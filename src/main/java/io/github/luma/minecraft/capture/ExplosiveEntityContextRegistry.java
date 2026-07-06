@@ -200,13 +200,16 @@ public final class ExplosiveEntityContextRegistry {
     ) {
 
         static Optional<ExplosiveContext> captureCurrent() {
-            String actionId = WorldMutationContext.currentActionId();
-            if (actionId == null || actionId.isBlank()) {
-                return Optional.empty();
-            }
             WorldMutationSource source = WorldMutationContext.currentSource();
             if (!HistoryCaptureManager.shouldCaptureMutation(source)) {
                 return Optional.empty();
+            }
+            String actionId = WorldMutationContext.currentActionId();
+            if (actionId == null || actionId.isBlank()) {
+                if (!startsGeneratedExplosiveAction(source)) {
+                    return Optional.empty();
+                }
+                actionId = UUID.randomUUID().toString();
             }
             return Optional.of(new ExplosiveContext(
                     WorldMutationSource.EXPLOSIVE,
@@ -215,6 +218,12 @@ public final class ExplosiveEntityContextRegistry {
                     WorldMutationContext.currentAccessAllowed(),
                     System.currentTimeMillis()
             ));
+        }
+
+        private static boolean startsGeneratedExplosiveAction(WorldMutationSource source) {
+            return source == WorldMutationSource.EXPLOSION
+                    || source == WorldMutationSource.EXPLOSIVE
+                    || source == WorldMutationSource.MOB;
         }
 
         static Optional<ExplosiveContext> captureDeferred(CaptureSessionState.DeferredActionContext context) {
