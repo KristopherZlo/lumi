@@ -66,7 +66,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 ### Quick Start
 
 1. Enter a world and let Lumi initialize the current workspace.
-2. Follow the quick tour: make 5 block edits, preview undo/redo with [ALT]+[Z]/[Y], use the wooden sword for restore areas and zone cells, then save with [ALT]+[S].
+2. Follow the quick tour: make 5 block edits, preview recent actions with [ALT] or undo/redo with [ALT]+[Z]/[Y], use the wooden sword for restore areas and zone cells, then save with [ALT]+[S].
 3. Press [U] to open Build History and inspect the created save card.
 4. Use the Compare tab to pick two saves for the overlay, or use save cards for restore, branches, and older checkpoints when an idea goes wrong.
 
@@ -77,6 +77,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 | [U] | Open Build History, or Zones when an active zone is selected |
 | [ALT]+[S] by default | Open Save build, or Save zone when an active zone is selected |
 | [ALT]+[1] ... [0] by default | Switch to the branch bound to that key; `main` defaults to [1], then branches use the first free key from [1]...[0] |
+| [ALT] by default | Hold to preview recent undo/redo actions and enable action-key modifiers |
 | [ALT]+[Z] by default | Undo, hold to preview the undo target |
 | [ALT]+[Y] by default | Redo, hold to preview the redo target |
 | [R] | Quick rollback, undoable with live undo |

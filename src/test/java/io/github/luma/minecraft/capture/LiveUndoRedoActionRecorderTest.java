@@ -51,6 +51,13 @@ class LiveUndoRedoActionRecorderTest {
     }
 
     @Test
+    void explosionBlockFalloutRecordsAsRootActionForLiveUndoOrdering() {
+        assertTrue(LiveUndoRedoActionRecorder.recordsBlockChangesAsRoot(WorldMutationSource.EXPLOSION));
+        assertTrue(LiveUndoRedoActionRecorder.recordsBlockChangesAsRoot(WorldMutationSource.EXPLOSIVE));
+        assertFalse(LiveUndoRedoActionRecorder.recordsBlockChangesAsRoot(WorldMutationSource.FLUID));
+    }
+
+    @Test
     void causalEntityChangesCanOpenLiveUndoActionBeforeBlockFallout() throws IOException {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/capture/LiveUndoRedoActionRecorder.java"));
         int entityMethod = source.indexOf("void recordEntityAction(");

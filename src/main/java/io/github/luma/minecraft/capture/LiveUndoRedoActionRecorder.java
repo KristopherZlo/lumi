@@ -19,8 +19,9 @@ import net.minecraft.server.level.ServerLevel;
  */
 final class LiveUndoRedoActionRecorder {
 
+    private static final MutationSourcePolicy SOURCE_POLICY = new MutationSourcePolicy();
+
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
-    private final MutationSourcePolicy sourcePolicy = new MutationSourcePolicy();
     private final HistoryDebugLog historyDebugLog;
 
     LiveUndoRedoActionRecorder(HistoryDebugLog historyDebugLog) {
@@ -39,7 +40,7 @@ final class LiveUndoRedoActionRecorder {
 
         String actionId = WorldMutationContext.currentActionId();
         boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
-        if (actionAllowed && !actionId.isBlank() && this.sourcePolicy.isExplicitRootSource(WorldMutationContext.currentSource())) {
+        if (actionAllowed && !actionId.isBlank() && recordsBlockChangesAsRoot(WorldMutationContext.currentSource())) {
             this.historyManager.recordAction(
                     trackedProject.project().id().toString(),
                     level.dimension().identifier().toString(),
@@ -82,7 +83,7 @@ final class LiveUndoRedoActionRecorder {
             return;
         }
 
-        if (this.sourcePolicy.isExplicitRootSource(WorldMutationContext.currentSource())) {
+        if (recordsBlockChangesAsRoot(WorldMutationContext.currentSource())) {
             return;
         }
 
@@ -110,7 +111,7 @@ final class LiveUndoRedoActionRecorder {
         WorldMutationSource source = WorldMutationContext.currentSource();
         String actionId = WorldMutationContext.currentActionId();
         boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
-        if (actionAllowed && actionId != null && !actionId.isBlank() && this.sourcePolicy.isExplicitRootSource(source)) {
+        if (actionAllowed && actionId != null && !actionId.isBlank() && recordsBlockChangesAsRoot(source)) {
             this.historyManager.recordAction(
                     trackedProject.project().id().toString(),
                     level.dimension().identifier().toString(),
@@ -142,7 +143,7 @@ final class LiveUndoRedoActionRecorder {
         String actionId = WorldMutationContext.currentActionId();
         WorldMutationSource source = WorldMutationContext.currentSource();
         boolean actionAllowed = WorldMutationContext.currentAccessAllowed() || !level.getServer().isDedicatedServer();
-        if (actionAllowed && !actionId.isBlank() && this.sourcePolicy.isExplicitRootSource(source)) {
+        if (actionAllowed && !actionId.isBlank() && SOURCE_POLICY.isExplicitRootSource(source)) {
             if (actionStartedAt == null) {
                 this.historyManager.recordAction(
                         trackedProject.project().id().toString(),
@@ -191,7 +192,7 @@ final class LiveUndoRedoActionRecorder {
             return;
         }
 
-        if (this.sourcePolicy.isExplicitRootSource(source) || requiresCausalActionForEntityReplay(source)) {
+        if (SOURCE_POLICY.isExplicitRootSource(source) || requiresCausalActionForEntityReplay(source)) {
             return;
         }
     }
@@ -316,6 +317,10 @@ final class LiveUndoRedoActionRecorder {
 
     static boolean requiresCausalActionForEntityReplay(WorldMutationSource source) {
         return source == WorldMutationSource.EXPLOSION || source == WorldMutationSource.MOB;
+    }
+
+    static boolean recordsBlockChangesAsRoot(WorldMutationSource source) {
+        return source == WorldMutationSource.EXPLOSION || SOURCE_POLICY.isExplicitRootSource(source);
     }
 
     private boolean canRecordDeferredAction(

@@ -25,4 +25,17 @@ class SynchedEntityDataMutationMixinTest {
         assertTrue(dataMixin.contains("EntityMutationTracker.captureAfter(modifiedEntity, pending)"));
         assertTrue(mixins.contains("\"SynchedEntityDataMutationMixin\""));
     }
+
+    @Test
+    void livingEntityEquipmentMutationsUseSharedEntityMutationCapture() throws Exception {
+        Path mixinPath = Path.of("src/main/java/io/github/luma/mixin/LivingEntityEquipmentMutationMixin.java");
+        String equipmentMixin = Files.readString(mixinPath);
+        String mixins = Files.readString(Path.of("src/main/resources/lumi.mixins.json"));
+
+        assertTrue(equipmentMixin.contains("@Mixin(LivingEntity.class)"));
+        assertTrue(equipmentMixin.contains("@WrapMethod(method = \"setItemSlot\""));
+        assertTrue(equipmentMixin.contains("EntityMutationTracker.captureBefore(entity)"));
+        assertTrue(equipmentMixin.contains("EntityMutationTracker.captureAfter(entity, pending)"));
+        assertTrue(mixins.contains("\"LivingEntityEquipmentMutationMixin\""));
+    }
 }

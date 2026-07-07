@@ -22,11 +22,17 @@ class LumaClientShortcutTest {
     }
 
     @Test
-    void holdingActionKeyAloneDoesNotPrepareRecentUndoRedoOverlay() throws IOException {
+    void holdingActionKeyAlonePreparesRecentOverlayButNotPendingScan() throws IOException {
         String source = Files.readString(Path.of("src/client/java/io/github/luma/LumaClient.java"));
 
-        assertTrue(!source.contains("overlayHold\n                ? RecentChangesOverlayCoordinator.PreviewTarget.BOTH"));
-        assertTrue(source.contains("undoRedoKeys.previewActive()"));
+        assertTrue(source.replace("\r\n", "\n").contains(
+                "overlayHold && !undoRedoKeys.previewActive()\n"
+                        + "                ? RecentChangesOverlayCoordinator.PreviewTarget.BOTH"
+        ));
+        assertTrue(source.replace("\r\n", "\n").contains(
+                "worldInputActive && overlayHold,\n"
+                        + "                recentPreviewTarget"
+        ));
         assertTrue(source.replace("\r\n", "\n").contains(
                 "worldInputActive && overlayHold && undoRedoKeys.previewActive() && !recentPreviewActive"
         ));
