@@ -78,6 +78,16 @@ class LiveUndoRedoActionRecorderTest {
     }
 
     @Test
+    void historyCaptureSkipsRedoActionsBeforeRecordingDrafts() throws IOException {
+        String managerSource = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/capture/HistoryCaptureManager.java"));
+        String policySource = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/capture/StaleRedoActionCapturePolicy.java"));
+
+        assertTrue(managerSource.contains("StaleRedoActionCapturePolicy"));
+        assertTrue(managerSource.contains("staleRedoActionCapturePolicy.shouldSkip("));
+        assertTrue(policySource.contains("undoRedoHistoryManager.hasRedoAction"));
+    }
+
+    @Test
     void liveRecorderDoesNotUseRelatedJoinFallback() throws IOException {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/capture/LiveUndoRedoActionRecorder.java"));
 

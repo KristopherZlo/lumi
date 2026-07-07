@@ -272,6 +272,22 @@ public final class UndoRedoHistoryManager {
         return this.projectRevisions.getOrDefault(projectId, 0L);
     }
 
+    public synchronized boolean hasRedoAction(String projectId, String actionId) {
+        if (projectId == null || projectId.isBlank() || actionId == null || actionId.isBlank()) {
+            return false;
+        }
+        Map<String, UndoRedoActionStack> stacks = this.projectStacks.get(projectId);
+        if (stacks == null || stacks.isEmpty()) {
+            return false;
+        }
+        for (UndoRedoActionStack stack : stacks.values()) {
+            if (stack.hasRedoAction(actionId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public synchronized void clearProject(String projectId) {
         if (projectId == null || projectId.isBlank()) {
             return;

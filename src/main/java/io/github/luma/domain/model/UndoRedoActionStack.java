@@ -80,6 +80,9 @@ public final class UndoRedoActionStack {
 
         UndoRedoAction action = this.undoStack.peekFirst();
         if (action == null || !action.id().equals(actionId)) {
+            if (this.findRedoAction(actionId) != null) {
+                return this.revision;
+            }
             action = new UndoRedoAction(actionId, actor, projectId, dimensionId, now, now);
             this.undoStack.addFirst(action);
             this.trimUndoStack();
@@ -239,6 +242,10 @@ public final class UndoRedoActionStack {
 
     public boolean canRedo() {
         return !this.redoStack.isEmpty();
+    }
+
+    public boolean hasRedoAction(String actionId) {
+        return this.findRedoAction(actionId) != null;
     }
 
     public long revision() {

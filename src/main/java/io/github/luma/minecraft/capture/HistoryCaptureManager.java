@@ -60,6 +60,8 @@ public final class HistoryCaptureManager {
     private final WorkingDraftSessionManager workingDrafts = new WorkingDraftSessionManager(this.persistenceCoordinator);
     private final LiveUndoRedoActionRecorder liveUndoRedoActionRecorder =
             new LiveUndoRedoActionRecorder(this.historyDebugLog);
+    private final StaleRedoActionCapturePolicy staleRedoActionCapturePolicy =
+            new StaleRedoActionCapturePolicy(this.diagnosticsLogger);
     private final ProjectService projectService = new ProjectService();
     private final ActiveWorkZoneTouchRecorder activeWorkZoneTouchRecorder = new ActiveWorkZoneTouchRecorder();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -152,6 +154,9 @@ public final class HistoryCaptureManager {
                 boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
                 CaptureSessionState.DeferredActionContext deferredActionContext =
                         this.deferredActionContext(existingSession, chunk, source);
+                if (this.staleRedoActionCapturePolicy.shouldSkip(trackedProject, pos, deferredActionContext)) {
+                    continue;
+                }
                 if (!explicitRootSource
                         && !ELIGIBILITY.canCaptureDeferredPreMutationBaseline(
                                 trackedProject.project(),
@@ -280,6 +285,9 @@ public final class HistoryCaptureManager {
                 boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
                 CaptureSessionState.DeferredActionContext deferredActionContext =
                         this.deferredActionContext(existingSession, chunk, source);
+                if (this.staleRedoActionCapturePolicy.shouldSkip(trackedProject, pos, deferredActionContext)) {
+                    continue;
+                }
                 boolean usesDeferredStabilization = ELIGIBILITY.usesDeferredStabilization(
                         trackedProject.project(),
                         source
@@ -552,6 +560,9 @@ public final class HistoryCaptureManager {
         boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
         CaptureSessionState.DeferredActionContext deferredActionContext =
                 this.deferredActionContext(existingSession, chunk, source);
+        if (this.staleRedoActionCapturePolicy.shouldSkip(trackedProject, input.pos(), deferredActionContext)) {
+            return;
+        }
         boolean usesDeferredStabilization = ELIGIBILITY.usesDeferredStabilization(trackedProject.project(), source);
         if (usesDeferredStabilization
                 && !ELIGIBILITY.canUseDeferredStabilization(
@@ -721,6 +732,9 @@ public final class HistoryCaptureManager {
 
             for (TrackedProject trackedProject : matchingProjects) {
                 if (!this.accessGuard.canUseProjectInCurrentMode(trackedProject)) { continue; }
+                if (this.staleRedoActionCapturePolicy.shouldSkip(trackedProject, pos, null)) {
+                    continue;
+                }
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }

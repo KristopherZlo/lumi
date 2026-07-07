@@ -534,6 +534,22 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void staleRootFalloutDoesNotReopenActionAfterUndo() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        recordChange(stack, "blast", "Alex", "project", "minecraft:overworld",
+                change(1, "minecraft:air", "minecraft:tnt"), NOW);
+        UndoRedoActionStack.Selection selection = stack.selectUndo();
+        assertTrue(stack.completeUndo(selection));
+
+        recordChange(stack, "blast", "Alex", "project", "minecraft:overworld",
+                change(2, "minecraft:tnt", "minecraft:air"), NOW.plusSeconds(1));
+
+        assertFalse(stack.canUndo());
+        assertTrue(stack.canRedo());
+        assertEquals("blast", stack.selectRedo().action().id());
+    }
+
+    @Test
     void staleSelectionDoesNotDropUndoHistory() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);

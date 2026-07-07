@@ -328,6 +328,31 @@ class UndoRedoHistoryManagerTest {
         assertNull(historyManager.selectRedo(projectId, "Steve"));
     }
 
+    @Test
+    void hasRedoActionFindsActionsMovedByUndo() {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "has-redo-action-test";
+        historyManager.clearProject(projectId);
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "blast",
+                "Alex",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+
+        assertNull(historyManager.selectRedo(projectId, "Alex"));
+        assertTrue(!historyManager.hasRedoAction(projectId, "blast"));
+
+        historyManager.completeUndo(projectId, historyManager.selectUndo(projectId, "Alex"));
+
+        assertTrue(historyManager.hasRedoAction(projectId, "blast"));
+        historyManager.clearProject(projectId);
+        assertTrue(!historyManager.hasRedoAction(projectId, "blast"));
+    }
+
     private static StoredBlockChange change(int x) {
         return new StoredBlockChange(
                 new BlockPoint(x, 64, 1),
