@@ -13,6 +13,11 @@ import net.minecraft.network.chat.Component;
 
 public final class RestoreConfirmationDialogView {
 
+    private static final int ENTITY_LIST_ROW_HEIGHT = 22;
+    private static final int ENTITY_LIST_MIN_HEIGHT = 48;
+    private static final int ENTITY_LIST_MAX_HEIGHT = 160;
+    private static final int ENTITY_LIST_SCREEN_MARGIN = 230;
+
     private final Actions actions;
 
     public RestoreConfirmationDialogView(Actions actions) {
@@ -99,13 +104,14 @@ public final class RestoreConfirmationDialogView {
                 });
                 list.child(toggle);
             }
-            section.child(list);
+            section.child(LumaUi.screenScroll(Sizing.fill(100), Sizing.fixed(model.entityListHeight()), list));
         }
         return section;
     }
 
     public record Model(
             int width,
+            int height,
             Component title,
             Component help,
             Component target,
@@ -120,6 +126,7 @@ public final class RestoreConfirmationDialogView {
 
         public Model(
                 int width,
+                int height,
                 Component title,
                 Component help,
                 Component target,
@@ -130,6 +137,7 @@ public final class RestoreConfirmationDialogView {
         ) {
             this(
                     width,
+                    height,
                     title,
                     help,
                     target,
@@ -145,6 +153,7 @@ public final class RestoreConfirmationDialogView {
 
         public Model(
                 int width,
+                int height,
                 Component title,
                 Component help,
                 Component target,
@@ -157,6 +166,7 @@ public final class RestoreConfirmationDialogView {
         ) {
             this(
                     width,
+                    height,
                     title,
                     help,
                     target,
@@ -171,6 +181,7 @@ public final class RestoreConfirmationDialogView {
         }
 
         public Model {
+            height = Math.max(0, height);
             title = Objects.requireNonNull(title, "title");
             help = Objects.requireNonNull(help, "help");
             target = Objects.requireNonNull(target, "target");
@@ -190,6 +201,12 @@ public final class RestoreConfirmationDialogView {
                 total += option.count();
             }
             return total;
+        }
+
+        public int entityListHeight() {
+            int contentHeight = Math.max(ENTITY_LIST_MIN_HEIGHT, this.entityTypes.size() * ENTITY_LIST_ROW_HEIGHT);
+            int screenMax = Math.min(ENTITY_LIST_MAX_HEIGHT, Math.max(ENTITY_LIST_MIN_HEIGHT, this.height - ENTITY_LIST_SCREEN_MARGIN));
+            return Math.min(contentHeight, screenMax);
         }
     }
 

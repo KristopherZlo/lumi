@@ -903,6 +903,7 @@ public final class WorkZoneScreen extends LumaScreen {
 
         return new RestoreConfirmationDialogView.Model(
                 this.width,
+                this.height,
                 Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
                 Component.translatable("luma.restore.confirm_zone_help"),
                 Component.translatable(

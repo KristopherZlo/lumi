@@ -193,4 +193,18 @@ class ProjectScreenHistoryBranchSelectionTest {
                 "LumaUi should expose the existing modal frame without forcing animation"
         );
     }
+
+    @Test
+    void restoreEntityTypeListIsHeightBoundedAndScrollable() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/RestoreConfirmationDialogView.java"));
+        String projectScreen = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/ProjectScreen.java"));
+        String saveDetails = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/SaveDetailsScreen.java"));
+        String workZone = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/WorkZoneScreen.java"));
+
+        assertTrue(source.contains("LumaUi.screenScroll(Sizing.fill(100), Sizing.fixed(model.entityListHeight()), list)"));
+        assertTrue(source.contains("Math.min(ENTITY_LIST_MAX_HEIGHT, Math.max(ENTITY_LIST_MIN_HEIGHT, this.height - ENTITY_LIST_SCREEN_MARGIN))"));
+        assertTrue(projectScreen.contains("new RestoreConfirmationDialogView.Model(\n                this.width,\n                this.height,"));
+        assertTrue(saveDetails.contains("new RestoreConfirmationDialogView.Model(\n                this.width,\n                this.height,"));
+        assertTrue(workZone.contains("new RestoreConfirmationDialogView.Model(\n                this.width,\n                this.height,"));
+    }
 }

@@ -610,6 +610,7 @@ public final class SaveDetailsScreen extends LumaScreen {
         boolean hasSelectionChoice = partialRequest == null && !zoneScoped && this.selectedLumiBounds().isPresent();
         return new RestoreConfirmationDialogView.Model(
                 this.width,
+                this.height,
                 Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
                 partialRequest == null
                         ? Component.translatable(zoneScoped ? "luma.restore.confirm_zone_help" : "luma.restore.confirm_help")

@@ -358,6 +358,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         boolean hasSelectionChoice = this.pendingRestoreMode == null && model.lumiSelection().isPresent();
         return Optional.of(new RestoreConfirmationDialogView.Model(
                 this.width,
+                this.height,
                 Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
                 this.restoreConfirmHelp(this.pendingRestoreMode),
                 Component.translatable(
