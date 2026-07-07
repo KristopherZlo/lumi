@@ -131,6 +131,27 @@ class ProjectScreenHistoryBranchSelectionTest {
     }
 
     @Test
+    void saveDetailsRestoreUsesCommitSwitchForZoneScopedSaves() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/SaveDetailsScreen.java"));
+        int methodIndex = source.indexOf("    private void executeRestore(");
+        int nextMethodIndex = source.indexOf("    private void openSelectedRestoreConfirmation(", methodIndex);
+
+        assertTrue(methodIndex >= 0, "Save details should keep a restore execution action");
+        assertTrue(nextMethodIndex > methodIndex, "The restore execution action should be bounded by the selected restore action");
+
+        String methodBody = source.substring(methodIndex, nextMethodIndex);
+
+        assertTrue(
+                methodBody.contains("controller.restoreVersion(this.projectName, version.id(), versionVariant.id(), selection)"),
+                "Save details restore should switch to the selected commit even when it is zone-scoped"
+        );
+        assertFalse(
+                methodBody.contains("partialRestore("),
+                "Save details restore should not treat hidden zone commits as partial zone restore"
+        );
+    }
+
+    @Test
     void onboardingHistorySpotlightTargetsLatestRestoreButton() throws IOException {
         String sections = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectScreenSections.java"));
         String card = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/ProjectSaveCardView.java"));

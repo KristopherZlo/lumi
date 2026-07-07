@@ -52,6 +52,17 @@ class WorkZoneScreenZoneActionsTest {
     }
 
     @Test
+    void zoneRestoreSwitchesToTheSelectedCommit() {
+        String methodBody = methodBody(
+                "    private void executeZoneRestore(ProjectVersion version, String zoneId, RestoreEntityTypeSelection selection) {",
+                "    private void clearPendingRestore() {"
+        );
+
+        assertTrue(methodBody.contains("restoreVersion(this.effectiveProjectName(), version.id(), version.variantId(), selection)"));
+        assertFalse(methodBody.contains("partialRestore("));
+    }
+
+    @Test
     void zoneBranchActionOpensBranchCreationDialog() {
         String methodBody = methodBody(
                 "        public void openBranchDialog(ProjectVersion version) {",

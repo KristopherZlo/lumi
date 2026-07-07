@@ -605,34 +605,27 @@ public final class SaveDetailsScreen extends LumaScreen {
             ProjectVariant versionVariant,
             boolean operationActive
     ) {
-        boolean zoneScoped = !this.versionVisibility.workZoneId(version).isBlank();
         PartialRestoreRequest partialRequest = this.pendingPartialRestoreRequest;
-        boolean hasSelectionChoice = partialRequest == null && !zoneScoped && this.selectedLumiBounds().isPresent();
+        boolean hasSelectionChoice = partialRequest == null && this.selectedLumiBounds().isPresent();
         return new RestoreConfirmationDialogView.Model(
                 this.width,
                 this.height,
                 Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
                 partialRequest == null
-                        ? Component.translatable(zoneScoped ? "luma.restore.confirm_zone_help" : "luma.restore.confirm_help")
+                        ? Component.translatable("luma.restore.confirm_help")
                         : this.restoreConfirmHelp(partialRequest.restoreMode()),
                 Component.translatable(
                         "luma.restore.confirm_target",
                         ProjectUiSupport.displayVariantName(versionVariant),
                         ProjectUiSupport.displayMessage(version)
                 ),
-                !zoneScoped && this.state.project().settings().safetySnapshotBeforeRestore(),
+                this.state.project() != null && this.state.project().settings().safetySnapshotBeforeRestore(),
                 version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT,
                 hasSelectionChoice,
                 operationActive,
                 this.restoreEntitySelection.expanded(),
                 this.restoreEntitySelection.options(partialRequest != null
                         ? this.controller.restoreEntityTypes(partialRequest)
-                        : zoneScoped
-                        ? this.controller.restoreEntityTypes(this.zoneRestoreRequest(
-                                version,
-                                this.versionVisibility.workZoneId(version),
-                                RestoreEntityTypeSelection.includeAll()
-                        ))
                         : this.controller.restoreEntityTypes(this.projectName, version.id())),
                 this.primaryRestoreAction(partialRequest == null ? null : partialRequest.restoreMode(), hasSelectionChoice)
         );
@@ -670,36 +663,8 @@ public final class SaveDetailsScreen extends LumaScreen {
             return;
         }
 
-        String zoneId = this.versionVisibility.workZoneId(version);
-        if (!zoneId.isBlank()) {
-            this.executeZoneRestore(version, zoneId, selection);
-            return;
-        }
-
-        String result = this.controller.restoreVersion(this.projectName, version.id(), "", selection);
-        this.router.openProjectIgnoringRecovery(this.parent, this.projectName, version.variantId(), result);
-    }
-
-    private void executeZoneRestore(ProjectVersion version, String zoneId, RestoreEntityTypeSelection selection) {
-        String result = this.controller.partialRestore(this.zoneRestoreRequest(version, zoneId, selection));
-        this.router.openProjectIgnoringRecovery(this.parent, this.projectName, version.variantId(), result);
-    }
-
-    private PartialRestoreRequest zoneRestoreRequest(
-            ProjectVersion version,
-            String zoneId,
-            RestoreEntityTypeSelection selection
-    ) {
-        return new PartialRestoreRequest(
-                this.projectName,
-                version.id(),
-                null,
-                PartialRestoreMode.SELECTED_AREA,
-                PartialRestoreRegionSource.LUMI_REGION,
-                selection,
-                this.client.getUser().getName(),
-                Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
-        );
+        String result = this.controller.restoreVersion(this.projectName, version.id(), versionVariant.id(), selection);
+        this.router.openProjectIgnoringRecovery(this.parent, this.projectName, versionVariant.id(), result);
     }
 
     private void openSelectedRestoreConfirmation(ProjectVersion version, PartialRestoreMode mode) {

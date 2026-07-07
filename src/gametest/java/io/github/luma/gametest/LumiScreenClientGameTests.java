@@ -114,6 +114,7 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
         RestoreConfirmationDialogView restoreDialog = new RestoreConfirmationDialogView(restoreActions);
         FlowLayout restore = restoreDialog.overlay(new RestoreConfirmationDialogView.Model(
                 960,
+                540,
                 Component.translatable("luma.restore.confirm_title"),
                 Component.translatable("luma.restore.confirm_help"),
                 Component.translatable("luma.restore.confirm_target", "main", "v0001"),

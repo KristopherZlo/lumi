@@ -1,8 +1,5 @@
 package io.github.luma.ui.screen;
 
-import io.github.luma.domain.model.PartialRestoreMode;
-import io.github.luma.domain.model.PartialRestoreRegionSource;
-import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
@@ -53,7 +50,6 @@ import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
@@ -905,22 +901,21 @@ public final class WorkZoneScreen extends LumaScreen {
                 this.width,
                 this.height,
                 Component.translatable("luma.restore.confirm_title", ProjectUiSupport.displayMessage(version)),
-                Component.translatable("luma.restore.confirm_zone_help"),
+                Component.translatable("luma.restore.confirm_help"),
                 Component.translatable(
                         "luma.restore.confirm_target",
                         ProjectUiSupport.displayVariantName(variant),
                         ProjectUiSupport.displayMessage(version)
                 ),
-                false,
+                this.state.project() != null && this.state.project().settings().safetySnapshotBeforeRestore(),
                 version.versionKind() == VersionKind.INITIAL || version.versionKind() == VersionKind.WORLD_ROOT,
                 false,
                 false,
                 this.restoreEntitySelection.expanded(),
-                this.restoreEntitySelection.options(this.projectController.restoreEntityTypes(this.zoneRestoreRequest(
-                        version,
-                        this.versionVisibility.workZoneId(version),
-                        RestoreEntityTypeSelection.includeAll()
-                )))
+                this.restoreEntitySelection.options(this.projectController.restoreEntityTypes(
+                        this.effectiveProjectName(),
+                        version.id()
+                ))
         );
     }
 
@@ -943,24 +938,7 @@ public final class WorkZoneScreen extends LumaScreen {
     }
 
     private void executeZoneRestore(ProjectVersion version, String zoneId, RestoreEntityTypeSelection selection) {
-        this.refresh(this.projectController.partialRestore(this.zoneRestoreRequest(version, zoneId, selection)));
-    }
-
-    private PartialRestoreRequest zoneRestoreRequest(
-            ProjectVersion version,
-            String zoneId,
-            RestoreEntityTypeSelection selection
-    ) {
-        return new PartialRestoreRequest(
-                this.effectiveProjectName(),
-                version.id(),
-                null,
-                PartialRestoreMode.SELECTED_AREA,
-                PartialRestoreRegionSource.LUMI_REGION,
-                selection,
-                this.client.getUser().getName(),
-                Map.of(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, zoneId)
-        );
+        this.refresh(this.projectController.restoreVersion(this.effectiveProjectName(), version.id(), version.variantId(), selection));
     }
 
     private void clearPendingRestore() {
