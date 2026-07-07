@@ -247,20 +247,18 @@ public final class LumaClient implements ClientModInitializer {
                 this.undoKey,
                 this.redoKey
         );
-        RecentChangesOverlayCoordinator.PreviewTarget recentPreviewTarget = overlayHold
-                ? RecentChangesOverlayCoordinator.PreviewTarget.BOTH
-                : undoRedoKeys.previewTarget();
+        RecentChangesOverlayCoordinator.PreviewTarget recentPreviewTarget = undoRedoKeys.previewTarget();
         LumiShortcutInteractionGate.getInstance().tick(worldInputActive, undoRedoKeys);
         CompareOverlayRenderer.setXrayEnabled(overlayHold);
         CompareOverlayCoordinator.getInstance().tick(client);
         boolean recentPreviewActive = RecentChangesOverlayCoordinator.getInstance().tick(
                 client,
-                worldInputActive && overlayHold,
+                worldInputActive && overlayHold && undoRedoKeys.previewActive(),
                 recentPreviewTarget
         );
         PendingChangesOverlayCoordinator.getInstance().tick(
                 client,
-                worldInputActive && overlayHold && !recentPreviewActive
+                worldInputActive && overlayHold && undoRedoKeys.previewActive() && !recentPreviewActive
         );
         OverlayDiagnostics.getInstance().clientTick(
                 client,

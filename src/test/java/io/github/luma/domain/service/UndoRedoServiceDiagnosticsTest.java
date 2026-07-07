@@ -60,6 +60,13 @@ class UndoRedoServiceDiagnosticsTest {
     }
 
     @Test
+    void singleplayerUndoRedoFallbackIncludesRestoreAndQuickRollbackActions() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/domain/service/UndoRedoService.java"));
+
+        assertTrue(source.contains("Lumi quick rollback"));
+    }
+
+    @Test
     void undoRedoInterruptsActiveExplosiveContextsInsteadOfWaiting() throws Exception {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/domain/service/UndoRedoService.java"));
 

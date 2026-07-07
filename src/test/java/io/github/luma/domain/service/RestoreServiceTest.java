@@ -1168,11 +1168,12 @@ class RestoreServiceTest {
                 RecoveryDraft.class,
                 net.minecraft.server.level.ServerLevel.class,
                 RestoreEntityTypeSelection.class,
-                WorldOperationManager.ProgressSink.class
+                WorldOperationManager.ProgressSink.class,
+                boolean.class
         );
         method.setAccessible(true);
         try {
-            return (Optional<List<PreparedChunkBatch>>) method.invoke(
+            Optional<?> decoded = (Optional<?>) method.invoke(
                     service,
                     layout,
                     project,
@@ -1183,8 +1184,15 @@ class RestoreServiceTest {
                     null,
                     entityTypeSelection,
                     (WorldOperationManager.ProgressSink) (stage, completed, total, detail) -> {
-                    }
+                    },
+                    false
             );
+            if (decoded.isEmpty()) {
+                return Optional.empty();
+            }
+            Method batches = decoded.orElseThrow().getClass().getDeclaredMethod("batches");
+            batches.setAccessible(true);
+            return Optional.of((List<PreparedChunkBatch>) batches.invoke(decoded.orElseThrow()));
         } catch (InvocationTargetException exception) {
             throw exception.getCause();
         }

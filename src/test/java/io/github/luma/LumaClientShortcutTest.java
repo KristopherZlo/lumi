@@ -20,4 +20,15 @@ class LumaClientShortcutTest {
                 "if (shortcutsSuppressed) {\n            this.drainLumiShortcutClicks();"
         ));
     }
+
+    @Test
+    void holdingActionKeyAloneDoesNotPrepareRecentUndoRedoOverlay() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/LumaClient.java"));
+
+        assertTrue(!source.contains("overlayHold\n                ? RecentChangesOverlayCoordinator.PreviewTarget.BOTH"));
+        assertTrue(source.contains("undoRedoKeys.previewActive()"));
+        assertTrue(source.replace("\r\n", "\n").contains(
+                "worldInputActive && overlayHold && undoRedoKeys.previewActive() && !recentPreviewActive"
+        ));
+    }
 }

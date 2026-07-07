@@ -38,6 +38,32 @@ final class RestoreUndoActionFactory {
                 entityChanges
         );
     }
+
+    RestoreUndoAction restoreUndoAction(
+            String projectId,
+            String dimensionId,
+            String targetVersionId,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges
+    ) {
+        List<StoredBlockChange> blockChanges = changes == null ? List.of() : List.copyOf(changes);
+        List<StoredEntityChange> entityChangeList = entityChanges == null ? List.of() : List.copyOf(entityChanges);
+        if (blockChanges.isEmpty() && entityChangeList.isEmpty()) {
+            return null;
+        }
+        return new RestoreUndoAction(
+                "restore-" + normalizedTargetVersionId(targetVersionId) + "-" + UUID.randomUUID(),
+                "Lumi quick rollback",
+                projectId,
+                dimensionId,
+                blockChanges,
+                entityChangeList
+        );
+    }
+
+    private static String normalizedTargetVersionId(String targetVersionId) {
+        return targetVersionId == null || targetVersionId.isBlank() ? "target" : targetVersionId;
+    }
 }
 
 record RestoreUndoAction(

@@ -47,6 +47,23 @@ class RestoreUndoActionFactoryTest {
         assertEquals("minecraft:stone", action.changes().getFirst().newValue().blockId());
     }
 
+    @Test
+    void restoreUndoActionUsesAppliedResetTransitions() {
+        RestoreUndoAction action = this.factory.restoreUndoAction(
+                "project",
+                "minecraft:overworld",
+                "v0001",
+                List.of(change(1, "minecraft:glass", "minecraft:stone")),
+                List.of()
+        );
+
+        assertNotNull(action);
+        assertEquals("Lumi quick rollback", action.actor());
+        assertEquals("restore-v0001-", action.actionId().substring(0, "restore-v0001-".length()));
+        assertEquals("minecraft:glass", action.changes().getFirst().oldValue().blockId());
+        assertEquals("minecraft:stone", action.changes().getFirst().newValue().blockId());
+    }
+
     private static StoredBlockChange change(int offset, String oldBlock, String newBlock) {
         return new StoredBlockChange(
                 new BlockPoint(offset, 64, 0),

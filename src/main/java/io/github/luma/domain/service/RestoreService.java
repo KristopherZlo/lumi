@@ -9,6 +9,7 @@ import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PatchSectionWorldChanges;
+import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PartialRestorePlanSummary;
 import io.github.luma.domain.model.PartialRestoreRequest;
@@ -144,6 +145,15 @@ public final class RestoreService {
         return this.restore(level, projectName, versionId, "", false, entityTypeSelection);
     }
 
+    public OperationHandle restoreUndoable(
+            ServerLevel level,
+            String projectName,
+            String versionId,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
+        return this.restore(level, projectName, versionId, "", false, true, entityTypeSelection);
+    }
+
     public OperationHandle restore(
             ServerLevel level,
             String projectName,
@@ -207,6 +217,16 @@ public final class RestoreService {
             RestoreEntityTypeSelection entityTypeSelection
     ) throws IOException {
         return this.restore(level, projectName, versionId, targetVariantId, false, entityTypeSelection);
+    }
+
+    public OperationHandle restoreToVariantUndoable(
+            ServerLevel level,
+            String projectName,
+            String versionId,
+            String targetVariantId,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
+        return this.restore(level, projectName, versionId, targetVariantId, false, true, entityTypeSelection);
     }
 
     private OperationHandle restore(
@@ -395,16 +415,7 @@ public final class RestoreService {
                     point.variantId()
             ));
         }
-        RestoreUndoAction restoreUndoAction = recordUndoRedoAction
-                ? this.restoreUndoActionFactory.quickRollbackUndoAction(
-                        project.id().toString(),
-                        level.dimension().identifier().toString(),
-                        version.id(),
-                        pendingDraft
-                )
-                : null;
-
-        Optional<List<PreparedChunkBatch>> prepared = this.tryDecodeDirectRestore(
+        Optional<DirectRestoreDecode> prepared = this.tryDecodeDirectRestore(
                 layout,
                 project,
                 versions,
@@ -413,10 +424,21 @@ public final class RestoreService {
                 pendingDraft,
                 level,
                 selection,
-                progressSink
+                progressSink,
+                recordUndoRedoAction
         );
+        RestoreUndoAction restoreUndoAction = prepared
+                .map(DirectRestoreDecode::restoreUndoAction)
+                .orElseGet(() -> recordUndoRedoAction
+                        ? this.restoreUndoActionFactory.quickRollbackUndoAction(
+                                project.id().toString(),
+                                level.dimension().identifier().toString(),
+                                version.id(),
+                                pendingDraft
+                        )
+                        : null);
 
-        List<PreparedChunkBatch> batches = prepared.orElseGet(() -> {
+        List<PreparedChunkBatch> batches = prepared.map(DirectRestoreDecode::batches).orElseGet(() -> {
             try {
                 if (version.versionKind() == VersionKind.WORLD_ROOT) {
                     return this.decodeWorldRootRestore(layout, project, level, selection, progressSink);
@@ -649,7 +671,7 @@ public final class RestoreService {
         return collapsed;
     }
 
-    private Optional<List<PreparedChunkBatch>> tryDecodeDirectRestore(
+    private Optional<DirectRestoreDecode> tryDecodeDirectRestore(
             ProjectLayout layout,
             io.github.luma.domain.model.BuildProject project,
             List<ProjectVersion> versions,
@@ -658,7 +680,8 @@ public final class RestoreService {
             RecoveryDraft pendingDraft,
             ServerLevel level,
             RestoreEntityTypeSelection entityTypeSelection,
-            WorldOperationManager.ProgressSink progressSink
+            WorldOperationManager.ProgressSink progressSink,
+            boolean recordUndoRedoAction
     ) throws IOException {
         DirectRestorePatchPlan directPlan = this.directRestorePatchPlanner.applicablePlan(project, versions, variants, targetVersion);
         if (directPlan == null) {
@@ -679,6 +702,8 @@ public final class RestoreService {
                 + exactRootStatePlan.sourceCount();
         int completedSources = 0;
         List<PreparedChunkBatch> batches = new ArrayList<>();
+        List<StoredBlockChange> appliedBlockChanges = new ArrayList<>();
+        List<StoredEntityChange> appliedEntityChanges = new ArrayList<>();
         MechanismReplayScope.Builder mechanismScope = MechanismReplayScope.builder();
 
         if (pendingDraft != null && !pendingDraft.isEmpty()) {
@@ -698,6 +723,10 @@ public final class RestoreService {
             List<StoredBlockChange> rollbackChanges = rollbackDraft.changes();
             List<StoredEntityChange> rollbackEntityChanges = rollbackDraft.entityChanges();
             if (!rollbackChanges.isEmpty() || !rollbackEntityChanges.isEmpty()) {
+                if (recordUndoRedoAction) {
+                    appliedBlockChanges.addAll(inverseBlockChanges(rollbackChanges));
+                    appliedEntityChanges.addAll(inverseEntityChanges(rollbackEntityChanges));
+                }
                 PreparedWorldChangeBatches analyzed = this.decodeStoredChangesAnalyzed(
                         level,
                         rollbackChanges,
@@ -721,12 +750,17 @@ public final class RestoreService {
 
         for (ProjectVersion version : directPlan.reverseVersions()) {
             int before = batches.size();
-            PreparedWorldChangeBatches analyzed = this.decodeVersionChangesAnalyzed(
-                    layout,
+            PatchWorldChanges changes = this.loadVersionWorldChanges(layout, version, entityTypeSelection);
+            if (recordUndoRedoAction) {
+                appliedBlockChanges.addAll(inverseBlockChanges(changes.blockChanges()));
+                appliedEntityChanges.addAll(inverseEntityChanges(changes.entityChanges()));
+            }
+            PreparedWorldChangeBatches analyzed = this.decodeStoredChangesAnalyzed(
                     level,
-                    version,
+                    changes.blockChanges(),
+                    changes.entityChanges(),
                     false,
-                    entityTypeSelection
+                    RestoreEntityTypeSelection.includeAll()
             );
             batches.addAll(analyzed.batches());
             mechanismScope.addAll(analyzed.mechanismReplayScope());
@@ -743,12 +777,17 @@ public final class RestoreService {
 
         for (ProjectVersion version : directPlan.forwardVersions()) {
             int before = batches.size();
-            PreparedWorldChangeBatches analyzed = this.decodeVersionChangesAnalyzed(
-                    layout,
+            PatchWorldChanges changes = this.loadVersionWorldChanges(layout, version, entityTypeSelection);
+            if (recordUndoRedoAction) {
+                appliedBlockChanges.addAll(changes.blockChanges());
+                appliedEntityChanges.addAll(changes.entityChanges());
+            }
+            PreparedWorldChangeBatches analyzed = this.decodeStoredChangesAnalyzed(
                     level,
-                    version,
+                    changes.blockChanges(),
+                    changes.entityChanges(),
                     true,
-                    entityTypeSelection
+                    RestoreEntityTypeSelection.includeAll()
             );
             batches.addAll(analyzed.batches());
             mechanismScope.addAll(analyzed.mechanismReplayScope());
@@ -848,7 +887,41 @@ public final class RestoreService {
                 rawPlacements,
                 collapsedPlacements
         );
-        return Optional.of(collapsed);
+        RestoreUndoAction restoreUndoAction = recordUndoRedoAction
+                ? this.restoreUndoActionFactory.restoreUndoAction(
+                        project.id().toString(),
+                        level.dimension().identifier().toString(),
+                        targetVersion.id(),
+                        appliedBlockChanges,
+                        appliedEntityChanges
+                )
+                : null;
+        return Optional.of(new DirectRestoreDecode(collapsed, restoreUndoAction));
+    }
+
+    private PatchWorldChanges loadVersionWorldChanges(
+            ProjectLayout layout,
+            ProjectVersion version,
+            RestoreEntityTypeSelection entityTypeSelection
+    ) throws IOException {
+        List<StoredBlockChange> blockChanges = new ArrayList<>();
+        List<StoredEntityChange> entityChanges = new ArrayList<>();
+        for (String patchId : version.patchIds()) {
+            PatchMetadata metadata = this.patchMetaRepository.load(layout, patchId)
+                    .orElseThrow(() -> new IllegalArgumentException("Patch metadata is missing for " + patchId));
+            PatchWorldChanges changes = this.patchDataRepository.loadWorldChanges(layout, metadata);
+            blockChanges.addAll(changes.blockChanges());
+            entityChanges.addAll(this.selectedEntityChanges(changes.entityChanges(), entityTypeSelection));
+        }
+        return new PatchWorldChanges(blockChanges, entityChanges);
+    }
+
+    private static List<StoredBlockChange> inverseBlockChanges(List<StoredBlockChange> changes) {
+        return changes == null ? List.of() : changes.stream().map(StoredBlockChange::inverse).toList();
+    }
+
+    private static List<StoredEntityChange> inverseEntityChanges(List<StoredEntityChange> changes) {
+        return changes == null ? List.of() : changes.stream().map(StoredEntityChange::inverse).toList();
     }
 
     private List<ChunkPoint> worldRootFallbackBaselineScope(
@@ -1183,6 +1256,12 @@ public final class RestoreService {
             }
         }
         return total;
+    }
+
+    private record DirectRestoreDecode(
+            List<PreparedChunkBatch> batches,
+            RestoreUndoAction restoreUndoAction
+    ) {
     }
 
 }

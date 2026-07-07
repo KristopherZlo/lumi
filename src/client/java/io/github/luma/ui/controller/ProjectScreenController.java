@@ -227,9 +227,9 @@ public final class ProjectScreenController {
         try {
             var level = ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName);
             if (targetVariantId == null || targetVariantId.isBlank()) {
-                this.restoreService.restore(level, projectName, versionId, entityTypeSelection);
+                this.restoreService.restoreUndoable(level, projectName, versionId, entityTypeSelection);
             } else {
-                this.restoreService.restoreToVariant(level, projectName, versionId, targetVariantId, entityTypeSelection);
+                this.restoreService.restoreToVariantUndoable(level, projectName, versionId, targetVariantId, entityTypeSelection);
             }
             return "luma.status.restore_started";
         } catch (IllegalStateException exception) {

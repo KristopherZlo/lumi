@@ -66,7 +66,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 ### Quick Start
 
 1. Enter a world and let Lumi initialize the current workspace.
-2. Follow the quick tour: make 5 block edits, preview them with [ALT] by default, use the wooden sword for restore areas and zone cells, undo/redo with [ALT]+[Z]/[Y], then save with [ALT]+[S].
+2. Follow the quick tour: make 5 block edits, preview undo/redo with [ALT]+[Z]/[Y], use the wooden sword for restore areas and zone cells, then save with [ALT]+[S].
 3. Press [U] to open Build History and inspect the created save card.
 4. Use the Compare tab to pick two saves for the overlay, or use save cards for restore, branches, and older checkpoints when an idea goes wrong.
 
@@ -77,9 +77,9 @@ For dedicated servers, install Lumi on both the server and every client that use
 | [U] | Open Build History, or Zones when an active zone is selected |
 | [ALT]+[S] by default | Open Save build, or Save zone when an active zone is selected |
 | [ALT]+[1] ... [0] by default | Switch to the branch bound to that key; `main` defaults to [1], then branches use the first free key from [1]...[0] |
-| [ALT]+[Z] by default | Undo |
-| [ALT]+[Y] by default | Redo |
-| [R] | Quick rollback |
+| [ALT]+[Z] by default | Undo, hold to preview the undo target |
+| [ALT]+[Y] by default | Redo, hold to preview the redo target |
+| [R] | Quick rollback, undoable with live undo |
 | [H] | Toggle compare overlay |
 | [ALT]+[I] by default | Show Lumi hotkeys |
 | Wooden sword | Select partial-restore regions and active-zone cells; the action key with mouse controls resizes, switches mode, or clears; [ALT]+[Z]/[Y] undo/redo selection by default, [CTRL] adds/removes active-zone cells |
@@ -245,10 +245,10 @@ Hard rules:
 - Long operations publish progress and terminal success/failure UI feedback.
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
-- Restore, recovery, merge, quick rollback, and undo/redo replay must verify final target state before reporting success.
+- Restore, recovery, merge, quick rollback, and undo/redo replay must verify final target state before reporting success. Full restore and quick rollback are undoable with live undo.
 - Live undo/redo, recent previews, and pending overlays include explosion and mob block fallout only when it is causally tied to a player action; passive mob edits and ambient explosions remain actionless.
 - Player-caused mob and explosion block fallout, plus persistent placed-entity fallout, is captured in recovery drafts and saved project history, and is also available to live undo/redo for immediate cleanup.
-- Live undo/redo actions are actor-scoped. Multiplayer undo/redo selects only the local player's stack, singleplayer can fall back to neutral explosion/mob cleanup actions, project-wide overlays aggregate unconflicted actions from a monotonic project revision, and an action is hidden once another actor later touches the same block or entity target. That target ownership is computed from recent applied undo actions when selecting or previewing instead of maintained as a separate mutation ledger. Secondary fallout joins live undo only through an explicit action id or deferred carrier context; Lumi does not guess ownership from nearby latest actions. Undo/redo waits for redstone and piston fallout to settle, selects Lumi replay on the server thread, freezes primed TNT ticks during replay, removes active primed TNT tied to the undo action, suppresses TNT activation callbacks and stale delayed fluid ticks for that action, and rejects stale selections whose action changed after preview/selection. Hidden fluid fallout records the settled transition from the current draft target, so undoing water removes water and restores redstone/mechanism states instead of older session-baseline blocks; live undo/redo replays those targets Reden-style without scheduling extra fluid replay cleanup.
+- Live undo/redo actions are actor-scoped. Multiplayer undo/redo selects only the local player's stack, singleplayer can fall back to neutral explosion/mob cleanup and Lumi restore actions, project-wide overlays aggregate unconflicted actions from a monotonic project revision, and an action is hidden once another actor later touches the same block or entity target. That target ownership is computed from recent applied undo actions when selecting or previewing instead of maintained as a separate mutation ledger. Secondary fallout joins live undo only through an explicit action id or deferred carrier context; Lumi does not guess ownership from nearby latest actions. Undo/redo waits for redstone and piston fallout to settle, selects Lumi replay on the server thread, freezes primed TNT ticks during replay, removes active primed TNT tied to the undo action, suppresses TNT activation callbacks and stale delayed fluid ticks for that action, and rejects stale selections whose action changed after preview/selection. Hidden fluid fallout records the settled transition from the current draft target, so undoing water removes water and restores redstone/mechanism states instead of older session-baseline blocks; live undo/redo replays those targets Reden-style without scheduling extra fluid replay cleanup.
 - Native external-tool undo/redo is advisory. Lumi delegates only for known supported actions, waits for queued server work, and advances its stack only after current block or entity targets match the selected action. Generic native mismatches fall back to Lumi replay; verified Axiom dispatch mismatches fail without moving Lumi history.
 - If a placed block is synchronously consumed by vanilla callbacks before `Level#setBlock` returns, Lumi keeps the requested transition inside the same live action before recording the final settled state. Undo therefore removes block-to-entity transitions such as instant-primed TNT instead of restoring the short-lived placed block.
 - Client modal overlays consume pointer input so underlying workspace actions cannot fire while a modal is open.

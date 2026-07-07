@@ -404,7 +404,7 @@ public final class UndoRedoService {
             return false;
         }
         return switch (selection.action().actor()) {
-            case "explosion", "explosive", "mob" -> true;
+            case "explosion", "explosive", "mob", "Lumi quick rollback" -> true;
             default -> false;
         };
     }

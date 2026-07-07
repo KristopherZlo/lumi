@@ -7,9 +7,12 @@ import io.github.luma.domain.model.PartialRestorePlanSummary;
 import io.github.luma.domain.model.PartialRestoreRegionSource;
 import io.github.luma.domain.model.RestorePlanMode;
 import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectScreenControllerTest {
 
@@ -113,6 +116,13 @@ class ProjectScreenControllerTest {
                 "luma.status.partial_restore_started",
                 ProjectScreenController.partialRestoreStatus(summary(PartialRestoreMode.OUTSIDE_SELECTED_AREA, 0, 1))
         );
+    }
+
+    @Test
+    void fullRestoreRequestsUndoableRestoreActions() throws Exception {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/controller/ProjectScreenController.java"));
+
+        assertTrue(source.contains("restoreToVariantUndoable("));
     }
 
     private static PartialRestorePlanSummary noOpSummary(PartialRestoreMode mode) {
