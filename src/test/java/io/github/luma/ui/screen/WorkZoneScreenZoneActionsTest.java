@@ -63,6 +63,18 @@ class WorkZoneScreenZoneActionsTest {
     }
 
     @Test
+    void zoneHistoryHighlightsBranchHeadInsteadOfNewestCommit() {
+        String methodBody = methodBody(
+                "    private FlowLayout zoneHistorySection(WorkZone zone) {",
+                "    private FlowLayout zoneHistoryToolbar() {"
+        );
+
+        assertTrue(methodBody.contains("this.zoneSaveCard(latest, ProjectUiSupport.isVariantHead(this.state.variants(), latest))"));
+        assertTrue(methodBody.contains("this.zoneSaveCard(version, ProjectUiSupport.isVariantHead(this.state.variants(), version))"));
+        assertFalse(methodBody.contains("this.zoneSaveCard(latest, true)"));
+    }
+
+    @Test
     void zoneBranchActionOpensBranchCreationDialog() {
         String methodBody = methodBody(
                 "        public void openBranchDialog(ProjectVersion version) {",

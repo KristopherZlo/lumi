@@ -578,7 +578,7 @@ public final class WorkZoneScreen extends LumaScreen {
         }
 
         ProjectVersion latest = versions.getFirst();
-        section.child(this.zoneSaveCard(latest, true));
+        section.child(this.zoneSaveCard(latest, ProjectUiSupport.isVariantHead(this.state.variants(), latest)));
 
         List<ProjectVersion> olderVersions = versions.stream()
                 .filter(version -> !version.id().equals(latest.id()))
@@ -587,7 +587,7 @@ public final class WorkZoneScreen extends LumaScreen {
             section.child(LumaUi.caption(Component.translatable("luma.build.recent_saves_title")));
         }
         for (ProjectVersion version : olderVersions) {
-            section.child(this.zoneSaveCard(version, false));
+            section.child(this.zoneSaveCard(version, ProjectUiSupport.isVariantHead(this.state.variants(), version)));
         }
         return section;
     }
