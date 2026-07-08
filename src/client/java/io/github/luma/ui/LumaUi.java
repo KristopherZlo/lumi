@@ -524,42 +524,46 @@ public final class LumaUi {
     }
 
     public static LabelComponent title(Component text) {
-        return UIComponents.label(text).color(TEXT_PRIMARY).shadow(false).maxWidth(VALUE_WRAP_WIDTH);
+        return lumaLabel(text).color(TEXT_PRIMARY).shadow(false).maxWidth(VALUE_WRAP_WIDTH);
     }
 
     public static LabelComponent value(Component text) {
-        return UIComponents.label(text).color(TEXT_PRIMARY).shadow(true).maxWidth(VALUE_WRAP_WIDTH);
+        return lumaLabel(text).color(TEXT_PRIMARY).shadow(true).maxWidth(VALUE_WRAP_WIDTH);
     }
 
     public static LabelComponent accent(Component text) {
-        return UIComponents.label(text).color(TEXT_ACCENT).shadow(false).maxWidth(BODY_WRAP_WIDTH);
+        return lumaLabel(text).color(TEXT_ACCENT).shadow(false).maxWidth(BODY_WRAP_WIDTH);
     }
 
     public static LabelComponent danger(Component text) {
-        return UIComponents.label(text).color(TEXT_DANGER).shadow(false).maxWidth(BODY_WRAP_WIDTH);
+        return lumaLabel(text).color(TEXT_DANGER).shadow(false).maxWidth(BODY_WRAP_WIDTH);
     }
 
     public static LabelComponent caption(Component text) {
-        return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(BODY_WRAP_WIDTH);
+        return lumaLabel(text).color(TEXT_MUTED).shadow(false).maxWidth(BODY_WRAP_WIDTH);
     }
 
     private static LabelComponent compactValue(Component text) {
-        return UIComponents.label(text).color(TEXT_PRIMARY).shadow(true).maxWidth(180);
+        return lumaLabel(text).color(TEXT_PRIMARY).shadow(true).maxWidth(180);
     }
 
     private static LabelComponent compactAccent(Component text) {
-        return UIComponents.label(text).color(TEXT_ACCENT).shadow(false).maxWidth(180);
+        return lumaLabel(text).color(TEXT_ACCENT).shadow(false).maxWidth(180);
     }
 
     private static LabelComponent compactCaption(Component text) {
-        return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(180);
+        return lumaLabel(text).color(TEXT_MUTED).shadow(false).maxWidth(180);
     }
 
     private static LabelComponent statValue(Component text) {
-        return UIComponents.label(text).color(TEXT_ACCENT).shadow(false).maxWidth(72);
+        return lumaLabel(text).color(TEXT_ACCENT).shadow(false).maxWidth(72);
     }
 
     private static LabelComponent statLabel(Component text) {
-        return UIComponents.label(text).color(TEXT_MUTED).shadow(false).maxWidth(108);
+        return lumaLabel(text).color(TEXT_MUTED).shadow(false).maxWidth(108);
+    }
+
+    private static LabelComponent lumaLabel(Component text) {
+        return new LumaLabelComponent(text);
     }
 }

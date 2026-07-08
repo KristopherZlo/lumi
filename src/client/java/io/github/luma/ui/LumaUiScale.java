@@ -27,6 +27,10 @@ public final class LumaUiScale {
         return coordinate / renderScale(currentGuiScale);
     }
 
+    public static float targetPixelOffset() {
+        return 1.0F / targetGuiScale();
+    }
+
     public static int iconButtonWidth() {
         return intProperty(ICON_BUTTON_WIDTH_PROPERTY, DEFAULT_ICON_BUTTON_WIDTH, 10, 64);
     }

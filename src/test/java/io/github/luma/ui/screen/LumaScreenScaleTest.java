@@ -37,4 +37,15 @@ class LumaScreenScaleTest {
         Assertions.assertTrue(source.contains("mouseX,\n                            mouseY,"));
         Assertions.assertFalse(source.contains("super.drawComponentTooltip(graphics, this.virtualCoordinate(mouseX), this.virtualCoordinate(mouseY), partialTick);"));
     }
+
+    @Test
+    void labelsUseLumaScaleBaselineOffset() throws IOException {
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/LumaUi.java"));
+        String label = Files.readString(Path.of("src/client/java/io/github/luma/ui/LumaLabelComponent.java"));
+
+        Assertions.assertTrue(source.contains("new LumaLabelComponent(text)"));
+        Assertions.assertFalse(source.contains("UIComponents.label("));
+        Assertions.assertTrue(label.contains("LumaUiScale.targetPixelOffset()"));
+        Assertions.assertFalse(label.contains("getGuiScale()"));
+    }
 }
