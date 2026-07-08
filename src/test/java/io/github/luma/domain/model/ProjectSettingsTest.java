@@ -9,6 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ProjectSettingsTest {
 
     @Test
+    void defaultLargeEditThresholdUsesExpandedVolume() {
+        assertEquals(131072, ProjectSettings.DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD);
+        assertEquals(131072, ProjectSettings.defaults().autoCheckpointLargeChangeThreshold());
+    }
+
+    @Test
     void sanitizeUsesDefaultsForNull() {
         ProjectSettings settings = ProjectSettings.sanitize(null);
 

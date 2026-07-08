@@ -2,14 +2,18 @@ package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.WorldMutationSource;
+import java.time.Instant;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PreviewBoundsResolverTest {
 
@@ -43,7 +47,7 @@ class PreviewBoundsResolverTest {
     }
 
     @Test
-    void changedBlockBoundsIgnoreHiddenChanges() {
+    void changedBlockBoundsIncludeHiddenRecordedChangesForPreviews() {
         Bounds3i bounds = PreviewBoundsResolver.changedBlockBounds(
                 List.of(new StoredBlockChange(
                         new BlockPoint(100, 64, 100),
@@ -56,7 +60,39 @@ class PreviewBoundsResolverTest {
                 319
         );
 
-        assertNull(bounds);
+        assertEquals(new BlockPoint(97, 62, 97), bounds.min());
+        assertEquals(new BlockPoint(103, 66, 103), bounds.max());
+    }
+
+    @Test
+    void resolvePreviewChangesKeepsHiddenDraftChangesForScreenshots() throws Exception {
+        StoredBlockChange hidden = new StoredBlockChange(
+                new BlockPoint(100, 64, 100),
+                payload("minecraft:stone"),
+                payload("minecraft:air"),
+                true
+        );
+        RecoveryDraft draft = new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.EXPLOSION,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                List.of(hidden)
+        );
+
+        List<StoredBlockChange> changes = new PreviewBoundsResolver().resolvePreviewChanges(
+                null,
+                BuildProject.createWorldWorkspace("project", "minecraft:overworld", Instant.EPOCH),
+                List.of(),
+                null,
+                draft
+        );
+
+        assertEquals(List.of(hidden), changes);
+        assertTrue(changes.getFirst().hidden());
     }
 
     private static StoredBlockChange change(int x, int y, int z) {

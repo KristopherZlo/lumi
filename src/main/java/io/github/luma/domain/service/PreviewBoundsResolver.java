@@ -85,14 +85,14 @@ public final class PreviewBoundsResolver {
             RecoveryDraft draft
     ) throws IOException {
         if (draft != null && !draft.isEmpty()) {
-            return BUILDER_SURFACE.visibleBlockChanges(draft.changes());
+            return draft.changes();
         }
 
         if (version != null
                 && version.patchIds() != null
                 && !version.patchIds().isEmpty()
                 && !this.hasCompleteVisibleSectionIndex(layout, version.patchIds())) {
-            return BUILDER_SURFACE.visibleBlockChanges(this.loadPatchChanges(layout, version.patchIds()));
+            return this.loadPatchChanges(layout, version.patchIds());
         }
 
         if (!project.tracksWholeDimension()) {
@@ -110,18 +110,14 @@ public final class PreviewBoundsResolver {
             RecoveryDraft draft
     ) throws IOException {
         if (draft != null && !draft.isEmpty()) {
-            return ChunkSelectionFactory.fromStoredChanges(BUILDER_SURFACE.visibleBlockChanges(draft.changes()));
+            return ChunkSelectionFactory.fromStoredChanges(draft.changes());
         }
 
         if (version != null && version.patchIds() != null && !version.patchIds().isEmpty()) {
             if (!this.hasCompleteVisibleSectionIndex(layout, version.patchIds())) {
-                List<StoredBlockChange> changes =
-                        BUILDER_SURFACE.visibleBlockChanges(this.loadPatchChanges(layout, version.patchIds()));
+                List<StoredBlockChange> changes = this.loadPatchChanges(layout, version.patchIds());
                 if (!changes.isEmpty()) {
                     return ChunkSelectionFactory.fromStoredChanges(changes);
-                }
-                if (this.hasHiddenOnlyPatchChanges(layout, version.patchIds())) {
-                    return List.of();
                 }
             }
             return this.patchChunksFromMetadata(layout, version.patchIds());
@@ -152,7 +148,7 @@ public final class PreviewBoundsResolver {
         int maxZ = Integer.MIN_VALUE;
 
         for (StoredBlockChange change : changes) {
-            if (!BUILDER_SURFACE.includes(change) || change.pos() == null) {
+            if (change == null || change.pos() == null) {
                 continue;
             }
             BlockPoint pos = change.pos();
@@ -231,16 +227,13 @@ public final class PreviewBoundsResolver {
                 continue;
             }
             for (var chunk : metadata.get().chunks()) {
-                if (!chunk.visibleSectionIndexAvailable()) {
-                    return null;
-                }
-                if (chunk.visibleSectionFingerprints().isEmpty()) {
-                    if (chunk.visibleChangeCount() > 0) {
+                if (chunk.sectionFingerprints().isEmpty()) {
+                    if (chunk.changeCount() > 0 || chunk.entityCount() > 0) {
                         chunks.add(chunk.chunk());
                     }
                     continue;
                 }
-                sections.addAll(chunk.visibleSectionFingerprints());
+                sections.addAll(chunk.sectionFingerprints());
             }
         }
         if (!sections.isEmpty()) {
@@ -269,8 +262,7 @@ public final class PreviewBoundsResolver {
                 continue;
             }
             for (var chunk : metadata.get().chunks()) {
-                if (!chunk.visibleSectionIndexAvailable()
-                        || chunk.visibleChangeCount() > 0
+                if (chunk.changeCount() > 0
                         || chunk.entityCount() > 0) {
                     addChunk(chunks, chunk.chunk());
                 }
@@ -306,11 +298,6 @@ public final class PreviewBoundsResolver {
         return changes;
     }
 
-    private boolean hasHiddenOnlyPatchChanges(ProjectLayout layout, List<String> patchIds) throws IOException {
-        List<StoredBlockChange> changes = this.loadPatchChanges(layout, patchIds);
-        return !changes.isEmpty() && BUILDER_SURFACE.visibleBlockChanges(changes).isEmpty();
-    }
-
     private List<ChunkPoint> collectSnapshotChunks(
             ProjectLayout layout,
             BuildProject project,
@@ -339,7 +326,7 @@ public final class PreviewBoundsResolver {
             return List.copyOf(chunks);
         }
 
-        addChunks(chunks, ChunkSelectionFactory.fromStoredChanges(BUILDER_SURFACE.visibleBlockChanges(draft.changes())));
+        addChunks(chunks, ChunkSelectionFactory.fromStoredChanges(draft.changes()));
         return List.copyOf(chunks);
     }
 

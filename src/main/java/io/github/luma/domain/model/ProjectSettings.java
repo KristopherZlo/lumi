@@ -15,7 +15,7 @@ public record ProjectSettings(
         Boolean showHiddenCommits,
         Boolean survivalModeEnabled
 ) {
-    public static final int DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD = 512;
+    public static final int DEFAULT_AUTO_CHECKPOINT_LARGE_CHANGE_THRESHOLD = 131072;
 
     public ProjectSettings(
             boolean autoVersionsEnabled,
