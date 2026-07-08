@@ -57,6 +57,19 @@ class SpecialThanksPlayerShowcaseComponentTest {
     }
 
     @Test
+    void capeIsTiltedAwayFromBack() throws IOException {
+        String source = Files.readString(Path.of(
+                "src/client/java/io/github/luma/client/specialthanks/SpecialThanksPlayerShowcaseComponent.java"
+        ));
+        String mixins = Files.readString(Path.of("src/main/resources/lumi.mixins.json"));
+
+        assertTrue(source.contains("CAPE_ROTATION_X"));
+        assertTrue(source.contains("PlayerCapeModelAccessor"));
+        assertTrue(source.contains(".luma$cape().xRot = CAPE_ROTATION_X"));
+        assertTrue(mixins.contains("client.PlayerCapeModelAccessor"));
+    }
+
+    @Test
     void secondLayerUsesParentPartTransformOnly() throws IOException {
         String source = Files.readString(Path.of(
                 "src/client/java/io/github/luma/client/specialthanks/SpecialThanksPlayerShowcaseComponent.java"
