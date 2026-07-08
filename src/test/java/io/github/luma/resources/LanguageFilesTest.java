@@ -38,6 +38,7 @@ class LanguageFilesTest {
     private static final Set<String> EXACT_ENGLISH_COPY_ALLOWED_KEYS = Set.of(
             "key.category.lumi.general",
             "luma.action.buy_me_a_coffee",
+            "luma.window.support",
             "luma.history.version_header",
             "luma.variant.entry",
             "luma.log.entry_header",

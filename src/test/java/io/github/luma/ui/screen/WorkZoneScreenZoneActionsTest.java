@@ -109,6 +109,17 @@ class WorkZoneScreenZoneActionsTest {
     }
 
     @Test
+    void zoneDeleteDialogHintsZoneNameAndUsesDangerButton() {
+        String methodBody = methodBody(
+                "    private FlowLayout zoneDeleteDialogOverlay() {",
+                "    private FlowLayout zoneHistorySection(WorkZone zone) {"
+        );
+
+        assertTrue(methodBody.contains("input.setHint(Component.literal(zone.name()))"));
+        assertTrue(methodBody.contains("LumaUi.dangerButton"));
+    }
+
+    @Test
     void altSaveOnWorkZoneScreenOpensZoneSaveDialog() throws IOException {
         String clientSource = Files.readString(Path.of("src/client/java/io/github/luma/LumaClient.java"));
 

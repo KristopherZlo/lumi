@@ -21,6 +21,7 @@ public final class ProjectSidebarNavigation {
 
     private static final URI SUPPORT_URI = URI.create("https://buymeacoffee.com/zl0yxp");
     private static final URI PAYPAL_DONATE_URI = URI.create("https://www.paypal.com/donate/?hosted_button_id=CY7A2U64JWY4W");
+    private static final URI BUG_REPORT_URI = URI.create("https://github.com/KristopherZlo/lumi/issues/new");
     private static final Identifier SUPPORT_LOGO = Identifier.fromNamespaceAndPath(
             LumaMod.MOD_ID,
             "textures/gui/buymeacoffee.png"
@@ -28,6 +29,10 @@ public final class ProjectSidebarNavigation {
     private static final Identifier PAYPAL_LOGO = Identifier.fromNamespaceAndPath(
             LumaMod.MOD_ID,
             "textures/gui/paypal.png"
+    );
+    private static final Identifier BUG_LOGO = Identifier.fromNamespaceAndPath(
+            LumaMod.MOD_ID,
+            "textures/gui/icons/bug.png"
     );
 
     private final ScreenRouter router = new ScreenRouter();
@@ -106,6 +111,11 @@ public final class ProjectSidebarNavigation {
                 PAYPAL_LOGO,
                 Component.translatable("luma.action.paypal_donate"),
                 PAYPAL_DONATE_URI
+        ));
+        footer.child(this.supportLinkRow(
+                BUG_LOGO,
+                Component.translatable("luma.action.report_bug"),
+                BUG_REPORT_URI
         ));
         footer.child(LumaUi.caption(Component.translatable("luma.window.credit")));
         footer.child(LumaUi.caption(Component.translatable("luma.window.mod_version", this.currentModVersion())));

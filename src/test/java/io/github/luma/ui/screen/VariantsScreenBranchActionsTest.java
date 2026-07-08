@@ -48,6 +48,35 @@ class VariantsScreenBranchActionsTest {
         assertFalse(this.source.contains("key.keyboard.left.alt"));
     }
 
+    @Test
+    void mergeActionOpensConfirmationModal() {
+        String methodBody = methodBody(
+                this.source,
+                "    private FlowLayout variantCard(ProjectVariant variant) {",
+                "    private VariantsViewState loadState() {"
+        );
+
+        assertTrue(methodBody.contains("openBranchMergeDialog(variant.id())"));
+        assertFalse(methodBody.contains("mergeVariantIntoCurrent(this.projectName, variant.id())"));
+        assertTrue(this.source.contains("branchMergeDialogOverlay()"));
+    }
+
+    @Test
+    void mergeConfirmationShowsBothHeadPreviewsAndRequiresSourceBranchName() {
+        String methodBody = methodBody(
+                this.source,
+                "    private FlowLayout branchMergeDialogOverlay() {",
+                "    private FlowLayout branchBindDialogOverlay() {"
+        );
+
+        assertTrue(methodBody.contains("headVersion(sourceVariant)"));
+        assertTrue(methodBody.contains("ProjectUiSupport.activeHead"));
+        assertTrue(methodBody.contains("ProjectUiSupport.versionPreview"));
+        assertTrue(methodBody.contains("MERGE_CHEVRON"));
+        assertTrue(methodBody.contains("input.setHint(Component.literal(ProjectUiSupport.displayVariantName(sourceVariant)))"));
+        assertTrue(methodBody.contains("merge.active(this.canConfirmMerge(sourceVariant))"));
+    }
+
     private static String methodBody(String source, String start, String end) {
         int methodIndex = source.indexOf(start);
         int nextMethodIndex = source.indexOf(end, methodIndex);

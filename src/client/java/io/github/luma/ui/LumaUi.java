@@ -50,6 +50,8 @@ public final class LumaUi {
     private static final int BUTTON_DISABLED = 0xFF18191B;
     private static final int PRIMARY_BUTTON_FILL = 0xFF7A5A21;
     private static final int PRIMARY_BUTTON_HOVER = 0xFF936D29;
+    private static final int DANGER_BUTTON_FILL = 0xFF7A2424;
+    private static final int DANGER_BUTTON_HOVER = 0xFF963030;
     private static final int STATUS_FILL = 0xFF211F18;
     private static final int STATUS_BORDER = 0xFF5A4724;
     private static final int CONTROL_HEIGHT = 18;
@@ -418,6 +420,10 @@ public final class LumaUi {
 
     public static ButtonComponent primaryButton(Component text, Consumer<ButtonComponent> onPress) {
         return styledButton(text, onPress, PRIMARY_BUTTON_FILL, PRIMARY_BUTTON_HOVER, BUTTON_DISABLED);
+    }
+
+    public static ButtonComponent dangerButton(Component text, Consumer<ButtonComponent> onPress) {
+        return styledButton(text, onPress, DANGER_BUTTON_FILL, DANGER_BUTTON_HOVER, BUTTON_DISABLED);
     }
 
     public static ButtonComponent iconButton(String iconName, Component tooltip, Consumer<ButtonComponent> onPress) {

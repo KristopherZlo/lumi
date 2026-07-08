@@ -41,9 +41,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 public final class VariantsScreen extends LumaScreen {
+
+    private static final Identifier MERGE_CHEVRON = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/chevron-right.png");
 
     private final Screen parent;
     private final String projectName;
@@ -63,6 +66,8 @@ public final class VariantsScreen extends LumaScreen {
     private String pendingDeleteVariantId = "";
     private String deleteVariantName = "";
     private String pendingBindVariantId = "";
+    private String pendingMergeVariantId = "";
+    private String mergeVariantName = "";
     private TextBoxComponent variantNameInput;
     private ButtonComponent createVariantButton;
     private int refreshCooldown = 0;
@@ -147,6 +152,8 @@ public final class VariantsScreen extends LumaScreen {
 
         if (!this.pendingDeleteVariantId.isBlank()) {
             stack.child(this.branchDeleteDialogOverlay());
+        } else if (!this.pendingMergeVariantId.isBlank()) {
+            stack.child(this.branchMergeDialogOverlay());
         } else if (!this.pendingBindVariantId.isBlank()) {
             stack.child(this.branchBindDialogOverlay());
         }
@@ -166,6 +173,10 @@ public final class VariantsScreen extends LumaScreen {
     public boolean keyPressed(KeyEvent event) {
         if (!this.pendingDeleteVariantId.isBlank() && OnboardingScreen.isEscapeKey(event)) {
             this.closeBranchDeleteDialog();
+            return true;
+        }
+        if (!this.pendingMergeVariantId.isBlank() && OnboardingScreen.isEscapeKey(event)) {
+            this.closeBranchMergeDialog();
             return true;
         }
         if (!this.pendingBindVariantId.isBlank()) {
@@ -312,8 +323,7 @@ public final class VariantsScreen extends LumaScreen {
 
         if (!this.zoneMode()) {
             ButtonComponent mergeButton = LumaUi.button(Component.translatable("luma.action.merge_into_current"), button -> {
-                String result = this.actionController.mergeVariantIntoCurrent(this.projectName, variant.id());
-                this.refresh(result);
+                this.openBranchMergeDialog(variant.id());
             });
             mergeButton.active(!active && headVersion != null && !this.operationActive());
             actions.child(mergeButton);
@@ -405,6 +415,73 @@ public final class VariantsScreen extends LumaScreen {
         return overlay;
     }
 
+    private FlowLayout branchMergeDialogOverlay() {
+        FlowLayout overlay = LumaUi.modalOverlay();
+        ProjectVariant sourceVariant = this.pendingMergeVariant();
+        if (sourceVariant == null) {
+            this.closeBranchMergeDialog();
+            return overlay;
+        }
+
+        ProjectVersion sourceHead = this.headVersion(sourceVariant);
+        ProjectVersion targetHead = ProjectUiSupport.activeHead(this.state.project(), this.state.variants(), this.state.versions());
+        FlowLayout modal = LumaUi.modalFrame(Math.min(420, Math.max(320, this.width - 40)));
+        modal.child(LumaUi.closeHeader(
+                Component.translatable("luma.ideas.merge_confirm_title", ProjectUiSupport.displayVariantName(sourceVariant)),
+                button -> this.closeBranchMergeDialog()
+        ));
+        modal.child(LumaUi.caption(Component.translatable(
+                "luma.ideas.merge_confirm_help",
+                ProjectUiSupport.displayVariantName(sourceVariant)
+        )));
+
+        FlowLayout previews = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+        previews.gap(6);
+        previews.verticalAlignment(io.wispforest.owo.ui.core.VerticalAlignment.CENTER);
+        previews.child(this.mergePreviewColumn(Component.translatable("luma.ideas.merge_source_preview"), sourceHead));
+        var chevron = UIComponents.texture(MERGE_CHEVRON, 0, 0, 16, 16, 16, 16);
+        chevron.blend(true);
+        chevron.sizing(Sizing.fixed(16), Sizing.fixed(16));
+        previews.child(chevron);
+        previews.child(this.mergePreviewColumn(Component.translatable("luma.ideas.merge_target_preview"), targetHead));
+        modal.child(previews);
+
+        ButtonComponent[] mergeButton = new ButtonComponent[1];
+        TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.mergeVariantName);
+        input.setHint(Component.literal(ProjectUiSupport.displayVariantName(sourceVariant)));
+        input.onChanged().subscribe(value -> {
+            this.mergeVariantName = value == null ? "" : value;
+            if (mergeButton[0] != null) {
+                mergeButton[0].active(this.canConfirmMerge(sourceVariant));
+            }
+        });
+        modal.child(LumaUi.formField(
+                Component.translatable("luma.idea.name_input"),
+                Component.translatable("luma.ideas.merge_confirm_input_help"),
+                input
+        ));
+
+        FlowLayout actions = LumaUi.actionRow();
+        ButtonComponent merge = LumaUi.primaryButton(Component.translatable("luma.action.merge_into_current"), button ->
+                this.confirmMergeVariant(sourceVariant));
+        mergeButton[0] = merge;
+        merge.active(this.canConfirmMerge(sourceVariant));
+        actions.child(merge);
+        actions.child(LumaUi.button(Component.translatable("luma.action.cancel"), button -> this.closeBranchMergeDialog()));
+        modal.child(actions);
+        overlay.child(modal);
+        return overlay;
+    }
+
+    private FlowLayout mergePreviewColumn(Component label, ProjectVersion version) {
+        FlowLayout column = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        column.gap(3);
+        column.child(LumaUi.caption(label));
+        column.child(ProjectUiSupport.versionPreview(this.actionController, this.projectName, version, 128, 72, 88));
+        column.child(LumaUi.caption(Component.literal(version == null ? "" : ProjectUiSupport.displayMessage(version))));
+        return column;
+    }
+
     private FlowLayout branchBindDialogOverlay() {
         FlowLayout overlay = LumaUi.modalOverlay();
         ProjectVariant variant = this.pendingBindVariant();
@@ -434,6 +511,12 @@ public final class VariantsScreen extends LumaScreen {
                 && ProjectUiSupport.displayVariantName(variant).equals(this.deleteVariantName.trim());
     }
 
+    private boolean canConfirmMerge(ProjectVariant sourceVariant) {
+        return sourceVariant != null
+                && sourceVariant.id().equals(this.pendingMergeVariantId)
+                && ProjectUiSupport.displayVariantName(sourceVariant).equals(this.mergeVariantName.trim());
+    }
+
     private void confirmDeleteVariant(ProjectVariant variant) {
         if (!this.canConfirmDelete(variant)) {
             return;
@@ -441,6 +524,16 @@ public final class VariantsScreen extends LumaScreen {
         String result = this.actionController.deleteVariant(this.projectName, variant.id());
         this.pendingDeleteVariantId = "";
         this.deleteVariantName = "";
+        this.refresh(result);
+    }
+
+    private void confirmMergeVariant(ProjectVariant sourceVariant) {
+        if (!this.canConfirmMerge(sourceVariant)) {
+            return;
+        }
+        String result = this.actionController.mergeVariantIntoCurrent(this.projectName, sourceVariant.id());
+        this.pendingMergeVariantId = "";
+        this.mergeVariantName = "";
         this.refresh(result);
     }
 
@@ -456,12 +549,34 @@ public final class VariantsScreen extends LumaScreen {
         this.rebuild();
     }
 
+    private void openBranchMergeDialog(String variantId) {
+        this.pendingMergeVariantId = variantId == null ? "" : variantId;
+        this.mergeVariantName = "";
+        this.rebuild();
+    }
+
+    private void closeBranchMergeDialog() {
+        this.pendingMergeVariantId = "";
+        this.mergeVariantName = "";
+        this.rebuild();
+    }
+
     private ProjectVariant pendingDeleteVariant() {
         if (this.pendingDeleteVariantId.isBlank()) {
             return null;
         }
         return this.state.variants().stream()
                 .filter(variant -> variant.id().equals(this.pendingDeleteVariantId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private ProjectVariant pendingMergeVariant() {
+        if (this.pendingMergeVariantId.isBlank()) {
+            return null;
+        }
+        return this.state.variants().stream()
+                .filter(variant -> variant.id().equals(this.pendingMergeVariantId))
                 .findFirst()
                 .orElse(null);
     }

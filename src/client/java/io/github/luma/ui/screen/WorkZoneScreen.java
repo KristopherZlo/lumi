@@ -520,7 +520,7 @@ public final class WorkZoneScreen extends LumaScreen {
 
         ButtonComponent[] deleteButton = new ButtonComponent[1];
         TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.deleteZoneName);
-        input.setHint(Component.translatable("luma.zones.delete_input"));
+        input.setHint(Component.literal(zone.name()));
         input.onChanged().subscribe(value -> {
             this.deleteZoneName = value == null ? "" : value;
             if (deleteButton[0] != null) {
@@ -534,7 +534,7 @@ public final class WorkZoneScreen extends LumaScreen {
         ));
 
         FlowLayout actions = LumaUi.actionRow();
-        ButtonComponent delete = LumaUi.button(
+        ButtonComponent delete = LumaUi.dangerButton(
                 Component.translatable("luma.zones.delete_confirm"),
                 button -> this.confirmZoneDelete(zone)
         );

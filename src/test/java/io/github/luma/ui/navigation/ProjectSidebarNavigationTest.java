@@ -39,4 +39,17 @@ class ProjectSidebarNavigationTest {
         assertTrue(source.contains("luma.window.mod_version"));
         assertTrue(source.contains("getModContainer(LumaMod.MOD_ID)"));
     }
+
+    @Test
+    void supportFooterShowsReportBugBelowPaypal() throws IOException {
+        String source = Files.readString(
+                Path.of("src/client/java/io/github/luma/ui/navigation/ProjectSidebarNavigation.java"),
+                StandardCharsets.UTF_8
+        );
+
+        assertTrue(source.contains("BUG_REPORT_URI"));
+        assertTrue(source.contains("BUG_LOGO"));
+        assertTrue(source.contains("luma.action.report_bug"));
+        assertTrue(source.indexOf("luma.action.paypal_donate") < source.indexOf("luma.action.report_bug"));
+    }
 }
