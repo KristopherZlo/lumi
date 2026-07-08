@@ -234,6 +234,7 @@ public final class WorkZoneScreen extends LumaScreen {
                 Component.translatable("luma.zones.create_help")
         );
         TextBoxComponent input = UIComponents.textBox(Sizing.fill(100), this.newZoneName);
+        input.setHint(Component.translatable("luma.zones.delete_input"));
         input.onChanged().subscribe(value -> this.newZoneName = value);
         section.child(input);
         section.child(LumaUi.button(Component.translatable("luma.zones.create_button"), button -> {

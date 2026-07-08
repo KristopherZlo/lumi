@@ -92,6 +92,16 @@ class WorkZoneScreenZoneActionsTest {
     }
 
     @Test
+    void createZoneInputHintsZoneName() {
+        String methodBody = methodBody(
+                "    private FlowLayout createZoneSection() {",
+                "    private FlowLayout zoneListSection() {"
+        );
+
+        assertTrue(methodBody.contains("input.setHint(Component.translatable(\"luma.zones.delete_input\"))"));
+    }
+
+    @Test
     void saveZoneDialogRepeatsSaveBuildFields() {
         String methodBody = methodBody(
                 "    private FlowLayout zoneSaveDialogOverlay() {",
