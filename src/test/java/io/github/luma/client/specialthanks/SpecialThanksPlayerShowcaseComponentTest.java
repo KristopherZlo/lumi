@@ -43,12 +43,16 @@ class SpecialThanksPlayerShowcaseComponentTest {
         String registry = Files.readString(Path.of(
                 "src/client/java/io/github/luma/client/specialthanks/SpecialThanksCapeRenderRegistry.java"
         ));
+        String mixins = Files.readString(Path.of("src/main/resources/lumi.mixins.json"));
 
         assertFalse(source.contains("drawCape("));
         assertTrue(source.contains("attachCape("));
         assertTrue(source.contains("SpecialThanksCapeRenderRegistry.getInstance().attach"));
         assertTrue(mixin.contains("renderAttachedCape"));
         assertTrue(mixin.contains("GuiSkinRenderer"));
+        assertFalse(mixin.contains("@Shadow"));
+        assertTrue(mixin.contains("PictureInPictureRendererAccessor"));
+        assertTrue(mixins.contains("client.PictureInPictureRendererAccessor"));
         assertTrue(registry.contains("renderToBuffer"));
     }
 

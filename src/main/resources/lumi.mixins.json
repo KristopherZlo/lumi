@@ -51,6 +51,7 @@
   "client": [
     "client.EditWorldScreenMixin",
     "client.GuiSkinRendererMixin",
+    "client.PictureInPictureRendererAccessor",
     "client.KeyboardHandlerMixin",
     "client.MinecraftInteractionMixin",
     "client.MouseHandlerMixin",
