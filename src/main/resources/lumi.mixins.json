@@ -8,6 +8,7 @@
     "CropBlockMixin",
     "CreeperReplayStateAccess",
     "EntityMutationMixin",
+    "ArmorStandCausalContextMixin",
     "AxiomSetBufferPacketMixin",
     "AxiomSetBlockPacketMixin",
     "BaseContainerBlockEntityMixin",
