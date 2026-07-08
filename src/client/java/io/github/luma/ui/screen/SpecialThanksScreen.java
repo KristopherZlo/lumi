@@ -112,7 +112,7 @@ public final class SpecialThanksScreen extends LumaScreen {
         FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
         row.gap(10);
         row.verticalAlignment(VerticalAlignment.CENTER);
-        row.child(new SpecialThanksPlayerShowcaseComponent(entry.skinName()));
+        row.child(new SpecialThanksPlayerShowcaseComponent(entry));
 
         FlowLayout text = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
         text.gap(2);

@@ -20,9 +20,12 @@ class SpecialThanksPlayerShowcaseComponentTest {
         assertTrue(source.contains("PlayerModel"));
         assertTrue(source.contains("ModelLayers.PLAYER"));
         assertTrue(source.contains("ModelLayers.PLAYER_SLIM"));
+        assertTrue(source.contains("ModelLayers.PLAYER_CAPE"));
+        assertTrue(source.contains("PlayerCapeModel"));
         assertTrue(source.contains("SpecialThanksClientCache.getInstance()"));
         assertTrue(source.contains(".skinFor("));
         assertTrue(source.contains("submitSkinRenderState"));
+        assertTrue(source.contains("skin.cape()"));
         assertTrue(source.contains("PlayerModelType.SLIM"));
         assertTrue(source.contains("Math.sin"));
         assertTrue(source.contains("rotationY"));

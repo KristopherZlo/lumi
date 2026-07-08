@@ -39,7 +39,7 @@ class SpecialThanksScreenTest {
         assertTrue(source.contains("removeListener"));
         assertTrue(source.contains("rebuildPreservingScroll"));
         assertFalse(source.contains("UIComponents.texture"));
-        assertTrue(source.contains("entry.skinName()"));
+        assertTrue(source.contains("new SpecialThanksPlayerShowcaseComponent(entry)"));
         assertTrue(source.contains("entry.description()"));
     }
 }

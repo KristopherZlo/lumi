@@ -16,6 +16,6 @@ class SpecialThanksClientCacheTest {
 
         assertTrue(client.contains("SpecialThanksClientCache.getInstance().preload(Minecraft.getInstance())"));
         assertTrue(cache.contains("preloadSkins()"));
-        assertTrue(cache.contains("skinFor(entry.skinName())"));
+        assertTrue(cache.contains("skinFor(entry)"));
     }
 }

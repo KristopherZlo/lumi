@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SpecialThanksCatalogResourceTest {
 
     @Test
-    void specialThanksCatalogStoresDisplayNameSkinNameAndDescription() throws IOException {
+    void specialThanksCatalogStoresDisplayNameSkinNameSkinUrlAndDescription() throws IOException {
         Path catalog = Path.of("src/main/resources/assets/lumi/special-thanks.json");
 
         assertTrue(Files.exists(catalog));
@@ -27,6 +27,7 @@ class SpecialThanksCatalogResourceTest {
         assertEquals(1, root.get("schema").getAsInt());
         assertEquals("ImZlo", first.get("displayName").getAsString());
         assertEquals("ImZlo", first.get("skinName").getAsString());
+        assertTrue(first.has("skinUrl"));
         assertFalse(first.get("description").getAsString().toLowerCase().contains("skins"));
     }
 }

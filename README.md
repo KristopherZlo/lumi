@@ -281,6 +281,9 @@ The `lumi.ui.*` flags are dev-only tuning knobs for Lumi's in-game menus.
 `targetGuiScale=2` makes Lumi screens render as if Minecraft GUI Scale were set
 to 2, including Lumi button tooltips and the Special Thanks player showcase,
 and the icon button flags tune the button box and the 24x24 texture draw size.
+Special Thanks entries may use `skinName` for Minecraft profile skin and cape
+lookup, or `skinUrl` for a direct skin PNG while still using the profile cape
+when a name is available.
 
 `-Dlumi.loadLog=true` writes `logs/lumi-load.log`. TNT undo/redo debugging uses
 `undo-redo/selected-action`, `tnt-context/*`, and `tnt-replay/*` events to show

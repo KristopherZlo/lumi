@@ -7,8 +7,9 @@ import io.wispforest.owo.ui.core.Sizing;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.geom.EntityModelSet;
 import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.model.player.PlayerCapeModel;
 import net.minecraft.client.model.player.PlayerModel;
-import net.minecraft.resources.Identifier;
+import net.minecraft.core.ClientAsset;
 import net.minecraft.world.entity.player.PlayerModelType;
 import net.minecraft.world.entity.player.PlayerSkin;
 
@@ -24,15 +25,21 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
     private static final long ORBIT_CYCLE_MILLIS = 9000L;
 
     private final SpecialThanksClientCache specialThanks = SpecialThanksClientCache.getInstance();
-    private final String skinName;
+    private final SpecialThanksEntry entry;
     private final PlayerModel wideModel;
     private final PlayerModel slimModel;
+    private final PlayerCapeModel capeModel;
 
     public SpecialThanksPlayerShowcaseComponent(String skinName) {
-        this.skinName = skinName == null ? "" : skinName.trim();
+        this(new SpecialThanksEntry(skinName, skinName, ""));
+    }
+
+    public SpecialThanksPlayerShowcaseComponent(SpecialThanksEntry entry) {
+        this.entry = entry == null ? new SpecialThanksEntry("", "", "") : entry;
         EntityModelSet models = Minecraft.getInstance().getEntityModels();
         this.wideModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER), false);
         this.slimModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER_SLIM), true);
+        this.capeModel = new PlayerCapeModel(models.bakeLayer(ModelLayers.PLAYER_CAPE));
         this.sizing(Sizing.fixed(WIDTH), Sizing.fixed(HEIGHT));
     }
 
@@ -49,18 +56,38 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
     @Override
     public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
         Minecraft client = Minecraft.getInstance();
-        PlayerSkin skin = this.specialThanks.skinFor(client, this.skinName);
+        PlayerSkin skin = this.specialThanks.skinFor(client, this.entry);
         PlayerModel model = skin.model() == PlayerModelType.SLIM ? this.slimModel : this.wideModel;
         long now = System.currentTimeMillis();
 
         this.poseWalking(model, now);
-        Identifier texture = skin.body().texturePath();
         float scale = FIT_SCALE * this.height / MODEL_HEIGHT;
         float lumaScale = LumaUiScale.renderScale(client.getWindow().getGuiScale());
         float rotationY = this.rotationY(now);
+        this.drawCape(graphics, skin, scale, lumaScale, rotationY);
         graphics.submitSkinRenderState(
                 model,
-                texture,
+                skin.body().texturePath(),
+                scale * lumaScale,
+                ROTATION_X,
+                rotationY,
+                PIVOT_Y,
+                scaled(this.x, lumaScale),
+                scaled(this.y, lumaScale),
+                scaled(this.x + this.width, lumaScale),
+                scaled(this.y + this.height, lumaScale)
+        );
+    }
+
+    private void drawCape(OwoUIGraphics graphics, PlayerSkin skin, float scale, float lumaScale, float rotationY) {
+        ClientAsset.Texture cape = skin.cape();
+        if (cape == null) {
+            return;
+        }
+        this.capeModel.resetPose();
+        graphics.submitSkinRenderState(
+                this.capeModel,
+                cape.texturePath(),
                 scale * lumaScale,
                 ROTATION_X,
                 rotationY,

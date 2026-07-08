@@ -43,6 +43,10 @@ public final class SpecialThanksClientCache {
         return this.skinFor(client, skinName).body().texturePath();
     }
 
+    public Identifier textureFor(Minecraft client, SpecialThanksEntry entry) {
+        return this.skinFor(client, entry).body().texturePath();
+    }
+
     public PlayerSkin skinFor(Minecraft client, String skinName) {
         if (client == null) {
             return DefaultPlayerSkin.getDefaultSkin();
@@ -50,6 +54,15 @@ public final class SpecialThanksClientCache {
         this.ensureSkinResolver(client);
         MinecraftSpecialThanksSkinResolver resolver = this.skinResolver;
         return resolver == null ? DefaultPlayerSkin.getDefaultSkin() : resolver.skinFor(skinName);
+    }
+
+    public PlayerSkin skinFor(Minecraft client, SpecialThanksEntry entry) {
+        if (client == null) {
+            return DefaultPlayerSkin.getDefaultSkin();
+        }
+        this.ensureSkinResolver(client);
+        MinecraftSpecialThanksSkinResolver resolver = this.skinResolver;
+        return resolver == null ? DefaultPlayerSkin.getDefaultSkin() : resolver.skinFor(entry);
     }
 
     public void addListener(Runnable listener) {
@@ -90,7 +103,7 @@ public final class SpecialThanksClientCache {
             return;
         }
         for (SpecialThanksEntry entry : this.entries) {
-            resolver.skinFor(entry.skinName());
+            resolver.skinFor(entry);
         }
     }
 
