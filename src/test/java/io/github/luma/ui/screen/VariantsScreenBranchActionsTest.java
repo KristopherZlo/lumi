@@ -77,6 +77,22 @@ class VariantsScreenBranchActionsTest {
         assertTrue(methodBody.contains("merge.active(this.canConfirmMerge(sourceVariant))"));
     }
 
+    @Test
+    void mergeConfirmationUsesFixedPreviewBoxesAndFallbackPlaceholder() {
+        String methodBody = methodBody(
+                this.source,
+                "    private FlowLayout mergePreviewColumn(Component label, ProjectVersion version) {",
+                "    private FlowLayout branchBindDialogOverlay() {"
+        );
+
+        assertTrue(this.source.contains("MERGE_PREVIEW_WIDTH"));
+        assertTrue(this.source.contains("MERGE_PREVIEW_HEIGHT"));
+        assertTrue(methodBody.contains("Sizing.fixed(MERGE_PREVIEW_WIDTH)"));
+        assertTrue(methodBody.contains("ProjectUiSupport.versionPreview"));
+        assertTrue(methodBody.contains("MERGE_PREVIEW_HEIGHT"));
+        assertFalse(methodBody.contains("128, 72, 88"));
+    }
+
     private static String methodBody(String source, String start, String end) {
         int methodIndex = source.indexOf(start);
         int nextMethodIndex = source.indexOf(end, methodIndex);

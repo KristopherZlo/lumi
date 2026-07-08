@@ -50,6 +50,7 @@
   ],
   "client": [
     "client.EditWorldScreenMixin",
+    "client.GuiSkinRendererMixin",
     "client.KeyboardHandlerMixin",
     "client.MinecraftInteractionMixin",
     "client.MouseHandlerMixin",

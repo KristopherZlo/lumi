@@ -47,6 +47,8 @@ import org.lwjgl.glfw.GLFW;
 public final class VariantsScreen extends LumaScreen {
 
     private static final Identifier MERGE_CHEVRON = Identifier.fromNamespaceAndPath("lumi", "textures/gui/icons/chevron-right.png");
+    private static final int MERGE_PREVIEW_WIDTH = 128;
+    private static final int MERGE_PREVIEW_HEIGHT = 72;
 
     private final Screen parent;
     private final String projectName;
@@ -474,10 +476,17 @@ public final class VariantsScreen extends LumaScreen {
     }
 
     private FlowLayout mergePreviewColumn(Component label, ProjectVersion version) {
-        FlowLayout column = UIContainers.verticalFlow(Sizing.expand(100), Sizing.content());
+        FlowLayout column = UIContainers.verticalFlow(Sizing.fixed(MERGE_PREVIEW_WIDTH), Sizing.content());
         column.gap(3);
         column.child(LumaUi.caption(label));
-        column.child(ProjectUiSupport.versionPreview(this.actionController, this.projectName, version, 128, 72, 88));
+        column.child(ProjectUiSupport.versionPreview(
+                this.actionController,
+                this.projectName,
+                version,
+                MERGE_PREVIEW_WIDTH,
+                MERGE_PREVIEW_HEIGHT,
+                MERGE_PREVIEW_HEIGHT
+        ));
         column.child(LumaUi.caption(Component.literal(version == null ? "" : ProjectUiSupport.displayMessage(version))));
         return column;
     }

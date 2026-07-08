@@ -22,6 +22,7 @@ class SpecialThanksPlayerShowcaseComponentTest {
         assertTrue(source.contains("ModelLayers.PLAYER_SLIM"));
         assertTrue(source.contains("ModelLayers.PLAYER_CAPE"));
         assertTrue(source.contains("PlayerCapeModel"));
+        assertTrue(source.contains("SpecialThanksCapeRenderRegistry"));
         assertTrue(source.contains("SpecialThanksClientCache.getInstance()"));
         assertTrue(source.contains(".skinFor("));
         assertTrue(source.contains("submitSkinRenderState"));
@@ -29,6 +30,26 @@ class SpecialThanksPlayerShowcaseComponentTest {
         assertTrue(source.contains("PlayerModelType.SLIM"));
         assertTrue(source.contains("Math.sin"));
         assertTrue(source.contains("rotationY"));
+    }
+
+    @Test
+    void capeIsAttachedToSkinRendererInsteadOfSeparateGuiLayer() throws IOException {
+        String source = Files.readString(Path.of(
+                "src/client/java/io/github/luma/client/specialthanks/SpecialThanksPlayerShowcaseComponent.java"
+        ));
+        String mixin = Files.readString(Path.of(
+                "src/client/java/io/github/luma/mixin/client/GuiSkinRendererMixin.java"
+        ));
+        String registry = Files.readString(Path.of(
+                "src/client/java/io/github/luma/client/specialthanks/SpecialThanksCapeRenderRegistry.java"
+        ));
+
+        assertFalse(source.contains("drawCape("));
+        assertTrue(source.contains("attachCape("));
+        assertTrue(source.contains("SpecialThanksCapeRenderRegistry.getInstance().attach"));
+        assertTrue(mixin.contains("renderAttachedCape"));
+        assertTrue(mixin.contains("GuiSkinRenderer"));
+        assertTrue(registry.contains("renderToBuffer"));
     }
 
     @Test

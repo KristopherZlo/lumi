@@ -64,7 +64,7 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
         float scale = FIT_SCALE * this.height / MODEL_HEIGHT;
         float lumaScale = LumaUiScale.renderScale(client.getWindow().getGuiScale());
         float rotationY = this.rotationY(now);
-        this.drawCape(graphics, skin, scale, lumaScale, rotationY);
+        this.attachCape(model, skin);
         graphics.submitSkinRenderState(
                 model,
                 skin.body().texturePath(),
@@ -79,24 +79,14 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
         );
     }
 
-    private void drawCape(OwoUIGraphics graphics, PlayerSkin skin, float scale, float lumaScale, float rotationY) {
+    private void attachCape(PlayerModel model, PlayerSkin skin) {
         ClientAsset.Texture cape = skin.cape();
         if (cape == null) {
+            SpecialThanksCapeRenderRegistry.getInstance().clear(model);
             return;
         }
         this.capeModel.resetPose();
-        graphics.submitSkinRenderState(
-                this.capeModel,
-                cape.texturePath(),
-                scale * lumaScale,
-                ROTATION_X,
-                rotationY,
-                PIVOT_Y,
-                scaled(this.x, lumaScale),
-                scaled(this.y, lumaScale),
-                scaled(this.x + this.width, lumaScale),
-                scaled(this.y + this.height, lumaScale)
-        );
+        SpecialThanksCapeRenderRegistry.getInstance().attach(model, this.capeModel, cape.texturePath());
     }
 
     private static int scaled(int coordinate, float scale) {
