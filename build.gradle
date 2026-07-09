@@ -301,23 +301,16 @@ def purgeTestClientRuntimeRemapCache = tasks.register('purgeTestClientRuntimeRem
     }
 }
 
-def installTestClientMods = tasks.register('installTestClientMods', Sync) {
+def installTestClientMods = tasks.register('installTestClientMods', Copy) {
     dependsOn(downloadPinnedTestClientMods)
     finalizedBy(purgeTestClientRuntimeRemapCache)
     from(configurations.testClientMods)
     from(layout.buildDirectory.dir('test-client-downloads'))
     into(layout.projectDirectory.dir('run/test-client/mods'))
-
-    doLast {
-        delete(
-                fileTree(destinationDir) {
-                    include 'lazydfu*.jar'
-                    include 'LazyDFU*.jar'
-                    include 'entityculling-1.10.1.jar'
-                    include 'forge-config-api-port-*.jar'
-                }
-        )
-    }
+    exclude 'lazydfu*.jar'
+    exclude 'LazyDFU*.jar'
+    exclude 'entityculling-1.10.1.jar'
+    exclude 'forge-config-api-port-*.jar'
 }
 
 purgeTestClientRuntimeRemapCache.configure {
@@ -397,7 +390,6 @@ def writeQuietClientRuntimeOptions = { String runDirPath ->
 }
 
 [
-        'runTestClient': 'run/test-client',
         'runClientGameTest': 'build/run/clientGameTest',
         'runBaselineClientGameTest': 'build/run/baselineClientGameTest',
         'runIdleClientGameTest': 'build/run/idleClientGameTest',
