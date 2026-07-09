@@ -303,7 +303,6 @@ def purgeTestClientRuntimeRemapCache = tasks.register('purgeTestClientRuntimeRem
 
 def installTestClientMods = tasks.register('installTestClientMods', Copy) {
     dependsOn(downloadPinnedTestClientMods)
-    finalizedBy(purgeTestClientRuntimeRemapCache)
     from(configurations.testClientMods)
     from(layout.buildDirectory.dir('test-client-downloads'))
     into(layout.projectDirectory.dir('run/test-client/mods'))
@@ -319,7 +318,6 @@ purgeTestClientRuntimeRemapCache.configure {
 
 tasks.named('runTestClient').configure {
     dependsOn(installTestClientMods)
-    dependsOn(purgeTestClientRuntimeRemapCache)
 }
 
 tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.ClientProductionRunTask) {

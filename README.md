@@ -147,7 +147,7 @@ Run the local test-client profile:
 .\scripts\run-test-client.ps1
 ```
 
-The test-client game directory is `run/test-client`. Put ad-hoc client mods in `run/test-client/mods`; `installTestClientMods` copies the pinned test mods there without clearing your manual jars. The local `runTestClient` profile also leaves `run/test-client/options.txt` alone, so Minecraft settings such as sound are not reset on every launch.
+The test-client game directory is `run/test-client`. Put ad-hoc client mods in `run/test-client/mods`; `installTestClientMods` copies the pinned test mods there without clearing your manual jars or the Fabric remap cache. The local `runTestClient` profile also leaves `run/test-client/options.txt` alone, so Minecraft settings such as sound are not reset on every launch. Run `.\gradlew.bat purgeTestClientRuntimeRemapCache` only when the test-client remap cache is stale.
 
 Run the server GameTest smoke suite:
 
