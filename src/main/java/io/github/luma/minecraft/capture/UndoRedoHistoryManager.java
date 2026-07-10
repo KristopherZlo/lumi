@@ -24,6 +24,7 @@ public final class UndoRedoHistoryManager {
 
     private final Map<String, Map<String, UndoRedoActionStack>> projectStacks = new HashMap<>();
     private final Map<String, Long> projectRevisions = new HashMap<>();
+    private final Map<String, OwnerSnapshot> currentOwnerSnapshots = new HashMap<>();
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
 
     private UndoRedoHistoryManager() {
@@ -294,6 +295,7 @@ public final class UndoRedoHistoryManager {
         }
         this.projectStacks.remove(projectId);
         this.projectRevisions.remove(projectId);
+        this.currentOwnerSnapshots.remove(projectId);
     }
 
     private UndoRedoActionStack stack(String projectId, String actor) {
@@ -323,6 +325,7 @@ public final class UndoRedoHistoryManager {
             return;
         }
         this.projectRevisions.merge(projectId, 1L, Long::sum);
+        this.currentOwnerSnapshots.remove(projectId);
     }
 
     private UndoRedoActionStack stackForSelection(String projectId, UndoRedoActionStack.Selection selection) {
@@ -399,7 +402,6 @@ public final class UndoRedoHistoryManager {
                 .filter(action -> undo ? this.actionIsCurrent(projectId, action) : this.actionCanRedo(projectId, action))
                 .sorted(Comparator.comparing(UndoRedoAction::updatedAt).reversed())
                 .limit(count)
-                .map(UndoRedoAction::copy)
                 .toList();
     }
 
@@ -446,6 +448,11 @@ public final class UndoRedoHistoryManager {
     }
 
     private Map<String, KeyOwner> currentOwners(String projectId) {
+        long revision = this.projectRevisions.getOrDefault(projectId, 0L);
+        OwnerSnapshot cached = this.currentOwnerSnapshots.get(projectId);
+        if (cached != null && cached.revision() == revision) {
+            return cached.owners();
+        }
         Map<String, UndoRedoActionStack> stacks = this.projectStacks.get(projectId);
         if (stacks == null || stacks.isEmpty()) {
             return Map.of();
@@ -456,7 +463,9 @@ public final class UndoRedoHistoryManager {
                 .flatMap(stack -> stack.recentUndoActions(64).stream())
                 .sorted(Comparator.comparing(UndoRedoAction::updatedAt))
                 .forEach(action -> this.markOwners(owners, action));
-        return owners;
+        Map<String, KeyOwner> snapshot = Map.copyOf(owners);
+        this.currentOwnerSnapshots.put(projectId, new OwnerSnapshot(revision, snapshot));
+        return snapshot;
     }
 
     private void markOwners(Map<String, KeyOwner> owners, UndoRedoAction action) {
@@ -531,5 +540,8 @@ public final class UndoRedoHistoryManager {
     }
 
     private record KeyOwner(String actionId, Instant updatedAt) {
+    }
+
+    private record OwnerSnapshot(long revision, Map<String, KeyOwner> owners) {
     }
 }

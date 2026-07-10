@@ -101,6 +101,42 @@ class UndoRedoHistoryManagerTest {
     }
 
     @Test
+    void ownerSnapshotIsInvalidatedWhenAnotherActorChangesTheProject() {
+        UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
+        String projectId = "owner-snapshot-invalidation-test";
+        historyManager.clearProject(projectId);
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "alex-action",
+                "Alex",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:00Z")
+        );
+        historyManager.recentUndoPreviewActionsSnapshot(projectId, 10);
+
+        historyManager.recordAction(
+                projectId,
+                "minecraft:overworld",
+                "steve-action",
+                "Steve",
+                List.of(change(1)),
+                List.of(),
+                Instant.parse("2026-04-23T08:00:01Z")
+        );
+
+        assertEquals(
+                List.of("steve-action"),
+                historyManager.recentUndoPreviewActionsSnapshot(projectId, 10)
+                        .actions()
+                        .stream()
+                        .map(action -> action.id())
+                        .toList()
+        );
+    }
+
+    @Test
     void projectRevisionAdvancesWhenSecondActorStackChanges() {
         UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
         String projectId = "project-revision-second-actor-test";
