@@ -40,6 +40,34 @@ class VersionRepositoryIndexTest {
     }
 
     @Test
+    void saveExtendsAFreshIndexWithoutRescanningOlderManifests() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Incremental");
+        this.repository.save(layout, version("v0001", "Manifest message", 0));
+        String indexedJson = Files.readString(layout.versionIndexFile())
+                .replace("Manifest message", "Cached message");
+        Files.writeString(layout.versionIndexFile(), indexedJson, StandardCharsets.UTF_8);
+
+        this.repository.save(layout, version("v0002", "Second", 1));
+
+        List<ProjectVersion> versions = this.repository.loadAll(layout);
+        assertEquals(List.of("Cached message", "Second"), versions.stream().map(ProjectVersion::message).toList());
+    }
+
+    @Test
+    void saveRescansWhenAnOlderManifestMakesTheIndexStale() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Incremental Stale");
+        this.repository.save(layout, version("v0001", "Before", 0));
+        Path manifest = layout.versionFile("v0001");
+        Files.writeString(manifest, GsonProvider.gson().toJson(version("v0001", "Changed", 0)), StandardCharsets.UTF_8);
+        Files.setLastModifiedTime(manifest, FileTime.fromMillis(Files.getLastModifiedTime(manifest).toMillis() + 2000L));
+
+        this.repository.save(layout, version("v0002", "Second", 1));
+
+        List<ProjectVersion> versions = this.repository.loadAll(layout);
+        assertEquals(List.of("Changed", "Second"), versions.stream().map(ProjectVersion::message).toList());
+    }
+
+    @Test
     void staleIndexRebuildsAfterManifestSizeOrMtimeChanges() throws Exception {
         ProjectLayout layout = ProjectLayout.of(this.tempDir, "Stale");
         this.repository.save(layout, version("v0001", "Before", 0));

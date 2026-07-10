@@ -23,13 +23,31 @@ public final class VersionRepository {
 
     public void save(ProjectLayout layout, ProjectVersion version) throws IOException {
         Files.createDirectories(layout.versionsDir());
+        Optional<List<ProjectVersion>> indexed = this.loadFreshIndex(layout);
         StorageIo.writeAtomically(layout.versionFile(version.id()), output -> output.write(
                 GsonProvider.gson().toJson(version).getBytes(StandardCharsets.UTF_8)
         ));
         try {
-            this.indexRepository.rebuild(layout, this.scanManifests(layout));
+            List<ProjectVersion> versions;
+            if (indexed.isPresent()) {
+                versions = new ArrayList<>(indexed.get());
+                versions.removeIf(candidate -> candidate.id().equals(version.id()));
+                versions.add(this.normalize(version));
+                versions.sort(Comparator.comparing(ProjectVersion::createdAt));
+            } else {
+                versions = this.scanManifests(layout);
+            }
+            this.indexRepository.rebuild(layout, versions);
         } catch (IOException | RuntimeException exception) {
             this.deleteIndexQuietly(layout);
+        }
+    }
+
+    private Optional<List<ProjectVersion>> loadFreshIndex(ProjectLayout layout) {
+        try {
+            return this.indexRepository.loadIfFresh(layout, this.versionManifestFiles(layout));
+        } catch (IOException | RuntimeException exception) {
+            return Optional.empty();
         }
     }
 
