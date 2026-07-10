@@ -31,6 +31,8 @@ public final class TrackedChangeBuffer {
     private Instant updatedAt;
     private final LinkedHashMap<BlockPoint, StoredBlockChange> changes = new LinkedHashMap<>();
     private final LinkedHashMap<String, StoredEntityChange> entityChanges = new LinkedHashMap<>();
+    private int contentFingerprint;
+    private boolean contentFingerprintDirty = true;
 
     public TrackedChangeBuffer(
             String id,
@@ -104,11 +106,13 @@ public final class TrackedChangeBuffer {
 
     public void addChange(StoredBlockChange change, Instant now) {
         StoredChangeAccumulator.mergeBlockChange(this.changes, change);
+        this.contentFingerprintDirty = true;
         this.updatedAt = now;
     }
 
     public void addEntityChange(StoredEntityChange change, Instant now) {
         StoredChangeAccumulator.mergeUndoableEntityChange(this.entityChanges, change);
+        this.contentFingerprintDirty = true;
         this.updatedAt = now;
     }
 
@@ -205,6 +209,9 @@ public final class TrackedChangeBuffer {
     }
 
     public int contentFingerprint() {
+        if (!this.contentFingerprintDirty) {
+            return this.contentFingerprint;
+        }
         int result = 1;
         for (Map.Entry<BlockPoint, StoredBlockChange> entry : this.changes.entrySet()) {
             result = (31 * result) + entry.getKey().hashCode();
@@ -214,7 +221,9 @@ public final class TrackedChangeBuffer {
             result = (31 * result) + entry.getKey().hashCode();
             result = (31 * result) + entry.getValue().hashCode();
         }
-        return result;
+        this.contentFingerprint = result;
+        this.contentFingerprintDirty = false;
+        return this.contentFingerprint;
     }
 
     public List<StoredBlockChange> orderedChanges() {
@@ -276,10 +285,11 @@ public final class TrackedChangeBuffer {
     }
 
     private void removeChunk(ChunkPoint chunk) {
-        this.changes.entrySet().removeIf(entry -> {
+        boolean removed = this.changes.entrySet().removeIf(entry -> {
             StoredBlockChange change = entry.getValue();
             return (change.pos().x() >> 4) == chunk.x()
                     && (change.pos().z() >> 4) == chunk.z();
         });
+        this.contentFingerprintDirty |= removed;
     }
 }

@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TrackedChangeBufferTest {
@@ -138,6 +139,24 @@ class TrackedChangeBufferTest {
         buffer.replaceChunks(List.of(new ChunkPoint(0, 0)), List.of(change), now.plusSeconds(20));
 
         assertEquals(firstFingerprint, buffer.contentFingerprint());
+    }
+
+    @Test
+    void contentFingerprintIsInvalidatedWhenAChunkIsRemoved() {
+        Instant now = Instant.parse("2026-04-20T10:15:30Z");
+        TrackedChangeBuffer buffer = TrackedChangeBuffer.create(
+                "session", "project", "main", "v0001", "tester", WorldMutationSource.PLAYER, now
+        );
+        buffer.addChange(new StoredBlockChange(
+                new BlockPoint(1, 64, 1),
+                payload("minecraft:stone"),
+                payload("minecraft:dirt")
+        ), now);
+        int populatedFingerprint = buffer.contentFingerprint();
+
+        buffer.replaceChunks(List.of(new ChunkPoint(0, 0)), List.of(), now.plusSeconds(1));
+
+        assertNotEquals(populatedFingerprint, buffer.contentFingerprint());
     }
 
     @Test

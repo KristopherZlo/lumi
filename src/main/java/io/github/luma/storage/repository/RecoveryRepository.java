@@ -40,13 +40,27 @@ public final class RecoveryRepository {
     private static final int ENTITY_CHANGE_DRAFT_VERSION = 4;
     private static final int HIDDEN_BLOCK_CHANGE_DRAFT_VERSION = 5;
     private static final long WAL_COMPACT_THRESHOLD_BYTES = 512 * 1024;
+    static final int MAX_JOURNAL_ENTRIES = 512;
     private static final byte[] EXPECTED_DRAFT_MARKER = "expected\n".getBytes(StandardCharsets.UTF_8);
     private static final Type JOURNAL_TYPE = new TypeToken<List<RecoveryJournalEntry>>() { }.getType();
 
     public void saveDraft(ProjectLayout layout, RecoveryDraft draft) throws IOException {
-        this.appendWalEntry(layout.recoveryWalFile(), draft);
-        if (this.shouldCompact(layout)) {
-            this.writeBase(layout.recoveryBaseFile(), draft);
+        byte[] draftBytes = this.serializeDraft(draft);
+        boolean baseExists = Files.exists(layout.recoveryBaseFile());
+        boolean walExists = Files.exists(layout.recoveryWalFile());
+        if (!baseExists && !walExists) {
+            this.writeBase(layout.recoveryBaseFile(), draftBytes);
+            LumaMod.LOGGER.info(
+                    "Initialized recovery base for project storage {} with {} changes",
+                    layout.root().getFileName(),
+                    draft.totalChangeCount()
+            );
+            return;
+        }
+
+        this.appendWalEntry(layout.recoveryWalFile(), draftBytes);
+        if (!baseExists || Files.size(layout.recoveryWalFile()) >= WAL_COMPACT_THRESHOLD_BYTES) {
+            this.writeBase(layout.recoveryBaseFile(), draftBytes);
             Files.deleteIfExists(layout.recoveryWalFile());
             LumaMod.LOGGER.info(
                     "Compacted recovery WAL for project storage {} with {} changes",
@@ -149,6 +163,9 @@ public final class RecoveryRepository {
     public void appendJournalEntry(ProjectLayout layout, RecoveryJournalEntry entry) throws IOException {
         List<RecoveryJournalEntry> entries = new ArrayList<>(this.loadJournal(layout));
         entries.add(entry);
+        if (entries.size() > MAX_JOURNAL_ENTRIES) {
+            entries.subList(0, entries.size() - MAX_JOURNAL_ENTRIES).clear();
+        }
         StorageIo.writeAtomically(layout.recoveryJournalFile(), output -> output.write(
                 GsonProvider.compactGson().toJson(entries).getBytes(StandardCharsets.UTF_8)
         ));
@@ -211,14 +228,12 @@ public final class RecoveryRepository {
         Files.deleteIfExists(layout.pendingRestoreCompletionFile());
     }
 
-    private boolean shouldCompact(ProjectLayout layout) throws IOException {
-        return !Files.exists(layout.recoveryBaseFile())
-                || (Files.exists(layout.recoveryWalFile()) && Files.size(layout.recoveryWalFile()) >= WAL_COMPACT_THRESHOLD_BYTES);
+    private void writeBase(Path baseFile, RecoveryDraft draft) throws IOException {
+        this.writeBase(baseFile, this.serializeDraft(draft));
     }
 
-    private void writeBase(Path baseFile, RecoveryDraft draft) throws IOException {
+    private void writeBase(Path baseFile, byte[] entryBytes) throws IOException {
         StorageIo.writeAtomically(baseFile, output -> {
-            byte[] entryBytes = this.serializeDraft(draft);
             try (DataOutputStream data = new DataOutputStream(new LZ4FrameOutputStream(new BufferedOutputStream(output)))) {
                 data.writeInt(entryBytes.length);
                 data.write(entryBytes);
@@ -226,8 +241,8 @@ public final class RecoveryRepository {
         });
     }
 
-    private void appendWalEntry(Path walFile, RecoveryDraft draft) throws IOException {
-        byte[] compressedEntry = this.compressEntry(this.serializeDraft(draft));
+    private void appendWalEntry(Path walFile, byte[] entryBytes) throws IOException {
+        byte[] compressedEntry = this.compressEntry(entryBytes);
         StorageIo.appendDurably(walFile, output -> {
             DataOutputStream data = new DataOutputStream(output);
             data.writeInt(compressedEntry.length);

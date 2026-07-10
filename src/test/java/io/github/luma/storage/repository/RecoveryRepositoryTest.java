@@ -6,6 +6,7 @@ import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.PartialRestoreMode;
 import io.github.luma.domain.model.PendingRestoreCompletion;
 import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
@@ -20,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -36,6 +38,27 @@ class RecoveryRepositoryTest {
     private final RecoveryRepository repository = new RecoveryRepository();
 
     @Test
+    void journalKeepsOnlyTheNewestBoundedEntries() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        List<RecoveryJournalEntry> entries = new ArrayList<>();
+        for (int index = 0; index <= RecoveryRepository.MAX_JOURNAL_ENTRIES; index++) {
+            entries.add(journalEntry(index));
+        }
+        Files.createDirectories(layout.recoveryJournalFile().getParent());
+        Files.writeString(
+                layout.recoveryJournalFile(),
+                io.github.luma.storage.GsonProvider.compactGson().toJson(entries)
+        );
+
+        this.repository.appendJournalEntry(layout, journalEntry(entries.size()));
+
+        List<RecoveryJournalEntry> restored = this.repository.loadJournal(layout);
+        assertEquals(RecoveryRepository.MAX_JOURNAL_ENTRIES, restored.size());
+        assertEquals("event-2", restored.getFirst().type());
+        assertEquals("event-513", restored.getLast().type());
+    }
+
+    @Test
     void latestWalEntryWinsWhenLoadingDraft() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         RecoveryDraft first = draft("minecraft:stone", Instant.parse("2026-04-20T10:00:00Z"));
@@ -47,6 +70,21 @@ class RecoveryRepositoryTest {
         RecoveryDraft restored = this.repository.loadDraft(layout).orElseThrow();
         assertEquals(second.updatedAt(), restored.updatedAt());
         assertEquals("minecraft:gold_block", restored.changes().getFirst().newValue().blockId());
+    }
+
+    @Test
+    void saveCompactsOrphanedWalIntoTheNewestDraft() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        this.repository.saveDraft(layout, draft("minecraft:stone", Instant.parse("2026-04-20T10:00:00Z")));
+        this.repository.saveDraft(layout, draft("minecraft:gold_block", Instant.parse("2026-04-20T10:05:00Z")));
+        Files.delete(layout.recoveryBaseFile());
+
+        this.repository.saveDraft(layout, draft("minecraft:diamond_block", Instant.parse("2026-04-20T10:10:00Z")));
+
+        RecoveryDraft restored = this.repository.loadDraft(layout).orElseThrow();
+        assertEquals("minecraft:diamond_block", restored.changes().getFirst().newValue().blockId());
+        assertTrue(Files.exists(layout.recoveryBaseFile()));
+        assertFalse(Files.exists(layout.recoveryWalFile()));
     }
 
     @Test
@@ -268,6 +306,16 @@ class RecoveryRepositoryTest {
                         payload("minecraft:stone"),
                         payload(blockId)
                 ))
+        );
+    }
+
+    private static RecoveryJournalEntry journalEntry(int index) {
+        return new RecoveryJournalEntry(
+                Instant.EPOCH.plusSeconds(index),
+                "event-" + index,
+                "message",
+                "",
+                ""
         );
     }
 
