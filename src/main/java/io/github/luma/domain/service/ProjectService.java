@@ -186,17 +186,10 @@ public final class ProjectService {
         String snapshotId = snapshotId(1);
         String entityCheckpointId = entityCheckpointId(1);
         List<ChunkPoint> initialChunks = ChunkSelectionFactory.fromBounds(bounds);
-        this.snapshotCaptureService.capture(
+        this.snapshotCaptureService.captureSnapshotAndEntityCheckpoint(
                 layout,
                 project.id().toString(),
                 snapshotId,
-                initialChunks,
-                level,
-                now
-        );
-        this.snapshotCaptureService.captureEntityCheckpoint(
-                layout,
-                project.id().toString(),
                 entityCheckpointId,
                 initialChunks,
                 level,

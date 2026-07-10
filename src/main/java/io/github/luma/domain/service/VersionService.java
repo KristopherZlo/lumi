@@ -635,16 +635,50 @@ public final class VersionService {
                 stats.changedChunks()
         );
 
+        boolean createSnapshot;
+        sectionStartedAt = System.nanoTime();
+        try (var ignored = LumaLoadLog.measure("save", "VersionService.snapshotPolicy", "project=" + project.name())) {
+            createSnapshot = level != null
+                    && allowSnapshotCapture
+                    && ((parentVersionId == null || parentVersionId.isBlank())
+                    || this.snapshotPlanner.shouldCreateSnapshot(
+                            project,
+                            layout,
+                            versions,
+                            activeVariant,
+                            draft,
+                            stats,
+                            versionKind
+                    ));
+        } finally {
+            recordTiming(timing, VersionSaveTiming.SNAPSHOT_POLICY, sectionStartedAt);
+        }
+        LumaMod.LOGGER.info(
+                "Snapshot policy for version {} in project {} resolved to {}",
+                versionId,
+                project.name(),
+                createSnapshot
+        );
+
         progressSink.update(OperationStage.PREPARING, 0, draft.totalChangeCount(), "Preparing version payload");
         String entityCheckpointId = "";
+        String snapshotId = "";
         List<ChunkPoint> entityCheckpointChunks = List.of();
         if (level != null) {
             entityCheckpointId = ProjectService.entityCheckpointId(nextIndex);
-            progressSink.update(OperationStage.WRITING, 0, draft.totalChangeCount(), "Capturing entity checkpoint");
+            snapshotId = createSnapshot ? ProjectService.snapshotId(nextIndex) : "";
+            progressSink.update(
+                    OperationStage.WRITING,
+                    0,
+                    draft.totalChangeCount(),
+                    createSnapshot ? "Capturing snapshot and entity checkpoint" : "Capturing entity checkpoint"
+            );
             sectionStartedAt = System.nanoTime();
             try (var ignored = LumaLoadLog.measure(
                     "save",
-                    "SnapshotCaptureService.captureEntityCheckpoint",
+                    createSnapshot
+                            ? "SnapshotCaptureService.captureSnapshotAndEntityCheckpoint"
+                            : "SnapshotCaptureService.captureEntityCheckpoint",
                     "project=" + project.name()
             )) {
                 entityCheckpointChunks = this.snapshotPlanner.collectEntityCheckpointChunks(
@@ -654,16 +688,32 @@ public final class VersionService {
                         draft,
                         this.liveEntityChunkCollector.collect(level)
                 );
-                this.snapshotCaptureService.captureEntityCheckpoint(
-                        layout,
-                        project.id().toString(),
-                        entityCheckpointId,
-                        entityCheckpointChunks,
-                        level,
-                        now
-                );
+                if (createSnapshot) {
+                    this.snapshotCaptureService.captureSnapshotAndEntityCheckpoint(
+                            layout,
+                            project.id().toString(),
+                            snapshotId,
+                            entityCheckpointId,
+                            entityCheckpointChunks,
+                            level,
+                            now
+                    );
+                } else {
+                    this.snapshotCaptureService.captureEntityCheckpoint(
+                            layout,
+                            project.id().toString(),
+                            entityCheckpointId,
+                            entityCheckpointChunks,
+                            level,
+                            now
+                    );
+                }
             } finally {
-                recordTiming(timing, VersionSaveTiming.ENTITY_CHECKPOINT_CAPTURE, sectionStartedAt);
+                recordTiming(
+                        timing,
+                        createSnapshot ? VersionSaveTiming.SNAPSHOT_CAPTURE : VersionSaveTiming.ENTITY_CHECKPOINT_CAPTURE,
+                        sectionStartedAt
+                );
             }
         }
         PatchMetadata patchMetadata;
@@ -696,59 +746,15 @@ public final class VersionService {
             recordTiming(timing, VersionSaveTiming.PATCH_META_WRITE, sectionStartedAt);
         }
 
-        String snapshotId = "";
-        boolean createSnapshot;
-        sectionStartedAt = System.nanoTime();
-        try (var ignored = LumaLoadLog.measure("save", "VersionService.snapshotPolicy", "project=" + project.name())) {
-            createSnapshot = allowSnapshotCapture
-                    && ((parentVersionId == null || parentVersionId.isBlank())
-                    || this.snapshotPlanner.shouldCreateSnapshot(project, layout, versions, activeVariant, draft, stats, versionKind));
-        } finally {
-            recordTiming(timing, VersionSaveTiming.SNAPSHOT_POLICY, sectionStartedAt);
-        }
-        LumaMod.LOGGER.info(
-                "Snapshot policy for version {} in project {} resolved to {}",
-                versionId,
-                project.name(),
-                createSnapshot
-        );
         if (createSnapshot) {
-            snapshotId = ProjectService.snapshotId(nextIndex);
-            progressSink.update(OperationStage.WRITING, draft.changes().size(), draft.changes().size(), "Capturing snapshot");
-            List<ChunkPoint> snapshotChunks;
-            sectionStartedAt = System.nanoTime();
-            try (var ignored = LumaLoadLog.measure("save", "VersionService.collectSnapshotChunks", "project=" + project.name())) {
-                snapshotChunks = entityCheckpointChunks.isEmpty()
-                        ? this.snapshotPlanner.collectSnapshotChunks(layout, project, versions, draft)
-                        : entityCheckpointChunks;
-            } finally {
-                recordTiming(timing, VersionSaveTiming.SNAPSHOT_PREPARATION, sectionStartedAt);
-            }
             LumaDebugLog.log(
                     project,
                     "save",
-                    "Capturing snapshot {} for version {} across {} tracked chunks",
+                    "Captured snapshot {} for version {} across {} tracked chunks",
                     snapshotId,
                     versionId,
-                    snapshotChunks.size()
+                    entityCheckpointChunks.size()
             );
-            sectionStartedAt = System.nanoTime();
-            try (var ignored = LumaLoadLog.measure(
-                    "save",
-                    "SnapshotCaptureService.capture",
-                    "project=" + project.name() + ", chunks=" + snapshotChunks.size()
-            )) {
-                this.snapshotCaptureService.capture(
-                        layout,
-                        project.id().toString(),
-                        snapshotId,
-                        snapshotChunks,
-                        level,
-                        now
-                );
-            } finally {
-                recordTiming(timing, VersionSaveTiming.SNAPSHOT_CAPTURE, sectionStartedAt);
-            }
         }
 
         ProjectVersion version = new ProjectVersion(
