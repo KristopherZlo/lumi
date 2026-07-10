@@ -50,38 +50,47 @@ final class EntitySpawnCaptureQueue {
     void drain(
             MinecraftServer server,
             EntityMutationTracker.EntityChangeRecorder recorder,
-            boolean allowInitialPayloadFallback
+            boolean allowInitialPayloadFallback,
+            int maxCaptures
     ) {
-        if (server == null || recorder == null) {
+        if (server == null || recorder == null || maxCaptures <= 0) {
             return;
         }
 
+        int remaining = maxCaptures;
         for (ServerLevel level : server.getAllLevels()) {
-            this.drain(level, recorder, allowInitialPayloadFallback);
+            remaining -= this.drain(level, recorder, allowInitialPayloadFallback, remaining);
+            if (remaining <= 0) {
+                break;
+            }
         }
     }
 
-    private void drain(
+    private int drain(
             ServerLevel level,
             EntityMutationTracker.EntityChangeRecorder recorder,
-            boolean allowInitialPayloadFallback
+            boolean allowInitialPayloadFallback,
+            int maxCaptures
     ) {
-        List<PendingSpawnCapture> captures = this.pending(level);
+        List<PendingSpawnCapture> captures = this.pending(level, maxCaptures);
         if (captures.isEmpty()) {
-            return;
+            return 0;
         }
 
         long now = level.getGameTime();
         for (PendingSpawnCapture capture : captures) {
             EntityPayload payload = this.resolvePayload(level, capture, allowInitialPayloadFallback);
             if (payload == null) {
-                this.removeIfExpired(level, capture, now);
+                if (!this.removeIfExpired(level, capture, now)) {
+                    this.defer(level, capture);
+                }
                 continue;
             }
 
             recorder.record(level, null, payload, capture.frame(), capture.undoOnly());
             this.remove(level, capture.entityId());
         }
+        return captures.size();
     }
 
     private EntityPayload resolvePayload(
@@ -104,18 +113,36 @@ final class EntitySpawnCaptureQueue {
         return allowInitialPayloadFallback ? capture.initialPayload() : null;
     }
 
-    private synchronized List<PendingSpawnCapture> pending(ServerLevel level) {
+    private synchronized List<PendingSpawnCapture> pending(ServerLevel level, int limit) {
         LinkedHashMap<UUID, PendingSpawnCapture> worldCaptures = this.pendingCaptures.get(level);
         if (worldCaptures == null || worldCaptures.isEmpty()) {
             return List.of();
         }
-        return List.copyOf(new ArrayList<>(worldCaptures.values()));
+        List<PendingSpawnCapture> captures = new ArrayList<>(Math.min(limit, worldCaptures.size()));
+        for (PendingSpawnCapture capture : worldCaptures.values()) {
+            captures.add(capture);
+            if (captures.size() >= limit) {
+                break;
+            }
+        }
+        return List.copyOf(captures);
     }
 
-    private void removeIfExpired(ServerLevel level, PendingSpawnCapture capture, long now) {
+    private boolean removeIfExpired(ServerLevel level, PendingSpawnCapture capture, long now) {
         if (now - capture.queuedAtGameTime() >= MAX_CAPTURE_AGE_TICKS) {
             this.remove(level, capture.entityId());
+            return true;
         }
+        return false;
+    }
+
+    private synchronized void defer(ServerLevel level, PendingSpawnCapture capture) {
+        LinkedHashMap<UUID, PendingSpawnCapture> worldCaptures = this.pendingCaptures.get(level);
+        if (worldCaptures == null || worldCaptures.get(capture.entityId()) != capture) {
+            return;
+        }
+        worldCaptures.remove(capture.entityId());
+        worldCaptures.put(capture.entityId(), capture);
     }
 
     private synchronized void remove(ServerLevel level, UUID entityId) {

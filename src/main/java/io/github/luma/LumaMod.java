@@ -82,6 +82,7 @@ public final class LumaMod implements ModInitializer {
             try (var ignored = LumaLoadLog.measure("lifecycle", "server-stopping")) {
                 this.worldBootstrapService.close();
                 this.operationBossBars.clear();
+                EntityMutationTracker.drainPendingSpawns(server);
                 HistoryCaptureManager.getInstance().flushAll(server);
                 HistoryCaptureManager.getInstance().invalidateProjectCache(server);
                 WorldOperationManager.getInstance().shutdown(server);

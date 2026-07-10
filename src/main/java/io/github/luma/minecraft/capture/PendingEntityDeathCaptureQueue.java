@@ -36,42 +36,68 @@ final class PendingEntityDeathCaptureQueue {
                 .add(oldPayload);
     }
 
-    void drain(MinecraftServer server, EntityMutationTracker.EntityDeathBatchRecorder recorder) {
-        if (server == null || recorder == null) {
+    void drain(
+            MinecraftServer server,
+            EntityMutationTracker.EntityDeathBatchRecorder recorder,
+            int maxCaptures
+    ) {
+        if (server == null || recorder == null || maxCaptures <= 0) {
             return;
         }
 
+        int remaining = maxCaptures;
         for (ServerLevel level : server.getAllLevels()) {
-            this.drain(level, recorder);
+            remaining -= this.drain(level, recorder, remaining);
+            if (remaining <= 0) {
+                break;
+            }
         }
     }
 
-    private void drain(ServerLevel level, EntityMutationTracker.EntityDeathBatchRecorder recorder) {
-        List<PendingDeathBatch> batches = this.pending(level);
-        if (batches.isEmpty()) {
-            return;
+    private int drain(
+            ServerLevel level,
+            EntityMutationTracker.EntityDeathBatchRecorder recorder,
+            int maxCaptures
+    ) {
+        int processed = 0;
+        while (processed < maxCaptures) {
+            PendingDeathSlice slice = this.pending(level, maxCaptures - processed);
+            if (slice == null) {
+                break;
+            }
+            recorder.record(level, slice.oldPayloads(), slice.frame());
+            this.remove(level, slice);
+            processed += slice.oldPayloads().size();
         }
-
-        for (PendingDeathBatch batch : batches) {
-            recorder.record(level, batch.oldPayloads(), batch.frame());
-            this.remove(level, batch.frame().actionId());
-        }
+        return processed;
     }
 
-    private synchronized List<PendingDeathBatch> pending(ServerLevel level) {
+    private synchronized PendingDeathSlice pending(ServerLevel level, int limit) {
         LinkedHashMap<String, PendingDeathBatch> worldCaptures = this.pendingCaptures.get(level);
         if (worldCaptures == null || worldCaptures.isEmpty()) {
-            return List.of();
+            return null;
         }
-        return List.copyOf(worldCaptures.values());
+        Map.Entry<String, PendingDeathBatch> entry = worldCaptures.entrySet().iterator().next();
+        return new PendingDeathSlice(
+                entry.getKey(),
+                entry.getValue().frame(),
+                entry.getValue().oldPayloads(limit)
+        );
     }
 
-    private synchronized void remove(ServerLevel level, String actionId) {
+    private synchronized void remove(ServerLevel level, PendingDeathSlice slice) {
         LinkedHashMap<String, PendingDeathBatch> worldCaptures = this.pendingCaptures.get(level);
         if (worldCaptures == null) {
             return;
         }
-        worldCaptures.remove(actionId);
+        PendingDeathBatch batch = worldCaptures.get(slice.actionId());
+        if (batch == null) {
+            return;
+        }
+        batch.remove(slice.oldPayloads());
+        if (batch.isEmpty()) {
+            worldCaptures.remove(slice.actionId());
+        }
         if (worldCaptures.isEmpty()) {
             this.pendingCaptures.remove(level);
         }
@@ -94,8 +120,23 @@ final class PendingEntityDeathCaptureQueue {
             return this.frame;
         }
 
-        private List<EntityPayload> oldPayloads() {
-            return List.copyOf(this.oldPayloads.values());
+        private List<EntityPayload> oldPayloads(int limit) {
+            return this.oldPayloads.values().stream().limit(limit).toList();
         }
+
+        private void remove(List<EntityPayload> payloads) {
+            payloads.forEach(payload -> this.oldPayloads.remove(payload.entityId()));
+        }
+
+        private boolean isEmpty() {
+            return this.oldPayloads.isEmpty();
+        }
+    }
+
+    private record PendingDeathSlice(
+            String actionId,
+            EntityMutationTracker.CaptureFrame frame,
+            List<EntityPayload> oldPayloads
+    ) {
     }
 }

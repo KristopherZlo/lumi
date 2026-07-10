@@ -19,7 +19,9 @@ class PendingEntityDeathCaptureQueueTest {
         );
 
         assertFalse(queue.contains("boolean undoOnly"));
-        assertTrue(queue.contains("List.copyOf(worldCaptures.values())"));
-        assertTrue(tracker.contains("DEATH_CAPTURE_QUEUE.drain(server, EntityMutationTracker::recordDeaths)"));
+        assertTrue(queue.contains("int maxCaptures"));
+        assertTrue(queue.contains("oldPayloads(limit)"));
+        assertTrue(tracker.contains("MAX_DEATH_CAPTURES_PER_TICK"));
+        assertTrue(tracker.contains("Integer.MAX_VALUE"));
     }
 }

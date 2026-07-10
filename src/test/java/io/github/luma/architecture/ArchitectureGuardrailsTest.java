@@ -259,8 +259,8 @@ class ArchitectureGuardrailsTest {
                 "Spawn drain must use the queued payload only for explicit same-tick fallback"
         );
         assertTrue(
-                trackerSource.contains("drainPendingSpawns(server, false)")
-                        && trackerSource.contains("drainPendingSpawns(server, true)"),
+                trackerSource.contains("MAX_SPAWN_CAPTURES_PER_TICK")
+                        && trackerSource.contains("true, Integer.MAX_VALUE"),
                 "Normal ticks should wait for stable entity lookup, while undo/redo may force same-tick spawn capture"
         );
     }

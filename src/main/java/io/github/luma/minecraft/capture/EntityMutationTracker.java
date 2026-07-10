@@ -14,6 +14,8 @@ import net.minecraft.world.entity.Entity;
 
 public final class EntityMutationTracker {
 
+    private static final int MAX_SPAWN_CAPTURES_PER_TICK = 128;
+    private static final int MAX_DEATH_CAPTURES_PER_TICK = 128;
     private static final EntitySnapshotService SNAPSHOT_SERVICE = new EntitySnapshotService();
     private static final EntityMutationCapturePolicy CAPTURE_POLICY = new EntityMutationCapturePolicy();
     private static final EntitySpawnCaptureQueue SPAWN_CAPTURE_QUEUE = new EntitySpawnCaptureQueue(SNAPSHOT_SERVICE);
@@ -109,21 +111,22 @@ public final class EntityMutationTracker {
     }
 
     public static void tick(MinecraftServer server) {
-        drainPendingSpawns(server, false);
-        drainPendingDeaths(server);
+        SPAWN_CAPTURE_QUEUE.drain(
+                server,
+                EntityMutationTracker::record,
+                false,
+                MAX_SPAWN_CAPTURES_PER_TICK
+        );
+        DEATH_CAPTURE_QUEUE.drain(
+                server,
+                EntityMutationTracker::recordDeaths,
+                MAX_DEATH_CAPTURES_PER_TICK
+        );
     }
 
     public static void drainPendingSpawns(MinecraftServer server) {
-        drainPendingSpawns(server, true);
-        drainPendingDeaths(server);
-    }
-
-    private static void drainPendingSpawns(MinecraftServer server, boolean allowInitialPayloadFallback) {
-        SPAWN_CAPTURE_QUEUE.drain(server, EntityMutationTracker::record, allowInitialPayloadFallback);
-    }
-
-    private static void drainPendingDeaths(MinecraftServer server) {
-        DEATH_CAPTURE_QUEUE.drain(server, EntityMutationTracker::recordDeaths);
+        SPAWN_CAPTURE_QUEUE.drain(server, EntityMutationTracker::record, true, Integer.MAX_VALUE);
+        DEATH_CAPTURE_QUEUE.drain(server, EntityMutationTracker::recordDeaths, Integer.MAX_VALUE);
     }
 
     public static PendingEntityMutation captureRemoval(Entity entity) {
