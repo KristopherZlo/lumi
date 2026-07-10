@@ -35,6 +35,7 @@ import net.minecraft.server.level.ServerLevel;
 public final class SessionStabilizationService {
 
     private static final int DEFERRED_SETTLE_TICKS = 4;
+    private static final int MAX_CHUNKS_PER_TICK = 4;
     private static final CompoundTag AIR_STATE = airState();
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
 
@@ -53,7 +54,11 @@ public final class SessionStabilizationService {
 
         List<ChunkPoint> pendingChunks = requireLoadedChunks
                 ? session.drainPendingReconcileChunks()
-                : session.drainPendingReconcileChunks(level.getGameTime(), DEFERRED_SETTLE_TICKS);
+                : session.drainPendingReconcileChunks(
+                        level.getGameTime(),
+                        DEFERRED_SETTLE_TICKS,
+                        MAX_CHUNKS_PER_TICK
+                );
         if (pendingChunks.isEmpty()) {
             session.finishReconciliation(List.of());
             return ReconciliationResult.noOp();
@@ -772,15 +777,17 @@ public final class SessionStabilizationService {
         List<ChunkPoint> missingChunks = new ArrayList<>();
         List<ChunkPoint> transientChunks = new ArrayList<>();
         for (ChunkPoint chunk : chunks) {
-            if (this.chunkSnapshotCaptureService.containsTransientBlockState(level, chunk)) {
+            ChunkSnapshotCaptureService.LoadedBlockStateCapture capture =
+                    this.chunkSnapshotCaptureService.captureLoadedStableBlockState(level, chunk);
+            if (capture.transientState()) {
                 transientChunks.add(chunk);
                 continue;
             }
-            this.chunkSnapshotCaptureService.captureLoadedChunk(level, chunk)
-                    .ifPresentOrElse(
-                            snapshot -> captured.put(chunk, snapshot),
-                            () -> missingChunks.add(chunk)
-                    );
+            if (capture.payload() == null) {
+                missingChunks.add(chunk);
+            } else {
+                captured.put(chunk, capture.payload());
+            }
         }
         return new CapturedChunks(captured, List.copyOf(missingChunks), List.copyOf(transientChunks));
     }

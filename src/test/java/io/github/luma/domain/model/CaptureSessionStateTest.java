@@ -180,6 +180,16 @@ class CaptureSessionStateTest {
     }
 
     @Test
+    void pendingChunkDrainHonorsRequestedSliceSize() {
+        CaptureSessionState state = CaptureSessionState.create(buffer());
+        List<ChunkPoint> chunks = List.of(new ChunkPoint(1, 1), new ChunkPoint(2, 2), new ChunkPoint(3, 3));
+        chunks.forEach(state::markDirtyChunk);
+
+        assertEquals(chunks.subList(0, 2), state.drainPendingReconcileChunks(2));
+        assertEquals(chunks.subList(2, 3), state.drainPendingReconcileChunks(2));
+    }
+
+    @Test
     void dirtySectionsTrackKnownSectionMutationsUntilChunkFallsBackToFullDirty() {
         CaptureSessionState state = CaptureSessionState.create(buffer());
         ChunkPoint chunk = new ChunkPoint(0, 0);

@@ -47,6 +47,25 @@ public final class ChunkSnapshotCaptureService {
         return this.captureLoadedChunk(level, chunk, null, null, null);
     }
 
+    LoadedBlockStateCapture captureLoadedStableBlockState(ServerLevel level, ChunkPoint chunk) {
+        if (level == null || chunk == null) {
+            return LoadedBlockStateCapture.missing();
+        }
+        LevelChunk levelChunk = level.getChunkSource().getChunkNow(chunk.x(), chunk.z());
+        if (levelChunk == null) {
+            return LoadedBlockStateCapture.missing();
+        }
+        ChunkSnapshotPayload payload = this.capture(
+                level,
+                levelChunk,
+                List.of(),
+                EntitySnapshotOverride.none(),
+                true,
+                false
+        );
+        return payload == null ? LoadedBlockStateCapture.transientCapture() : LoadedBlockStateCapture.captured(payload);
+    }
+
     boolean containsTransientBlockState(ServerLevel level, ChunkPoint chunk) {
         if (level == null || chunk == null) {
             return false;
@@ -60,7 +79,7 @@ public final class ChunkSnapshotCaptureService {
             return Optional.empty();
         }
         LevelChunk levelChunk = level.getChunk(chunk.x(), chunk.z());
-        return Optional.of(this.capture(level, levelChunk, List.of(), EntitySnapshotOverride.none()));
+        return Optional.of(this.capture(level, levelChunk, List.of(), EntitySnapshotOverride.none(), false, true));
     }
 
     public Optional<ChunkSnapshotPayload> captureEntityCheckpointChunk(ServerLevel level, ChunkPoint chunk) {
@@ -157,14 +176,16 @@ public final class ChunkSnapshotCaptureService {
         if (levelChunk == null) {
             return Optional.empty();
         }
-        return Optional.of(this.capture(level, levelChunk, blockStateOverrides, entityOverride));
+        return Optional.of(this.capture(level, levelChunk, blockStateOverrides, entityOverride, false, true));
     }
 
     private ChunkSnapshotPayload capture(
             ServerLevel level,
             LevelChunk chunk,
             List<BlockStateOverride> blockStateOverrides,
-            EntitySnapshotOverride entityOverride
+            EntitySnapshotOverride entityOverride,
+            boolean rejectTransientState,
+            boolean includeEntities
     ) {
         Map<Integer, List<NormalizedBlockStateOverride>> overridesBySection =
                 this.normalizedOverridesBySection(blockStateOverrides);
@@ -186,9 +207,12 @@ public final class ChunkSnapshotCaptureService {
                         override.state().state()
                 );
             }
-            ChunkSectionSnapshotPayload sectionPayload = this.captureSection(sectionCopy, sectionY);
-            if (sectionPayload != null) {
-                sections.add(sectionPayload);
+            CapturedSection capturedSection = this.captureSection(sectionCopy, sectionY);
+            if (rejectTransientState && capturedSection.transientState()) {
+                return null;
+            }
+            if (capturedSection.payload() != null) {
+                sections.add(capturedSection.payload());
             }
         }
 
@@ -215,7 +239,7 @@ public final class ChunkSnapshotCaptureService {
                 level.getMaxY(),
                 sections,
                 blockEntities,
-                this.captureEntities(level, chunk, entityOverride)
+                includeEntities ? this.captureEntities(level, chunk, entityOverride) : List.of()
         );
     }
 
@@ -247,11 +271,13 @@ public final class ChunkSnapshotCaptureService {
         return bySection;
     }
 
-    private ChunkSectionSnapshotPayload captureSection(LevelChunkSection section, int sectionY) {
+    private CapturedSection captureSection(LevelChunkSection section, int sectionY) {
         PalettedContainerRO.PackedData<BlockState> packedData = section.getStates().pack(BLOCK_STATE_STRATEGY);
         List<CompoundTag> palette = new ArrayList<>(packedData.paletteEntries().size());
         boolean nonAir = false;
+        boolean transientState = false;
         for (BlockState blockState : packedData.paletteEntries()) {
+            transientState |= this.blockStatePolicy.isTransientPistonState(blockState);
             BlockState normalizedState = this.blockStatePolicy.normalizeState(blockState);
             CompoundTag tag = NbtUtils.writeBlockState(normalizedState);
             palette.add(tag);
@@ -260,12 +286,15 @@ public final class ChunkSnapshotCaptureService {
             }
         }
         if (!nonAir) {
-            return null;
+            return new CapturedSection(null, transientState);
         }
         long[] packedStorage = packedData.storage()
                 .map(java.util.stream.LongStream::toArray)
                 .orElseGet(() -> new long[0]);
-        return new ChunkSectionSnapshotPayload(sectionY, palette, packedStorage, packedData.bitsPerEntry());
+        return new CapturedSection(
+                new ChunkSectionSnapshotPayload(sectionY, palette, packedStorage, packedData.bitsPerEntry()),
+                transientState
+        );
     }
 
     private Map<Integer, CompoundTag> captureBlockEntities(ServerLevel level, LevelChunk chunk) {
@@ -378,6 +407,24 @@ public final class ChunkSnapshotCaptureService {
             pos = pos == null ? null : pos.immutable();
             blockEntityTag = blockEntityTag == null ? null : blockEntityTag.copy();
         }
+    }
+
+    record LoadedBlockStateCapture(ChunkSnapshotPayload payload, boolean transientState) {
+
+        static LoadedBlockStateCapture captured(ChunkSnapshotPayload payload) {
+            return new LoadedBlockStateCapture(payload, false);
+        }
+
+        static LoadedBlockStateCapture missing() {
+            return new LoadedBlockStateCapture(null, false);
+        }
+
+        static LoadedBlockStateCapture transientCapture() {
+            return new LoadedBlockStateCapture(null, true);
+        }
+    }
+
+    private record CapturedSection(ChunkSectionSnapshotPayload payload, boolean transientState) {
     }
 
     private record NormalizedBlockStateOverride(

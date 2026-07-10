@@ -3,6 +3,7 @@ package io.github.luma.domain.model;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -164,22 +165,30 @@ public final class CaptureSessionState {
     }
 
     public List<ChunkPoint> drainPendingReconcileChunks() {
-        List<ChunkPoint> drained = List.copyOf(this.pendingReconcileChunks);
-        this.pendingReconcileChunks.clear();
-        return drained;
+        return this.drainPendingReconcileChunks(Integer.MAX_VALUE);
+    }
+
+    public List<ChunkPoint> drainPendingReconcileChunks(int maxChunks) {
+        return this.drainPendingReconcileChunks(Long.MIN_VALUE, 0, maxChunks);
     }
 
     public List<ChunkPoint> drainPendingReconcileChunks(long gameTime, int settleTicks) {
-        if (settleTicks <= 0) {
-            return this.drainPendingReconcileChunks();
+        return this.drainPendingReconcileChunks(gameTime, settleTicks, Integer.MAX_VALUE);
+    }
+
+    public List<ChunkPoint> drainPendingReconcileChunks(long gameTime, int settleTicks, int maxChunks) {
+        if (maxChunks <= 0) {
+            return List.of();
         }
         List<ChunkPoint> drained = new ArrayList<>();
-        for (ChunkPoint chunk : this.pendingReconcileChunks) {
-            if (this.isReadyForReconciliation(chunk, gameTime, settleTicks)) {
+        Iterator<ChunkPoint> pending = this.pendingReconcileChunks.iterator();
+        while (pending.hasNext() && drained.size() < maxChunks) {
+            ChunkPoint chunk = pending.next();
+            if (settleTicks <= 0 || this.isReadyForReconciliation(chunk, gameTime, settleTicks)) {
                 drained.add(chunk);
+                pending.remove();
             }
         }
-        this.pendingReconcileChunks.removeAll(drained);
         return List.copyOf(drained);
     }
 
