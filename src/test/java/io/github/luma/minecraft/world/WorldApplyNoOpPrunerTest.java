@@ -102,6 +102,19 @@ class WorldApplyNoOpPrunerTest {
     }
 
     @Test
+    void keepsPlacementMarkedAsARealUpdateByTheLiveScan() {
+        PreparedBlockPlacement placement = new PreparedBlockPlacement(
+                new BlockPos(4, 64, 4),
+                Blocks.STONE.defaultBlockState(),
+                null
+        );
+        LongOpenHashSet updatedPositions = new LongOpenHashSet();
+        updatedPositions.add(placement.pos().asLong());
+
+        assertTrue(this.pruner.shouldKeepAfterLiveScan(placement, updatedPositions));
+    }
+
+    @Test
     void promotesDryTargetWhenLiveCellAlreadyContainsFluid() {
         PreparedBlockPlacement placement = new PreparedBlockPlacement(
                 new BlockPos(4, 64, 4),

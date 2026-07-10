@@ -99,7 +99,7 @@ final class WorldApplyNoOpPruner {
             if (placement != originalPlacement) {
                 adjustedCells[0] = true;
             }
-            if (!this.shouldKeep(level, liveSection, placement, updatedPositions)) {
+            if (!this.shouldKeepAfterLiveScan(placement, updatedPositions)) {
                 return;
             }
             builder.set(
@@ -156,7 +156,7 @@ final class WorldApplyNoOpPruner {
                     placement,
                     this.currentState(liveSection, placement.pos())
             );
-            if (this.shouldKeep(level, liveSection, adjustedPlacement, updatedPositions)) {
+            if (this.shouldKeepAfterLiveScan(adjustedPlacement, updatedPositions)) {
                 sparsePlacements.computeIfAbsent(section.sectionY(), ignored -> new ArrayList<>())
                         .add(adjustedPlacement);
             }
@@ -228,16 +228,11 @@ final class WorldApplyNoOpPruner {
         return updatedPositions;
     }
 
-    private boolean shouldKeep(
-            ServerLevel level,
-            LevelChunkSection section,
-            PreparedBlockPlacement placement,
-            LongSet updatedPositions
-    ) {
+    boolean shouldKeepAfterLiveScan(PreparedBlockPlacement placement, LongSet updatedPositions) {
         if (placement == null || placement.pos() == null || placement.state() == null) {
             return false;
         }
-        if (this.requiresLiveUpdate(level, section, placement)) {
+        if (updatedPositions != null && updatedPositions.contains(placement.pos().asLong())) {
             return true;
         }
         return this.shouldKeepNoOpReplay(placement, updatedPositions);
