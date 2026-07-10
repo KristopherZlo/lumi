@@ -10,7 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Marks accepted block mutations for final settled-world reconciliation.
+ * Marks persistent block mutations for final settled-world reconciliation.
  */
 final class LiveBlockSectionReconciliationMarker {
 

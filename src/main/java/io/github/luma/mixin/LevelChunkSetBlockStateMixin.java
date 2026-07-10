@@ -124,20 +124,15 @@ abstract class LevelChunkSetBlockStateMixin {
         if (operation != null && currentSourceCaptures) {
             operation = operation.withAccessAllowed(WorldMutationContext.currentAccessAllowed());
         }
-        if (operation == null && !currentSourceCaptures) {
-            return null;
-        }
 
         LevelChunk chunk = (LevelChunk) (Object) this;
         BlockState oldState = chunk.getBlockState(pos);
         CompoundTag oldBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, pos, oldState);
-        if (currentSourceCaptures && !oldState.equals(newState)) {
-            HistoryCaptureManager.getInstance().capturePreMutationBaseline(
-                    serverLevel,
-                    pos,
-                    oldState,
-                    oldBlockEntity
-            );
+        if (!oldState.equals(newState)) {
+            this.luma$capturePreMutationBaseline(serverLevel, pos, oldState, oldBlockEntity, operation, currentSourceCaptures);
+        }
+        if (operation == null && !currentSourceCaptures) {
+            return null;
         }
         WorldMutationCaptureGuard.CaptureBoundary boundary = WorldMutationCaptureGuard.pushChunkSetBlockBoundary();
         return new PendingBlockMutation(
@@ -156,6 +151,26 @@ abstract class LevelChunkSetBlockStateMixin {
         }
         BlockEntity blockEntity = chunk.getBlockEntity(pos);
         return BlockEntitySnapshot.capture(serverLevel, blockEntity);
+    }
+
+    @Unique
+    private void luma$capturePreMutationBaseline(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState oldState,
+            CompoundTag oldBlockEntity,
+            ObservedExternalToolOperation operation,
+            boolean currentSourceCaptures
+    ) {
+        if (operation == null || currentSourceCaptures) {
+            HistoryCaptureManager.getInstance().capturePreMutationBaseline(level, pos, oldState, oldBlockEntity);
+            return;
+        }
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                operation.source(), operation.actor(), operation.actionId(), operation.accessAllowed()
+        )) {
+            HistoryCaptureManager.getInstance().capturePreMutationBaseline(level, pos, oldState, oldBlockEntity);
+        }
     }
 
     @Unique

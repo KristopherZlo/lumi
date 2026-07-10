@@ -91,19 +91,14 @@ abstract class LevelSetBlockMixin {
         if (operation != null && currentSourceCaptures) {
             operation = operation.withAccessAllowed(WorldMutationContext.currentAccessAllowed());
         }
-        if (!currentSourceCaptures && operation == null) {
-            return null;
-        }
 
         BlockState oldState = serverLevel.getBlockState(pos);
         CompoundTag oldBlockEntity = this.luma$blockEntityTag(serverLevel, pos, oldState);
-        if (currentSourceCaptures && !oldState.equals(newState)) {
-            HistoryCaptureManager.getInstance().capturePreMutationBaseline(
-                    serverLevel,
-                    pos,
-                    oldState,
-                    oldBlockEntity
-            );
+        if (!oldState.equals(newState)) {
+            this.luma$capturePreMutationBaseline(serverLevel, pos, oldState, oldBlockEntity, operation, currentSourceCaptures);
+        }
+        if (!currentSourceCaptures && operation == null) {
+            return null;
         }
         WorldMutationCaptureGuard.CaptureBoundary boundary = WorldMutationCaptureGuard.pushLevelSetBlockBoundary();
         return new PendingBlockMutation(
@@ -113,6 +108,26 @@ abstract class LevelSetBlockMixin {
                 operation,
                 boundary
         );
+    }
+
+    @Unique
+    private void luma$capturePreMutationBaseline(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState oldState,
+            CompoundTag oldBlockEntity,
+            ObservedExternalToolOperation operation,
+            boolean currentSourceCaptures
+    ) {
+        if (operation == null || currentSourceCaptures) {
+            HistoryCaptureManager.getInstance().capturePreMutationBaseline(level, pos, oldState, oldBlockEntity);
+            return;
+        }
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                operation.source(), operation.actor(), operation.actionId(), operation.accessAllowed()
+        )) {
+            HistoryCaptureManager.getInstance().capturePreMutationBaseline(level, pos, oldState, oldBlockEntity);
+        }
     }
 
     @Unique

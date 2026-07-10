@@ -15,8 +15,8 @@ import java.util.UUID;
  * Mutable runtime state for one active capture session.
  *
  * <p>The working-draft buffer remains the source of truth for pending block
- * changes, while chunk-level root and dirty sets drive deferred stabilization
- * for causal-only ambient fallout such as fluid spread or falling blocks.
+ * changes, while chunk-level root and dirty sets drive coalesced stabilization
+ * for both attributed actions and persistent actionless fallout.
  */
 public final class CaptureSessionState {
 

@@ -157,7 +157,7 @@ public final class LumiGameTests implements CustomTestMethodInvoker {
             this.verifyRandom(this.alice, ALICE_SEED, "Alice blocks after Bob save");
             this.verifyRandom(this.bob, BOB_SEED, "Bob saved blocks");
             this.requireWorkZoneVersions(2);
-            this.overwrite(ALICE, this.alice, Blocks.REDSTONE_BLOCK.defaultBlockState());
+            this.overwriteUnattributed(this.alice, Blocks.REDSTONE_BLOCK.defaultBlockState());
             this.verifyBlock(this.alice, Blocks.REDSTONE_BLOCK, "Alice pending rollback blocks");
             this.waitFor(
                     this.rollbackService.quickRollback(this.level, this.projectName, Bounds3i.of(corner(this.alice, false), corner(this.alice, true))),
@@ -222,13 +222,13 @@ public final class LumiGameTests implements CustomTestMethodInvoker {
             this.record(actor + " placed " + positions.size() + " randomized blocks");
         }
 
-        private void overwrite(String actor, List<BlockPos> positions, BlockState state) throws IOException {
-            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, actor, true)) {
-                for (BlockPos pos : positions) {
-                    this.place(actor, pos, state);
-                }
+        private void overwriteUnattributed(List<BlockPos> positions, BlockState state) {
+            if (WorldMutationContext.currentSource() != WorldMutationSource.SYSTEM
+                    || !WorldMutationContext.currentActionId().isBlank()) {
+                throw new AssertionError("Regression mutation must run without causal attribution");
             }
-            this.record(actor + " overwrote " + positions.size() + " blocks with " + state.getBlock());
+            positions.forEach(pos -> this.level.setBlock(pos, state, 3));
+            this.record("world overwrote " + positions.size() + " blocks without an action id using " + state.getBlock());
         }
 
         private void place(String actor, BlockPos pos, BlockState state) throws IOException {

@@ -71,7 +71,12 @@ public final class BlockEntityMutationSnapshotRegistry {
         if (Objects.equals(snapshot.tag(), currentTag)) {
             return;
         }
-
+        HistoryCaptureManager.getInstance().capturePreMutationBaseline(
+                serverLevel,
+                snapshot.pos(),
+                snapshot.state(),
+                snapshot.tag()
+        );
         HistoryCaptureManager.getInstance().recordBlockChange(
                 serverLevel,
                 snapshot.pos(),
@@ -90,7 +95,7 @@ public final class BlockEntityMutationSnapshotRegistry {
 
     private boolean canCaptureCurrentSource() {
         WorldMutationSource source = WorldMutationContext.currentSource();
-        return HistoryCaptureManager.shouldCaptureMutation(source);
+        return HistoryCaptureManager.shouldTrackPersistentMutation(source);
     }
 
     private Snapshot snapshot(ServerLevel level, BlockEntity blockEntity) {

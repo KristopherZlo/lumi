@@ -117,8 +117,8 @@ public final class HistoryCaptureManager {
     }
 
     /**
-     * Captures the active-session baseline before a root mutation can trigger
-     * synchronous neighbor fallout in the same chunk.
+     * Captures the active-session baseline and marks the section dirty before
+     * any persistent mutation can trigger synchronous fallout.
      */
     public void capturePreMutationBaseline(
             ServerLevel level,
@@ -129,8 +129,7 @@ public final class HistoryCaptureManager {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
         boolean explicitRootSource = ELIGIBILITY.isExplicitRootSource(source);
         if (level == null || pos == null || this.shouldSkipSuppressedReplay(level)
-                || !shouldCaptureMutation(source)
-                || !this.accessGuard.canUseMutationSource(level.getServer(), source)) {
+                || !shouldTrackPersistentMutation(source)) {
             return;
         }
 
@@ -138,7 +137,10 @@ public final class HistoryCaptureManager {
             Instant now = Instant.now();
             List<TrackedProject> matchingProjects = this.matchingProjects(level, pos);
             if (matchingProjects.isEmpty()) {
-                if (!explicitRootSource || !allowsAutomaticProjectCreation(source) || !this.accessGuard.canCreateProjectInCurrentMode()) {
+                if (!explicitRootSource
+                        || !allowsAutomaticProjectCreation(source)
+                        || !this.accessGuard.canUseMutationSource(level.getServer(), source)
+                        || !this.accessGuard.canCreateProjectInCurrentMode()) {
                     return;
                 }
                 this.projectService.ensureWorldProject(level, defaultActor(source));
@@ -147,61 +149,41 @@ public final class HistoryCaptureManager {
             }
 
             for (TrackedProject trackedProject : matchingProjects) {
-                if (!this.accessGuard.canUseProjectInCurrentMode(trackedProject)) { continue; }
                 String projectId = trackedProject.project().id().toString();
                 CaptureSessionState existingSession = this.workingDrafts.session(projectId);
                 ChunkPoint chunk = ChunkPoint.from(pos);
-                boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
-                CaptureSessionState.DeferredActionContext deferredActionContext =
-                        this.deferredActionContext(existingSession, chunk, source);
-                if (this.staleRedoActionCapturePolicy.shouldSkip(trackedProject, pos, deferredActionContext)) {
-                    continue;
-                }
-                if (!explicitRootSource
-                        && !ELIGIBILITY.canCaptureDeferredPreMutationBaseline(
-                                trackedProject.project(),
-                                source,
-                                activeSessionRegion,
-                                actionId(deferredActionContext)
-                        )) {
-                    continue;
-                }
-                if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
-                    continue;
-                }
-
                 this.getOrCreateWorkingDraft(trackedProject, source, now);
                 CaptureSessionState session = this.workingDrafts.session(projectId);
                 if (session == null) {
                     continue;
                 }
-                ChunkSnapshotPayload[] capturedBaseline = new ChunkSnapshotPayload[1];
-                if (!this.ensureTrackedChunk(
-                        trackedProject, level, pos, oldState, oldBlockEntity, null, null,
-                        source, activeSessionRegion, now, capturedBaseline
-                )) {
-                    continue;
-                }
-
-                if (capturedBaseline[0] == null) {
-                    this.baselineCoordinator.captureSessionChunkBaseline(
+                if (!session.hasBaselineChunk(chunk)
+                        && !this.persistenceCoordinator.hasPendingBaselineWrite(projectId, chunk)
+                        && !this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
+                    ChunkSnapshotPayload baseline = this.captureChunkBaseline(
                             trackedProject,
                             level,
-                            session,
-                            chunk,
                             pos,
                             oldState,
-                            oldBlockEntity
+                            oldBlockEntity,
+                            now
                     );
-                } else {
-                    this.baselineCoordinator.captureSessionChunkBaseline(session, chunk, capturedBaseline[0]);
+                    this.baselineCoordinator.captureSessionChunkBaseline(session, chunk, baseline);
                 }
-                if (!explicitRootSource) {
-                    this.baselineCoordinator.recordBaselineCorrection(session, pos, oldState, oldBlockEntity);
-                }
-                if (explicitRootSource) {
-                    session.addRootChunk(chunk);
-                }
+                CaptureSessionState.DeferredActionContext context = shouldCaptureMutation(source)
+                        ? this.currentDeferredActionContext(source)
+                        : null;
+                this.liveBlockSectionReconciliationMarker.mark(
+                        trackedProject,
+                        level,
+                        source,
+                        pos,
+                        chunk,
+                        oldState,
+                        oldBlockEntity,
+                        context,
+                        explicitRootSource
+                );
             }
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Failed to capture pre-mutation baseline at {} in {}", pos, level.dimension().identifier(), exception);
@@ -1772,6 +1754,12 @@ public final class HistoryCaptureManager {
             return false;
         }
         return ELIGIBILITY.shouldCaptureMutation(source);
+    }
+
+    static boolean shouldTrackPersistentMutation(io.github.luma.domain.model.WorldMutationSource source) {
+        return !WorldMutationContext.captureSuppressed()
+                && source != null
+                && source != io.github.luma.domain.model.WorldMutationSource.RESTORE;
     }
 
     public static boolean allowsAutomaticProjectCreation(io.github.luma.domain.model.WorldMutationSource source) {

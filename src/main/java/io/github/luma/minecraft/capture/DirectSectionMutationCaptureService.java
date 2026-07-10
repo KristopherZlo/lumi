@@ -62,25 +62,26 @@ public final class DirectSectionMutationCaptureService {
             return PendingDirectSectionMutation.skipped();
         }
 
-        boolean captureCurrentSource = this.currentSourceCaptures();
-        ObservedExternalToolOperation operation = this.detectOperation(captureCurrentSource);
-        if (operation == null && !captureCurrentSource) {
-            return PendingDirectSectionMutation.skipped();
-        }
-
         var owner = this.ownershipRegistry.ownerOf(section);
         ChunkSectionOwnershipRegistry.SectionOwner sectionOwner = owner.orElse(null);
         BlockPos pos = sectionOwner == null ? null : sectionOwner.blockPos(localX, localY, localZ);
         BlockState oldState = section.getBlockState(localX, localY, localZ);
         ServerLevel ownerLevel = sectionOwner == null ? null : sectionOwner.level();
         CompoundTag oldBlockEntity = this.blockEntityTag(ownerLevel, pos, oldState);
-        if (captureCurrentSource && ownerLevel != null && !oldState.equals(newState)) {
-            HistoryCaptureManager.getInstance().capturePreMutationBaseline(
+        boolean captureCurrentSource = this.currentSourceCaptures();
+        ObservedExternalToolOperation operation = this.detectOperation(captureCurrentSource);
+        if (ownerLevel != null && !oldState.equals(newState)) {
+            this.capturePreMutationBaseline(
                     ownerLevel,
                     pos,
                     oldState,
-                    oldBlockEntity
+                    oldBlockEntity,
+                    operation,
+                    captureCurrentSource
             );
+        }
+        if (operation == null && !captureCurrentSource) {
+            return PendingDirectSectionMutation.skipped();
         }
         return new PendingDirectSectionMutation(
                 pos,
@@ -169,6 +170,25 @@ public final class DirectSectionMutationCaptureService {
     private boolean accessAllowed(ServerLevel level, ObservedExternalToolOperation operation) {
         return operation != null
                 && (operation.accessAllowed() || level == null || !level.getServer().isDedicatedServer());
+    }
+
+    private void capturePreMutationBaseline(
+            ServerLevel level,
+            BlockPos pos,
+            BlockState oldState,
+            CompoundTag oldBlockEntity,
+            ObservedExternalToolOperation operation,
+            boolean currentSourceCaptures
+    ) {
+        if (operation == null || currentSourceCaptures) {
+            HistoryCaptureManager.getInstance().capturePreMutationBaseline(level, pos, oldState, oldBlockEntity);
+            return;
+        }
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
+                operation.source(), operation.actor(), operation.actionId(), operation.accessAllowed()
+        )) {
+            HistoryCaptureManager.getInstance().capturePreMutationBaseline(level, pos, oldState, oldBlockEntity);
+        }
     }
 
     public record PendingDirectSectionMutation(
