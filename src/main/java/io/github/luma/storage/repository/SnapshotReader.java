@@ -89,7 +89,6 @@ public final class SnapshotReader {
                 } else {
                     input.seek(input.getFilePointer() + frame.compressedLength());
                 }
-                BackgroundThrottle.pauseEvery(chunkIndex + 1, 8, 250_000L);
             }
             LumaMod.LOGGER.info("Loaded snapshot {} with {} chunks", snapshotFile.getFileName(), chunkData.size());
             return new SnapshotData(

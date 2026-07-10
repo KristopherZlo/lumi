@@ -102,7 +102,6 @@ final class PatchPayloadReader {
                 PatchWorldChanges chunk = this.readChunkFrame(input);
                 changes.addAll(chunk.blockChanges());
                 entityChanges.addAll(chunk.entityChanges());
-                BackgroundThrottle.pauseEvery(index + 1, 8, 250_000L);
             }
             return new PatchWorldChanges(changes, entityChanges);
         }

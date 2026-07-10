@@ -62,7 +62,6 @@ final class PatchPayloadWriter {
         );
 
         List<ChunkFrame> frames = new ArrayList<>();
-        int chunkIndex = 0;
         for (Map.Entry<String, ChunkPayload> entry : sortedChunks) {
             String[] split = entry.getKey().split(":", 2);
             int chunkX = Integer.parseInt(split[0]);
@@ -85,8 +84,6 @@ final class PatchPayloadWriter {
                     this.metadataBuilder.visibleSectionFingerprints(chunkX, chunkZ, chunkChanges),
                     chunkEntityChanges.size()
             ));
-            chunkIndex += 1;
-            BackgroundThrottle.pauseEvery(chunkIndex, 8, 250_000L);
         }
 
         List<PatchChunkSlice> slices = new ArrayList<>();
