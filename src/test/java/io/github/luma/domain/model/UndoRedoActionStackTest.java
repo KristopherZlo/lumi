@@ -550,17 +550,18 @@ class UndoRedoActionStackTest {
     }
 
     @Test
-    void staleSelectionDoesNotDropUndoHistory() {
+    void unrelatedActionDoesNotInvalidateSelectedUndo() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         recordChange(stack, "action-1", "Alex", "project", "minecraft:overworld", change(1, "minecraft:stone", "minecraft:dirt"), NOW);
 
-        UndoRedoActionStack.Selection staleSelection = stack.selectUndo();
+        UndoRedoActionStack.Selection selection = stack.selectUndo();
         recordChange(stack, "action-2", "Alex", "project", "minecraft:overworld", change(2, "minecraft:air", "minecraft:oak_planks"), NOW);
-        stack.completeUndo(staleSelection);
+        assertTrue(stack.completeUndo(selection));
 
         assertTrue(stack.canUndo());
-        assertFalse(stack.canRedo());
-        assertEquals(List.of("action-2", "action-1"), stack.recentUndoActions(2).stream().map(UndoRedoAction::id).toList());
+        assertTrue(stack.canRedo());
+        assertEquals("action-2", stack.selectUndo().action().id());
+        assertEquals("action-1", stack.selectRedo().action().id());
     }
 
     @Test

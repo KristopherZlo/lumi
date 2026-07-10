@@ -353,9 +353,6 @@ public final class UndoRedoActionStack {
         if (selection.action() == null) {
             return false;
         }
-        if (this.revision != selection.revision()) {
-            return false;
-        }
         UndoRedoAction current = this.findAction(stack, selection.action().id());
         return current != null && current.version() == selection.actionVersion();
     }
