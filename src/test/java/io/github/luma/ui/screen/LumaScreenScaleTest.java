@@ -10,7 +10,8 @@ class LumaScreenScaleTest {
 
     @Test
     void buildUsesVirtualDimensionsBeforeOwoInflatesLayout() throws IOException {
-        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/LumaScreen.java"));
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/LumaScreen.java"))
+                .replace("\r\n", "\n");
 
         int widthIndex = source.indexOf("this.width = LumaUiScale.virtualSize(this.width, currentGuiScale);");
         int heightIndex = source.indexOf("this.height = LumaUiScale.virtualSize(this.height, currentGuiScale);");
@@ -24,7 +25,8 @@ class LumaScreenScaleTest {
 
     @Test
     void tooltipsUseLumaScaleAfterVirtualHoverLookup() throws IOException {
-        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/LumaScreen.java"));
+        String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/LumaScreen.java"))
+                .replace("\r\n", "\n");
 
         int virtualHoverIndex = source.indexOf("childAt(virtualMouseX, virtualMouseY)");
         int drawIndex = source.indexOf("graphics.renderTooltip(");
