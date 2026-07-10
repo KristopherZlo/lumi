@@ -18,6 +18,7 @@ class ProjectileCausalContextMixinTest {
         assertTrue(living.contains("@WrapMethod(method = \"stopUsingItem\")"));
         assertTrue(lifecycle.contains("entity instanceof Projectile"));
         assertTrue(lifecycle.contains("entity instanceof FallingBlockEntity"));
+        assertTrue(lifecycle.contains("entity instanceof ItemEntity"));
         assertTrue(lifecycle.contains("rememberCurrentActionIfAbsent(entity, level)"));
         assertTrue(lifecycle.contains("rememberSpawn(entity, (ServerLevel) (Object) this)"));
         assertTrue(lifecycle.contains("LumaLoadLog.event(\"tnt-replay\", \"primed-tnt-spawn\""));

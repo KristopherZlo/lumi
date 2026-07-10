@@ -68,8 +68,20 @@ class ServerLevelEntityTickMixinTest {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/ServerLevelEntityTickMixin.java"));
 
         assertTrue(source.contains("entity instanceof FallingBlockEntity"));
-        assertTrue(source.contains("source != WorldMutationSource.MOB && source != WorldMutationSource.FALLING_BLOCK"));
+        assertTrue(source.contains("source == WorldMutationSource.MOB || source == WorldMutationSource.FALLING_BLOCK"));
         assertTrue(source.contains("pushIfPresent(entity, (ServerLevel) (Object) this, source)"));
+    }
+
+    @Test
+    void causalCarrierTicksRestoreActionBeforeSourceFallback() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/io/github/luma/mixin/ServerLevelEntityTickMixin.java"));
+        int tickMethod = source.indexOf("private void luma$wrapEntityTick");
+        int causalFrame = source.indexOf("luma$pushRememberedCausalAction(entity, source)", tickMethod);
+        int sourceFallback = source.indexOf("if (source == null &&", causalFrame);
+
+        assertTrue(causalFrame > tickMethod);
+        assertTrue(sourceFallback > causalFrame);
+        assertTrue(source.contains("pushIfPresent(entity, (ServerLevel) (Object) this)"));
     }
 
     @Test

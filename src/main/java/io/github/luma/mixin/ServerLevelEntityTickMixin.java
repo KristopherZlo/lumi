@@ -43,18 +43,17 @@ abstract class ServerLevelEntityTickMixin {
             return;
         }
         WorldMutationSource source = this.luma$sourceForTrackedEntity(entity);
-        if (source == null) {
-            original.call(entity);
-            return;
-        }
-
         boolean explosiveFrame = this.luma$pushRememberedExplosiveAction(entity);
         EntityCausalContextRegistry.ContextFrame causalFrame = explosiveFrame
                 ? null
                 : this.luma$pushRememberedCausalAction(entity, source);
+        if (source == null && (causalFrame == null || !causalFrame.active())) {
+            original.call(entity);
+            return;
+        }
         WorldMutationContext.SourceFrame sourceFrame = null;
         try {
-            if (!explosiveFrame && (causalFrame == null || !causalFrame.active())) {
+            if (source != null && !explosiveFrame && (causalFrame == null || !causalFrame.active())) {
                 sourceFrame = this.luma$pushEntityTickSource(entity, source);
             }
             original.call(entity);
@@ -85,10 +84,10 @@ abstract class ServerLevelEntityTickMixin {
             Entity entity,
             WorldMutationSource source
     ) {
-        if (source != WorldMutationSource.MOB && source != WorldMutationSource.FALLING_BLOCK) {
-            return null;
+        if (source == WorldMutationSource.MOB || source == WorldMutationSource.FALLING_BLOCK) {
+            return LUMA_ENTITY_CAUSAL_CONTEXTS.pushIfPresent(entity, (ServerLevel) (Object) this, source);
         }
-        return LUMA_ENTITY_CAUSAL_CONTEXTS.pushIfPresent(entity, (ServerLevel) (Object) this, source);
+        return LUMA_ENTITY_CAUSAL_CONTEXTS.pushIfPresent(entity, (ServerLevel) (Object) this);
     }
 
     @Unique

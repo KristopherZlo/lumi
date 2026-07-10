@@ -169,11 +169,7 @@ public final class EntityCausalContextRegistry {
     }
 
     boolean canRememberSource(WorldMutationSource source, String actionId) {
-        return (source == WorldMutationSource.PLAYER
-                || source == WorldMutationSource.MOB
-                || source == WorldMutationSource.EXPLOSION
-                || source == WorldMutationSource.EXPLOSIVE
-                || source == WorldMutationSource.FALLING_BLOCK)
+        return HistoryCaptureManager.shouldCaptureMutation(source)
                 && actionId != null
                 && !actionId.isBlank();
     }
