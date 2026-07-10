@@ -6,6 +6,7 @@ import io.github.luma.domain.model.ChunkPoint;
 import java.util.BitSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
@@ -68,6 +69,28 @@ class WorldApplyVerificationServiceTest {
         assertEquals(1, repaired.repaired());
         assertEquals(0, repaired.skipped());
         assertFalse(repaired.hasRepairs());
+    }
+
+    @Test
+    void verificationResumesAcrossDeadlines() {
+        AtomicLong clock = new AtomicLong();
+        WorldApplyVerificationService service = new WorldApplyVerificationService(clock::getAndIncrement);
+        WorldApplyVerificationService.Verification verification = service.begin(batch(List.of(
+                new PreparedBlockPlacement(new BlockPos(1, 64, 1), Blocks.STONE.defaultBlockState(), null),
+                new PreparedBlockPlacement(new BlockPos(2, 64, 2), Blocks.DIRT.defaultBlockState(), null),
+                new PreparedBlockPlacement(new BlockPos(3, 64, 3), Blocks.GLASS.defaultBlockState(), null)
+        )), placement -> placement.state().is(Blocks.DIRT));
+
+        WorldApplyVerificationResult result = null;
+        int slices = 0;
+        while (result == null) {
+            result = verification.advance(clock.get() + 2);
+            slices += 1;
+        }
+
+        assertTrue(slices > 1);
+        assertEquals(2, result.matched());
+        assertEquals(1, result.mismatched());
     }
 
     private static ChunkBatch batch(List<PreparedBlockPlacement> placements) {

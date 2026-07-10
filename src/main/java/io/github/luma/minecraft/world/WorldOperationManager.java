@@ -1137,7 +1137,8 @@ public final class WorldOperationManager {
 
             long startedAt = System.nanoTime();
             if (this.currentVerificationResult == null) {
-                this.currentVerificationResult = this.verificationService.verify(this.level(), batch);
+                this.currentVerificationResult = this.verificationService.advance(this.level(), batch, deadlineNanos);
+                if (this.currentVerificationResult == null) { return null; }
                 this.currentVerificationRepaired = 0;
                 if (this.currentVerificationResult.hasRepairs()) {
                     this.verificationRepairer.start(this.currentVerificationResult.repairSections());
@@ -1173,6 +1174,7 @@ public final class WorldOperationManager {
         }
 
         private void clearCurrentVerification() {
+            this.verificationService.clear();
             this.currentVerificationResult = null;
             this.currentVerificationRepaired = 0;
             this.verificationRepairer.clear();

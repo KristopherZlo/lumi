@@ -94,7 +94,10 @@ final class WorldApplyFinalVerificationGate {
             return WorldApplyVerificationResult.empty();
         }
         if (this.currentResult == null) {
-            this.currentResult = this.verificationService.verify(level, batch);
+            this.currentResult = this.verificationService.advance(level, batch, deadlineNanos);
+            if (this.currentResult == null) {
+                return null;
+            }
             this.currentRepaired = 0;
             if (this.currentResult.hasRepairs()) {
                 this.verificationRepairer.start(this.currentResult.repairSections());
@@ -124,6 +127,7 @@ final class WorldApplyFinalVerificationGate {
     }
 
     private void clearCurrent() {
+        this.verificationService.clear();
         this.currentResult = null;
         this.currentRepaired = 0;
         this.verificationRepairer.clear();

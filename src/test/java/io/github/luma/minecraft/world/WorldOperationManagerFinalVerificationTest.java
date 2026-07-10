@@ -42,4 +42,17 @@ class WorldOperationManagerFinalVerificationTest {
         assertTrue(source.contains("this.currentBatch = this.pruneNoOpBatch(this.currentTargetBatch);"));
         assertTrue(source.contains("this.finalVerificationGate.record(this.currentTargetBatch);"));
     }
+
+    @Test
+    void verificationUsesTheTickDeadlineInBothPasses() throws Exception {
+        String manager = Files.readString(Path.of(
+                "src/main/java/io/github/luma/minecraft/world/WorldOperationManager.java"
+        ));
+        String finalGate = Files.readString(Path.of(
+                "src/main/java/io/github/luma/minecraft/world/WorldApplyFinalVerificationGate.java"
+        ));
+
+        assertTrue(manager.contains("verificationService.advance(this.level(), batch, deadlineNanos)"));
+        assertTrue(finalGate.contains("verificationService.advance(level, batch, deadlineNanos)"));
+    }
 }
