@@ -252,6 +252,7 @@ Hard rules:
 - Bounds arithmetic rejects reversed ranges and cannot silently overflow; a single work-zone selection edit is capped at 65,536 section cells to prevent an accidental unbounded client allocation.
 - Recovery drafts are serialized once per flush; the first flush writes the compact base directly, and the operational journal retains only its newest 512 entries.
 - Repeated unchanged-draft checks reuse a cached content fingerprint until the tracked block or entity set changes.
+- Empty entity-causal lookups reuse one inactive frame, and normal mob ticks only expire a matched context instead of sweeping the whole registry.
 - Snapshot sections are encoded once per chunk and reused for content deduplication, fingerprints, and the compressed snapshot frame; existing content blobs skip redundant LZ4 compression.
 - Saving a version extends a fresh history index in memory instead of reopening and parsing every older manifest; stale indices still fall back to a full safe rebuild.
 - Pending/recent, work-zone, and selection overlays reuse the capture catalog instead of reparsing every project on client tick or render hot paths, and hot drafts are rejected before final reconciliation or deep snapshot copying.

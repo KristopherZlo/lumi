@@ -180,8 +180,16 @@ public final class EntityCausalContextRegistry {
         if (entity == null || entity.getUUID() == null || level == null) {
             return null;
         }
-        this.removeExpired(level.getGameTime());
-        return this.contexts.get(this.key(entity, level));
+        if (this.contexts.isEmpty()) {
+            return null;
+        }
+        EntityContextKey key = this.key(entity, level);
+        EntityCausalContext context = this.contexts.get(key);
+        if (context != null && context.expiresAtGameTime() < level.getGameTime()) {
+            this.contexts.remove(key);
+            return null;
+        }
+        return context;
     }
 
     private boolean currentFrameHasDifferentAction(String expectedActionId) {
@@ -218,6 +226,8 @@ public final class EntityCausalContextRegistry {
 
     public static final class ContextFrame implements AutoCloseable {
 
+        private static final ContextFrame EMPTY = new ContextFrame(null, false);
+
         private final WorldMutationContext.SourceFrame sourceFrame;
         private final boolean pushedStartedAt;
         private boolean closed;
@@ -228,7 +238,7 @@ public final class EntityCausalContextRegistry {
         }
 
         private static ContextFrame empty() {
-            return new ContextFrame(null, false);
+            return EMPTY;
         }
 
         public boolean active() {
@@ -237,6 +247,9 @@ public final class EntityCausalContextRegistry {
 
         @Override
         public void close() {
+            if (this.sourceFrame == null) {
+                return;
+            }
             if (this.closed) {
                 return;
             }

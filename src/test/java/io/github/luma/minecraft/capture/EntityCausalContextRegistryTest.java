@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EntityCausalContextRegistryTest {
@@ -26,6 +27,17 @@ class EntityCausalContextRegistryTest {
         assertFalse(this.registry.canRememberSource(WorldMutationSource.EXPLOSION, ""));
         assertFalse(this.registry.canRememberSource(WorldMutationSource.MOB, ""));
         assertFalse(this.registry.canRememberSource(WorldMutationSource.SYSTEM, "action-1"));
+    }
+
+    @Test
+    void emptyLookupsReuseTheInactiveContextFrame() {
+        EntityCausalContextRegistry.ContextFrame first = this.registry.pushIfPresent(null, null);
+        EntityCausalContextRegistry.ContextFrame second = this.registry.pushIfPresent(null, null);
+
+        first.close();
+
+        assertSame(first, second);
+        assertFalse(second.active());
     }
 
     @Test
