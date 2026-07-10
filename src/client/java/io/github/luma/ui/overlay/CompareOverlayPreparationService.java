@@ -24,6 +24,7 @@ public final class CompareOverlayPreparationService {
     });
     private final AtomicLong revision = new AtomicLong();
     private volatile Future<?> pendingTask;
+    private volatile PreparationKey pendingKey;
 
     private CompareOverlayPreparationService() {
     }
@@ -39,6 +40,18 @@ public final class CompareOverlayPreparationService {
             List<DiffBlockEntry> changedBlocks,
             boolean debugEnabled
     ) {
+        PreparationKey key = new PreparationKey(
+                projectName,
+                leftVersionId,
+                rightVersionId,
+                changedBlocks == null ? 0 : changedBlocks.size(),
+                changedBlocks == null ? 0 : changedBlocks.hashCode(),
+                debugEnabled
+        );
+        if (key.equals(this.pendingKey)) {
+            return;
+        }
+        this.pendingKey = key;
         long requestRevision = this.revision.incrementAndGet();
         this.cancelTask(this.pendingTask);
         this.pendingTask = this.executor.submit(() -> {
@@ -55,6 +68,7 @@ public final class CompareOverlayPreparationService {
 
     public void cancelPending() {
         this.revision.incrementAndGet();
+        this.pendingKey = null;
         this.cancelTask(this.pendingTask);
     }
 
@@ -86,6 +100,9 @@ public final class CompareOverlayPreparationService {
     ) {
         Minecraft client = Minecraft.getInstance();
         if (client == null) {
+            if (requestRevision == this.revision.get()) {
+                this.pendingKey = null;
+            }
             CompareOverlayRenderer.discard(prepared);
             return;
         }
@@ -101,6 +118,7 @@ public final class CompareOverlayPreparationService {
             CompareOverlayRenderer.discard(prepared);
             return;
         }
+        this.pendingKey = null;
         if (failure != null) {
             Throwable cause = failure instanceof CompletionException && failure.getCause() != null
                     ? failure.getCause()
@@ -115,5 +133,15 @@ public final class CompareOverlayPreparationService {
         if (task != null && !task.isDone()) {
             task.cancel(true);
         }
+    }
+
+    private record PreparationKey(
+            String projectName,
+            String leftVersionId,
+            String rightVersionId,
+            int changedBlockCount,
+            int changedBlocksFingerprint,
+            boolean debugEnabled
+    ) {
     }
 }

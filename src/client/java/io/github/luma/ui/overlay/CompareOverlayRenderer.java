@@ -22,6 +22,7 @@ public final class CompareOverlayRenderer {
 
     private static final String CURRENT_WORLD_REFERENCE = "current";
     static final int DETAILED_DIFF_RENDER_LIMIT = 50_000;
+    static final int BACKGROUND_PREPARATION_THRESHOLD = 2_048;
     private static final int MAX_SECTION_UPLOADS_PER_FRAME = 24;
     private static final float NORMAL_FILL_ALPHA = 48.0F;
     private static final float XRAY_FILL_ALPHA = 96.0F;
@@ -140,7 +141,23 @@ public final class CompareOverlayRenderer {
     }
 
     public static boolean shouldPrepareInBackground(List<DiffBlockEntry> changedBlocks) {
-        return changedBlocks != null && changedBlocks.size() > DETAILED_DIFF_RENDER_LIMIT;
+        return changedBlocks != null && changedBlocks.size() > BACKGROUND_PREPARATION_THRESHOLD;
+    }
+
+    static boolean currentContentMatches(
+            String projectName,
+            String leftVersionId,
+            String rightVersionId,
+            List<DiffBlockEntry> changedBlocks,
+            boolean debugEnabled
+    ) {
+        OverlayState current = ACTIVE_STATE.get();
+        List<DiffBlockEntry> resolvedBlocks = changedBlocks == null ? List.of() : changedBlocks;
+        boolean resolvedDebug = debugEnabled || LumaDebugLog.globalEnabled();
+        return current != null
+                && current.matches(projectName, leftVersionId, rightVersionId)
+                && current.sameContent(resolvedBlocks.size(), resolvedBlocks.hashCode())
+                && current.debugEnabled() == resolvedDebug;
     }
 
     public static RefreshRequest refreshRequest() {

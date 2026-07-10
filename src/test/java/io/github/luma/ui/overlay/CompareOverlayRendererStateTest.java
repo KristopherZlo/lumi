@@ -76,8 +76,8 @@ class CompareOverlayRendererStateTest {
 
     @Test
     void largeOverlaysAreMarkedForBackgroundPreparation() {
-        assertFalse(CompareOverlayRenderer.shouldPrepareInBackground(lineEntries(CompareOverlayRenderer.DETAILED_DIFF_RENDER_LIMIT)));
-        assertTrue(CompareOverlayRenderer.shouldPrepareInBackground(lineEntries(CompareOverlayRenderer.DETAILED_DIFF_RENDER_LIMIT + 1)));
+        assertFalse(CompareOverlayRenderer.shouldPrepareInBackground(lineEntries(CompareOverlayRenderer.BACKGROUND_PREPARATION_THRESHOLD)));
+        assertTrue(CompareOverlayRenderer.shouldPrepareInBackground(lineEntries(CompareOverlayRenderer.BACKGROUND_PREPARATION_THRESHOLD + 1)));
     }
 
     @Test

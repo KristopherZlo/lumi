@@ -99,6 +99,25 @@ public final class CompareOverlayCoordinator {
                 return;
             }
 
+            if (CompareOverlayRenderer.shouldPrepareInBackground(diff.changedBlocks())) {
+                if (!CompareOverlayRenderer.currentContentMatches(
+                        request.projectName(),
+                        request.leftVersionId(),
+                        request.rightVersionId(),
+                        diff.changedBlocks(),
+                        request.debugEnabled()
+                )) {
+                    CompareOverlayPreparationService.getInstance().prepareAndShow(
+                            request.projectName(),
+                            request.leftVersionId(),
+                            request.rightVersionId(),
+                            diff.changedBlocks(),
+                            request.debugEnabled()
+                    );
+                }
+                return;
+            }
+
             CompareOverlayRenderer.refresh(
                     request.projectName(),
                     request.leftVersionId(),
