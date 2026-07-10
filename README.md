@@ -254,7 +254,7 @@ Hard rules:
 - Repeated unchanged-draft checks reuse a cached content fingerprint until the tracked block or entity set changes.
 - Snapshot sections are encoded once per chunk and reused for content deduplication, fingerprints, and the compressed snapshot frame; existing content blobs skip redundant LZ4 compression.
 - Saving a version extends a fresh history index in memory instead of reopening and parsing every older manifest; stale indices still fall back to a full safe rebuild.
-- Pending/recent overlays reuse the capture catalog instead of reparsing every project each client tick, and hot drafts are rejected before final reconciliation or deep snapshot copying.
+- Pending/recent, work-zone, and selection overlays reuse the capture catalog instead of reparsing every project on client tick or render hot paths, and hot drafts are rejected before final reconciliation or deep snapshot copying.
 - Preview pixel cropping, PNG encoding, request cleanup, and version metadata updates run on the low-priority preview worker instead of the render/client thread.
 - Compare overlays build geometry in the cancellable background worker above 2,048 changed blocks, reject stale worker results after show/refresh/clear transitions, and skip rebuilding when refreshed content is unchanged.
 - World-apply no-op pruning reuses its first live-state scan instead of decoding and comparing every target block twice.

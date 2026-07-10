@@ -11,13 +11,13 @@ import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.WorkZoneShellPlanner;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.network.WorkZoneClientNetworking;
+import io.github.luma.storage.ProjectLayout;
 import io.github.luma.ui.ActionBarMessagePresenter;
 import io.github.luma.ui.controller.ClientProjectAccess;
 import java.util.List;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
 
 public final class WorkZoneOverlayRenderer {
 
@@ -31,6 +31,7 @@ public final class WorkZoneOverlayRenderer {
     private static State activeState;
     private static ShellState cachedShell;
     private static MeshState cachedMesh;
+    private static CachedProjectLayout cachedProjectLayout;
     private static String lastEnteredZoneId = "";
     private static int refreshCooldown;
     private static DisplayMode displayMode = DisplayMode.FOCUSED;
@@ -102,22 +103,30 @@ public final class WorkZoneOverlayRenderer {
 
     private static State resolve(Minecraft client) {
         try {
-            MinecraftServer server = ClientProjectAccess.requireSingleplayerServer(client);
-            ServerLevel level = server.getLevel(client.level.dimension());
-            if (level == null) {
-                return null;
-            }
-            BuildProject project = PROJECT_SERVICE.findWorldProject(level).orElse(null);
+            BuildProject project = ClientProjectAccess.findCurrentWorldProject(client).orElse(null);
+            MinecraftServer server = client.getSingleplayerServer();
             if (project == null) {
+                cachedProjectLayout = null;
                 return null;
             }
 
-            WorkZoneState zones = WORK_ZONE_SERVICE.load(PROJECT_SERVICE.resolveLayout(server, project.name()));
+            WorkZoneState zones = WORK_ZONE_SERVICE.load(projectLayout(server, project));
             String actor = client.getUser() == null ? "player" : client.getUser().getName();
             return stateFrom(zones, actor, WorkZoneCell.from(BlockPoint.from(client.player.blockPosition())));
         } catch (Exception ignored) {
+            cachedProjectLayout = null;
             return null;
         }
+    }
+
+    private static ProjectLayout projectLayout(MinecraftServer server, BuildProject project) throws java.io.IOException {
+        CachedProjectLayout current = cachedProjectLayout;
+        if (current != null && current.server() == server && current.project() == project) {
+            return current.layout();
+        }
+        ProjectLayout layout = PROJECT_SERVICE.resolveLayout(server, project.name());
+        cachedProjectLayout = new CachedProjectLayout(server, project, layout);
+        return layout;
     }
 
     private static State resolveRemote(Minecraft client) {
@@ -215,6 +224,7 @@ public final class WorkZoneOverlayRenderer {
         lastEnteredZoneId = "";
         refreshCooldown = 0;
         cachedShell = null;
+        cachedProjectLayout = null;
         clearCachedMesh();
     }
 
@@ -267,5 +277,8 @@ public final class WorkZoneOverlayRenderer {
         private boolean matches(State state) {
             return this.faces.equals(state.faces());
         }
+    }
+
+    private record CachedProjectLayout(MinecraftServer server, BuildProject project, ProjectLayout layout) {
     }
 }

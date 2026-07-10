@@ -3,17 +3,13 @@ package io.github.luma.ui.overlay;
 import io.github.luma.client.selection.LumiRegionSelectionController;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
-import io.github.luma.domain.service.ProjectService;
 import io.github.luma.ui.controller.ClientProjectAccess;
 import java.util.Optional;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.Minecraft;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
 
 public final class LumiRegionSelectionRenderer {
 
-    private static final ProjectService PROJECT_SERVICE = new ProjectService();
     private static final float OUTSET = 0.01F;
     private static final int RED = 0x35;
     private static final int GREEN = 0xC6;
@@ -56,9 +52,7 @@ public final class LumiRegionSelectionRenderer {
             return Optional.empty();
         }
         try {
-            MinecraftServer server = ClientProjectAccess.requireSingleplayerServer(client);
-            ServerLevel level = server.getLevel(client.level.dimension());
-            return level == null ? Optional.empty() : PROJECT_SERVICE.findWorldProject(level);
+            return ClientProjectAccess.findCurrentWorldProject(client);
         } catch (Exception exception) {
             return Optional.empty();
         }

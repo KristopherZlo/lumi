@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,6 +35,18 @@ class WorkZoneOverlayMeshTest {
         String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/overlay/WorkZoneOverlayRenderer.java"));
 
         assertTrue(source.contains("private static final float OUTSET = 0.01F;"));
+    }
+
+    @Test
+    void overlayHotPathsReuseTheCaptureProjectCatalog() throws IOException {
+        String workZones = Files.readString(Path.of("src/client/java/io/github/luma/ui/overlay/WorkZoneOverlayRenderer.java"));
+        String selection = Files.readString(Path.of("src/client/java/io/github/luma/ui/overlay/LumiRegionSelectionRenderer.java"));
+
+        assertTrue(workZones.contains("ClientProjectAccess.findCurrentWorldProject(client)"));
+        assertTrue(workZones.contains("CachedProjectLayout current = cachedProjectLayout;"));
+        assertFalse(workZones.contains("PROJECT_SERVICE.findWorldProject"));
+        assertTrue(selection.contains("ClientProjectAccess.findCurrentWorldProject(client)"));
+        assertFalse(selection.contains("PROJECT_SERVICE.findWorldProject"));
     }
 
     @Test
