@@ -74,7 +74,7 @@ public final class LumiOverlayClientSmoke {
                 true
         );
         context.runOnClient(client -> {
-            CompareOverlayRenderer.activate(largeCompare);
+            CompareOverlayRenderer.activatePrepared(largeCompare);
             this.assertCompareMesh("large compare", 1, 1);
             this.assertCompareMeshNearCamera(client, "large compare");
         });
