@@ -532,6 +532,7 @@ public final class WorldOperationManager {
         private WorldApplyChunkPreloader chunkPreloader;
         private GlobalDispatcher dispatcher;
         private ChunkBatch currentBatch;
+        private ChunkBatch currentTargetBatch;
         private List<PreparedSectionApplyBatch> currentNativeSections = List.of();
         private List<SectionBatch> currentSections = List.of();
         private List<Map.Entry<BlockPos, CompoundTag>> currentBlockEntities = List.of();
@@ -669,12 +670,12 @@ public final class WorldOperationManager {
             }
             while (System.nanoTime() < deadlineNanos) {
                 if (this.currentBatch == null) {
-                    this.currentBatch = this.dispatcher.pollNext();
-                    if (this.currentBatch == null) {
+                    this.currentTargetBatch = this.dispatcher.pollNext();
+                    if (this.currentTargetBatch == null) {
                         stopReason = "dispatcher-empty";
                         break;
                     }
-                    this.currentBatch = this.pruneNoOpBatch(this.currentBatch);
+                    this.currentBatch = this.pruneNoOpBatch(this.currentTargetBatch);
                     this.currentNativeSections = this.currentBatch.orderedNativeSections();
                     this.currentSections = this.currentBatch.orderedSections();
                     this.currentBlockEntities = List.copyOf(this.currentBatch.blockEntities().entrySet());
@@ -798,7 +799,7 @@ public final class WorldOperationManager {
                 );
                 if (this.currentBatch != null && this.currentBatchFinished()) {
                     WorldApplyVerificationResult verificationResult = this.verifyAndRepairBatch(
-                            this.currentBatch,
+                            this.currentTargetBatch,
                             budget,
                             deadlineNanos
                     );
@@ -820,9 +821,10 @@ public final class WorldOperationManager {
                     }
                     tickCounters.recordChunkFinished();
                     this.exactReplayStateQueue.record(this.currentBatch);
-                    this.finalVerificationGate.record(this.currentBatch);
+                    this.finalVerificationGate.record(this.currentTargetBatch);
                     this.logBlockApplyChunkFinish(this.currentBatch);
                     this.currentBatch = null;
+                    this.currentTargetBatch = null;
                     this.currentNativeSections = List.of();
                     this.currentSections = List.of();
                     this.currentBlockEntities = List.of();

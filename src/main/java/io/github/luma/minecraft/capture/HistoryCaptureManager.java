@@ -934,7 +934,7 @@ public final class HistoryCaptureManager {
         return this.serverThreadExecutor.call(server, () -> this.snapshotDraftOnServerThread(server, projectId));
     }
 
-    public Optional<io.github.luma.domain.model.BuildProject> findWholeDimensionProject(ServerLevel level) throws IOException {
+    public Optional<BuildProject> findWholeDimensionProject(ServerLevel level) throws IOException {
         TrackedProject trackedProject = this.trackedProjectCatalog.findWholeDimension(level);
         return trackedProject == null ? Optional.empty() : Optional.of(trackedProject.project());
     }
@@ -1161,14 +1161,7 @@ public final class HistoryCaptureManager {
                     TrackedProject trackedProject = this.findTrackedProject(server, projectId);
                     CaptureSessionState sessionState = this.workingDrafts.session(projectId);
                     if (trackedProject != null && sessionState != null) {
-                        this.reconcileSession(server, trackedProject, sessionState, false);
-                        if (sessionState.hasPendingReconciliation()) {
-                            LumaMod.LOGGER.info(
-                                    "Skipped final shutdown stabilization for project {} with {} pending dirty chunks",
-                                    trackedProject.project().name(),
-                                    sessionState.pendingReconcileChunks().size()
-                            );
-                        }
+                        this.reconcileSession(server, trackedProject, sessionState, true);
                     }
                     return this.workingDrafts.freezeForShutdownAfterReconciliation(projectId, trackedProject);
                 });

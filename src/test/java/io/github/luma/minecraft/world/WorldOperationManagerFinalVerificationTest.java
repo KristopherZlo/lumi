@@ -32,4 +32,14 @@ class WorldOperationManagerFinalVerificationTest {
         assertTrue(source.contains("return !this.exactReplayStateQueue.hasPending();"));
         assertFalse(source.contains("!this.exactReplayStateQueue.hasPending() || reapplied > 0"));
     }
+
+    @Test
+    void finalVerificationKeepsTheOriginalTargetsRemovedByNoOpPruning() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/luma/minecraft/world/WorldOperationManager.java"
+        ));
+
+        assertTrue(source.contains("this.currentBatch = this.pruneNoOpBatch(this.currentTargetBatch);"));
+        assertTrue(source.contains("this.finalVerificationGate.record(this.currentTargetBatch);"));
+    }
 }

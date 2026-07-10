@@ -19,10 +19,13 @@ class Bounds3iTest {
     }
 
     @Test
-    void reversedBoundsAreRejected() {
-        assertThrows(IllegalArgumentException.class, () -> new Bounds3i(
+    void reversedBoundsAreNormalized() {
+        Bounds3i bounds = new Bounds3i(
                 new BlockPoint(1, 0, 0),
                 new BlockPoint(0, 0, 0)
-        ));
+        );
+
+        assertEquals(new BlockPoint(0, 0, 0), bounds.min());
+        assertEquals(new BlockPoint(1, 0, 0), bounds.max());
     }
 }

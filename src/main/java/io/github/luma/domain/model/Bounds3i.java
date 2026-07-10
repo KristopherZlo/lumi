@@ -6,11 +6,18 @@ import net.minecraft.core.BlockPos;
 public record Bounds3i(BlockPoint min, BlockPoint max) {
 
     public Bounds3i {
-        Objects.requireNonNull(min, "min");
-        Objects.requireNonNull(max, "max");
-        if (min.x() > max.x() || min.y() > max.y() || min.z() > max.z()) {
-            throw new IllegalArgumentException("Bounds minimum must not exceed maximum");
-        }
+        BlockPoint first = Objects.requireNonNull(min, "min");
+        BlockPoint second = Objects.requireNonNull(max, "max");
+        min = new BlockPoint(
+                Math.min(first.x(), second.x()),
+                Math.min(first.y(), second.y()),
+                Math.min(first.z(), second.z())
+        );
+        max = new BlockPoint(
+                Math.max(first.x(), second.x()),
+                Math.max(first.y(), second.y()),
+                Math.max(first.z(), second.z())
+        );
     }
 
     public static Bounds3i of(BlockPos a, BlockPos b) {

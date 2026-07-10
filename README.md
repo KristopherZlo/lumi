@@ -258,6 +258,7 @@ Hard rules:
 - Preview pixel cropping, PNG encoding, request cleanup, and version metadata updates run on the low-priority preview worker instead of the render/client thread.
 - Compare overlays build geometry in the cancellable background worker above 2,048 changed blocks and skip rebuilding when refreshed content is unchanged.
 - World-apply no-op pruning reuses its first live-state scan instead of decoding and comparing every target block twice.
+- Shutdown fully drains dirty-chunk stabilization, and final restore verification retains original targets even when no-op pruning skips their initial write.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
 - Restore, recovery, merge, quick rollback, and undo/redo replay must verify final target state before reporting success. Full restore and quick rollback are undoable with live undo.
 - Live undo/redo, recent previews, and pending overlays include explosion and mob block fallout only when it is causally tied to a player action; passive mob edits and ambient explosions remain actionless.

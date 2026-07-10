@@ -70,9 +70,14 @@ final class WorldApplyFinalVerificationGate {
                 return false;
             }
             this.retryCount = 0;
+            this.batches.set(this.batchIndex, null);
             this.batchIndex += 1;
         }
-        return this.batchIndex >= this.batches.size();
+        boolean complete = this.batchIndex >= this.batches.size();
+        if (complete) {
+            this.batches.clear();
+        }
+        return complete;
     }
 
     private WorldApplyVerificationResult verifyAndRepair(
