@@ -252,6 +252,7 @@ Hard rules:
 - Bounds arithmetic rejects reversed ranges and cannot silently overflow; a single work-zone selection edit is capped at 65,536 section cells to prevent an accidental unbounded client allocation.
 - Recovery drafts are serialized once per flush; the first flush writes the compact base directly, and the operational journal retains only its newest 512 entries.
 - Repeated unchanged-draft checks reuse a cached content fingerprint until the tracked block or entity set changes.
+- Snapshot sections are encoded once per chunk and reused for content deduplication, fingerprints, and the compressed snapshot frame; existing content blobs skip redundant LZ4 compression.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
 - Restore, recovery, merge, quick rollback, and undo/redo replay must verify final target state before reporting success. Full restore and quick rollback are undoable with live undo.
 - Live undo/redo, recent previews, and pending overlays include explosion and mob block fallout only when it is causally tied to a player action; passive mob edits and ambient explosions remain actionless.

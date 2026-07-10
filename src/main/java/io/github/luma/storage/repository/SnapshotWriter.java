@@ -33,11 +33,11 @@ public final class SnapshotWriter {
     private final PayloadContentRepository contentRepository = new PayloadContentRepository();
 
     public void writeFile(Path snapshotFile, SnapshotData snapshot) throws IOException {
-        StorageIo.writeAtomically(snapshotFile, output -> this.writeCompressed(output, snapshot));
+        StorageIo.writeAtomically(snapshotFile, output -> this.writeCompressed(output, snapshot, null));
     }
 
     public void writeFile(ProjectLayout layout, Path snapshotFile, SnapshotData snapshot) throws IOException {
-        this.writeFile(snapshotFile, this.withContentRefs(layout, snapshot));
+        StorageIo.writeAtomically(snapshotFile, output -> this.writeCompressed(output, snapshot, layout));
     }
 
     public void writePreparedChunkFile(
@@ -75,8 +75,8 @@ public final class SnapshotWriter {
             Collection<ChunkSnapshotPayload> chunks,
             Instant now
     ) throws IOException {
-        SnapshotData snapshot = this.withContentRefs(layout, this.materializePreparedSnapshot(projectId, chunks, now));
-        this.writeFile(snapshotFile, snapshot);
+        SnapshotData snapshot = this.materializePreparedSnapshot(projectId, chunks, now);
+        this.writeFile(layout, snapshotFile, snapshot);
     }
 
     public SnapshotRef writePreparedSnapshot(
@@ -97,8 +97,8 @@ public final class SnapshotWriter {
             Collection<ChunkSnapshotPayload> chunks,
             Instant now
     ) throws IOException {
-        SnapshotData snapshot = this.withContentRefs(layout, this.materializePreparedSnapshot(projectId, chunks, now));
-        this.writeFile(snapshotFile, snapshot);
+        SnapshotData snapshot = this.materializePreparedSnapshot(projectId, chunks, now);
+        this.writeFile(layout, snapshotFile, snapshot);
         return new SnapshotRef(
                 snapshotId,
                 projectId,
@@ -109,7 +109,7 @@ public final class SnapshotWriter {
         );
     }
 
-    private void writeCompressed(OutputStream output, SnapshotData snapshot) throws IOException {
+    private void writeCompressed(OutputStream output, SnapshotData snapshot, ProjectLayout layout) throws IOException {
         try (DataOutputStream data = new DataOutputStream(new BufferedOutputStream(output))) {
             data.writeInt(MAGIC);
             data.writeInt(VERSION);
@@ -120,11 +120,12 @@ public final class SnapshotWriter {
             data.writeInt(snapshot.chunks().size());
 
             for (SnapshotChunkData chunk : snapshot.chunks()) {
-                byte[] chunkBytes = this.chunkBytes(chunk);
+                List<EncodedSection> sections = this.encodeSections(layout, chunk);
+                byte[] chunkBytes = this.chunkBytes(chunk, sections);
                 byte[] compressedBytes = this.compressFrame(chunkBytes);
                 data.writeInt(chunk.chunkX());
                 data.writeInt(chunk.chunkZ());
-                this.writeSectionFingerprints(data, chunk);
+                this.writeSectionFingerprints(data, chunk, sections);
                 data.writeInt(chunk.entitySnapshots().size());
                 data.writeInt(chunkBytes.length);
                 data.writeInt(compressedBytes.length);
@@ -133,16 +134,15 @@ public final class SnapshotWriter {
         }
     }
 
-    private byte[] chunkBytes(SnapshotChunkData chunk) throws IOException {
-        List<SnapshotSectionData> sections = storedSections(chunk);
+    private byte[] chunkBytes(SnapshotChunkData chunk, List<EncodedSection> sections) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream data = new DataOutputStream(bytes)) {
             data.writeInt(chunk.chunkX());
             data.writeInt(chunk.chunkZ());
             data.writeInt(sections.size());
             data.writeInt(chunk.blockEntities().size());
-            for (SnapshotSectionData section : sections) {
-                this.writeSection(data, section);
+            for (EncodedSection section : sections) {
+                data.write(section.bytes());
             }
             for (Map.Entry<Integer, net.minecraft.nbt.CompoundTag> entry : chunk.blockEntities().entrySet()) {
                 data.writeInt(entry.getKey());
@@ -156,16 +156,19 @@ public final class SnapshotWriter {
         return bytes.toByteArray();
     }
 
-    private void writeSectionFingerprints(DataOutputStream data, SnapshotChunkData chunk) throws IOException {
-        List<SnapshotSectionData> sections = storedSections(chunk);
+    private void writeSectionFingerprints(
+            DataOutputStream data,
+            SnapshotChunkData chunk,
+            List<EncodedSection> sections
+    ) throws IOException {
         data.writeInt(sections.size());
-        for (SnapshotSectionData section : sections) {
+        for (EncodedSection section : sections) {
             SectionFingerprint fingerprint = SectionFingerprint.fromBytes(
                     chunk.chunkX(),
                     chunk.chunkZ(),
                     section.sectionY(),
                     SectionChangeMask.ENTRY_COUNT,
-                    this.sectionBytes(section)
+                    section.bytes()
             );
             data.writeInt(fingerprint.sectionY());
             data.writeInt(fingerprint.changedCount());
@@ -173,6 +176,19 @@ public final class SnapshotWriter {
             data.writeUTF(fingerprint.sha256());
             this.writeContentRef(data, section.contentRef());
         }
+    }
+
+    private List<EncodedSection> encodeSections(ProjectLayout layout, SnapshotChunkData chunk) throws IOException {
+        List<SnapshotSectionData> storedSections = storedSections(chunk);
+        List<EncodedSection> encoded = new ArrayList<>(storedSections.size());
+        for (SnapshotSectionData section : storedSections) {
+            byte[] bytes = this.sectionBytes(section);
+            ContentRef contentRef = layout == null
+                    ? section.contentRef()
+                    : this.contentRepository.writeContent(layout, SNAPSHOT_SECTION_CONTENT, bytes);
+            encoded.add(new EncodedSection(section.sectionY(), bytes, contentRef));
+        }
+        return encoded;
     }
 
     private void writeContentRef(DataOutputStream data, ContentRef contentRef) throws IOException {
@@ -234,42 +250,6 @@ public final class SnapshotWriter {
         return new SnapshotData(projectId, now, minBuildHeight, maxBuildHeight, chunkData);
     }
 
-    private SnapshotData withContentRefs(ProjectLayout layout, SnapshotData snapshot) throws IOException {
-        if (layout == null || snapshot == null || snapshot.chunks().isEmpty()) {
-            return snapshot;
-        }
-        List<SnapshotChunkData> chunks = new ArrayList<>(snapshot.chunks().size());
-        for (SnapshotChunkData chunk : snapshot.chunks()) {
-            List<SnapshotSectionData> storedSections = storedSections(chunk);
-            List<SnapshotSectionData> sections = new ArrayList<>(storedSections.size());
-            for (SnapshotSectionData section : storedSections) {
-                byte[] bytes = this.sectionBytes(section);
-                ContentRef contentRef = this.contentRepository.writeContent(layout, SNAPSHOT_SECTION_CONTENT, bytes);
-                sections.add(new SnapshotSectionData(
-                        section.sectionY(),
-                        section.palette(),
-                        section.bitsPerEntry(),
-                        section.packedStorage(),
-                        contentRef
-                ));
-            }
-            chunks.add(new SnapshotChunkData(
-                    chunk.chunkX(),
-                    chunk.chunkZ(),
-                    sections,
-                    chunk.blockEntities(),
-                    chunk.entitySnapshots()
-            ));
-        }
-        return new SnapshotData(
-                snapshot.projectId(),
-                snapshot.createdAt(),
-                snapshot.minBuildHeight(),
-                snapshot.maxBuildHeight(),
-                chunks
-        );
-    }
-
     private SnapshotChunkData materializePreparedChunk(ChunkSnapshotPayload chunk) {
         List<SnapshotSectionData> sections = new ArrayList<>(chunk.sections().size());
         for (ChunkSectionSnapshotPayload section : chunk.sections()) {
@@ -300,5 +280,8 @@ public final class SnapshotWriter {
         return chunk.sections().stream()
                 .filter(section -> section != null && !section.palette().isEmpty())
                 .toList();
+    }
+
+    private record EncodedSection(int sectionY, byte[] bytes, ContentRef contentRef) {
     }
 }

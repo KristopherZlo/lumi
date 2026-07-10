@@ -26,6 +26,7 @@ class PayloadContentRepositoryTest {
         var second = this.repository.writeContent(layout, "snapshot-section", payload);
 
         assertEquals(first.sha256(), second.sha256());
+        assertEquals(Files.size(layout.contentFile(first.sha256())), second.compressedBytes());
         assertTrue(this.repository.contains(layout, first));
         assertArrayEquals(payload, this.repository.readContent(layout, first));
         assertEquals(1, Files.list(layout.contentCacheDir()).count());

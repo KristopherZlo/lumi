@@ -16,10 +16,12 @@ public final class PayloadContentRepository {
     public ContentRef writeContent(ProjectLayout layout, String logicalKind, byte[] uncompressedBytes) throws IOException {
         byte[] payload = uncompressedBytes == null ? new byte[0] : uncompressedBytes.clone();
         String sha256 = sha256(payload);
-        byte[] compressed = this.compress(payload);
-        if (!Files.exists(layout.contentFile(sha256))) {
-            StorageIo.writeAtomically(layout.contentFile(sha256), output -> output.write(compressed));
+        var contentFile = layout.contentFile(sha256);
+        if (Files.exists(contentFile)) {
+            return new ContentRef(sha256, logicalKind, payload.length, Files.size(contentFile));
         }
+        byte[] compressed = this.compress(payload);
+        StorageIo.writeAtomically(contentFile, output -> output.write(compressed));
         return new ContentRef(sha256, logicalKind, payload.length, compressed.length);
     }
 
