@@ -40,6 +40,8 @@ public record SnapshotSectionData(
         if (palette.size() <= 1) {
             bitsPerEntry = 0;
             packedStorage = new long[0];
+        } else if (bitsPerEntry == -1) {
+            bitsPerEntry = inferBitsPerEntry(palette.size(), packedStorage);
         }
     }
 
@@ -85,6 +87,23 @@ public record SnapshotSectionData(
         return (SectionChangeMask.ENTRY_COUNT + valuesPerLong - 1) / valuesPerLong;
     }
 
+    public static int inferBitsPerEntry(int paletteSize, long[] packedStorage) {
+        long[] storage = packedStorage == null ? new long[0] : packedStorage;
+        int resolved = -1;
+        for (int bits = 1; bits <= Integer.SIZE; bits++) {
+            if ((1L << bits) < paletteSize || packedLongCount(bits) != storage.length) {
+                continue;
+            }
+            if (containsOnlyPaletteIndexes(bits, paletteSize, storage)) {
+                if (resolved >= 0) {
+                    return -1;
+                }
+                resolved = bits;
+            }
+        }
+        return resolved;
+    }
+
     private static long[] packPaletteIndexes(short[] paletteIndexes, int bitsPerEntry) {
         if (bitsPerEntry <= 0) {
             return new long[0];
@@ -112,6 +131,19 @@ public record SnapshotSectionData(
 
     private static int valuesPerLong(int bitsPerEntry) {
         return Math.max(1, Long.SIZE / bitsPerEntry);
+    }
+
+    private static boolean containsOnlyPaletteIndexes(int bitsPerEntry, int paletteSize, long[] storage) {
+        int valuesPerLong = valuesPerLong(bitsPerEntry);
+        long mask = (1L << bitsPerEntry) - 1L;
+        for (int index = 0; index < SectionChangeMask.ENTRY_COUNT; index++) {
+            int storageIndex = index / valuesPerLong;
+            int bitOffset = (index - storageIndex * valuesPerLong) * bitsPerEntry;
+            if (((storage[storageIndex] >>> bitOffset) & mask) >= paletteSize) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static List<CompoundTag> copyPalette(List<CompoundTag> palette) {

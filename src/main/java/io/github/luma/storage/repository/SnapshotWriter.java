@@ -212,13 +212,20 @@ public final class SnapshotWriter {
     }
 
     private void writeSection(DataOutputStream data, SnapshotSectionData section) throws IOException {
+        int bitsPerEntry = section.bitsPerEntry();
+        long[] packedStorage = section.packedStorage();
+        if (section.palette().size() > 1
+                && (bitsPerEntry <= 0
+                || bitsPerEntry > Integer.SIZE
+                || packedStorage.length != SnapshotSectionData.packedLongCount(bitsPerEntry))) {
+            throw new IOException("Snapshot section has invalid packed storage");
+        }
         data.writeInt(section.sectionY());
         data.writeInt(section.palette().size());
         for (var tag : section.palette()) {
             StorageIo.writeCompound(data, tag);
         }
-        data.writeInt(section.bitsPerEntry());
-        long[] packedStorage = section.packedStorage();
+        data.writeInt(bitsPerEntry);
         data.writeInt(packedStorage.length);
         for (long packedLong : packedStorage) {
             data.writeLong(packedLong);

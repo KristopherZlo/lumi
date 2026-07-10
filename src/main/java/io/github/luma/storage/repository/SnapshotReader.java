@@ -347,31 +347,38 @@ public final class SnapshotReader {
         if (palette.isEmpty()) {
             throw new IOException("Snapshot section palette is empty");
         }
-        int bitsPerEntry = input.readInt();
-        if (bitsPerEntry < 0 || bitsPerEntry > Integer.SIZE) {
-            throw new IOException("Snapshot packed bits per entry out of bounds");
-        }
+        int storedBitsPerEntry = input.readInt();
         int packedLongCount = StorageLimits.requireLength(
                 "snapshot packed long count",
                 input.readInt(),
                 StorageLimits.MAX_SNAPSHOT_PACKED_LONGS
         );
         if (palette.size() == 1) {
-            if (bitsPerEntry != 0 || packedLongCount != 0) {
+            if (storedBitsPerEntry != 0 || packedLongCount != 0) {
                 throw new IOException("Snapshot single-palette section must not store packed data");
             }
             return new SnapshotSectionData(sectionY, palette, 0, new long[0]);
         }
-        if (bitsPerEntry <= 0 || (1L << bitsPerEntry) < palette.size()) {
+        long[] packedStorage = new long[packedLongCount];
+        for (int index = 0; index < packedStorage.length; index++) {
+            packedStorage[index] = input.readLong();
+        }
+        int bitsPerEntry = storedBitsPerEntry == -1
+                ? SnapshotSectionData.inferBitsPerEntry(palette.size(), packedStorage)
+                : storedBitsPerEntry;
+        if (bitsPerEntry <= 0 || bitsPerEntry > Integer.SIZE) {
+            throw new IOException(
+                    "Snapshot packed bits per entry out of bounds: " + storedBitsPerEntry
+                            + " (sectionY=" + sectionY + ", paletteSize=" + palette.size()
+                            + ", packedLongCount=" + packedLongCount + ")"
+            );
+        }
+        if ((1L << bitsPerEntry) < palette.size()) {
             throw new IOException("Snapshot packed bits cannot address palette");
         }
         int expectedLongCount = SnapshotSectionData.packedLongCount(bitsPerEntry);
         if (packedLongCount != expectedLongCount) {
             throw new IOException("Snapshot packed long count mismatch");
-        }
-        long[] packedStorage = new long[packedLongCount];
-        for (int index = 0; index < packedStorage.length; index++) {
-            packedStorage[index] = input.readLong();
         }
         SnapshotSectionData section = new SnapshotSectionData(sectionY, palette, bitsPerEntry, packedStorage);
         for (int localIndex = 0; localIndex < SectionChangeMask.ENTRY_COUNT; localIndex++) {

@@ -22,6 +22,12 @@ public record ChunkSectionSnapshotPayload(
     public ChunkSectionSnapshotPayload {
         palette = copyPalette(palette);
         packedStorage = packedStorage == null ? new long[0] : packedStorage.clone();
+        if (palette.size() <= 1) {
+            bitsPerEntry = 0;
+            packedStorage = new long[0];
+        } else if (bitsPerEntry == -1) {
+            bitsPerEntry = SnapshotSectionData.inferBitsPerEntry(palette.size(), packedStorage);
+        }
     }
 
     @Override

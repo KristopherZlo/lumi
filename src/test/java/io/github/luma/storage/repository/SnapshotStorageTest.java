@@ -197,6 +197,58 @@ class SnapshotStorageTest {
     }
 
     @Test
+    void recoversUnknownPackedBitsWrittenByMinecraftCapture() throws Exception {
+        short[] indexes = new short[4096];
+        indexes[0] = 11;
+        long[] packed = packMinecraftIndexes(indexes, 4);
+        Path file = this.tempDir.resolve("unknown-packed-bits.bin.lz4");
+        this.writeSnapshotFile(file, 8, this.v8Chunk(palette(12), -1, packed));
+
+        SnapshotSectionData section = this.reader.readFile(file).chunks().getFirst().sections().getFirst();
+
+        assertEquals(4, section.bitsPerEntry());
+        assertArrayEquals(packed, section.packedStorage());
+        assertEquals(11, section.paletteIndexAt(0));
+    }
+
+    @Test
+    void normalizesUnknownPackedBitsBeforeWritingPreparedBaseline() throws Exception {
+        short[] indexes = new short[4096];
+        indexes[0] = 11;
+        ChunkSnapshotPayload payload = new ChunkSnapshotPayload(
+                0,
+                0,
+                0,
+                15,
+                List.of(new ChunkSectionSnapshotPayload(0, palette(12), packMinecraftIndexes(indexes, 4), -1)),
+                Map.of(),
+                List.of()
+        );
+        Path file = this.tempDir.resolve("normalized-prepared-baseline.bin.lz4");
+
+        this.writer.writePreparedChunkFile(file, "project", payload, Instant.parse("2026-04-20T10:00:00Z"));
+
+        SnapshotSectionData section = this.reader.readFile(file).chunks().getFirst().sections().getFirst();
+        assertEquals(4, section.bitsPerEntry());
+        assertEquals(11, section.paletteIndexAt(0));
+    }
+
+    @Test
+    void rejectsUnresolvableUnknownPackedBitsBeforeWriting() {
+        SnapshotData snapshot = snapshotWithSection(new SnapshotSectionData(
+                0,
+                List.of(state("minecraft:air"), state("minecraft:stone")),
+                -1,
+                new long[] {0L}
+        ));
+
+        assertThrows(
+                java.io.IOException.class,
+                () -> this.writer.writeFile(this.tempDir.resolve("unresolvable-packed-bits.bin.lz4"), snapshot)
+        );
+    }
+
+    @Test
     void readsSnapshotV7PaletteIndexes() throws Exception {
         short[] indexes = new short[4096];
         indexes[0] = 1;
