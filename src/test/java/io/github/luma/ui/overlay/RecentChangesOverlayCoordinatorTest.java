@@ -20,6 +20,7 @@ class RecentChangesOverlayCoordinatorTest {
         assertTrue(source.contains("recentUndoPreviewActionsSnapshot("));
         assertTrue(source.contains("recentRedoPreviewActionsSnapshot("));
         assertTrue(source.contains("recentUndoRedoPreviewActionsSnapshot("));
+        assertTrue(source.contains("RecentChangesOverlayRenderer.discard(prepared);"));
 
         int pendingIndex = source.indexOf("RecentChangesPreviewSession.PreviewKey pending = this.pendingPreview;");
         int requestIndex = source.indexOf("this.previewSession.request(");

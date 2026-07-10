@@ -3,10 +3,10 @@ package io.github.luma.ui.overlay;
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.DiffBlockEntry;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 import net.minecraft.client.Minecraft;
 
@@ -23,6 +23,7 @@ public final class CompareOverlayPreparationService {
         return thread;
     });
     private final AtomicLong revision = new AtomicLong();
+    private volatile Future<?> pendingTask;
 
     private CompareOverlayPreparationService() {
     }
@@ -39,13 +40,22 @@ public final class CompareOverlayPreparationService {
             boolean debugEnabled
     ) {
         long requestRevision = this.revision.incrementAndGet();
-        CompletableFuture
-                .supplyAsync(() -> this.prepare(projectName, leftVersionId, rightVersionId, changedBlocks, debugEnabled), this.executor)
-                .whenComplete((prepared, failure) -> this.apply(requestRevision, prepared, failure));
+        this.cancelTask(this.pendingTask);
+        this.pendingTask = this.executor.submit(() -> {
+            CompareOverlayRenderer.PreparedOverlay prepared = null;
+            Throwable failure = null;
+            try {
+                prepared = this.prepare(projectName, leftVersionId, rightVersionId, changedBlocks, debugEnabled);
+            } catch (Throwable throwable) {
+                failure = throwable;
+            }
+            this.apply(requestRevision, prepared, failure);
+        });
     }
 
     public void cancelPending() {
         this.revision.incrementAndGet();
+        this.cancelTask(this.pendingTask);
     }
 
     private CompareOverlayRenderer.PreparedOverlay prepare(
@@ -99,5 +109,11 @@ public final class CompareOverlayPreparationService {
             return;
         }
         CompareOverlayRenderer.activate(prepared);
+    }
+
+    private void cancelTask(Future<?> task) {
+        if (task != null && !task.isDone()) {
+            task.cancel(true);
+        }
     }
 }

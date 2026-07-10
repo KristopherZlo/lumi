@@ -96,6 +96,12 @@ public final class PendingChangesOverlayRenderer {
         closePrevious(ACTIVE_STATE.getAndSet(null));
     }
 
+    static void discard(PreparedOverlay prepared) {
+        if (prepared != null) {
+            closePrevious(prepared.state());
+        }
+    }
+
     public static boolean visible() {
         return ACTIVE_STATE.get() != null;
     }

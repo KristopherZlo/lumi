@@ -133,6 +133,7 @@ public final class RecentChangesOverlayCoordinator {
                         this.pendingPreview = null;
                     }
                     if (exception != null) {
+                        RecentChangesOverlayRenderer.discard(prepared);
                         OverlayDiagnostics.getInstance().log(
                                 debugEnabled,
                                 "recent-prepare-failed",
@@ -149,6 +150,8 @@ public final class RecentChangesOverlayCoordinator {
                     if (previewKey.equals(this.requestedPreview)) {
                         RecentChangesOverlayRenderer.activate(prepared);
                         this.preparedPreview = previewKey;
+                    } else {
+                        RecentChangesOverlayRenderer.discard(prepared);
                     }
                 });
     }

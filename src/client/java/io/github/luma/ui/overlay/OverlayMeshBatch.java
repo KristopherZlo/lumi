@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
+import java.util.concurrent.CancellationException;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.client.renderer.rendertype.RenderType;
@@ -246,6 +247,7 @@ final class OverlayMeshBatch implements AutoCloseable {
 
             Map<SectionKey, SurfaceSectionBuilder> builders = new LinkedHashMap<>();
             for (CompareOverlaySurfaceResolver.SurfaceBlock surfaceBlock : surfaceBlocks) {
+                throwIfInterrupted();
                 if (surfaceBlock == null) {
                     continue;
                 }
@@ -254,6 +256,7 @@ final class OverlayMeshBatch implements AutoCloseable {
                 builders.computeIfAbsent(key, SurfaceSectionBuilder::new).add(surfaceBlock);
             }
             for (SurfaceSectionBuilder builder : builders.values()) {
+                throwIfInterrupted();
                 MergedSurfacePrimitive primitive = builder.build(style);
                 if (primitive != null) {
                     this.add(builder.key(), primitive);
@@ -329,13 +332,21 @@ final class OverlayMeshBatch implements AutoCloseable {
             }
             List<SectionMesh> meshes = new ArrayList<>(this.sections.size());
             for (SectionBuilder builder : this.sections.values()) {
+                throwIfInterrupted();
                 meshes.add(builder.build());
             }
             return new OverlayMeshBatch(List.copyOf(meshes));
         }
 
         private void add(SectionKey key, OverlayPrimitive primitive) {
+            throwIfInterrupted();
             this.sections.computeIfAbsent(key, SectionBuilder::new).add(primitive);
+        }
+
+        private static void throwIfInterrupted() {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new CancellationException("Overlay mesh preparation was interrupted");
+            }
         }
     }
 

@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import net.minecraft.core.BlockPos;
 
 final class CompareOverlaySurfaceResolver {
@@ -20,6 +21,7 @@ final class CompareOverlaySurfaceResolver {
     Set<Long> indexPositions(List<DiffBlockEntry> entries) {
         Set<Long> occupiedPositions = new HashSet<>((entries.size() * 4 / 3) + 1);
         for (DiffBlockEntry entry : entries) {
+            throwIfInterrupted();
             occupiedPositions.add(pack(entry.pos()));
         }
         return Set.copyOf(occupiedPositions);
@@ -32,6 +34,7 @@ final class CompareOverlaySurfaceResolver {
 
         List<SurfaceBlock> surfaceBlocks = new ArrayList<>(visibleEntries.size());
         for (DiffBlockEntry entry : visibleEntries) {
+            throwIfInterrupted();
             int faceMask = resolveExposedFaces(entry.pos(), occupiedPositions);
             if (faceMask != 0) {
                 surfaceBlocks.add(new SurfaceBlock(entry, faceMask));
@@ -69,6 +72,12 @@ final class CompareOverlaySurfaceResolver {
 
     private static long pack(BlockPoint pos) {
         return BlockPos.asLong(pos.x(), pos.y(), pos.z());
+    }
+
+    private static void throwIfInterrupted() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("Overlay surface preparation was interrupted");
+        }
     }
 
     record SurfaceBlock(DiffBlockEntry entry, int faceMask) {

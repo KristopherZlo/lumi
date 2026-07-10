@@ -12,7 +12,8 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
@@ -33,8 +34,25 @@ final class PreviewRenderMeshBuilder {
     private final Minecraft client = Minecraft.getInstance();
     private final PreviewRenderableBlockFilter renderableBlockFilter = new PreviewRenderableBlockFilter();
 
-    CompletableFuture<PreviewRenderMesh> scheduleBuild(ClientLevel level, Bounds3i bounds, Executor executor) {
-        return CompletableFuture.supplyAsync(() -> this.build(level, bounds), executor);
+    CompletableFuture<PreviewRenderMesh> scheduleBuild(
+            ClientLevel level,
+            Bounds3i bounds,
+            ExecutorService executor
+    ) {
+        CompletableFuture<PreviewRenderMesh> result = new CompletableFuture<>();
+        Future<?> submitted = executor.submit(() -> {
+            try {
+                result.complete(this.build(level, bounds));
+            } catch (Throwable failure) {
+                result.completeExceptionally(failure);
+            }
+        });
+        result.whenComplete((mesh, failure) -> {
+            if (result.isCancelled()) {
+                submitted.cancel(true);
+            }
+        });
+        return result;
     }
 
     private PreviewRenderMesh build(ClientLevel level, Bounds3i bounds) {

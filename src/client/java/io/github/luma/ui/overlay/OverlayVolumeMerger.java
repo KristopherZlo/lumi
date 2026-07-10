@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 
 /**
  * Collapses dense block previews into coarse chunk-section volumes.
@@ -24,6 +25,7 @@ final class OverlayVolumeMerger {
 
         Set<SectionKey> sectionKeys = new HashSet<>();
         for (BlockPoint position : positions) {
+            throwIfInterrupted();
             if (position != null) {
                 sectionKeys.add(SectionKey.from(position));
             }
@@ -44,6 +46,7 @@ final class OverlayVolumeMerger {
         Set<SectionKey> remaining = new HashSet<>(sectionKeys);
         List<OverlayBox> boxes = new ArrayList<>();
         for (SectionKey start : ordered) {
+            throwIfInterrupted();
             if (!remaining.contains(start)) {
                 continue;
             }
@@ -117,6 +120,7 @@ final class OverlayVolumeMerger {
             Set<SectionKey> remaining
     ) {
         for (int sectionY = start.sectionY(); sectionY <= maxY; sectionY++) {
+            throwIfInterrupted();
             for (int sectionZ = start.sectionZ(); sectionZ <= maxZ; sectionZ++) {
                 for (int sectionX = start.sectionX(); sectionX <= maxX; sectionX++) {
                     remaining.remove(new SectionKey(sectionX, sectionY, sectionZ));
@@ -161,6 +165,7 @@ final class OverlayVolumeMerger {
 
         List<OverlayBox> splitBoxes = new ArrayList<>();
         for (OverlayBox box : boxes) {
+            throwIfInterrupted();
             splitFixed(box, splitBoxes);
             if (splitBoxes.size() > MAX_MERGED_BOXES) {
                 return splitAdaptive(globalBox(boxes), MAX_MERGED_BOXES);
@@ -260,6 +265,12 @@ final class OverlayVolumeMerger {
 
     private static int ceilDiv(int value, int divisor) {
         return (value + divisor - 1) / divisor;
+    }
+
+    private static void throwIfInterrupted() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("Overlay volume preparation was interrupted");
+        }
     }
 
     record OverlayBox(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {

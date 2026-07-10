@@ -17,4 +17,14 @@ class PreviewCaptureCoordinatorTest {
 
         assertTrue(source.contains("version.entityCheckpointId()"));
     }
+
+    @Test
+    void cancellingMeshFutureInterruptsTheSubmittedBuild() throws IOException {
+        String source = Files.readString(Path.of(
+                "src/client/java/io/github/luma/client/preview/PreviewRenderMeshBuilder.java"
+        ));
+
+        assertTrue(source.contains("submitted.cancel(true);"));
+        assertTrue(source.contains("Thread.currentThread().isInterrupted()"));
+    }
 }

@@ -111,7 +111,7 @@ public final class RecentChangesOverlayRenderer {
 
     static void activate(PreparedOverlay prepared) {
         if (prepared == null) {
-            ACTIVE_STATE.set(null);
+            clear();
             return;
         }
         OverlayState state = prepared.state();
@@ -134,6 +134,12 @@ public final class RecentChangesOverlayRenderer {
 
     public static void clear() {
         closePrevious(ACTIVE_STATE.getAndSet(null));
+    }
+
+    static void discard(PreparedOverlay prepared) {
+        if (prepared != null) {
+            closePrevious(prepared.state());
+        }
     }
 
     public static boolean visible() {

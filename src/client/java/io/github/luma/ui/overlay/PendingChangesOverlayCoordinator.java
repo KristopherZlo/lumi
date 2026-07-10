@@ -94,6 +94,7 @@ public final class PendingChangesOverlayCoordinator {
                         this.pendingKey = null;
                     }
                     if (exception != null) {
+                        PendingChangesOverlayRenderer.discard(prepared);
                         OverlayDiagnostics.getInstance().log(
                                 debugEnabled,
                                 "pending-prepare-failed",
@@ -109,14 +110,17 @@ public final class PendingChangesOverlayCoordinator {
                         return;
                     }
                     if (!requestKey.equals(this.requestedKey)) {
+                        PendingChangesOverlayRenderer.discard(prepared);
                         return;
                     }
                     if (prepared.state() == null) {
+                        PendingChangesOverlayRenderer.discard(prepared);
                         PendingChangesOverlayRenderer.clear();
                         this.preparedKey = null;
                         return;
                     }
                     if (PendingChangesOverlayRenderer.visibleFor(prepared.projectId(), prepared.revision())) {
+                        PendingChangesOverlayRenderer.discard(prepared);
                         this.preparedKey = requestKey;
                         return;
                     }
