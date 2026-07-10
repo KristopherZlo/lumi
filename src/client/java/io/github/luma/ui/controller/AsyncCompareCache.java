@@ -8,9 +8,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Supplier;
 
 /**
@@ -53,9 +55,7 @@ public final class AsyncCompareCache {
         if (refresh) {
             this.requests.remove(key).ifPresent(AsyncCompareCache::cancelIfRunning);
         }
-        CompletableFuture<CompareResult> future = this.requests.getOrCreate(key, () ->
-                CompletableFuture.supplyAsync(() -> this.runTask(task), this.executor)
-        );
+        CompletableFuture<CompareResult> future = this.requests.getOrCreate(key, () -> this.submit(task));
         if (!future.isDone()) {
             return CompareResultState.loading();
         }
@@ -86,9 +86,35 @@ public final class AsyncCompareCache {
 
     private CompareResult runTask(CompareTask task) {
         try {
-            return task.run();
+            this.throwIfInterrupted();
+            CompareResult result = task.run();
+            this.throwIfInterrupted();
+            return result;
         } catch (Exception exception) {
             throw new CompletionException(exception);
+        }
+    }
+
+    private CompletableFuture<CompareResult> submit(CompareTask task) {
+        CompletableFuture<CompareResult> result = new CompletableFuture<>();
+        Future<?> submitted = this.executor.submit(() -> {
+            try {
+                result.complete(this.runTask(task));
+            } catch (Throwable failure) {
+                result.completeExceptionally(failure);
+            }
+        });
+        result.whenComplete((value, failure) -> {
+            if (result.isCancelled()) {
+                submitted.cancel(true);
+            }
+        });
+        return result;
+    }
+
+    private void throwIfInterrupted() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("Compare request was interrupted");
         }
     }
 

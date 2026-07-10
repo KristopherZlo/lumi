@@ -73,6 +73,28 @@ class AsyncCompareCacheTest {
     }
 
     @Test
+    void clearingCacheInterruptsRunningCompareTask() throws Exception {
+        AsyncCompareCache cache = AsyncCompareCache.getInstance();
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch interrupted = new CountDownLatch(1);
+
+        cache.request(key(50), () -> {
+            started.countDown();
+            try {
+                new CountDownLatch(1).await();
+            } catch (InterruptedException exception) {
+                interrupted.countDown();
+                throw exception;
+            }
+            return result(50);
+        }, true);
+
+        assertTrue(started.await(1, TimeUnit.SECONDS));
+        cache.clear();
+        assertTrue(interrupted.await(1, TimeUnit.SECONDS));
+    }
+
+    @Test
     void invalidKeyIsReadyWithEmptyResult() {
         AsyncCompareCache.CompareResultState state = AsyncCompareCache.getInstance().request(
                 new CompareRequestKey("project", "", "v0002"),

@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import net.minecraft.server.MinecraftServer;
 
 public final class DiffService {
@@ -75,6 +76,7 @@ public final class DiffService {
         List<DiffBlockEntry> changedBlocks = new ArrayList<>();
         Set<Long> changedChunks = new HashSet<>();
         for (BlockPoint pos : allPositions) {
+            throwIfInterrupted();
             StatePayload leftState = leftStates.containsKey(pos)
                     ? leftStates.get(pos).finalState()
                     : rightStates.get(pos).initialState();
@@ -108,6 +110,7 @@ public final class DiffService {
             Set<Long> changedChunks = new HashSet<>();
             PatchWorldChanges worldChanges = this.loadPatchWorldChanges(layout, version.patchIds());
             for (StoredBlockChange change : worldChanges.blockChanges()) {
+                throwIfInterrupted();
                 if (!this.visible(change) || this.statesEqual(change.oldValue(), change.newValue())) {
                     continue;
                 }
@@ -202,6 +205,7 @@ public final class DiffService {
             return states;
         }
         for (ProjectVersion version : path) {
+            throwIfInterrupted();
             for (StoredBlockChange change : this.loadBlockChanges(layout, version.patchIds(), sectionScope)) {
                 if (!this.visible(change)) {
                     continue;
@@ -232,6 +236,7 @@ public final class DiffService {
     ) throws IOException {
         Map<String, EntityStateAccumulator> states = new LinkedHashMap<>();
         for (ProjectVersion version : path) {
+            throwIfInterrupted();
             for (StoredEntityChange change : this.loadEntityChanges(layout, version.patchIds())) {
                 states.compute(change.entityId(), (entityId, current) -> current == null
                         ? new EntityStateAccumulator(change.oldValue(), change.newValue(), change.entityType())
@@ -250,6 +255,7 @@ public final class DiffService {
         entityIds.addAll(leftStates.keySet());
         entityIds.addAll(rightStates.keySet());
         for (String entityId : entityIds) {
+            throwIfInterrupted();
             EntityPayload leftState = leftStates.containsKey(entityId)
                     ? leftStates.get(entityId).finalState()
                     : rightStates.get(entityId).initialState();
@@ -321,6 +327,7 @@ public final class DiffService {
         }
 
         for (StoredBlockChange change : changes) {
+            throwIfInterrupted();
             if (!this.visible(change)) {
                 continue;
             }
@@ -365,6 +372,7 @@ public final class DiffService {
         List<StoredBlockChange> changes = new ArrayList<>();
         List<StoredEntityChange> entityChanges = new ArrayList<>();
         for (String patchId : patchIds) {
+            throwIfInterrupted();
             PatchMetadataHolder metadata = this.loadPatchMetadata(layout, patchId);
             PatchWorldChanges worldChanges = this.patchDataRepository.loadWorldChanges(layout, metadata.metadata());
             changes.addAll(worldChanges.blockChanges());
@@ -383,6 +391,7 @@ public final class DiffService {
         }
         List<StoredBlockChange> changes = new ArrayList<>();
         for (String patchId : patchIds) {
+            throwIfInterrupted();
             PatchMetadataHolder metadata = this.loadPatchMetadata(layout, patchId);
             if (sectionScope == null || !sectionScope.isIndexed()) {
                 changes.addAll(this.patchDataRepository.loadWorldChanges(layout, metadata.metadata()).blockChanges());
@@ -405,6 +414,7 @@ public final class DiffService {
         }
         List<StoredEntityChange> entityChanges = new ArrayList<>();
         for (String patchId : patchIds) {
+            throwIfInterrupted();
             PatchMetadataHolder metadata = this.loadPatchMetadata(layout, patchId);
             if (metadata.metadata().chunks() == null || metadata.metadata().chunks().isEmpty()) {
                 entityChanges.addAll(this.patchDataRepository.loadWorldChanges(layout, metadata.metadata()).entityChanges());
@@ -445,6 +455,7 @@ public final class DiffService {
         Map<SectionKey, StringBuilder> signatures = new LinkedHashMap<>();
         boolean fullReadRequired = false;
         for (ProjectVersion version : path) {
+            throwIfInterrupted();
             for (String patchId : version.patchIds() == null ? List.<String>of() : version.patchIds()) {
                 io.github.luma.domain.model.PatchMetadata metadata = this.loadPatchMetadata(layout, patchId).metadata();
                 if (metadata.chunks() == null || metadata.chunks().isEmpty()) {
@@ -528,6 +539,12 @@ public final class DiffService {
 
     private boolean visible(StoredBlockChange change) {
         return this.builderSurface.includes(change);
+    }
+
+    private static void throwIfInterrupted() {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new CancellationException("Version comparison was interrupted");
+        }
     }
 
     private record StateAccumulator(StatePayload initialState, StatePayload finalState) {
