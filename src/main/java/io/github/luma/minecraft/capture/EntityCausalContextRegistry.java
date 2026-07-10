@@ -96,7 +96,9 @@ public final class EntityCausalContextRegistry {
 
     public synchronized Optional<EntityPayload> oldPayloadOverride(Entity entity, ServerLevel level) {
         EntityCausalContext context = this.context(entity, level);
-        if (context == null || context.oldPayload() == null) {
+        if (context == null
+                || context.oldPayload() == null
+                || this.currentFrameHasDifferentAction(context.actionId())) {
             return Optional.empty();
         }
         return Optional.of(new EntityPayload(context.oldPayload().copyTag()));

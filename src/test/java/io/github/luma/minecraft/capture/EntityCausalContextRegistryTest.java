@@ -54,6 +54,19 @@ class EntityCausalContextRegistryTest {
     }
 
     @Test
+    void minecartRemovalUsesSnapshotFromBreakingActionNotEarlierHit() throws Exception {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/capture/EntityCausalContextRegistry.java")
+        );
+        int method = source.indexOf("oldPayloadOverride");
+        int nextMethod = source.indexOf("public boolean hasContext", method);
+        int actionCheck = source.indexOf("currentFrameHasDifferentAction(context.actionId())", method);
+
+        assertTrue(actionCheck > method);
+        assertTrue(actionCheck < nextMethod);
+    }
+
+    @Test
     void causalContextsAreScopedByDimensionAndEntityUuid() throws Exception {
         String source = Files.readString(
                 Path.of("src/main/java/io/github/luma/minecraft/capture/EntityCausalContextRegistry.java")
