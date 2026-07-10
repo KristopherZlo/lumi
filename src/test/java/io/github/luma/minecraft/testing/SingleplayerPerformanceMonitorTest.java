@@ -30,6 +30,18 @@ class SingleplayerPerformanceMonitorTest {
     }
 
     @Test
+    void keepsLargeTntActionsBounded() {
+        SingleplayerPerformanceMonitor accepted = new SingleplayerPerformanceMonitor();
+        accepted.recordOperationSnapshot(snapshot("undo-action", 128));
+
+        SingleplayerPerformanceMonitor rejected = new SingleplayerPerformanceMonitor();
+        rejected.recordOperationSnapshot(snapshot("undo-action", 129));
+
+        assertTrue(checkContaining(accepted, "remained action-scoped").passed());
+        assertFalse(checkContaining(rejected, "remained action-scoped").passed());
+    }
+
+    @Test
     void flagsSlowPostSetupTickSlicesAsTpsRegression() {
         SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
         monitor.recordSyncSlice("Project setup", Duration.ofSeconds(2).toNanos());

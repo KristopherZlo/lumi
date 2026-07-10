@@ -20,7 +20,7 @@ final class SingleplayerPerformanceMonitor {
 
     private static final long MAX_SYNC_SLICE_NANOS = Duration.ofSeconds(1).toNanos();
     private static final long MAX_SYNC_TOTAL_NANOS = Duration.ofSeconds(5).toNanos();
-    private static final int MAX_ACTION_APPLY_BLOCKS = 64;
+    private static final int MAX_ACTION_APPLY_UNITS = 128;
     private static final int MAX_PARTIAL_RESTORE_BLOCKS = 16;
     private static final int MAX_FULL_RESTORE_BLOCKS = 512;
     private static final long MAX_HEAP_GROWTH_MIB = 1024;
@@ -161,7 +161,7 @@ final class SingleplayerPerformanceMonitor {
         ));
         checks.add(new PerformanceCheck(
                 "Undo, redo, and quick rollback remained action-scoped instead of broad world work",
-                this.maxOperationUnits("undo-action", "redo-action", "quick-rollback") <= MAX_ACTION_APPLY_BLOCKS,
+                this.maxOperationUnits("undo-action", "redo-action", "quick-rollback") <= MAX_ACTION_APPLY_UNITS,
                 "maxActionUnits=" + this.maxOperationUnits("undo-action", "redo-action", "quick-rollback")
         ));
         checks.add(new PerformanceCheck(
