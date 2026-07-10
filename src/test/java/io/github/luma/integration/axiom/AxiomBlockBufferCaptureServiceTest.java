@@ -53,7 +53,7 @@ class AxiomBlockBufferCaptureServiceTest {
                 AxiomBlockBufferCaptureService.CaptureAttempt.captured(1, 1);
 
         assertTrue(attempt.captured());
-        assertFalse(attempt.suppressDirectSectionFallback());
+        assertTrue(attempt.suppressDirectSectionFallback());
     }
 
     private static CompoundTag chestTag() {

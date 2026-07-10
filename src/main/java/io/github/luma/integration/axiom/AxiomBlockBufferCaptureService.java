@@ -269,7 +269,7 @@ public final class AxiomBlockBufferCaptureService {
     ) {
 
         public boolean suppressDirectSectionFallback() {
-            return false;
+            return this.captured;
         }
 
         static CaptureAttempt captured(int extractedMutations, int capturedInputs) {

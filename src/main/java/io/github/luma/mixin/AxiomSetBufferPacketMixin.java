@@ -46,6 +46,7 @@ abstract class AxiomSetBufferPacketMixin {
                         serverPlayer
                 );
                 if (preparedCapture.hasSourceContext()) {
+                    directSectionSuppression = WorldMutationCaptureGuard.pushDirectSectionCaptureSuppression();
                     axiomSourceFrame = WorldMutationContext.pushExternalSource(
                             WorldMutationSource.AXIOM,
                             preparedCapture.actor(),
