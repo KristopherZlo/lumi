@@ -63,6 +63,14 @@ final class WorkingDraftSessionManager {
         return this.sessionRegistry.lastDraftFlush(projectId);
     }
 
+    boolean activeDraftUpdatedAfter(String projectId, Instant threshold) {
+        TrackedChangeBuffer buffer = this.sessionRegistry.buffer(projectId);
+        return buffer != null
+                && buffer.updatedAt() != null
+                && threshold != null
+                && buffer.updatedAt().isAfter(threshold);
+    }
+
     boolean hasDraftFingerprint(String projectId, int fingerprint) {
         return this.sessionRegistry.hasDraftFingerprint(projectId, fingerprint);
     }

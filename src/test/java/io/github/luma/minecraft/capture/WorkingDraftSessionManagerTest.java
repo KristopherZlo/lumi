@@ -43,6 +43,19 @@ class WorkingDraftSessionManagerTest {
     private static final Instant NOW = Instant.parse("2026-04-21T09:00:00Z");
 
     @Test
+    void activeDraftTimestampCanBeCheckedWithoutCopyingTheDraft() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("timestamp.mbp"));
+        BuildProject project = project();
+        WorkingDraftSessionManager manager = new WorkingDraftSessionManager();
+        TrackedChangeBuffer buffer = manager.getOrCreate(trackedProject(layout, project), WorldMutationSource.PLAYER, NOW);
+        buffer.addChange(change("minecraft:stone", "minecraft:gold_block"), NOW.plusSeconds(1));
+
+        assertTrue(manager.activeDraftUpdatedAfter(project.id().toString(), NOW));
+        assertFalse(manager.activeDraftUpdatedAfter(project.id().toString(), NOW.plusSeconds(1)));
+        assertFalse(manager.activeDraftUpdatedAfter("missing", NOW));
+    }
+
+    @Test
     void rebaseActiveWorkingDraftKeepsCapturedDelta() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("active.mbp"));
         BuildProject project = project();

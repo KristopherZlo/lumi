@@ -42,6 +42,17 @@ final class TrackedProjectCatalog {
         return null;
     }
 
+    TrackedProject findWholeDimension(ServerLevel level) throws IOException {
+        String dimensionId = level.dimension().identifier().toString();
+        for (TrackedProject trackedProject : this.loadAll(level.getServer())) {
+            BuildProject project = trackedProject.project();
+            if (project.tracksWholeDimension() && dimensionId.equals(project.dimensionId())) {
+                return trackedProject;
+            }
+        }
+        return null;
+    }
+
     List<TrackedProject> loadAll(MinecraftServer server) throws IOException {
         return this.loadCache(server).projects();
     }

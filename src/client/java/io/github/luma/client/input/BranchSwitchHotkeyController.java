@@ -38,7 +38,7 @@ public final class BranchSwitchHotkeyController {
 
         String switchKey = InputConstants.getKey(event).getName();
         try {
-            Optional<BuildProject> project = ClientProjectAccess.findCurrentWorldProject(client, this.projectService);
+            Optional<BuildProject> project = ClientProjectAccess.findCurrentWorldProject(client);
             if (project.isEmpty()) {
                 return false;
             }

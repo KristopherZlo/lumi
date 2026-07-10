@@ -934,6 +934,18 @@ public final class HistoryCaptureManager {
         return this.serverThreadExecutor.call(server, () -> this.snapshotDraftOnServerThread(server, projectId));
     }
 
+    public Optional<io.github.luma.domain.model.BuildProject> findWholeDimensionProject(ServerLevel level) throws IOException {
+        TrackedProject trackedProject = this.trackedProjectCatalog.findWholeDimension(level);
+        return trackedProject == null ? Optional.empty() : Optional.of(trackedProject.project());
+    }
+
+    public boolean activeDraftUpdatedAfter(MinecraftServer server, String projectId, Instant threshold) throws IOException {
+        return this.serverThreadExecutor.call(
+                server,
+                () -> this.workingDrafts.activeDraftUpdatedAfter(projectId, threshold)
+        );
+    }
+
     public boolean hasInterruptedDraft(MinecraftServer server, String projectId) throws IOException {
         return this.serverThreadExecutor.call(server, () -> this.hasInterruptedDraftOnServerThread(server, projectId));
     }

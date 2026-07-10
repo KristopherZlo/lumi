@@ -1,7 +1,6 @@
 package io.github.luma.ui.overlay;
 
 import io.github.luma.debug.LumaDebugLog;
-import io.github.luma.domain.service.ProjectService;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.ui.controller.ClientProjectAccess;
 import java.util.List;
@@ -18,7 +17,6 @@ public final class RecentChangesOverlayCoordinator {
     private static final RecentChangesOverlayCoordinator INSTANCE = new RecentChangesOverlayCoordinator();
     private static final int PREVIEW_ACTION_COUNT = 10;
 
-    private final ProjectService projectService = new ProjectService();
     private final UndoRedoHistoryManager historyManager = UndoRedoHistoryManager.getInstance();
     private final ExecutorService previewExecutor = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "lumi-recent-overlay-preview");
@@ -69,7 +67,7 @@ public final class RecentChangesOverlayCoordinator {
         }
 
         try {
-            var project = ClientProjectAccess.findCurrentWorldProject(client, this.projectService);
+            var project = ClientProjectAccess.findCurrentWorldProject(client);
             if (project.isEmpty()) {
                 this.logSkip("no-project", previewTarget);
                 this.clearPreview();

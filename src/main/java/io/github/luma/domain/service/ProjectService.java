@@ -236,6 +236,7 @@ public final class ProjectService {
                 .withSettings(settings, Instant.now())
                 .withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION);
         this.projectRepository.save(layout, updated);
+        HistoryCaptureManager.getInstance().invalidateProjectCache(server);
         return updated;
     }
 
@@ -247,6 +248,7 @@ public final class ProjectService {
                 .withArchived(archived, Instant.now())
                 .withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION);
         this.projectRepository.save(layout, updated);
+        HistoryCaptureManager.getInstance().invalidateProjectCache(server);
         return updated;
     }
 

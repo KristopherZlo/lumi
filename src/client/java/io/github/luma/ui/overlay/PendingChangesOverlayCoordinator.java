@@ -2,7 +2,6 @@ package io.github.luma.ui.overlay;
 
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.RecoveryDraft;
-import io.github.luma.domain.service.ProjectService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.ui.controller.ClientProjectAccess;
 import java.time.Duration;
@@ -22,7 +21,6 @@ public final class PendingChangesOverlayCoordinator {
     private static final int SNAPSHOT_REQUEST_INTERVAL_TICKS = 10;
     private static final Duration ACTIVE_DRAFT_PREVIEW_QUIET_PERIOD = Duration.ofMillis(500);
 
-    private final ProjectService projectService = new ProjectService();
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
     private final ExecutorService previewExecutor = Executors.newSingleThreadExecutor(task -> {
         Thread thread = new Thread(task, "lumi-pending-overlay-preview");
@@ -52,7 +50,7 @@ public final class PendingChangesOverlayCoordinator {
         }
 
         try {
-            var project = ClientProjectAccess.findCurrentWorldProject(client, this.projectService);
+            var project = ClientProjectAccess.findCurrentWorldProject(client);
             if (project.isEmpty()) {
                 this.clearPreview();
                 return;
@@ -131,8 +129,17 @@ public final class PendingChangesOverlayCoordinator {
 
     private PendingChangesOverlaySnapshot loadSnapshot(Minecraft client, String projectId) {
         try {
+            Instant now = Instant.now();
+            var server = ClientProjectAccess.requireSingleplayerServer(client);
+            if (this.captureManager.activeDraftUpdatedAfter(
+                    server,
+                    projectId,
+                    now.minus(ACTIVE_DRAFT_PREVIEW_QUIET_PERIOD)
+            )) {
+                return null;
+            }
             Optional<RecoveryDraft> draft = this.captureManager.snapshotDraft(
-                    ClientProjectAccess.requireSingleplayerServer(client),
+                    server,
                     projectId
             );
             if (draft.isPresent() && shouldDeferHotDraft(draft.get(), Instant.now())) {

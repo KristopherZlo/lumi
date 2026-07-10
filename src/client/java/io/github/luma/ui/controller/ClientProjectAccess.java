@@ -4,6 +4,7 @@ import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.minecraft.access.LumaAccessControl;
+import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import java.io.IOException;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
@@ -44,13 +45,13 @@ public final class ClientProjectAccess {
         return projectService.ensureWorldProject(level, author);
     }
 
-    public static Optional<BuildProject> findCurrentWorldProject(Minecraft client, ProjectService projectService) throws IOException {
+    public static Optional<BuildProject> findCurrentWorldProject(Minecraft client) throws IOException {
         var server = requireSingleplayerServer(client);
         ServerLevel level = server.getLevel(client.level == null ? net.minecraft.world.level.Level.OVERWORLD : client.level.dimension());
         if (level == null) {
             level = server.overworld();
         }
-        Optional<BuildProject> project = projectService.findWorldProject(level);
+        Optional<BuildProject> project = HistoryCaptureManager.getInstance().findWholeDimensionProject(level);
         if (project.isEmpty() || !canUseProject(client, project.get())) {
             return Optional.empty();
         }
