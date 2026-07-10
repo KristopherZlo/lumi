@@ -1177,20 +1177,7 @@ public final class WorldOperationManager {
         }
 
         private boolean shouldVerifyPostApply() {
-            String label = this.handle().label();
-            if (label == null) {
-                return false;
-            }
-            return switch (label) {
-                case "restore-version",
-                     "partial-restore",
-                     "recovery",
-                     "quick-rollback",
-                     "undo-action",
-                     "redo-action",
-                     "merge-variant" -> true;
-                default -> false;
-            };
+            return WorldOperationManager.this.applyOperationProfile.requiresPostApplyVerification(this.handle().label());
         }
 
         private String applyDetail(String detail) {

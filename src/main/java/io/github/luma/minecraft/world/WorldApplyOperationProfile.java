@@ -7,7 +7,9 @@ final class WorldApplyOperationProfile {
     private static final Set<String> HISTORY_FAST_LABELS = Set.of(
             "restore-version",
             "partial-restore",
+            "zone-restore",
             "recovery",
+            "restore-draft",
             "quick-rollback",
             "undo-action",
             "redo-action",
@@ -28,5 +30,9 @@ final class WorldApplyOperationProfile {
             return WorldApplyProfile.MAXIMUM;
         }
         return WorldApplyProfile.NORMAL;
+    }
+
+    boolean requiresPostApplyVerification(String label) {
+        return label != null && HISTORY_FAST_LABELS.contains(label);
     }
 }
