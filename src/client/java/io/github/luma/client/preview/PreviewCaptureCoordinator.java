@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -72,6 +73,12 @@ public final class PreviewCaptureCoordinator {
     }
 
     private void tickActiveCapture(Minecraft client) {
+        if (this.activeCapture.storeFuture() != null) {
+            if (this.activeCapture.storeFuture().isDone()) {
+                this.finishStoredCapture(this.activeCapture);
+            }
+            return;
+        }
         if (!this.activeCapture.buildFuture().isDone()) {
             return;
         }
@@ -86,7 +93,7 @@ public final class PreviewCaptureCoordinator {
         }
 
         if (this.activeCapture.pendingCapture().imageFuture().isDone()) {
-            this.finishCapture(client);
+            this.startStoreCapture();
         }
     }
 
@@ -106,7 +113,9 @@ public final class PreviewCaptureCoordinator {
                 this.completeCapture(capture, CaptureCompletion.RETRY_LATER, "dimension changed before preview render");
                 return;
             }
-            this.activeCapture = capture.withPendingCapture(this.captureService.capture(client, capture.request().bounds(), mesh));
+            this.activeCapture = capture.withPendingCapture(
+                    this.captureService.capture(client, capture.request().bounds(), mesh, BUILD_EXECUTOR)
+            );
         } catch (Exception exception) {
             LumaMod.LOGGER.warn(
                     "Failed to render textured preview for version {} in project {}",
@@ -118,50 +127,93 @@ public final class PreviewCaptureCoordinator {
         }
     }
 
-    private void finishCapture(Minecraft client) {
+    private void startStoreCapture() {
         ActiveCapture capture = this.activeCapture;
         if (capture == null || capture.pendingCapture() == null) {
             return;
         }
 
-        try (PreviewImageCropper.CapturedPreviewImage image = capture.pendingCapture().imageFuture().join()) {
-            Files.createDirectories(capture.layout().previewsDir());
-            image.image().writeToFile(capture.layout().previewFile(capture.request().versionId()));
+        PreviewImageCropper.CapturedPreviewImage image;
+        try {
+            image = capture.pendingCapture().imageFuture().join();
+        } catch (Exception exception) {
+            this.completeCapture(capture, CaptureCompletion.FAILED_ATTEMPT, exception.getClass().getSimpleName() + ": " + exception.getMessage());
+            return;
+        }
 
-            ProjectVersion version = this.versionRepository.load(capture.layout(), capture.request().versionId())
-                    .orElseThrow(() -> new IllegalArgumentException("Version not found: " + capture.request().versionId()));
-            this.versionRepository.save(capture.layout(), new ProjectVersion(
-                    version.id(),
-                    version.projectId(),
-                    version.variantId(),
-                    version.parentVersionId(),
-                    version.snapshotId(),
-                    version.entityCheckpointId(),
-                    version.patchIds(),
-                    version.versionKind(),
-                    version.author(),
-                    version.message(),
-                    version.stats(),
-                    new PreviewInfo(
-                            capture.layout().previewFile(version.id()).getFileName().toString(),
-                            image.width(),
-                            image.height()
-                    ),
-                    version.sourceInfo(),
-                    version.createdAt()
-            ));
-            this.requestService.clear(capture.layout(), capture.request().versionId());
-            LumaMod.LOGGER.info("Rendered textured preview for version {} in project {}", version.id(), capture.project().name());
-            LumaDebugLog.log(capture.project(), "preview", "Rendered textured preview for version {}", version.id());
+        try {
+            CompletableFuture<Void> storeFuture = CompletableFuture.runAsync(() -> {
+                try (image) {
+                    this.storeCapture(capture, image);
+                } catch (Exception exception) {
+                    throw new CompletionException(exception);
+                }
+            }, BUILD_EXECUTOR);
+            this.activeCapture = capture.withStoreFuture(storeFuture);
+        } catch (RuntimeException exception) {
+            this.completeCapture(capture, CaptureCompletion.FAILED_ATTEMPT, exception.getClass().getSimpleName() + ": " + exception.getMessage());
+        }
+    }
+
+    private void storeCapture(ActiveCapture capture, PreviewImageCropper.CapturedPreviewImage image) throws Exception {
+        Files.createDirectories(capture.layout().previewsDir());
+        image.image().writeToFile(capture.layout().previewFile(capture.request().versionId()));
+
+        ProjectVersion version = this.versionRepository.load(capture.layout(), capture.request().versionId())
+                .orElseThrow(() -> new IllegalArgumentException("Version not found: " + capture.request().versionId()));
+        this.versionRepository.save(capture.layout(), new ProjectVersion(
+                version.id(),
+                version.projectId(),
+                version.variantId(),
+                version.parentVersionId(),
+                version.snapshotId(),
+                version.entityCheckpointId(),
+                version.patchIds(),
+                version.versionKind(),
+                version.author(),
+                version.message(),
+                version.stats(),
+                new PreviewInfo(
+                        capture.layout().previewFile(version.id()).getFileName().toString(),
+                        image.width(),
+                        image.height()
+                ),
+                version.sourceInfo(),
+                version.createdAt()
+        ));
+        this.requestService.clear(capture.layout(), capture.request().versionId());
+    }
+
+    private void finishStoredCapture(ActiveCapture capture) {
+        try {
+            capture.storeFuture().join();
+            LumaMod.LOGGER.info(
+                    "Rendered textured preview for version {} in project {}",
+                    capture.request().versionId(),
+                    capture.project().name()
+            );
+            LumaDebugLog.log(
+                    capture.project(),
+                    "preview",
+                    "Rendered textured preview for version {}",
+                    capture.request().versionId()
+            );
             this.completeCapture(capture, CaptureCompletion.SUCCESS, "");
         } catch (Exception exception) {
+            Throwable cause = exception instanceof CompletionException && exception.getCause() != null
+                    ? exception.getCause()
+                    : exception;
             LumaMod.LOGGER.warn(
                     "Failed to store textured preview for version {} in project {}",
                     capture.request().versionId(),
                     capture.project().name(),
-                    exception
+                    cause
             );
-            this.completeCapture(capture, CaptureCompletion.FAILED_ATTEMPT, exception.getClass().getSimpleName() + ": " + exception.getMessage());
+            this.completeCapture(
+                    capture,
+                    CaptureCompletion.FAILED_ATTEMPT,
+                    cause.getClass().getSimpleName() + ": " + cause.getMessage()
+            );
         }
     }
 
@@ -185,7 +237,7 @@ public final class PreviewCaptureCoordinator {
                     }
 
                     CompletableFuture<PreviewRenderMesh> buildFuture = this.meshBuilder.scheduleBuild(client.level, request.bounds(), BUILD_EXECUTOR);
-                    this.activeCapture = new ActiveCapture(project, layout, request, buildFuture, null, null);
+                    this.activeCapture = new ActiveCapture(project, layout, request, buildFuture, null, null, null);
                     LumaMod.LOGGER.info("Queued client preview render for version {} in project {}", request.versionId(), project.name());
                     LumaDebugLog.log(project, "preview", "Building textured preview mesh for version {} with bounds {}", request.versionId(), request.bounds());
                     return true;
@@ -202,12 +254,25 @@ public final class PreviewCaptureCoordinator {
         if (this.activeCapture == null) {
             return;
         }
+        if (this.activeCapture.storeFuture() != null) {
+            if (this.activeCapture.storeFuture().isDone()) {
+                this.finishStoredCapture(this.activeCapture);
+            }
+            return;
+        }
         this.completeCapture(this.activeCapture, CaptureCompletion.RETRY_LATER, "client world closed before preview capture completed");
     }
 
     private void completeCapture(ActiveCapture capture, CaptureCompletion completion, String failure) {
         if (capture.pendingCapture() != null) {
             capture.pendingCapture().renderTarget().destroyBuffers();
+            if (capture.storeFuture() == null) {
+                capture.pendingCapture().imageFuture().whenComplete((image, throwable) -> {
+                    if (image != null) {
+                        image.close();
+                    }
+                });
+            }
         }
         this.closeMesh(capture);
         if (completion == CaptureCompletion.FAILED_ATTEMPT) {
@@ -280,14 +345,43 @@ public final class PreviewCaptureCoordinator {
             io.github.luma.domain.model.PreviewCaptureRequest request,
             CompletableFuture<PreviewRenderMesh> buildFuture,
             PreviewRenderMesh mesh,
-            TexturedPreviewCaptureService.PendingPreviewCapture pendingCapture
+            TexturedPreviewCaptureService.PendingPreviewCapture pendingCapture,
+            CompletableFuture<Void> storeFuture
     ) {
         private ActiveCapture withMesh(PreviewRenderMesh mesh) {
-            return new ActiveCapture(this.project, this.layout, this.request, this.buildFuture, mesh, this.pendingCapture);
+            return new ActiveCapture(
+                    this.project,
+                    this.layout,
+                    this.request,
+                    this.buildFuture,
+                    mesh,
+                    this.pendingCapture,
+                    this.storeFuture
+            );
         }
 
         private ActiveCapture withPendingCapture(TexturedPreviewCaptureService.PendingPreviewCapture pendingCapture) {
-            return new ActiveCapture(this.project, this.layout, this.request, this.buildFuture, this.mesh, pendingCapture);
+            return new ActiveCapture(
+                    this.project,
+                    this.layout,
+                    this.request,
+                    this.buildFuture,
+                    this.mesh,
+                    pendingCapture,
+                    this.storeFuture
+            );
+        }
+
+        private ActiveCapture withStoreFuture(CompletableFuture<Void> storeFuture) {
+            return new ActiveCapture(
+                    this.project,
+                    this.layout,
+                    this.request,
+                    this.buildFuture,
+                    this.mesh,
+                    this.pendingCapture,
+                    storeFuture
+            );
         }
     }
 

@@ -14,6 +14,7 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import io.github.luma.domain.model.Bounds3i;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.CachedOrthoProjectionMatrixBuffer;
 import org.joml.Matrix4fStack;
@@ -29,7 +30,7 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
             false
     );
 
-    PendingPreviewCapture capture(Minecraft client, Bounds3i bounds, PreviewRenderMesh mesh) {
+    PendingPreviewCapture capture(Minecraft client, Bounds3i bounds, PreviewRenderMesh mesh, Executor worker) {
         PreviewFramingCalculator.PreviewFraming framing = this.framingCalculator.calculate(bounds);
         TextureTarget renderTarget = new TextureTarget("Lumi Preview", framing.resolution(), framing.resolution(), true);
         boolean handedOff = false;
@@ -80,7 +81,10 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
                 RenderSystem.restoreProjectionMatrix();
             }
 
-            PendingPreviewCapture capture = new PendingPreviewCapture(renderTarget, this.readPixels(renderTarget).thenApply(this.imageCropper::crop));
+            PendingPreviewCapture capture = new PendingPreviewCapture(
+                    renderTarget,
+                    this.readPixels(renderTarget).thenApplyAsync(this.imageCropper::crop, worker)
+            );
             handedOff = true;
             return capture;
         } finally {

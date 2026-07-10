@@ -16,6 +16,8 @@ class PreviewCaptureCoordinatorTest {
         ));
 
         assertTrue(source.contains("version.entityCheckpointId()"));
+        assertTrue(source.contains("CompletableFuture.runAsync"));
+        assertTrue(source.contains("capture.storeFuture().join()"));
     }
 
     @Test
