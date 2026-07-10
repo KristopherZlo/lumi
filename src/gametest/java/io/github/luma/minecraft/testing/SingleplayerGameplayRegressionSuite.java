@@ -459,7 +459,7 @@ final class SingleplayerGameplayRegressionSuite {
 
         @Override
         public void run(GameplayScenarioContext context) {
-            Entity entity = EntityType.COW.create(context.level, EntitySpawnReason.COMMAND);
+            Entity entity = EntityType.ARMOR_STAND.create(context.level, EntitySpawnReason.COMMAND);
             context.checks.check(entity != null, "gameplay created a non-player entity");
             if (entity == null) {
                 return;

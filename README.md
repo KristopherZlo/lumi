@@ -157,6 +157,14 @@ Run the server GameTest smoke suite:
 
 This task clears `build/run/gameTest/world` before launch so server GameTests do not reuse stale local projects.
 
+Run the integrated singleplayer player-flow regression suite:
+
+```powershell
+.\gradlew.bat runClientGameTest -Dlumi.singleplayerTest.mode=player-flow --no-daemon
+```
+
+The player-flow TNT checks place redstone beside pre-existing TNT, verify that a ten-block explosion chain remains one live action, and require one undo to remove the trigger, restore every TNT block, and leave no primed TNT entity. The same flow verifies entity-only quick rollback and a final full restore after the explosion scenarios.
+
 Run the alpha gate:
 
 ```powershell

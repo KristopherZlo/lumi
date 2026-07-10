@@ -1069,10 +1069,7 @@ final class SingleplayerTestRun {
         }
 
         this.savedGameplayEntityId = entity.getStringUUID();
-        this.savedGameplayEntityPosition = this.gameplayReport == null
-                ? BlockPoint.from(entity.blockPosition())
-                : this.gameplayReport.expectedEntityPositions()
-                        .getOrDefault(this.savedGameplayEntityId, BlockPoint.from(entity.blockPosition()));
+        this.savedGameplayEntityPosition = BlockPoint.from(entity.blockPosition());
         BlockPos moved = this.volume.min().offset(9, 1, 9);
         try (WorldMutationContext.SourceFrame ignored =
                      WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, ACTOR, true)) {
@@ -1178,7 +1175,7 @@ final class SingleplayerTestRun {
                 this.player,
                 this.volume,
                 ACTOR,
-                this.volume.min().offset(14, 0, 2)
+                this.volume.min().offset(8, 8, 2)
         );
         this.check(this.poweredTntUndoReport.placed(), "Player placed powered TNT through gameMode useItemOn");
         this.check(this.poweredTntUndoReport.ignited(), "Powered TNT auto-primed through redstone");
@@ -1199,7 +1196,10 @@ final class SingleplayerTestRun {
     private void checkPoweredTntUndo() {
         this.check(this.poweredTntUndoReport != null
                         && this.poweredTntUndoReport.restoredBeforeExplosionUndo(this.level),
-                "Powered TNT undo removed same-action primed entity without restoring inert TNT");
+                "Powered TNT undo removed the redstone trigger, restored TNT, and removed the primed entity; mismatches="
+                        + (this.poweredTntUndoReport == null
+                        ? "missing report"
+                        : this.poweredTntUndoReport.restorationMismatches(this.level)));
         this.completePhase(this.level.getServer(), Phase.START_CHAINED_TNT_INTERACTION);
     }
 
@@ -1210,10 +1210,10 @@ final class SingleplayerTestRun {
                 this.player,
                 this.volume,
                 ACTOR,
-                this.volume.min().offset(4, 0, 10)
+                this.volume.min().offset(4, 8, 8)
         );
-        this.check(this.chainedTntReport.placed(), "Player placed redstone-chain TNT through gameMode useItemOn");
-        this.check(this.chainedTntReport.ignited(), "Redstone-chain TNT auto-primed through redstone");
+        this.check(this.chainedTntReport.placed(), "Player placed the TNT chain redstone trigger through gameMode useItemOn");
+        this.check(this.chainedTntReport.ignited(), "Pre-existing TNT chain auto-primed through the redstone trigger");
         this.completePhase(server, Phase.CHECK_CHAINED_TNT_CAPTURE);
     }
 
@@ -1239,8 +1239,12 @@ final class SingleplayerTestRun {
             for (var change : latestUndoAction.undoChanges()) {
                 capturedBlocks.add(change.pos());
             }
-            this.check(capturedBlocks.containsAll(this.chainedTntReport.expectedUndoRedoBlocks()),
-                    "Redstone TNT chain live undo action owns every persistent TNT and witness block");
+            Set<BlockPoint> expectedBlocks = this.chainedTntReport.expectedUndoRedoBlocks(this.level);
+            Set<BlockPoint> missingBlocks = new HashSet<>(expectedBlocks);
+            missingBlocks.removeAll(capturedBlocks);
+            this.check(capturedBlocks.containsAll(expectedBlocks),
+                    "Redstone TNT chain live undo action owns the trigger, every TNT, and every witness block; missing="
+                            + missingBlocks);
         }
         this.completePhase(server, Phase.START_CHAINED_TNT_UNDO);
     }
@@ -1256,7 +1260,10 @@ final class SingleplayerTestRun {
 
     private void checkChainedTntUndo() {
         this.check(this.chainedTntReport != null && this.chainedTntReport.restoredAfterUndo(this.level),
-                "Redstone TNT chain undo restored persistent TNT and blast witness blocks as one action");
+                "Redstone TNT chain undo removed the trigger and restored all TNT and witness blocks as one action; mismatches="
+                        + (this.chainedTntReport == null
+                        ? "missing report"
+                        : this.chainedTntReport.restorationMismatches(this.level)));
         this.completePhase(this.level.getServer(), Phase.START_EXPLOSION_INTERACTION);
     }
 
@@ -1285,18 +1292,21 @@ final class SingleplayerTestRun {
             return;
         }
 
-        RecoveryDraft draft = this.value("Explosion recovery draft can be loaded", () ->
-                HistoryCaptureManager.getInstance().snapshotDraft(server, this.project.id().toString()).orElse(null));
-        if (draft != null && this.explosionReport != null) {
+        var latestUndoAction = this.undoRedoHistoryManager.recentUndoActions(this.project.id().toString(), 1)
+                .stream()
+                .findFirst()
+                .orElse(null);
+        this.check(latestUndoAction != null, "Explosion live undo action can be loaded");
+        if (latestUndoAction != null && this.explosionReport != null) {
             this.explosionDestroyedWitnessBlocks = this.explosionReport.destroyedWitnessBlocks(this.level);
             this.check(!this.explosionDestroyedWitnessBlocks.isEmpty(),
                     "Controlled TNT explosion removed at least one witness block");
             Set<BlockPoint> capturedBlocks = new HashSet<>();
-            for (var change : draft.changes()) {
+            for (var change : latestUndoAction.undoChanges()) {
                 capturedBlocks.add(change.pos());
             }
             this.check(capturedBlocks.containsAll(this.explosionDestroyedWitnessBlocks),
-                    "Explosion draft includes every removed blast witness block");
+                    "Explosion live undo action includes every removed blast witness block");
         }
         this.completePhase(server, Phase.START_EXPLOSION_UNDO);
     }
@@ -1946,10 +1956,10 @@ final class SingleplayerTestRun {
         START_PRIMED_TNT_UNDO_INTERACTION("Primed TNT interaction", "place and ignite TNT before its fuse completes"),
         START_PRIMED_TNT_UNDO("Queue primed TNT undo", "undo TNT ignition before the primed entity explodes"),
         CHECK_PRIMED_TNT_UNDO("Verify primed TNT undo", "check that undo removed the primed entity and restored the block"),
-        START_POWERED_TNT_UNDO_INTERACTION("Powered TNT interaction", "place TNT against redstone before its fuse completes"),
-        START_POWERED_TNT_UNDO("Queue powered TNT undo", "undo redstone-primed TNT before the primed entity explodes"),
-        CHECK_POWERED_TNT_UNDO("Verify powered TNT undo", "check that restored TNT is not immediately primed again"),
-        START_CHAINED_TNT_INTERACTION("Redstone TNT chain", "place TNT on redstone and let it ignite a TNT chain"),
+        START_POWERED_TNT_UNDO_INTERACTION("Powered TNT interaction", "place redstone beside existing TNT before its fuse completes"),
+        START_POWERED_TNT_UNDO("Queue powered TNT undo", "undo the redstone trigger before the primed TNT explodes"),
+        CHECK_POWERED_TNT_UNDO("Verify powered TNT undo", "check that redstone is removed and restored TNT remains inert"),
+        START_CHAINED_TNT_INTERACTION("Redstone TNT chain", "place redstone beside ten existing TNT blocks and let the chain explode"),
         CHECK_CHAINED_TNT_CAPTURE("Verify TNT chain capture", "check that one live undo action owns the full chain"),
         START_CHAINED_TNT_UNDO("Queue TNT chain undo", "undo the redstone TNT chain through the operation model"),
         CHECK_CHAINED_TNT_UNDO("Verify TNT chain undo", "check that persistent TNT chain blocks and witnesses were restored"),
