@@ -126,7 +126,7 @@ public final class CompareOverlayPreparationService {
             LumaMod.LOGGER.warn("Failed to prepare compare overlay in the background", cause);
             return;
         }
-        CompareOverlayRenderer.activate(prepared);
+        CompareOverlayRenderer.activatePrepared(prepared);
     }
 
     private void cancelTask(Future<?> task) {

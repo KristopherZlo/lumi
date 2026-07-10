@@ -3,8 +3,11 @@ package io.github.luma.ui.overlay;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -78,6 +81,30 @@ class CompareOverlayRendererStateTest {
     void largeOverlaysAreMarkedForBackgroundPreparation() {
         assertFalse(CompareOverlayRenderer.shouldPrepareInBackground(lineEntries(CompareOverlayRenderer.BACKGROUND_PREPARATION_THRESHOLD)));
         assertTrue(CompareOverlayRenderer.shouldPrepareInBackground(lineEntries(CompareOverlayRenderer.BACKGROUND_PREPARATION_THRESHOLD + 1)));
+    }
+
+    @Test
+    void directStateChangesRejectStaleBackgroundResults() throws Exception {
+        CompareOverlayPreparationService service = CompareOverlayPreparationService.getInstance();
+
+        CompareOverlayRenderer.PreparedOverlay staleAfterClear = prepared("stale-clear");
+        long clearRevision = preparationRevision(service);
+        CompareOverlayRenderer.clear();
+        apply(service, clearRevision, staleAfterClear);
+        assertFalse(CompareOverlayRenderer.hasData());
+
+        CompareOverlayRenderer.PreparedOverlay staleAfterShow = prepared("stale-show");
+        long showRevision = preparationRevision(service);
+        CompareOverlayRenderer.show("newer", "left", "shown", List.of(sampleEntry()), false);
+        apply(service, showRevision, staleAfterShow);
+        assertTrue(CompareOverlayRenderer.hasDataFor("newer", "left", "shown"));
+
+        CompareOverlayRenderer.PreparedOverlay staleAfterRefresh = prepared("stale-refresh");
+        long refreshRevision = preparationRevision(service);
+        CompareOverlayRenderer.refresh("newer", "left", "refreshed", lineEntries(2), false);
+        apply(service, refreshRevision, staleAfterRefresh);
+        assertTrue(CompareOverlayRenderer.hasDataFor("newer", "left", "refreshed"));
+        assertEquals(2, CompareOverlayRenderer.changedBlockCount());
     }
 
     @Test
@@ -163,6 +190,31 @@ class CompareOverlayRendererStateTest {
 
     private static DiffBlockEntry sampleEntry() {
         return new DiffBlockEntry(new BlockPoint(10, 64, 10), "minecraft:stone", "minecraft:glass", ChangeType.CHANGED);
+    }
+
+    private static CompareOverlayRenderer.PreparedOverlay prepared(String rightVersionId) {
+        return CompareOverlayRenderer.prepare("stale", "left", rightVersionId, List.of(sampleEntry()), false, true);
+    }
+
+    private static long preparationRevision(CompareOverlayPreparationService service) throws Exception {
+        Field revision = CompareOverlayPreparationService.class.getDeclaredField("revision");
+        revision.setAccessible(true);
+        return ((AtomicLong) revision.get(service)).get();
+    }
+
+    private static void apply(
+            CompareOverlayPreparationService service,
+            long revision,
+            CompareOverlayRenderer.PreparedOverlay prepared
+    ) throws Exception {
+        Method apply = CompareOverlayPreparationService.class.getDeclaredMethod(
+                "applyOnClientThread",
+                long.class,
+                CompareOverlayRenderer.PreparedOverlay.class,
+                Throwable.class
+        );
+        apply.setAccessible(true);
+        apply.invoke(service, revision, prepared, null);
     }
 
     private static List<DiffBlockEntry> denseCubeEntries() {

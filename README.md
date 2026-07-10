@@ -256,7 +256,7 @@ Hard rules:
 - Saving a version extends a fresh history index in memory instead of reopening and parsing every older manifest; stale indices still fall back to a full safe rebuild.
 - Pending/recent overlays reuse the capture catalog instead of reparsing every project each client tick, and hot drafts are rejected before final reconciliation or deep snapshot copying.
 - Preview pixel cropping, PNG encoding, request cleanup, and version metadata updates run on the low-priority preview worker instead of the render/client thread.
-- Compare overlays build geometry in the cancellable background worker above 2,048 changed blocks and skip rebuilding when refreshed content is unchanged.
+- Compare overlays build geometry in the cancellable background worker above 2,048 changed blocks, reject stale worker results after show/refresh/clear transitions, and skip rebuilding when refreshed content is unchanged.
 - World-apply no-op pruning reuses its first live-state scan instead of decoding and comparing every target block twice.
 - Shutdown fully drains dirty-chunk stabilization, and final restore verification retains original targets even when no-op pruning skips their initial write.
 - Snapshot and patch storage no longer inserts fixed sleeps between chunks; background thread priority and cooperative cancellation control contention without slowing completed work.

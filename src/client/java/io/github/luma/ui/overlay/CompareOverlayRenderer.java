@@ -52,7 +52,8 @@ public final class CompareOverlayRenderer {
             List<DiffBlockEntry> changedBlocks,
             boolean debugEnabled
     ) {
-        activate(prepare(projectName, leftVersionId, rightVersionId, changedBlocks, debugEnabled, true));
+        CompareOverlayPreparationService.getInstance().cancelPending();
+        activatePrepared(prepare(projectName, leftVersionId, rightVersionId, changedBlocks, debugEnabled, true));
     }
 
     static PreparedOverlay prepare(
@@ -81,7 +82,7 @@ public final class CompareOverlayRenderer {
         );
     }
 
-    static void activate(PreparedOverlay prepared) {
+    static void activatePrepared(PreparedOverlay prepared) {
         if (prepared == null) {
             clear();
             return;
@@ -109,6 +110,7 @@ public final class CompareOverlayRenderer {
     }
 
     public static void clear() {
+        CompareOverlayPreparationService.getInstance().cancelPending();
         OverlayState state = ACTIVE_STATE.getAndSet(null);
         if (state != null && (state.debugEnabled() || LumaDebugLog.globalEnabled())) {
             LumaDebugLog.log(
@@ -182,6 +184,7 @@ public final class CompareOverlayRenderer {
             List<DiffBlockEntry> changedBlocks,
             boolean debugEnabled
     ) {
+        CompareOverlayPreparationService.getInstance().cancelPending();
         OverlayState current = ACTIVE_STATE.get();
         if (current == null) {
             show(projectName, leftVersionId, rightVersionId, changedBlocks, debugEnabled);
