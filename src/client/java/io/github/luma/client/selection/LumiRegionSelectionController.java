@@ -34,6 +34,7 @@ public final class LumiRegionSelectionController {
 
     private static final LumiRegionSelectionController INSTANCE = new LumiRegionSelectionController();
     private static final int MAX_SCOPES = 32;
+    private static final int MAX_ZONE_EDIT_CELLS = 65_536;
 
     private final ProjectService projectService = new ProjectService();
     private final WorkZoneService workZoneService = new WorkZoneService();
@@ -352,18 +353,29 @@ public final class LumiRegionSelectionController {
         return client.getUser() == null ? "player" : client.getUser().getName();
     }
 
-    private static List<WorkZoneCell> cellsIn(Bounds3i bounds) {
+    static List<WorkZoneCell> cellsIn(Bounds3i bounds) {
         WorkZoneCell min = WorkZoneCell.from(bounds.min());
         WorkZoneCell max = WorkZoneCell.from(bounds.max());
-        List<WorkZoneCell> cells = new ArrayList<>();
-        for (int x = min.x(); x <= max.x(); x++) {
-            for (int y = min.y(); y <= max.y(); y++) {
-                for (int z = min.z(); z <= max.z(); z++) {
-                    cells.add(new WorkZoneCell(x, y, z));
+        List<WorkZoneCell> cells = new ArrayList<>(cellCount(min, max));
+        for (long x = min.x(); x <= max.x(); x++) {
+            for (long y = min.y(); y <= max.y(); y++) {
+                for (long z = min.z(); z <= max.z(); z++) {
+                    cells.add(new WorkZoneCell((int) x, (int) y, (int) z));
                 }
             }
         }
         return cells;
+    }
+
+    private static int cellCount(WorkZoneCell min, WorkZoneCell max) {
+        long sizeX = (long) max.x() - min.x() + 1L;
+        long sizeY = (long) max.y() - min.y() + 1L;
+        long sizeZ = (long) max.z() - min.z() + 1L;
+        if (sizeX > MAX_ZONE_EDIT_CELLS / sizeY
+                || sizeX * sizeY > MAX_ZONE_EDIT_CELLS / sizeZ) {
+            throw new IllegalArgumentException("Selection contains too many work-zone cells");
+        }
+        return (int) (sizeX * sizeY * sizeZ);
     }
 
     private void notify(Player player, String key) {

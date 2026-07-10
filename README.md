@@ -249,6 +249,7 @@ Hard rules:
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Replaced or cleared compare requests interrupt their worker task; long diff passes stop cooperatively instead of consuming CPU after the UI no longer needs them.
 - Cancelled compare/preview mesh preparation interrupts the submitted worker, and stale pending/recent overlay meshes are closed before they can retain CPU-side or GPU-side buffers.
+- Bounds arithmetic rejects reversed ranges and cannot silently overflow; a single work-zone selection edit is capped at 65,536 section cells to prevent an accidental unbounded client allocation.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
 - Restore, recovery, merge, quick rollback, and undo/redo replay must verify final target state before reporting success. Full restore and quick rollback are undoable with live undo.
 - Live undo/redo, recent previews, and pending overlays include explosion and mob block fallout only when it is causally tied to a player action; passive mob edits and ambient explosions remain actionless.

@@ -1,8 +1,17 @@
 package io.github.luma.domain.model;
 
+import java.util.Objects;
 import net.minecraft.core.BlockPos;
 
 public record Bounds3i(BlockPoint min, BlockPoint max) {
+
+    public Bounds3i {
+        Objects.requireNonNull(min, "min");
+        Objects.requireNonNull(max, "max");
+        if (min.x() > max.x() || min.y() > max.y() || min.z() > max.z()) {
+            throw new IllegalArgumentException("Bounds minimum must not exceed maximum");
+        }
+    }
 
     public static Bounds3i of(BlockPos a, BlockPos b) {
         return new Bounds3i(
@@ -12,19 +21,22 @@ public record Bounds3i(BlockPoint min, BlockPoint max) {
     }
 
     public int sizeX() {
-        return this.max.x() - this.min.x() + 1;
+        return Math.toIntExact(span(this.min.x(), this.max.x()));
     }
 
     public int sizeY() {
-        return this.max.y() - this.min.y() + 1;
+        return Math.toIntExact(span(this.min.y(), this.max.y()));
     }
 
     public int sizeZ() {
-        return this.max.z() - this.min.z() + 1;
+        return Math.toIntExact(span(this.min.z(), this.max.z()));
     }
 
     public long volume() {
-        return (long) this.sizeX() * this.sizeY() * this.sizeZ();
+        return saturatedMultiply(
+                saturatedMultiply(span(this.min.x(), this.max.x()), span(this.min.y(), this.max.y())),
+                span(this.min.z(), this.max.z())
+        );
     }
 
     public boolean contains(BlockPoint point) {
@@ -37,5 +49,13 @@ public record Bounds3i(BlockPoint min, BlockPoint max) {
                 && point.y() <= this.max.y()
                 && point.z() >= this.min.z()
                 && point.z() <= this.max.z();
+    }
+
+    private static long span(int min, int max) {
+        return (long) max - min + 1L;
+    }
+
+    private static long saturatedMultiply(long left, long right) {
+        return left > Long.MAX_VALUE / right ? Long.MAX_VALUE : left * right;
     }
 }
