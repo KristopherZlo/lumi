@@ -1,5 +1,7 @@
 package io.github.luma.minecraft.capture;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Block;
@@ -36,6 +38,17 @@ class ChunkSnapshotCaptureServiceTest {
         assertFalse(this.service.containsTransientBlockState(sectionWithDefault(
                 Blocks.OAK_PLANKS.defaultBlockState()
         )));
+    }
+
+    @Test
+    void baselineOverridesBypassDetachedSectionBookkeeping() throws Exception {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/capture/ChunkSnapshotCaptureService.java")
+        );
+
+        assertTrue(source.contains("if (!overrides.isEmpty())"));
+        assertTrue(source.contains("capturedSection.getStates().set("));
+        assertFalse(source.contains("sectionCopy.setBlockState("));
     }
 
     private static LevelChunkSection sectionWithDefault(BlockState state) {

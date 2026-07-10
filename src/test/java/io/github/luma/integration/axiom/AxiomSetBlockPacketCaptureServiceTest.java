@@ -60,4 +60,12 @@ class AxiomSetBlockPacketCaptureServiceTest {
         assertEquals("axiom", identity.actor());
     }
 
+    @Test
+    void onlyInfiniteReachPacketsNeedRequestedTransitionFallback() {
+        assertTrue(AxiomSetBlockPacketCaptureService.usesRequestedTransitionFallback(64));
+        assertTrue(AxiomSetBlockPacketCaptureService.usesRequestedTransitionFallback(64 | 256));
+        assertFalse(AxiomSetBlockPacketCaptureService.usesRequestedTransitionFallback(0));
+        assertFalse(AxiomSetBlockPacketCaptureService.usesRequestedTransitionFallback(128));
+    }
+
 }

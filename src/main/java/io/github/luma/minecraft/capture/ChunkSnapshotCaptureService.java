@@ -198,21 +198,25 @@ public final class ChunkSnapshotCaptureService {
                 continue;
             }
             int sectionY = level.getSectionYFromSectionIndex(index);
-            LevelChunkSection sectionCopy = section.copy();
-            for (NormalizedBlockStateOverride override : overridesBySection.getOrDefault(sectionY, List.of())) {
-                sectionCopy.setBlockState(
-                        override.pos().getX() & 15,
-                        override.pos().getY() & 15,
-                        override.pos().getZ() & 15,
-                        override.state().state()
-                );
+            LevelChunkSection capturedSection = section;
+            List<NormalizedBlockStateOverride> overrides = overridesBySection.getOrDefault(sectionY, List.of());
+            if (!overrides.isEmpty()) {
+                capturedSection = section.copy();
+                for (NormalizedBlockStateOverride override : overrides) {
+                    capturedSection.getStates().set(
+                            override.pos().getX() & 15,
+                            override.pos().getY() & 15,
+                            override.pos().getZ() & 15,
+                            override.state().state()
+                    );
+                }
             }
-            CapturedSection capturedSection = this.captureSection(sectionCopy, sectionY);
-            if (rejectTransientState && capturedSection.transientState()) {
+            CapturedSection captured = this.captureSection(capturedSection, sectionY);
+            if (rejectTransientState && captured.transientState()) {
                 return null;
             }
-            if (capturedSection.payload() != null) {
-                sections.add(capturedSection.payload());
+            if (captured.payload() != null) {
+                sections.add(captured.payload());
             }
         }
 
