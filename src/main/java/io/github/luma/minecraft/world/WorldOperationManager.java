@@ -1062,7 +1062,7 @@ public final class WorldOperationManager {
                             + this.exactReplayStateQueue.pendingCount()
                             + " blocks queued")
             );
-            return !this.exactReplayStateQueue.hasPending() || reapplied > 0;
+            return !this.exactReplayStateQueue.hasPending();
         }
 
         private void guardRecordedExactReplayStates() {
