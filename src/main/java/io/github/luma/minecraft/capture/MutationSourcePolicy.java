@@ -38,22 +38,6 @@ final class MutationSourcePolicy {
             WorldMutationSource.PISTON,
             WorldMutationSource.FALLING_BLOCK
     );
-    private static final EnumSet<WorldMutationSource> REUSABLE_DEFERRED_CONTEXT_SOURCES = EnumSet.of(
-            WorldMutationSource.BLOCK_UPDATE,
-            WorldMutationSource.PISTON,
-            WorldMutationSource.FLUID,
-            WorldMutationSource.FALLING_BLOCK,
-            WorldMutationSource.GROWTH,
-            WorldMutationSource.SYSTEM
-    );
-    private static final EnumSet<WorldMutationSource> DIRECT_CAPTURE_REQUIRES_ACTION_SOURCES = EnumSet.of(
-            WorldMutationSource.EXPLOSION,
-            WorldMutationSource.FIRE,
-            WorldMutationSource.GROWTH,
-            WorldMutationSource.FLUID,
-            WorldMutationSource.FALLING_BLOCK,
-            WorldMutationSource.MOB
-    );
     boolean isExplicitRootSource(WorldMutationSource source) {
         return source != null && EXPLICIT_ROOT_SOURCES.contains(source);
     }
@@ -66,13 +50,6 @@ final class MutationSourcePolicy {
 
     boolean allowsSessionBootstrap(WorldMutationSource source) {
         return this.isExplicitRootSource(source);
-    }
-
-    boolean allowsCausalSessionBootstrap(WorldMutationSource source, String actionId) {
-        return (source == WorldMutationSource.EXPLOSION
-                || source == WorldMutationSource.GROWTH
-                || source == WorldMutationSource.MOB)
-                && this.hasCausalAction(actionId);
     }
 
     boolean allowsTrackedChunkExpansion(WorldMutationSource source) {
@@ -106,46 +83,10 @@ final class MutationSourcePolicy {
         return source != null;
     }
 
-    boolean canCaptureDeferredPreMutationBaseline(
-            BuildProject project,
-            WorldMutationSource source,
-            boolean activeSessionRegion,
-            String actionId
-    ) {
-        if (project == null || source == null) {
-            return false;
-        }
-        if (source == WorldMutationSource.GROWTH) {
-            return this.hasCausalAction(actionId);
-        }
-        return activeSessionRegion
-                && this.requiresActiveRegionMembership(source)
-                && this.usesDeferredStabilization(project, source)
-                && this.canUseDeferredStabilization(project, source, activeSessionRegion, actionId);
-    }
-
-    boolean requiresCausalActionForDeferredStabilization(WorldMutationSource source) {
-        return source == WorldMutationSource.BLOCK_UPDATE
-                || source == WorldMutationSource.PISTON
-                || source == WorldMutationSource.FLUID
-                || source == WorldMutationSource.FALLING_BLOCK;
-    }
-
-    boolean canUseDeferredStabilization(WorldMutationSource source, String actionId) {
-        return !this.requiresCausalActionForDeferredStabilization(source)
-                || this.hasCausalAction(actionId);
-    }
-
-    boolean canUseDeferredStabilization(BuildProject project, WorldMutationSource source, String actionId) {
-        return this.usesDeferredStabilization(project, source)
-                && this.canUseDeferredStabilization(source, actionId);
-    }
-
     boolean canUseDeferredStabilization(
             BuildProject project,
             WorldMutationSource source,
-            boolean activeSessionRegion,
-            String actionId
+            boolean activeSessionRegion
     ) {
         return this.usesDeferredStabilization(project, source)
                 && activeSessionRegion;
@@ -155,8 +96,7 @@ final class MutationSourcePolicy {
             BuildProject project,
             WorldMutationSource source,
             boolean hasActiveSession,
-            boolean activeSessionRegion,
-            String actionId
+            boolean activeSessionRegion
     ) {
         if (source == null) {
             return false;
@@ -165,32 +105,15 @@ final class MutationSourcePolicy {
             return true;
         }
         if (this.usesDeferredStabilization(project, source)) {
-            return this.canUseDeferredStabilization(project, source, activeSessionRegion, actionId);
+            return this.canUseDeferredStabilization(project, source, activeSessionRegion);
         }
         if (!hasActiveSession) {
-            return this.allowsSessionBootstrap(source) || this.allowsCausalSessionBootstrap(source, actionId);
+            return this.allowsSessionBootstrap(source);
         }
         if (this.requiresActiveRegionMembership(source) && !activeSessionRegion) {
             return false;
         }
-        return this.canUseDirectCapture(source, actionId);
-    }
-
-    boolean canReuseDeferredActionContext(WorldMutationSource source) {
-        return source != null && REUSABLE_DEFERRED_CONTEXT_SOURCES.contains(source);
-    }
-
-    boolean requiresCausalActionForDirectCapture(WorldMutationSource source) {
-        return source != null && DIRECT_CAPTURE_REQUIRES_ACTION_SOURCES.contains(source);
-    }
-
-    boolean canUseDirectCapture(WorldMutationSource source, String actionId) {
-        return !this.requiresCausalActionForDirectCapture(source)
-                || this.hasCausalAction(actionId);
-    }
-
-    private boolean hasCausalAction(String actionId) {
-        return actionId != null && !actionId.isBlank();
+        return this.isExplicitRootSource(source);
     }
 
     String defaultActor(WorldMutationSource source) {

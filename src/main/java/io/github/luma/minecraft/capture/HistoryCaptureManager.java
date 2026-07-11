@@ -142,9 +142,6 @@ public final class HistoryCaptureManager {
                 ChunkPoint chunk = ChunkPoint.from(pos);
                 CaptureSessionState.DeferredActionContext context =
                         this.deferredActionContext(existingSession, chunk, source);
-                if (!explicitRootSource && (context == null || !context.hasAction())) {
-                    continue;
-                }
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }
@@ -269,8 +266,7 @@ public final class HistoryCaptureManager {
                         source,
                         pos,
                         existingSession != null,
-                        activeSessionRegion,
-                        deferredActionContext
+                        activeSessionRegion
                 )) {
                     continue;
                 }
@@ -298,8 +294,7 @@ public final class HistoryCaptureManager {
                         && !ELIGIBILITY.canUseDeferredStabilization(
                                 trackedProject.project(),
                                 source,
-                                activeSessionRegion,
-                                actionId(deferredActionContext)
+                                activeSessionRegion
                         )) {
                     this.diagnosticsLogger.logSkippedCapture(
                             trackedProject,
@@ -519,8 +514,7 @@ public final class HistoryCaptureManager {
                 && !ELIGIBILITY.canUseDeferredStabilization(
                         trackedProject.project(),
                         source,
-                        activeSessionRegion,
-                        actionId(deferredActionContext)
+                        activeSessionRegion
                 )) {
             this.diagnosticsLogger.logSkippedCapture(
                     trackedProject,
@@ -1240,8 +1234,7 @@ public final class HistoryCaptureManager {
             if (this.activeSessionRegionPolicy.contains(level, sessionState, chunk)) {
                 return true;
             }
-            if (!requiresActiveRegionMembership(source)
-                    && ELIGIBILITY.canUseDirectCapture(source, WorldMutationContext.currentActionId())) {
+            if (ELIGIBILITY.isExplicitRootSource(source)) {
                 return true;
             }
             this.diagnosticsLogger.logSkippedCapture(
@@ -1250,11 +1243,11 @@ public final class HistoryCaptureManager {
                     pos,
                     "outside-active-session-region",
                     "chunk " + chunk.x() + ":" + chunk.z()
-                            + " is outside the active session region and has no explicit action"
+                            + " is outside the active session region and has no explicit root source"
             );
             return false;
         }
-        if (allowsSessionBootstrap(source, WorldMutationContext.currentActionId())) {
+        if (allowsSessionBootstrap(source)) {
             return true;
         }
         this.diagnosticsLogger.logSkippedCapture(
@@ -1450,7 +1443,7 @@ public final class HistoryCaptureManager {
         if (currentContext != null) {
             return currentContext;
         }
-        if (!ELIGIBILITY.canReuseDeferredActionContext(source) || session == null) {
+        if (session == null) {
             return null;
         }
         return session.deferredActionContext(chunk);
@@ -1460,14 +1453,15 @@ public final class HistoryCaptureManager {
             io.github.luma.domain.model.WorldMutationSource source
     ) {
         String actionId = WorldMutationContext.currentActionId();
-        if (actionId == null || actionId.isBlank()) {
+        boolean hidden = ELIGIBILITY.hiddenInBuilderSurfaces(source);
+        if ((actionId == null || actionId.isBlank()) && !hidden) {
             return null;
         }
         return new CaptureSessionState.DeferredActionContext(
                 actionId,
                 WorldMutationContext.currentActor(),
                 WorldMutationContext.currentAccessAllowed(),
-                ELIGIBILITY.hiddenInBuilderSurfaces(source)
+                hidden
         );
     }
 
@@ -1512,10 +1506,6 @@ public final class HistoryCaptureManager {
 
     public static boolean allowsSessionBootstrap(io.github.luma.domain.model.WorldMutationSource source) {
         return ELIGIBILITY.allowsSessionBootstrap(source);
-    }
-
-    public static boolean allowsSessionBootstrap(io.github.luma.domain.model.WorldMutationSource source, String actionId) {
-        return ELIGIBILITY.allowsSessionBootstrap(source, actionId);
     }
 
     public static boolean allowsTrackedChunkExpansion(io.github.luma.domain.model.WorldMutationSource source) {

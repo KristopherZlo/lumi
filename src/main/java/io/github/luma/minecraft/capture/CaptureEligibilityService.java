@@ -7,7 +7,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Owns source/access and causal-action gates for capture entry points.
+ * Owns source, access, and active-region gates for capture entry points.
  */
 final class CaptureEligibilityService {
 
@@ -45,11 +45,6 @@ final class CaptureEligibilityService {
         return this.sourcePolicy.allowsSessionBootstrap(source);
     }
 
-    boolean allowsSessionBootstrap(WorldMutationSource source, String actionId) {
-        return this.sourcePolicy.allowsSessionBootstrap(source)
-                || this.sourcePolicy.allowsCausalSessionBootstrap(source, actionId);
-    }
-
     boolean allowsTrackedChunkExpansion(WorldMutationSource source) {
         return this.sourcePolicy.allowsTrackedChunkExpansion(source);
     }
@@ -74,46 +69,26 @@ final class CaptureEligibilityService {
         return this.sourcePolicy.usesLiveStateReconciliation(source);
     }
 
-    boolean canCaptureDeferredPreMutationBaseline(
-            BuildProject project,
-            WorldMutationSource source,
-            boolean activeSessionRegion,
-            String actionId
-    ) {
-        return this.sourcePolicy.canCaptureDeferredPreMutationBaseline(project, source, activeSessionRegion, actionId);
-    }
-
     boolean canUseDeferredStabilization(
             BuildProject project,
             WorldMutationSource source,
-            boolean activeSessionRegion,
-            String actionId
+            boolean activeSessionRegion
     ) {
-        return this.sourcePolicy.canUseDeferredStabilization(project, source, activeSessionRegion, actionId);
+        return this.sourcePolicy.canUseDeferredStabilization(project, source, activeSessionRegion);
     }
 
     boolean canInspectBlockMutationPayload(
             BuildProject project,
             WorldMutationSource source,
             boolean hasActiveSession,
-            boolean activeSessionRegion,
-            String actionId
+            boolean activeSessionRegion
     ) {
         return this.sourcePolicy.canInspectBlockMutationPayload(
                 project,
                 source,
                 hasActiveSession,
-                activeSessionRegion,
-                actionId
+                activeSessionRegion
         );
-    }
-
-    boolean canUseDirectCapture(WorldMutationSource source, String actionId) {
-        return this.sourcePolicy.canUseDirectCapture(source, actionId);
-    }
-
-    boolean canReuseDeferredActionContext(WorldMutationSource source) {
-        return this.sourcePolicy.canReuseDeferredActionContext(source);
     }
 
     String defaultActor(WorldMutationSource source) {

@@ -31,15 +31,13 @@ final class BlockMutationCaptureGate {
             WorldMutationSource source,
             BlockPos pos,
             boolean hasActiveSession,
-            boolean activeSessionRegion,
-            CaptureSessionState.DeferredActionContext deferredActionContext
+            boolean activeSessionRegion
     ) {
         if (this.eligibility.canInspectBlockMutationPayload(
                 trackedProject.project(),
                 source,
                 hasActiveSession,
-                activeSessionRegion,
-                actionId(deferredActionContext)
+                activeSessionRegion
         )) {
             return true;
         }
@@ -47,8 +45,8 @@ final class BlockMutationCaptureGate {
                 trackedProject,
                 source,
                 pos,
-                "no-causal-capture-path",
-                "no causal action or active session region is available"
+                "no-capture-path",
+                "no explicit root source or active session region is available"
         );
         return false;
     }
@@ -87,9 +85,5 @@ final class BlockMutationCaptureGate {
                 oldState,
                 newState
         );
-    }
-
-    private static String actionId(CaptureSessionState.DeferredActionContext context) {
-        return context == null ? "" : context.actionId();
     }
 }
