@@ -78,7 +78,7 @@ abstract class ServerLevelEntityLifecycleMixin {
     private void luma$rememberCausalEntityAction(Entity entity) {
         if (entity instanceof Projectile || entity instanceof FallingBlockEntity || entity instanceof ItemEntity) {
             ServerLevel level = (ServerLevel) (Object) this;
-            LUMA_ENTITY_CAUSAL_CONTEXTS.rememberCurrentActionIfAbsent(entity, level);
+            LUMA_ENTITY_CAUSAL_CONTEXTS.rememberCurrentMutationIfAbsent(entity, level);
         }
     }
 

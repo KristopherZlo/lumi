@@ -14,21 +14,20 @@ class EntityCausalContextRegistryTest {
     private final EntityCausalContextRegistry registry = EntityCausalContextRegistry.getInstance();
 
     @Test
-    void remembersBuilderOwnedExplosiveDamageContexts() {
-        assertTrue(this.registry.canRememberSource(WorldMutationSource.PLAYER, "action-1"));
-        assertTrue(this.registry.canRememberSource(WorldMutationSource.MOB, "action-1"));
-        assertTrue(this.registry.canRememberSource(WorldMutationSource.EXPLOSION, "action-1"));
-        assertTrue(this.registry.canRememberSource(WorldMutationSource.EXPLOSIVE, "action-1"));
-        assertTrue(this.registry.canRememberSource(WorldMutationSource.FALLING_BLOCK, "action-1"));
-        assertTrue(this.registry.canRememberSource(WorldMutationSource.BLOCK_UPDATE, "action-1"));
-        assertTrue(this.registry.canRememberSource(WorldMutationSource.PISTON, "action-1"));
+    void remembersCapturableDamageContexts() {
+        assertTrue(this.registry.canRememberSource(WorldMutationSource.PLAYER));
+        assertTrue(this.registry.canRememberSource(WorldMutationSource.MOB));
+        assertTrue(this.registry.canRememberSource(WorldMutationSource.EXPLOSION));
+        assertTrue(this.registry.canRememberSource(WorldMutationSource.EXPLOSIVE));
+        assertTrue(this.registry.canRememberSource(WorldMutationSource.FALLING_BLOCK));
+        assertTrue(this.registry.canRememberSource(WorldMutationSource.BLOCK_UPDATE));
+        assertTrue(this.registry.canRememberSource(WorldMutationSource.PISTON));
     }
 
     @Test
-    void ignoresAmbientDamageContextsWithoutBuilderAction() {
-        assertFalse(this.registry.canRememberSource(WorldMutationSource.EXPLOSION, ""));
-        assertFalse(this.registry.canRememberSource(WorldMutationSource.MOB, ""));
-        assertFalse(this.registry.canRememberSource(WorldMutationSource.SYSTEM, "action-1"));
+    void ignoresInternalDamageContexts() {
+        assertFalse(this.registry.canRememberSource(WorldMutationSource.SYSTEM));
+        assertFalse(this.registry.canRememberSource(WorldMutationSource.RESTORE));
     }
 
     @Test
@@ -40,32 +39,6 @@ class EntityCausalContextRegistryTest {
 
         assertSame(first, second);
         assertFalse(second.active());
-    }
-
-    @Test
-    void rememberedPlayerInteractionIsNotOverwrittenByLaterMobTick() throws Exception {
-        String source = Files.readString(
-                Path.of("src/main/java/io/github/luma/minecraft/capture/EntityCausalContextRegistry.java")
-        );
-        int method = source.indexOf("rememberCurrentPlayerActionIfAbsent");
-        int contextCheck = source.indexOf("if (context != null)", method);
-        int rememberCall = source.indexOf("return this.rememberCurrentPlayerAction(entity, level);", method);
-
-        assertTrue(contextCheck > method);
-        assertTrue(contextCheck < rememberCall);
-    }
-
-    @Test
-    void minecartRemovalUsesSnapshotFromBreakingActionNotEarlierHit() throws Exception {
-        String source = Files.readString(
-                Path.of("src/main/java/io/github/luma/minecraft/capture/EntityCausalContextRegistry.java")
-        );
-        int method = source.indexOf("oldPayloadOverride");
-        int nextMethod = source.indexOf("public boolean hasContext", method);
-        int actionCheck = source.indexOf("currentFrameHasDifferentAction(context.actionId())", method);
-
-        assertTrue(actionCheck > method);
-        assertTrue(actionCheck < nextMethod);
     }
 
     @Test

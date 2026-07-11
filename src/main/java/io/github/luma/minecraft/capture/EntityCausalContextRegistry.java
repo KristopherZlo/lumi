@@ -1,6 +1,5 @@
 package io.github.luma.minecraft.capture;
 
-import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.WorldMutationSource;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -15,7 +14,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 
 /**
- * Carries a short-lived player action identity from damage time to delayed
+ * Carries short-lived mutation attribution from damage time to delayed
  * death, loot, and removal callbacks.
  */
 public final class EntityCausalContextRegistry {
@@ -25,7 +24,6 @@ public final class EntityCausalContextRegistry {
     private static final ThreadLocal<Deque<Instant>> ACTIVE_STARTED_AT =
             ThreadLocal.withInitial(ArrayDeque::new);
 
-    private final EntitySnapshotService snapshotService = new EntitySnapshotService();
     private final Map<EntityContextKey, EntityCausalContext> contexts = new HashMap<>();
 
     private EntityCausalContextRegistry() {
@@ -35,13 +33,8 @@ public final class EntityCausalContextRegistry {
         return INSTANCE;
     }
 
-    public synchronized boolean rememberCurrentPlayerAction(Entity entity, ServerLevel level) {
+    public synchronized boolean rememberCurrentMutation(Entity entity, ServerLevel level) {
         if (!this.canRemember(entity, level)) {
-            return false;
-        }
-
-        EntityPayload originalPayload = this.snapshotService.capture(level, entity);
-        if (originalPayload == null) {
             return false;
         }
 
@@ -49,29 +42,19 @@ public final class EntityCausalContextRegistry {
         this.contexts.put(this.key(entity, level), new EntityCausalContext(
                 WorldMutationContext.currentSource(),
                 WorldMutationContext.currentActor(),
-                WorldMutationContext.currentActionId(),
                 WorldMutationContext.currentAccessAllowed(),
                 Instant.now(),
-                level.getGameTime() + CONTEXT_TTL_TICKS,
-                originalPayload
+                level.getGameTime() + CONTEXT_TTL_TICKS
         ));
         return true;
     }
 
-    public synchronized boolean rememberCurrentPlayerActionIfAbsent(Entity entity, ServerLevel level) {
+    public synchronized boolean rememberCurrentMutationIfAbsent(Entity entity, ServerLevel level) {
         EntityCausalContext context = this.context(entity, level);
         if (context != null) {
             return false;
         }
-        return this.rememberCurrentPlayerAction(entity, level);
-    }
-
-    public synchronized boolean rememberCurrentActionIfAbsent(Entity entity, ServerLevel level) {
-        EntityCausalContext context = this.context(entity, level);
-        if (context != null) {
-            return false;
-        }
-        return this.rememberCurrentPlayerAction(entity, level);
+        return this.rememberCurrentMutation(entity, level);
     }
 
     public ContextFrame pushIfPresent(Entity entity, ServerLevel level) {
@@ -80,28 +63,18 @@ public final class EntityCausalContextRegistry {
 
     public ContextFrame pushIfPresent(Entity entity, ServerLevel level, WorldMutationSource sourceOverride) {
         EntityCausalContext context = this.context(entity, level);
-        if (context == null || this.currentFrameHasDifferentAction(context.actionId())) {
+        if (context == null) {
             return ContextFrame.empty();
         }
 
         WorldMutationContext.SourceFrame sourceFrame = WorldMutationContext.pushSource(
                 sourceOverride == null ? context.source() : sourceOverride,
                 context.actor(),
-                context.actionId(),
+                "",
                 context.accessAllowed()
         );
         ACTIVE_STARTED_AT.get().push(context.startedAt());
         return new ContextFrame(sourceFrame, true);
-    }
-
-    public synchronized Optional<EntityPayload> oldPayloadOverride(Entity entity, ServerLevel level) {
-        EntityCausalContext context = this.context(entity, level);
-        if (context == null
-                || context.oldPayload() == null
-                || this.currentFrameHasDifferentAction(context.actionId())) {
-            return Optional.empty();
-        }
-        return Optional.of(new EntityPayload(context.oldPayload().copyTag()));
     }
 
     public boolean hasContext(Entity entity, ServerLevel level) {
@@ -131,13 +104,11 @@ public final class EntityCausalContextRegistry {
         if (WorldMutationContext.captureSuppressed()) {
             return false;
         }
-        return this.canRememberSource(WorldMutationContext.currentSource(), WorldMutationContext.currentActionId());
+        return this.canRememberSource(WorldMutationContext.currentSource());
     }
 
-    boolean canRememberSource(WorldMutationSource source, String actionId) {
-        return HistoryCaptureManager.shouldCaptureMutation(source)
-                && actionId != null
-                && !actionId.isBlank();
+    boolean canRememberSource(WorldMutationSource source) {
+        return HistoryCaptureManager.shouldCaptureMutation(source);
     }
 
     private synchronized EntityCausalContext context(Entity entity, ServerLevel level) {
@@ -154,11 +125,6 @@ public final class EntityCausalContextRegistry {
             return null;
         }
         return context;
-    }
-
-    private boolean currentFrameHasDifferentAction(String expectedActionId) {
-        String currentActionId = WorldMutationContext.currentActionId();
-        return currentActionId != null && !currentActionId.isBlank() && !currentActionId.equals(expectedActionId);
     }
 
     private void removeExpired(long gameTime) {
@@ -180,11 +146,9 @@ public final class EntityCausalContextRegistry {
     private record EntityCausalContext(
             WorldMutationSource source,
             String actor,
-            String actionId,
             boolean accessAllowed,
             Instant startedAt,
-            long expiresAtGameTime,
-            EntityPayload oldPayload
+            long expiresAtGameTime
     ) {
     }
 

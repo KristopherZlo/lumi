@@ -69,7 +69,7 @@ abstract class LivingEntityCausalContextMixin {
 
     @Unique
     private boolean luma$rememberDamageContext(LivingEntity entity, ServerLevel level, DamageSource damageSource) {
-        if (LUMA_ENTITY_CAUSAL_CONTEXTS.rememberCurrentPlayerAction(entity, level)) {
+        if (LUMA_ENTITY_CAUSAL_CONTEXTS.rememberCurrentMutation(entity, level)) {
             return true;
         }
         Entity attacker = damageSource == null ? null : damageSource.getEntity();
@@ -81,7 +81,7 @@ abstract class LivingEntityCausalContextMixin {
                 player.getName().getString(),
                 LumaAccessControl.getInstance().canUse(player) || WorldMutationContext.currentAccessAllowed()
         )) {
-            return LUMA_ENTITY_CAUSAL_CONTEXTS.rememberCurrentPlayerAction(entity, level);
+            return LUMA_ENTITY_CAUSAL_CONTEXTS.rememberCurrentMutation(entity, level);
         }
     }
 }
