@@ -11,6 +11,7 @@ import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlockChangeApplierSafetyTest {
@@ -34,17 +35,14 @@ class BlockChangeApplierSafetyTest {
     }
 
     @Test
-    void primedTntEntityReplayLogsLoadRestoreAndSpawnPhases() throws IOException {
+    void entityReplayDoesNotCreateLiveActionContext() throws IOException {
         String applier = Files.readString(
                 Path.of("src/main/java/io/github/luma/minecraft/world/BlockChangeApplier.java"),
                 StandardCharsets.UTF_8
         );
 
-        assertTrue(applier.contains("PRIMED_TNT_ENTITY_TYPE = \"minecraft:tnt\""));
-        assertTrue(applier.contains("logEntityReplay(\"load\""));
-        assertTrue(applier.contains("logEntityReplay(\"restore-existing\""));
-        assertTrue(applier.contains("logEntityReplay(\"spawn\""));
-        assertTrue(applier.contains("LumaLoadLog.event(\"tnt-replay\", \"entity-replay\""));
+        assertFalse(applier.contains("ReplayContext"));
+        assertFalse(applier.contains("rememberReplayAction"));
     }
 
     @Test

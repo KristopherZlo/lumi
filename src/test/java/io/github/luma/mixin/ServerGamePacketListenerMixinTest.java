@@ -101,17 +101,15 @@ class ServerGamePacketListenerMixinTest {
     }
 
     @Test
-    void lethalDamageQueuesPreDeathEntityReplay() throws IOException {
+    void lethalDamageKeepsCausalContextForCommonRemovalCapture() throws IOException {
         String source = Files.readString(
                 Path.of("src/main/java/io/github/luma/mixin/LivingEntityCausalContextMixin.java"),
                 StandardCharsets.UTF_8
         );
 
-        int vanillaDamage = source.indexOf("original.call(serverLevel, damageSource, amount)");
-        int deathCapture = source.indexOf("EntityMutationTracker.captureCausalDeath(entity)");
-
         assertTrue(source.contains("entity.isDeadOrDying()"));
-        assertTrue(deathCapture > vanillaDamage);
+        assertTrue(source.contains("LUMA_ENTITY_CAUSAL_CONTEXTS.clear(entity)"));
+        assertFalse(source.contains("captureCausalDeath"));
     }
 
     @Test

@@ -14,10 +14,7 @@ class HistoryCaptureManagerShutdownTest {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/luma/minecraft/capture/HistoryCaptureManager.java"
         ));
-        String flushAll = source.substring(
-                source.indexOf("public void flushAll"),
-                source.indexOf("public void drainUndoRedoStabilization")
-        );
+        String flushAll = source.substring(source.indexOf("public void flushAll"));
 
         assertTrue(flushAll.contains("this.reconcileSession(server, trackedProject, sessionState, true);"));
         assertFalse(flushAll.contains("this.reconcileSession(server, trackedProject, sessionState, false);"));

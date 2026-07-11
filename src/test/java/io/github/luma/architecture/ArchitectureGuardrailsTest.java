@@ -201,26 +201,6 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
-    void undoRedoSelectionDrainsPendingEntitySpawnsFirst() throws IOException {
-        Path undoRedoService = MAIN_SOURCES.resolve("io/github/luma/domain/service/UndoRedoService.java");
-        String source = Files.readString(undoRedoService);
-
-        String drainCall = "EntityMutationTracker.drainPendingSpawns(level.getServer());";
-        int drainIndex = source.indexOf(drainCall);
-        int selectUndoIndex = source.indexOf("this.historyManager.selectUndo(project.id().toString())");
-        int selectRedoIndex = source.indexOf("this.historyManager.selectRedo(project.id().toString())");
-
-        assertTrue(
-                drainIndex >= 0,
-                "Undo/redo must drain pending entity spawn captures before selecting a live action"
-        );
-        assertTrue(
-                drainIndex < selectUndoIndex && drainIndex < selectRedoIndex,
-                "Undo/redo must not select an action before pending entity spawn captures are attached"
-        );
-    }
-
-    @Test
     void saveVersionDraftIsolationDrainsPendingEntitySpawnsFirst() throws IOException {
         Path versionService = MAIN_SOURCES.resolve("io/github/luma/domain/service/VersionService.java");
         String source = Files.readString(versionService);
@@ -240,7 +220,7 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
-    void pendingEntitySpawnQueueKeepsInitialPayloadForImmediateUndo() throws IOException {
+    void pendingEntitySpawnQueueKeepsInitialPayloadForImmediateSave() throws IOException {
         Path queue = MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/EntitySpawnCaptureQueue.java");
         Path tracker = MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/EntityMutationTracker.java");
         String source = Files.readString(queue);
@@ -248,7 +228,7 @@ class ArchitectureGuardrailsTest {
 
         assertTrue(
                 source.contains("EntityPayload initialPayload"),
-                "Pending spawn captures must keep the accepted entity payload for same-tick undo"
+                "Pending spawn captures must keep the accepted entity payload for a same-tick save"
         );
         assertTrue(
                 source.contains("Entity acceptedEntity"),
@@ -261,7 +241,7 @@ class ArchitectureGuardrailsTest {
         assertTrue(
                 trackerSource.contains("MAX_SPAWN_CAPTURES_PER_TICK")
                         && trackerSource.contains("true, Integer.MAX_VALUE"),
-                "Normal ticks should wait for stable entity lookup, while undo/redo may force same-tick spawn capture"
+                "Normal ticks should wait for stable entity lookup, while save may force same-tick spawn capture"
         );
     }
 
