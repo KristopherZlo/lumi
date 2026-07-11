@@ -10,6 +10,7 @@ import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.QuickRollbackService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.WorkZoneService;
+import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
@@ -94,6 +95,7 @@ public final class LumiGameTests implements CustomTestMethodInvoker {
         private final VersionService versionService = new VersionService();
         private final QuickRollbackService rollbackService = new QuickRollbackService();
         private final WorkZoneService zoneService = new WorkZoneService();
+        private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
         private final WorldOperationManager operations = WorldOperationManager.getInstance();
         private final List<String> behavior = new ArrayList<>();
 
@@ -157,7 +159,8 @@ public final class LumiGameTests implements CustomTestMethodInvoker {
             this.verifyRandom(this.alice, ALICE_SEED, "Alice blocks after Bob save");
             this.verifyRandom(this.bob, BOB_SEED, "Bob saved blocks");
             this.requireWorkZoneVersions(2);
-            this.overwriteUnattributed(this.alice, Blocks.REDSTONE_BLOCK.defaultBlockState());
+            this.verifyAmbientMutationDoesNotOpenDraft();
+            this.overwriteFromAttributedRoot(ALICE, this.alice, Blocks.REDSTONE_BLOCK.defaultBlockState());
             this.verifyBlock(this.alice, Blocks.REDSTONE_BLOCK, "Alice pending rollback blocks");
             this.waitFor(
                     this.rollbackService.quickRollback(this.level, this.projectName, Bounds3i.of(corner(this.alice, false), corner(this.alice, true))),
@@ -222,13 +225,28 @@ public final class LumiGameTests implements CustomTestMethodInvoker {
             this.record(actor + " placed " + positions.size() + " randomized blocks");
         }
 
-        private void overwriteUnattributed(List<BlockPos> positions, BlockState state) {
+        private void verifyAmbientMutationDoesNotOpenDraft() throws IOException {
+            BlockPos probe = this.alice.getFirst();
+            BlockState original = this.level.getBlockState(probe);
+            this.level.setBlock(probe, Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+            if (this.captureManager.snapshotDraft(this.server, this.projectId).isPresent()) {
+                throw new AssertionError("Ambient world mutation opened a recovery draft");
+            }
+            this.level.setBlock(probe, original, 3);
+        }
+
+        private void overwriteFromAttributedRoot(String actor, List<BlockPos> positions, BlockState state) throws IOException {
+            try (WorldMutationContext.SourceFrame ignored =
+                         WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, actor, true)) {
+                this.place(actor, positions.getFirst(), state);
+            }
             if (WorldMutationContext.currentSource() != WorldMutationSource.SYSTEM
                     || !WorldMutationContext.currentActionId().isBlank()) {
                 throw new AssertionError("Regression mutation must run without causal attribution");
             }
-            positions.forEach(pos -> this.level.setBlock(pos, state, 3));
-            this.record("world overwrote " + positions.size() + " blocks without an action id using " + state.getBlock());
+            positions.subList(1, positions.size()).forEach(pos -> this.level.setBlock(pos, state, 3));
+            this.record("player root caused " + (positions.size() - 1)
+                    + " world mutations without an action id using " + state.getBlock());
         }
 
         private void place(String actor, BlockPos pos, BlockState state) throws IOException {

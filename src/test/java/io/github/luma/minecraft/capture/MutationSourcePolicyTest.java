@@ -66,6 +66,7 @@ class MutationSourcePolicyTest {
         assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.FLUID));
         assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.FALLING_BLOCK));
         assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.GROWTH));
+        assertTrue(this.policy.canReuseDeferredActionContext(WorldMutationSource.SYSTEM));
         assertFalse(this.policy.canReuseDeferredActionContext(WorldMutationSource.PLAYER));
     }
 

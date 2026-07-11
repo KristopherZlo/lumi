@@ -43,7 +43,8 @@ final class MutationSourcePolicy {
             WorldMutationSource.PISTON,
             WorldMutationSource.FLUID,
             WorldMutationSource.FALLING_BLOCK,
-            WorldMutationSource.GROWTH
+            WorldMutationSource.GROWTH,
+            WorldMutationSource.SYSTEM
     );
     private static final EnumSet<WorldMutationSource> DIRECT_CAPTURE_REQUIRES_ACTION_SOURCES = EnumSet.of(
             WorldMutationSource.EXPLOSION,

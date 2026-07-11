@@ -152,6 +152,14 @@ public final class HistoryCaptureManager {
                 String projectId = trackedProject.project().id().toString();
                 CaptureSessionState existingSession = this.workingDrafts.session(projectId);
                 ChunkPoint chunk = ChunkPoint.from(pos);
+                CaptureSessionState.DeferredActionContext context =
+                        this.deferredActionContext(existingSession, chunk, source);
+                if (!explicitRootSource && (context == null || !context.hasAction())) {
+                    continue;
+                }
+                if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
+                    continue;
+                }
                 this.getOrCreateWorkingDraft(trackedProject, source, now);
                 CaptureSessionState session = this.workingDrafts.session(projectId);
                 if (session == null) {
@@ -170,9 +178,6 @@ public final class HistoryCaptureManager {
                     );
                     this.baselineCoordinator.captureSessionChunkBaseline(session, chunk, baseline);
                 }
-                CaptureSessionState.DeferredActionContext context = shouldCaptureMutation(source)
-                        ? this.currentDeferredActionContext(source)
-                        : null;
                 this.liveBlockSectionReconciliationMarker.mark(
                         trackedProject,
                         level,
