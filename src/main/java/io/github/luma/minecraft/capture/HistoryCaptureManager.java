@@ -72,6 +72,7 @@ public final class HistoryCaptureManager {
     private final LiveBlockSectionReconciliationMarker liveBlockSectionReconciliationMarker =
             new LiveBlockSectionReconciliationMarker(this.baselineCoordinator, this.workingDrafts);
     private final SessionDraftBlockChangeRecorder draftBlockChangeRecorder = new SessionDraftBlockChangeRecorder();
+    private final LiveUndoRedoActionRecorder liveUndoRedoActionRecorder = new LiveUndoRedoActionRecorder();
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
     private final EntitySnapshotService entitySnapshotService = new EntitySnapshotService();
     private final WorkingDraftLiveStateReconciler liveStateReconciler = new WorkingDraftLiveStateReconciler();
@@ -357,6 +358,7 @@ public final class HistoryCaptureManager {
                 }
                 SessionDraftBlockChangeRecorder.Result draftRecord =
                         this.draftBlockChangeRecorder.record(session, buffer, capturedChange, now);
+                this.liveUndoRedoActionRecorder.recordBlock(trackedProject, level, capturedChange, now);
                 this.activeWorkZoneTouchRecorder.record(trackedProject, capturedChange, now);
                 this.historyDebugLog.logCapturedBlock(
                         trackedProject.project(),
@@ -586,6 +588,7 @@ public final class HistoryCaptureManager {
         StoredBlockChange capturedChange = mutation.change();
         SessionDraftBlockChangeRecorder.Result draftRecord =
                 this.draftBlockChangeRecorder.record(session, buffer, capturedChange, now);
+        this.liveUndoRedoActionRecorder.recordBlock(trackedProject, level, capturedChange, now);
         this.activeWorkZoneTouchRecorder.record(trackedProject, capturedChange, now);
         CaptureSessionDiagnostics diagnostics = this.workingDrafts.diagnosticsForSession(projectId);
         diagnostics.record(
@@ -697,6 +700,13 @@ public final class HistoryCaptureManager {
 
                 int pendingBefore = buffer.size();
                 buffer.addEntityChange(capturedChange, now);
+                this.liveUndoRedoActionRecorder.recordEntity(
+                        trackedProject,
+                        level,
+                        capturedChange,
+                        now,
+                        actionStartedAt
+                );
                 this.activeWorkZoneTouchRecorder.record(trackedProject, mutationPositions, now);
                 int pendingAfter = buffer.size();
                 this.workingDrafts.diagnosticsForSession(projectId).addActiveChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
