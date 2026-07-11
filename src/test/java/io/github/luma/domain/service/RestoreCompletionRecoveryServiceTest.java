@@ -15,6 +15,7 @@ import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RestoreCompletionRecoveryServiceTest {
@@ -60,6 +62,10 @@ class RestoreCompletionRecoveryServiceTest {
                 layout,
                 PendingRestoreCompletion.full(project.id().toString(), "feature", "v0003", NOW)
         );
+        UndoRedoHistoryManager.getInstance().recordAction(
+                project.id().toString(), project.dimensionId(), "stale-action", "tester",
+                List.of(change(2)), List.of(), NOW
+        );
 
         this.service.completePending(layout, project, null);
 
@@ -74,6 +80,7 @@ class RestoreCompletionRecoveryServiceTest {
         );
         assertTrue(this.recoveryRepository.loadDraft(layout).isEmpty());
         assertTrue(this.recoveryRepository.loadPendingRestoreCompletion(layout).isEmpty());
+        assertNull(UndoRedoHistoryManager.getInstance().selectUndo(project.id().toString()));
     }
 
     @Test

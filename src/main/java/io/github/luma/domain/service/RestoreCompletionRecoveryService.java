@@ -10,6 +10,7 @@ import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
@@ -73,6 +74,7 @@ final class RestoreCompletionRecoveryService {
         );
 
         this.recoveryRepository.deletePendingRestoreCompletion(layout);
+        UndoRedoHistoryManager.getInstance().clearProject(project.id().toString());
         if (server != null) {
             HistoryCaptureManager.getInstance().invalidateProjectCache(server);
         }

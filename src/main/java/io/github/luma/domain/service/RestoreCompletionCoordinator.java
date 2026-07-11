@@ -11,6 +11,7 @@ import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PlayerRespawnRepository;
 import io.github.luma.storage.repository.ProjectRepository;
@@ -84,6 +85,7 @@ final class RestoreCompletionCoordinator {
                 partialDraft.variantId()
         ));
         this.recoveryRepository.deletePendingRestoreCompletion(layout);
+        UndoRedoHistoryManager.getInstance().clearProject(project.id().toString());
         HistoryCaptureManager.getInstance().invalidateProjectCache(level.getServer());
         LumaMod.LOGGER.info(
                 "Completed partial restore for project {} to version {} with {} chunk batches and {} changes",
