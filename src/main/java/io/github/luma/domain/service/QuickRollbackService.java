@@ -14,6 +14,7 @@ import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.world.EntityApplyMode;
 import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedApplyOperation;
@@ -38,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
 
 /**
@@ -52,6 +54,7 @@ public final class QuickRollbackService {
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final RestoreService restoreService = new RestoreService();
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
+    private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final RestoreMechanismReconciliationPlanner mechanismReconciliationPlanner =
             new RestoreMechanismReconciliationPlanner();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
@@ -209,6 +212,15 @@ public final class QuickRollbackService {
             int batchCount
     ) throws IOException {
         Instant now = Instant.now();
+        this.undoRedoHistoryManager.recordAction(
+                project.id().toString(),
+                level.dimension().identifier().toString(),
+                "quick-rollback-" + UUID.randomUUID(),
+                "Lumi quick rollback",
+                plan.blockChanges(),
+                plan.entityChanges(),
+                now
+        );
         this.captureManager.discardSession(level.getServer(), project.id().toString());
         this.saveRemainingDraft(layout, plan.remainingDraft());
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
