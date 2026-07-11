@@ -99,21 +99,6 @@ public final class SessionStabilizationService {
                     persistentDeltaChanges,
                     capturedChunks.captured()
             );
-            List<StoredBlockChange> actionChanges = this.reconciliationActionChanges(
-                    startingChanges,
-                    currentChanges,
-                    composedChanges,
-                    deferredActionContexts
-            );
-            this.logHiddenDeferredReconciliation(
-                    project,
-                    processedChunks,
-                    currentChanges,
-                    deltaChanges,
-                    composedChanges,
-                    actionChanges,
-                    deferredActionContexts
-            );
             int bufferBefore = session.buffer().size();
             boolean bufferChanged = !currentChanges.equals(composedChanges);
             if (bufferChanged) {
@@ -135,9 +120,7 @@ public final class SessionStabilizationService {
                     bufferBefore,
                     bufferAfter,
                     false,
-                    bufferChanged,
-                    deferredActionContexts,
-                    actionChanges
+                    bufferChanged
             );
         } catch (RuntimeException exception) {
             session.requeuePendingChunks(pendingChunks);
@@ -487,256 +470,6 @@ public final class SessionStabilizationService {
         return false;
     }
 
-    List<StoredBlockChange> relatedDeltaChanges(
-            List<StoredBlockChange> currentChanges,
-            List<StoredBlockChange> persistentDeltaChanges
-    ) {
-        return this.relatedActionChanges(currentChanges, persistentDeltaChanges, Map.of());
-    }
-
-    List<StoredBlockChange> reconciliationActionChanges(
-            List<StoredBlockChange> currentChanges,
-            List<StoredBlockChange> composedChanges
-    ) {
-        Map<BlockPoint, StoredBlockChange> currentByPos = new LinkedHashMap<>();
-        for (StoredBlockChange currentChange : currentChanges == null ? List.<StoredBlockChange>of() : currentChanges) {
-            currentByPos.put(currentChange.pos(), currentChange);
-        }
-        Map<BlockPoint, StoredBlockChange> composedByPos = new LinkedHashMap<>();
-        for (StoredBlockChange composedChange : composedChanges == null ? List.<StoredBlockChange>of() : composedChanges) {
-            composedByPos.put(composedChange.pos(), composedChange);
-        }
-
-        List<StoredBlockChange> changes = new ArrayList<>();
-        LinkedHashSet<BlockPoint> positions = new LinkedHashSet<>();
-        positions.addAll(currentByPos.keySet());
-        positions.addAll(composedByPos.keySet());
-        for (BlockPoint pos : positions) {
-            StoredBlockChange currentChange = currentByPos.get(pos);
-            StoredBlockChange composedChange = composedByPos.get(pos);
-            StoredBlockChange actionChange = this.reconciliationActionChange(pos, currentChange, composedChange);
-            if (actionChange != null && !actionChange.isNoOp()) {
-                changes.add(actionChange);
-            }
-        }
-        return List.copyOf(changes);
-    }
-
-    List<StoredBlockChange> reconciliationActionChanges(
-            List<StoredBlockChange> currentChanges,
-            List<StoredBlockChange> composedChanges,
-            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
-    ) {
-        if (!hasHiddenDeferredAction(deferredActionContexts)) {
-            return this.reconciliationActionChanges(currentChanges, composedChanges);
-        }
-        return this.hiddenDeferredReconciliationActionChanges(currentChanges, composedChanges);
-    }
-
-    List<StoredBlockChange> reconciliationActionChanges(
-            List<StoredBlockChange> startingChanges,
-            List<StoredBlockChange> currentChanges,
-            List<StoredBlockChange> composedChanges,
-            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
-    ) {
-        List<StoredBlockChange> draftBeforeReconciliation = composeChanges(startingChanges, currentChanges);
-        return this.reconciliationActionChanges(
-                draftBeforeReconciliation,
-                composedChanges,
-                deferredActionContexts
-        );
-    }
-
-    private List<StoredBlockChange> hiddenDeferredReconciliationActionChanges(
-            List<StoredBlockChange> currentChanges,
-            List<StoredBlockChange> composedChanges
-    ) {
-        Map<BlockPoint, StoredBlockChange> currentByPos = new LinkedHashMap<>();
-        for (StoredBlockChange currentChange : currentChanges == null ? List.<StoredBlockChange>of() : currentChanges) {
-            currentByPos.put(currentChange.pos(), currentChange);
-        }
-        Map<BlockPoint, StoredBlockChange> composedByPos = new LinkedHashMap<>();
-        for (StoredBlockChange composedChange : composedChanges == null ? List.<StoredBlockChange>of() : composedChanges) {
-            composedByPos.put(composedChange.pos(), composedChange);
-        }
-
-        List<StoredBlockChange> changes = new ArrayList<>();
-        LinkedHashSet<BlockPoint> positions = new LinkedHashSet<>();
-        positions.addAll(currentByPos.keySet());
-        positions.addAll(composedByPos.keySet());
-        for (BlockPoint pos : positions) {
-            StoredBlockChange currentChange = currentByPos.get(pos);
-            StoredBlockChange composedChange = composedByPos.get(pos);
-            StoredBlockChange actionChange = this.reconciliationActionChange(pos, currentChange, composedChange);
-            if (actionChange != null && !actionChange.isNoOp()) {
-                changes.add(actionChange);
-                continue;
-            }
-            if (currentChange != null
-                    && currentChange.hidden()
-                    && composedChange != null
-                    && composedChange.hidden()
-                    && currentChange.equals(composedChange)) {
-                changes.add(composedChange);
-            }
-        }
-        return List.copyOf(changes);
-    }
-
-    private static boolean hasHiddenDeferredAction(
-            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
-    ) {
-        for (CaptureSessionState.DeferredActionContext context : deferredActionContexts == null
-                ? List.<CaptureSessionState.DeferredActionContext>of()
-                : deferredActionContexts.values()) {
-            if (context != null && context.hasAction() && context.hiddenInBuilderSurfaces()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void logHiddenDeferredReconciliation(
-            BuildProject project,
-            List<ChunkPoint> chunks,
-            List<StoredBlockChange> currentChanges,
-            List<StoredBlockChange> deltaChanges,
-            List<StoredBlockChange> composedChanges,
-            List<StoredBlockChange> actionChanges,
-            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
-    ) {
-        if (!LumaDebugLog.enabled(project) || !hasHiddenDeferredAction(deferredActionContexts)) {
-            return;
-        }
-        CaptureSessionState.DeferredActionContext sample = firstHiddenDeferredAction(deferredActionContexts);
-        LumaDebugLog.log(project, "capture",
-                "Reconciled hidden deferred action chunks={} current={} liveDelta={} composed={} undoPayload={} hiddenContexts={} sampleAction={} sampleActor={}",
-                size(chunks), size(currentChanges), size(deltaChanges), size(composedChanges), size(actionChanges),
-                hiddenDeferredActionCount(deferredActionContexts),
-                sample == null ? "<none>" : blank(sample.actionId()),
-                sample == null ? "<none>" : sample.actor());
-    }
-
-    private static CaptureSessionState.DeferredActionContext firstHiddenDeferredAction(
-            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
-    ) {
-        for (CaptureSessionState.DeferredActionContext context : deferredActionContexts == null
-                ? List.<CaptureSessionState.DeferredActionContext>of()
-                : deferredActionContexts.values()) {
-            if (context != null && context.hasAction() && context.hiddenInBuilderSurfaces()) {
-                return context;
-            }
-        }
-        return null;
-    }
-
-    private static int hiddenDeferredActionCount(
-            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
-    ) {
-        int count = 0;
-        for (CaptureSessionState.DeferredActionContext context : deferredActionContexts == null
-                ? List.<CaptureSessionState.DeferredActionContext>of()
-                : deferredActionContexts.values()) {
-            if (context != null && context.hasAction() && context.hiddenInBuilderSurfaces()) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    private static int size(List<?> values) {
-        return values == null ? 0 : values.size();
-    }
-
-    private static String blank(String value) {
-        return value == null || value.isBlank() ? "<none>" : value;
-    }
-
-    private StoredBlockChange reconciliationActionChange(
-            BlockPoint pos,
-            StoredBlockChange currentChange,
-            StoredBlockChange composedChange
-    ) {
-        if (composedChange == null) {
-            return currentChange == null ? null : new StoredBlockChange(
-                    pos,
-                    currentChange.newValue(),
-                    currentChange.oldValue(),
-                    currentChange.hidden()
-            );
-        }
-        if (currentChange == null) {
-            return composedChange;
-        }
-        return new StoredBlockChange(
-                pos,
-                currentChange.newValue(),
-                composedChange.newValue(),
-                currentChange.hidden() && composedChange.hidden()
-        );
-    }
-
-    List<StoredBlockChange> relatedActionChanges(
-            List<StoredBlockChange> currentChanges,
-            List<StoredBlockChange> persistentDeltaChanges,
-            Map<ChunkPoint, ChunkSnapshotPayload> liveChunks
-    ) {
-        boolean hasPersistentDeltas = persistentDeltaChanges != null && !persistentDeltaChanges.isEmpty();
-        boolean canReadLiveState = liveChunks != null && !liveChunks.isEmpty();
-        if (!hasPersistentDeltas && !canReadLiveState) {
-            return List.of();
-        }
-        Map<BlockPoint, StoredBlockChange> currentByPos = new LinkedHashMap<>();
-        for (StoredBlockChange currentChange : currentChanges == null ? List.<StoredBlockChange>of() : currentChanges) {
-            currentByPos.put(currentChange.pos(), currentChange);
-        }
-
-        List<StoredBlockChange> related = new ArrayList<>();
-        Set<BlockPoint> deltaPositions = new LinkedHashSet<>();
-        for (StoredBlockChange deltaChange : persistentDeltaChanges == null
-                ? List.<StoredBlockChange>of()
-                : persistentDeltaChanges) {
-            deltaPositions.add(deltaChange.pos());
-            StoredBlockChange currentChange = currentByPos.get(deltaChange.pos());
-            if (currentChange == null) {
-                related.add(deltaChange);
-                continue;
-            }
-
-            StoredBlockChange relatedChange = new StoredBlockChange(
-                    deltaChange.pos(),
-                    currentChange.newValue(),
-                    deltaChange.newValue(),
-                    currentChange.hidden() && deltaChange.hidden()
-            );
-            if (!relatedChange.isNoOp()) {
-                related.add(relatedChange);
-            }
-        }
-        if (canReadLiveState) {
-            Map<ChunkPoint, Map<Integer, ChunkSectionSnapshotPayload>> liveSectionIndexes = new HashMap<>();
-            for (StoredBlockChange currentChange : currentByPos.values()) {
-                if (deltaPositions.contains(currentChange.pos())) {
-                    continue;
-                }
-                StatePayload livePayload = this.livePayload(currentChange.pos(), liveChunks, liveSectionIndexes);
-                if (livePayload == null || this.matchesLiveTarget(currentChange.newValue(), livePayload)) {
-                    continue;
-                }
-                StoredBlockChange revertedCurrentChange = new StoredBlockChange(
-                        currentChange.pos(),
-                        currentChange.newValue(),
-                        livePayload,
-                        currentChange.hidden()
-                );
-                if (!revertedCurrentChange.isNoOp()) {
-                    related.add(revertedCurrentChange);
-                }
-            }
-        }
-        return List.copyOf(related);
-    }
-
     private boolean sectionsEqual(ChunkSectionSnapshotPayload baseline, ChunkSectionSnapshotPayload live) {
         if (baseline == live) {
             return true;
@@ -866,23 +599,19 @@ public final class SessionStabilizationService {
             int bufferBefore,
             int bufferAfter,
             boolean inFlight,
-            boolean bufferChanged,
-            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts,
-            List<StoredBlockChange> deltaChanges
+            boolean bufferChanged
     ) {
 
         public ReconciliationResult {
             chunks = chunks == null ? List.of() : List.copyOf(chunks);
-            deferredActionContexts = deferredActionContexts == null ? Map.of() : Map.copyOf(deferredActionContexts);
-            deltaChanges = deltaChanges == null ? List.of() : List.copyOf(deltaChanges);
         }
 
         public static ReconciliationResult noOp() {
-            return new ReconciliationResult(0, List.of(), 0, 0, 0, 0, false, false, Map.of(), List.of());
+            return new ReconciliationResult(0, List.of(), 0, 0, 0, 0, false, false);
         }
 
         public static ReconciliationResult busy() {
-            return new ReconciliationResult(0, List.of(), 0, 0, 0, 0, true, false, Map.of(), List.of());
+            return new ReconciliationResult(0, List.of(), 0, 0, 0, 0, true, false);
         }
     }
 
