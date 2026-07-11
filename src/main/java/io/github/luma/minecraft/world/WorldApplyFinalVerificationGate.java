@@ -10,7 +10,7 @@ import net.minecraft.server.level.ServerLevel;
  */
 final class WorldApplyFinalVerificationGate {
 
-    private static final int MAX_RETRIES = 3;
+    private static final int MAX_REPAIR_PASSES = 1;
 
     private final WorldApplyVerificationService verificationService = new WorldApplyVerificationService();
     private final WorldApplyVerificationRepairer verificationRepairer = new WorldApplyVerificationRepairer();
@@ -18,7 +18,7 @@ final class WorldApplyFinalVerificationGate {
     private WorldApplyVerificationResult currentResult;
     private int currentRepaired;
     private int batchIndex;
-    private int retryCount;
+    private int repairPassCount;
 
     void record(ChunkBatch batch) {
         if (batch != null) {
@@ -54,22 +54,13 @@ final class WorldApplyFinalVerificationGate {
             if (result == null) {
                 return false;
             }
+            metrics.recordVerification(result);
             this.clearCurrent();
-            if (result.mismatched() > 0) {
-                this.retryCount += 1;
-                if (this.retryCount > MAX_RETRIES) {
-                    throw new IllegalStateException(
-                            "World apply final verification failed after "
-                                    + MAX_RETRIES
-                                    + " retries for chunk "
-                                    + batch.chunk().x()
-                                    + ":"
-                                    + batch.chunk().z()
-                    );
-                }
+            if (result.repaired() > 0) {
+                this.repairPassCount += 1;
                 return false;
             }
-            this.retryCount = 0;
+            this.repairPassCount = 0;
             this.batches.set(this.batchIndex, null);
             this.batchIndex += 1;
         }
@@ -100,6 +91,14 @@ final class WorldApplyFinalVerificationGate {
             }
             this.currentRepaired = 0;
             if (this.currentResult.hasRepairs()) {
+                if (this.repairPassCount >= MAX_REPAIR_PASSES) {
+                    throw new IllegalStateException(
+                            "World apply final verification still mismatched after repair for chunk "
+                                    + batch.chunk().x()
+                                    + ":"
+                                    + batch.chunk().z()
+                    );
+                }
                 this.verificationRepairer.start(this.currentResult.repairSections());
             }
         }

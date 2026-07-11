@@ -55,4 +55,16 @@ class WorldOperationManagerFinalVerificationTest {
         assertFalse(manager.contains("verificationService.advance(this.level(), batch, deadlineNanos)"));
         assertTrue(finalGate.contains("verificationService.advance(level, batch, deadlineNanos)"));
     }
+
+    @Test
+    void repairedTargetsAreReadBackOnceBeforeCompletion() throws Exception {
+        String finalGate = Files.readString(Path.of(
+                "src/main/java/io/github/luma/minecraft/world/WorldApplyFinalVerificationGate.java"
+        ));
+
+        assertTrue(finalGate.contains("MAX_REPAIR_PASSES = 1"));
+        assertTrue(finalGate.contains("if (result.repaired() > 0)"));
+        assertTrue(finalGate.contains("metrics.recordVerification(result)"));
+        assertFalse(finalGate.contains("MAX_RETRIES"));
+    }
 }
