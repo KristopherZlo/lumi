@@ -131,8 +131,6 @@ public final class ActionBarMessagePresenter {
             case "zone-restore" -> "luma.actionbar.operation.zone_restore";
             case "restore-draft" -> "luma.actionbar.operation.restore_draft";
             case "quick-rollback" -> "luma.actionbar.operation.quick_rollback";
-            case "undo-action" -> "luma.actionbar.operation.undo";
-            case "redo-action" -> "luma.actionbar.operation.redo";
             case "merge-variant" -> "luma.actionbar.operation.merge";
             case "light-refresh" -> "luma.actionbar.operation.light_refresh";
             default -> null;
