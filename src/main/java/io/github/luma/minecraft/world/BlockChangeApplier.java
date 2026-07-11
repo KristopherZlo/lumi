@@ -31,6 +31,7 @@ import net.minecraft.world.phys.AABB;
 public final class BlockChangeApplier {
 
     private static final PersistentBlockStatePolicy BLOCK_STATE_POLICY = new PersistentBlockStatePolicy();
+    private static final BlockEntityRemover BLOCK_ENTITY_REMOVER = new BlockEntityRemover();
     private static final WorldApplyBlockUpdatePolicy UPDATE_POLICY = new WorldApplyBlockUpdatePolicy();
     private static final RedstoneReplayUpdatePlanner REDSTONE_UPDATE_PLANNER = new RedstoneReplayUpdatePlanner();
     private static final BlockPlacementUpdateDecider UPDATE_DECIDER = new BlockPlacementUpdateDecider();
@@ -338,7 +339,7 @@ public final class BlockChangeApplier {
             return;
         }
 
-        level.removeBlockEntity(pos);
+        BLOCK_ENTITY_REMOVER.remove(level, pos);
         level.setBlock(pos, state, UPDATE_POLICY.placementFlags(state));
         ReplayQueuedTickCleaner.clear(level, pos);
         REDSTONE_UPDATE_PLANNER.propagate(level, pos, currentState, state);
@@ -370,7 +371,7 @@ public final class BlockChangeApplier {
             return false;
         }
 
-        level.removeBlockEntity(pos);
+        BLOCK_ENTITY_REMOVER.remove(level, pos);
         level.setBlock(pos, state, UPDATE_POLICY.placementFlags(state));
         ReplayQueuedTickCleaner.clear(level, pos);
         REDSTONE_UPDATE_PLANNER.propagate(level, pos, currentState, state);
@@ -390,7 +391,7 @@ public final class BlockChangeApplier {
         PersistentBlockStatePolicy.PersistentBlockState persistentState = BLOCK_STATE_POLICY.normalize(state,
                 blockEntityTag);
         if (persistentState.blockEntityTag() == null) {
-            level.removeBlockEntity(pos);
+            BLOCK_ENTITY_REMOVER.remove(level, pos);
             return 0;
         }
 

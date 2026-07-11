@@ -23,6 +23,7 @@ final class DirectChunkBlockCommitStrategy {
     private final DirectSectionBlockCommitStrategy sectionFallback;
     private final SectionLightUpdatePlanner lightUpdatePlanner = new SectionLightUpdatePlanner();
     private final RedstoneReplayUpdatePlanner redstoneUpdatePlanner = new RedstoneReplayUpdatePlanner();
+    private final BlockEntityRemover blockEntityRemover = new BlockEntityRemover();
     private final SparseDeleteFastPathClassifier deleteFastPathClassifier = new SparseDeleteFastPathClassifier();
 
     DirectChunkBlockCommitStrategy(
@@ -254,7 +255,7 @@ final class DirectChunkBlockCommitStrategy {
         }
 
         if (!this.deleteFastPathClassifier.canDelete(currentState, targetState, targetBlockEntityTag)) {
-            level.removeBlockEntity(mutablePos);
+            this.blockEntityRemover.remove(level, mutablePos);
             level.updatePOIOnBlockStateChange(mutablePos, currentState, targetState);
         }
         section.setBlockState(localX, localY, localZ, targetState, false);

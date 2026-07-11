@@ -23,6 +23,7 @@ final class SectionNativeBlockCommitStrategy {
     private final SectionPoiUpdatePlanner poiUpdatePlanner = new SectionPoiUpdatePlanner();
     private final SectionLightUpdatePlanner lightUpdatePlanner = new SectionLightUpdatePlanner();
     private final RedstoneReplayUpdatePlanner redstoneUpdatePlanner = new RedstoneReplayUpdatePlanner();
+    private final BlockEntityRemover blockEntityRemover = new BlockEntityRemover();
 
     SectionNativeBlockCommitStrategy(
             PersistentBlockStatePolicy blockStatePolicy,
@@ -191,7 +192,7 @@ final class SectionNativeBlockCommitStrategy {
         }
 
         if (currentState.hasBlockEntity()) {
-            level.removeBlockEntity(mutablePos);
+            this.blockEntityRemover.remove(level, mutablePos);
         }
         section.setBlockState(localX, localY, localZ, targetState, false);
         ReplayQueuedTickCleaner.clear(level, mutablePos);
@@ -233,7 +234,7 @@ final class SectionNativeBlockCommitStrategy {
         }
 
         if (currentState.hasBlockEntity()) {
-            level.removeBlockEntity(mutablePos);
+            this.blockEntityRemover.remove(level, mutablePos);
         }
         section.setBlockState(localX, localY, localZ, targetState, false);
         ReplayQueuedTickCleaner.clear(level, mutablePos);

@@ -17,6 +17,7 @@ final class MinecraftExactReplayPlacementApplier implements ExactReplayPlacement
     private final BlockPlacementUpdateDecider updateDecider = new BlockPlacementUpdateDecider();
     private final WorldApplyBlockUpdatePolicy updatePolicy = new WorldApplyBlockUpdatePolicy();
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
+    private final BlockEntityRemover blockEntityRemover = new BlockEntityRemover();
 
     @Override
     public boolean apply(
@@ -38,7 +39,7 @@ final class MinecraftExactReplayPlacementApplier implements ExactReplayPlacement
             return false;
         }
 
-        level.removeBlockEntity(pos);
+        this.blockEntityRemover.remove(level, pos);
         level.setBlock(pos, targetState, this.updatePolicy.placementFlags(targetState));
         ReplayQueuedTickCleaner.clear(level, pos);
         if (targetBlockEntityTag != null) {

@@ -20,6 +20,7 @@ final class DirectSectionBlockCommitStrategy implements BlockCommitStrategy {
     private final DirectSectionCommitEligibility eligibility = new DirectSectionCommitEligibility();
     private final SectionLightUpdatePlanner lightUpdatePlanner = new SectionLightUpdatePlanner();
     private final RedstoneReplayUpdatePlanner redstoneUpdatePlanner = new RedstoneReplayUpdatePlanner();
+    private final BlockEntityRemover blockEntityRemover = new BlockEntityRemover();
 
     DirectSectionBlockCommitStrategy(
             PersistentBlockStatePolicy blockStatePolicy,
@@ -76,7 +77,7 @@ final class DirectSectionBlockCommitStrategy implements BlockCommitStrategy {
                 continue;
             }
 
-            level.removeBlockEntity(pos);
+            this.blockEntityRemover.remove(level, pos);
             section.setBlockState(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, targetState, false);
             ReplayQueuedTickCleaner.clear(level, pos);
             this.updateHeightmaps(chunk, pos, targetState);

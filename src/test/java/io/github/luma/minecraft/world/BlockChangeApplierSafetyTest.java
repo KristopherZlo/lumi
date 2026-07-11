@@ -91,7 +91,17 @@ class BlockChangeApplierSafetyTest {
 
         assertTrue(applier.contains("BLOCK_STATE_POLICY.normalize(state,"));
         assertTrue(applier.contains("if (persistentState.blockEntityTag() == null)"));
-        assertTrue(applier.contains("level.removeBlockEntity(pos);"));
+        assertTrue(applier.contains("BLOCK_ENTITY_REMOVER.remove(level, pos);"));
+    }
+
+    @Test
+    void removalPromotesPendingBlockEntityBeforeDeletingIt() throws IOException {
+        String remover = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/world/BlockEntityRemover.java"),
+                StandardCharsets.UTF_8
+        ).replace("\r\n", "\n");
+
+        assertTrue(remover.contains("level.getBlockEntity(pos);\n        level.removeBlockEntity(pos);"));
     }
 
     @Test
