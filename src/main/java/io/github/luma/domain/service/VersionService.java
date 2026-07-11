@@ -141,7 +141,8 @@ public final class VersionService {
      *
      * <p>The durable version manifest is only written after the background
      * operation completes successfully. Until then, the current draft is kept in
-     * isolated operation storage so new edits start a separate working draft.
+     * isolated operation storage and the world mutation barrier prevents a second
+     * edit stream from racing snapshot and checkpoint capture.
      */
     public OperationHandle startSaveVersion(
             ServerLevel level,

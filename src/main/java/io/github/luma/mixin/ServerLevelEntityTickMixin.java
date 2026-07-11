@@ -8,6 +8,7 @@ import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
 import io.github.luma.minecraft.capture.ExplosiveSourceContextPolicy;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldReplayTickSuppression;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -36,9 +37,15 @@ abstract class ServerLevelEntityTickMixin {
     @Unique
     private static final WorldReplayTickSuppression LUMA_REPLAY_TICK_SUPPRESSION =
             WorldReplayTickSuppression.getInstance();
+    @Unique
+    private static final WorldOperationManager LUMA_WORLD_OPERATIONS = WorldOperationManager.getInstance();
 
     @WrapMethod(method = "tickNonPassenger")
     private void luma$wrapEntityTick(Entity entity, Operation<Void> original) {
+        if (!(entity instanceof ServerPlayer)
+                && LUMA_WORLD_OPERATIONS.blocksWorldMutations((ServerLevel) (Object) this)) {
+            return;
+        }
         if (this.luma$shouldFreezePrimedTnt(entity)) {
             return;
         }

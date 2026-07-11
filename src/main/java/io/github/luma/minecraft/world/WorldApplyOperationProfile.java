@@ -18,6 +18,10 @@ final class WorldApplyOperationProfile {
     private static final Set<String> MAXIMUM_LABELS = Set.of(
             "light-refresh"
     );
+    private static final Set<String> SAVE_LABELS = Set.of(
+            "save-version",
+            "amend-version"
+    );
 
     WorldApplyProfile profileFor(String label) {
         if (label != null && label.startsWith("bulk-diagnostic-")) {
@@ -33,6 +37,18 @@ final class WorldApplyOperationProfile {
     }
 
     boolean requiresPostApplyVerification(String label) {
+        return label != null && HISTORY_FAST_LABELS.contains(label);
+    }
+
+    boolean blocksWorldMutations(String label) {
+        return blocksBackgroundWorldMutations(label) || blocksPreparedWorldMutations(label);
+    }
+
+    static boolean blocksBackgroundWorldMutations(String label) {
+        return label != null && SAVE_LABELS.contains(label);
+    }
+
+    static boolean blocksPreparedWorldMutations(String label) {
         return label != null && HISTORY_FAST_LABELS.contains(label);
     }
 }

@@ -9,6 +9,7 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.ExactReplayStateGuard;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.minecraft.world.WorldReplayTickSuppression;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -34,6 +35,8 @@ abstract class LevelChunkSetBlockStateMixin {
     @Unique
     private static final ExactReplayStateGuard LUMA_EXACT_REPLAY_STATE_GUARD =
             ExactReplayStateGuard.getInstance();
+    @Unique
+    private static final WorldOperationManager LUMA_WORLD_OPERATIONS = WorldOperationManager.getInstance();
 
     @Shadow
     @Final
@@ -48,6 +51,9 @@ abstract class LevelChunkSetBlockStateMixin {
     ) {
         if (!(this.level instanceof ServerLevel serverLevel)) {
             return original.call(pos, newState, flags);
+        }
+        if (LUMA_WORLD_OPERATIONS.blocksWorldMutations(serverLevel)) {
+            return null;
         }
         if (!WorldMutationContext.captureSuppressed()) {
             LUMA_EXACT_REPLAY_STATE_GUARD.releaseForExplicitMutation(

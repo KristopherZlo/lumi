@@ -10,6 +10,7 @@ import io.github.luma.minecraft.capture.PostCallbackBlockMutationPolicy;
 import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.ExactReplayStateGuard;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.minecraft.world.WorldReplayTickSuppression;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -35,6 +36,8 @@ abstract class LevelSetBlockMixin {
     @Unique
     private static final PostCallbackBlockMutationPolicy LUMA_POST_CALLBACK_MUTATION_POLICY =
             new PostCallbackBlockMutationPolicy();
+    @Unique
+    private static final WorldOperationManager LUMA_WORLD_OPERATIONS = WorldOperationManager.getInstance();
 
     @WrapMethod(method = "setBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;II)Z")
     private boolean luma$wrapSetBlock(
@@ -47,6 +50,9 @@ abstract class LevelSetBlockMixin {
         Level level = (Level) (Object) this;
         if (!(level instanceof ServerLevel serverLevel)) {
             return original.call(pos, newState, flags, recursionLeft);
+        }
+        if (LUMA_WORLD_OPERATIONS.blocksWorldMutations(serverLevel)) {
+            return false;
         }
         if (!WorldMutationContext.captureSuppressed()) {
             LUMA_EXACT_REPLAY_STATE_GUARD.releaseForExplicitMutation(

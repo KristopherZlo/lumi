@@ -50,4 +50,16 @@ class WorldApplyOperationProfileTest {
         assertFalse(this.profile.requiresPostApplyVerification("save-version"));
         assertFalse(this.profile.requiresPostApplyVerification(null));
     }
+
+    @Test
+    void savesAndHistoryApplyBlockConcurrentWorldMutations() {
+        assertTrue(this.profile.blocksWorldMutations("save-version"));
+        assertTrue(this.profile.blocksWorldMutations("amend-version"));
+        assertTrue(this.profile.blocksWorldMutations("restore-version"));
+        assertTrue(this.profile.blocksWorldMutations("quick-rollback"));
+        assertFalse(this.profile.blocksWorldMutations("light-refresh"));
+        assertFalse(this.profile.blocksWorldMutations("background-maintenance"));
+        assertFalse(WorldApplyOperationProfile.blocksBackgroundWorldMutations("merge-variant"));
+        assertTrue(WorldApplyOperationProfile.blocksPreparedWorldMutations("merge-variant"));
+    }
 }

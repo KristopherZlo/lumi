@@ -4,6 +4,7 @@ import io.github.luma.integration.common.ExternalToolMutationDetector;
 import io.github.luma.integration.common.ExternalToolMutationOriginDetector;
 import io.github.luma.integration.common.ExternalToolMutationSourceResolver;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -139,6 +140,15 @@ public final class DirectSectionMutationCaptureService {
                     this.blockEntityTag(level, pos, appliedState)
             );
         }
+    }
+
+    public boolean blocksWorldMutation(LevelChunkSection section) {
+        if (section == null) {
+            return false;
+        }
+        return this.ownershipRegistry.ownerOf(section)
+                .map(owner -> WorldOperationManager.getInstance().blocksWorldMutations(owner.level()))
+                .orElse(false);
     }
 
     private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos, BlockState state) {

@@ -5,9 +5,11 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerPlayerGameMode;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
@@ -26,8 +28,14 @@ abstract class ServerPlayerGameModeMixin {
     @Unique
     private int luma$playerMutationDepth = 0;
 
+    @Unique
+    private static final WorldOperationManager LUMA_WORLD_OPERATIONS = WorldOperationManager.getInstance();
+
     @WrapMethod(method = "destroyBlock")
     private boolean luma$wrapDestroyBlock(BlockPos pos, Operation<Boolean> original) {
+        if (this.player != null && this.luma$blocksWorldMutations(this.player.level())) {
+            return false;
+        }
         this.luma$pushPlayerSource();
         try {
             return original.call(pos);
@@ -44,6 +52,9 @@ abstract class ServerPlayerGameModeMixin {
             InteractionHand hand,
             Operation<InteractionResult> original
     ) {
+        if (this.luma$blocksWorldMutations(level)) {
+            return InteractionResult.FAIL;
+        }
         this.luma$pushPlayerSource();
         try {
             return original.call(player, level, stack, hand);
@@ -61,6 +72,9 @@ abstract class ServerPlayerGameModeMixin {
             BlockHitResult hitResult,
             Operation<InteractionResult> original
     ) {
+        if (this.luma$blocksWorldMutations(level)) {
+            return InteractionResult.FAIL;
+        }
         this.luma$pushPlayerSource();
         try {
             return original.call(player, level, stack, hand, hitResult);
@@ -79,6 +93,12 @@ abstract class ServerPlayerGameModeMixin {
                 accessControl.canUse(this.player) || WorldMutationContext.currentAccessAllowed(),
                 accessControl.survivalMode(this.player) || WorldMutationContext.currentSurvivalMode()
         );
+    }
+
+    @Unique
+    private boolean luma$blocksWorldMutations(Level level) {
+        return level instanceof ServerLevel serverLevel
+                && LUMA_WORLD_OPERATIONS.blocksWorldMutations(serverLevel);
     }
 
     @Unique

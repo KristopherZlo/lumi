@@ -6,20 +6,28 @@ import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.AutoCheckpointService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket;
 import net.minecraft.network.protocol.game.ServerboundContainerButtonClickPacket;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundContainerSlotStateChangedPacket;
 import net.minecraft.network.protocol.game.ServerboundInteractPacket;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundMoveVehiclePacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCreativeModeSlotPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
+import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ServerGamePacketListenerImpl.class)
 abstract class ServerGamePacketListenerMixin {
@@ -30,8 +38,34 @@ abstract class ServerGamePacketListenerMixin {
     @Unique
     private int luma$playerOperationDepth = 0;
 
+    @Unique
+    private static final WorldOperationManager LUMA_WORLD_OPERATIONS = WorldOperationManager.getInstance();
+
+    @Inject(
+            method = {
+                    "handleSignUpdate",
+                    "handleSetCommandBlock",
+                    "handleSetCommandMinecart",
+                    "handleSetJigsawBlock",
+                    "handleSetStructureBlock",
+                    "handleJigsawGenerate",
+                    "handleTestInstanceBlockAction",
+                    "handleSetBeaconPacket"
+            },
+            at = @At("HEAD"),
+            cancellable = true
+    )
+    private void luma$blockDirectWorldMutationPackets(CallbackInfo ci) {
+        if (this.luma$worldMutationBlocked()) {
+            ci.cancel();
+        }
+    }
+
     @WrapMethod(method = "handleChatCommand")
     private void luma$wrapChatCommand(ServerboundChatCommandPacket packet, Operation<Void> original) {
+        if (this.luma$worldMutationBlocked()) {
+            return;
+        }
         this.luma$pushPlayerSource();
         AutoCheckpointService.getInstance().checkpointBeforeCommand(this.player, packet.command());
         try {
@@ -43,6 +77,9 @@ abstract class ServerGamePacketListenerMixin {
 
     @WrapMethod(method = "handleSignedChatCommand")
     private void luma$wrapSignedChatCommand(ServerboundChatCommandSignedPacket packet, Operation<Void> original) {
+        if (this.luma$worldMutationBlocked()) {
+            return;
+        }
         this.luma$pushPlayerSource();
         AutoCheckpointService.getInstance().checkpointBeforeCommand(this.player, packet.command());
         try {
@@ -65,6 +102,25 @@ abstract class ServerGamePacketListenerMixin {
     @WrapMethod(method = "handleUseItemOn")
     private void luma$wrapUseItemOn(ServerboundUseItemOnPacket packet, Operation<Void> original) {
         this.luma$callWithPlayerSource(packet, original);
+    }
+
+    @WrapMethod(method = "handleUseItem")
+    private void luma$wrapUseItem(ServerboundUseItemPacket packet, Operation<Void> original) {
+        this.luma$callWithPlayerSource(packet, original);
+    }
+
+    @WrapMethod(method = "handleMovePlayer")
+    private void luma$wrapMovePlayer(ServerboundMovePlayerPacket packet, Operation<Void> original) {
+        if (!this.luma$worldMutationBlocked()) {
+            original.call(packet);
+        }
+    }
+
+    @WrapMethod(method = "handleMoveVehicle")
+    private void luma$wrapMoveVehicle(ServerboundMoveVehiclePacket packet, Operation<Void> original) {
+        if (!this.luma$worldMutationBlocked()) {
+            original.call(packet);
+        }
     }
 
     @WrapMethod(method = "handleContainerClick")
@@ -92,6 +148,9 @@ abstract class ServerGamePacketListenerMixin {
 
     @Unique
     private void luma$callWithPlayerSource(Object packet, Operation<Void> original) {
+        if (this.luma$worldMutationBlocked()) {
+            return;
+        }
         this.luma$pushPlayerSource();
         try {
             original.call(packet);
@@ -118,5 +177,12 @@ abstract class ServerGamePacketListenerMixin {
 
         this.luma$playerOperationDepth -= 1;
         WorldMutationContext.popSource();
+    }
+
+    @Unique
+    private boolean luma$worldMutationBlocked() {
+        return this.player != null
+                && this.player.level() instanceof ServerLevel level
+                && LUMA_WORLD_OPERATIONS.blocksWorldMutations(level);
     }
 }

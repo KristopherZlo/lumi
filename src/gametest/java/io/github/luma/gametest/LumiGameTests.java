@@ -45,8 +45,16 @@ public final class LumiGameTests implements CustomTestMethodInvoker {
         context.succeed();
     }
 
-    @GameTest
+    @GameTest(maxTicks = 400)
     public void fallingBlockSpawnDoesNotCrashEntityCapture(GameTestHelper context) {
+        context.runAfterDelay(1L, () -> this.startFallingBlockTestWhenIdle(context));
+    }
+
+    private void startFallingBlockTestWhenIdle(GameTestHelper context) {
+        if (WorldOperationManager.getInstance().hasActiveOperation(context.getLevel().getServer())) {
+            context.runAfterDelay(1L, () -> this.startFallingBlockTestWhenIdle(context));
+            return;
+        }
         context.setBlock(0, 0, 0, Blocks.STONE);
         context.setBlock(0, 1, 0, Blocks.AIR);
         context.setBlock(0, 2, 0, Blocks.SAND);
@@ -152,7 +160,21 @@ public final class LumiGameTests implements CustomTestMethodInvoker {
 
         private void saveActor(String actor, List<BlockPos> positions, long seed, String label, Step after) throws Exception {
             this.placeRandom(actor, positions, seed);
-            this.waitFor(this.versionService.startSaveVersion(this.level, this.projectName, label, actor), label, after);
+            OperationHandle handle = this.versionService.startSaveVersion(this.level, this.projectName, label, actor);
+            this.verifySaveMutationBarrier(positions.getFirst());
+            this.waitFor(handle, label, after);
+        }
+
+        private void verifySaveMutationBarrier(BlockPos probe) {
+            BlockState expected = this.level.getBlockState(probe);
+            boolean changed = this.level.setBlock(probe, Blocks.AIR.defaultBlockState(), 3);
+            if (changed || !this.level.getBlockState(probe).equals(expected)) {
+                throw new AssertionError("Save mutation barrier allowed a concurrent block edit");
+            }
+            if (!this.operations.blocksWorldMutations(this.level)
+                    || !this.server.tickRateManager().isFrozen()) {
+                throw new AssertionError("Save mutation barrier did not freeze the world");
+            }
         }
 
         private void afterBobSave() throws Exception {
@@ -205,6 +227,10 @@ public final class LumiGameTests implements CustomTestMethodInvoker {
                 this.record("completed " + this.pendingLabel + " stage=" + snapshot.stage() + " detail=" + snapshot.detail());
                 if (snapshot.failed()) {
                     throw new AssertionError(this.pendingLabel + " failed: " + snapshot.detail());
+                }
+                if (this.operations.blocksWorldMutations(this.level)
+                        || this.server.tickRateManager().isFrozen()) {
+                    throw new AssertionError(this.pendingLabel + " left the world mutation barrier active");
                 }
                 Step next = this.afterOperation;
                 this.pending = null;

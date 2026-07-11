@@ -16,9 +16,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -56,6 +58,7 @@ public final class WorldOperationManager {
     private ExecutorService backgroundExecutor = createExecutor();
     private final WorldOperationLifecycle lifecycle = new WorldOperationLifecycle();
     private final WorldOperationMetricsReporter metricsReporter = new WorldOperationMetricsReporter();
+    private final Set<MinecraftServer> mutationBlockedServers = ConcurrentHashMap.newKeySet();
     private final WorldOperationShutdownHandler shutdownHandler = new WorldOperationShutdownHandler(
             this.lifecycle,
             this.budgetPlanner,
@@ -71,6 +74,15 @@ public final class WorldOperationManager {
 
     public synchronized boolean hasActiveOperation(MinecraftServer server) {
         return this.lifecycle.hasActive(this.serverKey(server));
+    }
+
+    public boolean blocksWorldMutations(ServerLevel level) {
+        if (level == null
+                || WorldMutationContext.captureSuppressed()
+                || WorldMutationContext.internalWorldApplyActive()) {
+            return false;
+        }
+        return this.mutationBlockedServers.contains(level.getServer());
     }
 
     public synchronized Optional<OperationSnapshot> snapshot(MinecraftServer server) {
@@ -110,6 +122,9 @@ public final class WorldOperationManager {
                     work
             );
             this.lifecycle.start(serverKey, operation);
+            if (operation.blocksWorldMutations()) {
+                this.mutationBlockedServers.add(level.getServer());
+            }
             LumaMod.LOGGER.info(
                     "Queued background operation {} for project {}",
                     operation.handle().label(),
@@ -159,6 +174,9 @@ public final class WorldOperationManager {
                     freezeWorldTicks
             );
             this.lifecycle.start(serverKey, operation);
+            if (operation.blocksWorldMutations()) {
+                this.mutationBlockedServers.add(level.getServer());
+            }
             LumaMod.LOGGER.info(
                     "Queued prepared apply operation {} for project {}",
                     operation.handle().label(),
@@ -217,6 +235,8 @@ public final class WorldOperationManager {
         String serverKey = this.serverKey(server);
         WorldOperationLifecycle.Completion completion = this.lifecycle.complete(serverKey, operation);
         if (completion.completed()) {
+            this.mutationBlockedServers.remove(server);
+            operation.releaseWorldMutationBarrier();
             completion.metrics().ifPresent(metrics -> LumaLoadLog.operationMetrics(operation.handle(), metrics));
             ActiveOperation followUp = completion.followUp();
             if (followUp != null) {
@@ -284,17 +304,45 @@ public final class WorldOperationManager {
         private volatile int lastLoggedPercent = -1;
         protected final WorldApplyPerformanceGovernor performanceGovernor = new WorldApplyPerformanceGovernor();
         private final boolean freezeWorldTicks;
+        private final boolean blocksWorldMutations;
+        private final boolean restoreServerTickFreeze;
         private boolean worldTickFreezeReleased;
+        private boolean worldMutationBarrierReleased;
 
         ActiveOperation(ServerLevel level, OperationHandle handle, String unitLabel) {
-            this(level, handle, unitLabel, false);
+            this(
+                    level,
+                    handle,
+                    unitLabel,
+                    false,
+                    WorldApplyOperationProfile.blocksBackgroundWorldMutations(handle.label())
+            );
         }
 
         ActiveOperation(ServerLevel level, OperationHandle handle, String unitLabel, boolean freezeWorldTicks) {
+            this(
+                    level,
+                    handle,
+                    unitLabel,
+                    freezeWorldTicks,
+                    WorldApplyOperationProfile.blocksPreparedWorldMutations(handle.label())
+            );
+        }
+
+        private ActiveOperation(
+                ServerLevel level,
+                OperationHandle handle,
+                String unitLabel,
+                boolean freezeWorldTicks,
+                boolean blocksWorldMutations
+        ) {
             this.level = level;
             this.handle = handle;
             this.unitLabel = unitLabel == null || unitLabel.isBlank() ? "items" : unitLabel;
             this.freezeWorldTicks = freezeWorldTicks;
+            this.blocksWorldMutations = blocksWorldMutations;
+            this.restoreServerTickFreeze = this.blocksWorldMutations
+                    && !level.getServer().tickRateManager().isFrozen();
             this.snapshot = new OperationSnapshot(
                     handle,
                     OperationStage.QUEUED,
@@ -313,6 +361,16 @@ public final class WorldOperationManager {
             );
             if (freezeWorldTicks) {
                 WorldReplayTickSuppression.getInstance().freezeWorldTick(level);
+            }
+            if (this.restoreServerTickFreeze) {
+                level.getServer().tickRateManager().setFrozen(true);
+            }
+            if (this.blocksWorldMutations) {
+                LumaLoadLog.event(
+                        "world-op",
+                        "mutation-barrier-acquire",
+                        "label=" + handle.label() + ", alreadyFrozen=" + !this.restoreServerTickFreeze
+                );
             }
         }
 
@@ -440,6 +498,10 @@ public final class WorldOperationManager {
             return null;
         }
 
+        boolean blocksWorldMutations() {
+            return this.blocksWorldMutations;
+        }
+
         protected boolean drainBeforeShutdown() {
             return false;
         }
@@ -450,6 +512,23 @@ public final class WorldOperationManager {
             }
             this.worldTickFreezeReleased = true;
             WorldReplayTickSuppression.getInstance().releaseWorldTickFreeze(this.level);
+        }
+
+        private void releaseWorldMutationBarrier() {
+            if (this.worldMutationBarrierReleased) {
+                return;
+            }
+            this.worldMutationBarrierReleased = true;
+            if (this.restoreServerTickFreeze) {
+                this.level.getServer().tickRateManager().setFrozen(false);
+            }
+            if (this.blocksWorldMutations) {
+                LumaLoadLog.event(
+                        "world-op",
+                        "mutation-barrier-release",
+                        "label=" + this.handle.label() + ", restoredFrozen=" + !this.restoreServerTickFreeze
+                );
+            }
         }
 
         private void logProgressIfNeeded(OperationStage stage, OperationProgress progress, String detail) {
