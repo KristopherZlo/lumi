@@ -90,6 +90,22 @@ class SingleplayerPerformanceMonitorTest {
     }
 
     @Test
+    void enforcesTwoSecondCoreOperationBudgetWithoutIncludingUndo() {
+        SingleplayerPerformanceMonitor accepted = new SingleplayerPerformanceMonitor();
+        accepted.recordOperationSnapshot(snapshot("restore-version", 10, 2_000));
+        accepted.recordOperationSnapshot(snapshot("undo-action", 10, 10_000));
+
+        SingleplayerPerformanceMonitor rejected = new SingleplayerPerformanceMonitor();
+        rejected.recordOperationSnapshot(snapshot("save-version", 10, 2_001));
+
+        assertTrue(checkContaining(accepted, "Core save, restore").passed());
+        SingleplayerPerformanceMonitor.PerformanceCheck rejectedCheck =
+                checkContaining(rejected, "Core save, restore");
+        assertFalse(rejectedCheck.passed());
+        assertTrue(rejectedCheck.detail().contains("2001 ms in save-version"));
+    }
+
+    @Test
     void flagsLineageFullChunkRestoreAsLoadRegression() {
         SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
         monitor.recordSyncSlice("Project setup", Duration.ofMillis(20).toNanos());
@@ -226,6 +242,16 @@ class SingleplayerPerformanceMonitorTest {
 
     private static OperationSnapshot snapshot(String label, int totalUnits) {
         return snapshot(label, totalUnits, OperationStage.COMPLETED, "Completed");
+    }
+
+    private static OperationSnapshot snapshot(String label, int totalUnits, long durationMillis) {
+        return new OperationSnapshot(
+                new OperationHandle(label + "-id", "project", label, NOW, false),
+                OperationStage.COMPLETED,
+                new OperationProgress(totalUnits, totalUnits, "blocks"),
+                "Completed",
+                NOW.plusMillis(durationMillis)
+        );
     }
 
     private static OperationSnapshot snapshot(String label, int totalUnits, OperationStage stage, String detail) {

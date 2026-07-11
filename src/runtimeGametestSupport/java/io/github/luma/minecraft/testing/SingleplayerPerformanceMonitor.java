@@ -27,7 +27,17 @@ final class SingleplayerPerformanceMonitor {
     private static final long MAX_BUFFER_GROWTH_MIB = 128;
     private static final int MAX_THREAD_GROWTH = 16;
     private static final long MAX_FIRST_INTERACTION_NANOS = Duration.ofSeconds(1).toNanos();
+    private static final long MAX_CORE_OPERATION_MILLIS = 2_000L;
     private static final Set<String> WARMUP_SYNC_PHASES = Set.of("Project setup");
+    private static final Set<String> CORE_OPERATION_LABELS = Set.of(
+            "save-version",
+            "amend-version",
+            "restore-version",
+            "partial-restore",
+            "zone-restore",
+            "restore-draft",
+            "merge-variant"
+    );
 
     private final Map<String, OperationMetric> operations = new LinkedHashMap<>();
     private final List<LabeledLoadSample> loadSamples = new ArrayList<>();
@@ -159,6 +169,15 @@ final class SingleplayerPerformanceMonitor {
                 this.failedOperationLabels().isEmpty(),
                 "failedOperations=" + this.failedOperationLabels()
         ));
+        OperationMetric slowestCoreOperation = this.slowestCoreOperation();
+        checks.add(new PerformanceCheck(
+                "Core save, restore, branch, and zone operations stayed below "
+                        + MAX_CORE_OPERATION_MILLIS + " ms",
+                slowestCoreOperation == null || slowestCoreOperation.durationMillis() <= MAX_CORE_OPERATION_MILLIS,
+                slowestCoreOperation == null
+                        ? "no core operations recorded"
+                        : "max=" + slowestCoreOperation.durationMillis() + " ms in " + slowestCoreOperation.label
+        ));
         checks.add(new PerformanceCheck(
                 "Undo, redo, and quick rollback remained action-scoped instead of broad world work",
                 this.maxOperationUnits("undo-action", "redo-action", "quick-rollback") <= MAX_ACTION_APPLY_UNITS,
@@ -224,6 +243,19 @@ final class SingleplayerPerformanceMonitor {
             }
         }
         return labels;
+    }
+
+    private OperationMetric slowestCoreOperation() {
+        OperationMetric slowest = null;
+        for (OperationMetric metric : this.operations.values()) {
+            if (!CORE_OPERATION_LABELS.contains(metric.label)) {
+                continue;
+            }
+            if (slowest == null || metric.durationMillis() > slowest.durationMillis()) {
+                slowest = metric;
+            }
+        }
+        return slowest;
     }
 
     private int maxRestoreUnitsWithoutInitialSnapshot() {

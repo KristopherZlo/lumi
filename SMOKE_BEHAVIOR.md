@@ -56,6 +56,7 @@ history behavior changes.
   diffs remain strict failures.
 - `load-smoke` runs the singleplayer smoke route through the first history
   operations, records JVM load samples, and fails on large heap, direct/mapped
-  buffer, thread, or first-world-interaction CPU/wall regressions.
+  buffer, thread, first-world-interaction CPU/wall regressions, or a core save,
+  restore, branch, or zone operation that exceeds two seconds.
 - Dedicated multiplayer smoke uses the server GameTest runner for work-zone
   save isolation and scoped rollback behavior.
