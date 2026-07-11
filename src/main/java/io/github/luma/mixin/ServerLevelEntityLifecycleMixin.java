@@ -3,7 +3,6 @@ package io.github.luma.mixin;
 import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
-import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldReplayTickSuppression;
 import net.minecraft.server.level.ServerLevel;
@@ -23,10 +22,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 abstract class ServerLevelEntityLifecycleMixin {
 
     @Unique
-    private static final ExplosiveEntityContextRegistry LUMA_EXPLOSIVE_CONTEXTS =
-            ExplosiveEntityContextRegistry.getInstance();
-
-    @Unique
     private static final EntityCausalContextRegistry LUMA_ENTITY_CAUSAL_CONTEXTS =
             EntityCausalContextRegistry.getInstance();
     @Unique
@@ -44,7 +39,6 @@ abstract class ServerLevelEntityLifecycleMixin {
     private void luma$captureAddFreshEntity(Entity entity, CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) {
             this.luma$rememberCausalEntityAction(entity);
-            LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity, (ServerLevel) (Object) this);
             EntityMutationTracker.captureSpawn((ServerLevel) (Object) this, entity);
         }
         this.luma$logPrimedTntSpawn("addFreshEntity", entity, cir.getReturnValue());
@@ -61,7 +55,6 @@ abstract class ServerLevelEntityLifecycleMixin {
     private void luma$captureAddWithUuid(Entity entity, CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) {
             this.luma$rememberCausalEntityAction(entity);
-            LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity, (ServerLevel) (Object) this);
             EntityMutationTracker.captureSpawn((ServerLevel) (Object) this, entity);
         }
         this.luma$logPrimedTntSpawn("addWithUUID", entity, cir.getReturnValue());
@@ -77,7 +70,6 @@ abstract class ServerLevelEntityLifecycleMixin {
     @Inject(method = "addDuringTeleport", at = @At("RETURN"))
     private void luma$captureAddDuringTeleport(Entity entity, CallbackInfo ci) {
         this.luma$rememberCausalEntityAction(entity);
-        LUMA_EXPLOSIVE_CONTEXTS.rememberSpawn(entity, (ServerLevel) (Object) this);
         EntityMutationTracker.captureSpawn((ServerLevel) (Object) this, entity);
         this.luma$logPrimedTntSpawn("addDuringTeleport", entity, true);
     }

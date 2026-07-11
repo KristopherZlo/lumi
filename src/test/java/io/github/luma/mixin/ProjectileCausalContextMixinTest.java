@@ -20,7 +20,6 @@ class ProjectileCausalContextMixinTest {
         assertTrue(lifecycle.contains("entity instanceof FallingBlockEntity"));
         assertTrue(lifecycle.contains("entity instanceof ItemEntity"));
         assertTrue(lifecycle.contains("rememberCurrentActionIfAbsent(entity, level)"));
-        assertTrue(lifecycle.contains("rememberSpawn(entity, (ServerLevel) (Object) this)"));
         assertTrue(lifecycle.contains("LumaLoadLog.event(\"tnt-replay\", \"primed-tnt-spawn\""));
         assertTrue(lifecycle.contains("accepted=\" + accepted"));
         assertTrue(lifecycle.contains("frozen=\" + LUMA_REPLAY_TICK_SUPPRESSION.shouldFreezeWorldTick(level)"));
