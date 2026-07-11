@@ -1,7 +1,7 @@
 {
   "key.category.lumi.general": "Lumi",
-  "key.lumi.undo": "Deshacer cambio de selección",
-  "key.lumi.redo": "Rehacer cambio de selección",
+  "key.lumi.undo": "Deshacer",
+  "key.lumi.redo": "Rehacer",
   "key.lumi.open_dashboard": "Abrir espacio de trabajo actual",
   "key.lumi.quick_save": "Tecla de guardado rápido",
   "key.lumi.toggle_compare_overlay": "Mostrar u ocultar resaltado de comparación",

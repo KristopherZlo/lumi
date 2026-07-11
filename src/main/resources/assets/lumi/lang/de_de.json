@@ -1,7 +1,7 @@
 {
   "key.category.lumi.general": "Lumi",
-  "key.lumi.undo": "Auswahländerung rückgängig machen",
-  "key.lumi.redo": "Auswahländerung wiederholen",
+  "key.lumi.undo": "Rückgängig",
+  "key.lumi.redo": "Wiederholen",
   "key.lumi.open_dashboard": "Aktuellen Arbeitsbereich öffnen",
   "key.lumi.quick_save": "Schnellspeichertaste",
   "key.lumi.toggle_compare_overlay": "Vergleichshervorhebung ein- oder ausblenden",

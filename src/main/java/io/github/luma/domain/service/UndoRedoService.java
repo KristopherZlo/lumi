@@ -9,6 +9,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
+import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.world.EntityApplyMode;
@@ -57,6 +58,7 @@ public final class UndoRedoService {
     ) throws IOException {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
         String projectId = project.id().toString();
+        EntityMutationTracker.drainPendingSpawns(level.getServer());
         UndoRedoActionStack.Selection selection = direction.select(this.history, projectId, actor);
         if (selection == null && !level.getServer().isDedicatedServer()) {
             selection = direction.select(this.history, projectId, null);
@@ -76,6 +78,15 @@ public final class UndoRedoService {
                 : action.redoEntityChanges();
         int total = blocks.size() + entities.size();
         UndoRedoActionStack.Selection selected = selection;
+        LumaMod.LOGGER.info(
+                "Starting {} for project {} action {} by {}: {} block and {} entity changes",
+                direction.label,
+                project.name(),
+                action.id(),
+                action.actor(),
+                blocks.size(),
+                entities.size()
+        );
 
         return this.operations.startPreparedApplyOperation(
                 level,

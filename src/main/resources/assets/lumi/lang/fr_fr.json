@@ -1,7 +1,7 @@
 {
   "key.category.lumi.general": "Lumi",
-  "key.lumi.undo": "Annuler le changement de sélection",
-  "key.lumi.redo": "Rétablir le changement de sélection",
+  "key.lumi.undo": "Annuler",
+  "key.lumi.redo": "Rétablir",
   "key.lumi.open_dashboard": "Ouvrir l'espace de travail actuel",
   "key.lumi.quick_save": "Clé de sauvegarde rapide",
   "key.lumi.toggle_compare_overlay": "Afficher ou masquer le point culminant de la comparaison",

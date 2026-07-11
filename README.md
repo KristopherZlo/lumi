@@ -77,8 +77,8 @@ For dedicated servers, install Lumi on both the server and every client that use
 | [ALT]+[S] by default | Open Save build, or Save zone when an active zone is selected |
 | [ALT]+[1] ... [0] by default | Switch to the branch bound to that key; `main` defaults to [1], then branches use the first free key from [1]...[0] |
 | [ALT] by default | Hold to preview pending work and enable action-key modifiers |
-| [ALT]+[Z] by default | Undo the current wooden-sword selection edit |
-| [ALT]+[Y] by default | Redo the current wooden-sword selection edit |
+| [ALT]+[Z] by default | Undo the current wooden-sword selection edit, otherwise undo the latest tracked world action |
+| [ALT]+[Y] by default | Redo the current wooden-sword selection edit, otherwise redo the latest undone world action |
 | [R] | Quick rollback of unsaved work |
 | [H] | Toggle compare overlay |
 | [ALT]+[I] by default | Show Lumi hotkeys |
@@ -93,7 +93,7 @@ Lumi keybinds are ignored while the Minecraft pause menu is open.
 
 Save, restore, branch, zone, recovery, and quick-rollback operations are measured against a two-second singleplayer target. Heavy decoding and file preparation stay off the server tick; history apply may synchronously load at most one missing chunk per tick so a small restore does not wait through the old 20-tick preload fallback. Large or storage-bound operations can exceed the target and are reported as performance failures instead of silently weakening exactness.
 
-Restore verification reads the final live world state, performs at most one repair pass, then reads it again and fails the operation if any requested state still differs. Quick rollback uses the same strict final verification path.
+Restore, quick rollback, undo, and redo read the final live world state, perform at most one repair pass, then read it again and fail if any requested state still differs. Live undo/redo is an in-memory convenience layer; durable save, restore, branch, zone, and recovery history remains the source of truth across restarts.
 
 ### Privacy and Diagnostics
 

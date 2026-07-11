@@ -1,7 +1,7 @@
 {
   "key.category.lumi.general": "Lumi",
-  "key.lumi.undo": "Kumoa valinnan muutos",
-  "key.lumi.redo": "Toista valinnan muutos",
+  "key.lumi.undo": "Kumoa",
+  "key.lumi.redo": "Toista",
   "key.lumi.open_dashboard": "Avaa nykyinen työtila",
   "key.lumi.quick_save": "Pikatallennusavain",
   "key.lumi.toggle_compare_overlay": "Näytä tai piilota vertailukohde",
