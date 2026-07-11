@@ -944,10 +944,6 @@ final class SingleplayerTestRun {
         this.completePhase(this.level.getServer(), Phase.START_GAMEPLAY_SAVE);
     }
 
-    private boolean waitForUndoRedoStabilization(String label) throws Exception {
-        return true;
-    }
-
     private void startGameplaySave(MinecraftServer server) throws Exception {
         this.gameplaySaveVersionId = this.nextVersionId(server);
         this.previewWaitTicks = 0;
@@ -965,7 +961,7 @@ final class SingleplayerTestRun {
             VersionDiff diff = this.value("Gameplay saved version diff can be built", () ->
                     this.diffService.compareVersionToParent(server, this.project.name(), this.gameplaySaveVersionId));
             if (diff != null) {
-                this.check(diff.changedBlockCount() >= Math.max(1, this.gameplayReport == null ? 0 : this.gameplayReport.latestUndoRedoBlocks().size()),
+                this.check(diff.changedBlockCount() >= Math.max(1, this.gameplayReport == null ? 0 : this.gameplayReport.latestCaptureBlocks().size()),
                         "Gameplay saved patch includes the water bridge");
             }
             this.check("Gameplay save consumed the recovery draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
@@ -1076,9 +1072,6 @@ final class SingleplayerTestRun {
     }
 
     private void startPrimedTntUndo() throws Exception {
-        if (!this.waitForUndoRedoStabilization("primed TNT undo")) {
-            return;
-        }
         this.check(this.primedTntUndoReport != null && this.primedTntUndoReport.primedTntPresent(this.level),
                 "Primed TNT entity exists before fuse-time undo");
         this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
@@ -1107,9 +1100,6 @@ final class SingleplayerTestRun {
     }
 
     private void startPoweredTntUndo() throws Exception {
-        if (!this.waitForUndoRedoStabilization("powered TNT undo")) {
-            return;
-        }
         this.check(this.poweredTntUndoReport != null && this.poweredTntUndoReport.primedTntPresent(this.level),
                 "Powered primed TNT entity exists before undo");
         this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
@@ -1149,10 +1139,6 @@ final class SingleplayerTestRun {
         }
         this.check(this.chainedTntReport != null && this.chainedTntReport.exploded(this.level),
                 "Redstone TNT chain exploded through the fixture");
-        if (!this.waitForUndoRedoStabilization("redstone TNT chain capture")) {
-            return;
-        }
-
         RecoveryDraft draft = this.recoveryService.loadDraft(server, this.project.name()).orElse(null);
         this.check(draft != null && draft.totalChangeCount() > 0,
                 "Redstone TNT chain settled into the durable recovery draft");
@@ -1160,9 +1146,6 @@ final class SingleplayerTestRun {
     }
 
     private void startChainedTntUndo() throws Exception {
-        if (!this.waitForUndoRedoStabilization("redstone TNT chain undo")) {
-            return;
-        }
         this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
         this.log.info("Queued redstone TNT chain quick rollback " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_CHAINED_TNT_UNDO);
@@ -1198,10 +1181,6 @@ final class SingleplayerTestRun {
         }
         this.check(this.explosionReport != null && this.explosionReport.exploded(this.level),
                 "Controlled TNT explosion changed the fixture");
-        if (!this.waitForUndoRedoStabilization("explosion draft capture")) {
-            return;
-        }
-
         RecoveryDraft draft = this.recoveryService.loadDraft(server, this.project.name()).orElse(null);
         this.check(draft != null && draft.totalChangeCount() > 0,
                 "Explosion settled into the durable recovery draft");
@@ -1214,9 +1193,6 @@ final class SingleplayerTestRun {
     }
 
     private void startExplosionUndo() throws Exception {
-        if (!this.waitForUndoRedoStabilization("explosion undo")) {
-            return;
-        }
         this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
         this.log.info("Queued explosion quick rollback " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_EXPLOSION_UNDO);

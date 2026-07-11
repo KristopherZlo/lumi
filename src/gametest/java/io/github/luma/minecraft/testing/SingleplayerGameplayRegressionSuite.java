@@ -58,8 +58,8 @@ final class SingleplayerGameplayRegressionSuite {
             new ItemEntityScenario(),
             new EntitySpawnScenario(),
             new WaterBridgeScenario(),
-            new MechanismAndWaterUndoRedoScenario(),
-            new PreCutWaterReleaseUndoRedoScenario()
+            new MechanismAndWaterCaptureScenario(),
+            new PreCutWaterReleaseCaptureScenario()
     );
 
     GameplayRegressionReport run(
@@ -92,7 +92,7 @@ final class SingleplayerGameplayRegressionSuite {
             Set<BlockPoint> expectedDraftBlocks,
             Set<BlockPoint> unexpectedDraftBlocks,
             Map<BlockPoint, Map<String, String>> expectedDraftProperties,
-            Set<BlockPoint> latestUndoRedoBlocks,
+            Set<BlockPoint> latestCaptureBlocks,
             List<ReplayBlockExpectation> latestReplayBlocks,
             List<UndoOnlyBlockExpectation> latestUndoOnlyBlocks,
             int expectedEntityChanges,
@@ -153,7 +153,7 @@ final class SingleplayerGameplayRegressionSuite {
         private final Set<BlockPoint> expectedDraftBlocks = new LinkedHashSet<>();
         private final Set<BlockPoint> unexpectedDraftBlocks = new LinkedHashSet<>();
         private final Map<BlockPoint, Map<String, String>> expectedDraftProperties = new LinkedHashMap<>();
-        private final Set<BlockPoint> latestUndoRedoBlocks = new LinkedHashSet<>();
+        private final Set<BlockPoint> latestCaptureBlocks = new LinkedHashSet<>();
         private final List<ReplayBlockExpectation> latestReplayBlocks = new ArrayList<>();
         private final List<UndoOnlyBlockExpectation> latestUndoOnlyBlocks = new ArrayList<>();
         private final Set<String> expectedEntityIds = new LinkedHashSet<>();
@@ -207,12 +207,12 @@ final class SingleplayerGameplayRegressionSuite {
                     .put(propertyName, propertyValue);
         }
 
-        private void expectLatestUndoRedoBlock(BlockPos pos) {
+        private void expectLatestCaptureBlock(BlockPos pos) {
             this.expectLatestReplayBlock(pos, Blocks.AIR, this.level.getBlockState(pos).getBlock());
         }
 
-        private void beginLatestUndoRedoAction() {
-            this.latestUndoRedoBlocks.clear();
+        private void beginLatestCaptureGroup() {
+            this.latestCaptureBlocks.clear();
             this.latestReplayBlocks.clear();
             this.latestUndoOnlyBlocks.clear();
         }
@@ -223,7 +223,7 @@ final class SingleplayerGameplayRegressionSuite {
 
         private void expectLatestReplayBlock(BlockPos pos, Block undoBlock, Block redoBlock, boolean expectDraft) {
             BlockPoint point = BlockPoint.from(pos);
-            this.latestUndoRedoBlocks.add(point);
+            this.latestCaptureBlocks.add(point);
             this.latestReplayBlocks.add(new ReplayBlockExpectation(point, undoBlock, redoBlock));
             if (expectDraft) {
                 this.expectDraftBlock(pos);
@@ -257,7 +257,7 @@ final class SingleplayerGameplayRegressionSuite {
                     Set.copyOf(this.expectedDraftBlocks),
                     Set.copyOf(this.unexpectedDraftBlocks),
                     this.expectedDraftProperties(),
-                    Set.copyOf(this.latestUndoRedoBlocks),
+                    Set.copyOf(this.latestCaptureBlocks),
                     List.copyOf(this.latestReplayBlocks),
                     List.copyOf(this.latestUndoOnlyBlocks),
                     this.expectedEntityChanges,
@@ -573,7 +573,7 @@ final class SingleplayerGameplayRegressionSuite {
         public void run(GameplayScenarioContext context) {
             BlockPos anchor = context.volume.min().offset(1, 2, 8);
             List<BlockPos> bridge = new ArrayList<>();
-            context.beginLatestUndoRedoAction();
+            context.beginLatestCaptureGroup();
             Set<BlockPos> fixtureBlocks = new LinkedHashSet<>();
             context.trackedPlayerAction(() -> {
                 context.level.setBlock(anchor, Blocks.STONE.defaultBlockState(), 3);
@@ -606,11 +606,11 @@ final class SingleplayerGameplayRegressionSuite {
                     "gameplay water bridge verified " + verified + "/" + BRIDGE_LENGTH + " planks above source water");
             fixtureBlocks.forEach(context::expectDraftBlock);
             bridge.forEach(context::expectDraftBlock);
-            context.expectLatestUndoRedoBlock(bridge.getLast());
+            context.expectLatestCaptureBlock(bridge.getLast());
         }
     }
 
-    private static final class MechanismAndWaterUndoRedoScenario implements GameplayScenario {
+    private static final class MechanismAndWaterCaptureScenario implements GameplayScenario {
 
         @Override
         public void run(GameplayScenarioContext context) {
@@ -623,7 +623,7 @@ final class SingleplayerGameplayRegressionSuite {
             BlockPos torchSupport = torch.below();
 
             this.loadFixture(context, piston, home, water, power, torchSupport, torch);
-            context.beginLatestUndoRedoAction();
+            context.beginLatestCaptureGroup();
             context.trackedPlayerAction(() -> {
                 context.level.setBlock(water, Blocks.WATER.defaultBlockState(), 3);
                 context.level.setBlock(power, Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
@@ -686,7 +686,7 @@ final class SingleplayerGameplayRegressionSuite {
         }
     }
 
-    private static final class PreCutWaterReleaseUndoRedoScenario implements GameplayScenario {
+    private static final class PreCutWaterReleaseCaptureScenario implements GameplayScenario {
 
         @Override
         public void run(GameplayScenarioContext context) {
@@ -735,7 +735,7 @@ final class SingleplayerGameplayRegressionSuite {
                 context.expectDraftBlock(dig);
             }
 
-            context.beginLatestUndoRedoAction();
+            context.beginLatestCaptureGroup();
             context.trackedPlayerAction(() -> {
                 context.level.setBlock(gateway, Blocks.AIR.defaultBlockState(), 3);
                 context.level.setBlock(sequentialDigs.getLast(), Blocks.AIR.defaultBlockState(), 3);
