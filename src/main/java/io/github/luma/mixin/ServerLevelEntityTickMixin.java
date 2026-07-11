@@ -4,7 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
-import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
+import io.github.luma.minecraft.capture.DeferredWorldMutationContexts;
 import io.github.luma.minecraft.capture.ExplosiveSourceContextPolicy;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldReplayTickSuppression;
@@ -28,9 +28,6 @@ abstract class ServerLevelEntityTickMixin {
     @Unique
     private static final EntityCausalContextRegistry LUMA_ENTITY_CAUSAL_CONTEXTS =
             EntityCausalContextRegistry.getInstance();
-    @Unique
-    private static final ExplosiveEntityContextRegistry LUMA_EXPLOSIVE_CONTEXTS =
-            ExplosiveEntityContextRegistry.getInstance();
     @Unique
     private static final ExplosiveSourceContextPolicy LUMA_EXPLOSIVE_SOURCE_CONTEXT_POLICY =
             new ExplosiveSourceContextPolicy();
@@ -99,7 +96,7 @@ abstract class ServerLevelEntityTickMixin {
 
     @Unique
     private boolean luma$pushRememberedExplosiveAction(Entity entity) {
-        return entity instanceof PrimedTnt && LUMA_EXPLOSIVE_CONTEXTS.pushContext(entity);
+        return entity instanceof PrimedTnt && DeferredWorldMutationContexts.pushSource(entity);
     }
 
     @Unique

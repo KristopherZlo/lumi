@@ -40,6 +40,21 @@ public final class DeferredWorldMutationContexts {
         return access.luma$deferredMutationContext();
     }
 
+    public static boolean pushSource(Object carrier) {
+        DeferredWorldMutationContext context = context(carrier);
+        if (context == null) {
+            return false;
+        }
+        context.push();
+        return true;
+    }
+
+    public static void clear(Object carrier) {
+        if (carrier instanceof DeferredWorldMutationContextAccess access) {
+            access.luma$setDeferredMutationContext(null);
+        }
+    }
+
     public static void push(Object carrier) {
         DeferredWorldMutationContext context = context(carrier);
         APPLIED_FRAMES.get().push(new AppliedFrame(context, context == null ? null : context.push()));

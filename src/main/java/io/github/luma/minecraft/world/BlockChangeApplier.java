@@ -6,7 +6,6 @@ import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.mixin.CreeperReplayStateAccess;
 import io.github.luma.minecraft.capture.EntitySnapshotService;
-import io.github.luma.minecraft.capture.ExplosiveEntityContextRegistry;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.io.IOException;
 import java.util.HashSet;
@@ -24,7 +23,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityProcessor;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -430,9 +428,6 @@ public final class BlockChangeApplier {
             Entity entity = level.getEntity(UUID.fromString(entityId));
             if (entity == null || entity instanceof ServerPlayer) {
                 return;
-            }
-            if (entity instanceof PrimedTnt) {
-                ExplosiveEntityContextRegistry.getInstance().forget(entity);
             }
             entity.discard();
         } catch (IllegalArgumentException ignored) {

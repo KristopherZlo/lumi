@@ -41,6 +41,26 @@ class DeferredWorldMutationContextsTest {
     }
 
     @Test
+    void directSourcePushAndClearUseTheSameCarrierContext() {
+        Carrier carrier = new Carrier();
+        try (WorldMutationContext.SourceFrame ignored =
+                     WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, "builder", true)) {
+            DeferredWorldMutationContexts.remember(carrier, WorldMutationSource.EXPLOSIVE);
+        }
+
+        assertTrue(DeferredWorldMutationContexts.pushSource(carrier));
+        try {
+            assertEquals(WorldMutationSource.EXPLOSIVE, WorldMutationContext.currentSource());
+            assertEquals("builder", WorldMutationContext.currentActor());
+        } finally {
+            WorldMutationContext.popSource();
+        }
+
+        DeferredWorldMutationContexts.clear(carrier);
+        assertNull(carrier.luma$deferredMutationContext());
+    }
+
+    @Test
     void mechanismContextPropagationSurvivesDeepRedstoneCascadesButStopsEventually() {
         Carrier current = new Carrier();
 
