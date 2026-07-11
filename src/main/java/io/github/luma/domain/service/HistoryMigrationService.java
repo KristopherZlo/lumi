@@ -2,12 +2,14 @@ package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.SnapshotData;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchDataRepository;
+import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
@@ -21,7 +23,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -40,6 +44,7 @@ public final class HistoryMigrationService {
     private final SnapshotReader snapshotReader;
     private final SnapshotWriter snapshotWriter;
     private final RecoveryRepository recoveryRepository;
+    private final BaselineChunkRepository baselineChunkRepository;
 
     public HistoryMigrationService() {
         this(
@@ -49,7 +54,8 @@ public final class HistoryMigrationService {
                 new PatchDataRepository(),
                 new SnapshotReader(),
                 new SnapshotWriter(),
-                new RecoveryRepository()
+                new RecoveryRepository(),
+                new BaselineChunkRepository()
         );
     }
 
@@ -60,7 +66,8 @@ public final class HistoryMigrationService {
             PatchDataRepository patchDataRepository,
             SnapshotReader snapshotReader,
             SnapshotWriter snapshotWriter,
-            RecoveryRepository recoveryRepository
+            RecoveryRepository recoveryRepository,
+            BaselineChunkRepository baselineChunkRepository
     ) {
         this.projectRepository = projectRepository;
         this.versionRepository = versionRepository;
@@ -69,6 +76,7 @@ public final class HistoryMigrationService {
         this.snapshotReader = snapshotReader;
         this.snapshotWriter = snapshotWriter;
         this.recoveryRepository = recoveryRepository;
+        this.baselineChunkRepository = baselineChunkRepository;
     }
 
     public MigrationReport migrate(ProjectLayout layout, BuildProject project) throws IOException {
@@ -80,7 +88,13 @@ public final class HistoryMigrationService {
         boolean projectUpdated = project.schemaVersion() < BuildProject.CURRENT_SCHEMA_VERSION;
         int patchCount = this.migratePatches(layout, versions);
         int snapshotCount = this.migrateSnapshots(layout, versions);
+        if (project.tracksWholeDimension()) {
+            snapshotCount += this.repairWholeDimensionEntityCheckpoints(layout, versions);
+        }
         int recoveryCount = projectUpdated ? this.migrateRecovery(layout) : 0;
+        int orphanBaselineCount = project.tracksWholeDimension()
+                ? this.quarantineOrphanBaselines(layout, versions)
+                : 0;
         if (projectUpdated) {
             this.projectRepository.save(
                     layout,
@@ -89,6 +103,13 @@ public final class HistoryMigrationService {
         }
 
         MigrationReport report = new MigrationReport(patchCount, snapshotCount, recoveryCount, projectUpdated);
+        if (orphanBaselineCount > 0) {
+            LumaMod.LOGGER.warn(
+                    "Quarantined {} unreferenced baseline chunks for project {}",
+                    orphanBaselineCount,
+                    project.name()
+            );
+        }
         if (!report.isEmpty()) {
             LumaMod.LOGGER.info(
                     "Migrated history storage for project {}: patches={} snapshots={} recovery={} schemaUpdated={}",
@@ -191,6 +212,100 @@ public final class HistoryMigrationService {
             migrated += 1;
         }
         return migrated;
+    }
+
+    private int repairWholeDimensionEntityCheckpoints(
+            ProjectLayout layout,
+            List<ProjectVersion> versions
+    ) throws IOException {
+        Map<String, ProjectVersion> versionsById = new LinkedHashMap<>();
+        for (ProjectVersion version : versions) {
+            versionsById.put(version.id(), version);
+        }
+
+        int repaired = 0;
+        Set<String> processedCheckpoints = new LinkedHashSet<>();
+        for (ProjectVersion version : versions) {
+            String checkpointId = version.entityCheckpointId();
+            if (checkpointId == null || checkpointId.isBlank() || !processedCheckpoints.add(checkpointId)) {
+                continue;
+            }
+            Path checkpointFile = layout.entityCheckpointFile(checkpointId);
+            if (!Files.exists(checkpointFile)) {
+                continue;
+            }
+
+            var checkpointMetadata = this.snapshotReader.loadSectionIndex(checkpointFile);
+            Set<ChunkPoint> retained = new LinkedHashSet<>();
+            checkpointMetadata.chunks().stream()
+                    .filter(chunk -> chunk.entityCount() > 0)
+                    .forEach(chunk -> retained.add(chunk.chunk()));
+            if (!this.addLineagePatchChunks(layout, version, versionsById, retained)) {
+                continue;
+            }
+            if (checkpointMetadata.chunks().stream().allMatch(chunk -> retained.contains(chunk.chunk()))) {
+                continue;
+            }
+
+            int originalChunkCount = checkpointMetadata.chunks().size();
+            SnapshotData snapshot = this.snapshotReader.readFile(checkpointFile, retained);
+            this.snapshotWriter.writeFile(layout, checkpointFile, snapshot);
+            repaired += 1;
+            LumaMod.LOGGER.warn(
+                    "Repaired entity checkpoint {} scope from {} to {} chunks",
+                    checkpointId,
+                    originalChunkCount,
+                    snapshot.chunks().size()
+            );
+        }
+        return repaired;
+    }
+
+    private boolean addLineagePatchChunks(
+            ProjectLayout layout,
+            ProjectVersion target,
+            Map<String, ProjectVersion> versionsById,
+            Set<ChunkPoint> retained
+    ) throws IOException {
+        Set<String> visited = new LinkedHashSet<>();
+        ProjectVersion cursor = target;
+        while (cursor != null && visited.add(cursor.id())) {
+            for (String patchId : cursor.patchIds() == null ? List.<String>of() : cursor.patchIds()) {
+                Optional<PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
+                if (metadata.isEmpty()) {
+                    LumaMod.LOGGER.warn("Skipped entity checkpoint repair because patch metadata is missing for {}", patchId);
+                    return false;
+                }
+                metadata.get().chunks().forEach(chunk -> retained.add(chunk.chunk()));
+            }
+            cursor = cursor.parentVersionId() == null || cursor.parentVersionId().isBlank()
+                    ? null
+                    : versionsById.get(cursor.parentVersionId());
+        }
+        return true;
+    }
+
+    private int quarantineOrphanBaselines(ProjectLayout layout, List<ProjectVersion> versions) throws IOException {
+        Set<ChunkPoint> retained = new LinkedHashSet<>();
+        for (ProjectVersion version : versions) {
+            for (String patchId : version.patchIds() == null ? List.<String>of() : version.patchIds()) {
+                Optional<PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
+                if (metadata.isEmpty()) {
+                    LumaMod.LOGGER.warn("Skipped baseline cleanup because patch metadata is missing for {}", patchId);
+                    return 0;
+                }
+                metadata.get().chunks().forEach(chunk -> retained.add(chunk.chunk()));
+            }
+        }
+        this.recoveryRepository.loadDraft(layout).ifPresent(draft -> {
+            retained.addAll(ChunkSelectionFactory.fromStoredChanges(draft.changes()));
+            retained.addAll(ChunkSelectionFactory.fromStoredEntityChanges(draft.entityChanges()));
+        });
+        this.recoveryRepository.loadOperationDraft(layout).ifPresent(draft -> {
+            retained.addAll(ChunkSelectionFactory.fromStoredChanges(draft.changes()));
+            retained.addAll(ChunkSelectionFactory.fromStoredEntityChanges(draft.entityChanges()));
+        });
+        return this.baselineChunkRepository.quarantineExcept(layout, retained);
     }
 
     public record MigrationReport(

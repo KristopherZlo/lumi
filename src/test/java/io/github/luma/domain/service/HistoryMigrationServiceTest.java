@@ -1,6 +1,7 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.PatchMetadata;
@@ -14,12 +15,14 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PatchDataRepository;
+import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.ProjectRepository;
 import io.github.luma.storage.repository.SnapshotReader;
 import io.github.luma.storage.repository.SnapshotWriter;
 import io.github.luma.storage.repository.VersionRepository;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -118,6 +121,108 @@ class HistoryMigrationServiceTest {
         );
         assertEquals(0, second.patchCount());
         assertEquals(0, second.snapshotCount());
+    }
+
+    @Test
+    void quarantinesWholeDimensionBaselinesWithoutHistoryReferences() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("orphan-baselines.mbp"));
+        Instant now = Instant.parse("2026-04-20T10:00:00Z");
+        BuildProject project = BuildProject.createWorldWorkspace("Tower", "minecraft:overworld", now);
+        ChunkPoint retainedChunk = new ChunkPoint(0, 0);
+        ChunkPoint orphanChunk = new ChunkPoint(99, -99);
+        BaselineChunkRepository baselines = new BaselineChunkRepository();
+        for (ChunkPoint chunk : List.of(retainedChunk, orphanChunk)) {
+            Path file = baselines.filePath(layout, chunk);
+            Files.createDirectories(file.getParent());
+            Files.write(file, new byte[] {1});
+        }
+        PatchMetadata metadata = this.patchDataRepository.writePayload(
+                layout,
+                "patch-0001",
+                project.id().toString(),
+                "v0001",
+                List.of(new StoredBlockChange(
+                        new io.github.luma.domain.model.BlockPoint(1, 64, 1),
+                        payload("minecraft:stone"),
+                        payload("minecraft:gold_block")
+                ))
+        );
+        this.patchMetaRepository.save(layout, metadata);
+        this.versionRepository.save(layout, new ProjectVersion(
+                "v0001",
+                project.id().toString(),
+                "main",
+                "",
+                "",
+                List.of("patch-0001"),
+                VersionKind.MANUAL,
+                "tester",
+                "Save",
+                ChangeStats.empty(),
+                PreviewInfo.none(),
+                ExternalSourceInfo.manual(),
+                now
+        ));
+
+        this.migrationService.migrate(layout, project);
+
+        assertEquals(true, baselines.contains(layout, retainedChunk));
+        assertEquals(false, baselines.contains(layout, orphanChunk));
+        assertEquals(true, Files.exists(layout.cacheDir()
+                .resolve("baseline-chunks-orphaned")
+                .resolve(baselines.filePath(layout, orphanChunk).getFileName())));
+    }
+
+    @Test
+    void repairsPollutedWholeDimensionEntityCheckpointScope() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("polluted-checkpoint.mbp"));
+        Instant now = Instant.parse("2026-04-20T10:00:00Z");
+        BuildProject project = BuildProject.createWorldWorkspace("Tower", "minecraft:overworld", now);
+        PatchMetadata metadata = this.patchDataRepository.writePayload(
+                layout,
+                "patch-0001",
+                project.id().toString(),
+                "v0001",
+                List.of(new StoredBlockChange(
+                        new io.github.luma.domain.model.BlockPoint(1, 64, 1),
+                        payload("minecraft:stone"),
+                        payload("minecraft:gold_block")
+                ))
+        );
+        this.patchMetaRepository.save(layout, metadata);
+        this.snapshotWriter.writeFile(layout.entityCheckpointFile("entities-0001"), new SnapshotData(
+                project.id().toString(),
+                now,
+                64,
+                79,
+                List.of(
+                        new SnapshotChunkData(0, 0, List.of(), Map.of(), List.of()),
+                        new SnapshotChunkData(99, -99, List.of(), Map.of(), List.of())
+                )
+        ));
+        this.versionRepository.save(layout, new ProjectVersion(
+                "v0001",
+                project.id().toString(),
+                "main",
+                "",
+                "",
+                "entities-0001",
+                List.of("patch-0001"),
+                VersionKind.MANUAL,
+                "tester",
+                "Save",
+                ChangeStats.empty(),
+                PreviewInfo.none(),
+                ExternalSourceInfo.manual(),
+                now
+        ));
+
+        HistoryMigrationService.MigrationReport report = this.migrationService.migrate(layout, project);
+
+        assertEquals(1, report.snapshotCount());
+        assertEquals(List.of(new ChunkPoint(0, 0)), this.snapshotReader.loadChunks(
+                layout.entityCheckpointFile("entities-0001")
+        ));
     }
 
     private static StatePayload payload(String blockId) {

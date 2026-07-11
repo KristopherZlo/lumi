@@ -6,10 +6,12 @@ import io.github.luma.storage.ProjectLayout;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 public final class BaselineChunkRepository {
@@ -77,6 +79,32 @@ public final class BaselineChunkRepository {
 
     public Path filePath(ProjectLayout layout, ChunkPoint chunk) {
         return this.file(layout, chunk);
+    }
+
+    public int quarantineExcept(ProjectLayout layout, Collection<ChunkPoint> retainedChunks) throws IOException {
+        Set<ChunkPoint> retained = new LinkedHashSet<>();
+        for (ChunkPoint chunk : retainedChunks == null ? List.<ChunkPoint>of() : retainedChunks) {
+            if (chunk != null) {
+                retained.add(chunk);
+            }
+        }
+
+        int moved = 0;
+        Path quarantine = layout.cacheDir().resolve("baseline-chunks-orphaned");
+        for (ChunkPoint chunk : this.listChunks(layout)) {
+            if (retained.contains(chunk)) {
+                continue;
+            }
+            Path source = this.file(layout, chunk);
+            Files.createDirectories(quarantine);
+            Files.move(
+                    source,
+                    quarantine.resolve(source.getFileName()),
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+            moved += 1;
+        }
+        return moved;
     }
 
     private Path directory(ProjectLayout layout) {
