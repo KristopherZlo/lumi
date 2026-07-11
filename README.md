@@ -253,6 +253,7 @@ Capture writes working drafts while the player builds. Startup metadata bootstra
 Hard rules:
 
 - One world operation runs per world at a time.
+- Operation labels map once to a typed workload kind that owns the apply budget, final verification, and mutation-barrier policy.
 - Long operations publish progress and terminal success/failure UI feedback.
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Replaced or cleared compare requests interrupt their worker task; long diff passes stop cooperatively instead of consuming CPU after the UI no longer needs them.

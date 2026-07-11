@@ -11,10 +11,7 @@ import org.junit.jupiter.api.Test;
 
 class WorldOperationTickRunnerTest {
 
-    private final WorldOperationTickRunner runner = new WorldOperationTickRunner(
-            new WorldApplyBudgetPlanner(),
-            new WorldApplyOperationProfile()
-    );
+    private final WorldOperationTickRunner runner = new WorldOperationTickRunner(new WorldApplyBudgetPlanner());
 
     @Test
     void completesOperationWhenAdvanceReportsDone() {

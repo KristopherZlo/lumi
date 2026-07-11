@@ -12,14 +12,9 @@ import net.minecraft.server.MinecraftServer;
 final class WorldOperationTickRunner {
 
     private final WorldApplyBudgetPlanner budgetPlanner;
-    private final WorldApplyOperationProfile applyOperationProfile;
 
-    WorldOperationTickRunner(
-            WorldApplyBudgetPlanner budgetPlanner,
-            WorldApplyOperationProfile applyOperationProfile
-    ) {
+    WorldOperationTickRunner(WorldApplyBudgetPlanner budgetPlanner) {
         this.budgetPlanner = budgetPlanner;
-        this.applyOperationProfile = applyOperationProfile;
     }
 
     void advance(
@@ -72,6 +67,6 @@ final class WorldOperationTickRunner {
         if (operation == null || operation.handle() == null) {
             return WorldApplyProfile.NORMAL;
         }
-        return this.applyOperationProfile.profileFor(operation.handle().label());
+        return WorldOperationKind.fromLabel(operation.handle().label()).profile();
     }
 }

@@ -44,14 +44,10 @@ public final class WorldOperationManager {
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
     private static final AtomicInteger NEXT_BACKGROUND_THREAD_INDEX = new AtomicInteger(1);
 
-    private final WorldApplyOperationProfile applyOperationProfile = new WorldApplyOperationProfile();
     private final WorldApplyBudgetPlanner budgetPlanner = new WorldApplyBudgetPlanner();
     private final WorldApplyTickWorkGate tickWorkGate = new WorldApplyTickWorkGate();
     private final WorldApplyTickDiagnostics applyTickDiagnostics = new WorldApplyTickDiagnostics();
-    private final WorldOperationTickRunner tickRunner = new WorldOperationTickRunner(
-            this.budgetPlanner,
-            this.applyOperationProfile
-    );
+    private final WorldOperationTickRunner tickRunner = new WorldOperationTickRunner(this.budgetPlanner);
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private ExecutorService backgroundExecutor = createExecutor();
     private final WorldOperationLifecycle lifecycle = new WorldOperationLifecycle();
@@ -570,7 +566,7 @@ public final class WorldOperationManager {
                 boolean freezeWorldTicks
         ) {
             super(level, handle, unitLabel, freezeWorldTicks);
-            this.profile = WorldOperationManager.this.applyOperationProfile.profileFor(handle.label());
+            this.profile = WorldOperationKind.fromLabel(handle.label()).profile();
             this.preparationStartedAtNanos = System.nanoTime();
             this.future = CompletableFuture.supplyAsync(() -> {
                 long loadStartedAt = LumaLoadLog.start();
@@ -1120,7 +1116,7 @@ public final class WorldOperationManager {
         }
 
         private boolean shouldVerifyPostApply() {
-            return WorldOperationManager.this.applyOperationProfile.requiresPostApplyVerification(this.handle().label());
+            return WorldOperationKind.fromLabel(this.handle().label()).requiresFinalVerification();
         }
 
         private String applyDetail(String detail) {

@@ -8,58 +8,47 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorldApplyOperationProfileTest {
 
-    private final WorldApplyOperationProfile profile = new WorldApplyOperationProfile();
-
     @Test
     void historyApplyOperationsUseFastButBoundedProfile() {
-        assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("restore-version"));
-        assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("partial-restore"));
-        assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("zone-restore"));
-        assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("recovery"));
-        assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("restore-draft"));
-        assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("quick-rollback"));
-        assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("undo-action"));
-        assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("redo-action"));
-        assertEquals(WorldApplyProfile.HISTORY_FAST, this.profile.profileFor("merge-variant"));
-        assertEquals(WorldApplyProfile.MAXIMUM, this.profile.profileFor("light-refresh"));
+        assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("restore-version"));
+        assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("partial-restore"));
+        assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("zone-restore"));
+        assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("recovery"));
+        assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("restore-draft"));
+        assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("quick-rollback"));
+        assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("undo-action"));
+        assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("redo-action"));
+        assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("merge-variant"));
+        assertEquals(WorldApplyProfile.HISTORY_FAST, WorldOperationKind.HISTORY_APPLY.profile());
+        assertEquals(WorldApplyProfile.MAXIMUM, WorldOperationKind.LIGHT_REFRESH.profile());
     }
 
     @Test
     void bulkDiagnosticsUseTurboProfile() {
-        assertEquals(WorldApplyProfile.DIAGNOSTIC_TURBO, this.profile.profileFor("bulk-diagnostic-sparse-direct-delete"));
+        assertEquals(WorldOperationKind.DIAGNOSTIC, WorldOperationKind.fromLabel("bulk-diagnostic-sparse-direct-delete"));
     }
 
     @Test
     void regularOperationsKeepConservativeBudgetProfile() {
-        assertEquals(WorldApplyProfile.NORMAL, this.profile.profileFor("save-version"));
-        assertEquals(WorldApplyProfile.NORMAL, this.profile.profileFor("background-maintenance"));
-        assertEquals(WorldApplyProfile.NORMAL, this.profile.profileFor(null));
+        assertEquals(WorldOperationKind.SAVE, WorldOperationKind.fromLabel("save-version"));
+        assertEquals(WorldOperationKind.OTHER, WorldOperationKind.fromLabel("background-maintenance"));
+        assertEquals(WorldOperationKind.OTHER, WorldOperationKind.fromLabel(null));
     }
 
     @Test
     void everyHistoryApplyProfileRequiresFinalVerification() {
-        assertTrue(this.profile.requiresPostApplyVerification("restore-version"));
-        assertTrue(this.profile.requiresPostApplyVerification("partial-restore"));
-        assertTrue(this.profile.requiresPostApplyVerification("zone-restore"));
-        assertTrue(this.profile.requiresPostApplyVerification("recovery"));
-        assertTrue(this.profile.requiresPostApplyVerification("restore-draft"));
-        assertTrue(this.profile.requiresPostApplyVerification("quick-rollback"));
-        assertTrue(this.profile.requiresPostApplyVerification("undo-action"));
-        assertTrue(this.profile.requiresPostApplyVerification("redo-action"));
-        assertTrue(this.profile.requiresPostApplyVerification("merge-variant"));
-        assertFalse(this.profile.requiresPostApplyVerification("save-version"));
-        assertFalse(this.profile.requiresPostApplyVerification(null));
+        assertTrue(WorldOperationKind.HISTORY_APPLY.requiresFinalVerification());
+        assertFalse(WorldOperationKind.SAVE.requiresFinalVerification());
+        assertFalse(WorldOperationKind.OTHER.requiresFinalVerification());
     }
 
     @Test
     void savesAndHistoryApplyBlockConcurrentWorldMutations() {
-        assertTrue(this.profile.blocksWorldMutations("save-version"));
-        assertTrue(this.profile.blocksWorldMutations("amend-version"));
-        assertTrue(this.profile.blocksWorldMutations("restore-version"));
-        assertTrue(this.profile.blocksWorldMutations("quick-rollback"));
-        assertFalse(this.profile.blocksWorldMutations("light-refresh"));
-        assertFalse(this.profile.blocksWorldMutations("background-maintenance"));
-        assertFalse(WorldApplyOperationProfile.blocksBackgroundWorldMutations("merge-variant"));
-        assertTrue(WorldApplyOperationProfile.blocksPreparedWorldMutations("merge-variant"));
+        assertTrue(WorldOperationKind.SAVE.blocksBackgroundMutations());
+        assertFalse(WorldOperationKind.SAVE.blocksPreparedMutations());
+        assertFalse(WorldOperationKind.HISTORY_APPLY.blocksBackgroundMutations());
+        assertTrue(WorldOperationKind.HISTORY_APPLY.blocksPreparedMutations());
+        assertFalse(WorldOperationKind.LIGHT_REFRESH.blocksPreparedMutations());
+        assertFalse(WorldOperationKind.OTHER.blocksBackgroundMutations());
     }
 }

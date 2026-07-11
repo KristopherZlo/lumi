@@ -36,9 +36,10 @@ final class WorldMutationBarrier {
     }
 
     private Lease createLease(ServerLevel level, String label, boolean preparedApply) {
+        WorldOperationKind kind = WorldOperationKind.fromLabel(label);
         boolean blocks = preparedApply
-                ? WorldApplyOperationProfile.blocksPreparedWorldMutations(label)
-                : WorldApplyOperationProfile.blocksBackgroundWorldMutations(label);
+                ? kind.blocksPreparedMutations()
+                : kind.blocksBackgroundMutations();
         if (!blocks) {
             return null;
         }
