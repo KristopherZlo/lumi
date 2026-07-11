@@ -1487,22 +1487,13 @@ public final class HistoryCaptureManager {
     ) {
         String projectId = trackedProject.project().id().toString();
         if (this.workingDrafts.hasBuffer(projectId)) {
-            if (!ELIGIBILITY.canUseDirectCapture(source, WorldMutationContext.currentActionId())) {
-                this.diagnosticsLogger.logSkippedCapture(
-                        trackedProject,
-                        source,
-                        pos,
-                        "no-causal-action",
-                        "no causal action is active"
-                );
-                return false;
-            }
-            if (!requiresActiveRegionMembership(source)) {
-                return true;
-            }
             ChunkPoint chunk = ChunkPoint.from(pos);
             CaptureSessionState sessionState = this.workingDrafts.session(projectId);
             if (this.activeSessionRegionPolicy.contains(level, sessionState, chunk)) {
+                return true;
+            }
+            if (!requiresActiveRegionMembership(source)
+                    && ELIGIBILITY.canUseDirectCapture(source, WorldMutationContext.currentActionId())) {
                 return true;
             }
             this.diagnosticsLogger.logSkippedCapture(
@@ -1510,7 +1501,8 @@ public final class HistoryCaptureManager {
                     source,
                     pos,
                     "outside-active-session-region",
-                    "chunk " + chunk.x() + ":" + chunk.z() + " is outside the active session region"
+                    "chunk " + chunk.x() + ":" + chunk.z()
+                            + " is outside the active session region and has no explicit action"
             );
             return false;
         }

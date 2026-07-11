@@ -74,7 +74,7 @@ class CaptureEligibilityServiceTest {
                 false,
                 "action-1"
         ));
-        assertFalse(this.eligibility.canInspectBlockMutationPayload(
+        assertTrue(this.eligibility.canInspectBlockMutationPayload(
                 wholeDimension,
                 WorldMutationSource.GROWTH,
                 true,
@@ -112,7 +112,7 @@ class CaptureEligibilityServiceTest {
     }
 
     @Test
-    void deferredBaselineRequiresActiveRegionAndCausalAction() {
+    void deferredBaselineRequiresOnlyAnActiveRegionForDurableCapture() {
         BuildProject wholeDimension = BuildProject.createWorldWorkspace(
                 "World",
                 "minecraft:overworld",
@@ -132,7 +132,7 @@ class CaptureEligibilityServiceTest {
                 false,
                 "action-1"
         ));
-        assertFalse(this.eligibility.canCaptureDeferredPreMutationBaseline(
+        assertTrue(this.eligibility.canCaptureDeferredPreMutationBaseline(
                 wholeDimension,
                 WorldMutationSource.FLUID,
                 true,

@@ -148,8 +148,7 @@ final class MutationSourcePolicy {
             String actionId
     ) {
         return this.usesDeferredStabilization(project, source)
-                && activeSessionRegion
-                && this.canUseDeferredStabilization(source, actionId);
+                && activeSessionRegion;
     }
 
     boolean canInspectBlockMutationPayload(
@@ -161,6 +160,9 @@ final class MutationSourcePolicy {
     ) {
         if (source == null) {
             return false;
+        }
+        if (hasActiveSession && activeSessionRegion) {
+            return true;
         }
         if (this.usesDeferredStabilization(project, source)) {
             return this.canUseDeferredStabilization(project, source, activeSessionRegion, actionId);
