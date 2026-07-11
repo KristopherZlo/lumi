@@ -33,7 +33,8 @@ public final class EntityMutationTracker {
         WorldMutationSource source = WorldMutationContext.currentSource();
         Instant actionStartedAt = EntityCausalContextRegistry.currentStartedAt().orElse(null);
         ObservedExternalToolOperation operation = null;
-        if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
+        if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)
+                && !shouldInspectUndoRedo(source, entityType)) {
             if (WorldMutationContext.captureSuppressed()) {
                 return PendingEntityMutation.empty();
             }
@@ -47,7 +48,8 @@ public final class EntityMutationTracker {
             operation = detected.get();
             source = operation.source();
         }
-        if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)) {
+        if (!CAPTURE_POLICY.shouldInspectMutation(source, entityType)
+                && !shouldInspectUndoRedo(source, entityType)) {
             return PendingEntityMutation.empty();
         }
 
@@ -77,10 +79,8 @@ public final class EntityMutationTracker {
         String entityType = entityType(entity);
         WorldMutationSource source = WorldMutationContext.currentSource();
         ObservedExternalToolOperation operation = null;
-        if (!CAPTURE_POLICY.shouldInspectSpawnMutation(source, entityType)) {
-            if (CAPTURE_POLICY.shouldIgnoreTransientSpawn(source, entityType)) {
-                return;
-            }
+        if (!CAPTURE_POLICY.shouldInspectSpawnMutation(source, entityType)
+                && !shouldInspectUndoRedo(source, entityType)) {
             if (WorldMutationContext.captureSuppressed()) {
                 return;
             }
@@ -95,6 +95,13 @@ public final class EntityMutationTracker {
             source = operation.source();
         }
         SPAWN_CAPTURE_QUEUE.enqueue(level, entity, CaptureFrame.current(operation));
+    }
+
+    private static boolean shouldInspectUndoRedo(WorldMutationSource source, String entityType) {
+        String actionId = WorldMutationContext.currentActionId();
+        return actionId != null
+                && !actionId.isBlank()
+                && CAPTURE_POLICY.shouldInspectUndoRedo(source, entityType);
     }
 
     public static void tick(MinecraftServer server) {

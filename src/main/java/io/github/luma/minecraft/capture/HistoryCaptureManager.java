@@ -645,16 +645,20 @@ public final class HistoryCaptureManager {
 
         try {
             Optional<StoredEntityChange> capturedMutation = ENTITY_CAPTURE_POLICY.capture(source, oldPayload, newPayload);
-            if (capturedMutation.isEmpty()) {
+            Optional<StoredEntityChange> undoRedoMutation = WorldMutationContext.currentActionId().isBlank()
+                    ? Optional.empty()
+                    : ENTITY_CAPTURE_POLICY.captureUndoRedo(source, oldPayload, newPayload);
+            if (capturedMutation.isEmpty() && undoRedoMutation.isEmpty()) {
                 return;
             }
-            StoredEntityChange capturedChange = capturedMutation.get();
             BlockPos pos = this.entityMutationPos(oldPayload, newPayload);
             List<BlockPos> mutationPositions = this.entityMutationPositions(oldPayload, newPayload);
             Instant now = Instant.now();
             List<TrackedProject> matchingProjects = this.matchingEntityProjects(level, mutationPositions);
             if (matchingProjects.isEmpty()) {
-                if (!allowsAutomaticProjectCreation(source) || !this.accessGuard.canCreateProjectInCurrentMode()) {
+                if (capturedMutation.isEmpty()
+                        || !allowsAutomaticProjectCreation(source)
+                        || !this.accessGuard.canCreateProjectInCurrentMode()) {
                     LumaDebugLog.log(
                             "capture",
                             "Skipped {} entity mutation at {} in {} because no tracked workspace exists and the source cannot bootstrap one",
@@ -672,6 +676,19 @@ public final class HistoryCaptureManager {
 
             for (TrackedProject trackedProject : matchingProjects) {
                 if (!this.accessGuard.canUseProjectInCurrentMode(trackedProject)) { continue; }
+                if (undoRedoMutation.isPresent()) {
+                    this.liveUndoRedoActionRecorder.recordEntity(
+                            trackedProject,
+                            level,
+                            undoRedoMutation.get(),
+                            now,
+                            actionStartedAt
+                    );
+                }
+                if (capturedMutation.isEmpty()) {
+                    continue;
+                }
+                StoredEntityChange capturedChange = capturedMutation.get();
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }
@@ -700,13 +717,6 @@ public final class HistoryCaptureManager {
 
                 int pendingBefore = buffer.size();
                 buffer.addEntityChange(capturedChange, now);
-                this.liveUndoRedoActionRecorder.recordEntity(
-                        trackedProject,
-                        level,
-                        capturedChange,
-                        now,
-                        actionStartedAt
-                );
                 this.activeWorkZoneTouchRecorder.record(trackedProject, mutationPositions, now);
                 int pendingAfter = buffer.size();
                 this.workingDrafts.diagnosticsForSession(projectId).addActiveChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));

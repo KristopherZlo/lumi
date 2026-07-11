@@ -38,11 +38,14 @@ class EntityMutationCapturePolicyTest {
     }
 
     @Test
-    void transientSpawnsAreIgnoredInsteadOfEnteringDurableHistory() {
-        assertTrue(this.policy.shouldIgnoreTransientSpawn(WorldMutationSource.PLAYER, "minecraft:item"));
-        assertTrue(this.policy.shouldIgnoreTransientSpawn(WorldMutationSource.EXPLOSIVE, "minecraft:tnt"));
-        assertTrue(this.policy.shouldIgnoreTransientSpawn(WorldMutationSource.FALLING_BLOCK, "minecraft:falling_block"));
-        assertFalse(this.policy.shouldIgnoreTransientSpawn(WorldMutationSource.PLAYER, "minecraft:armor_stand"));
+    void liveUndoCapturesTransientEntitiesWithoutPersistingThem() {
+        EntityPayload item = entity("minecraft:item", "00000000-0000-0000-0000-000000000043");
+        EntityPayload tnt = entity("minecraft:tnt", "00000000-0000-0000-0000-000000000044");
+
+        assertTrue(this.policy.captureUndoRedo(WorldMutationSource.PLAYER, null, item).isPresent());
+        assertTrue(this.policy.captureUndoRedo(WorldMutationSource.EXPLOSIVE, null, tnt).isPresent());
+        assertFalse(this.policy.capture(WorldMutationSource.PLAYER, null, item).isPresent());
+        assertFalse(this.policy.capture(WorldMutationSource.EXPLOSIVE, null, tnt).isPresent());
     }
 
     @Test
