@@ -13,6 +13,7 @@ import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
+import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
@@ -43,6 +44,7 @@ final class HistoryJourneyScenario {
     private final ProjectService projectService = new ProjectService();
     private final VersionService versionService = new VersionService();
     private final RestoreService restoreService = new RestoreService();
+    private final UndoRedoService undoRedoService = new UndoRedoService();
     private final VariantService variantService = new VariantService();
     private final RecoveryService recoveryService = new RecoveryService();
     private final ProjectIntegrityService integrityService = new ProjectIntegrityService();
@@ -115,6 +117,7 @@ final class HistoryJourneyScenario {
 
     private void executeJourney() throws Exception {
         this.placeMainSimpleBlocks();
+        this.verifyUndoRedoRoundTrip();
         this.save("S01-main-simple", "S01 simple main blocks");
 
         this.placeMainRedstoneBase();
@@ -188,6 +191,27 @@ final class HistoryJourneyScenario {
                     "main simple glass");
         });
         this.waitTicks(SETTLE_TICKS);
+    }
+
+    private void verifyUndoRedoRoundTrip() throws Exception {
+        BlockPos glass = this.pos(2, 1, 1);
+        OperationHandle undo = this.singleplayer.getServer().computeOnServer(server ->
+                this.undoRedoService.undo(server.overworld(), this.projectName));
+        this.waitForOperation(undo, "undo simple glass placement");
+        boolean removed = this.singleplayer.getServer().computeOnServer(server ->
+                server.overworld().getBlockState(glass).isAir());
+        if (!removed) {
+            throw new AssertionError("Undo did not remove the latest glass placement");
+        }
+
+        OperationHandle redo = this.singleplayer.getServer().computeOnServer(server ->
+                this.undoRedoService.redo(server.overworld(), this.projectName));
+        this.waitForOperation(redo, "redo simple glass placement");
+        boolean restored = this.singleplayer.getServer().computeOnServer(server ->
+                server.overworld().getBlockState(glass).is(Blocks.GLASS));
+        if (!restored) {
+            throw new AssertionError("Redo did not restore the latest glass placement");
+        }
     }
 
     private void placeMainRedstoneBase() throws Exception {
