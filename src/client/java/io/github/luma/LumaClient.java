@@ -15,6 +15,7 @@ import io.github.luma.client.input.LumiShortcutInteractionGate;
 import io.github.luma.client.input.LumiShortcutScreenPolicy;
 import io.github.luma.client.input.LumiShortcutSuppressingScreen;
 import io.github.luma.client.input.QuickRollbackKeyController;
+import io.github.luma.client.input.UndoRedoKeyController;
 import io.github.luma.client.input.LumiActionKeyChordTracker;
 import io.github.luma.client.onboarding.ClientOnboardingFlowCoordinator;
 import io.github.luma.client.telemetry.TelemetryNoticeController;
@@ -76,6 +77,7 @@ public final class LumaClient implements ClientModInitializer {
     private KeyMapping hotkeyInfoKey;
     private final KeyBindingState keyBindingState = new KeyBindingState();
     private final LumiActionKeyChordTracker actionKeyChordTracker = new LumiActionKeyChordTracker();
+    private final UndoRedoKeyController undoRedoKeyController = new UndoRedoKeyController();
     private final QuickRollbackKeyController quickRollbackKeyController = new QuickRollbackKeyController();
     private final LumiShortcutScreenPolicy shortcutScreenPolicy = new LumiShortcutScreenPolicy();
     private final LumiRegionSelectionTeachingController selectionTeachingController = new LumiRegionSelectionTeachingController();
@@ -259,10 +261,14 @@ public final class LumaClient implements ClientModInitializer {
             CompareOverlayRenderer.toggleVisibility();
         }
         if (actionKeys.undoPressed()) {
-            LumiRegionSelectionController.getInstance().handleUndoRedo(client, true);
+            if (!LumiRegionSelectionController.getInstance().handleUndoRedo(client, true)) {
+                this.undoRedoKeyController.undo(client);
+            }
         }
         if (actionKeys.redoPressed()) {
-            LumiRegionSelectionController.getInstance().handleUndoRedo(client, false);
+            if (!LumiRegionSelectionController.getInstance().handleUndoRedo(client, false)) {
+                this.undoRedoKeyController.redo(client);
+            }
         }
 
         boolean quickRollbackClicked = false;
