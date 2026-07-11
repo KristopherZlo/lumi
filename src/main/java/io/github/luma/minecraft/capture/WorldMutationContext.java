@@ -53,7 +53,7 @@ public final class WorldMutationContext {
     public static SourceFrame pushSource(WorldMutationSource source) {
         WorldMutationSource resolvedSource = source == null ? WorldMutationSource.SYSTEM : source;
         Frame parent = currentFrame();
-        if (inheritsParentAction(resolvedSource, parent)) {
+        if (inheritsParentContext(resolvedSource, parent)) {
             SOURCE_STACK.get().push(new Frame(
                     resolvedSource,
                     parent.actor(),
@@ -81,7 +81,7 @@ public final class WorldMutationContext {
     public static SourceFrame pushCausalSource(WorldMutationSource source) {
         WorldMutationSource resolvedSource = source == null ? WorldMutationSource.SYSTEM : source;
         Frame parent = currentFrame();
-        if (parent.hasAction()) {
+        if (parent.hasCausalContext()) {
             SOURCE_STACK.get().push(new Frame(
                     resolvedSource,
                     parent.actor(),
@@ -130,7 +130,7 @@ public final class WorldMutationContext {
     ) {
         WorldMutationSource resolvedSource = source == null ? WorldMutationSource.PLAYER : source;
         Frame parent = currentFrame();
-        if (parent.hasAction()) {
+        if (parent.hasCausalContext()) {
             SOURCE_STACK.get().push(new Frame(
                     resolvedSource,
                     parent.actor(),
@@ -226,8 +226,10 @@ public final class WorldMutationContext {
         return frame == null ? Frame.system() : frame;
     }
 
-    private static boolean inheritsParentAction(WorldMutationSource source, Frame parent) {
-        if (source == WorldMutationSource.GROWTH && parent.source() == WorldMutationSource.GROWTH && parent.hasAction()) {
+    private static boolean inheritsParentContext(WorldMutationSource source, Frame parent) {
+        if (source == WorldMutationSource.GROWTH
+                && parent.source() == WorldMutationSource.GROWTH
+                && parent.hasCausalContext()) {
             return true;
         }
         return switch (source) {
@@ -283,6 +285,10 @@ public final class WorldMutationContext {
 
         private boolean hasAction() {
             return this.actionId != null && !this.actionId.isBlank();
+        }
+
+        private boolean hasCausalContext() {
+            return this.hasAction() || this.accessAllowed;
         }
     }
 

@@ -31,11 +31,9 @@ class ExplosiveSourceContextPolicyTest {
     }
 
     @Test
-    void redstoneAndChainedTntKeepInheritedExplosiveAction() {
+    void redstoneAndChainedTntKeepInheritedAccess() {
         try (WorldMutationContext.SourceFrame ignored =
                      WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, "builder", true)) {
-            String actionId = WorldMutationContext.currentActionId();
-
             try (WorldMutationContext.SourceFrame ignoredRedstone =
                          WorldMutationContext.pushSource(WorldMutationSource.BLOCK_UPDATE)) {
                 assertTrue(this.policy.canOpenExplosiveSource());
@@ -43,15 +41,14 @@ class ExplosiveSourceContextPolicyTest {
                 try (WorldMutationContext.SourceFrame ignoredTnt =
                              WorldMutationContext.pushSource(WorldMutationSource.EXPLOSIVE)) {
                     assertTrue(this.policy.canOpenExplosiveSource());
-                    assertTrue(this.policy.canOpenExplosiveSource(actionId));
+                    assertTrue(this.policy.canOpenExplosiveSource(true));
                 }
             }
         }
     }
 
     @Test
-    void blankActionCannotOpenExplosiveRootSource() {
-        assertFalse(this.policy.canOpenExplosiveSource(""));
-        assertFalse(this.policy.canOpenExplosiveSource(null));
+    void unauthorizedContextCannotOpenExplosiveRootSource() {
+        assertFalse(this.policy.canOpenExplosiveSource(false));
     }
 }

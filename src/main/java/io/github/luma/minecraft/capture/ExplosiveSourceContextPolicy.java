@@ -1,16 +1,15 @@
 package io.github.luma.minecraft.capture;
 
 /**
- * Gates TNT/explosive source promotion to mutations that belong to an undoable
- * action.
+ * Gates TNT source promotion to builder-authorized mutation chains.
  */
 public final class ExplosiveSourceContextPolicy {
 
     public boolean canOpenExplosiveSource() {
-        return this.canOpenExplosiveSource(WorldMutationContext.currentActionId());
+        return this.canOpenExplosiveSource(WorldMutationContext.currentAccessAllowed());
     }
 
-    boolean canOpenExplosiveSource(String actionId) {
-        return actionId != null && !actionId.isBlank();
+    boolean canOpenExplosiveSource(boolean accessAllowed) {
+        return accessAllowed;
     }
 }

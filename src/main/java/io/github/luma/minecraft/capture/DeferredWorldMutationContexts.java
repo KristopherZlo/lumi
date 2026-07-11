@@ -37,8 +37,7 @@ public final class DeferredWorldMutationContexts {
         if (!(carrier instanceof DeferredWorldMutationContextAccess access)) {
             return null;
         }
-        DeferredWorldMutationContext context = access.luma$deferredMutationContext();
-        return context != null && context.hasAction() ? context : null;
+        return access.luma$deferredMutationContext();
     }
 
     public static void push(Object carrier) {

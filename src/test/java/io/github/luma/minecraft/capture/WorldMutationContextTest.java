@@ -242,6 +242,23 @@ class WorldMutationContextTest {
     }
 
     @Test
+    void deferredContextWithoutActionIdKeepsActorAndAccess() {
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(
+                WorldMutationSource.BLOCK_UPDATE,
+                "builder",
+                "",
+                true
+        )) {
+            try (WorldMutationContext.SourceFrame nested = WorldMutationContext.pushSource(WorldMutationSource.PISTON)) {
+                assertEquals(WorldMutationSource.PISTON, WorldMutationContext.currentSource());
+                assertEquals("builder", WorldMutationContext.currentActor());
+                assertEquals("", WorldMutationContext.currentActionId());
+                assertTrue(WorldMutationContext.currentAccessAllowed());
+            }
+        }
+    }
+
+    @Test
     void captureSuppressionIsScoped() {
         assertFalse(WorldMutationContext.captureSuppressed());
 

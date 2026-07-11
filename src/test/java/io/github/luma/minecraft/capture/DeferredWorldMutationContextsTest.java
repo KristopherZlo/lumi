@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DeferredWorldMutationContextsTest {
 
     @Test
-    void rememberSkipsCarriersWithoutActionIdentity() {
+    void rememberSkipsCarriersWithoutCapturableSource() {
         Carrier carrier = new Carrier();
 
         DeferredWorldMutationContexts.remember(carrier, WorldMutationSource.BLOCK_UPDATE);
@@ -19,7 +19,7 @@ class DeferredWorldMutationContextsTest {
     }
 
     @Test
-    void pushRestoresCapturedActionIdentity() {
+    void pushRestoresCapturedMutationContextWithoutActionOwnership() {
         Carrier carrier = new Carrier();
 
         try (WorldMutationContext.SourceFrame ignored =
@@ -32,7 +32,7 @@ class DeferredWorldMutationContextsTest {
         try {
             assertEquals(WorldMutationSource.BLOCK_UPDATE, WorldMutationContext.currentSource());
             assertEquals("builder", WorldMutationContext.currentActor());
-            assertEquals("action-1", WorldMutationContext.currentActionId());
+            assertEquals("", WorldMutationContext.currentActionId());
             assertTrue(WorldMutationContext.currentAccessAllowed());
         } finally {
             DeferredWorldMutationContexts.pop();
@@ -59,7 +59,7 @@ class DeferredWorldMutationContextsTest {
                 DeferredWorldMutationContexts.pop();
             }
             assertEquals(depth, next.luma$deferredMutationContext().propagationDepth());
-            assertEquals("action-1", next.luma$deferredMutationContext().actionId());
+            assertEquals("builder", next.luma$deferredMutationContext().actor());
             current = next;
         }
 
@@ -74,7 +74,7 @@ class DeferredWorldMutationContextsTest {
     }
 
     @Test
-    void pistonMovementCarrierPreservesActionWithoutIncreasingMechanismDepth() {
+    void pistonMovementCarrierPreservesContextWithoutIncreasingMechanismDepth() {
         Carrier first = new Carrier();
         Carrier second = new Carrier();
         Carrier third = new Carrier();
@@ -101,7 +101,7 @@ class DeferredWorldMutationContextsTest {
         }
 
         assertEquals(WorldMutationSource.PISTON, third.luma$deferredMutationContext().source());
-        assertEquals("action-1", third.luma$deferredMutationContext().actionId());
+        assertEquals("builder", third.luma$deferredMutationContext().actor());
         assertEquals(1, third.luma$deferredMutationContext().propagationDepth());
     }
 
