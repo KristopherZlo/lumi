@@ -103,7 +103,7 @@ final class MutationSourcePolicy {
     }
 
     boolean usesLiveStateReconciliation(WorldMutationSource source) {
-        return source != null && source != WorldMutationSource.GROWTH;
+        return source != null;
     }
 
     boolean canCaptureDeferredPreMutationBaseline(

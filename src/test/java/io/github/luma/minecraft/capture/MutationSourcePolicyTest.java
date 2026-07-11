@@ -196,10 +196,11 @@ class MutationSourcePolicyTest {
     }
 
     @Test
-    void bonemealGrowthDoesNotUseSectionLiveStateReconciliation() {
-        assertFalse(this.policy.usesLiveStateReconciliation(WorldMutationSource.GROWTH));
+    void capturedBlockSourcesUseSettledSectionReconciliation() {
+        assertTrue(this.policy.usesLiveStateReconciliation(WorldMutationSource.GROWTH));
         assertTrue(this.policy.usesLiveStateReconciliation(WorldMutationSource.PLAYER));
         assertTrue(this.policy.usesLiveStateReconciliation(WorldMutationSource.PISTON));
+        assertFalse(this.policy.usesLiveStateReconciliation(null));
     }
 
     @Test
