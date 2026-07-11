@@ -108,40 +108,6 @@ public final class EntityCausalContextRegistry {
         return this.context(entity, level) != null;
     }
 
-    public synchronized boolean rememberReplayAction(
-            Entity entity,
-            ServerLevel level,
-            String actor,
-            String actionId,
-            boolean accessAllowed
-    ) {
-        if (entity == null
-                || level == null
-                || entity instanceof ServerPlayer
-                || entity.getUUID() == null
-                || actionId == null
-                || actionId.isBlank()) {
-            return false;
-        }
-
-        EntityPayload originalPayload = this.snapshotService.capture(level, entity);
-        if (originalPayload == null) {
-            return false;
-        }
-
-        this.removeExpired(level.getGameTime());
-        this.contexts.put(this.key(entity, level), new EntityCausalContext(
-                WorldMutationSource.MOB,
-                actor,
-                actionId,
-                accessAllowed,
-                Instant.now(),
-                level.getGameTime() + CONTEXT_TTL_TICKS,
-                originalPayload
-        ));
-        return true;
-    }
-
     public static Optional<Instant> currentStartedAt() {
         Deque<Instant> frames = ACTIVE_STARTED_AT.get();
         return frames.isEmpty() ? Optional.empty() : Optional.of(frames.peek());

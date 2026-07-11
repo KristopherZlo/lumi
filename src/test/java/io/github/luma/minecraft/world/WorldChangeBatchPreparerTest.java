@@ -101,7 +101,7 @@ class WorldChangeBatchPreparerTest {
     void undoRedoEntityMovementPreparesDeltaUpdateWithoutRemoval() throws Exception {
         String entityId = "00000000-0000-0000-0000-000000000023";
 
-        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+        List<PreparedChunkBatch> batches = this.preparer.prepareDiff(
                 null,
                 List.of(),
                 List.of(new StoredEntityChange(
@@ -133,7 +133,7 @@ class WorldChangeBatchPreparerTest {
                 entity("minecraft:tnt", entityId, 1.0D)
         ));
 
-        List<PreparedChunkBatch> redoBatches = this.preparer.prepareUndoRedo(
+        List<PreparedChunkBatch> redoBatches = this.preparer.prepareDiff(
                 null,
                 List.of(),
                 changes,
@@ -141,7 +141,7 @@ class WorldChangeBatchPreparerTest {
                 null,
                 EntityApplyMode.DELTA
         );
-        List<PreparedChunkBatch> undoBatches = this.preparer.prepareUndoRedo(
+        List<PreparedChunkBatch> undoBatches = this.preparer.prepareDiff(
                 null,
                 List.of(),
                 changes,
@@ -155,7 +155,7 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
-    void undoRedoReplayClearsDeadAndIgnitedEntityPayloadsButKeepsMotion() throws Exception {
+    void diffReplayClearsDeadAndIgnitedEntityPayloadsButKeepsMotion() throws Exception {
         String entityId = "00000000-0000-0000-0000-000000000025";
         CompoundTag tag = entity("minecraft:creeper", entityId, 1.0D).copyTag();
         tag.putShort("DeathTime", (short) 18);
@@ -166,7 +166,7 @@ class WorldChangeBatchPreparerTest {
         tag.putShort("Fuse", (short) 4);
         tag.putString("Motion", "keep");
 
-        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+        List<PreparedChunkBatch> batches = this.preparer.prepareDiff(
                 null,
                 List.of(),
                 List.of(new StoredEntityChange(
@@ -255,7 +255,7 @@ class WorldChangeBatchPreparerTest {
                 ))
                 .toList();
 
-        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+        List<PreparedChunkBatch> batches = this.preparer.prepareDiff(
                 null,
                 changes,
                 List.of(),
@@ -402,7 +402,7 @@ class WorldChangeBatchPreparerTest {
         BlockState upperPlant = Blocks.SUNFLOWER.defaultBlockState()
                 .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER);
 
-        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+        List<PreparedChunkBatch> batches = this.preparer.prepareDiff(
                 null,
                 List.of(
                         new StoredBlockChange(
@@ -435,7 +435,7 @@ class WorldChangeBatchPreparerTest {
     void undoRedoRestoresFloodedRedstoneWithoutFluidReplay() throws Exception {
         BlockPos pos = new BlockPos(1, 64, 1);
 
-        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+        List<PreparedChunkBatch> batches = this.preparer.prepareDiff(
                 null,
                 List.of(new StoredBlockChange(
                         BlockPoint.from(pos),
@@ -661,7 +661,7 @@ class WorldChangeBatchPreparerTest {
                 .setValue(PistonBaseBlock.EXTENDED, false);
         BlockState extended = retracted.setValue(PistonBaseBlock.EXTENDED, true);
 
-        List<PreparedChunkBatch> batches = this.preparer.prepareUndoRedo(
+        List<PreparedChunkBatch> batches = this.preparer.prepareDiff(
                 null,
                 List.of(new StoredBlockChange(
                         BlockPoint.from(base),

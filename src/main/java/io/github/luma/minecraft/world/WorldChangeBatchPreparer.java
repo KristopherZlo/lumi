@@ -192,7 +192,7 @@ public final class WorldChangeBatchPreparer {
         return new PreparedWorldChangeBatches(batches, mechanismReplayScope);
     }
 
-    public List<PreparedChunkBatch> prepareUndoRedo(
+    public List<PreparedChunkBatch> prepareDiff(
             ServerLevel level,
             List<StoredBlockChange> changes,
             List<StoredEntityChange> entityChanges,
@@ -201,7 +201,7 @@ public final class WorldChangeBatchPreparer {
             EntityApplyMode entityApplyMode
     ) throws IOException {
         changes = changes == null ? List.of() : changes;
-        entityChanges = undoRedoReplayEntityChanges(entityChanges, applyNewValues);
+        entityChanges = diffReplayEntityChanges(entityChanges, applyNewValues);
         if (changes.size() < SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD) {
             return this.prepareAnalyzed(
                     level,
@@ -210,12 +210,12 @@ public final class WorldChangeBatchPreparer {
                     applyNewValues,
                     progressListener,
                     entityApplyMode,
-                    WorldChangeBatchPreparer::undoRedoReplayHintFor
+                    WorldChangeBatchPreparer::diffReplayHintFor
             ).batches();
         }
 
         BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
-        PreparedWorldChangeBatches analyzed = this.prepareUndoRedoSectionFirst(
+        PreparedWorldChangeBatches analyzed = this.prepareDiffSectionFirst(
                 level,
                 changes,
                 entityChanges,
@@ -232,12 +232,12 @@ public final class WorldChangeBatchPreparer {
                         applyNewValues,
                         progressListener,
                         entityApplyMode,
-                        WorldChangeBatchPreparer::undoRedoReplayHintFor
+                        WorldChangeBatchPreparer::diffReplayHintFor
                 ).batches()
                 : analyzed.batches();
     }
 
-    public PreparedWorldChangeBatches prepareUndoRedoAnalyzed(
+    public PreparedWorldChangeBatches prepareDiffAnalyzed(
             ServerLevel level,
             List<StoredBlockChange> changes,
             List<StoredEntityChange> entityChanges,
@@ -246,7 +246,7 @@ public final class WorldChangeBatchPreparer {
             EntityApplyMode entityApplyMode
     ) throws IOException {
         changes = changes == null ? List.of() : changes;
-        entityChanges = undoRedoReplayEntityChanges(entityChanges, applyNewValues);
+        entityChanges = diffReplayEntityChanges(entityChanges, applyNewValues);
         if (changes.size() < SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD) {
             return this.prepareAnalyzed(
                     level,
@@ -255,12 +255,12 @@ public final class WorldChangeBatchPreparer {
                     applyNewValues,
                     progressListener,
                     entityApplyMode,
-                    WorldChangeBatchPreparer::undoRedoReplayHintFor
+                    WorldChangeBatchPreparer::diffReplayHintFor
             );
         }
 
         BlockStateDecoder blockStateDecoder = this.blockStateDecoderFactory.get();
-        PreparedWorldChangeBatches analyzed = this.prepareUndoRedoSectionFirst(
+        PreparedWorldChangeBatches analyzed = this.prepareDiffSectionFirst(
                 level,
                 changes,
                 entityChanges,
@@ -277,7 +277,7 @@ public final class WorldChangeBatchPreparer {
                         applyNewValues,
                         progressListener,
                         entityApplyMode,
-                        WorldChangeBatchPreparer::undoRedoReplayHintFor
+                        WorldChangeBatchPreparer::diffReplayHintFor
                 )
                 : analyzed;
     }
@@ -436,7 +436,7 @@ public final class WorldChangeBatchPreparer {
         return PreparedBlockPlacement.ReplayHint.of(forceFinalReplay, fluid, mechanism);
     }
 
-    private static PreparedBlockPlacement.ReplayHint undoRedoReplayHintFor(BlockState ignoredSourceState, BlockState targetState) {
+    private static PreparedBlockPlacement.ReplayHint diffReplayHintFor(BlockState ignoredSourceState, BlockState targetState) {
         boolean mechanism = isMechanismRelated(targetState);
         return PreparedBlockPlacement.ReplayHint.of(false, false, mechanism);
     }
@@ -657,7 +657,7 @@ public final class WorldChangeBatchPreparer {
         }
     }
 
-    private PreparedWorldChangeBatches prepareUndoRedoSectionFirst(
+    private PreparedWorldChangeBatches prepareDiffSectionFirst(
             ServerLevel level,
             List<StoredBlockChange> changes,
             List<StoredEntityChange> entityChanges,
@@ -685,7 +685,7 @@ public final class WorldChangeBatchPreparer {
 
             SectionKey key = SectionKey.from(change);
             BlockPos pos = change.pos().toBlockPos();
-            PreparedBlockPlacement.ReplayHint replayHint = undoRedoReplayHintFor(sourceState, targetState);
+            PreparedBlockPlacement.ReplayHint replayHint = diffReplayHintFor(sourceState, targetState);
             sectionBuilders.computeIfAbsent(key, ignored -> LumiSectionBuffer.builder(key.sectionY()))
                     .set(
                             change.pos().x() & 15,
@@ -817,7 +817,7 @@ public final class WorldChangeBatchPreparer {
         return EntitySnapshotService.normalizeForHistory(payload == null ? null : payload.copyTag());
     }
 
-    private static List<StoredEntityChange> undoRedoReplayEntityChanges(
+    private static List<StoredEntityChange> diffReplayEntityChanges(
             List<StoredEntityChange> entityChanges,
             boolean applyNewValues
     ) {

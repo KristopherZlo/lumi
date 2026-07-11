@@ -23,13 +23,4 @@ public record PreparedChunkBatch(
         nativeSections = nativeSections == null ? List.of() : List.copyOf(nativeSections);
         entityBatch = entityBatch == null ? EntityBatch.empty() : entityBatch;
     }
-
-    public PreparedChunkBatch withEntityReplayContext(EntityBatch.ReplayContext replayContext) {
-        return new PreparedChunkBatch(
-                this.chunk,
-                this.placements,
-                this.nativeSections,
-                this.entityBatch.withReplayContext(replayContext)
-        );
-    }
 }

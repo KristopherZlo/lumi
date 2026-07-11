@@ -133,7 +133,7 @@ public final class QuickRollbackService {
                             plan.totalChangeCount(),
                             "Preparing quick rollback"
                     );
-                    PreparedWorldChangeBatches analyzed = this.batchPreparer.prepareUndoRedoAnalyzed(
+                    PreparedWorldChangeBatches analyzed = this.batchPreparer.prepareDiffAnalyzed(
                             level,
                             plan.blockChanges(),
                             plan.entityChanges(),
