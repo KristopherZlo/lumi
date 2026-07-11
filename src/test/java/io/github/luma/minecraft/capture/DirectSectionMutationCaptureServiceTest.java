@@ -47,6 +47,30 @@ class DirectSectionMutationCaptureServiceTest {
     }
 
     @Test
+    void skipsAllInspectionWhileCaptureIsSuppressed() {
+        AtomicBoolean inspectedStack = new AtomicBoolean(false);
+        AtomicBoolean inspectedOwner = new AtomicBoolean(false);
+        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(
+                () -> {
+                    inspectedStack.set(true);
+                    return Optional.empty();
+                },
+                section -> {
+                    inspectedOwner.set(true);
+                    return Optional.empty();
+                }
+        );
+
+        try (WorldMutationContext.SuppressionFrame ignored = WorldMutationContext.pushCaptureSuppression()) {
+            service.captureBefore(sectionWithDefault(Blocks.BARREL.defaultBlockState()),
+                    0, 0, 0, Blocks.AIR.defaultBlockState());
+        }
+
+        assertFalse(inspectedStack.get());
+        assertFalse(inspectedOwner.get());
+    }
+
+    @Test
     void keepsOwnerlessExternalSectionMutationPending() {
         AtomicBoolean inspectedStack = new AtomicBoolean(false);
         DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(

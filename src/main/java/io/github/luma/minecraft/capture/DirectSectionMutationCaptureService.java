@@ -56,7 +56,8 @@ public final class DirectSectionMutationCaptureService {
             int localZ,
             BlockState newState
     ) {
-        if (WorldMutationCaptureGuard.suppressesDirectSectionCapture()) {
+        if (WorldMutationContext.captureSuppressed()
+                || WorldMutationCaptureGuard.suppressesDirectSectionCapture()) {
             return PendingDirectSectionMutation.skipped();
         }
         if (section == null) {
