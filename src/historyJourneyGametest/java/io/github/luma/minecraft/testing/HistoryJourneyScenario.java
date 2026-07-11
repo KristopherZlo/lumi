@@ -13,10 +13,10 @@ import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
-import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.util.LinkedHashMap;
@@ -44,11 +44,11 @@ final class HistoryJourneyScenario {
     private final ProjectService projectService = new ProjectService();
     private final VersionService versionService = new VersionService();
     private final RestoreService restoreService = new RestoreService();
-    private final UndoRedoService undoRedoService = new UndoRedoService();
     private final VariantService variantService = new VariantService();
     private final RecoveryService recoveryService = new RecoveryService();
     private final ProjectIntegrityService integrityService = new ProjectIntegrityService();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
+    private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final Map<String, HistoryJourneyCheckpoint> checkpoints = new LinkedHashMap<>();
     private final Map<String, String> versionIds = new LinkedHashMap<>();
     private final Map<String, String> versionVariants = new LinkedHashMap<>();
@@ -63,6 +63,7 @@ final class HistoryJourneyScenario {
     private String activeVariantId = "main";
     private int versionCount;
     private int explicitSaveCount;
+    private LiveUndoRedoJourney liveUndoRedoJourney;
 
     HistoryJourneyScenario(ClientGameTestContext context) {
         this.context = context;
@@ -102,6 +103,9 @@ final class HistoryJourneyScenario {
         this.projectId = initial.projectId();
         this.projectName = initial.projectName();
         this.volume = initial.volume();
+        this.liveUndoRedoJourney = new LiveUndoRedoJourney(
+                this.context, this.singleplayer, this.volume, this.projectName, this.projectId
+        );
         this.versionCount = 1;
         this.variantHeads.put("main", ProjectService.versionId(1));
         this.variantHeadLabels.put("main", "baseline");
@@ -117,8 +121,9 @@ final class HistoryJourneyScenario {
 
     private void executeJourney() throws Exception {
         this.placeMainSimpleBlocks();
-        this.verifyUndoRedoRoundTrip();
+        this.liveUndoRedoJourney.run();
         this.save("S01-main-simple", "S01 simple main blocks");
+        this.liveUndoRedoJourney.verifyQuickRollbackUndoable();
 
         this.placeMainRedstoneBase();
         this.save("S02-main-redstone-base", "S02 redstone base");
@@ -191,27 +196,6 @@ final class HistoryJourneyScenario {
                     "main simple glass");
         });
         this.waitTicks(SETTLE_TICKS);
-    }
-
-    private void verifyUndoRedoRoundTrip() throws Exception {
-        BlockPos glass = this.pos(2, 1, 1);
-        OperationHandle undo = this.singleplayer.getServer().computeOnServer(server ->
-                this.undoRedoService.undo(server.overworld(), this.projectName));
-        this.waitForOperation(undo, "undo simple glass placement");
-        boolean removed = this.singleplayer.getServer().computeOnServer(server ->
-                server.overworld().getBlockState(glass).isAir());
-        if (!removed) {
-            throw new AssertionError("Undo did not remove the latest glass placement");
-        }
-
-        OperationHandle redo = this.singleplayer.getServer().computeOnServer(server ->
-                this.undoRedoService.redo(server.overworld(), this.projectName));
-        this.waitForOperation(redo, "redo simple glass placement");
-        boolean restored = this.singleplayer.getServer().computeOnServer(server ->
-                server.overworld().getBlockState(glass).is(Blocks.GLASS));
-        if (!restored) {
-            throw new AssertionError("Redo did not restore the latest glass placement");
-        }
     }
 
     private void placeMainRedstoneBase() throws Exception {
@@ -398,6 +382,7 @@ final class HistoryJourneyScenario {
                     .orElseThrow(() -> new IllegalStateException("Variant switch did not start an operation"));
         });
         this.waitForOperation(handle, "switch " + branchName);
+        this.assertUndoHistoryCleared("switch " + branchName);
         this.activeVariantId = variantId;
 
         String headLabel = this.variantHeadLabels.get(variantId);
@@ -414,6 +399,7 @@ final class HistoryJourneyScenario {
         OperationHandle handle = this.singleplayer.getServer().computeOnServer(server ->
                 this.restoreService.restore(server.overworld(), this.projectName, versionId));
         this.waitForOperation(handle, label);
+        this.assertUndoHistoryCleared(label);
 
         String targetVariant = this.versionVariants.get(targetLabel);
         this.activeVariantId = targetVariant;
@@ -574,6 +560,13 @@ final class HistoryJourneyScenario {
         }
     }
 
+    private void assertUndoHistoryCleared(String label) {
+        if (this.undoRedoHistoryManager.selectUndo(this.projectId) != null
+                || this.undoRedoHistoryManager.selectRedo(this.projectId) != null) {
+            throw new AssertionError("Runtime undo history survived full restore: " + label);
+        }
+    }
+
     private HistoryJourneyCheckpoint capture(String label) throws Exception {
         return this.singleplayer.getServer().computeOnServer(server ->
                 HistoryJourneyCheckpoint.capture(
@@ -645,6 +638,7 @@ final class HistoryJourneyScenario {
             });
             if (this.projectId != null && !this.projectId.isBlank()) {
                 HistoryCaptureManager.getInstance().discardSession(server, this.projectId);
+                this.undoRedoHistoryManager.clearProject(this.projectId);
             }
             this.projectService.setArchived(server, this.projectName, true);
         });
