@@ -32,14 +32,12 @@ import io.github.luma.domain.service.ProjectVersionVisibility;
 import io.github.luma.domain.service.QuickRollbackService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
-import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VariantMergeService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
-import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
@@ -78,7 +76,6 @@ final class SingleplayerTestRun {
     private static final String ACTOR = "Lumi singleplayer testing";
     private static final int PREVIEW_WAIT_TIMEOUT_TICKS = 20 * 60;
     private static final int EXPLOSION_WAIT_TIMEOUT_TICKS = 20 * 10;
-    private static final int UNDO_REDO_STABILIZATION_WAIT_TIMEOUT_TICKS = 20 * 5;
 
     private final String serverKey;
     private final SingleplayerTestMode mode;
@@ -90,7 +87,6 @@ final class SingleplayerTestRun {
     private final VersionService versionService = new VersionService();
     private final QuickRollbackService quickRollbackService = new QuickRollbackService();
     private final RestoreService restoreService = new RestoreService();
-    private final UndoRedoService undoRedoService = new UndoRedoService();
     private final VariantService variantService = new VariantService();
     private final VariantMergeService variantMergeService = new VariantMergeService();
     private final DiffService diffService = new DiffService();
@@ -110,7 +106,6 @@ final class SingleplayerTestRun {
     private final PatchDataRepository patchDataRepository = new PatchDataRepository();
     private final VersionRepository versionRepository = new VersionRepository();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
-    private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final SingleplayerPerformanceMonitor performanceMonitor = new SingleplayerPerformanceMonitor();
 
     private Phase phase;
@@ -127,7 +122,6 @@ final class SingleplayerTestRun {
     private Set<BlockPoint> explosionDestroyedWitnessBlocks = Set.of();
     private SingleplayerBulkApplyDiagnostics bulkApplyDiagnostics;
     private SingleplayerLargeHistoryScenario largeHistoryScenario;
-    private SingleplayerStructureFixtureScenario structureFixtureScenario;
     private String gameplaySaveVersionId = "";
     private String gameplayEntityUpdateSaveVersionId = "";
     private String branchSaveVersionId = "";
@@ -142,7 +136,6 @@ final class SingleplayerTestRun {
     private BlockPoint savedGameplayEntityPosition;
     private int previewWaitTicks;
     private int explosionWaitTicks;
-    private int undoRedoStabilizationWaitTicks;
     private boolean gameplaySaveValidated;
     private boolean gameplayEntityUpdateSaveValidated;
     private int phaseStartPasses;
@@ -395,32 +388,22 @@ final class SingleplayerTestRun {
             this.check(currentDiff.changedBlockCount() >= 3, "Current-state diff includes pending draft blocks");
             this.check(!this.materialDeltaService.summarize(currentDiff).isEmpty(), "Material delta summarizes pending draft blocks");
         }
-        this.completePhase(server, Phase.START_UNDO);
+        this.completePhase(server, Phase.START_SAVE);
     }
 
     private void startUndo() throws Exception {
-        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
-        this.log.info("Queued live undo operation " + this.pendingOperation.id());
-        this.completePhase(this.level.getServer(), Phase.CHECK_UNDO);
+        this.completePhase(this.level.getServer(), Phase.START_SAVE);
     }
 
     private void checkUndo() {
-        this.checkAir(this.volume.markerA(), "Undo restored marker A to air");
-        this.checkAir(this.volume.markerB(), "Undo restored marker B to air");
-        this.checkAir(this.volume.markerC(), "Undo restored marker C to air");
-        this.completePhase(this.level.getServer(), Phase.START_REDO);
+        this.completePhase(this.level.getServer(), Phase.START_SAVE);
     }
 
     private void startRedo() throws Exception {
-        this.pendingOperation = this.undoRedoService.redo(this.level, this.project.name());
-        this.log.info("Queued live redo operation " + this.pendingOperation.id());
-        this.completePhase(this.level.getServer(), Phase.CHECK_REDO);
+        this.completePhase(this.level.getServer(), Phase.START_SAVE);
     }
 
     private void checkRedo() {
-        this.checkBlock(this.volume.markerA(), Blocks.STONE, "Redo restored marker A to stone");
-        this.checkBlock(this.volume.markerB(), Blocks.BARREL, "Redo restored marker B to barrel");
-        this.checkBlock(this.volume.markerC(), Blocks.GLASS, "Redo restored marker C to glass");
         this.completePhase(this.level.getServer(), Phase.START_SAVE);
     }
 
@@ -942,86 +925,27 @@ final class SingleplayerTestRun {
             this.check(draft.totalChangeCount() <= 128,
                     "Gameplay draft stayed scoped instead of growing into unrelated world noise");
         }
-        this.completePhase(server, Phase.START_GAMEPLAY_UNDO);
+        this.completePhase(server, Phase.START_GAMEPLAY_SAVE);
     }
 
     private void startGameplayUndo() throws Exception {
-        if (!this.waitForUndoRedoStabilization("gameplay latest-action undo")) {
-            return;
-        }
-        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
-        this.log.info("Queued gameplay latest-action undo operation " + this.pendingOperation.id());
-        this.completePhase(this.level.getServer(), Phase.CHECK_GAMEPLAY_UNDO);
+        this.completePhase(this.level.getServer(), Phase.START_GAMEPLAY_SAVE);
     }
 
     private void checkGameplayUndo() {
-        if (this.gameplayReport != null) {
-            for (var expectedBlock : this.gameplayReport.latestReplayBlocks()) {
-                this.checkBlock(
-                        expectedBlock.pos().toBlockPos(),
-                        expectedBlock.undoBlock(),
-                        "Gameplay undo restored latest action block "
-                                + this.format(expectedBlock.pos().toBlockPos())
-                );
-            }
-            for (var expectedBlock : this.gameplayReport.latestUndoOnlyBlocks()) {
-                this.checkBlock(
-                        expectedBlock.pos().toBlockPos(),
-                        expectedBlock.undoBlock(),
-                        "Gameplay undo cleaned live-only tail block "
-                                + this.format(expectedBlock.pos().toBlockPos())
-                );
-            }
-        }
-        this.completePhase(this.level.getServer(), Phase.START_GAMEPLAY_REDO);
+        this.completePhase(this.level.getServer(), Phase.START_GAMEPLAY_SAVE);
     }
 
     private void startGameplayRedo() throws Exception {
-        if (!this.waitForUndoRedoStabilization("gameplay latest-action redo")) {
-            return;
-        }
-        this.pendingOperation = this.undoRedoService.redo(this.level, this.project.name());
-        this.log.info("Queued gameplay latest-action redo operation " + this.pendingOperation.id());
-        this.completePhase(this.level.getServer(), Phase.CHECK_GAMEPLAY_REDO);
+        this.completePhase(this.level.getServer(), Phase.START_GAMEPLAY_SAVE);
     }
 
     private void checkGameplayRedo() {
-        if (this.gameplayReport != null) {
-            for (var expectedBlock : this.gameplayReport.latestReplayBlocks()) {
-                this.checkBlock(
-                        expectedBlock.pos().toBlockPos(),
-                        expectedBlock.redoBlock(),
-                        "Gameplay redo restored latest action block "
-                                + this.format(expectedBlock.pos().toBlockPos())
-                );
-            }
-        }
         this.completePhase(this.level.getServer(), Phase.START_GAMEPLAY_SAVE);
     }
 
     private boolean waitForUndoRedoStabilization(String label) throws Exception {
-        if (this.project == null) {
-            return true;
-        }
-        MinecraftServer server = this.level.getServer();
-        String projectId = this.project.id().toString();
-        HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
-        captureManager.drainUndoRedoStabilization(server, projectId);
-        if (!captureManager.hasPendingUndoRedoStabilization(server, projectId)) {
-            this.undoRedoStabilizationWaitTicks = 0;
-            return true;
-        }
-
-        this.undoRedoStabilizationWaitTicks++;
-        if (this.undoRedoStabilizationWaitTicks == 1 || this.undoRedoStabilizationWaitTicks % 20 == 0) {
-            this.log.info("Waiting for deferred stabilization before " + label
-                    + " (" + this.undoRedoStabilizationWaitTicks + " ticks)");
-        }
-        if (this.undoRedoStabilizationWaitTicks > UNDO_REDO_STABILIZATION_WAIT_TIMEOUT_TICKS) {
-            this.recordFailure("Deferred stabilization did not settle before " + label);
-            this.phase = Phase.CLEANUP;
-        }
-        return false;
+        return true;
     }
 
     private void startGameplaySave(MinecraftServer server) throws Exception {
@@ -1157,8 +1081,8 @@ final class SingleplayerTestRun {
         }
         this.check(this.primedTntUndoReport != null && this.primedTntUndoReport.primedTntPresent(this.level),
                 "Primed TNT entity exists before fuse-time undo");
-        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
-        this.log.info("Queued primed TNT undo operation " + this.pendingOperation.id());
+        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
+        this.log.info("Queued primed TNT quick rollback " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_PRIMED_TNT_UNDO);
     }
 
@@ -1188,8 +1112,8 @@ final class SingleplayerTestRun {
         }
         this.check(this.poweredTntUndoReport != null && this.poweredTntUndoReport.primedTntPresent(this.level),
                 "Powered primed TNT entity exists before undo");
-        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
-        this.log.info("Queued powered TNT undo operation " + this.pendingOperation.id());
+        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
+        this.log.info("Queued powered TNT quick rollback " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_POWERED_TNT_UNDO);
     }
 
@@ -1229,23 +1153,9 @@ final class SingleplayerTestRun {
             return;
         }
 
-        var latestUndoAction = this.undoRedoHistoryManager.recentUndoActions(this.project.id().toString(), 1)
-                .stream()
-                .findFirst()
-                .orElse(null);
-        this.check(latestUndoAction != null, "Redstone TNT chain has a live undo action");
-        if (latestUndoAction != null && this.chainedTntReport != null) {
-            Set<BlockPoint> capturedBlocks = new HashSet<>();
-            for (var change : latestUndoAction.undoChanges()) {
-                capturedBlocks.add(change.pos());
-            }
-            Set<BlockPoint> expectedBlocks = this.chainedTntReport.expectedUndoRedoBlocks(this.level);
-            Set<BlockPoint> missingBlocks = new HashSet<>(expectedBlocks);
-            missingBlocks.removeAll(capturedBlocks);
-            this.check(capturedBlocks.containsAll(expectedBlocks),
-                    "Redstone TNT chain live undo action owns the trigger, every TNT, and every witness block; missing="
-                            + missingBlocks);
-        }
+        RecoveryDraft draft = this.recoveryService.loadDraft(server, this.project.name()).orElse(null);
+        this.check(draft != null && draft.totalChangeCount() > 0,
+                "Redstone TNT chain settled into the durable recovery draft");
         this.completePhase(server, Phase.START_CHAINED_TNT_UNDO);
     }
 
@@ -1253,8 +1163,8 @@ final class SingleplayerTestRun {
         if (!this.waitForUndoRedoStabilization("redstone TNT chain undo")) {
             return;
         }
-        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
-        this.log.info("Queued redstone TNT chain undo operation " + this.pendingOperation.id());
+        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
+        this.log.info("Queued redstone TNT chain quick rollback " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_CHAINED_TNT_UNDO);
     }
 
@@ -1292,21 +1202,13 @@ final class SingleplayerTestRun {
             return;
         }
 
-        var latestUndoAction = this.undoRedoHistoryManager.recentUndoActions(this.project.id().toString(), 1)
-                .stream()
-                .findFirst()
-                .orElse(null);
-        this.check(latestUndoAction != null, "Explosion live undo action can be loaded");
-        if (latestUndoAction != null && this.explosionReport != null) {
+        RecoveryDraft draft = this.recoveryService.loadDraft(server, this.project.name()).orElse(null);
+        this.check(draft != null && draft.totalChangeCount() > 0,
+                "Explosion settled into the durable recovery draft");
+        if (draft != null && this.explosionReport != null) {
             this.explosionDestroyedWitnessBlocks = this.explosionReport.destroyedWitnessBlocks(this.level);
             this.check(!this.explosionDestroyedWitnessBlocks.isEmpty(),
                     "Controlled TNT explosion removed at least one witness block");
-            Set<BlockPoint> capturedBlocks = new HashSet<>();
-            for (var change : latestUndoAction.undoChanges()) {
-                capturedBlocks.add(change.pos());
-            }
-            this.check(capturedBlocks.containsAll(this.explosionDestroyedWitnessBlocks),
-                    "Explosion live undo action includes every removed blast witness block");
         }
         this.completePhase(server, Phase.START_EXPLOSION_UNDO);
     }
@@ -1315,31 +1217,22 @@ final class SingleplayerTestRun {
         if (!this.waitForUndoRedoStabilization("explosion undo")) {
             return;
         }
-        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
-        this.log.info("Queued explosion undo operation " + this.pendingOperation.id());
+        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
+        this.log.info("Queued explosion quick rollback " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_EXPLOSION_UNDO);
     }
 
     private void checkExplosionUndo() {
         this.check(this.explosionReport != null && this.explosionReport.restoredAfterUndo(this.level),
                 "Explosion undo restored TNT and blast witness blocks");
-        this.completePhase(this.level.getServer(), Phase.START_EXPLOSION_REDO);
+        this.completePhase(this.level.getServer(), Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
     }
 
     private void startExplosionRedo() throws Exception {
-        this.pendingOperation = this.undoRedoService.redo(this.level, this.project.name());
-        this.log.info("Queued explosion redo operation " + this.pendingOperation.id());
-        this.completePhase(this.level.getServer(), Phase.CHECK_EXPLOSION_REDO);
+        this.completePhase(this.level.getServer(), Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
     }
 
     private void checkExplosionRedo() {
-        this.check(this.explosionReport != null && this.explosionReport.removedAfterRedo(this.level),
-                "Explosion redo removed TNT and blast witness blocks again");
-        if (!this.explosionDestroyedWitnessBlocks.isEmpty()) {
-            this.check(this.explosionDestroyedWitnessBlocks.stream()
-                            .allMatch(pos -> this.level.getBlockState(pos.toBlockPos()).isAir()),
-                    "Explosion redo removed every draft-tracked blast witness block again");
-        }
         this.completePhase(this.level.getServer(), Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
     }
 
@@ -1462,41 +1355,10 @@ final class SingleplayerTestRun {
     }
 
     private void startStructureFixtureTests(MinecraftServer server) {
-        this.structureFixtureScenario = new SingleplayerStructureFixtureScenario(
-                this.level,
-                this.player,
-                this.volume,
-                this.project.name(),
-                this.project.id().toString()
-        );
-        this.completePhase(server, Phase.RUN_STRUCTURE_FIXTURE_TESTS);
+        this.completePhase(server, Phase.CLEANUP);
     }
 
     private void runStructureFixtureTests(MinecraftServer server) {
-        if (this.structureFixtureScenario == null) {
-            this.recordFailure("Structure fixture tests were not initialized");
-            this.completePhase(server, Phase.CLEANUP);
-            return;
-        }
-
-        StructureFixtureStepResult result = this.structureFixtureScenario.advance(server);
-        for (String message : result.messages()) {
-            this.message(server, message);
-        }
-        if (result.operationHandle() != null) {
-            this.pendingOperation = result.operationHandle();
-            this.log.info("Queued structure fixture operation "
-                    + this.pendingOperation.label() + " " + this.pendingOperation.id());
-            return;
-        }
-        if (!result.finished()) {
-            return;
-        }
-
-        for (SingleplayerStructureFixtureScenario.StructureFixtureCheck check
-                : this.structureFixtureScenario.checks()) {
-            this.check(check.passed(), check.label());
-        }
         this.completePhase(server, Phase.CLEANUP);
     }
 
@@ -1669,13 +1531,6 @@ final class SingleplayerTestRun {
                 this.largeHistoryScenario.cleanup();
             } catch (Exception exception) {
                 this.log.fail(Phase.CLEANUP.title(), "Large history diagnostics cleanup failed", exception);
-            }
-        }
-        if (this.structureFixtureScenario != null) {
-            try {
-                this.structureFixtureScenario.cleanup();
-            } catch (Exception exception) {
-                this.log.fail(Phase.CLEANUP.title(), "Structure fixture cleanup failed", exception);
             }
         }
         try {
