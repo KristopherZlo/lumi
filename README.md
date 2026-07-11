@@ -80,7 +80,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 | [ALT] by default | Hold to preview recent undo/redo actions and enable action-key modifiers |
 | [ALT]+[Z] by default | Undo, hold to preview the undo target |
 | [ALT]+[Y] by default | Redo, hold to preview the redo target |
-| [R] | Quick rollback, undoable with live undo |
+| [R] | Quick rollback of unsaved work |
 | [H] | Toggle compare overlay |
 | [ALT]+[I] by default | Show Lumi hotkeys |
 | Wooden sword | Select partial-restore regions and active-zone cells; the action key with mouse controls resizes, switches mode, or clears; [ALT]+[Z]/[Y] undo/redo selection by default, [CTRL] adds/removes active-zone cells |
@@ -271,7 +271,7 @@ Hard rules:
 - Shutdown fully drains dirty-chunk stabilization, and restore verification retains original targets even when no-op pruning skips their initial write while scanning those targets incrementally within the current tick deadline.
 - Snapshot and patch storage no longer inserts fixed sleeps between chunks; background thread priority and cooperative cancellation control contention without slowing completed work.
 - Restore, recovery, merge, and undo/redo replay must not capture themselves as new user edits.
-- Restore, recovery, merge, quick rollback, and undo/redo replay verify final target state before reporting success. A mismatch gets one repair pass followed by a fresh read-back; a remaining mismatch fails the operation. Full and partial restore use saved history and recovery as their return path instead of creating volatile live undo actions; quick rollback remains undoable with live undo.
+- Restore, recovery, merge, quick rollback, and undo/redo replay verify final target state before reporting success. A mismatch gets one repair pass followed by a fresh read-back; a remaining mismatch fails the operation. Restore and rollback use saved history and recovery as their return path instead of creating volatile live undo actions.
 - Save/amend and history-apply operations hold a world mutation barrier from queueing through completion. Vanilla simulation is frozen while player movement, break/use/interact, containers, creative slots, world-editing commands, direct block/entity writes, and tool-driven section writes are rejected; Lumi's capture-suppressed apply remains allowed. A world that was already tick-frozen stays frozen when the operation releases its lease.
 - Live undo/redo, recent previews, and pending overlays include explosion and mob block fallout only when it is causally tied to a player action; passive mob edits and ambient explosions remain actionless.
 - Existing workspaces mark every captured block source, including growth, dirty for settled section reconciliation. Once an explicit edit opens a stabilization envelope, persistent fallout inside it enters recovery and save history without requiring causal attribution; actionless fallout still does not create a live undo action or workspace.

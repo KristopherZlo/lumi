@@ -13,12 +13,8 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.RestoreReturnPoint;
 import io.github.luma.domain.model.TrackedChangeBuffer;
-import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
-import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
-import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.EntityApplyMode;
-import io.github.luma.minecraft.world.EntityBatch;
 import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedApplyOperation;
 import io.github.luma.minecraft.world.PreparedBlockPlacement;
@@ -55,9 +51,7 @@ public final class QuickRollbackService {
     private final VersionRepository versionRepository = new VersionRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final RestoreService restoreService = new RestoreService();
-    private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
-    private final DeferredActionFalloutGuard deferredActionFalloutGuard = DeferredActionFalloutGuard.getInstance();
     private final RestoreMechanismReconciliationPlanner mechanismReconciliationPlanner =
             new RestoreMechanismReconciliationPlanner();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
@@ -99,12 +93,11 @@ public final class QuickRollbackService {
                 .orElseThrow(() -> new IllegalArgumentException("No pending tracked changes for " + projectName));
         this.requireCurrentHeadDraft(pendingDraft, activeVariant, projectName);
 
-        QuickRollbackDraftPlan plan = QuickRollbackDraftPlan.fromDraft(activeVariant.headVersionId(), pendingDraft, selectedBounds);
+        QuickRollbackDraftPlan plan = QuickRollbackDraftPlan.fromDraft(pendingDraft, selectedBounds);
         if (plan.isEmpty()) {
             throw new IllegalArgumentException("No pending tracked changes for " + projectName);
         }
 
-        this.deferredActionFalloutGuard.suppressAction(plan.actionId(), level.getGameTime());
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
                 "quick-rollback-started",
@@ -176,11 +169,6 @@ public final class QuickRollbackService {
                                 batches
                         );
                     }
-                    EntityBatch.ReplayContext replayContext =
-                            new EntityBatch.ReplayContext(this.currentActorOr(plan.actor()), plan.actionId(), true);
-                    batches = batches.stream()
-                            .map(batch -> batch.withEntityReplayContext(replayContext))
-                            .toList();
                     List<PreparedChunkBatch> finalBatches = batches;
                     return new PreparedApplyOperation(
                             finalBatches,
@@ -221,15 +209,6 @@ public final class QuickRollbackService {
             int batchCount
     ) throws IOException {
         Instant now = Instant.now();
-        this.undoRedoHistoryManager.recordAction(
-                project.id().toString(),
-                level.dimension().identifier().toString(),
-                plan.actionId(),
-                plan.actor(),
-                plan.blockChanges(),
-                plan.entityChanges(),
-                now
-        );
         this.captureManager.discardSession(level.getServer(), project.id().toString());
         this.saveRemainingDraft(layout, plan.remainingDraft());
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
@@ -291,11 +270,6 @@ public final class QuickRollbackService {
                 PreparedBlockPlacement.ReplayHint.FORCE_FINAL_REPLAY_AND_SUPPRESS_POST_REPLAY_MECHANISM
         ));
         return this.batchCollapser.collapse(combined);
-    }
-
-    private String currentActorOr(String fallback) {
-        String actor = WorldMutationContext.currentActor();
-        return actor == null || actor.isBlank() || "world".equals(actor) ? fallback : actor;
     }
 
     List<BlockPoint> mechanismReconciliationPositions(

@@ -25,7 +25,7 @@ class QuickRollbackDraftPlanTest {
     private static final Instant NOW = Instant.parse("2026-05-08T00:00:00Z");
 
     @Test
-    void planAppliesSavedValuesAndRecordsPreRollbackStateForUndo() {
+    void planAppliesSavedValues() {
         String entityId = "00000000-0000-0000-0000-000000000042";
         RecoveryDraft draft = new RecoveryDraft(
                 "project",
@@ -44,12 +44,10 @@ class QuickRollbackDraftPlanTest {
                 ))
         );
 
-        QuickRollbackDraftPlan plan = QuickRollbackDraftPlan.fromDraft("v0002", draft);
+        QuickRollbackDraftPlan plan = QuickRollbackDraftPlan.fromDraft(draft);
 
         assertFalse(plan.isEmpty());
-        assertEquals("Lumi quick rollback", plan.actor());
         assertEquals(2, plan.totalChangeCount());
-        assertTrue(plan.actionId().startsWith("quick-rollback-v0002-"));
         assertEquals("minecraft:glass", plan.blockChanges().getFirst().oldValue().blockId());
         assertEquals("minecraft:stone", plan.blockChanges().getFirst().newValue().blockId());
         assertEquals(2.0D, x(plan.entityChanges().getFirst().oldValue()));
@@ -69,7 +67,7 @@ class QuickRollbackDraftPlanTest {
                 List.of()
         );
 
-        QuickRollbackDraftPlan plan = QuickRollbackDraftPlan.fromDraft("v0002", draft);
+        QuickRollbackDraftPlan plan = QuickRollbackDraftPlan.fromDraft(draft);
 
         assertTrue(plan.isEmpty());
         assertEquals(0, plan.totalChangeCount());
@@ -108,7 +106,6 @@ class QuickRollbackDraftPlanTest {
         );
 
         QuickRollbackDraftPlan plan = QuickRollbackDraftPlan.fromDraft(
-                "v0002",
                 draft,
                 new Bounds3i(new BlockPoint(0, 0, 0), new BlockPoint(5, 80, 5))
         );

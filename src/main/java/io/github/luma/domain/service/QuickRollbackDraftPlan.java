@@ -8,47 +8,39 @@ import io.github.luma.domain.model.StoredEntityChange;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 
 /**
- * Immutable action plan for rolling pending draft changes back to their saved
- * base state while keeping the rollback undoable through the live undo stack.
+ * Immutable plan for rolling pending draft changes back to their saved base state.
  */
 final class QuickRollbackDraftPlan {
 
-    private static final String ACTOR = "Lumi quick rollback";
-
-    private final String actionId;
     private final List<StoredBlockChange> blockChanges;
     private final List<StoredEntityChange> entityChanges;
     private final RecoveryDraft remainingDraft;
 
     private QuickRollbackDraftPlan(
-            String actionId,
             List<StoredBlockChange> blockChanges,
             List<StoredEntityChange> entityChanges,
             RecoveryDraft remainingDraft
     ) {
-        this.actionId = actionId;
         this.blockChanges = blockChanges == null ? List.of() : List.copyOf(blockChanges);
         this.entityChanges = entityChanges == null ? List.of() : List.copyOf(entityChanges);
         this.remainingDraft = remainingDraft == null || remainingDraft.isEmpty() ? null : remainingDraft;
     }
 
-    static QuickRollbackDraftPlan fromDraft(String targetVersionId, RecoveryDraft draft) {
-        return fromDraft(targetVersionId, draft, null);
+    static QuickRollbackDraftPlan fromDraft(RecoveryDraft draft) {
+        return fromDraft(draft, null);
     }
 
-    static QuickRollbackDraftPlan fromDraft(String targetVersionId, RecoveryDraft draft, Bounds3i bounds) {
+    static QuickRollbackDraftPlan fromDraft(RecoveryDraft draft, Bounds3i bounds) {
         if (draft == null || draft.isEmpty()) {
-            return empty(targetVersionId);
+            return empty();
         }
         if (bounds != null) {
-            return selectedArea(targetVersionId, draft, bounds);
+            return selectedArea(draft, bounds);
         }
         return new QuickRollbackDraftPlan(
-                "quick-rollback-" + normalizedTargetVersionId(targetVersionId) + "-" + UUID.randomUUID(),
                 draft.changes().stream()
                         .map(QuickRollbackDraftPlan::inverse)
                         .toList(),
@@ -59,16 +51,15 @@ final class QuickRollbackDraftPlan {
         );
     }
 
-    private static QuickRollbackDraftPlan empty(String targetVersionId) {
+    private static QuickRollbackDraftPlan empty() {
         return new QuickRollbackDraftPlan(
-                "quick-rollback-" + normalizedTargetVersionId(targetVersionId) + "-" + UUID.randomUUID(),
                 List.of(),
                 List.of(),
                 null
         );
     }
 
-    private static QuickRollbackDraftPlan selectedArea(String targetVersionId, RecoveryDraft draft, Bounds3i bounds) {
+    private static QuickRollbackDraftPlan selectedArea(RecoveryDraft draft, Bounds3i bounds) {
         List<StoredBlockChange> selectedBlocks = new ArrayList<>();
         List<StoredBlockChange> remainingBlocks = new ArrayList<>();
         for (StoredBlockChange change : draft.changes()) {
@@ -90,7 +81,6 @@ final class QuickRollbackDraftPlan {
         }
 
         return new QuickRollbackDraftPlan(
-                "quick-rollback-" + normalizedTargetVersionId(targetVersionId) + "-" + UUID.randomUUID(),
                 selectedBlocks,
                 selectedEntities,
                 remainingDraft(draft, remainingBlocks, remainingEntities)
@@ -130,18 +120,6 @@ final class QuickRollbackDraftPlan {
                 ? change.oldValue() == null ? BlockPos.ZERO : change.oldValue().blockPos()
                 : change.newValue().blockPos();
         return bounds.contains(BlockPoint.from(pos));
-    }
-
-    private static String normalizedTargetVersionId(String targetVersionId) {
-        return targetVersionId == null || targetVersionId.isBlank() ? "head" : targetVersionId;
-    }
-
-    String actionId() {
-        return this.actionId;
-    }
-
-    String actor() {
-        return ACTOR;
     }
 
     List<StoredBlockChange> blockChanges() {
