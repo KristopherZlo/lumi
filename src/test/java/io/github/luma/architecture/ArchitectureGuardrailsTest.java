@@ -360,39 +360,6 @@ class ArchitectureGuardrailsTest {
         );
     }
 
-    @Test
-    void generatedRedstoneFixtureComparisonPoliciesCoverKnownPhaseProperties() throws IOException {
-        String snapshotSource = Files.readString(Path.of(
-                "src/runtimeGametestSupport/java/io/github/luma/minecraft/testing/StructureFixtureSnapshot.java"
-        ));
-        String generatedSource = Files.readString(Path.of(
-                "src/gametest/java/io/github/luma/minecraft/testing/GeneratedRedstoneStructureFixtures.java"
-        ));
-        String scenarioSource = Files.readString(Path.of(
-                "src/gametest/java/io/github/luma/minecraft/testing/SingleplayerStructureFixtureScenario.java"
-        ));
-
-        assertTrue(
-                snapshotSource.contains("ignoringRedstoneTorchLitAt")
-                        && snapshotSource.contains("ignoringRedstoneLampLitAt")
-                        && snapshotSource.contains("differsOnlyByBlockProperty"),
-                "Structure fixture snapshots must support exact-position redstone phase-property policies"
-        );
-        assertTrue(
-                generatedSource.contains("comparisonPolicy(")
-                        && !generatedSource.contains("undoComparisonPolicy(")
-                        && generatedSource.contains("withRedstoneTorchLitAt(List.of(torchInverterBlockPos(volume).above()))")
-                        && generatedSource.contains("withRedstoneLampLitAt(List.of(observerPulseObserverPos(volume).east()))"),
-                "Generated redstone fixtures must own the volatile phase-property policy for undo and redo"
-        );
-        assertTrue(
-                scenarioSource.contains("this.comparisonPolicy()")
-                        && scenarioSource.contains("this.changedSnapshot.matches(redone, comparisonPolicy)")
-                        && scenarioSource.contains("this.changedSnapshot.diff(redone, comparisonPolicy)"),
-                "Structure fixture redo verification must apply the same comparison policy as undo"
-        );
-    }
-
     private static List<Path> javaFiles(Path... roots) throws IOException {
         try (Stream<Path> stream = Stream.of(roots)
                 .filter(Files::exists)

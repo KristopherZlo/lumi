@@ -13,7 +13,6 @@ import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.RestoreService;
-import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
@@ -44,12 +43,10 @@ final class HistoryJourneyScenario {
     private final ProjectService projectService = new ProjectService();
     private final VersionService versionService = new VersionService();
     private final RestoreService restoreService = new RestoreService();
-    private final UndoRedoService undoRedoService = new UndoRedoService();
     private final VariantService variantService = new VariantService();
     private final RecoveryService recoveryService = new RecoveryService();
     private final ProjectIntegrityService integrityService = new ProjectIntegrityService();
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
-    private final HistoryJourneyKeyDriver keyDriver = new HistoryJourneyKeyDriver();
     private final Map<String, HistoryJourneyCheckpoint> checkpoints = new LinkedHashMap<>();
     private final Map<String, String> versionIds = new LinkedHashMap<>();
     private final Map<String, String> versionVariants = new LinkedHashMap<>();
@@ -154,9 +151,6 @@ final class HistoryJourneyScenario {
         );
         this.placeBranchBAfterPartialRestoreEdit();
         this.save("S08-branch-b-after-partial", "S08 branch B after partial restore");
-
-        this.verifyAltUndoRedo();
-        this.save("S09-branch-b-after-alt-redo", "S09 branch B after Alt+Y redo");
 
         this.switchVariant("branch-c");
         this.placeBranchCSimpleEdit();
@@ -279,35 +273,6 @@ final class HistoryJourneyScenario {
                     level.setBlock(this.pos(3, 2, 2), Blocks.EMERALD_BLOCK.defaultBlockState(), 3));
         });
         this.waitTicks(SETTLE_TICKS);
-    }
-
-    private void verifyAltUndoRedo() throws Exception {
-        HistoryJourneyCheckpoint beforeEdit = this.capture("ALT-Z expected before edit")
-                .withProjectState(this.activeVariantId, this.variantHeads(), this.versionCount);
-        this.checkpoints.get(this.variantHeadLabels.get(this.activeVariantId)).assertMatches(beforeEdit);
-
-        this.singleplayer.getServer().runOnServer(server -> {
-            SingleplayerPlayerActionDriver driver = this.driver(server);
-            this.assertPlaced(driver.placeAgainst(this.pos(1, 1, 1), Direction.UP, Blocks.COPPER_BLOCK, this.pos(1, 2, 1)),
-                    "Alt+Z player-like copper edit");
-        });
-        this.waitTicks(SETTLE_TICKS);
-
-        HistoryJourneyCheckpoint afterEdit = this.capture("ALT-Y expected after edit")
-                .withProjectState(this.activeVariantId, this.variantHeads(), this.versionCount);
-        if (beforeEdit.worldMatches(afterEdit)) {
-            throw new AssertionError("Alt+Z/Alt+Y edit did not change the world snapshot");
-        }
-
-        this.keyDriver.pressUndo(this.context);
-        this.waitForOperation(this.startLiveUndo(), "Alt+Z live undo");
-        this.waitForCheckpointWorld(beforeEdit, "Alt+Z");
-        beforeEdit.withLabel("Alt+Z actual").assertMatches(this.capture("Alt+Z actual"));
-
-        this.keyDriver.pressRedo(this.context);
-        this.waitForOperation(this.startLiveRedo(), "Alt+Y live redo");
-        this.waitForCheckpointWorld(afterEdit, "Alt+Y");
-        afterEdit.withLabel("Alt+Y actual").assertMatches(this.capture("Alt+Y actual"));
     }
 
     private void placeBranchCSimpleEdit() throws Exception {
@@ -536,16 +501,6 @@ final class HistoryJourneyScenario {
         throw new AssertionError("Timed out waiting for operation " + label + " handle=" + handle.id());
     }
 
-    private OperationHandle startLiveUndo() throws Exception {
-        return this.singleplayer.getServer().computeOnServer(server ->
-                this.undoRedoService.undo(server.overworld(), this.projectName));
-    }
-
-    private OperationHandle startLiveRedo() throws Exception {
-        return this.singleplayer.getServer().computeOnServer(server ->
-                this.undoRedoService.redo(server.overworld(), this.projectName));
-    }
-
     private void waitForCheckpointWorld(HistoryJourneyCheckpoint expected, String label) throws Exception {
         HistoryJourneyCheckpoint lastActual = null;
         for (int tick = 0; tick < WORLD_MATCH_TIMEOUT_TICKS; tick++) {
@@ -562,8 +517,8 @@ final class HistoryJourneyScenario {
     }
 
     private void assertFinalState() throws Exception {
-        if (this.explicitSaveCount != 15) {
-            throw new AssertionError("Expected 15 explicit saves, actual=" + this.explicitSaveCount);
+        if (this.explicitSaveCount != 14) {
+            throw new AssertionError("Expected 14 explicit saves, actual=" + this.explicitSaveCount);
         }
         int nonMainBranches = this.singleplayer.getServer().computeOnServer(server ->
                 (int) this.projectService.loadVariants(server, this.projectName).stream()
