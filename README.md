@@ -89,6 +89,12 @@ Wooden sword hints appear under the crosshair at the GUI Scale 2 visual size; on
 All keybinds are remappable in Minecraft controls.
 Lumi keybinds are ignored while the Minecraft pause menu is open.
 
+### Reliability and performance
+
+Save, restore, branch, zone, recovery, and quick-rollback operations are measured against a two-second singleplayer target. Heavy decoding and file preparation stay off the server tick; history apply may synchronously load at most one missing chunk per tick so a small restore does not wait through the old 20-tick preload fallback. Large or storage-bound operations can exceed the target and are reported as performance failures instead of silently weakening exactness.
+
+Restore verification reads the final live world state, performs at most one repair pass, then reads it again and fails the operation if any requested state still differs. Quick rollback uses the same strict final verification path.
+
 ### Privacy and Diagnostics
 
 Lumi has diagnostic telemetry for crashes, failed operations, rejected actions, and severe performance problems. It is technical-only and can be turned off in Lumi settings.

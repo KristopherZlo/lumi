@@ -76,7 +76,7 @@ class WorldApplyBudgetPlannerTest {
     @Test
     void runtimeProfilesAvoidSynchronousChunkLoadsByDefault() {
         assertEquals(0, this.planner.plan(1.0D, 1.0D, WorldApplyProfile.NORMAL).maxSyncChunkLoads());
-        assertEquals(0, this.planner.plan(1.0D, 1.0D, WorldApplyProfile.HISTORY_FAST).maxSyncChunkLoads());
+        assertEquals(1, this.planner.plan(1.0D, 1.0D, WorldApplyProfile.HISTORY_FAST).maxSyncChunkLoads());
         assertEquals(0, this.planner.plan(1.0D, 1.0D, WorldApplyProfile.DIAGNOSTIC_TURBO).maxSyncChunkLoads());
         assertEquals(0, this.planner.plan(1.0D, 1.0D, WorldApplyProfile.MAXIMUM).maxSyncChunkLoads());
     }
