@@ -560,11 +560,7 @@ public final class WorldOperationManager {
         private final RedstoneReplayUpdateQueue redstoneUpdateQueue = new RedstoneReplayUpdateQueue();
         private final ExactReplayStateQueue exactReplayStateQueue = new ExactReplayStateQueue();
         private final WorldApplyNoOpPruner noOpPruner = new WorldApplyNoOpPruner();
-        private final WorldApplyVerificationService verificationService = new WorldApplyVerificationService();
-        private final WorldApplyVerificationRepairer verificationRepairer = new WorldApplyVerificationRepairer();
         private final WorldApplyFinalVerificationGate finalVerificationGate = new WorldApplyFinalVerificationGate();
-        private WorldApplyVerificationResult currentVerificationResult;
-        private int currentVerificationRepaired;
 
         private PreparedApplyActiveOperation(
                 ServerLevel level,
@@ -806,24 +802,14 @@ public final class WorldOperationManager {
                                 : "Applying chunk " + this.currentBatch.chunk().x() + ":" + this.currentBatch.chunk().z())
                 );
                 if (this.currentBatch != null && this.currentBatchFinished()) {
-                    WorldApplyVerificationResult verificationResult = this.verifyAndRepairBatch(
-                            this.currentTargetBatch,
-                            budget,
-                            deadlineNanos
-                    );
-                    if (verificationResult == null) {
-                        stopReason = "verification-repair-pending";
-                        break;
-                    }
                     if (this.debugApplyEnabled()) {
                         LumaDebugLog.log(
                                 this.handle(),
                                 "world-op-apply",
-                                "Chunk batch finish {}:{} totalApplied={} verification=[{}] metrics=[{}]",
+                                "Chunk batch finish {}:{} totalApplied={} metrics=[{}]",
                                 this.currentBatch.chunk().x(),
                                 this.currentBatch.chunk().z(),
                                 this.appliedWorkUnits,
-                                verificationResult.summary(),
                                 this.applyMetrics.summary()
                         );
                     }
@@ -837,7 +823,6 @@ public final class WorldOperationManager {
                     this.currentSections = List.of();
                     this.currentBlockEntities = List.of();
                     this.nativeSectionCursor = null;
-                    this.clearCurrentVerification();
                 }
             }
             if (System.nanoTime() >= deadlineNanos && !"dispatcher-empty".equals(stopReason)) {
@@ -1134,60 +1119,6 @@ public final class WorldOperationManager {
             return !this.redstoneUpdateQueue.hasPending();
         }
 
-        private WorldApplyVerificationResult verifyAndRepairBatch(
-                ChunkBatch batch,
-                WorldApplyBudget budget,
-                long deadlineNanos
-        ) {
-            if (!this.shouldVerifyPostApply() || batch == null || batch.totalPlacements() <= 0) {
-                return WorldApplyVerificationResult.empty();
-            }
-
-            long startedAt = System.nanoTime();
-            if (this.currentVerificationResult == null) {
-                this.currentVerificationResult = this.verificationService.advance(this.level(), batch, deadlineNanos);
-                if (this.currentVerificationResult == null) { return null; }
-                this.currentVerificationRepaired = 0;
-                if (this.currentVerificationResult.hasRepairs()) {
-                    this.verificationRepairer.start(this.currentVerificationResult.repairSections());
-                }
-            }
-
-            if (this.verificationRepairer.hasPending()) {
-                long repairStartedAt = System.nanoTime();
-                int repaired = this.verificationRepairer.drain(
-                        this.level(),
-                        budget,
-                        deadlineNanos,
-                        this.applyMetrics,
-                        this.redstoneUpdateQueue,
-                        this.lightUpdateQueue
-                );
-                long repairElapsedNanos = System.nanoTime() - repairStartedAt;
-                this.performanceGovernor.recordWork(ApplyWorkKind.SPARSE_DIRECT, repaired, repairElapsedNanos);
-                this.currentVerificationRepaired += repaired;
-                if (this.verificationRepairer.hasPending()) {
-                    this.logBlockApplyVerificationPending(batch, repaired, repairElapsedNanos);
-                    return null;
-                }
-            }
-
-            WorldApplyVerificationResult result = this.currentVerificationResult.withRepairOutcome(
-                    this.currentVerificationRepaired,
-                    this.currentVerificationResult.mismatched() - this.currentVerificationRepaired
-            );
-            this.applyMetrics.recordVerification(result);
-            this.logBlockApplyVerification(batch, result, System.nanoTime() - startedAt);
-            return result;
-        }
-
-        private void clearCurrentVerification() {
-            this.verificationService.clear();
-            this.currentVerificationResult = null;
-            this.currentVerificationRepaired = 0;
-            this.verificationRepairer.clear();
-        }
-
         private boolean shouldVerifyPostApply() {
             return WorldOperationManager.this.applyOperationProfile.requiresPostApplyVerification(this.handle().label());
         }
@@ -1264,47 +1195,6 @@ public final class WorldOperationManager {
                             + ", chunk=" + batch.chunk().x() + ":" + batch.chunk().z()
                             + ", totalApplied=" + this.appliedWorkUnits
                             + ", metrics=" + this.applyMetrics.summary()
-            );
-        }
-
-        private void logBlockApplyVerification(
-                ChunkBatch batch,
-                WorldApplyVerificationResult result,
-                long elapsedNanos
-        ) {
-            if (!this.blockApplyDiagnosticsEnabled() || batch == null || result == null) {
-                return;
-            }
-            LumaDiagnosticsLog.blockApplySpan(
-                    "verify",
-                    elapsedNanos,
-                    "label=" + this.handle().label()
-                            + ", operationId=" + this.handle().id()
-                            + ", chunk=" + batch.chunk().x() + ":" + batch.chunk().z()
-                            + ", matched=" + result.matched()
-                            + ", mismatched=" + result.mismatched()
-                            + ", repaired=" + result.repaired()
-                            + ", skipped=" + result.skipped()
-            );
-        }
-
-        private void logBlockApplyVerificationPending(
-                ChunkBatch batch,
-                int repairedThisTick,
-                long elapsedNanos
-        ) {
-            if (!this.blockApplyDiagnosticsEnabled() || batch == null) {
-                return;
-            }
-            LumaDiagnosticsLog.blockApplySpan(
-                    "verify-repair",
-                    elapsedNanos,
-                    "label=" + this.handle().label()
-                            + ", operationId=" + this.handle().id()
-                            + ", chunk=" + batch.chunk().x() + ":" + batch.chunk().z()
-                            + ", repairedThisTick=" + repairedThisTick
-                            + ", repairedTotal=" + this.currentVerificationRepaired
-                            + ", pending=" + this.verificationRepairer.pendingCount()
             );
         }
 

@@ -44,7 +44,7 @@ class WorldOperationManagerFinalVerificationTest {
     }
 
     @Test
-    void verificationUsesTheTickDeadlineInBothPasses() throws Exception {
+    void verificationUsesTheTickDeadlineInTheFinalPass() throws Exception {
         String manager = Files.readString(Path.of(
                 "src/main/java/io/github/luma/minecraft/world/WorldOperationManager.java"
         ));
@@ -52,7 +52,7 @@ class WorldOperationManagerFinalVerificationTest {
                 "src/main/java/io/github/luma/minecraft/world/WorldApplyFinalVerificationGate.java"
         ));
 
-        assertTrue(manager.contains("verificationService.advance(this.level(), batch, deadlineNanos)"));
+        assertFalse(manager.contains("verificationService.advance(this.level(), batch, deadlineNanos)"));
         assertTrue(finalGate.contains("verificationService.advance(level, batch, deadlineNanos)"));
     }
 }
