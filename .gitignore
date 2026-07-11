@@ -1,6 +1,7 @@
 .gradle/
 .gradle-user/
 .gradle-codex/
+.gradle-sandbox/
 build/
 run/
 out/
