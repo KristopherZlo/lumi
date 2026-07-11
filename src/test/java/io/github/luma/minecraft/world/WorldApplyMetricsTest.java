@@ -24,12 +24,14 @@ class WorldApplyMetricsTest {
         metrics.recordLightPrepared(9, 2);
         metrics.recordLightEngineFlushTick();
         metrics.recordVerification(new WorldApplyVerificationResult(7, 2, 1, 1, List.of()));
+        metrics.recordEntityOperations(3);
         metrics.recordLightDrainTick(2_500_000L);
         metrics.recordTotalDuration(12_000_000L);
 
         String summary = metrics.summary();
 
         Assertions.assertTrue(summary.contains("processedBlocks=34"));
+        Assertions.assertTrue(summary.contains("processedEntityOperations=3"));
         Assertions.assertTrue(summary.contains("prepareDurationMs=3"));
         Assertions.assertTrue(summary.contains("preloadDurationMs=4"));
         Assertions.assertTrue(summary.contains("preloadTicks=1"));

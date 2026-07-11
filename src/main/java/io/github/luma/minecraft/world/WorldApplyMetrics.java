@@ -7,6 +7,7 @@ import java.util.StringJoiner;
 final class WorldApplyMetrics {
 
     private int processedBlocks;
+    private int processedEntityOperations;
     private int changedBlocks;
     private int skippedBlocks;
     private int directSections;
@@ -116,6 +117,10 @@ final class WorldApplyMetrics {
         this.applyFailures += 1;
     }
 
+    void recordEntityOperations(int processed) {
+        this.processedEntityOperations += Math.max(0, processed);
+    }
+
     void recordApplyTick(int workUnits) {
         this.recordApplyTick(workUnits, 0L);
     }
@@ -191,6 +196,7 @@ final class WorldApplyMetrics {
 
     String summary() {
         return "processedBlocks=" + this.processedBlocks
+                + ", processedEntityOperations=" + this.processedEntityOperations
                 + ", prepareDurationMs=" + this.millis(this.preparationNanos)
                 + ", preloadDurationMs=" + this.millis(this.preloadNanos)
                 + ", preloadTicks=" + this.preloadTicks

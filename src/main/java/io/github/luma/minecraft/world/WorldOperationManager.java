@@ -1476,6 +1476,7 @@ public final class WorldOperationManager {
                         this.applyMetrics
                 );
                 this.entityIndex += processed;
+                this.applyMetrics.recordEntityOperations(processed);
                 if (this.entityIndex >= entityOperationCount) {
                     this.entitiesApplied = true;
                 }
