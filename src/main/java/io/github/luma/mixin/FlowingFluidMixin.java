@@ -3,7 +3,6 @@ package io.github.luma.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
-import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
 import io.github.luma.minecraft.world.WorldReplayTickSuppression;
@@ -18,9 +17,6 @@ import org.spongepowered.asm.mixin.Unique;
 @Mixin(FlowingFluid.class)
 abstract class FlowingFluidMixin {
 
-    @Unique
-    private static final DeferredActionFalloutGuard LUMA_DEFERRED_ACTION_FALLOUT_GUARD =
-            DeferredActionFalloutGuard.getInstance();
     @Unique
     private static final WorldReplayTickSuppression LUMA_REPLAY_TICK_SUPPRESSION =
             WorldReplayTickSuppression.getInstance();
@@ -43,17 +39,6 @@ abstract class FlowingFluidMixin {
                     blockState,
                     fluidState,
                     "replay-callback"
-            );
-            return;
-        }
-        if (LUMA_DEFERRED_ACTION_FALLOUT_GUARD.shouldSuppressCurrent(level)) {
-            LUMA_HISTORY_DEBUG_LOG.logFluidTick(
-                    "fluid-tick-suppressed",
-                    level,
-                    pos,
-                    blockState,
-                    fluidState,
-                    "deferred-action"
             );
             return;
         }

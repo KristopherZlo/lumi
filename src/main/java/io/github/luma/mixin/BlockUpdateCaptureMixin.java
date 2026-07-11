@@ -3,7 +3,6 @@ package io.github.luma.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.minecraft.capture.BlockUpdateCaptureContext;
-import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldReplayTickSuppression;
 import net.minecraft.core.BlockPos;
@@ -24,9 +23,6 @@ abstract class BlockUpdateCaptureMixin {
     private static final BlockUpdateCaptureContext LUMA_BLOCK_UPDATE_CONTEXT =
             BlockUpdateCaptureContext.getInstance();
     @Unique
-    private static final DeferredActionFalloutGuard LUMA_DEFERRED_ACTION_FALLOUT_GUARD =
-            DeferredActionFalloutGuard.getInstance();
-    @Unique
     private static final WorldReplayTickSuppression LUMA_REPLAY_TICK_SUPPRESSION =
             WorldReplayTickSuppression.getInstance();
 
@@ -41,10 +37,6 @@ abstract class BlockUpdateCaptureMixin {
     ) {
         if (level instanceof ServerLevel serverLevel
                 && LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppressCallback(serverLevel, pos)) {
-            return;
-        }
-        if (level instanceof ServerLevel serverLevel
-                && LUMA_DEFERRED_ACTION_FALLOUT_GUARD.shouldSuppressCurrent(serverLevel)) {
             return;
         }
         WorldMutationContext.SourceFrame sourceFrame = LUMA_BLOCK_UPDATE_CONTEXT.pushFor(this.luma$state());
@@ -63,9 +55,6 @@ abstract class BlockUpdateCaptureMixin {
             Operation<Void> original
     ) {
         if (LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppressCallback(level, pos)) {
-            return;
-        }
-        if (LUMA_DEFERRED_ACTION_FALLOUT_GUARD.shouldSuppressCurrent(level)) {
             return;
         }
         WorldMutationContext.SourceFrame sourceFrame = LUMA_BLOCK_UPDATE_CONTEXT.pushFor(this.luma$state());

@@ -2,7 +2,6 @@ package io.github.luma.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.DeferredWorldMutationContexts;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
 import io.github.luma.minecraft.world.WorldReplayTickSuppression;
@@ -19,9 +18,6 @@ import org.spongepowered.asm.mixin.Unique;
 @Mixin(MovingPistonBlock.class)
 abstract class MovingPistonBlockTickerMixin {
 
-    @Unique
-    private static final DeferredActionFalloutGuard LUMA_DEFERRED_ACTION_FALLOUT_GUARD =
-            DeferredActionFalloutGuard.getInstance();
     @Unique
     private static final WorldReplayTickSuppression LUMA_REPLAY_TICK_SUPPRESSION =
             WorldReplayTickSuppression.getInstance();
@@ -50,17 +46,6 @@ abstract class MovingPistonBlockTickerMixin {
                         && LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppressCallback(serverLevel, pos)) {
                     LUMA_HISTORY_DEBUG_LOG.logSuppressedCallback(
                             "moving-piston-ticker",
-                            serverLevel,
-                            pos,
-                            tickerState,
-                            blockEntity == null ? "" : "blockEntity=" + blockEntity.getClass().getSimpleName()
-                    );
-                    return;
-                }
-                if (tickerLevel instanceof ServerLevel serverLevel
-                        && LUMA_DEFERRED_ACTION_FALLOUT_GUARD.shouldSuppressCurrent(serverLevel)) {
-                    LUMA_HISTORY_DEBUG_LOG.logSuppressedCallback(
-                            "moving-piston-ticker-action",
                             serverLevel,
                             pos,
                             tickerState,

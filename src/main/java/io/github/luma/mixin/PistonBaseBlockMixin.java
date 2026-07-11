@@ -3,7 +3,6 @@ package io.github.luma.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
-import io.github.luma.minecraft.capture.DeferredActionFalloutGuard;
 import io.github.luma.minecraft.capture.PistonMovementBaselineCaptureService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
@@ -19,9 +18,6 @@ import org.spongepowered.asm.mixin.Unique;
 @Mixin(PistonBaseBlock.class)
 abstract class PistonBaseBlockMixin {
 
-    @Unique
-    private static final DeferredActionFalloutGuard LUMA_DEFERRED_ACTION_FALLOUT_GUARD =
-            DeferredActionFalloutGuard.getInstance();
     @Unique
     private static final WorldReplayTickSuppression LUMA_REPLAY_TICK_SUPPRESSION =
             WorldReplayTickSuppression.getInstance();
@@ -47,17 +43,6 @@ abstract class PistonBaseBlockMixin {
                 && LUMA_REPLAY_TICK_SUPPRESSION.shouldSuppressCallback(serverLevel, pos)) {
             LUMA_HISTORY_DEBUG_LOG.logSuppressedCallback(
                     "piston-trigger-event",
-                    serverLevel,
-                    pos,
-                    state,
-                    "type=" + type + " data=" + data
-            );
-            return false;
-        }
-        if (level instanceof ServerLevel serverLevel
-                && LUMA_DEFERRED_ACTION_FALLOUT_GUARD.shouldSuppressCurrent(serverLevel)) {
-            LUMA_HISTORY_DEBUG_LOG.logSuppressedCallback(
-                    "piston-trigger-event-action",
                     serverLevel,
                     pos,
                     state,

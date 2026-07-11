@@ -52,7 +52,6 @@ public final class HistoryCaptureManager {
 
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
     private final CaptureDiagnosticsLogger diagnosticsLogger = new CaptureDiagnosticsLogger();
-    private final DeferredActionFalloutGuard deferredActionFalloutGuard = DeferredActionFalloutGuard.getInstance();
     private final BlockMutationCaptureGate blockMutationGate =
             new BlockMutationCaptureGate(ELIGIBILITY, this.diagnosticsLogger);
     private final CapturePersistenceCoordinator persistenceCoordinator = new CapturePersistenceCoordinator();
@@ -114,7 +113,7 @@ public final class HistoryCaptureManager {
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
         boolean explicitRootSource = ELIGIBILITY.isExplicitRootSource(source);
-        if (level == null || pos == null || this.shouldSkipSuppressedReplay(level)
+        if (level == null || pos == null
                 || !shouldTrackPersistentMutation(source)) {
             return;
         }
@@ -194,7 +193,7 @@ public final class HistoryCaptureManager {
             CompoundTag newBlockEntity
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        if (level == null || this.shouldSkipSuppressedReplay(level)
+        if (level == null
                 || !shouldCaptureMutation(source)
                 || !this.accessGuard.canUseMutationSource(level.getServer(), source)) {
             return;
@@ -412,7 +411,7 @@ public final class HistoryCaptureManager {
             List<BlockChangeInput> changes
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        if (level == null || changes == null || changes.isEmpty() || this.shouldSkipSuppressedReplay(level)
+        if (level == null || changes == null || changes.isEmpty()
                 || !shouldCaptureMutation(source)
                 || !this.accessGuard.canUseMutationSource(level.getServer(), source)) {
             return;
@@ -636,7 +635,7 @@ public final class HistoryCaptureManager {
             Instant actionStartedAt
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        if (level == null || this.shouldSkipSuppressedReplay(level)
+        if (level == null
                 || !this.accessGuard.canUseMutationSource(level.getServer(), source)) {
             return;
         }
@@ -1443,8 +1442,6 @@ public final class HistoryCaptureManager {
         }
         return null;
     }
-
-    private boolean shouldSkipSuppressedReplay(ServerLevel level) { return this.deferredActionFalloutGuard.shouldSuppressCurrent(level); }
 
     public static boolean shouldCaptureMutation(io.github.luma.domain.model.WorldMutationSource source) {
         if (WorldMutationContext.captureSuppressed()) {
