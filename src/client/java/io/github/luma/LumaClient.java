@@ -15,8 +15,7 @@ import io.github.luma.client.input.LumiShortcutInteractionGate;
 import io.github.luma.client.input.LumiShortcutScreenPolicy;
 import io.github.luma.client.input.LumiShortcutSuppressingScreen;
 import io.github.luma.client.input.QuickRollbackKeyController;
-import io.github.luma.client.input.UndoRedoKeyChordTracker;
-import io.github.luma.client.input.UndoRedoKeyController;
+import io.github.luma.client.input.LumiActionKeyChordTracker;
 import io.github.luma.client.onboarding.ClientOnboardingFlowCoordinator;
 import io.github.luma.client.telemetry.TelemetryNoticeController;
 import io.github.luma.client.preview.PreviewCaptureCoordinator;
@@ -42,8 +41,6 @@ import io.github.luma.ui.overlay.CompareOverlayHotkeyHud;
 import io.github.luma.ui.overlay.CompareOverlayCoordinator;
 import io.github.luma.ui.overlay.PendingChangesOverlayCoordinator;
 import io.github.luma.ui.overlay.PendingChangesOverlayRenderer;
-import io.github.luma.ui.overlay.RecentChangesOverlayCoordinator;
-import io.github.luma.ui.overlay.RecentChangesOverlayRenderer;
 import io.github.luma.ui.overlay.WorkZoneOverlayRenderer;
 import io.github.luma.ui.overlay.LumiRegionSelectionRenderer;
 import io.github.luma.ui.overlay.OverlayDiagnostics;
@@ -78,8 +75,7 @@ public final class LumaClient implements ClientModInitializer {
     private KeyMapping lumiActionButtonKey;
     private KeyMapping hotkeyInfoKey;
     private final KeyBindingState keyBindingState = new KeyBindingState();
-    private final UndoRedoKeyChordTracker undoRedoKeyChordTracker = new UndoRedoKeyChordTracker();
-    private final UndoRedoKeyController undoRedoKeyController = new UndoRedoKeyController();
+    private final LumiActionKeyChordTracker actionKeyChordTracker = new LumiActionKeyChordTracker();
     private final QuickRollbackKeyController quickRollbackKeyController = new QuickRollbackKeyController();
     private final LumiShortcutScreenPolicy shortcutScreenPolicy = new LumiShortcutScreenPolicy();
     private final LumiRegionSelectionTeachingController selectionTeachingController = new LumiRegionSelectionTeachingController();
@@ -177,7 +173,6 @@ public final class LumaClient implements ClientModInitializer {
         WorldRenderEvents.END_MAIN.register(LumiRegionSelectionRenderer::render);
         WorldRenderEvents.END_MAIN.register(WorkZoneOverlayRenderer::render);
         WorldRenderEvents.END_MAIN.register(PendingChangesOverlayRenderer::render);
-        WorldRenderEvents.END_MAIN.register(RecentChangesOverlayRenderer::render);
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
                 new LumaClientCommands(this.workspaceOpenService).register(dispatcher));
         OverlayDiagnostics.getInstance().clientRenderCallbacksRegistered("END_MAIN");
@@ -218,7 +213,7 @@ public final class LumaClient implements ClientModInitializer {
         this.selectionTeachingController.tick(client);
         if (shortcutsSuppressed) {
             this.drainLumiShortcutClicks();
-            UndoRedoKeyChordTracker.TickResult idleKeys = this.undoRedoKeyChordTracker.tick(
+            LumiActionKeyChordTracker.TickResult idleKeys = this.actionKeyChordTracker.tick(
                     client,
                     false,
                     false,
@@ -228,63 +223,47 @@ public final class LumaClient implements ClientModInitializer {
             LumiShortcutInteractionGate.getInstance().tick(false, idleKeys);
             CompareOverlayRenderer.setXrayEnabled(false);
             PendingChangesOverlayCoordinator.getInstance().tick(client, false);
-            RecentChangesOverlayCoordinator.getInstance().tick(client, false, idleKeys.previewTarget());
             OverlayDiagnostics.getInstance().clientTick(
                     client,
                     false,
                     false,
-                    idleKeys.previewTarget(),
                     false,
                     false,
                     this.lumiActionButtonKey
             );
             return;
         }
-        UndoRedoKeyChordTracker.TickResult undoRedoKeys = this.undoRedoKeyChordTracker.tick(
+        LumiActionKeyChordTracker.TickResult actionKeys = this.actionKeyChordTracker.tick(
                 client,
                 undoRedoInputActive,
                 overlayHold,
                 this.undoKey,
                 this.redoKey
         );
-        RecentChangesOverlayCoordinator.PreviewTarget recentPreviewTarget = overlayHold && !undoRedoKeys.previewActive()
-                ? RecentChangesOverlayCoordinator.PreviewTarget.BOTH
-                : undoRedoKeys.previewTarget();
-        LumiShortcutInteractionGate.getInstance().tick(worldInputActive, undoRedoKeys);
+        LumiShortcutInteractionGate.getInstance().tick(worldInputActive, actionKeys);
         CompareOverlayRenderer.setXrayEnabled(overlayHold);
         CompareOverlayCoordinator.getInstance().tick(client);
-        boolean recentPreviewActive = RecentChangesOverlayCoordinator.getInstance().tick(
-                client,
-                worldInputActive && overlayHold,
-                recentPreviewTarget
-        );
         PendingChangesOverlayCoordinator.getInstance().tick(
                 client,
-                worldInputActive && overlayHold && undoRedoKeys.previewActive() && !recentPreviewActive
+                worldInputActive && overlayHold
         );
         OverlayDiagnostics.getInstance().clientTick(
                 client,
                 overlayHold,
                 undoRedoInputActive,
-                recentPreviewTarget,
-                undoRedoKeys.undoPressed(),
-                undoRedoKeys.redoPressed(),
+                actionKeys.undoPressed(),
+                actionKeys.redoPressed(),
                 this.lumiActionButtonKey
         );
         while (this.toggleCompareOverlayKey.consumeClick()) {
             CompareOverlayRenderer.toggleVisibility();
         }
-        if (undoRedoKeys.undoPressed()) {
-            if (!LumiRegionSelectionController.getInstance().handleUndoRedo(client, true)) {
-                this.undoRedoKeyController.undo(client);
-            }
+        if (actionKeys.undoPressed()) {
+            LumiRegionSelectionController.getInstance().handleUndoRedo(client, true);
         }
-        if (undoRedoKeys.redoPressed()) {
-            if (!LumiRegionSelectionController.getInstance().handleUndoRedo(client, false)) {
-                this.undoRedoKeyController.redo(client);
-            }
+        if (actionKeys.redoPressed()) {
+            LumiRegionSelectionController.getInstance().handleUndoRedo(client, false);
         }
-        this.undoRedoKeyController.tick(client);
 
         boolean quickRollbackClicked = false;
         while (this.quickRollbackKey.consumeClick()) {
@@ -360,7 +339,6 @@ public final class LumaClient implements ClientModInitializer {
     private void clearWorldClientState() {
         CompareOverlayRenderer.clear();
         PendingChangesOverlayRenderer.clear();
-        RecentChangesOverlayRenderer.clear();
         AsyncCompareCache.getInstance().clear();
         ProjectPreviewTextureCache.releaseAll();
     }

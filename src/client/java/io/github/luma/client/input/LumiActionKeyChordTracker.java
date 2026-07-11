@@ -1,23 +1,20 @@
 package io.github.luma.client.input;
 
-import io.github.luma.ui.overlay.RecentChangesOverlayCoordinator;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 
-/**
- * Tracks the held Lumi overlay modifier and undo/redo keys as one-shot key chords.
- */
-public final class UndoRedoKeyChordTracker {
+/** Tracks one-shot action-key chords used by selection editing. */
+public final class LumiActionKeyChordTracker {
 
     private final KeyBindingState keyBindingState;
     private boolean undoHeld;
     private boolean redoHeld;
 
-    public UndoRedoKeyChordTracker() {
+    public LumiActionKeyChordTracker() {
         this(new KeyBindingState());
     }
 
-    UndoRedoKeyChordTracker(KeyBindingState keyBindingState) {
+    LumiActionKeyChordTracker(KeyBindingState keyBindingState) {
         this.keyBindingState = keyBindingState;
     }
 
@@ -28,15 +25,13 @@ public final class UndoRedoKeyChordTracker {
             KeyMapping undoKey,
             KeyMapping redoKey
     ) {
-        boolean undoClicked = this.consumeClicks(undoKey);
-        boolean redoClicked = this.consumeClicks(redoKey);
         return this.tick(
                 inputActive,
                 modifierHeld,
                 this.keyBindingState.isDown(client, undoKey),
                 this.keyBindingState.isDown(client, redoKey),
-                undoClicked,
-                redoClicked
+                consumeClicks(undoKey),
+                consumeClicks(redoKey)
         );
     }
 
@@ -61,22 +56,16 @@ public final class UndoRedoKeyChordTracker {
         if (undoRequested && redoRequested) {
             redoRequested = false;
         }
-
-        TickResult result = new TickResult(
-                undoRequested,
-                redoRequested,
-                currentUndoHeld || currentRedoHeld || undoRequested || redoRequested,
-                (currentRedoHeld || redoRequested) && !(currentUndoHeld || undoRequested)
-                        ? RecentChangesOverlayCoordinator.PreviewTarget.REDO
-                        : RecentChangesOverlayCoordinator.PreviewTarget.UNDO
-        );
-
         this.undoHeld = currentUndoHeld;
         this.redoHeld = currentRedoHeld;
-        return result;
+        return new TickResult(
+                undoRequested,
+                redoRequested,
+                currentUndoHeld || currentRedoHeld || undoRequested || redoRequested
+        );
     }
 
-    private boolean consumeClicks(KeyMapping key) {
+    private static boolean consumeClicks(KeyMapping key) {
         if (key == null) {
             return false;
         }
@@ -87,14 +76,9 @@ public final class UndoRedoKeyChordTracker {
         return clicked;
     }
 
-    public record TickResult(
-            boolean undoPressed,
-            boolean redoPressed,
-            boolean previewActive,
-            RecentChangesOverlayCoordinator.PreviewTarget previewTarget
-    ) {
+    public record TickResult(boolean undoPressed, boolean redoPressed, boolean chordActive) {
         public static TickResult idle() {
-            return new TickResult(false, false, false, RecentChangesOverlayCoordinator.PreviewTarget.UNDO);
+            return new TickResult(false, false, false);
         }
     }
 }

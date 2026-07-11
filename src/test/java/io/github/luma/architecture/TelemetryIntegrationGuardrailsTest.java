@@ -45,14 +45,11 @@ class TelemetryIntegrationGuardrailsTest {
     void overlayFailuresAreReportedAndDisabled() throws IOException {
         String compare = Files.readString(Path.of("src/client/java/io/github/luma/ui/overlay/CompareOverlayRenderer.java"));
         String pending = Files.readString(Path.of("src/client/java/io/github/luma/ui/overlay/PendingChangesOverlayRenderer.java"));
-        String recent = Files.readString(Path.of("src/client/java/io/github/luma/ui/overlay/RecentChangesOverlayRenderer.java"));
 
         assertTrue(compare.contains("TelemetryService.getInstance().recordRenderOverlayDisabled"),
                 "Compare overlay failures should be reported");
         assertTrue(pending.contains("TelemetryService.getInstance().recordRenderOverlayDisabled"),
                 "Pending overlay failures should be reported");
-        assertTrue(recent.contains("TelemetryService.getInstance().recordRenderOverlayDisabled"),
-                "Recent overlay failures should be reported");
     }
 
     @Test

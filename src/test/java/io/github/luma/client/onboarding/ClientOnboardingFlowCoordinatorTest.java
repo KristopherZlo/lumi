@@ -20,22 +20,6 @@ class ClientOnboardingFlowCoordinatorTest {
     }
 
     @Test
-    void undoRedoWorldPreviewSuppressesNormalShortcuts() {
-        ClientOnboardingFlowCoordinator coordinator = ClientOnboardingFlowCoordinator.getInstance();
-
-        coordinator.startWorldPreviewStep(
-                "test-project",
-                "main",
-                "luma.status.project_ready",
-                this.service(),
-                new OnboardingTour(),
-                OnboardingTour.Transition.EXECUTE_UNDO
-        );
-
-        Assertions.assertTrue(coordinator.suppressesLumiShortcuts());
-    }
-
-    @Test
     void nonPreviewStepDoesNotSuppressNormalShortcuts() {
         ClientOnboardingFlowCoordinator coordinator = ClientOnboardingFlowCoordinator.getInstance();
 

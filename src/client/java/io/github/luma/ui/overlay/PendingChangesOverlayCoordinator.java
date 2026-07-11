@@ -44,7 +44,7 @@ public final class PendingChangesOverlayCoordinator {
             this.clearPreview();
             return;
         }
-        if (CompareOverlayRenderer.visible() || RecentChangesOverlayRenderer.visible()) {
+        if (CompareOverlayRenderer.visible()) {
             this.clearPreview();
             return;
         }

@@ -32,20 +32,6 @@ public final class OnboardingTour {
             Page.world("break_block"),
             Page.world("preview_changes"),
             Page.hold(
-                    "undo_world",
-                    Transition.EXECUTE_UNDO,
-                    "luma.onboarding.hold_undo",
-                    LumiClientKeyBindings.Role.ACTION,
-                    LumiClientKeyBindings.Role.UNDO
-            ),
-            Page.hold(
-                    "redo_world",
-                    Transition.EXECUTE_REDO,
-                    "luma.onboarding.hold_redo",
-                    LumiClientKeyBindings.Role.ACTION,
-                    LumiClientKeyBindings.Role.REDO
-            ),
-            Page.hold(
                     "save_shortcut",
                     Transition.OPEN_QUICK_SAVE,
                     "luma.onboarding.hold_quick_save",
@@ -276,18 +262,6 @@ public final class OnboardingTour {
                 contentWidth
         ));
         table.child(this.shortcutTableRow(
-                "luma.onboarding.shortcuts_undo",
-                "luma.onboarding.shortcuts_undo_help",
-                new Shortcut(List.of(LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.UNDO)),
-                contentWidth
-        ));
-        table.child(this.shortcutTableRow(
-                "luma.onboarding.shortcuts_redo",
-                "luma.onboarding.shortcuts_redo_help",
-                new Shortcut(List.of(LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.REDO)),
-                contentWidth
-        ));
-        table.child(this.shortcutTableRow(
                 "luma.onboarding.shortcuts_quick_rollback",
                 "luma.onboarding.shortcuts_quick_rollback_help",
                 new Shortcut(List.of(LumiClientKeyBindings.Role.QUICK_ROLLBACK)),
@@ -330,7 +304,7 @@ public final class OnboardingTour {
 
     private boolean shortcutOnlyPage(Page page) {
         return switch (page.id()) {
-            case "preview_changes", "undo_world", "redo_world" -> true;
+            case "preview_changes" -> true;
             default -> false;
         };
     }
@@ -422,11 +396,7 @@ public final class OnboardingTour {
     }
 
     private Transition skipShortcutPage(Page page) {
-        return switch (page.onHold()) {
-            case OPEN_WORKSPACE -> this.advanceAfterHold(page);
-            case EXECUTE_UNDO, EXECUTE_REDO -> this.nextPage();
-            default -> this.nextPage();
-        };
+        return page.onHold() == Transition.OPEN_WORKSPACE ? this.advanceAfterHold(page) : this.nextPage();
     }
 
     private Transition advanceAfterHold(Page page) {
@@ -497,8 +467,6 @@ public final class OnboardingTour {
         CLOSE_WORKSPACE,
         OPEN_CONTROLS,
         OPEN_QUICK_SAVE,
-        EXECUTE_UNDO,
-        EXECUTE_REDO,
         COMPLETE
     }
 

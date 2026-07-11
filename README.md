@@ -52,12 +52,11 @@ For dedicated servers, install Lumi on both the server and every client that use
 - Compares saved versions, branches, and current unsaved work.
 - Provides a Compare workspace page for picking two saves from branch histories before showing the overlay.
 - Shows changed blocks with an in-world overlay.
-- Renders large pending and recent-change overlays as merged section meshes while preserving per-block square outlines.
+- Renders large pending-change overlays as merged section meshes while preserving per-block square outlines.
 - Restores a whole save, a selected area, or everything outside a selected area.
 - Lets you branch risky ideas and merge local branches back into the active branch.
 - Shows each branch history from its current head through reachable parent saves and restorable forward descendants.
 - Imports and exports project history packages.
-- Adds live undo/redo for recent tracked edits.
 - Keeps recovery drafts for interrupted work.
 - Lets you mark active work zones, save a zone separately, and keep unrelated pending work.
 - Lets work zones grow from causal tree growth and supported external-tool edits, hide boundary boxes, delete zone metadata without deleting commits, and optionally show zone commits in global history with zone color markers.
@@ -66,7 +65,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 ### Quick Start
 
 1. Enter a world and let Lumi initialize the current workspace.
-2. Follow the quick tour: make 5 block edits, preview recent actions with [ALT] or undo/redo with [ALT]+[Z]/[Y], use the wooden sword for restore areas and zone cells, then save with [ALT]+[S].
+2. Follow the quick tour: make 5 block edits, preview pending work with [ALT], use the wooden sword for restore areas and zone cells, then save with [ALT]+[S].
 3. Press [U] to open Build History and inspect the created save card.
 4. Use the Compare tab to pick two saves for the overlay, or use save cards for restore, branches, and older checkpoints when an idea goes wrong.
 
@@ -77,9 +76,9 @@ For dedicated servers, install Lumi on both the server and every client that use
 | [U] | Open Build History, or Zones when an active zone is selected |
 | [ALT]+[S] by default | Open Save build, or Save zone when an active zone is selected |
 | [ALT]+[1] ... [0] by default | Switch to the branch bound to that key; `main` defaults to [1], then branches use the first free key from [1]...[0] |
-| [ALT] by default | Hold to preview recent undo/redo actions and enable action-key modifiers |
-| [ALT]+[Z] by default | Undo, hold to preview the undo target |
-| [ALT]+[Y] by default | Redo, hold to preview the redo target |
+| [ALT] by default | Hold to preview pending work and enable action-key modifiers |
+| [ALT]+[Z] by default | Undo the current wooden-sword selection edit |
+| [ALT]+[Y] by default | Redo the current wooden-sword selection edit |
 | [R] | Quick rollback of unsaved work |
 | [H] | Toggle compare overlay |
 | [ALT]+[I] by default | Show Lumi hotkeys |

@@ -873,7 +873,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             case REBUILD -> this.refresh(this.statusKey);
             case CLOSE_WORKSPACE -> this.closeWorkspaceForWorldTeaching();
             case OPEN_CONTROLS -> this.openControls();
-            case OPEN_WORKSPACE, EXECUTE_UNDO, EXECUTE_REDO -> {
+            case OPEN_WORKSPACE -> {
             }
             case COMPLETE -> this.completeOnboarding();
             case NONE -> {

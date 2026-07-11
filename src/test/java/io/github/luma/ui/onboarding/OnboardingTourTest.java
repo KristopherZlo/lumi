@@ -15,8 +15,6 @@ class OnboardingTourTest {
                 "welcome",
                 "break_block",
                 "preview_changes",
-                "undo_world",
-                "redo_world",
                 "save_shortcut",
                 "open",
                 "save_spotlight",
@@ -27,8 +25,8 @@ class OnboardingTourTest {
     }
 
     @Test
-    void firstTourHasElevenPages() {
-        Assertions.assertEquals(11, OnboardingTour.pageCount());
+    void firstTourHasNinePages() {
+        Assertions.assertEquals(9, OnboardingTour.pageCount());
     }
 
     @Test
@@ -55,7 +53,7 @@ class OnboardingTourTest {
         Assertions.assertEquals("preview_changes", tour.currentPageId());
 
         Assertions.assertEquals(OnboardingTour.Transition.REBUILD, tour.advanceAfterPendingPreview());
-        Assertions.assertEquals("undo_world", tour.currentPageId());
+        Assertions.assertEquals("save_shortcut", tour.currentPageId());
     }
 
     @Test
@@ -64,9 +62,6 @@ class OnboardingTourTest {
         tour.next();
         tour.advanceAfterWorldEdit();
         tour.advanceAfterPendingPreview();
-        tour.next();
-        tour.next();
-
         Assertions.assertEquals("save_shortcut", tour.currentPageId());
         Assertions.assertEquals(OnboardingTour.Transition.REBUILD, tour.advanceAfterQuickSave());
         Assertions.assertEquals("open", tour.currentPageId());
@@ -78,8 +73,6 @@ class OnboardingTourTest {
         tour.next();
         tour.advanceAfterWorldEdit();
         tour.advanceAfterPendingPreview();
-        tour.next();
-        tour.next();
         tour.advanceAfterQuickSave();
         tour.next();
         tour.next();

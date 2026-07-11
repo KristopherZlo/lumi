@@ -19,9 +19,6 @@ public final class OverlayDiagnostics {
     private boolean lastOverlayHold;
     private boolean lastShortcutInputActive;
     private boolean lastCompareVisible;
-    private boolean lastRecentVisible;
-    private RecentChangesOverlayCoordinator.PreviewTarget lastPreviewTarget =
-            RecentChangesOverlayCoordinator.PreviewTarget.UNDO;
 
     private OverlayDiagnostics() {
     }
@@ -31,31 +28,25 @@ public final class OverlayDiagnostics {
     }
 
     public void clientRenderCallbacksRegistered(String stage) {
-        LumaDebugLog.log("overlay-render", "Registered compare and recent overlay callbacks at {}", stage);
+        LumaDebugLog.log("overlay-render", "Registered compare and pending overlay callbacks at {}", stage);
     }
 
     public void clientTick(
             Minecraft client,
             boolean overlayHold,
             boolean shortcutInputActive,
-            RecentChangesOverlayCoordinator.PreviewTarget previewTarget,
             boolean undoPressed,
             boolean redoPressed,
             KeyMapping overlayKey
     ) {
         boolean compareVisible = CompareOverlayRenderer.visible();
-        boolean recentVisible = RecentChangesOverlayRenderer.visible();
         boolean changed = overlayHold != this.lastOverlayHold
                 || shortcutInputActive != this.lastShortcutInputActive
-                || compareVisible != this.lastCompareVisible
-                || recentVisible != this.lastRecentVisible
-                || previewTarget != this.lastPreviewTarget;
+                || compareVisible != this.lastCompareVisible;
 
         this.lastOverlayHold = overlayHold;
         this.lastShortcutInputActive = shortcutInputActive;
         this.lastCompareVisible = compareVisible;
-        this.lastRecentVisible = recentVisible;
-        this.lastPreviewTarget = previewTarget;
 
         if (!changed && !overlayHold && !undoPressed && !redoPressed) {
             return;
@@ -66,14 +57,12 @@ public final class OverlayDiagnostics {
 
         LumaDebugLog.log(
                 "overlay-input",
-                "tick hold={} shortcutActive={} preview={} undoPressed={} redoPressed={} compareVisible={} recentVisible={} screen={} player={} level={} key={}",
+                "tick hold={} shortcutActive={} undoPressed={} redoPressed={} compareVisible={} screen={} player={} level={} key={}",
                 overlayHold,
                 shortcutInputActive,
-                previewTarget,
                 undoPressed,
                 redoPressed,
                 compareVisible,
-                recentVisible,
                 screenName(client),
                 client != null && client.player != null,
                 client != null && client.level != null,

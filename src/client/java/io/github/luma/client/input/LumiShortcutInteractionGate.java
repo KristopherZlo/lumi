@@ -36,10 +36,10 @@ public final class LumiShortcutInteractionGate {
         this.keyBindingState = keyBindingState;
     }
 
-    public void tick(boolean inputActive, UndoRedoKeyChordTracker.TickResult shortcutState) {
+    public void tick(boolean inputActive, LumiActionKeyChordTracker.TickResult shortcutState) {
         boolean shortcutActive = inputActive
                 && shortcutState != null
-                && (shortcutState.previewActive() || shortcutState.undoPressed() || shortcutState.redoPressed());
+                && shortcutState.chordActive();
         this.tick(inputActive, shortcutActive);
     }
 

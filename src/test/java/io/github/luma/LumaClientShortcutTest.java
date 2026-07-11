@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LumaClientShortcutTest {
@@ -22,19 +23,14 @@ class LumaClientShortcutTest {
     }
 
     @Test
-    void holdingActionKeyAlonePreparesRecentOverlayButNotPendingScan() throws IOException {
+    void holdingActionKeyPreparesTheDurablePendingOverlay() throws IOException {
         String source = Files.readString(Path.of("src/client/java/io/github/luma/LumaClient.java"));
 
         assertTrue(source.replace("\r\n", "\n").contains(
-                "overlayHold && !undoRedoKeys.previewActive()\n"
-                        + "                ? RecentChangesOverlayCoordinator.PreviewTarget.BOTH"
+                "PendingChangesOverlayCoordinator.getInstance().tick(\n"
+                        + "                client,\n"
+                        + "                worldInputActive && overlayHold"
         ));
-        assertTrue(source.replace("\r\n", "\n").contains(
-                "worldInputActive && overlayHold,\n"
-                        + "                recentPreviewTarget"
-        ));
-        assertTrue(source.replace("\r\n", "\n").contains(
-                "worldInputActive && overlayHold && undoRedoKeys.previewActive() && !recentPreviewActive"
-        ));
+        assertFalse(source.contains("RecentChangesOverlay"));
     }
 }
