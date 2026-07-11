@@ -162,7 +162,7 @@ Run the integrated singleplayer player-flow regression suite:
 .\gradlew.bat runClientGameTest -Dlumi.singleplayerTest.mode=player-flow --no-daemon
 ```
 
-The player-flow TNT checks place redstone beside pre-existing TNT, verify that a ten-block explosion chain remains one live action, and require one undo to remove the trigger, restore every TNT block, and leave no primed TNT entity. The same flow verifies entity-only quick rollback and a final full restore after the explosion scenarios.
+The player-flow TNT checks place redstone beside pre-existing TNT, verify that the complete ten-block explosion chain settles into the durable draft, and require quick rollback to restore every TNT block without leaving primed TNT entities. The same flow verifies entity-only quick rollback and a final full restore after the explosion scenarios.
 
 Run the alpha gate:
 
@@ -308,15 +308,15 @@ Special Thanks entries may use `skinName` for Minecraft profile skin and cape
 lookup, or `skinUrl` for a direct skin PNG while still using the profile cape
 when a name is available.
 
-`-Dlumi.loadLog=true` writes `logs/lumi-load.log`. TNT undo/redo debugging uses
-`undo-redo/selected-action`, `tnt-context/*`, and `tnt-replay/*` events to show
-freeze decisions, explosive context lifecycle, replayed primed TNT entities,
-TNT activation callbacks, frozen primed TNT ticks, and TNT explosion context.
+`-Dlumi.loadLog=true` writes `logs/lumi-load.log`. TNT restore diagnostics use
+`tnt-context/*` and `tnt-replay/*` events to show freeze decisions, deferred
+explosive context, TNT activation callbacks, frozen primed TNT ticks, and TNT
+explosion context.
 
 `-Dlumi.fluidUndoLog=true` writes `logs/lumi-fluid-undo.log` with fluid ticks,
-replay suppression, fluid-tail guards, live undo/redo action records, and
-undo/redo selection/completion events. It is separate from `lumi.loadLog`, so it
-can be enabled alone while the broader logs stay off.
+replay suppression, fluid-tail guards, and settled capture diagnostics. It is
+separate from `lumi.loadLog`, so it can be enabled alone while the broader logs
+stay off.
 
 Runtime logs are written under the normal Minecraft `logs/` directory or the world-local `lumi/test-logs/` directory for test profiles, including multiplayer work-zone smoke behavior logs.
 

@@ -98,7 +98,7 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
-    void undoRedoEntityMovementPreparesDeltaUpdateWithoutRemoval() throws Exception {
+    void reverseDiffEntityMovementPreparesDeltaUpdateWithoutRemoval() throws Exception {
         String entityId = "00000000-0000-0000-0000-000000000023";
 
         List<PreparedChunkBatch> batches = this.preparer.prepareDiff(
@@ -124,7 +124,7 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
-    void redoSkipsPrimedTntSpawnButUndoCanRemoveIt() throws Exception {
+    void forwardDiffSkipsPrimedTntSpawnButReverseDiffCanRemoveIt() throws Exception {
         String entityId = "00000000-0000-0000-0000-000000000024";
         List<StoredEntityChange> changes = List.of(new StoredEntityChange(
                 entityId,
@@ -133,7 +133,7 @@ class WorldChangeBatchPreparerTest {
                 entity("minecraft:tnt", entityId, 1.0D)
         ));
 
-        List<PreparedChunkBatch> redoBatches = this.preparer.prepareDiff(
+        List<PreparedChunkBatch> forwardBatches = this.preparer.prepareDiff(
                 null,
                 List.of(),
                 changes,
@@ -141,7 +141,7 @@ class WorldChangeBatchPreparerTest {
                 null,
                 EntityApplyMode.DELTA
         );
-        List<PreparedChunkBatch> undoBatches = this.preparer.prepareDiff(
+        List<PreparedChunkBatch> reverseBatches = this.preparer.prepareDiff(
                 null,
                 List.of(),
                 changes,
@@ -150,8 +150,8 @@ class WorldChangeBatchPreparerTest {
                 EntityApplyMode.DELTA
         );
 
-        assertTrue(redoBatches.isEmpty());
-        assertEquals(List.of(entityId), undoBatches.getFirst().entityBatch().entityIdsToRemove());
+        assertTrue(forwardBatches.isEmpty());
+        assertEquals(List.of(entityId), reverseBatches.getFirst().entityBatch().entityIdsToRemove());
     }
 
     @Test
@@ -245,7 +245,7 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
-    void undoRedoLargeSimpleSectionsPrepareAsRewriteBatches() throws Exception {
+    void largeSimpleDiffsPrepareAsRewriteBatches() throws Exception {
         List<StoredBlockChange> changes = java.util.stream.IntStream
                 .range(0, SectionApplySafetyClassifier.CONTAINER_REWRITE_THRESHOLD)
                 .mapToObj(index -> new StoredBlockChange(
@@ -395,7 +395,7 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
-    void undoRedoWaterBrokenDoublePlantRestoresBothHalvesWithoutFluidReplay() throws Exception {
+    void reverseDiffRestoresWaterBrokenDoublePlantWithoutFluidReplay() throws Exception {
         BlockPos lower = new BlockPos(1, 64, 1);
         BlockState lowerPlant = Blocks.SUNFLOWER.defaultBlockState()
                 .setValue(DoublePlantBlock.HALF, DoubleBlockHalf.LOWER);
@@ -432,7 +432,7 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
-    void undoRedoRestoresFloodedRedstoneWithoutFluidReplay() throws Exception {
+    void reverseDiffRestoresFloodedRedstoneWithoutFluidReplay() throws Exception {
         BlockPos pos = new BlockPos(1, 64, 1);
 
         List<PreparedChunkBatch> batches = this.preparer.prepareDiff(
@@ -654,7 +654,7 @@ class WorldChangeBatchPreparerTest {
     }
 
     @Test
-    void undoRedoRestoresRetractedPistonBaseFromTransientMovingBaseTarget() throws Exception {
+    void reverseDiffRestoresRetractedPistonBaseFromTransientMovingBaseTarget() throws Exception {
         BlockPos base = new BlockPos(0, 64, 0);
         BlockState retracted = Blocks.PISTON.defaultBlockState()
                 .setValue(PistonBaseBlock.FACING, Direction.EAST)

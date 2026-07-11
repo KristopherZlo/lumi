@@ -7,7 +7,7 @@ import net.minecraft.world.level.block.state.BlockState;
 /**
  * Selects Minecraft block update flags for Lumi's internal world replay path.
  *
- * <p>Restore, undo, redo, and recovery apply persisted states directly. They
+ * <p>Restore and recovery apply persisted states directly. They
  * must refresh clients without re-running placement physics, redstone neighbor
  * updates, or block removal side effects from the replay itself.
  */

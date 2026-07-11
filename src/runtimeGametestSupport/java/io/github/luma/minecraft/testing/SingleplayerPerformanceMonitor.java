@@ -20,7 +20,7 @@ final class SingleplayerPerformanceMonitor {
 
     private static final long MAX_SYNC_SLICE_NANOS = Duration.ofSeconds(1).toNanos();
     private static final long MAX_SYNC_TOTAL_NANOS = Duration.ofSeconds(5).toNanos();
-    private static final int MAX_ACTION_APPLY_UNITS = 128;
+    private static final int MAX_QUICK_ROLLBACK_UNITS = 128;
     private static final int MAX_PARTIAL_RESTORE_BLOCKS = 16;
     private static final int MAX_FULL_RESTORE_BLOCKS = 512;
     private static final long MAX_HEAP_GROWTH_MIB = 1024;
@@ -36,6 +36,7 @@ final class SingleplayerPerformanceMonitor {
             "partial-restore",
             "zone-restore",
             "restore-draft",
+            "quick-rollback",
             "merge-variant"
     );
 
@@ -179,9 +180,9 @@ final class SingleplayerPerformanceMonitor {
                         : "max=" + slowestCoreOperation.durationMillis() + " ms in " + slowestCoreOperation.label
         ));
         checks.add(new PerformanceCheck(
-                "Undo, redo, and quick rollback remained action-scoped instead of broad world work",
-                this.maxOperationUnits("undo-action", "redo-action", "quick-rollback") <= MAX_ACTION_APPLY_UNITS,
-                "maxActionUnits=" + this.maxOperationUnits("undo-action", "redo-action", "quick-rollback")
+                "Quick rollback remained draft-scoped instead of broad world work",
+                this.maxOperationUnits("quick-rollback") <= MAX_QUICK_ROLLBACK_UNITS,
+                "maxQuickRollbackUnits=" + this.maxOperationUnits("quick-rollback")
         ));
         checks.add(new PerformanceCheck(
                 "Partial restore stayed region-scoped",

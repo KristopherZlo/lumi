@@ -18,7 +18,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Owns the durable working draft independently from volatile live undo/redo.
+ * Owns the durable working draft independently from transient client state.
  */
 final class WorkingDraftSessionManager {
 

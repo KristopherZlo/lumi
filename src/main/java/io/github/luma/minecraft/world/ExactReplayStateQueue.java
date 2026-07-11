@@ -15,7 +15,7 @@ import net.minecraft.world.level.block.state.BlockState;
 /**
  * Reasserts persisted block states after vanilla replay fallout has drained.
  *
- * <p>Undo, redo, and restore apply complete history states. Neighbor updates
+ * <p>Restore and recovery apply complete history states. Neighbor updates
  * that are still needed for attachment cleanup can recompute redstone-only
  * properties after the main block pass, so a final exact pass keeps the world
  * at the saved state rather than the freshly simulated one.

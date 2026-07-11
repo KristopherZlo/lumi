@@ -20,8 +20,6 @@ class SingleplayerPerformanceMonitorTest {
         SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
         monitor.recordSyncSlice("Project setup", Duration.ofMillis(20).toNanos());
         monitor.recordSyncSlice("Verify save", Duration.ofMillis(30).toNanos());
-        monitor.recordOperationSnapshot(snapshot("undo-action", 3));
-        monitor.recordOperationSnapshot(snapshot("redo-action", 3));
         monitor.recordOperationSnapshot(snapshot("quick-rollback", 3));
         monitor.recordOperationSnapshot(snapshot("partial-restore", 1));
         monitor.recordOperationSnapshot(snapshot("restore-version", 4));
@@ -30,15 +28,15 @@ class SingleplayerPerformanceMonitorTest {
     }
 
     @Test
-    void keepsLargeTntActionsBounded() {
+    void keepsQuickRollbackDraftsBounded() {
         SingleplayerPerformanceMonitor accepted = new SingleplayerPerformanceMonitor();
-        accepted.recordOperationSnapshot(snapshot("undo-action", 128));
+        accepted.recordOperationSnapshot(snapshot("quick-rollback", 128));
 
         SingleplayerPerformanceMonitor rejected = new SingleplayerPerformanceMonitor();
-        rejected.recordOperationSnapshot(snapshot("undo-action", 129));
+        rejected.recordOperationSnapshot(snapshot("quick-rollback", 129));
 
-        assertTrue(checkContaining(accepted, "remained action-scoped").passed());
-        assertFalse(checkContaining(rejected, "remained action-scoped").passed());
+        assertTrue(checkContaining(accepted, "remained draft-scoped").passed());
+        assertFalse(checkContaining(rejected, "remained draft-scoped").passed());
     }
 
     @Test
@@ -90,19 +88,18 @@ class SingleplayerPerformanceMonitorTest {
     }
 
     @Test
-    void enforcesTwoSecondCoreOperationBudgetWithoutIncludingUndo() {
+    void enforcesTwoSecondCoreOperationBudgetIncludingQuickRollback() {
         SingleplayerPerformanceMonitor accepted = new SingleplayerPerformanceMonitor();
         accepted.recordOperationSnapshot(snapshot("restore-version", 10, 2_000));
-        accepted.recordOperationSnapshot(snapshot("undo-action", 10, 10_000));
 
         SingleplayerPerformanceMonitor rejected = new SingleplayerPerformanceMonitor();
-        rejected.recordOperationSnapshot(snapshot("save-version", 10, 2_001));
+        rejected.recordOperationSnapshot(snapshot("quick-rollback", 10, 2_001));
 
         assertTrue(checkContaining(accepted, "Core save, restore").passed());
         SingleplayerPerformanceMonitor.PerformanceCheck rejectedCheck =
                 checkContaining(rejected, "Core save, restore");
         assertFalse(rejectedCheck.passed());
-        assertTrue(rejectedCheck.detail().contains("2001 ms in save-version"));
+        assertTrue(rejectedCheck.detail().contains("2001 ms in quick-rollback"));
     }
 
     @Test

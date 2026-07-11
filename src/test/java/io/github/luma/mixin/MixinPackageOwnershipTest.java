@@ -35,7 +35,7 @@ class MixinPackageOwnershipTest {
 
         assertTrue(
                 mixinConfig.contains("\"BoneMealItemMixin\""),
-                "Bonemeal growth must keep the player action context for undo/redo capture"
+                "Bonemeal growth must keep the builder context for settled capture"
         );
     }
 

@@ -19,7 +19,7 @@ import net.minecraft.world.level.block.state.BlockState;
  *
  * <p>Persisted redstone properties such as power, powered, and lit are restored
  * as exact history state. Re-simulating those property transitions during replay
- * can schedule a fresh pulse after undo/redo and move the world away from the
+ * can schedule a fresh pulse after restore and move the world away from the
  * state being restored.
  */
 final class RedstoneReplayUpdatePlanner {
