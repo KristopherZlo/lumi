@@ -727,6 +727,66 @@ public final class HistoryCaptureManager {
         }
     }
 
+    /**
+     * Updates the durable working draft after an undo/redo apply, whose world
+     * mutations are deliberately capture-suppressed.
+     */
+    public void applyUndoRedoAdjustments(
+            MinecraftServer server,
+            String projectId,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            String actor,
+            Instant now
+    ) throws IOException {
+        this.serverThreadExecutor.run(server, () -> {
+            if ((changes == null || changes.isEmpty())
+                    && (entityChanges == null || entityChanges.isEmpty())) {
+                return;
+            }
+            TrackedProject project = this.findTrackedProject(server, projectId);
+            if (project == null) {
+                return;
+            }
+
+            TrackedChangeBuffer buffer = this.getOrCreateWorkingDraft(
+                    project,
+                    io.github.luma.domain.model.WorldMutationSource.PLAYER,
+                    now
+            );
+            CaptureSessionState session = this.workingDrafts.session(projectId);
+            for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
+                if (change == null || change.isNoOp()) {
+                    continue;
+                }
+                buffer.addChange(change, now);
+                if (session != null) {
+                    session.addRootChunk(ChunkPoint.from(change.pos()));
+                }
+            }
+            for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
+                if (change == null || change.isNoOp()) {
+                    continue;
+                }
+                buffer.addEntityChange(change, now);
+                if (session != null) {
+                    session.addRootChunk(change.chunk());
+                }
+            }
+            if (buffer.isEmpty()) {
+                this.workingDrafts.discardIfEmpty(project, "after undo/redo");
+                return;
+            }
+            this.workingDrafts.markDirty(projectId);
+            LumaMod.LOGGER.info(
+                    "Adjusted working draft for project {} after undo/redo by {}; pending={}",
+                    project.project().name(),
+                    actor == null || actor.isBlank() ? "player" : actor,
+                    buffer.size()
+            );
+        });
+    }
+
     public void finalizeProjectSession(MinecraftServer server, String projectId) throws IOException {
         this.freezeWorkingDraftForRecovery(server, projectId);
     }
