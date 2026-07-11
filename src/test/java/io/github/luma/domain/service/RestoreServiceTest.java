@@ -867,6 +867,31 @@ class RestoreServiceTest {
     }
 
     @Test
+    void batchScopedEntityReplacementDoesNotExpandQuickRollbackToCheckpointChunks(@TempDir Path tempDir)
+            throws Exception {
+        RestoreEntityStateResolver resolver = this.entityStateResolver();
+        ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));
+        this.snapshotWriter.writeFile(layout.entityCheckpointFile("entity-checkpoint-0002"), snapshot(List.of(
+                entity("minecraft:cow", "00000000-0000-0000-0000-000000000091", 32.0D)
+        )));
+        List<ProjectVersion> versions = List.of(
+                version("v0001", "main", "", "", List.of(), VersionKind.WORLD_ROOT),
+                version("v0002", "main", "v0001", "", "entity-checkpoint-0002", List.of())
+        );
+        ChunkPoint changedChunk = new ChunkPoint(0, 0);
+
+        List<PreparedChunkBatch> batches = resolver.withAuthoritativeEntityReplacementBatchesInBatchScope(
+                layout,
+                versions,
+                "v0002",
+                List.of(new PreparedChunkBatch(changedChunk, List.of(), EntityBatch.replaceEntities(List.of())))
+        );
+
+        assertEquals(1, batches.size());
+        assertEquals(changedChunk, batches.getFirst().chunk());
+    }
+
+    @Test
     void authoritativeEntityReplacementCanSkipEntityTypesFromCheckpoint(@TempDir Path tempDir) throws Exception {
         RestoreEntityStateResolver resolver = this.entityStateResolver();
         ProjectLayout layout = new ProjectLayout(tempDir.resolve("project.mbp"));

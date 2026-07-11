@@ -169,7 +169,7 @@ public final class QuickRollbackService {
                             selectedBounds
                     );
                     if (selectedBounds == null) {
-                        batches = this.entityStateResolver.withAuthoritativeEntityReplacementBatches(
+                        batches = this.entityStateResolver.withAuthoritativeEntityReplacementBatchesInBatchScope(
                                 layout,
                                 versions,
                                 activeVariant.headVersionId(),

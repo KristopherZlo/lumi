@@ -41,6 +41,20 @@ class EntityBatchTest {
     }
 
     @Test
+    void authoritativeReplacementDropsPrimedTntButDeltaKeepsIt() {
+        CompoundTag tnt = entity("minecraft:tnt", "00000000-0000-0000-0000-000000000011");
+        CompoundTag stand = entity("minecraft:armor_stand", "00000000-0000-0000-0000-000000000012");
+
+        EntityBatch replacement = EntityBatch.replaceEntities(List.of(tnt, stand));
+        EntityBatch delta = new EntityBatch(List.of(tnt), List.of());
+
+        assertEquals(List.of("minecraft:armor_stand"), replacement.entitiesToUpdate().stream()
+                .map(tag -> tag.getString("id").orElse(""))
+                .toList());
+        assertEquals(1, delta.entitiesToSpawn().size());
+    }
+
+    @Test
     void replayContextIsCopiedIntoEntityBatch() {
         EntityBatch batch = new EntityBatch(
                 List.of(entity("minecraft:creeper", "00000000-0000-0000-0000-000000000009")),

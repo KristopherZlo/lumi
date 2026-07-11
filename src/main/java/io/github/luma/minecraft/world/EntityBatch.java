@@ -21,10 +21,12 @@ public record EntityBatch(
         ReplayContext replayContext
 ) {
 
+    private static final String PRIMED_TNT_ENTITY_TYPE = "minecraft:tnt";
+
     public EntityBatch {
-        entitiesToSpawn = copyTags(entitiesToSpawn);
+        entitiesToSpawn = copyTags(entitiesToSpawn, replaceEntities);
         entityIdsToRemove = entityIdsToRemove == null ? List.of() : List.copyOf(entityIdsToRemove);
-        entitiesToUpdate = copyTags(entitiesToUpdate);
+        entitiesToUpdate = copyTags(entitiesToUpdate, replaceEntities);
         excludedEntityTypes = copyTypes(excludedEntityTypes);
         replayContext = replayContext == null || replayContext.actionId().isBlank() ? null : replayContext;
     }
@@ -90,13 +92,18 @@ public record EntityBatch(
         );
     }
 
-    private static List<CompoundTag> copyTags(List<CompoundTag> tags) {
+    private static List<CompoundTag> copyTags(List<CompoundTag> tags, boolean authoritativeReplacement) {
         if (tags == null || tags.isEmpty()) {
             return List.of();
         }
         return tags.stream()
+                .filter(tag -> !authoritativeReplacement || !isPrimedTnt(tag))
                 .map(tag -> tag == null ? new CompoundTag() : tag.copy())
                 .toList();
+    }
+
+    private static boolean isPrimedTnt(CompoundTag tag) {
+        return tag != null && PRIMED_TNT_ENTITY_TYPE.equals(tag.getString("id").orElse(""));
     }
 
     private static Set<String> copyTypes(Collection<String> entityTypes) {

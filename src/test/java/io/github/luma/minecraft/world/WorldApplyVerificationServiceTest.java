@@ -66,6 +66,7 @@ class WorldApplyVerificationServiceTest {
         assertTrue(result.repairSections().getFirst().placements().getFirst().state().is(Blocks.DIRT));
 
         WorldApplyVerificationResult repaired = result.withRepairOutcome(1, 0);
+        assertEquals(0, repaired.mismatched());
         assertEquals(1, repaired.repaired());
         assertEquals(0, repaired.skipped());
         assertFalse(repaired.hasRepairs());

@@ -7,6 +7,7 @@ import java.util.List;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.PrimedTnt;
 
 public final class LiveEntityChunkCollector {
 
@@ -19,7 +20,10 @@ public final class LiveEntityChunkCollector {
         return this.serverThreadExecutor.call(level.getServer(), () -> {
             LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
             for (Entity entity : level.getAllEntities()) {
-                if (entity != null && !(entity instanceof ServerPlayer) && !entity.isRemoved()) {
+                if (entity != null
+                        && !(entity instanceof ServerPlayer)
+                        && !(entity instanceof PrimedTnt)
+                        && !entity.isRemoved()) {
                     chunks.add(ChunkPoint.from(entity.blockPosition()));
                 }
             }

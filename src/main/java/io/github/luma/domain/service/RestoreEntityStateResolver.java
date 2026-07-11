@@ -125,8 +125,44 @@ final class RestoreEntityStateResolver {
             List<PreparedChunkBatch> batches,
             RestoreEntityTypeSelection entityTypeSelection
     ) throws IOException {
+        return this.withAuthoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                targetVersionId,
+                batches,
+                entityTypeSelection,
+                true
+        );
+    }
+
+    List<PreparedChunkBatch> withAuthoritativeEntityReplacementBatchesInBatchScope(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            String targetVersionId,
+            List<PreparedChunkBatch> batches
+    ) throws IOException {
+        return this.withAuthoritativeEntityReplacementBatches(
+                layout,
+                versions,
+                targetVersionId,
+                batches,
+                RestoreEntityTypeSelection.includeAll(),
+                false
+        );
+    }
+
+    private List<PreparedChunkBatch> withAuthoritativeEntityReplacementBatches(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            String targetVersionId,
+            List<PreparedChunkBatch> batches,
+            RestoreEntityTypeSelection entityTypeSelection,
+            boolean includeCheckpointChunks
+    ) throws IOException {
         Set<ChunkPoint> selectedChunks = new LinkedHashSet<>(this.chunkCollector.batchChunks(batches));
-        selectedChunks.addAll(this.entityCheckpointChunks(layout, versions, targetVersionId));
+        if (includeCheckpointChunks) {
+            selectedChunks.addAll(this.entityCheckpointChunks(layout, versions, targetVersionId));
+        }
         if (selectedChunks.isEmpty()) {
             return batches == null ? List.of() : batches;
         }

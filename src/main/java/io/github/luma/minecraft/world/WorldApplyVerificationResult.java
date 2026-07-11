@@ -21,7 +21,7 @@ record WorldApplyVerificationResult(
     WorldApplyVerificationResult withRepairOutcome(int repairedCount, int unrepairedCount) {
         return new WorldApplyVerificationResult(
                 this.matched,
-                this.mismatched,
+                Math.max(0, unrepairedCount),
                 Math.max(0, repairedCount),
                 this.skipped + Math.max(0, unrepairedCount),
                 List.of()

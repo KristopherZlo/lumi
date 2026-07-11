@@ -17,6 +17,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -339,7 +340,7 @@ public final class ChunkSnapshotCaptureService {
         this.captureEntitiesInBounds(
                 level,
                 this.chunkBounds(level, chunkX, chunkZ, 0.0D),
-                entity -> !this.isRemoved(entity),
+                entity -> !this.isRemoved(entity) && !(entity instanceof PrimedTnt),
                 chunkX,
                 chunkZ,
                 snapshots
@@ -347,7 +348,9 @@ public final class ChunkSnapshotCaptureService {
         this.captureEntitiesInBounds(
                 level,
                 this.chunkBounds(level, chunkX, chunkZ, PLACED_ENTITY_SEARCH_MARGIN),
-                entity -> !this.isRemoved(entity) && this.placedEntityHistoryPolicy.shouldPersist(entity),
+                entity -> !this.isRemoved(entity)
+                        && !(entity instanceof PrimedTnt)
+                        && this.placedEntityHistoryPolicy.shouldPersist(entity),
                 chunkX,
                 chunkZ,
                 snapshots
