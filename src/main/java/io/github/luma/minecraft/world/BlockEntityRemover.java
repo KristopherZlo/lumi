@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerLevel;
 final class BlockEntityRemover {
 
     void remove(ServerLevel level, BlockPos pos) {
+        level.removeBlockEntity(pos);
         level.getBlockEntity(pos);
         level.removeBlockEntity(pos);
     }

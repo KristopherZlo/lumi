@@ -95,13 +95,15 @@ class BlockChangeApplierSafetyTest {
     }
 
     @Test
-    void removalPromotesPendingBlockEntityBeforeDeletingIt() throws IOException {
+    void removalDeletesLoadedAndPendingBlockEntities() throws IOException {
         String remover = Files.readString(
                 Path.of("src/main/java/io/github/luma/minecraft/world/BlockEntityRemover.java"),
                 StandardCharsets.UTF_8
         ).replace("\r\n", "\n");
 
-        assertTrue(remover.contains("level.getBlockEntity(pos);\n        level.removeBlockEntity(pos);"));
+        assertTrue(remover.contains("level.removeBlockEntity(pos);\n"
+                + "        level.getBlockEntity(pos);\n"
+                + "        level.removeBlockEntity(pos);"));
     }
 
     @Test
