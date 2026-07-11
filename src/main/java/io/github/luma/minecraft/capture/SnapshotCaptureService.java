@@ -76,32 +76,28 @@ public final class SnapshotCaptureService {
     }
 
     private List<ChunkSnapshotPayload> capturePayloads(ServerLevel level, Collection<ChunkPoint> chunks) throws IOException {
-        List<ChunkSnapshotPayload> payloads = new ArrayList<>();
-        for (ChunkPoint chunk : new LinkedHashSet<>(chunks == null ? List.<ChunkPoint>of() : chunks)) {
-            this.throwIfInterrupted();
-            this.serverThreadExecutor.call(level.getServer(), () -> {
+        return this.serverThreadExecutor.call(level.getServer(), () -> {
+            List<ChunkSnapshotPayload> payloads = new ArrayList<>();
+            for (ChunkPoint chunk : new LinkedHashSet<>(chunks == null ? List.<ChunkPoint>of() : chunks)) {
                 this.chunkSnapshotCaptureService.captureChunk(level, chunk).ifPresent(payloads::add);
-                return null;
-            });
-        }
-        LumaMod.LOGGER.info("Captured {} snapshot chunks in server-thread slices", payloads.size());
-        return List.copyOf(payloads);
+            }
+            LumaMod.LOGGER.info("Captured {} snapshot chunks on the server thread", payloads.size());
+            return List.copyOf(payloads);
+        });
     }
 
     private List<ChunkSnapshotPayload> captureEntityCheckpointPayloads(
             ServerLevel level,
             Collection<ChunkPoint> chunks
     ) throws IOException {
-        List<ChunkSnapshotPayload> payloads = new ArrayList<>();
-        for (ChunkPoint chunk : new LinkedHashSet<>(chunks == null ? List.<ChunkPoint>of() : chunks)) {
-            this.throwIfInterrupted();
-            this.serverThreadExecutor.call(level.getServer(), () -> {
+        return this.serverThreadExecutor.call(level.getServer(), () -> {
+            List<ChunkSnapshotPayload> payloads = new ArrayList<>();
+            for (ChunkPoint chunk : new LinkedHashSet<>(chunks == null ? List.<ChunkPoint>of() : chunks)) {
                 this.chunkSnapshotCaptureService.captureEntityCheckpointChunk(level, chunk).ifPresent(payloads::add);
-                return null;
-            });
-        }
-        LumaMod.LOGGER.info("Captured {} entity checkpoint chunks in server-thread slices", payloads.size());
-        return List.copyOf(payloads);
+            }
+            LumaMod.LOGGER.info("Captured {} entity checkpoint chunks on the server thread", payloads.size());
+            return List.copyOf(payloads);
+        });
     }
 
     List<ChunkSnapshotPayload> entityOnlyPayloads(List<ChunkSnapshotPayload> payloads) {
@@ -116,11 +112,5 @@ public final class SnapshotCaptureService {
                         payload.entitySnapshots()
                 ))
                 .toList();
-    }
-
-    private void throwIfInterrupted() throws IOException {
-        if (Thread.currentThread().isInterrupted()) {
-            throw new IOException("Snapshot capture was interrupted");
-        }
     }
 }

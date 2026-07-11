@@ -31,6 +31,7 @@ import io.github.luma.storage.repository.VariantRepository;
 import io.github.luma.storage.repository.VersionRepository;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -308,6 +309,25 @@ class VersionServiceTest {
         );
 
         assertTrue(chunks.contains(new ChunkPoint(2, 0)));
+    }
+
+    @Test
+    void wholeDimensionSnapshotChunksIgnoreUnreferencedBaselineFiles() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("orphan-baseline.mbp"));
+        BaselineChunkRepository baselines = new BaselineChunkRepository();
+        Path orphan = baselines.filePath(layout, new ChunkPoint(99, -99));
+        Files.createDirectories(orphan.getParent());
+        Files.write(orphan, new byte[] {1});
+        VersionSnapshotPlanner planner = new VersionSnapshotPlanner(baselines, this.patchMetaRepository);
+
+        List<ChunkPoint> chunks = planner.collectSnapshotChunks(
+                layout,
+                BuildProject.createWorldWorkspace("project", "minecraft:overworld", instant(0)),
+                List.of(),
+                null
+        );
+
+        assertTrue(chunks.isEmpty());
     }
 
     @Test

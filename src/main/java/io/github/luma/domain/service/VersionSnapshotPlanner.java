@@ -125,7 +125,6 @@ final class VersionSnapshotPlanner {
         }
 
         Set<ChunkPoint> chunks = new LinkedHashSet<>();
-        this.addChunks(chunks, this.baselineChunkRepository.listChunks(layout));
         for (ProjectVersion version : versions) {
             for (String patchId : version.patchIds()) {
                 Optional<io.github.luma.domain.model.PatchMetadata> metadata = this.patchMetaRepository.load(layout, patchId);
