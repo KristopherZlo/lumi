@@ -1,6 +1,5 @@
 package io.github.luma.minecraft.capture;
 
-import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.debug.LumaLoadLog;
 import java.util.ArrayList;
@@ -44,16 +43,7 @@ public final class ExplosiveEntityContextRegistry {
             this.logSpawnContext("current", entity, level, current.get());
             return;
         }
-        Optional<ExplosiveContext> deferred = ExplosiveContext.captureDeferred(
-                HistoryCaptureManager.getInstance().deferredActionContextNear(level, entity.blockPosition())
-        );
-        deferred.ifPresent(context -> {
-            this.remember(entity, context);
-            this.logSpawnContext("deferred", entity, level, context);
-        });
-        if (deferred.isEmpty()) {
-            this.logSpawnContext("missing", entity, level, null);
-        }
+        this.logSpawnContext("missing", entity, level, null);
     }
 
     public Optional<ExplosiveContext> contextFor(Entity entity) {
@@ -213,19 +203,6 @@ public final class ExplosiveEntityContextRegistry {
                     WorldMutationContext.currentActor(),
                     actionId,
                     WorldMutationContext.currentAccessAllowed(),
-                    System.currentTimeMillis()
-            ));
-        }
-
-        static Optional<ExplosiveContext> captureDeferred(CaptureSessionState.DeferredActionContext context) {
-            if (context == null || !context.hasAction()) {
-                return Optional.empty();
-            }
-            return Optional.of(new ExplosiveContext(
-                    WorldMutationSource.EXPLOSIVE,
-                    context.actor(),
-                    context.actionId(),
-                    context.accessAllowed(),
                     System.currentTimeMillis()
             ));
         }

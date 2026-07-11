@@ -37,12 +37,7 @@ class SessionStabilizationServiceTest {
 
         List<StoredBlockChange> changes = service.applyDeferredVisibility(
                 List.of(fluidFallout, ordinaryMechanism),
-                Map.of(
-                        new ChunkPoint(0, 0),
-                        new CaptureSessionState.DeferredActionContext("fluid-action", "builder", true, true),
-                        new ChunkPoint(2, 0),
-                        new CaptureSessionState.DeferredActionContext("piston-action", "builder", true, false)
-                )
+                Set.of(new ChunkPoint(0, 0))
         );
 
         assertTrue(changes.get(0).hidden());

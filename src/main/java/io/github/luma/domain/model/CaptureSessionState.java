@@ -15,8 +15,7 @@ import java.util.UUID;
  * Mutable runtime state for one active capture session.
  *
  * <p>The working-draft buffer remains the source of truth for pending block
- * changes, while chunk-level root and dirty sets drive coalesced stabilization
- * for both attributed actions and persistent actionless fallout.
+ * changes, while chunk-level root and dirty sets drive coalesced stabilization.
  */
 public final class CaptureSessionState {
 
@@ -32,7 +31,7 @@ public final class CaptureSessionState {
     private final LinkedHashMap<ChunkPoint, LinkedHashSet<Integer>> dirtySections = new LinkedHashMap<>();
     private final LinkedHashSet<ChunkPoint> pendingReconcileChunks = new LinkedHashSet<>();
     private final LinkedHashMap<ChunkPoint, Long> pendingReconcileGameTimes = new LinkedHashMap<>();
-    private final LinkedHashMap<ChunkPoint, DeferredActionContext> deferredActionContexts = new LinkedHashMap<>();
+    private final LinkedHashSet<ChunkPoint> hiddenReconciliationChunks = new LinkedHashSet<>();
     private final LinkedHashSet<UUID> trackedFallingEntities = new LinkedHashSet<>();
     private boolean reconciliationInFlight;
 
@@ -65,30 +64,30 @@ public final class CaptureSessionState {
     }
 
     public boolean markDirtyChunk(ChunkPoint chunk) {
-        return this.markDirtyChunk(chunk, null);
+        return this.markDirtyChunk(chunk, false);
     }
 
-    public boolean markDirtyChunk(ChunkPoint chunk, DeferredActionContext deferredActionContext) {
-        return this.markDirtyChunk(chunk, deferredActionContext, Long.MIN_VALUE);
+    public boolean markDirtyChunk(ChunkPoint chunk, boolean hidden) {
+        return this.markDirtyChunk(chunk, hidden, Long.MIN_VALUE);
     }
 
     public boolean markDirtyChunk(
             ChunkPoint chunk,
-            DeferredActionContext deferredActionContext,
+            boolean hidden,
             long gameTime
     ) {
-        return this.markDirtyChunk(chunk, deferredActionContext, gameTime, false);
+        return this.markDirtyChunk(chunk, hidden, gameTime, false);
     }
 
     public boolean markDirtySection(
             ChunkSectionPoint section,
-            DeferredActionContext deferredActionContext,
+            boolean hidden,
             long gameTime
     ) {
         if (section == null) {
             return false;
         }
-        boolean chunkChanged = this.markDirtyChunk(section.chunk(), deferredActionContext, gameTime, true);
+        boolean chunkChanged = this.markDirtyChunk(section.chunk(), hidden, gameTime, true);
         boolean sectionChanged = this.dirtySections
                 .computeIfAbsent(section.chunk(), ignored -> new LinkedHashSet<>())
                 .add(section.sectionY());
@@ -97,7 +96,7 @@ public final class CaptureSessionState {
 
     private boolean markDirtyChunk(
             ChunkPoint chunk,
-            DeferredActionContext deferredActionContext,
+            boolean hidden,
             long gameTime,
             boolean preserveSectionTracking
     ) {
@@ -111,14 +110,8 @@ public final class CaptureSessionState {
         boolean pendingChanged = this.pendingReconcileChunks.add(chunk);
         Long previousGameTime = this.pendingReconcileGameTimes.put(chunk, gameTime);
         boolean gameTimeChanged = previousGameTime == null || previousGameTime.longValue() != gameTime;
-        boolean contextChanged = false;
-        if (deferredActionContext != null && deferredActionContext.hasContext()) {
-            DeferredActionContext previous = this.deferredActionContexts.get(chunk);
-            DeferredActionContext merged = mergeDeferredActionContext(previous, deferredActionContext);
-            this.deferredActionContexts.put(chunk, merged);
-            contextChanged = !merged.equals(previous);
-        }
-        return dirtyChanged || pendingChanged || gameTimeChanged || contextChanged;
+        boolean visibilityChanged = hidden && this.hiddenReconciliationChunks.add(chunk);
+        return dirtyChanged || pendingChanged || gameTimeChanged || visibilityChanged;
     }
 
     public boolean isWithinStabilizationEnvelope(ChunkPoint chunk) {
@@ -216,7 +209,7 @@ public final class CaptureSessionState {
         this.dirtyChunks.removeAll(reconciledChunks);
         for (ChunkPoint chunk : reconciledChunks) {
             this.dirtySections.remove(chunk);
-            this.deferredActionContexts.remove(chunk);
+            this.hiddenReconciliationChunks.remove(chunk);
             this.pendingReconcileGameTimes.remove(chunk);
         }
     }
@@ -315,26 +308,21 @@ public final class CaptureSessionState {
         return List.copyOf(changes);
     }
 
-    public Map<ChunkPoint, DeferredActionContext> deferredActionContexts(Collection<ChunkPoint> chunks) {
+    public Set<ChunkPoint> hiddenReconciliationChunks(Collection<ChunkPoint> chunks) {
         if (chunks == null || chunks.isEmpty()) {
-            return Map.of();
+            return Set.of();
         }
-        LinkedHashMap<ChunkPoint, DeferredActionContext> contexts = new LinkedHashMap<>();
+        LinkedHashSet<ChunkPoint> hiddenChunks = new LinkedHashSet<>();
         for (ChunkPoint chunk : chunks) {
-            DeferredActionContext context = this.deferredActionContexts.get(chunk);
-            if (context != null && context.hasContext()) {
-                contexts.put(chunk, context);
+            if (this.hiddenReconciliationChunks.contains(chunk)) {
+                hiddenChunks.add(chunk);
             }
         }
-        return Map.copyOf(contexts);
+        return Set.copyOf(hiddenChunks);
     }
 
-    public DeferredActionContext deferredActionContext(ChunkPoint chunk) {
-        if (chunk == null) {
-            return null;
-        }
-        DeferredActionContext context = this.deferredActionContexts.get(chunk);
-        return context != null && context.hasContext() ? context : null;
+    public boolean isHiddenReconciliationChunk(ChunkPoint chunk) {
+        return chunk != null && this.hiddenReconciliationChunks.contains(chunk);
     }
 
     public boolean trackFallingEntity(UUID entityId) {
@@ -366,43 +354,4 @@ public final class CaptureSessionState {
         return gameTime - dirtyAt >= settleTicks;
     }
 
-    private static DeferredActionContext mergeDeferredActionContext(
-            DeferredActionContext previous,
-            DeferredActionContext next
-    ) {
-        if (previous == null || !previous.hasContext()) {
-            return next;
-        }
-        return new DeferredActionContext(
-                next.actionId(),
-                next.actor(),
-                previous.accessAllowed() && next.accessAllowed(),
-                previous.hiddenInBuilderSurfaces() || next.hiddenInBuilderSurfaces()
-        );
-    }
-
-    public record DeferredActionContext(
-            String actionId,
-            String actor,
-            boolean accessAllowed,
-            boolean hiddenInBuilderSurfaces
-    ) {
-
-        public DeferredActionContext(String actionId, String actor, boolean accessAllowed) {
-            this(actionId, actor, accessAllowed, false);
-        }
-
-        public DeferredActionContext {
-            actionId = actionId == null ? "" : actionId;
-            actor = actor == null || actor.isBlank() ? "player" : actor;
-        }
-
-        public boolean hasAction() {
-            return !this.actionId.isBlank();
-        }
-
-        public boolean hasContext() {
-            return this.hasAction() || this.hiddenInBuilderSurfaces;
-        }
-    }
 }

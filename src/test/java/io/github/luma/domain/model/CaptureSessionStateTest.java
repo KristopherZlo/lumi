@@ -81,9 +81,7 @@ class CaptureSessionStateTest {
     void reconciliationDrainAndTrackedFallingEntitiesRemainCoalesced() {
         CaptureSessionState state = CaptureSessionState.create(buffer());
         state.addRootChunk(new ChunkPoint(0, 0));
-        CaptureSessionState.DeferredActionContext deferredAction =
-                new CaptureSessionState.DeferredActionContext("action-1", "builder", true);
-        state.markDirtyChunk(new ChunkPoint(0, 0), deferredAction);
+        state.markDirtyChunk(new ChunkPoint(0, 0), true);
         state.markDirtyChunk(new ChunkPoint(1, 0));
 
         assertEquals(List.of(new ChunkPoint(0, 0), new ChunkPoint(1, 0)), state.pendingReconcileChunks());
@@ -97,80 +95,35 @@ class CaptureSessionStateTest {
 
         List<ChunkPoint> drained = state.drainPendingReconcileChunks();
         assertEquals(2, drained.size());
-        assertEquals(
-                deferredAction,
-                state.deferredActionContexts(List.of(new ChunkPoint(0, 0), new ChunkPoint(1, 0)))
-                        .get(new ChunkPoint(0, 0))
-        );
-        assertEquals(deferredAction, state.deferredActionContext(new ChunkPoint(0, 0)));
-        assertNull(state.deferredActionContext(new ChunkPoint(1, 0)));
+        assertEquals(Set.of(new ChunkPoint(0, 0)),
+                state.hiddenReconciliationChunks(List.of(new ChunkPoint(0, 0), new ChunkPoint(1, 0))));
 
         state.finishReconciliation(drained);
         assertFalse(state.reconciliationInFlight());
         assertFalse(state.hasPendingReconciliation());
-        assertTrue(state.deferredActionContexts(List.of(new ChunkPoint(0, 0))).isEmpty());
+        assertTrue(state.hiddenReconciliationChunks(List.of(new ChunkPoint(0, 0))).isEmpty());
         assertTrue(state.untrackFallingEntity(entityId));
         assertFalse(state.isTrackedFallingEntity(entityId));
     }
 
     @Test
-    void latestDeferredActionOwnsPendingChunkReconciliation() {
+    void hiddenVisibilitySticksUntilReconciliationFinishes() {
         CaptureSessionState state = CaptureSessionState.create(buffer());
         ChunkPoint chunk = new ChunkPoint(0, 0);
-        CaptureSessionState.DeferredActionContext firstAction =
-                new CaptureSessionState.DeferredActionContext("action-1", "builder", true);
-        CaptureSessionState.DeferredActionContext secondAction =
-                new CaptureSessionState.DeferredActionContext("action-2", "builder", true, true);
 
-        assertTrue(state.markDirtyChunk(chunk, firstAction));
-        assertTrue(state.markDirtyChunk(chunk, secondAction));
+        assertTrue(state.markDirtyChunk(chunk, true));
         state.markDirtyChunk(chunk);
 
-        assertEquals(secondAction, state.deferredActionContexts(List.of(chunk)).get(chunk));
-        assertTrue(state.deferredActionContext(chunk).hiddenInBuilderSurfaces());
-    }
-
-    @Test
-    void mergedDeferredActionKeepsRestrictiveChunkFlags() {
-        CaptureSessionState state = CaptureSessionState.create(buffer());
-        ChunkPoint chunk = new ChunkPoint(0, 0);
-        CaptureSessionState.DeferredActionContext hiddenDeniedAction =
-                new CaptureSessionState.DeferredActionContext("action-1", "builder", false, true);
-        CaptureSessionState.DeferredActionContext visibleAllowedAction =
-                new CaptureSessionState.DeferredActionContext("action-2", "builder", true, false);
-
-        assertTrue(state.markDirtyChunk(chunk, hiddenDeniedAction));
-        assertTrue(state.markDirtyChunk(chunk, visibleAllowedAction));
-
-        CaptureSessionState.DeferredActionContext merged = state.deferredActionContext(chunk);
-        assertEquals("action-2", merged.actionId());
-        assertFalse(merged.accessAllowed());
-        assertTrue(merged.hiddenInBuilderSurfaces());
-    }
-
-    @Test
-    void hiddenDeferredContextWithoutActionIsRetainedForVisibility() {
-        CaptureSessionState state = CaptureSessionState.create(buffer());
-        ChunkPoint chunk = new ChunkPoint(0, 0);
-        CaptureSessionState.DeferredActionContext hiddenContext =
-                new CaptureSessionState.DeferredActionContext("", "fire", false, true);
-
-        assertTrue(state.markDirtyChunk(chunk, hiddenContext));
-
-        assertEquals(hiddenContext, state.deferredActionContexts(List.of(chunk)).get(chunk));
-        assertEquals(hiddenContext, state.deferredActionContext(chunk));
-        assertFalse(state.deferredActionContext(chunk).hasAction());
-        assertTrue(state.deferredActionContext(chunk).hasContext());
+        assertTrue(state.isHiddenReconciliationChunk(chunk));
+        state.finishReconciliation(List.of(chunk));
+        assertFalse(state.isHiddenReconciliationChunk(chunk));
     }
 
     @Test
     void dirtyChunksWaitForSettleTicksBeforeReconciliation() {
         CaptureSessionState state = CaptureSessionState.create(buffer());
         ChunkPoint chunk = new ChunkPoint(0, 0);
-        CaptureSessionState.DeferredActionContext action =
-                new CaptureSessionState.DeferredActionContext("action-1", "builder", true);
-
-        state.markDirtyChunk(chunk, action, 100L);
+        state.markDirtyChunk(chunk, false, 100L);
 
         assertTrue(state.drainPendingReconcileChunks(103L, 4).isEmpty());
         assertTrue(state.hasPendingReconciliation());
@@ -193,14 +146,11 @@ class CaptureSessionStateTest {
     void dirtySectionsTrackKnownSectionMutationsUntilChunkFallsBackToFullDirty() {
         CaptureSessionState state = CaptureSessionState.create(buffer());
         ChunkPoint chunk = new ChunkPoint(0, 0);
-        CaptureSessionState.DeferredActionContext action =
-                new CaptureSessionState.DeferredActionContext("action-1", "builder", true);
-
-        assertTrue(state.markDirtySection(new ChunkSectionPoint(chunk, 4), action, 100L));
-        assertTrue(state.markDirtySection(new ChunkSectionPoint(chunk, 5), action, 101L));
+        assertTrue(state.markDirtySection(new ChunkSectionPoint(chunk, 4), false, 100L));
+        assertTrue(state.markDirtySection(new ChunkSectionPoint(chunk, 5), false, 101L));
 
         assertEquals(Map.of(chunk, Set.of(4, 5)), state.dirtySections(List.of(chunk)));
-        state.markDirtyChunk(chunk, action, 102L);
+        state.markDirtyChunk(chunk, false, 102L);
         assertTrue(state.dirtySections(List.of(chunk)).isEmpty());
         state.finishReconciliation(List.of(chunk));
         assertTrue(state.dirtyChunks().isEmpty());

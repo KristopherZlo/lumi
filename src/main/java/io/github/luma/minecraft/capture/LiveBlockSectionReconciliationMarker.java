@@ -33,7 +33,7 @@ final class LiveBlockSectionReconciliationMarker {
             ChunkPoint chunk,
             BlockState oldState,
             CompoundTag oldBlockEntity,
-            CaptureSessionState.DeferredActionContext context,
+            boolean hidden,
             boolean explicitRootSource
     ) {
         String projectId = trackedProject.project().id().toString();
@@ -55,7 +55,7 @@ final class LiveBlockSectionReconciliationMarker {
                 oldBlockEntity
         );
         int sectionY = Math.floorDiv(pos.getY(), 16);
-        session.markDirtySection(new ChunkSectionPoint(chunk, sectionY), context, level.getGameTime());
+        session.markDirtySection(new ChunkSectionPoint(chunk, sectionY), hidden, level.getGameTime());
         this.workingDrafts.markDirty(projectId);
         LumaDebugLog.log(
                 trackedProject.project(),

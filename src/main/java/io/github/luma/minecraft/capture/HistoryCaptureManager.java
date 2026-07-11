@@ -66,8 +66,6 @@ public final class HistoryCaptureManager {
             this.projectRepository,
             this.variantRepository
     );
-    private final DeferredActionContextResolver deferredActionContextResolver =
-            new DeferredActionContextResolver(this.trackedProjectCatalog, this.workingDrafts);
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
     private final CaptureBaselineCoordinator baselineCoordinator =
@@ -140,8 +138,7 @@ public final class HistoryCaptureManager {
                 String projectId = trackedProject.project().id().toString();
                 CaptureSessionState existingSession = this.workingDrafts.session(projectId);
                 ChunkPoint chunk = ChunkPoint.from(pos);
-                CaptureSessionState.DeferredActionContext context =
-                        this.deferredActionContext(existingSession, chunk, source);
+                boolean hiddenReconciliation = this.hiddenReconciliation(existingSession, chunk, source);
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }
@@ -171,7 +168,7 @@ public final class HistoryCaptureManager {
                         chunk,
                         oldState,
                         oldBlockEntity,
-                        context,
+                        hiddenReconciliation,
                         explicitRootSource
                 );
             }
@@ -255,8 +252,7 @@ public final class HistoryCaptureManager {
                 CaptureSessionState existingSession = this.workingDrafts.session(projectId);
                 ChunkPoint chunk = ChunkPoint.from(pos);
                 boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
-                CaptureSessionState.DeferredActionContext deferredActionContext =
-                        this.deferredActionContext(existingSession, chunk, source);
+                boolean hiddenReconciliation = this.hiddenReconciliation(existingSession, chunk, source);
                 boolean usesDeferredStabilization = ELIGIBILITY.usesDeferredStabilization(
                         trackedProject.project(),
                         source
@@ -332,7 +328,7 @@ public final class HistoryCaptureManager {
                             oldState,
                             oldBlockEntity,
                             now,
-                            deferredActionContext
+                            hiddenReconciliation
                     );
                     continue;
                 }
@@ -351,14 +347,14 @@ public final class HistoryCaptureManager {
                             mutation.oldState(),
                             mutation.oldBlockEntity(),
                             now,
-                            deferredActionContext
+                            hiddenReconciliation
                     );
                     continue;
                 }
                 if (ELIGIBILITY.usesLiveStateReconciliation(source)) {
                     this.liveBlockSectionReconciliationMarker.mark(
                             trackedProject, level, source, pos, chunk, mutation.oldState(), mutation.oldBlockEntity(),
-                            deferredActionContext, ELIGIBILITY.isExplicitRootSource(source));
+                            hiddenReconciliation, ELIGIBILITY.isExplicitRootSource(source));
                 }
                 SessionDraftBlockChangeRecorder.Result draftRecord =
                         this.draftBlockChangeRecorder.record(session, buffer, capturedChange, now);
@@ -507,8 +503,7 @@ public final class HistoryCaptureManager {
         CaptureSessionState existingSession = this.workingDrafts.session(projectId);
         ChunkPoint chunk = ChunkPoint.from(input.pos());
         boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
-        CaptureSessionState.DeferredActionContext deferredActionContext =
-                this.deferredActionContext(existingSession, chunk, source);
+        boolean hiddenReconciliation = this.hiddenReconciliation(existingSession, chunk, source);
         boolean usesDeferredStabilization = ELIGIBILITY.usesDeferredStabilization(trackedProject.project(), source);
         if (usesDeferredStabilization
                 && !ELIGIBILITY.canUseDeferredStabilization(
@@ -552,7 +547,7 @@ public final class HistoryCaptureManager {
                     input.oldState(),
                     input.oldBlockEntity(),
                     now,
-                    deferredActionContext
+                    hiddenReconciliation
             );
             return;
         }
@@ -579,14 +574,14 @@ public final class HistoryCaptureManager {
                     mutation.oldState(),
                     mutation.oldBlockEntity(),
                     now,
-                    deferredActionContext
+                    hiddenReconciliation
             );
             return;
         }
         if (ELIGIBILITY.usesLiveStateReconciliation(source)) {
             this.liveBlockSectionReconciliationMarker.mark(
                     trackedProject, level, source, input.pos(), chunk, mutation.oldState(), mutation.oldBlockEntity(),
-                    deferredActionContext, ELIGIBILITY.isExplicitRootSource(source));
+                    hiddenReconciliation, ELIGIBILITY.isExplicitRootSource(source));
         }
 
         StoredBlockChange capturedChange = mutation.change();
@@ -982,10 +977,6 @@ public final class HistoryCaptureManager {
         this.trackedProjectCatalog.invalidate(server);
     }
 
-    public CaptureSessionState.DeferredActionContext deferredActionContextNear(ServerLevel level, BlockPos pos) {
-        return this.deferredActionContextResolver.near(level, pos);
-    }
-
     static boolean canUseMutationSource(
             boolean dedicatedServer,
             boolean accessAllowed,
@@ -1269,7 +1260,7 @@ public final class HistoryCaptureManager {
             BlockState oldState,
             CompoundTag oldBlockEntity,
             Instant now,
-            CaptureSessionState.DeferredActionContext deferredActionContext
+            boolean hiddenReconciliation
     ) throws IOException {
         String projectId = trackedProject.project().id().toString();
         TrackedChangeBuffer buffer = this.getOrCreateWorkingDraft(trackedProject, source, now);
@@ -1279,7 +1270,7 @@ public final class HistoryCaptureManager {
         }
         this.liveBlockSectionReconciliationMarker.mark(
                 trackedProject, level, source, pos, chunk, oldState, oldBlockEntity,
-                deferredActionContext, ELIGIBILITY.isExplicitRootSource(source));
+                hiddenReconciliation, ELIGIBILITY.isExplicitRootSource(source));
         CaptureSessionDiagnostics diagnostics = this.workingDrafts.diagnosticsForSession(projectId);
         diagnostics.record(
                 source,
@@ -1306,9 +1297,7 @@ public final class HistoryCaptureManager {
                 pos,
                 oldState,
                 level.getBlockState(pos),
-                buffer.size(),
-                actionId(deferredActionContext),
-                actor(deferredActionContext)
+                buffer.size()
         );
     }
 
@@ -1434,43 +1423,13 @@ public final class HistoryCaptureManager {
         }
     }
 
-    private CaptureSessionState.DeferredActionContext deferredActionContext(
+    private boolean hiddenReconciliation(
             CaptureSessionState session,
             ChunkPoint chunk,
             io.github.luma.domain.model.WorldMutationSource source
     ) {
-        CaptureSessionState.DeferredActionContext currentContext = this.currentDeferredActionContext(source);
-        if (currentContext != null) {
-            return currentContext;
-        }
-        if (session == null) {
-            return null;
-        }
-        return session.deferredActionContext(chunk);
-    }
-
-    private CaptureSessionState.DeferredActionContext currentDeferredActionContext(
-            io.github.luma.domain.model.WorldMutationSource source
-    ) {
-        String actionId = WorldMutationContext.currentActionId();
-        boolean hidden = ELIGIBILITY.hiddenInBuilderSurfaces(source);
-        if ((actionId == null || actionId.isBlank()) && !hidden) {
-            return null;
-        }
-        return new CaptureSessionState.DeferredActionContext(
-                actionId,
-                WorldMutationContext.currentActor(),
-                WorldMutationContext.currentAccessAllowed(),
-                hidden
-        );
-    }
-
-    private static String actionId(CaptureSessionState.DeferredActionContext context) {
-        return context == null ? "" : context.actionId();
-    }
-
-    private static String actor(CaptureSessionState.DeferredActionContext context) {
-        return context == null ? "" : context.actor();
+        return ELIGIBILITY.hiddenInBuilderSurfaces(source)
+                || session != null && session.isHiddenReconciliationChunk(chunk);
     }
 
     private ServerLevel resolveProjectLevel(MinecraftServer server, BuildProject project) {

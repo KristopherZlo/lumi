@@ -1,6 +1,5 @@
 package io.github.luma.minecraft.capture;
 
-import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.WorldMutationSource;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -99,21 +98,6 @@ class ExplosiveEntityContextRegistryTest {
     @Test
     void ignoresExplosiveContextWithoutBuilderAction() {
         assertTrue(ExplosiveEntityContextRegistry.ExplosiveContext.captureCurrent().isEmpty());
-    }
-
-    @Test
-    void capturesDeferredDispenserTntActionAsExplosiveContext() {
-        CaptureSessionState.DeferredActionContext deferred =
-                new CaptureSessionState.DeferredActionContext("action-1", "builder", true);
-
-        Optional<ExplosiveEntityContextRegistry.ExplosiveContext> captured =
-                ExplosiveEntityContextRegistry.ExplosiveContext.captureDeferred(deferred);
-
-        assertTrue(captured.isPresent());
-        assertEquals(WorldMutationSource.EXPLOSIVE, captured.get().source());
-        assertEquals("builder", captured.get().actor());
-        assertEquals("action-1", captured.get().actionId());
-        assertTrue(captured.get().accessAllowed());
     }
 
     @Test

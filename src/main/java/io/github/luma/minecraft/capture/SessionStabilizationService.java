@@ -80,8 +80,7 @@ public final class SessionStabilizationService {
 
             Map<BlockPoint, StatePayload> baselineCorrections = session.baselineCorrections(processedChunks);
             Map<ChunkPoint, Set<Integer>> dirtySections = session.dirtySections(processedChunks);
-            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts =
-                    session.deferredActionContexts(processedChunks);
+            Set<ChunkPoint> hiddenChunks = session.hiddenReconciliationChunks(processedChunks);
             List<StoredBlockChange> deltaChanges = this.deltaChanges(
                     project,
                     session,
@@ -89,7 +88,7 @@ public final class SessionStabilizationService {
                     baselineCorrections,
                     dirtySections
             );
-            deltaChanges = this.applyDeferredVisibility(deltaChanges, deferredActionContexts);
+            deltaChanges = this.applyDeferredVisibility(deltaChanges, hiddenChunks);
             List<StoredBlockChange> startingChanges = session.startingChunkChanges(processedChunks);
             List<StoredBlockChange> currentChanges = session.currentChunkChanges(processedChunks);
             List<StoredBlockChange> persistentDeltaChanges = this.persistentDeltaChanges(currentChanges, deltaChanges);
@@ -297,12 +296,12 @@ public final class SessionStabilizationService {
 
     List<StoredBlockChange> applyDeferredVisibility(
             List<StoredBlockChange> changes,
-            Map<ChunkPoint, CaptureSessionState.DeferredActionContext> deferredActionContexts
+            Set<ChunkPoint> hiddenChunks
     ) {
         if (changes == null || changes.isEmpty()) {
             return List.of();
         }
-        if (deferredActionContexts == null || deferredActionContexts.isEmpty()) {
+        if (hiddenChunks == null || hiddenChunks.isEmpty()) {
             return List.copyOf(changes);
         }
 
@@ -313,9 +312,7 @@ public final class SessionStabilizationService {
                 changed = true;
                 continue;
             }
-            CaptureSessionState.DeferredActionContext context =
-                    deferredActionContexts.get(ChunkPoint.from(change.pos()));
-            if (context != null && context.hiddenInBuilderSurfaces() && !change.hidden()) {
+            if (hiddenChunks.contains(ChunkPoint.from(change.pos())) && !change.hidden()) {
                 rewrittenChanges.add(change.asHidden());
                 changed = true;
             } else {
