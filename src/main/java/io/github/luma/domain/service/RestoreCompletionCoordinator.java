@@ -11,7 +11,6 @@ import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
-import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.PlayerRespawnRepository;
 import io.github.luma.storage.repository.ProjectRepository;
@@ -22,7 +21,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -45,7 +43,6 @@ final class RestoreCompletionCoordinator {
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final PlayerRespawnRepository playerRespawnRepository = new PlayerRespawnRepository();
     private final PartialRestoreDraftRewriter partialRestoreDraftRewriter = new PartialRestoreDraftRewriter();
-    private final UndoRedoHistoryManager undoRedoHistoryManager = UndoRedoHistoryManager.getInstance();
 
     void completePartialRestore(
             ServerLevel level,
@@ -74,7 +71,6 @@ final class RestoreCompletionCoordinator {
                 request.bounds(),
                 request.restoreMode()
         ));
-        this.recordPartialRestoreUndoAction(level, project, request, partialDraft);
         this.partialRestoreDraftRewriter.saveDraftOrDelete(layout, mergedDraft);
         if (mergedDraft != null) {
             HistoryCaptureManager.getInstance().markPersistedDraftCurrentRun(level.getServer(), project.id().toString());
@@ -105,8 +101,7 @@ final class RestoreCompletionCoordinator {
             List<ProjectVariant> variants,
             ProjectVariant targetVariant,
             ProjectVersion version,
-            int batchCount,
-            RestoreUndoAction restoreUndoAction
+            int batchCount
     ) throws IOException {
         Instant now = Instant.now();
         this.recoveryRepository.savePendingRestoreCompletion(layout, PendingRestoreCompletion.full(
@@ -128,8 +123,6 @@ final class RestoreCompletionCoordinator {
                         .withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION);
         this.projectRepository.save(layout, updatedProject);
         this.recoveryRepository.deleteDraft(layout);
-        this.undoRedoHistoryManager.clearProject(project.id().toString());
-        this.recordRestoreUndoAction(restoreUndoAction, now);
         this.restorePlayerRespawns(level, layout, version);
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 now,
@@ -199,42 +192,6 @@ final class RestoreCompletionCoordinator {
             identifier = Level.OVERWORLD.identifier();
         }
         return ResourceKey.create(Registries.DIMENSION, identifier);
-    }
-
-    private void recordPartialRestoreUndoAction(
-            ServerLevel level,
-            BuildProject project,
-            PartialRestoreRequest request,
-            RecoveryDraft partialDraft
-    ) {
-        if (partialDraft == null || partialDraft.isEmpty()) {
-            return;
-        }
-        Instant now = Instant.now();
-        this.undoRedoHistoryManager.recordAction(
-                project.id().toString(),
-                level.dimension().identifier().toString(),
-                "partial-restore-" + request.targetVersionId() + "-" + UUID.randomUUID(),
-                partialDraft.actor(),
-                partialDraft.changes(),
-                partialDraft.entityChanges(),
-                now
-        );
-    }
-
-    private void recordRestoreUndoAction(RestoreUndoAction action, Instant now) {
-        if (action == null || action.isEmpty()) {
-            return;
-        }
-        this.undoRedoHistoryManager.recordAction(
-                action.projectId(),
-                action.dimensionId(),
-                action.actionId(),
-                action.actor(),
-                action.changes(),
-                action.entityChanges(),
-                now
-        );
     }
 
     private List<ProjectVariant> replaceVariantHead(

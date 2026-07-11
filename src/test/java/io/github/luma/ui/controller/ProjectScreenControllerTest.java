@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectScreenControllerTest {
@@ -119,10 +120,11 @@ class ProjectScreenControllerTest {
     }
 
     @Test
-    void fullRestoreRequestsUndoableRestoreActions() throws Exception {
+    void fullRestoreUsesDurableHistoryInsteadOfLiveUndo() throws Exception {
         String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/controller/ProjectScreenController.java"));
 
-        assertTrue(source.contains("restoreToVariantUndoable("));
+        assertFalse(source.contains("restoreToVariantUndoable("));
+        assertTrue(source.contains("restoreToVariant("));
     }
 
     private static PartialRestorePlanSummary noOpSummary(PartialRestoreMode mode) {

@@ -1193,8 +1193,7 @@ class RestoreServiceTest {
                 RecoveryDraft.class,
                 net.minecraft.server.level.ServerLevel.class,
                 RestoreEntityTypeSelection.class,
-                WorldOperationManager.ProgressSink.class,
-                boolean.class
+                WorldOperationManager.ProgressSink.class
         );
         method.setAccessible(true);
         try {
@@ -1209,8 +1208,7 @@ class RestoreServiceTest {
                     null,
                     entityTypeSelection,
                     (WorldOperationManager.ProgressSink) (stage, completed, total, detail) -> {
-                    },
-                    false
+                    }
             );
             if (decoded.isEmpty()) {
                 return Optional.empty();
