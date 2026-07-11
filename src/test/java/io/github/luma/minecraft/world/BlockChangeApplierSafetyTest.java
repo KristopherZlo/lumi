@@ -83,6 +83,18 @@ class BlockChangeApplierSafetyTest {
     }
 
     @Test
+    void blockEntityTailCannotRestoreAnEntityIntoAnIncompatibleBlock() throws IOException {
+        String applier = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/world/BlockChangeApplier.java"),
+                StandardCharsets.UTF_8
+        );
+
+        assertTrue(applier.contains("BLOCK_STATE_POLICY.normalize(state,"));
+        assertTrue(applier.contains("if (persistentState.blockEntityTag() == null)"));
+        assertTrue(applier.contains("level.removeBlockEntity(pos);"));
+    }
+
+    @Test
     void blockEntityTailExceptionCountsAsProcessedAndRecordsFailure() {
         WorldApplyMetrics metrics = new WorldApplyMetrics();
         CompoundTag blockEntity = new CompoundTag();

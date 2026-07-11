@@ -387,7 +387,15 @@ public final class BlockChangeApplier {
         }
 
         BlockState state = level.getBlockState(pos);
-        BlockEntity blockEntity = BlockEntity.loadStatic(pos, state, blockEntityTag.copy(), level.registryAccess());
+        PersistentBlockStatePolicy.PersistentBlockState persistentState = BLOCK_STATE_POLICY.normalize(state,
+                blockEntityTag);
+        if (persistentState.blockEntityTag() == null) {
+            level.removeBlockEntity(pos);
+            return 0;
+        }
+
+        BlockEntity blockEntity = BlockEntity.loadStatic(pos, persistentState.state(),
+                persistentState.blockEntityTag(), level.registryAccess());
         if (blockEntity != null) {
             level.setBlockEntity(blockEntity);
             return UPDATE_BROADCASTER.broadcastBlockEntity(level, blockEntity);
