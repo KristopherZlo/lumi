@@ -107,6 +107,19 @@ class BlockChangeApplierSafetyTest {
     }
 
     @Test
+    void pendingBlockEntityNbtRequiresACompatibleLiveState() throws IOException {
+        String mixin = Files.readString(
+                Path.of("src/main/java/io/github/luma/mixin/ChunkAccessBlockEntityNbtMixin.java"),
+                StandardCharsets.UTF_8
+        );
+        String mixins = Files.readString(Path.of("src/main/resources/lumi.mixins.json"), StandardCharsets.UTF_8);
+
+        assertTrue(mixins.contains("\"ChunkAccessBlockEntityNbtMixin\""));
+        assertTrue(mixin.contains("if (!chunk.getBlockState(pos).hasBlockEntity())"));
+        assertTrue(mixin.contains("callback.cancel();"));
+    }
+
+    @Test
     void blockEntityTailExceptionCountsAsProcessedAndRecordsFailure() {
         WorldApplyMetrics metrics = new WorldApplyMetrics();
         CompoundTag blockEntity = new CompoundTag();
