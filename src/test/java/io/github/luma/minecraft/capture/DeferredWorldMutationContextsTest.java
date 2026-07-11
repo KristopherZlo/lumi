@@ -19,7 +19,7 @@ class DeferredWorldMutationContextsTest {
     }
 
     @Test
-    void pushRestoresCapturedMutationContextWithoutActionOwnership() {
+    void pushRestoresCapturedActionContext() {
         Carrier carrier = new Carrier();
 
         try (WorldMutationContext.SourceFrame ignored =
@@ -32,7 +32,7 @@ class DeferredWorldMutationContextsTest {
         try {
             assertEquals(WorldMutationSource.BLOCK_UPDATE, WorldMutationContext.currentSource());
             assertEquals("builder", WorldMutationContext.currentActor());
-            assertEquals("", WorldMutationContext.currentActionId());
+            assertEquals("action-1", WorldMutationContext.currentActionId());
             assertTrue(WorldMutationContext.currentAccessAllowed());
         } finally {
             DeferredWorldMutationContexts.pop();

@@ -30,9 +30,9 @@ class WorldMutationCapturePolicyTest {
     }
 
     @Test
-    void rejectsPistonSourceMutations() {
+    void capturesPistonSourceMutationsGenerically() {
         assertEquals(
-                WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION,
+                WorldMutationCapturePolicy.CaptureDecision.CAPTURED,
                 this.policy.evaluate(
                         WorldMutationSource.PISTON,
                         POS,
@@ -49,7 +49,7 @@ class WorldMutationCapturePolicyTest {
                 Blocks.AIR.defaultBlockState(),
                 null,
                 null
-        ).isEmpty());
+        ).isPresent());
     }
 
     @Test
@@ -166,9 +166,9 @@ class WorldMutationCapturePolicyTest {
     }
 
     @Test
-    void defersBlockUpdateMutationsToStabilization() {
+    void capturesBlockUpdateMutationsGenerically() {
         assertEquals(
-                WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION,
+                WorldMutationCapturePolicy.CaptureDecision.CAPTURED,
                 this.policy.evaluate(
                         WorldMutationSource.BLOCK_UPDATE,
                         POS,
@@ -185,7 +185,7 @@ class WorldMutationCapturePolicyTest {
                 Blocks.COPPER_BLOCK.defaultBlockState(),
                 null,
                 null
-        ).isEmpty());
+        ).isPresent());
     }
 
     @Test

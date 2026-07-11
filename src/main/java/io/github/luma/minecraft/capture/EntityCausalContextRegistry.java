@@ -42,6 +42,7 @@ public final class EntityCausalContextRegistry {
         this.contexts.put(this.key(entity, level), new EntityCausalContext(
                 WorldMutationContext.currentSource(),
                 WorldMutationContext.currentActor(),
+                WorldMutationContext.currentActionId(),
                 WorldMutationContext.currentAccessAllowed(),
                 Instant.now(),
                 level.getGameTime() + CONTEXT_TTL_TICKS
@@ -70,7 +71,7 @@ public final class EntityCausalContextRegistry {
         WorldMutationContext.SourceFrame sourceFrame = WorldMutationContext.pushSource(
                 sourceOverride == null ? context.source() : sourceOverride,
                 context.actor(),
-                "",
+                context.actionId(),
                 context.accessAllowed()
         );
         ACTIVE_STARTED_AT.get().push(context.startedAt());
@@ -146,6 +147,7 @@ public final class EntityCausalContextRegistry {
     private record EntityCausalContext(
             WorldMutationSource source,
             String actor,
+            String actionId,
             boolean accessAllowed,
             Instant startedAt,
             long expiresAtGameTime

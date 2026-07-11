@@ -10,6 +10,7 @@ import java.util.Optional;
 public record DeferredWorldMutationContext(
         WorldMutationSource source,
         String actor,
+        String actionId,
         boolean accessAllowed,
         int propagationDepth
 ) {
@@ -19,6 +20,7 @@ public record DeferredWorldMutationContext(
     public DeferredWorldMutationContext {
         source = source == null ? WorldMutationSource.SYSTEM : source;
         actor = actor == null || actor.isBlank() ? HistoryCaptureManager.defaultActor(source) : actor;
+        actionId = actionId == null ? "" : actionId;
         propagationDepth = Math.max(0, propagationDepth);
     }
 
@@ -58,13 +60,14 @@ public record DeferredWorldMutationContext(
         return Optional.of(new DeferredWorldMutationContext(
                 source,
                 WorldMutationContext.currentActor(),
+                WorldMutationContext.currentActionId(),
                 WorldMutationContext.currentAccessAllowed(),
                 propagationDepth
         ));
     }
 
     public WorldMutationContext.SourceFrame push() {
-        return WorldMutationContext.pushSource(this.source, this.actor, "", this.accessAllowed);
+        return WorldMutationContext.pushSource(this.source, this.actor, this.actionId, this.accessAllowed);
     }
 
     private static boolean isMechanismSource(WorldMutationSource source) {

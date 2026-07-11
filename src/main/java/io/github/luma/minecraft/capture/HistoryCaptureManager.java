@@ -318,6 +318,7 @@ public final class HistoryCaptureManager {
                 )) {
                     continue;
                 }
+                this.liveUndoRedoActionRecorder.recordBlock(trackedProject, level, capturedChange, now);
                 if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION) {
                     this.recordDeferredBlockMutation(
                             trackedProject,
@@ -358,7 +359,6 @@ public final class HistoryCaptureManager {
                 }
                 SessionDraftBlockChangeRecorder.Result draftRecord =
                         this.draftBlockChangeRecorder.record(session, buffer, capturedChange, now);
-                this.liveUndoRedoActionRecorder.recordBlock(trackedProject, level, capturedChange, now);
                 this.activeWorkZoneTouchRecorder.record(trackedProject, capturedChange, now);
                 this.historyDebugLog.logCapturedBlock(
                         trackedProject.project(),
@@ -526,6 +526,7 @@ public final class HistoryCaptureManager {
         }
 
         WorldMutationCapturePolicy.CapturedMutation mutation = captureResult.mutation();
+        StoredBlockChange capturedChange = mutation == null ? null : mutation.change();
         if (!this.ensureTrackedChunk(
                 trackedProject,
                 level,
@@ -538,6 +539,7 @@ public final class HistoryCaptureManager {
         )) {
             return;
         }
+        this.liveUndoRedoActionRecorder.recordBlock(trackedProject, level, capturedChange, now);
         if (captureResult.decision() == WorldMutationCapturePolicy.CaptureDecision.DEFER_TO_STABILIZATION) {
             this.recordDeferredBlockMutation(
                     trackedProject,
@@ -585,10 +587,8 @@ public final class HistoryCaptureManager {
                     hiddenReconciliation, ELIGIBILITY.isExplicitRootSource(source));
         }
 
-        StoredBlockChange capturedChange = mutation.change();
         SessionDraftBlockChangeRecorder.Result draftRecord =
                 this.draftBlockChangeRecorder.record(session, buffer, capturedChange, now);
-        this.liveUndoRedoActionRecorder.recordBlock(trackedProject, level, capturedChange, now);
         this.activeWorkZoneTouchRecorder.record(trackedProject, capturedChange, now);
         CaptureSessionDiagnostics diagnostics = this.workingDrafts.diagnosticsForSession(projectId);
         diagnostics.record(

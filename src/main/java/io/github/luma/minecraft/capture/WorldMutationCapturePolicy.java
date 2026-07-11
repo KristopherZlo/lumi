@@ -36,11 +36,6 @@ public final class WorldMutationCapturePolicy {
         if (pos == null || !this.shouldCaptureMutation(source)) {
             return CaptureResult.rejected();
         }
-        if (source == WorldMutationSource.BLOCK_UPDATE
-                || source == WorldMutationSource.PISTON) {
-            return CaptureResult.deferToStabilization();
-        }
-
         PersistentBlockStatePolicy.PersistentBlockState oldPersistent = this.blockStatePolicy.normalize(oldState, oldBlockEntity);
         PersistentBlockStatePolicy.PersistentBlockState newPersistent = this.blockStatePolicy.normalize(newState, newBlockEntity);
         StoredBlockChange change = new StoredBlockChange(
