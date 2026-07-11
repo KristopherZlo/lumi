@@ -358,11 +358,6 @@ public final class VersionService {
             }
             throw new IllegalArgumentException("No pending tracked changes for active work zone");
         }
-        if (!split.remainder().isEmpty()) {
-            // ponytail: one full-draft write protects out-of-zone edits; revisit if zone-save draft writes show in load logs.
-            this.recoveryRepository.saveDraft(layout, draft);
-        }
-
         // Keep a durable fallback until the async save fully commits, without exposing it to live capture.
         sectionStartedAt = System.nanoTime();
         progressSink.update(OperationStage.WRITING, 0, split.selected().totalChangeCount(), "Writing operation draft");
