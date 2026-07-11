@@ -107,22 +107,26 @@ final class LiveUndoRedoJourney {
     }
 
     private void verifyEntityLifecycle() throws Exception {
-        UUID[] entityId = new UUID[1];
-        this.roundTrip("entity spawn", (server, level) -> {
-            Entity entity = EntityType.ARMOR_STAND.create(level, EntitySpawnReason.COMMAND);
+        Entity spawned = this.singleplayer.getServer().computeOnServer(server -> {
+            Entity entity;
+            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.RESTORE)) {
+                entity = EntityType.ARMOR_STAND.create(server.overworld(), EntitySpawnReason.COMMAND);
+            }
             this.require(entity != null, "Could not create armor stand");
             entity.snapTo(this.pos(4, 1, 10).getCenter().x, this.pos(4, 1, 10).getY(),
                     this.pos(4, 1, 10).getCenter().z, 0.0F, 0.0F);
-            entityId[0] = entity.getUUID();
-            level.addFreshEntity(entity);
-        }, 1, false);
+            entity.setNoGravity(true);
+            return entity;
+        });
+        UUID entityId = spawned.getUUID();
+        this.roundTrip("entity spawn", (server, level) -> level.addFreshEntity(spawned), 1, false);
         this.roundTrip("entity update", (server, level) -> {
-            Entity entity = this.entity(level, entityId[0]);
+            Entity entity = this.entity(level, entityId);
             entity.setCustomName(Component.literal("lumi-undo-entity"));
             entity.snapTo(this.pos(5, 1, 10).getCenter().x, this.pos(5, 1, 10).getY(),
                     this.pos(5, 1, 10).getCenter().z, 90.0F, 0.0F);
         }, 1, false);
-        this.roundTrip("entity removal", (server, level) -> this.entity(level, entityId[0]).discard(), 1, false);
+        this.roundTrip("entity removal", (server, level) -> this.entity(level, entityId).discard(), 1, false);
     }
 
     private void verifyPistonFallout() throws Exception {
