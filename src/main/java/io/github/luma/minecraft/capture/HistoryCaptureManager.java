@@ -40,8 +40,7 @@ import net.minecraft.world.level.block.state.BlockState;
  *
  * <p>This manager coordinates project matching, capture policy, stabilization,
  * and baseline chunk capture. Durable working-draft ownership lives in
- * {@link WorkingDraftSessionManager}; volatile live undo/redo action ownership
- * lives in {@link LiveUndoRedoActionRecorder}.
+ * {@link WorkingDraftSessionManager}.
  */
 public final class HistoryCaptureManager {
 
@@ -58,10 +57,6 @@ public final class HistoryCaptureManager {
             new BlockMutationCaptureGate(ELIGIBILITY, this.diagnosticsLogger);
     private final CapturePersistenceCoordinator persistenceCoordinator = new CapturePersistenceCoordinator();
     private final WorkingDraftSessionManager workingDrafts = new WorkingDraftSessionManager(this.persistenceCoordinator);
-    private final LiveUndoRedoActionRecorder liveUndoRedoActionRecorder =
-            new LiveUndoRedoActionRecorder(this.historyDebugLog);
-    private final StaleRedoActionCapturePolicy staleRedoActionCapturePolicy =
-            new StaleRedoActionCapturePolicy(this.diagnosticsLogger);
     private final ProjectService projectService = new ProjectService();
     private final ActiveWorkZoneTouchRecorder activeWorkZoneTouchRecorder = new ActiveWorkZoneTouchRecorder();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -73,13 +68,6 @@ public final class HistoryCaptureManager {
     );
     private final DeferredActionContextResolver deferredActionContextResolver =
             new DeferredActionContextResolver(this.trackedProjectCatalog, this.workingDrafts);
-    private final UndoOnlyEntityChangeRecorder undoOnlyEntityChangeRecorder =
-            new UndoOnlyEntityChangeRecorder(
-                    ENTITY_CAPTURE_POLICY,
-                    ELIGIBILITY,
-                    this.trackedProjectCatalog,
-                    this.liveUndoRedoActionRecorder
-            );
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
     private final CaptureBaselineCoordinator baselineCoordinator =
@@ -272,9 +260,6 @@ public final class HistoryCaptureManager {
                 boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
                 CaptureSessionState.DeferredActionContext deferredActionContext =
                         this.deferredActionContext(existingSession, chunk, source);
-                if (this.staleRedoActionCapturePolicy.shouldSkip(trackedProject, pos, deferredActionContext)) {
-                    continue;
-                }
                 boolean usesDeferredStabilization = ELIGIBILITY.usesDeferredStabilization(
                         trackedProject.project(),
                         source
@@ -383,7 +368,6 @@ public final class HistoryCaptureManager {
                 SessionDraftBlockChangeRecorder.Result draftRecord =
                         this.draftBlockChangeRecorder.record(session, buffer, capturedChange, now);
                 this.activeWorkZoneTouchRecorder.record(trackedProject, capturedChange, now);
-                this.liveUndoRedoActionRecorder.recordBlockAction(trackedProject, level, capturedChange, now);
                 this.historyDebugLog.logCapturedBlock(
                         trackedProject.project(),
                         "direct",
@@ -446,8 +430,6 @@ public final class HistoryCaptureManager {
         try {
             Instant now = Instant.now();
             boolean autoWorkspaceCreated = false;
-            Map<String, TrackedProject> liveUndoProjects = new LinkedHashMap<>();
-            Map<String, List<StoredBlockChange>> liveUndoChanges = new LinkedHashMap<>();
             for (BlockChangeInput input : changes) {
                 if (input == null) {
                     continue;
@@ -458,19 +440,10 @@ public final class HistoryCaptureManager {
                             input,
                             source,
                             now,
-                            autoWorkspaceCreated,
-                            liveUndoProjects,
-                            liveUndoChanges
+                            autoWorkspaceCreated
                     );
                 } catch (Exception exception) {
                     LumaMod.LOGGER.warn("Failed to capture bulk block change at {} in {}", input.pos(), level.dimension().identifier(), exception);
-                }
-            }
-
-            for (Map.Entry<String, List<StoredBlockChange>> entry : liveUndoChanges.entrySet()) {
-                TrackedProject trackedProject = liveUndoProjects.get(entry.getKey());
-                if (trackedProject != null) {
-                    this.liveUndoRedoActionRecorder.recordBlockAction(trackedProject, level, entry.getValue(), now);
                 }
             }
         } catch (Exception exception) {
@@ -483,9 +456,7 @@ public final class HistoryCaptureManager {
             BlockChangeInput input,
             io.github.luma.domain.model.WorldMutationSource source,
             Instant now,
-            boolean autoWorkspaceCreated,
-            Map<String, TrackedProject> liveUndoProjects,
-            Map<String, List<StoredBlockChange>> liveUndoChanges
+            boolean autoWorkspaceCreated
     ) throws IOException {
         WorldMutationCapturePolicy.CaptureResult captureResult = ELIGIBILITY.evaluateBlockMutation(
                 source,
@@ -523,9 +494,7 @@ public final class HistoryCaptureManager {
                     source,
                     now,
                     input,
-                    captureResult,
-                    liveUndoProjects,
-                    liveUndoChanges
+                    captureResult
             );
         }
         return autoWorkspaceCreated;
@@ -537,9 +506,7 @@ public final class HistoryCaptureManager {
             io.github.luma.domain.model.WorldMutationSource source,
             Instant now,
             BlockChangeInput input,
-            WorldMutationCapturePolicy.CaptureResult captureResult,
-            Map<String, TrackedProject> liveUndoProjects,
-            Map<String, List<StoredBlockChange>> liveUndoChanges
+            WorldMutationCapturePolicy.CaptureResult captureResult
     ) throws IOException {
         String projectId = trackedProject.project().id().toString();
         CaptureSessionState existingSession = this.workingDrafts.session(projectId);
@@ -547,9 +514,6 @@ public final class HistoryCaptureManager {
         boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
         CaptureSessionState.DeferredActionContext deferredActionContext =
                 this.deferredActionContext(existingSession, chunk, source);
-        if (this.staleRedoActionCapturePolicy.shouldSkip(trackedProject, input.pos(), deferredActionContext)) {
-            return;
-        }
         boolean usesDeferredStabilization = ELIGIBILITY.usesDeferredStabilization(trackedProject.project(), source);
         if (usesDeferredStabilization
                 && !ELIGIBILITY.canUseDeferredStabilization(
@@ -635,8 +599,6 @@ public final class HistoryCaptureManager {
         SessionDraftBlockChangeRecorder.Result draftRecord =
                 this.draftBlockChangeRecorder.record(session, buffer, capturedChange, now);
         this.activeWorkZoneTouchRecorder.record(trackedProject, capturedChange, now);
-        liveUndoProjects.putIfAbsent(projectId, trackedProject);
-        liveUndoChanges.computeIfAbsent(projectId, ignored -> new ArrayList<>()).add(capturedChange);
         CaptureSessionDiagnostics diagnostics = this.workingDrafts.diagnosticsForSession(projectId);
         diagnostics.record(
                 source,
@@ -719,9 +681,6 @@ public final class HistoryCaptureManager {
 
             for (TrackedProject trackedProject : matchingProjects) {
                 if (!this.accessGuard.canUseProjectInCurrentMode(trackedProject)) { continue; }
-                if (this.staleRedoActionCapturePolicy.shouldSkip(trackedProject, pos, null)) {
-                    continue;
-                }
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }
@@ -751,7 +710,6 @@ public final class HistoryCaptureManager {
                 int pendingBefore = buffer.size();
                 buffer.addEntityChange(capturedChange, now);
                 this.activeWorkZoneTouchRecorder.record(trackedProject, mutationPositions, now);
-                this.liveUndoRedoActionRecorder.recordEntityAction(trackedProject, level, capturedChange, now, actionStartedAt);
                 int pendingAfter = buffer.size();
                 this.workingDrafts.diagnosticsForSession(projectId).addActiveChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
                 LumaDebugLog.log(
@@ -778,138 +736,6 @@ public final class HistoryCaptureManager {
             }
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Failed to capture entity change in {}", level.dimension().identifier(), exception);
-        }
-    }
-
-    public void recordUndoOnlyEntityChange(
-            ServerLevel level,
-            EntityPayload oldPayload,
-            EntityPayload newPayload
-    ) {
-        if (this.shouldSkipSuppressedReplay(level)) return;
-        this.undoOnlyEntityChangeRecorder.record(level, oldPayload, newPayload, null);
-    }
-
-    public void recordDelayedUndoOnlyEntityChange(
-            ServerLevel level,
-            EntityPayload oldPayload,
-            EntityPayload newPayload,
-            Instant actionStartedAt
-    ) {
-        if (this.shouldSkipSuppressedReplay(level)) return;
-        this.undoOnlyEntityChangeRecorder.record(level, oldPayload, newPayload, actionStartedAt);
-    }
-
-    public void recordDelayedUndoOnlyEntityChanges(
-            ServerLevel level,
-            List<EntityPayload> oldPayloads,
-            Instant actionStartedAt
-    ) {
-        if (this.shouldSkipSuppressedReplay(level)) return;
-        this.undoOnlyEntityChangeRecorder.recordBatch(level, oldPayloads, actionStartedAt);
-    }
-
-    /**
-     * Reconciles the working draft after an internal undo/redo world
-     * operation has already applied the same state transition to the world.
-     */
-    public void applyLiveActionAdjustments(
-            MinecraftServer server,
-            String projectId,
-            List<StoredBlockChange> changes,
-            String actor,
-            Instant now
-    ) throws IOException {
-        this.applyLiveActionAdjustments(server, projectId, changes, List.of(), actor, now);
-    }
-
-    public void applyLiveActionAdjustments(
-            MinecraftServer server,
-            String projectId,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            String actor,
-            Instant now
-    ) throws IOException {
-        this.serverThreadExecutor.run(server, () -> this.applyLiveActionAdjustmentsOnServerThread(
-                server,
-                projectId,
-                changes,
-                entityChanges,
-                actor,
-                now
-        ));
-    }
-
-    public void applyUndoRedoAdjustments(
-            MinecraftServer server,
-            String projectId,
-            List<StoredBlockChange> changes,
-            String actor,
-            Instant now
-    ) throws IOException {
-        this.applyLiveActionAdjustments(server, projectId, changes, actor, now);
-    }
-
-    public void applyUndoRedoAdjustments(
-            MinecraftServer server,
-            String projectId,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            String actor,
-            Instant now
-    ) throws IOException {
-        this.applyLiveActionAdjustments(server, projectId, changes, entityChanges, actor, now);
-    }
-
-    private void applyLiveActionAdjustmentsOnServerThread(
-            MinecraftServer server,
-            String projectId,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges,
-            String actor,
-            Instant now
-    ) throws IOException {
-        if ((changes == null || changes.isEmpty()) && (entityChanges == null || entityChanges.isEmpty())) {
-            return;
-        }
-
-        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
-        if (trackedProject == null) {
-            return;
-        }
-
-        TrackedChangeBuffer buffer = this.getOrCreateWorkingDraft(
-                trackedProject,
-                io.github.luma.domain.model.WorldMutationSource.PLAYER,
-                now
-        );
-        CaptureSessionState session = this.workingDrafts.session(projectId);
-        for (StoredBlockChange change : changes == null ? List.<StoredBlockChange>of() : changes) {
-            buffer.addChange(change, now);
-            if (session != null) {
-                session.addRootChunk(ChunkPoint.from(change.pos()));
-            }
-        }
-        for (StoredEntityChange change : entityChanges == null ? List.<StoredEntityChange>of() : entityChanges) {
-            if (!ENTITY_CAPTURE_POLICY.shouldPersistUndoRedoAdjustment(change)) continue;
-            buffer.addEntityChange(change, now);
-            if (session != null) {
-                session.addRootChunk(change.chunk());
-            }
-        }
-
-        if (buffer.isEmpty()) {
-            this.workingDrafts.discardIfEmpty(trackedProject, "after undo/redo");
-        } else {
-            this.workingDrafts.markDirty(projectId);
-            LumaMod.LOGGER.info(
-                    "Adjusted working draft for project {} after undo/redo by {} with {} changes; pending={}",
-                    trackedProject.project().name(),
-                    actor == null || actor.isBlank() ? "player" : actor,
-                    (changes == null ? 0 : changes.size()) + (entityChanges == null ? 0 : entityChanges.size()),
-                    buffer.size()
-            );
         }
     }
 
@@ -1158,90 +984,12 @@ public final class HistoryCaptureManager {
         }
     }
 
-    /**
-     * Reconciles already-dirty causal chunks before live undo/redo chooses the
-     * next action, so settled fluid and falling-block fallout can join it.
-     */
-    public void drainUndoRedoStabilization(MinecraftServer server, String projectId) throws IOException {
-        this.serverThreadExecutor.run(server, () -> this.drainUndoRedoStabilizationOnServerThread(server, projectId));
-    }
-
-    public boolean hasPendingUndoRedoStabilization(MinecraftServer server, String projectId) throws IOException {
-        return this.serverThreadExecutor.call(server, () -> {
-            if (projectId == null || projectId.isBlank()) {
-                return false;
-            }
-            CaptureSessionState sessionState = this.workingDrafts.session(projectId);
-            return sessionState != null && sessionState.hasPendingReconciliation();
-        });
-    }
-
     public void invalidateProjectCache(MinecraftServer server) {
         this.trackedProjectCatalog.invalidate(server);
     }
 
     public CaptureSessionState.DeferredActionContext deferredActionContextNear(ServerLevel level, BlockPos pos) {
         return this.deferredActionContextResolver.near(level, pos);
-    }
-
-    private void drainUndoRedoStabilizationOnServerThread(MinecraftServer server, String projectId) throws IOException {
-        if (projectId == null || projectId.isBlank()) {
-            return;
-        }
-
-        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
-        CaptureSessionState sessionState = this.workingDrafts.session(projectId);
-        if (trackedProject == null || sessionState == null || !sessionState.hasPendingReconciliation()) {
-            return;
-        }
-
-        ServerLevel level = this.resolveProjectLevel(server, trackedProject.project());
-        this.loadUndoRedoStabilizationChunks(level, trackedProject.project(), sessionState);
-        this.reconcileSession(server, trackedProject, sessionState, false);
-    }
-
-    private void loadUndoRedoStabilizationChunks(
-            ServerLevel level,
-            BuildProject project,
-            CaptureSessionState sessionState
-    ) {
-        if (level == null || project == null || sessionState == null) {
-            return;
-        }
-        List<ChunkPoint> pendingChunks = sessionState.pendingReconcileChunks();
-        if (pendingChunks.isEmpty()) {
-            return;
-        }
-        int loaded = 0;
-        int alreadyLoaded = 0;
-        for (ChunkPoint chunk : pendingChunks) {
-            if (chunk == null) {
-                continue;
-            }
-            if (level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) != null) {
-                alreadyLoaded += 1;
-                continue;
-            }
-            if (level.getChunk(chunk.x(), chunk.z()) != null) {
-                loaded += 1;
-            }
-        }
-        if (loaded > 0) {
-            LumaMod.LOGGER.info(
-                    "Loaded {} deferred stabilization chunks for undo/redo in project {} ({} already loaded)",
-                    loaded,
-                    project.name(),
-                    alreadyLoaded
-            );
-        }
-        LumaDebugLog.log(
-                project,
-                "capture",
-                "Undo/redo stabilization chunk load pending={} loaded={} alreadyLoaded={}",
-                pendingChunks.size(),
-                loaded,
-                alreadyLoaded
-        );
     }
 
     static boolean canUseMutationSource(
@@ -1614,7 +1362,6 @@ public final class HistoryCaptureManager {
                 && this.reconcileWorkingDraftAgainstLiveWorld(level, trackedProject, session, Instant.now());
         if (result.chunkCount() > 0) {
             this.diagnosticsLogger.logReconciliation(trackedProject, result);
-            this.liveUndoRedoActionRecorder.recordReconciledChanges(trackedProject, level, result, Instant.now());
         }
         if (session.buffer().isEmpty()) {
             this.workingDrafts.discardIfEmpty(trackedProject, "after reconciliation");

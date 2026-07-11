@@ -5,7 +5,6 @@ import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.integration.common.ExternalToolMutationOriginDetector;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
@@ -15,15 +14,10 @@ import net.minecraft.world.entity.Entity;
 public final class EntityMutationTracker {
 
     private static final int MAX_SPAWN_CAPTURES_PER_TICK = 128;
-    private static final int MAX_DEATH_CAPTURES_PER_TICK = 128;
     private static final EntitySnapshotService SNAPSHOT_SERVICE = new EntitySnapshotService();
     private static final EntityMutationCapturePolicy CAPTURE_POLICY = new EntityMutationCapturePolicy();
     private static final EntitySpawnCaptureQueue SPAWN_CAPTURE_QUEUE = new EntitySpawnCaptureQueue(SNAPSHOT_SERVICE);
-    private static final PendingEntityDeathCaptureQueue DEATH_CAPTURE_QUEUE = new PendingEntityDeathCaptureQueue();
     private static final ExternalToolMutationOriginDetector TOOL_DETECTOR = ExternalToolMutationOriginDetector.getInstance();
-    private static final EntityCausalContextRegistry ENTITY_CAUSAL_CONTEXTS =
-            EntityCausalContextRegistry.getInstance();
-
     private EntityMutationTracker() {
     }
 
@@ -61,9 +55,7 @@ public final class EntityMutationTracker {
                 level,
                 SNAPSHOT_SERVICE.capture(level, entity),
                 operation,
-                false,
-                actionStartedAt,
-                false
+                actionStartedAt
         );
     }
 
@@ -71,12 +63,8 @@ public final class EntityMutationTracker {
         if (pending == null || pending.isEmpty() || !(entity.level() instanceof ServerLevel level)) {
             return;
         }
-        EntityPayload newPayload = entity.isRemoved()
-                ? null
-                : pending.exactPayloads()
-                ? SNAPSHOT_SERVICE.captureExact(level, entity)
-                : SNAPSHOT_SERVICE.capture(level, entity);
-        record(level, pending.oldPayload(), newPayload, pending.operation(), pending.undoOnly(), pending.actionStartedAt());
+        EntityPayload newPayload = entity.isRemoved() ? null : SNAPSHOT_SERVICE.capture(level, entity);
+        record(level, pending.oldPayload(), newPayload, pending.operation(), pending.actionStartedAt());
     }
 
     public static void captureSpawn(ServerLevel level, Entity entity) {
@@ -90,8 +78,7 @@ public final class EntityMutationTracker {
         WorldMutationSource source = WorldMutationContext.currentSource();
         ObservedExternalToolOperation operation = null;
         if (!CAPTURE_POLICY.shouldInspectSpawnMutation(source, entityType)) {
-            if (CAPTURE_POLICY.shouldInspectUndoOnlyMutation(source, entityType)) {
-                SPAWN_CAPTURE_QUEUE.enqueue(level, entity, CaptureFrame.current(null), true);
+            if (CAPTURE_POLICY.shouldIgnoreTransientSpawn(source, entityType)) {
                 return;
             }
             if (WorldMutationContext.captureSuppressed()) {
@@ -107,7 +94,7 @@ public final class EntityMutationTracker {
             operation = detected.get();
             source = operation.source();
         }
-        SPAWN_CAPTURE_QUEUE.enqueue(level, entity, CaptureFrame.current(operation), false);
+        SPAWN_CAPTURE_QUEUE.enqueue(level, entity, CaptureFrame.current(operation));
     }
 
     public static void tick(MinecraftServer server) {
@@ -117,121 +104,14 @@ public final class EntityMutationTracker {
                 false,
                 MAX_SPAWN_CAPTURES_PER_TICK
         );
-        DEATH_CAPTURE_QUEUE.drain(
-                server,
-                EntityMutationTracker::recordDeaths,
-                MAX_DEATH_CAPTURES_PER_TICK
-        );
     }
 
     public static void drainPendingSpawns(MinecraftServer server) {
         SPAWN_CAPTURE_QUEUE.drain(server, EntityMutationTracker::record, true, Integer.MAX_VALUE);
-        DEATH_CAPTURE_QUEUE.drain(server, EntityMutationTracker::recordDeaths, Integer.MAX_VALUE);
     }
 
     public static PendingEntityMutation captureRemoval(Entity entity) {
-        PendingEntityMutation pending = captureBefore(entity);
-        if (pending.isEmpty()) {
-            pending = captureUndoOnlyRemoval(entity);
-        }
-        if (pending.isEmpty()) {
-            return pending;
-        }
-        return ENTITY_CAUSAL_CONTEXTS.oldPayloadOverride(entity, pending.level())
-                .map(pending::withOldPayload)
-                .orElse(pending);
-    }
-
-    public static PendingEntityMutation captureUndoOnlyBefore(Entity entity) {
-        if (!(entity.level() instanceof ServerLevel level) || WorldMutationContext.captureSuppressed()) {
-            return PendingEntityMutation.empty();
-        }
-        String entityType = entityType(entity);
-        if (!CAPTURE_POLICY.shouldInspectUndoOnlyStateMutation(WorldMutationContext.currentSource(), entityType)) {
-            return PendingEntityMutation.empty();
-        }
-        return new PendingEntityMutation(
-                level,
-                SNAPSHOT_SERVICE.captureExact(level, entity),
-                null,
-                true,
-                EntityCausalContextRegistry.currentStartedAt().orElse(null),
-                true
-        );
-    }
-
-    private static PendingEntityMutation captureUndoOnlyRemoval(Entity entity) {
-        if (!(entity.level() instanceof ServerLevel level) || WorldMutationContext.captureSuppressed()) {
-            return PendingEntityMutation.empty();
-        }
-        String entityType = entityType(entity);
-        if (!CAPTURE_POLICY.shouldInspectUndoOnlyMutation(WorldMutationContext.currentSource(), entityType)) {
-            return PendingEntityMutation.empty();
-        }
-        return new PendingEntityMutation(
-                level,
-                SNAPSHOT_SERVICE.capture(level, entity),
-                null,
-                true,
-                EntityCausalContextRegistry.currentStartedAt().orElse(null),
-                false
-        );
-    }
-
-    public static void captureCausalDeath(Entity entity) {
-        if (!(entity.level() instanceof ServerLevel level)) {
-            return;
-        }
-        if (WorldMutationContext.captureSuppressed()) {
-            return;
-        }
-
-        String entityType = entityType(entity);
-        WorldMutationSource source = WorldMutationContext.currentSource();
-        if (!CAPTURE_POLICY.shouldInspectUndoOnlyMutation(source, entityType)) {
-            return;
-        }
-
-        ENTITY_CAUSAL_CONTEXTS.oldPayloadOverride(entity, level)
-                .ifPresent(oldPayload -> DEATH_CAPTURE_QUEUE.enqueue(
-                        level,
-                        oldPayload,
-                        CaptureFrame.current(null)
-                ));
-    }
-
-    private static void recordDeaths(
-            ServerLevel level,
-            List<EntityPayload> oldPayloads,
-            CaptureFrame frame
-    ) {
-        if (level == null || oldPayloads == null || oldPayloads.isEmpty() || frame == null) {
-            return;
-        }
-
-        if (frame.operation() != null) {
-            boolean accessAllowed = frame.operation().accessAllowed() || !level.getServer().isDedicatedServer();
-            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushExternalSource(
-                    frame.operation().source(),
-                    frame.operation().actor(),
-                    frame.operation().actionId(),
-                    accessAllowed
-            )) {
-                HistoryCaptureManager.getInstance()
-                        .recordDelayedUndoOnlyEntityChanges(level, oldPayloads, frame.recordedAt());
-            }
-            return;
-        }
-
-        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(
-                frame.source(),
-                frame.actor(),
-                frame.actionId(),
-                frame.accessAllowed()
-        )) {
-            HistoryCaptureManager.getInstance()
-                    .recordDelayedUndoOnlyEntityChanges(level, oldPayloads, frame.recordedAt());
-        }
+        return captureBefore(entity);
     }
 
     private static String entityType(Entity entity) {
@@ -246,7 +126,6 @@ public final class EntityMutationTracker {
             EntityPayload oldPayload,
             EntityPayload newPayload,
             ObservedExternalToolOperation operation,
-            boolean undoOnly,
             Instant actionStartedAt
     ) {
         if (oldPayload == null && newPayload == null) {
@@ -254,13 +133,9 @@ public final class EntityMutationTracker {
         }
         if (operation == null) {
             if (actionStartedAt == null) {
-                if (undoOnly) {
-                    HistoryCaptureManager.getInstance().recordUndoOnlyEntityChange(level, oldPayload, newPayload);
-                } else {
-                    HistoryCaptureManager.getInstance().recordEntityChange(level, oldPayload, newPayload);
-                }
+                HistoryCaptureManager.getInstance().recordEntityChange(level, oldPayload, newPayload);
             } else {
-                recordDelayed(level, oldPayload, newPayload, actionStartedAt, undoOnly);
+                recordDelayed(level, oldPayload, newPayload, actionStartedAt);
             }
             return;
         }
@@ -273,13 +148,9 @@ public final class EntityMutationTracker {
                 accessAllowed
         )) {
             if (actionStartedAt == null) {
-                if (undoOnly) {
-                    HistoryCaptureManager.getInstance().recordUndoOnlyEntityChange(level, oldPayload, newPayload);
-                } else {
-                    HistoryCaptureManager.getInstance().recordEntityChange(level, oldPayload, newPayload);
-                }
+                HistoryCaptureManager.getInstance().recordEntityChange(level, oldPayload, newPayload);
             } else {
-                recordDelayed(level, oldPayload, newPayload, actionStartedAt, undoOnly);
+                recordDelayed(level, oldPayload, newPayload, actionStartedAt);
             }
         }
     }
@@ -288,8 +159,7 @@ public final class EntityMutationTracker {
             ServerLevel level,
             EntityPayload oldPayload,
             EntityPayload newPayload,
-            CaptureFrame frame,
-            boolean undoOnly
+            CaptureFrame frame
     ) {
         if (frame == null || oldPayload == null && newPayload == null) {
             return;
@@ -303,7 +173,7 @@ public final class EntityMutationTracker {
                     frame.operation().actionId(),
                     accessAllowed
             )) {
-                recordDelayed(level, oldPayload, newPayload, frame.recordedAt(), undoOnly);
+                recordDelayed(level, oldPayload, newPayload, frame.recordedAt());
             }
             return;
         }
@@ -314,7 +184,7 @@ public final class EntityMutationTracker {
                 frame.actionId(),
                 frame.accessAllowed()
         )) {
-            recordDelayed(level, oldPayload, newPayload, frame.recordedAt(), undoOnly);
+            recordDelayed(level, oldPayload, newPayload, frame.recordedAt());
         }
     }
 
@@ -322,19 +192,12 @@ public final class EntityMutationTracker {
             ServerLevel level,
             EntityPayload oldPayload,
             EntityPayload newPayload,
-            Instant actionStartedAt,
-            boolean undoOnly
+            Instant actionStartedAt
     ) {
         if (oldPayload == null && newPayload == null) {
             return;
         }
-        if (undoOnly) {
-            HistoryCaptureManager.getInstance()
-                    .recordDelayedUndoOnlyEntityChange(level, oldPayload, newPayload, actionStartedAt);
-        } else {
-            HistoryCaptureManager.getInstance()
-                    .recordDelayedEntityChange(level, oldPayload, newPayload, actionStartedAt);
-        }
+        HistoryCaptureManager.getInstance().recordDelayedEntityChange(level, oldPayload, newPayload, actionStartedAt);
     }
 
     record CaptureFrame(
@@ -374,42 +237,24 @@ public final class EntityMutationTracker {
                 ServerLevel level,
                 EntityPayload oldPayload,
                 EntityPayload newPayload,
-                CaptureFrame frame,
-                boolean undoOnly
+                CaptureFrame frame
         );
-    }
-
-    interface EntityDeathBatchRecorder {
-
-        void record(ServerLevel level, List<EntityPayload> oldPayloads, CaptureFrame frame);
     }
 
     public record PendingEntityMutation(
             ServerLevel level,
             EntityPayload oldPayload,
             ObservedExternalToolOperation operation,
-            boolean undoOnly,
-            Instant actionStartedAt,
-            boolean exactPayloads
+            Instant actionStartedAt
     ) {
 
         public static PendingEntityMutation empty() {
-            return new PendingEntityMutation(null, null, null, false, null, false);
+            return new PendingEntityMutation(null, null, null, null);
         }
 
         public boolean isEmpty() {
             return this.level == null || this.oldPayload == null;
         }
 
-        private PendingEntityMutation withOldPayload(EntityPayload oldPayload) {
-            return new PendingEntityMutation(
-                    this.level,
-                    oldPayload,
-                    this.operation,
-                    this.undoOnly,
-                    this.actionStartedAt,
-                    this.exactPayloads
-            );
-        }
     }
 }

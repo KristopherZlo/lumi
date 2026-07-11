@@ -26,7 +26,7 @@ final class EntitySpawnCaptureQueue {
         this.snapshotService = snapshotService;
     }
 
-    synchronized void enqueue(ServerLevel level, Entity entity, EntityMutationTracker.CaptureFrame frame, boolean undoOnly) {
+    synchronized void enqueue(ServerLevel level, Entity entity, EntityMutationTracker.CaptureFrame frame) {
         if (level == null || entity == null || frame == null || entity.getUUID() == null) {
             return;
         }
@@ -42,7 +42,6 @@ final class EntitySpawnCaptureQueue {
                         entity,
                         initialPayload,
                         frame,
-                        undoOnly,
                         level.getGameTime()
                 ));
     }
@@ -87,7 +86,7 @@ final class EntitySpawnCaptureQueue {
                 continue;
             }
 
-            recorder.record(level, null, payload, capture.frame(), capture.undoOnly());
+            recorder.record(level, null, payload, capture.frame());
             this.remove(level, capture.entityId());
         }
         return captures.size();
@@ -161,7 +160,6 @@ final class EntitySpawnCaptureQueue {
             Entity acceptedEntity,
             EntityPayload initialPayload,
             EntityMutationTracker.CaptureFrame frame,
-            boolean undoOnly,
             long queuedAtGameTime
     ) {
     }
