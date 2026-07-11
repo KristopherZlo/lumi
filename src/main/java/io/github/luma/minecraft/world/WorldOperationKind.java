@@ -32,7 +32,7 @@ enum WorldOperationKind {
         return switch (label == null ? "" : label) {
             case "save-version", "amend-version" -> SAVE;
             case "restore-version", "partial-restore", "zone-restore", "recovery", "restore-draft",
-                    "quick-rollback", "merge-variant" -> HISTORY_APPLY;
+                    "quick-rollback", "merge-variant", "undo-action", "redo-action" -> HISTORY_APPLY;
             case "light-refresh" -> LIGHT_REFRESH;
             default -> OTHER;
         };
