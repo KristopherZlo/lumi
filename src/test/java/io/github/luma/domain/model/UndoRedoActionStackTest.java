@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Instant;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
+import net.minecraft.nbt.ListTag;
 import org.junit.jupiter.api.Test;
 
 class UndoRedoActionStackTest {
@@ -64,6 +66,37 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void lateActionDoesNotJumpAheadOfNewerWork() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        Instant first = Instant.parse("2026-01-01T00:00:00Z");
+        Instant second = first.plusSeconds(10);
+        stack.recordAction("newer", "player", "project", "overworld",
+                List.of(change(0, "air", "stone")), List.of(), second);
+
+        stack.recordDelayedEntityChanges(
+                "older", "player", "project", "overworld", List.of(entitySpawn()), first, second.plusSeconds(10)
+        );
+
+        assertEquals("newer", stack.selectUndo().action().id());
+    }
+
+    @Test
+    void mutationAfterUndoClearsRedo() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        Instant now = Instant.parse("2026-01-01T00:00:00Z");
+        stack.recordAction("older", "player", "project", "overworld",
+                List.of(change(0, "air", "stone")), List.of(), now);
+        stack.recordAction("newer", "player", "project", "overworld",
+                List.of(change(1, "air", "stone")), List.of(), now.plusSeconds(1));
+        assertTrue(stack.completeUndo(stack.selectUndo()));
+
+        stack.recordCurrentCausalAction("older", "player", "project", "overworld",
+                List.of(change(2, "air", "dirt")), List.of(), now.plusSeconds(2));
+
+        assertFalse(stack.canRedo());
+    }
+
+    @Test
     void keepsOnlyConfiguredNumberOfActions() {
         UndoRedoActionStack stack = new UndoRedoActionStack(2);
         Instant now = Instant.parse("2026-01-01T00:00:00Z");
@@ -87,5 +120,22 @@ class UndoRedoActionStackTest {
         CompoundTag tag = new CompoundTag();
         tag.putString("Name", "minecraft:" + blockId);
         return new StatePayload(tag, null);
+    }
+
+    private static StoredEntityChange entitySpawn() {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("id", "minecraft:item");
+        tag.putString("UUID", "00000000-0000-0000-0000-000000000001");
+        ListTag pos = new ListTag();
+        pos.add(DoubleTag.valueOf(0));
+        pos.add(DoubleTag.valueOf(64));
+        pos.add(DoubleTag.valueOf(0));
+        tag.put("Pos", pos);
+        return new StoredEntityChange(
+                "00000000-0000-0000-0000-000000000001",
+                "minecraft:item",
+                null,
+                new EntityPayload(tag)
+        );
     }
 }

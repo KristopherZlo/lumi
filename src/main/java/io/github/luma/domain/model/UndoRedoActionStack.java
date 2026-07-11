@@ -140,7 +140,7 @@ public final class UndoRedoActionStack {
             this.trim(this.undo);
         }
 
-        Instant recordedAt = created ? now : action.updatedAt();
+        Instant recordedAt = action.updatedAt();
         boolean changed = false;
         for (StoredBlockChange block : blocks == null ? List.<StoredBlockChange>of() : blocks) {
             changed |= action.recordChange(block, recordedAt);
@@ -152,9 +152,7 @@ public final class UndoRedoActionStack {
             this.undo.remove(action);
         }
         if (changed) {
-            if (created) {
-                this.redo.clear();
-            }
+            this.redo.clear();
             this.revision++;
         }
         return this.revision;
