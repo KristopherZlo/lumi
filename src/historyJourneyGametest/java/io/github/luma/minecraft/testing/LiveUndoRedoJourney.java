@@ -10,6 +10,7 @@ import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.core.BlockPos;
@@ -20,6 +21,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -60,6 +62,7 @@ final class LiveUndoRedoJourney {
         this.verifyBlockPlacementAndBreak();
         this.verifyBlockEntityNbt();
         this.verifyEntityLifecycle();
+        this.verifyDyingMobUndo();
         this.verifyPistonFallout();
         this.verifyFluidAndGravityTicks();
         this.verifyNewActionClearsRedo();
@@ -127,6 +130,85 @@ final class LiveUndoRedoJourney {
                     this.pos(5, 1, 10).getCenter().z, 90.0F, 0.0F);
         }, 1, false);
         this.roundTrip("entity removal", (server, level) -> this.entity(level, entityId).discard(), 1, false);
+    }
+
+    private void verifyDyingMobUndo() throws Exception {
+        BlockPos mobPos = this.pos(6, 1, 10);
+        UUID entityId = this.singleplayer.getServer().computeOnServer(server -> {
+            LivingEntity mob;
+            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.RESTORE)) {
+                mob = EntityType.COW.create(server.overworld(), EntitySpawnReason.COMMAND);
+                this.require(mob != null, "Could not create dying-mob fixture");
+                mob.snapTo(mobPos.getCenter().x, mobPos.getY(), mobPos.getCenter().z, 0.0F, 0.0F);
+                this.require(server.overworld().addFreshEntity(mob), "Could not spawn dying-mob fixture");
+            }
+            return mob.getUUID();
+        });
+        this.waitTicks(SETTLE_TICKS);
+        this.history.clearProject(this.projectId);
+
+        try {
+            String actionId = this.runAction((server, level) -> {
+                LivingEntity mob = (LivingEntity) this.entity(level, entityId);
+                this.require(mob.hurtServer(level, level.damageSources().genericKill(), Float.MAX_VALUE),
+                        "Dying-mob fixture rejected lethal damage");
+            });
+            this.waitForClientEntity(entityId, LivingEntity::isDeadOrDying,
+                    "Client never entered the mob death animation");
+            this.require(this.history.recentUndoActions(this.projectId, 64).stream()
+                            .anyMatch(action -> action.id().equals(actionId)),
+                    "Lethal mob action was not recorded");
+
+            this.waitFor(this.undo(), "undo dying mob");
+            this.require(this.singleplayer.getServer().computeOnServer(server -> {
+                Entity restored = server.overworld().getEntity(entityId);
+                return restored instanceof LivingEntity living
+                        && living.isAlive()
+                        && living.deathTime == 0;
+            }), "Server mob remained in its death animation after undo");
+            this.waitForClientEntity(entityId,
+                    living -> living.isAlive() && living.deathTime == 0,
+                    "Client mob remained in its death animation after undo");
+        } finally {
+            this.singleplayer.getServer().runOnServer(server -> WorldMutationContext.runWithSource(
+                    WorldMutationSource.RESTORE,
+                    () -> {
+                        Entity entity = server.overworld().getEntity(entityId);
+                        if (entity != null) {
+                            entity.discard();
+                        }
+                    }
+            ));
+            this.history.clearProject(this.projectId);
+            this.waitTicks(SETTLE_TICKS);
+        }
+    }
+
+    private void waitForClientEntity(
+            UUID entityId,
+            Predicate<LivingEntity> predicate,
+            String failure
+    ) throws Exception {
+        for (int tick = 0; tick < 40; tick++) {
+            boolean matched = this.context.computeOnClient(client -> client.level != null
+                    && java.util.stream.StreamSupport.stream(client.level.entitiesForRendering().spliterator(), false)
+                            .filter(LivingEntity.class::isInstance)
+                            .map(LivingEntity.class::cast)
+                            .anyMatch(entity -> entityId.equals(entity.getUUID()) && predicate.test(entity)));
+            if (matched) {
+                return;
+            }
+            this.context.waitTick();
+        }
+        String clientState = this.context.computeOnClient(client -> client.level == null
+                ? "level missing"
+                : java.util.stream.StreamSupport.stream(client.level.entitiesForRendering().spliterator(), false)
+                        .filter(LivingEntity.class::isInstance)
+                        .map(LivingEntity.class::cast)
+                        .map(entity -> entity.getUUID() + ":alive=" + entity.isAlive() + ":deathTime=" + entity.deathTime)
+                        .toList()
+                        .toString());
+        throw new AssertionError(failure + "; nearby=" + clientState);
     }
 
     private void verifyPistonFallout() throws Exception {
