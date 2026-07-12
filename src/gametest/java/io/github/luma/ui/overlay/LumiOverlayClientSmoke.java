@@ -6,6 +6,11 @@ import io.github.luma.domain.model.ChangeType;
 import io.github.luma.domain.model.DiffBlockEntry;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
+import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.domain.service.ProjectService;
+import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.ui.controller.ClientProjectAccess;
 import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -17,7 +22,7 @@ import net.minecraft.nbt.CompoundTag;
 /** Client GameTest smoke coverage for durable compare and pending overlays. */
 public final class LumiOverlayClientSmoke {
 
-    public void run(ClientGameTestContext context, TestSingleplayerContext ignoredSingleplayer) throws Exception {
+    public void run(ClientGameTestContext context, TestSingleplayerContext singleplayer) throws Exception {
         BlockPos origin = context.computeOnClient(client -> {
             if (client.player == null || client.level == null) {
                 throw new AssertionError("Minecraft client world is not ready for overlay smoke tests");
@@ -27,6 +32,7 @@ public final class LumiOverlayClientSmoke {
         try {
             this.runCompareSmoke(context, origin);
             this.runPendingSmoke(context, origin);
+            this.runPendingAltHoldSmoke(context, singleplayer, origin);
         } finally {
             this.clearOverlayState(context);
         }
@@ -94,6 +100,59 @@ public final class LumiOverlayClientSmoke {
             }
         });
         context.runOnClient(client -> PendingChangesOverlayRenderer.clear());
+    }
+
+    private void runPendingAltHoldSmoke(
+            ClientGameTestContext context,
+            TestSingleplayerContext singleplayer,
+            BlockPos marker
+    ) throws Exception {
+        String projectId = singleplayer.getServer().computeOnServer(server -> {
+            server.getPlayerList().getPlayers().getFirst().setGameMode(net.minecraft.world.level.GameType.CREATIVE);
+            var project = new ProjectService().ensureWorldProject(server.overworld(), "Lumi overlay smoke");
+            try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushPlayerSource(
+                    WorldMutationSource.PLAYER, "Lumi overlay smoke", true)) {
+                server.overworld().setBlock(marker, net.minecraft.world.level.block.Blocks.GLASS.defaultBlockState(), 3);
+            }
+            return project.id().toString();
+        });
+        KeyMapping actionKey = context.computeOnClient(client ->
+                LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION));
+        if (actionKey == null || actionKey.isUnbound()) {
+            throw new AssertionError("Lumi action key is not bound");
+        }
+        if (!"key.keyboard.left.alt".equals(actionKey.saveString())) {
+            throw new AssertionError("Lumi action key default is not Left Alt: " + actionKey.saveString());
+        }
+
+        try {
+            context.waitTicks(20);
+            String visibleProjectId = context.computeOnClient(client -> ClientProjectAccess.findCurrentWorldProject(client)
+                    .map(project -> project.id().toString())
+                    .orElse(""));
+            if (!projectId.equals(visibleProjectId)) {
+                throw new AssertionError("Pending overlay project is not accessible: " + visibleProjectId);
+            }
+            if (singleplayer.getServer().computeOnServer(server ->
+                    HistoryCaptureManager.getInstance().snapshotDraft(server, projectId).isEmpty())) {
+                throw new AssertionError("Pending overlay draft is missing");
+            }
+            context.getInput().holdKey(actionKey);
+            context.waitFor(client -> client.screen == null && actionKey.isDown(), 20);
+            context.waitFor(client -> PendingChangesOverlayRenderer.visible()
+                    && PendingChangesOverlayRenderer.meshPrimitiveCountForTest() > 0, 100);
+            context.takeScreenshot("lumi-pending-overlay-alt-held");
+
+            context.getInput().releaseKey(actionKey);
+            context.waitFor(client -> !PendingChangesOverlayRenderer.visible(), 20);
+        } finally {
+            context.getInput().releaseKey(actionKey);
+            singleplayer.getServer().runOnServer(server -> {
+                WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () ->
+                        server.overworld().setBlock(marker, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3));
+                HistoryCaptureManager.getInstance().discardSession(server, projectId);
+            });
+        }
     }
 
     private void clearOverlayState(ClientGameTestContext context) throws Exception {
