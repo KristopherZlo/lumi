@@ -68,9 +68,6 @@ import net.minecraft.server.level.ServerLevel;
  */
 public final class RestoreService {
 
-    private static final int MAX_COLLAPSE_PLACEMENTS = 1_000_000;
-    private static final int MAX_COLLAPSE_NATIVE_SECTIONS = 2_048;
-
     private final ProjectService projectService = new ProjectService();
     private final ProjectRepository projectRepository = new ProjectRepository();
     private final VersionRepository versionRepository = new VersionRepository();
@@ -88,6 +85,13 @@ public final class RestoreService {
     private final SnapshotBatchPreparer snapshotBatchPreparer = new SnapshotBatchPreparer();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final PreparedChunkBatchCollapser batchCollapser = new PreparedChunkBatchCollapser();
+    private final RestoreBatchCollapser restoreBatchCollapser = new RestoreBatchCollapser(this.batchCollapser);
+    private final WorldRootRestorePreparer worldRootRestorePreparer = new WorldRootRestorePreparer(
+            this.baselineChunkRepository,
+            this.snapshotReader,
+            this.snapshotBatchPreparer,
+            this.restoreBatchCollapser
+    );
     private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final DirectRestorePatchPlanner directRestorePatchPlanner = new DirectRestorePatchPlanner();
     private final RestoreRequestResolver requestResolver = new RestoreRequestResolver();
@@ -356,7 +360,7 @@ public final class RestoreService {
         List<PreparedChunkBatch> batches = prepared.map(DirectRestoreDecode::batches).orElseGet(() -> {
             try {
                 if (version.versionKind() == VersionKind.WORLD_ROOT) {
-                    return this.decodeWorldRootRestore(layout, project, level, selection, progressSink);
+                    return this.worldRootRestorePreparer.prepare(layout, project, level, selection, progressSink);
                 }
                 progressSink.update(OperationStage.PREPARING, 0, 1, "Planning restore");
                 RestorePlan plan = this.restorePlanBuilder.build(
@@ -530,59 +534,6 @@ public final class RestoreService {
                 request,
                 resolvedRequest.hardScope()
         );
-    }
-
-    private List<PreparedChunkBatch> decodeWorldRootRestore(
-            ProjectLayout layout,
-            io.github.luma.domain.model.BuildProject project,
-            ServerLevel level,
-            RestoreEntityTypeSelection entityTypeSelection,
-            WorldOperationManager.ProgressSink progressSink
-    ) throws IOException {
-        List<ChunkPoint> trackedChunks = this.baselineChunkRepository.listChunks(layout);
-        if (trackedChunks.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Missing baseline chunks for world-root restore: no tracked baseline chunks"
-            );
-        }
-
-        List<PreparedChunkBatch> batches = new ArrayList<>();
-        int index = 0;
-        for (ChunkPoint chunk : trackedChunks) {
-            try (var ignored = LumaLoadLog.measure(
-                    "restore",
-                    "RestoreService.decodeWorldRootRestore.baselineChunk",
-                    "chunk=" + chunk.x() + ":" + chunk.z()
-            )) {
-                batches.addAll(this.snapshotBatchPreparer.prepare(
-                        this.snapshotReader.readFile(this.baselineChunkRepository.filePath(layout, chunk)),
-                        level,
-                        entityTypeSelection.excludedEntityTypes()
-                ));
-            }
-            index += 1;
-            progressSink.update(
-                    OperationStage.PREPARING,
-                    index,
-                    trackedChunks.size(),
-                    "Decoded world root chunk " + chunk.x() + ":" + chunk.z()
-            );
-        }
-
-        List<PreparedChunkBatch> collapsed = this.collapsePreparedRestoreBatches("world-root", batches);
-        LumaMod.LOGGER.info(
-                "Decoded {} tracked baseline chunks for world root restore in project {}",
-                trackedChunks.size(),
-                project.name()
-        );
-        LumaDebugLog.log(
-                project,
-                "restore",
-                "World root restore decoded {} tracked chunks into {} chunk batches",
-                trackedChunks.size(),
-                collapsed.size()
-        );
-        return collapsed;
     }
 
     private Optional<DirectRestoreDecode> tryDecodeDirectRestore(
@@ -770,7 +721,7 @@ public final class RestoreService {
             }
         }
 
-        List<PreparedChunkBatch> collapsed = this.collapsePreparedRestoreBatches("direct-restore", batches);
+        List<PreparedChunkBatch> collapsed = this.restoreBatchCollapser.collapse("direct-restore", batches);
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
         LumaMod.LOGGER.info(
@@ -890,7 +841,7 @@ public final class RestoreService {
             progressSink.update(OperationStage.PREPARING, completedSources, totalSources, "Decoded patch " + patch.id());
         }
 
-        List<PreparedChunkBatch> collapsed = this.collapsePreparedRestoreBatches("restore-plan", batches);
+        List<PreparedChunkBatch> collapsed = this.restoreBatchCollapser.collapse("restore-plan", batches);
         int rawPlacements = totalPlacements(batches);
         int collapsedPlacements = totalPlacements(collapsed);
         if (rawPlacements != collapsedPlacements) {
@@ -978,37 +929,6 @@ public final class RestoreService {
             }
         }
         return new PreparedWorldChangeBatches(batches, mechanismScope.build());
-    }
-
-    private List<PreparedChunkBatch> collapsePreparedRestoreBatches(String source, List<PreparedChunkBatch> batches) {
-        long placements = totalPlacementsLong(batches);
-        int nativeSections = totalNativeSections(batches);
-        if (placements > MAX_COLLAPSE_PLACEMENTS || nativeSections > MAX_COLLAPSE_NATIVE_SECTIONS) {
-            LumaMod.LOGGER.info(
-                    "Skipping restore batch collapse for {} because prepared work is already large: batches={}, nativeSections={}, placements={}",
-                    source,
-                    batches.size(),
-                    nativeSections,
-                    placements
-            );
-            LumaDebugLog.log(
-                    "restore",
-                    "Skipped restore batch collapse for {} with {} batches, {} native sections, and {} placements",
-                    source,
-                    batches.size(),
-                    nativeSections,
-                    placements
-            );
-            return List.copyOf(batches);
-        }
-
-        try (var ignored = LumaLoadLog.measure(
-                "restore",
-                "PreparedChunkBatchCollapser.collapse",
-                "source=" + source + ", batches=" + batches.size()
-        )) {
-            return this.batchCollapser.collapse(batches);
-        }
     }
 
     private PreparedWorldChangeBatches decodeStoredChangesAnalyzed(
@@ -1125,16 +1045,6 @@ public final class RestoreService {
             total += batch.placements().size();
             for (var section : batch.nativeSections()) {
                 total += section.changedCellCount();
-            }
-        }
-        return total;
-    }
-
-    private static int totalNativeSections(List<PreparedChunkBatch> batches) {
-        int total = 0;
-        for (PreparedChunkBatch batch : batches == null ? List.<PreparedChunkBatch>of() : batches) {
-            if (batch != null) {
-                total += batch.nativeSections().size();
             }
         }
         return total;
