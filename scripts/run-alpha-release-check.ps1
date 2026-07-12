@@ -53,6 +53,7 @@ try {
     Invoke-TestClientGradle -Tasks @("test", "verifyCoverageRatchet")
     Invoke-TestClientGradle -Tasks @("runGameTest")
     Invoke-TestClientGradle -Tasks @("runClientGameTest")
+    Invoke-TestClientGradle -Tasks @("runHistoryJourneyClientGameTest")
     Invoke-TestClientGradle -Tasks @("runClientGameTest") -Mode "structure-fixtures"
     Invoke-TestClientGradle -Tasks @("runClientGameTest") -Mode "external-tools"
     Invoke-TestClientGradle -Tasks @("runClientGameTest") -Mode "crash-safety"

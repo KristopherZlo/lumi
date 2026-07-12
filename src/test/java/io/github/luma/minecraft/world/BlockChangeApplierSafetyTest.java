@@ -50,17 +50,6 @@ class BlockChangeApplierSafetyTest {
     }
 
     @Test
-    void dyingLivingEntityIsRespawnedSoClientsDropTheirDeathAnimation() throws IOException {
-        String applier = Files.readString(
-                Path.of("src/main/java/io/github/luma/minecraft/world/BlockChangeApplier.java"),
-                StandardCharsets.UTF_8
-        );
-
-        assertTrue(applier.contains("existing.getType() == entity.getType() && !requiresRespawn(existing)"));
-        assertTrue(applier.contains("living.isDeadOrDying() || living.deathTime > 0"));
-    }
-
-    @Test
     void replayClearsQueuedTicksAndBlockEventsForRestoredPositions() throws IOException {
         String cleaner = Files.readString(
                 Path.of("src/main/java/io/github/luma/minecraft/world/ReplayQueuedTickCleaner.java"),

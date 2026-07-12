@@ -262,7 +262,7 @@ Hard rules:
 - Long operations publish progress and terminal success/failure UI feedback.
 - JSON parsing, LZ4 decompression, and block-state decoding stay off the tick-thread apply path.
 - Replaced or cleared compare requests interrupt their worker task; long diff passes stop cooperatively instead of consuming CPU after the UI no longer needs them.
-- Cancelled compare/preview mesh preparation interrupts the submitted worker, and stale pending/recent overlay meshes are closed before they can retain CPU-side or GPU-side buffers.
+- Cancelled compare/preview mesh preparation interrupts the submitted worker, and stale pending overlay meshes are closed before they can retain CPU-side or GPU-side buffers.
 - Bounds arithmetic rejects reversed ranges and cannot silently overflow; a single work-zone selection edit is capped at 65,536 section cells to prevent an accidental unbounded client allocation.
 - Recovery drafts are serialized once per flush; zone save reuses that durable draft instead of rewriting the full draft before isolating its operation draft, and the operational journal retains only its newest 512 entries.
 - Repeated unchanged-draft checks reuse a cached content fingerprint until the tracked block or entity set changes.
