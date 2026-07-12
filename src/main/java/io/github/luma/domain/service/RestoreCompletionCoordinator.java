@@ -125,6 +125,7 @@ final class RestoreCompletionCoordinator {
                         .withSchemaVersion(BuildProject.CURRENT_SCHEMA_VERSION);
         this.projectRepository.save(layout, updatedProject);
         this.recoveryRepository.deleteDraft(layout);
+        UndoRedoHistoryManager.getInstance().clearProject(project.id().toString());
         this.restorePlayerRespawns(level, layout, version);
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 now,
