@@ -57,7 +57,7 @@ class BlockChangeApplierSafetyTest {
         );
 
         assertTrue(applier.contains("existing.getType() == entity.getType() && !requiresRespawn(existing)"));
-        assertTrue(applier.contains("entity instanceof LivingEntity living && living.deathTime > 0"));
+        assertTrue(applier.contains("living.isDeadOrDying() || living.deathTime > 0"));
     }
 
     @Test

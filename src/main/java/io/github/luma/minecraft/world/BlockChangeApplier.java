@@ -492,7 +492,7 @@ public final class BlockChangeApplier {
     }
 
     private static boolean requiresRespawn(Entity entity) {
-        return entity instanceof LivingEntity living && living.deathTime > 0;
+        return entity instanceof LivingEntity living && (living.isDeadOrDying() || living.deathTime > 0);
     }
 
     private static void resetCreeperReplayState(Entity entity) {
