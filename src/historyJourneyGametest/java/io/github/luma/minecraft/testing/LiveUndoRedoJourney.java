@@ -9,6 +9,7 @@ import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -27,6 +28,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.phys.AABB;
 
 /** Compact exact live undo/redo journey embedded in the history GameTest. */
 final class LiveUndoRedoJourney {
@@ -63,6 +65,7 @@ final class LiveUndoRedoJourney {
         this.verifyBlockEntityNbt();
         this.verifyEntityLifecycle();
         this.verifyDyingMobUndo();
+        this.verifyPoweredTntChainUndo();
         this.verifyPistonFallout();
         this.verifyFluidAndGravityTicks();
         this.verifyNewActionClearsRedo();
@@ -211,6 +214,81 @@ final class LiveUndoRedoJourney {
         throw new AssertionError(failure + "; nearby=" + clientState);
     }
 
+    private void verifyPoweredTntChainUndo() throws Exception {
+        BlockPos first = this.pos(9, 3, 12);
+        BlockPos second = first.east();
+        BlockPos third = first.south();
+        List<BlockPos> witnesses = List.of(
+                first.north(), first.west(), first.east(2), first.south(2), second.north(), third.west());
+        AABB blastArea = new AABB(first).inflate(5.0D);
+
+        this.restoreMutation(level -> {
+            for (BlockPos pos : BlockPos.betweenClosed(first.west(3).below(3), first.east(4).south(4).above(4))) {
+                level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+            }
+            level.setBlock(first.below(), Blocks.REDSTONE_BLOCK.defaultBlockState(), 3);
+            level.setBlock(second.below(), Blocks.OBSIDIAN.defaultBlockState(), 3);
+            level.setBlock(third.below(), Blocks.OBSIDIAN.defaultBlockState(), 3);
+            witnesses.forEach(pos -> level.setBlock(pos, Blocks.OAK_PLANKS.defaultBlockState(), 3));
+        });
+        this.history.clearProject(this.projectId);
+
+        try {
+            String firstActionId = this.runAction((server, level) ->
+                    level.setBlock(first, Blocks.TNT.defaultBlockState(), 3));
+            this.waitForServer(level -> this.primedTntPresent(level, blastArea), 40,
+                    "Powered TNT did not ignite on placement");
+
+            this.runAction((server, level) -> level.setBlock(second, Blocks.TNT.defaultBlockState(), 3));
+            this.runAction((server, level) -> level.setBlock(third, Blocks.TNT.defaultBlockState(), 3));
+            this.waitForServer(level -> level.getBlockState(first).isAir()
+                            && level.getBlockState(second).isAir()
+                            && level.getBlockState(third).isAir()
+                            && !this.primedTntPresent(level, blastArea),
+                    20 * 10, "TNT chain did not finish exploding");
+            this.waitTicks(SETTLE_TICKS * 2);
+
+            this.require(this.singleplayer.getServer().computeOnServer(server -> witnesses.stream()
+                            .anyMatch(pos -> !server.overworld().getBlockState(pos).is(Blocks.OAK_PLANKS))),
+                    "TNT chain did not destroy a witness block");
+            var selection = this.history.selectUndo(this.projectId);
+            UndoRedoAction selected = selection == null ? null : selection.action();
+            this.require(selected != null && selected.id().equals(firstActionId),
+                    "TNT fallout was not promoted to the igniting action");
+
+            this.waitFor(this.undo(), "undo powered TNT chain");
+            this.require(this.singleplayer.getServer().computeOnServer(server -> {
+                ServerLevel level = server.overworld();
+                return level.getBlockState(first).isAir()
+                        && level.getBlockState(second).is(Blocks.TNT)
+                        && level.getBlockState(third).is(Blocks.TNT)
+                        && witnesses.stream().allMatch(pos -> level.getBlockState(pos).is(Blocks.OAK_PLANKS))
+                        && !this.primedTntPresent(level, blastArea);
+            }), "One undo did not restore the complete powered TNT fallout");
+        } finally {
+            this.restoreMutation(level -> {
+                for (BlockPos pos : BlockPos.betweenClosed(first.west(3).below(3), first.east(4).south(4).above(4))) {
+                    level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+                }
+            });
+            this.history.clearProject(this.projectId);
+        }
+    }
+
+    private boolean primedTntPresent(ServerLevel level, AABB bounds) {
+        return !level.getEntities((Entity) null, bounds, entity -> entity.getType() == EntityType.TNT).isEmpty();
+    }
+
+    private void waitForServer(Predicate<ServerLevel> condition, int timeoutTicks, String failure) throws Exception {
+        for (int tick = 0; tick < timeoutTicks; tick++) {
+            if (this.singleplayer.getServer().computeOnServer(server -> condition.test(server.overworld()))) {
+                return;
+            }
+            this.context.waitTick();
+        }
+        throw new AssertionError(failure);
+    }
+
     private void verifyPistonFallout() throws Exception {
         BlockPos piston = this.pos(8, 1, 12);
         this.restoreMutation(level -> {
@@ -238,9 +316,9 @@ final class LiveUndoRedoJourney {
                 level.setBlock(water, Blocks.WATER.defaultBlockState(), 3), 2, true);
 
         BlockPos sand = this.pos(13, 7, 13);
-        this.restoreMutation(level -> level.setBlock(this.pos(13, 1, 13), Blocks.STONE.defaultBlockState(), 3));
+        this.restoreMutation(level -> level.setBlock(this.pos(13, 5, 13), Blocks.STONE.defaultBlockState(), 3));
         this.roundTrip("gravity scheduled tick", (server, level) ->
-                level.setBlock(sand, Blocks.SAND.defaultBlockState(), 3), 2, true);
+                level.setBlock(sand, Blocks.SAND.defaultBlockState(), 3), 1, true);
     }
 
     private void verifyNewActionClearsRedo() throws Exception {
