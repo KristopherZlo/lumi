@@ -22,8 +22,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,7 +45,6 @@ public final class HistoryCaptureManager {
     private static final Duration ACTIVE_DRAFT_FLUSH_INTERVAL = Duration.ofSeconds(3);
     private static final int IDLE_FLUSH_TICK_INTERVAL = 5;
     private static final CaptureEligibilityService ELIGIBILITY = new CaptureEligibilityService();
-    private static final EntityMutationCapturePolicy ENTITY_CAPTURE_POLICY = new EntityMutationCapturePolicy();
     private static final HistoryCaptureManager INSTANCE = new HistoryCaptureManager();
 
     private final HistoryDebugLog historyDebugLog = new HistoryDebugLog();
@@ -65,6 +62,8 @@ public final class HistoryCaptureManager {
             this.projectRepository,
             this.variantRepository
     );
+    private final EntityChangeCapturePlanner entityCapturePlanner =
+            new EntityChangeCapturePlanner(this.trackedProjectCatalog);
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
     private final CaptureBaselineCoordinator baselineCoordinator =
@@ -644,19 +643,15 @@ public final class HistoryCaptureManager {
         }
 
         try {
-            Optional<StoredEntityChange> capturedMutation = ENTITY_CAPTURE_POLICY.capture(source, oldPayload, newPayload);
-            Optional<StoredEntityChange> undoRedoMutation = WorldMutationContext.currentActionId().isBlank()
-                    ? Optional.empty()
-                    : ENTITY_CAPTURE_POLICY.captureUndoRedo(source, oldPayload, newPayload);
-            if (capturedMutation.isEmpty() && undoRedoMutation.isEmpty()) {
+            EntityChangeCapturePlanner.CapturePlan plan =
+                    this.entityCapturePlanner.plan(oldPayload, newPayload, actionStartedAt);
+            if (plan == null) {
                 return;
             }
-            BlockPos pos = this.entityMutationPos(oldPayload, newPayload);
-            List<BlockPos> mutationPositions = this.entityMutationPositions(oldPayload, newPayload);
-            Instant now = Instant.now();
-            List<TrackedProject> matchingProjects = this.matchingEntityProjects(level, mutationPositions);
+            BlockPos pos = plan.primaryPos();
+            List<TrackedProject> matchingProjects = this.entityCapturePlanner.matchingProjects(level, plan);
             if (matchingProjects.isEmpty()) {
-                if (capturedMutation.isEmpty()
+                if (plan.durableMutation().isEmpty()
                         || !allowsAutomaticProjectCreation(source)
                         || !this.accessGuard.canCreateProjectInCurrentMode()) {
                     LumaDebugLog.log(
@@ -670,54 +665,53 @@ public final class HistoryCaptureManager {
                 }
                 this.projectService.ensureWorldProject(level, defaultActor(source));
                 this.invalidateProjectCache(level.getServer());
-                matchingProjects = this.matchingEntityProjects(level, mutationPositions);
+                matchingProjects = this.entityCapturePlanner.matchingProjects(level, plan);
                 LumaMod.LOGGER.info("Created world workspace automatically for entity mutation in {}", level.dimension().identifier());
             }
 
             for (TrackedProject trackedProject : matchingProjects) {
                 if (!this.accessGuard.canUseProjectInCurrentMode(trackedProject)) { continue; }
-                if (undoRedoMutation.isPresent()) {
+                if (plan.liveMutation().isPresent()) {
                     this.liveUndoRedoActionRecorder.recordEntity(
                             trackedProject,
                             level,
-                            undoRedoMutation.get(),
-                            now,
-                            actionStartedAt
+                            plan.liveMutation().get(),
+                            plan.capturedAt(),
+                            plan.actionStartedAt()
                     );
                 }
-                if (capturedMutation.isEmpty()) {
+                if (plan.durableMutation().isEmpty()) {
                     continue;
                 }
-                StoredEntityChange capturedChange = capturedMutation.get();
+                StoredEntityChange capturedChange = plan.durableMutation().get();
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
                 }
                 String projectId = trackedProject.project().id().toString();
                 CaptureSessionState existingSession = this.workingDrafts.session(projectId);
-                List<ChunkPoint> mutationChunks = this.entityMutationChunks(mutationPositions);
                 if (!this.ensureTrackedEntityChunks(
                         trackedProject,
                         level,
-                        mutationPositions,
+                        plan.positions(),
                         capturedChange,
                         source,
                         existingSession,
-                        now
+                        plan.capturedAt()
                 )) {
                     continue;
                 }
 
-                TrackedChangeBuffer buffer = this.getOrCreateWorkingDraft(trackedProject, source, now);
+                TrackedChangeBuffer buffer = this.getOrCreateWorkingDraft(trackedProject, source, plan.capturedAt());
                 CaptureSessionState session = this.workingDrafts.session(projectId);
                 if (session != null) {
-                    for (ChunkPoint chunk : mutationChunks) {
+                    for (ChunkPoint chunk : plan.chunks()) {
                         session.addRootChunk(chunk);
                     }
                 }
 
                 int pendingBefore = buffer.size();
-                buffer.addEntityChange(capturedChange, now);
-                this.activeWorkZoneTouchRecorder.record(trackedProject, mutationPositions, now);
+                buffer.addEntityChange(capturedChange, plan.capturedAt());
+                this.activeWorkZoneTouchRecorder.record(trackedProject, plan.positions(), plan.capturedAt());
                 int pendingAfter = buffer.size();
                 this.workingDrafts.diagnosticsForSession(projectId).addActiveChunk(new ChunkPoint(pos.getX() >> 4, pos.getZ() >> 4));
                 LumaDebugLog.log(
@@ -1062,45 +1056,6 @@ public final class HistoryCaptureManager {
             io.github.luma.domain.model.WorldMutationSource source
     ) {
         return ELIGIBILITY.canUseMutationSource(dedicatedServer, accessAllowed, source);
-    }
-
-    private BlockPos entityMutationPos(EntityPayload oldPayload, EntityPayload newPayload) {
-        if (newPayload != null) {
-            return newPayload.blockPos();
-        }
-        return oldPayload == null ? BlockPos.ZERO : oldPayload.blockPos();
-    }
-
-    private List<BlockPos> entityMutationPositions(EntityPayload oldPayload, EntityPayload newPayload) {
-        LinkedHashSet<BlockPos> positions = new LinkedHashSet<>();
-        if (oldPayload != null) {
-            positions.add(oldPayload.blockPos());
-        }
-        if (newPayload != null) {
-            positions.add(newPayload.blockPos());
-        }
-        if (positions.isEmpty()) {
-            positions.add(BlockPos.ZERO);
-        }
-        return List.copyOf(positions);
-    }
-
-    private List<ChunkPoint> entityMutationChunks(List<BlockPos> positions) {
-        LinkedHashSet<ChunkPoint> chunks = new LinkedHashSet<>();
-        for (BlockPos pos : positions == null ? List.<BlockPos>of() : positions) {
-            chunks.add(ChunkPoint.from(pos));
-        }
-        return List.copyOf(chunks);
-    }
-
-    private List<TrackedProject> matchingEntityProjects(ServerLevel level, List<BlockPos> positions) throws IOException {
-        LinkedHashMap<String, TrackedProject> projects = new LinkedHashMap<>();
-        for (BlockPos pos : positions == null ? List.<BlockPos>of() : positions) {
-            for (TrackedProject trackedProject : this.matchingProjects(level, pos)) {
-                projects.putIfAbsent(trackedProject.project().id().toString(), trackedProject);
-            }
-        }
-        return List.copyOf(projects.values());
     }
 
     private boolean ensureTrackedEntityChunks(
