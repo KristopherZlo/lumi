@@ -533,8 +533,7 @@ public final class WorldOperationManager {
         private final long preparationStartedAtNanos;
         private final WorldApplyProfile profile;
         private PreparedApplyOperation prepared;
-        private WorldApplyChunkPreloader chunkPreloader;
-        private GlobalDispatcher dispatcher;
+        private final PreparedApplyPhaseCoordinator phases = new PreparedApplyPhaseCoordinator();
         private ChunkBatch currentBatch;
         private ChunkBatch currentTargetBatch;
         private List<PreparedSectionApplyBatch> currentNativeSections = List.of();
@@ -610,7 +609,7 @@ public final class WorldOperationManager {
                         || preparationDetail.startsWith("Decoded exact initial snapshot"))
                         ? preparationDetail
                         : "";
-                this.chunkPreloader = WorldApplyChunkPreloader.create(this.prepared.localQueue(), this.profile);
+                this.phases.initialize(this.prepared, this.profile);
                 LumaDebugLog.log(
                         this.handle(),
                         "world-op",
@@ -618,7 +617,7 @@ public final class WorldOperationManager {
                         this.handle().label(),
                         this.prepared.totalWorkUnits(),
                         this.prepared.localQueue().completedCount(),
-                        this.chunkPreloader.totalChunks()
+                        this.phases.totalPreloadChunks()
                 );
                 if (this.blockApplyDiagnosticsEnabled()) {
                     LumaDiagnosticsLog.blockApplyEvent(
@@ -629,7 +628,7 @@ public final class WorldOperationManager {
                                     + ", profile=" + this.profile
                                     + ", totalWorkUnits=" + this.prepared.totalWorkUnits()
                                     + ", readyChunkBatches=" + this.prepared.localQueue().completedCount()
-                                    + ", preloadChunks=" + this.chunkPreloader.totalChunks()
+                                    + ", preloadChunks=" + this.phases.totalPreloadChunks()
                     );
                 }
                 if (this.prepared.totalWorkUnits() == 0) {
@@ -637,14 +636,12 @@ public final class WorldOperationManager {
                 }
             }
 
-            if (this.chunkPreloader != null
-                    && this.chunkPreloader.required()
-                    && !this.chunkPreloader.complete()
+            if (this.phases.preloadPending()
                     && !this.advancePreload(budget, deadlineNanos)) {
                 return false;
             }
 
-            if (this.dispatcher == null) {
+            if (!this.phases.applyStarted()) {
                 this.startApply();
             }
 
@@ -663,14 +660,14 @@ public final class WorldOperationManager {
                         this.adaptiveScale(),
                         budget.summary(),
                         WorldOperationManager.this.applyTickDiagnostics.chunkId(this.currentBatch),
-                        this.dispatcher != null && this.dispatcher.hasPending(),
+                        this.phases.hasPendingBatches(),
                         this.lightUpdateQueue.pendingCount(),
                         this.redstoneUpdateQueue.pendingCount()
                 );
             }
             while (System.nanoTime() < deadlineNanos) {
                 if (this.currentBatch == null) {
-                    this.currentTargetBatch = this.dispatcher.pollNext();
+                    this.currentTargetBatch = this.phases.pollNext();
                     if (this.currentTargetBatch == null) {
                         stopReason = "dispatcher-empty";
                         break;
@@ -834,7 +831,7 @@ public final class WorldOperationManager {
                                 stopReason,
                                 this.applyMetrics,
                                 WorldOperationManager.this.applyTickDiagnostics.chunkId(this.currentBatch),
-                                this.dispatcher != null && this.dispatcher.hasPending(),
+                                this.phases.hasPendingBatches(),
                                 this.lightUpdateQueue.pendingCount(),
                                 this.redstoneUpdateQueue.pendingCount()
                         )
@@ -852,7 +849,7 @@ public final class WorldOperationManager {
                                         stopReason,
                                         this.applyMetrics,
                                         WorldOperationManager.this.applyTickDiagnostics.chunkId(this.currentBatch),
-                                        this.dispatcher != null && this.dispatcher.hasPending(),
+                                        this.phases.hasPendingBatches(),
                                         this.lightUpdateQueue.pendingCount(),
                                         this.redstoneUpdateQueue.pendingCount()
                                 )
@@ -869,7 +866,7 @@ public final class WorldOperationManager {
                             + ", directSections=" + tickCounters.directSections()
             );
 
-            if (this.currentBatch == null && (this.dispatcher == null || !this.dispatcher.hasPending())) {
+            if (this.currentBatch == null && !this.phases.hasPendingBatches()) {
                 if (!this.drainDeferredRedstoneUpdates(budget, deadlineNanos)) {
                     return false;
                 }
@@ -909,11 +906,8 @@ public final class WorldOperationManager {
 
         private boolean advancePreload(WorldApplyBudget budget, long deadlineNanos) {
             long startedAt = System.nanoTime();
-            WorldApplyChunkPreloader.PreloadTickResult result = this.chunkPreloader.advance(
-                    new ServerLevelChunkPreloadAccess(this.level()),
-                    budget,
-                    deadlineNanos
-            );
+            WorldApplyChunkPreloader.PreloadTickResult result =
+                    this.phases.advancePreload(this.level(), budget, deadlineNanos);
             long elapsedNanos = System.nanoTime() - startedAt;
             this.applyMetrics.recordPreloadTick(
                     result.newlyLoadedChunks(),
@@ -978,8 +972,7 @@ public final class WorldOperationManager {
         }
 
         private void startApply() {
-            this.dispatcher = new GlobalDispatcher();
-            this.dispatcher.enqueue(this.prepared.localQueue());
+            this.phases.startApply(this.prepared);
             if (this.blockApplyDiagnosticsEnabled()) {
                 LumaDiagnosticsLog.blockApplyEvent(
                         "apply-start",
@@ -1212,8 +1205,7 @@ public final class WorldOperationManager {
 
         private boolean allowsSynchronousChunkLoad() {
             return this.profile != WorldApplyProfile.NORMAL
-                    && this.chunkPreloader != null
-                    && this.chunkPreloader.complete();
+                    && this.phases.preloadComplete();
         }
 
         private boolean advanceCompletion() throws Exception {
@@ -1589,10 +1581,7 @@ public final class WorldOperationManager {
         }
 
         private void releasePreloadTickets() {
-            if (this.chunkPreloader == null) {
-                return;
-            }
-            this.chunkPreloader.release(new ServerLevelChunkPreloadAccess(this.level()));
+            this.phases.releasePreloadTickets(this.level());
         }
 
         private long microsSince(long startedAt) {
