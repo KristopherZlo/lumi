@@ -120,8 +120,8 @@ final class HistoryJourneyScenario {
     }
 
     private void executeJourney() throws Exception {
-        this.placeMainSimpleBlocks();
         this.liveUndoRedoJourney.run();
+        this.placeMainSimpleBlocks();
         this.save("S01-main-simple", "S01 simple main blocks");
         this.liveUndoRedoJourney.verifyQuickRollbackUndoable();
 
@@ -401,6 +401,8 @@ final class HistoryJourneyScenario {
         this.waitForOperation(handle, label);
         this.assertUndoHistoryCleared(label);
 
+        this.versionCount = this.visibleProjectState().versionCount();
+
         String targetVariant = this.versionVariants.get(targetLabel);
         this.activeVariantId = targetVariant;
         this.variantHeads.put(targetVariant, versionId);
@@ -438,12 +440,7 @@ final class HistoryJourneyScenario {
         });
         this.waitForOperation(handle, label);
 
-        String versionId = ProjectService.versionId(this.versionCount + 1);
-        this.versionCount += 1;
-        this.variantHeads.put(this.activeVariantId, versionId);
         this.variantHeadLabels.put(this.activeVariantId, label);
-        this.versionIds.put(label, versionId);
-        this.versionVariants.put(label, this.activeVariantId);
 
         HistoryJourneyCheckpoint expected = HistoryJourneyCheckpoint.composeSelectedRegion(
                 label,
@@ -457,7 +454,7 @@ final class HistoryJourneyScenario {
         HistoryJourneyCheckpoint actual = this.capture("actual " + label);
         expected.assertMatches(actual);
         this.checkpoints.put(label, expected);
-        this.assertNoDraft(label);
+        this.assertDraftPresent(label);
     }
 
     private void save(String label, String message) throws Exception {
@@ -466,9 +463,10 @@ final class HistoryJourneyScenario {
                 this.versionService.startSaveVersion(server.overworld(), this.projectName, message, ACTOR));
         this.waitForOperation(handle, label);
 
-        String versionId = ProjectService.versionId(this.versionCount + 1);
+        VisibleProjectState projectState = this.visibleProjectState();
+        String versionId = projectState.activeHeadVersionId();
         this.explicitSaveCount += 1;
-        this.versionCount += 1;
+        this.versionCount = projectState.versionCount();
         this.variantHeads.put(this.activeVariantId, versionId);
         this.variantHeadLabels.put(this.activeVariantId, label);
         this.versionIds.put(label, versionId);
@@ -481,6 +479,19 @@ final class HistoryJourneyScenario {
         expected.assertMatches(actual);
         this.checkpoints.put(label, expected);
         this.assertNoDraft(label);
+    }
+
+    private VisibleProjectState visibleProjectState() throws Exception {
+        return this.singleplayer.getServer().computeOnServer(server -> {
+            ProjectVariant activeVariant = this.projectService.loadVariants(server, this.projectName).stream()
+                    .filter(variant -> variant.id().equals(this.activeVariantId))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Active branch is missing: " + this.activeVariantId));
+            return new VisibleProjectState(
+                    activeVariant.headVersionId(),
+                    this.projectService.loadVersions(server, this.projectName).size()
+            );
+        });
     }
 
     private void waitForOperation(OperationHandle handle, String label) throws Exception {
@@ -557,6 +568,14 @@ final class HistoryJourneyScenario {
                 this.recoveryService.loadDraft(server, this.projectName).isEmpty());
         if (!draftEmpty) {
             throw new AssertionError("Recovery draft was not consumed after " + label);
+        }
+    }
+
+    private void assertDraftPresent(String label) throws Exception {
+        boolean draftEmpty = this.singleplayer.getServer().computeOnServer(server ->
+                this.recoveryService.loadDraft(server, this.projectName).isEmpty());
+        if (draftEmpty) {
+            throw new AssertionError("Recovery draft was not retained after " + label);
         }
     }
 
@@ -645,6 +664,9 @@ final class HistoryJourneyScenario {
     }
 
     private record InitialProject(String projectId, String projectName, SingleplayerTestVolume volume) {
+    }
+
+    private record VisibleProjectState(String activeHeadVersionId, int versionCount) {
     }
 
     private record OperationWaitState(

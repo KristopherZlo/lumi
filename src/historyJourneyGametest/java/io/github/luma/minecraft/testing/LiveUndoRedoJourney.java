@@ -6,6 +6,7 @@ import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.domain.service.QuickRollbackService;
 import io.github.luma.domain.service.UndoRedoService;
+import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
@@ -34,6 +35,7 @@ import net.minecraft.world.phys.AABB;
 final class LiveUndoRedoJourney {
 
     private static final int SETTLE_TICKS = 8;
+    private static final int EXACT_REPLAY_GUARD_TICKS = 40;
     private static final int OPERATION_TIMEOUT_TICKS = 20 * 60;
 
     private final ClientGameTestContext context;
@@ -72,6 +74,13 @@ final class LiveUndoRedoJourney {
         this.clearFixture();
         this.roundTrip("undo before save", (server, level) ->
                 level.setBlock(this.pos(15, 1, 15), Blocks.IRON_BLOCK.defaultBlockState(), 3), 1, true);
+        this.waitTicks(EXACT_REPLAY_GUARD_TICKS + SETTLE_TICKS);
+        this.clearFixture();
+        this.singleplayer.getServer().computeOnServer(server -> {
+            HistoryCaptureManager.getInstance().discardSession(server, this.projectId);
+            return null;
+        });
+        this.history.clearProject(this.projectId);
     }
 
     void verifyQuickRollbackUndoable() throws Exception {
