@@ -96,6 +96,36 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void currentCausalFalloutWinsWhenTimestampsMatch() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        Instant now = Instant.parse("2026-01-01T00:00:00Z");
+        stack.recordAction("explosion", "player", "project", "overworld",
+                List.of(change(0, "air", "tnt")), List.of(), now);
+        stack.recordAction("later-placement", "player", "project", "overworld",
+                List.of(change(1, "air", "tnt")), List.of(), now);
+
+        stack.recordCurrentCausalAction("explosion", "player", "project", "overworld",
+                List.of(change(1, "tnt", "air")), List.of(), now);
+
+        assertEquals("explosion", stack.selectUndo().action().id());
+    }
+
+    @Test
+    void currentCausalFalloutDoesNotDependOnWallClockDirection() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        Instant first = Instant.parse("2026-01-01T00:00:00Z");
+        stack.recordAction("explosion", "player", "project", "overworld",
+                List.of(change(0, "air", "tnt")), List.of(), first);
+        stack.recordAction("later-placement", "player", "project", "overworld",
+                List.of(change(1, "air", "tnt")), List.of(), first.plusSeconds(1));
+
+        stack.recordCurrentCausalAction("explosion", "player", "project", "overworld",
+                List.of(change(1, "tnt", "air")), List.of(), first.minusSeconds(1));
+
+        assertEquals("explosion", stack.selectUndo().action().id());
+    }
+
+    @Test
     void mutationAfterUndoClearsRedo() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         Instant now = Instant.parse("2026-01-01T00:00:00Z");

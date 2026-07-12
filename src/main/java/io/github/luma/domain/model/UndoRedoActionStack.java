@@ -3,7 +3,6 @@ package io.github.luma.domain.model;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
@@ -40,7 +39,7 @@ public final class UndoRedoActionStack {
             List<StoredEntityChange> entities,
             Instant now
     ) {
-        return this.record(actionId, actor, projectId, dimensionId, blocks, entities, now, now, false);
+        return this.record(actionId, actor, projectId, dimensionId, blocks, entities, now, now, false, false);
     }
 
     public long recordCurrentCausalAction(
@@ -52,7 +51,7 @@ public final class UndoRedoActionStack {
             List<StoredEntityChange> entities,
             Instant now
     ) {
-        return this.record(actionId, actor, projectId, dimensionId, blocks, entities, now, now, true);
+        return this.record(actionId, actor, projectId, dimensionId, blocks, entities, now, now, true, false);
     }
 
     public long recordDelayedEntityChanges(
@@ -65,14 +64,12 @@ public final class UndoRedoActionStack {
             Instant now
     ) {
         Instant startedAt = actionStartedAt == null ? now : actionStartedAt;
-        return this.record(actionId, actor, projectId, dimensionId, List.of(), entities, startedAt, now, false);
+        return this.record(actionId, actor, projectId, dimensionId, List.of(), entities, startedAt, now, false, true);
     }
 
     public Selection selectUndo() {
-        return this.undo.stream()
-                .max(Comparator.comparing(UndoRedoAction::updatedAt))
-                .map(action -> new Selection(action.copy(), this.revision, action.version()))
-                .orElse(null);
+        UndoRedoAction action = this.undo.peekFirst();
+        return action == null ? null : new Selection(action.copy(), this.revision, action.version());
     }
 
     public Selection selectRedo() {
@@ -127,7 +124,8 @@ public final class UndoRedoActionStack {
             List<StoredEntityChange> entities,
             Instant startedAt,
             Instant now,
-            boolean advanceChronology
+            boolean advanceChronology,
+            boolean delayed
     ) {
         if (actionId == null || actionId.isBlank() || this.find(this.redo, actionId) != null) {
             return this.revision;
@@ -137,7 +135,12 @@ public final class UndoRedoActionStack {
         boolean created = action == null;
         if (created) {
             action = new UndoRedoAction(actionId, actor, projectId, dimensionId, startedAt, startedAt);
-            this.undo.addFirst(action);
+            // ponytail: orphan delayed actions stay oldest; propagate an order token if exact interleaving matters.
+            if (delayed) {
+                this.undo.addLast(action);
+            } else {
+                this.undo.addFirst(action);
+            }
             this.trim(this.undo);
         }
 
@@ -151,6 +154,9 @@ public final class UndoRedoActionStack {
         }
         if (action.isEmpty()) {
             this.undo.remove(action);
+        } else if (changed && advanceChronology) {
+            this.undo.remove(action);
+            this.undo.addFirst(action);
         }
         if (changed) {
             this.redo.clear();
