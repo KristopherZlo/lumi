@@ -47,6 +47,7 @@ class EntitySnapshotServiceTest {
         tag.putString("UUID", "00000000-0000-0000-0000-000000000002");
         tag.putShort("DeathTime", (short) 18);
         tag.putShort("HurtTime", (short) 9);
+        tag.putInt("HurtByTimestamp", 42);
         tag.putShort("Fire", (short) 120);
         tag.putFloat("Health", 0.0F);
         tag.putBoolean("ignited", true);
@@ -59,6 +60,7 @@ class EntitySnapshotServiceTest {
 
         assertEquals(0, normalized.getShortOr("DeathTime", (short) 0));
         assertEquals(0, normalized.getShortOr("HurtTime", (short) 0));
+        assertEquals(0, normalized.getIntOr("HurtByTimestamp", -1));
         assertEquals(0, normalized.getShortOr("Fire", (short) 0));
         assertEquals(1.0F, normalized.getFloatOr("Health", 0.0F));
         assertEquals(false, normalized.getBooleanOr("ignited", false));

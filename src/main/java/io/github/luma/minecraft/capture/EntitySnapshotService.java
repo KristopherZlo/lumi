@@ -58,6 +58,9 @@ public final class EntitySnapshotService {
         if (tag.contains("HurtTime")) {
             tag.putShort("HurtTime", (short) 0);
         }
+        if (tag.contains("HurtByTimestamp")) {
+            tag.putInt("HurtByTimestamp", 0);
+        }
         if (tag.contains("Fire")) {
             tag.putShort("Fire", (short) 0);
         }
