@@ -40,7 +40,7 @@ public final class UndoRedoActionStack {
             List<StoredEntityChange> entities,
             Instant now
     ) {
-        return this.record(actionId, actor, projectId, dimensionId, blocks, entities, now, now);
+        return this.record(actionId, actor, projectId, dimensionId, blocks, entities, now, now, false);
     }
 
     public long recordCurrentCausalAction(
@@ -52,7 +52,7 @@ public final class UndoRedoActionStack {
             List<StoredEntityChange> entities,
             Instant now
     ) {
-        return this.record(actionId, actor, projectId, dimensionId, blocks, entities, now, now);
+        return this.record(actionId, actor, projectId, dimensionId, blocks, entities, now, now, true);
     }
 
     public long recordDelayedEntityChanges(
@@ -65,7 +65,7 @@ public final class UndoRedoActionStack {
             Instant now
     ) {
         Instant startedAt = actionStartedAt == null ? now : actionStartedAt;
-        return this.record(actionId, actor, projectId, dimensionId, List.of(), entities, startedAt, now);
+        return this.record(actionId, actor, projectId, dimensionId, List.of(), entities, startedAt, now, false);
     }
 
     public Selection selectUndo() {
@@ -126,7 +126,8 @@ public final class UndoRedoActionStack {
             List<StoredBlockChange> blocks,
             List<StoredEntityChange> entities,
             Instant startedAt,
-            Instant now
+            Instant now,
+            boolean advanceChronology
     ) {
         if (actionId == null || actionId.isBlank() || this.find(this.redo, actionId) != null) {
             return this.revision;
@@ -140,7 +141,7 @@ public final class UndoRedoActionStack {
             this.trim(this.undo);
         }
 
-        Instant recordedAt = action.updatedAt();
+        Instant recordedAt = advanceChronology ? now : action.updatedAt();
         boolean changed = false;
         for (StoredBlockChange block : blocks == null ? List.<StoredBlockChange>of() : blocks) {
             changed |= action.recordChange(block, recordedAt);

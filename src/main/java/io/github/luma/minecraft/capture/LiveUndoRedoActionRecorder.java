@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 final class LiveUndoRedoActionRecorder {
 
     private final UndoRedoHistoryManager history = UndoRedoHistoryManager.getInstance();
+    private final MutationSourcePolicy sourcePolicy = new MutationSourcePolicy();
 
     void recordBlock(
             TrackedProject project,
@@ -72,15 +73,19 @@ final class LiveUndoRedoActionRecorder {
         if (project == null || level == null || !this.hasAction()) {
             return;
         }
-        this.history.recordAction(
-                project.project().id().toString(),
-                level.dimension().identifier().toString(),
-                WorldMutationContext.currentActionId(),
-                WorldMutationContext.currentActor(),
-                blocks,
-                entities,
-                now
-        );
+        String projectId = project.project().id().toString();
+        String dimensionId = level.dimension().identifier().toString();
+        if (this.sourcePolicy.isExplicitRootSource(WorldMutationContext.currentSource())) {
+            this.history.recordAction(
+                    projectId, dimensionId, WorldMutationContext.currentActionId(),
+                    WorldMutationContext.currentActor(), blocks, entities, now
+            );
+        } else {
+            this.history.recordCurrentCausalAction(
+                    projectId, dimensionId, WorldMutationContext.currentActionId(),
+                    WorldMutationContext.currentActor(), blocks, entities, now
+            );
+        }
     }
 
     private boolean hasAction() {

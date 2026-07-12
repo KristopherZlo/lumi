@@ -26,6 +26,7 @@ class LumaClientShortcutTest {
     void holdingActionKeyPreparesTheDurablePendingOverlay() throws IOException {
         String source = Files.readString(Path.of("src/client/java/io/github/luma/LumaClient.java"));
 
+        assertTrue(source.contains("GLFW.GLFW_KEY_LEFT_ALT"));
         assertTrue(source.replace("\r\n", "\n").contains(
                 "PendingChangesOverlayCoordinator.getInstance().tick(\n"
                         + "                client,\n"
