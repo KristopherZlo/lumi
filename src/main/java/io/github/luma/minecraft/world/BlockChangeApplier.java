@@ -25,6 +25,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityProcessor;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -471,7 +472,7 @@ public final class BlockChangeApplier {
                 return;
             }
             if (existing != null && !existing.isRemoved()) {
-                if (existing.getType() == entity.getType()) {
+                if (existing.getType() == entity.getType() && !requiresRespawn(existing)) {
                     existing.restoreFrom(entity);
                     DeferredWorldMutationContexts.restore(existing, replayedEntityContext);
                     resetCreeperReplayState(existing);
@@ -488,6 +489,10 @@ public final class BlockChangeApplier {
                 resetCreeperReplayState(entity);
             }
         }
+    }
+
+    private static boolean requiresRespawn(Entity entity) {
+        return entity instanceof LivingEntity living && living.deathTime > 0;
     }
 
     private static void resetCreeperReplayState(Entity entity) {
