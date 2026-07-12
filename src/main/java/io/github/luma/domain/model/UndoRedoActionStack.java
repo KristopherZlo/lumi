@@ -135,16 +135,15 @@ public final class UndoRedoActionStack {
         boolean created = action == null;
         if (created) {
             action = new UndoRedoAction(actionId, actor, projectId, dimensionId, startedAt, startedAt);
-            // ponytail: orphan delayed actions stay oldest; propagate an order token if exact interleaving matters.
             if (delayed) {
-                this.undo.addLast(action);
+                this.addDelayed(action);
             } else {
                 this.undo.addFirst(action);
             }
             this.trim(this.undo);
         }
 
-        Instant recordedAt = advanceChronology ? now : action.updatedAt();
+        Instant recordedAt = advanceChronology && now.isAfter(action.updatedAt()) ? now : action.updatedAt();
         boolean changed = false;
         for (StoredBlockChange block : blocks == null ? List.<StoredBlockChange>of() : blocks) {
             changed |= action.recordChange(block, recordedAt);
@@ -163,6 +162,16 @@ public final class UndoRedoActionStack {
             this.revision++;
         }
         return this.revision;
+    }
+
+    private void addDelayed(UndoRedoAction action) {
+        // ponytail: delayed actions only need to beat the current head; propagate an order token if deeper interleaving matters.
+        UndoRedoAction current = this.undo.peekFirst();
+        if (current == null || action.startedAt().isAfter(current.updatedAt())) {
+            this.undo.addFirst(action);
+        } else {
+            this.undo.addLast(action);
+        }
     }
 
     private boolean move(Selection selection, Deque<UndoRedoAction> from, Deque<UndoRedoAction> to) {

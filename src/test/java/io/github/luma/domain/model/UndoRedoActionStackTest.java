@@ -81,6 +81,21 @@ class UndoRedoActionStackTest {
     }
 
     @Test
+    void newlyCompletedDelayedActionBecomesTheNextUndoTarget() {
+        UndoRedoActionStack stack = new UndoRedoActionStack();
+        Instant first = Instant.parse("2026-01-01T00:00:00Z");
+        stack.recordAction("older", "player", "project", "overworld",
+                List.of(change(0, "air", "stone")), List.of(), first);
+
+        stack.recordDelayedEntityChanges(
+                "entity-spawn", "player", "project", "overworld",
+                List.of(entitySpawn()), first.plusSeconds(1), first.plusSeconds(2)
+        );
+
+        assertEquals("entity-spawn", stack.selectUndo().action().id());
+    }
+
+    @Test
     void currentCausalFalloutBecomesTheNextUndoTarget() {
         UndoRedoActionStack stack = new UndoRedoActionStack();
         Instant first = Instant.parse("2026-01-01T00:00:00Z");
