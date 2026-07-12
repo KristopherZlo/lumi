@@ -3,7 +3,6 @@ package io.github.luma.domain.service;
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.debug.LumaLoadLog;
-import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.ChangeStats;
@@ -27,7 +26,6 @@ import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.VersionSaveTiming;
 import io.github.luma.domain.model.WorkZone;
-import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.LiveEntityChunkCollector;
@@ -75,7 +73,7 @@ public final class VersionService {
     private final PlayerRespawnRepository playerRespawnRepository = new PlayerRespawnRepository();
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final OperationDraftRecoveryService operationDraftRecoveryService = new OperationDraftRecoveryService();
-    private final WorkZoneService workZoneService = new WorkZoneService();
+    private final SaveDraftIsolationService draftIsolationService = new SaveDraftIsolationService();
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final PreviewBoundsResolver previewBoundsResolver = new PreviewBoundsResolver();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
@@ -350,7 +348,8 @@ public final class VersionService {
                 draft.variantId()
         );
 
-        ScopedDraftSplit scoped = this.splitDraftForActiveZone(layout, draft, author);
+        SaveDraftIsolationService.ScopedDraftSplit scoped =
+                this.draftIsolationService.splitForActiveZone(layout, draft, author);
         DraftSplit split = scoped.split();
         if (split.selected().isEmpty()) {
             if (!split.remainder().isEmpty()) {
@@ -375,78 +374,12 @@ public final class VersionService {
         return new IsolatedDraft(split.selected(), scoped.workZone());
     }
 
-    private ScopedDraftSplit splitDraftForActiveZone(ProjectLayout layout, RecoveryDraft draft, String author) throws IOException {
-        Optional<WorkZone> zone = this.workZoneService.activeZone(layout, author)
-                .filter(candidate -> !candidate.cells().isEmpty());
-        if (zone.isEmpty()) {
-            return new ScopedDraftSplit(DraftSplit.unscoped(draft), null);
-        }
-        return new ScopedDraftSplit(splitDraftForZone(draft, zone.get()), zone.get());
-    }
-
     static DraftSplit splitDraftForZone(RecoveryDraft draft, WorkZone zone) {
-        if (draft == null || zone == null || zone.cells().isEmpty()) {
-            return DraftSplit.unscoped(draft);
-        }
-
-        List<StoredBlockChange> selectedBlocks = new ArrayList<>();
-        List<StoredBlockChange> remainderBlocks = new ArrayList<>();
-        for (StoredBlockChange change : draft.changes()) {
-            if (zone.contains(WorkZoneCell.from(change.pos()))) {
-                selectedBlocks.add(change);
-            } else {
-                remainderBlocks.add(change);
-            }
-        }
-
-        List<StoredEntityChange> selectedEntities = new ArrayList<>();
-        List<StoredEntityChange> remainderEntities = new ArrayList<>();
-        for (StoredEntityChange change : draft.entityChanges()) {
-            if (entityTouchesZone(change, zone)) {
-                selectedEntities.add(change);
-            } else {
-                remainderEntities.add(change);
-            }
-        }
-
-        return new DraftSplit(
-                draftWithChanges(draft, selectedBlocks, selectedEntities),
-                draftWithChanges(draft, remainderBlocks, remainderEntities)
-        );
+        return new SaveDraftIsolationService().splitForZone(draft, zone);
     }
 
     public static PendingChangeSummary summarizePendingForZone(RecoveryDraft draft, WorkZone zone) {
-        if (draft == null || draft.isEmpty() || zone == null || zone.cells().isEmpty()) {
-            return PendingChangeSummary.empty();
-        }
-        RecoveryDraft selected = splitDraftForZone(draft, zone).selected();
-        return ChangeStatsFactory.summarizePending(selected.changes(), selected.entityChanges());
-    }
-
-    private static boolean entityTouchesZone(StoredEntityChange change, WorkZone zone) {
-        return entityPayloadTouchesZone(change.oldValue(), zone) || entityPayloadTouchesZone(change.newValue(), zone);
-    }
-
-    private static boolean entityPayloadTouchesZone(io.github.luma.domain.model.EntityPayload payload, WorkZone zone) {
-        return payload != null && zone.contains(WorkZoneCell.from(BlockPoint.from(payload.blockPos())));
-    }
-
-    private static RecoveryDraft draftWithChanges(
-            RecoveryDraft draft,
-            List<StoredBlockChange> changes,
-            List<StoredEntityChange> entityChanges
-    ) {
-        return new RecoveryDraft(
-                draft.projectId(),
-                draft.variantId(),
-                draft.baseVersionId(),
-                draft.actor(),
-                draft.mutationSource(),
-                draft.startedAt(),
-                draft.updatedAt(),
-                changes,
-                entityChanges
-        );
+        return new SaveDraftIsolationService().summarize(draft, zone);
     }
 
     ProjectVersion writeVersion(
@@ -1130,12 +1063,6 @@ public final class VersionService {
 
     record DraftSplit(RecoveryDraft selected, RecoveryDraft remainder) {
 
-        private static DraftSplit unscoped(RecoveryDraft draft) {
-            return new DraftSplit(draft, draftWithChanges(draft, List.of(), List.of()));
-        }
-    }
-
-    private record ScopedDraftSplit(DraftSplit split, WorkZone workZone) {
     }
 
     private record IsolatedDraft(RecoveryDraft draft, WorkZone workZone) {
