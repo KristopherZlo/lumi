@@ -69,12 +69,12 @@ public final class UndoRedoActionStack {
 
     public Selection selectUndo() {
         UndoRedoAction action = this.undo.peekFirst();
-        return action == null ? null : new Selection(action.copy(), this.revision, action.version());
+        return action == null ? null : new Selection(action.copy(), action.version());
     }
 
     public Selection selectRedo() {
         UndoRedoAction action = this.redo.peekFirst();
-        return action == null ? null : new Selection(action.copy(), this.revision, action.version());
+        return action == null ? null : new Selection(action.copy(), action.version());
     }
 
     public boolean completeUndo(Selection selection) {
@@ -219,6 +219,6 @@ public final class UndoRedoActionStack {
         }
     }
 
-    public record Selection(UndoRedoAction action, long revision, long actionVersion) {
+    public record Selection(UndoRedoAction action, long actionVersion) {
     }
 }

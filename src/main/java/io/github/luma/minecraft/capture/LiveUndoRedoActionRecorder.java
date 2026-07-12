@@ -24,20 +24,6 @@ final class LiveUndoRedoActionRecorder {
         this.record(project, level, List.of(change), List.of(), now);
     }
 
-    void recordBlocks(
-            TrackedProject project,
-            ServerLevel level,
-            List<StoredBlockChange> changes,
-            Instant now
-    ) {
-        List<StoredBlockChange> recordable = changes == null
-                ? List.of()
-                : changes.stream().filter(change -> change != null && !change.isNoOp()).toList();
-        if (!recordable.isEmpty()) {
-            this.record(project, level, recordable, List.of(), now);
-        }
-    }
-
     void recordEntity(
             TrackedProject project,
             ServerLevel level,

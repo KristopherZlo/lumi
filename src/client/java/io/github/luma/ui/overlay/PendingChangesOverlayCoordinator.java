@@ -29,7 +29,6 @@ public final class PendingChangesOverlayCoordinator {
     });
     private volatile RequestKey requestedKey;
     private volatile RequestKey pendingKey;
-    private volatile RequestKey preparedKey;
     private int requestCooldown = 0;
 
     private PendingChangesOverlayCoordinator() {
@@ -114,16 +113,13 @@ public final class PendingChangesOverlayCoordinator {
                     if (prepared.state() == null) {
                         PendingChangesOverlayRenderer.discard(prepared);
                         PendingChangesOverlayRenderer.clear();
-                        this.preparedKey = null;
                         return;
                     }
                     if (PendingChangesOverlayRenderer.visibleFor(prepared.projectId(), prepared.revision())) {
                         PendingChangesOverlayRenderer.discard(prepared);
-                        this.preparedKey = requestKey;
                         return;
                     }
                     PendingChangesOverlayRenderer.activate(prepared);
-                    this.preparedKey = requestKey;
                 });
     }
 
@@ -156,7 +152,6 @@ public final class PendingChangesOverlayCoordinator {
     private void clearPreview() {
         this.requestedKey = null;
         this.pendingKey = null;
-        this.preparedKey = null;
         this.requestCooldown = 0;
         PendingChangesOverlayRenderer.clear();
     }
