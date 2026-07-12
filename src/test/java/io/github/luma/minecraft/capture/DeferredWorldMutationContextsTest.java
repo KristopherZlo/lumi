@@ -61,6 +61,24 @@ class DeferredWorldMutationContextsTest {
     }
 
     @Test
+    void replayRestoresExplosiveActionOnDeferredCarrier() {
+        Carrier carrier = new Carrier();
+        DeferredWorldMutationContext context =
+                DeferredWorldMutationContext.replayedExplosiveAction("builder", "action-1");
+
+        DeferredWorldMutationContexts.restore(carrier, context);
+
+        assertEquals(context, carrier.luma$deferredMutationContext());
+        assertTrue(DeferredWorldMutationContexts.pushSource(carrier));
+        try {
+            assertEquals(WorldMutationSource.EXPLOSIVE, WorldMutationContext.currentSource());
+            assertEquals("action-1", WorldMutationContext.currentActionId());
+        } finally {
+            WorldMutationContext.popSource();
+        }
+    }
+
+    @Test
     void mechanismContextPropagationSurvivesDeepRedstoneCascadesButStopsEventually() {
         Carrier current = new Carrier();
 

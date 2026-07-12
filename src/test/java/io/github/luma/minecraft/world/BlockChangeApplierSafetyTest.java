@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlockChangeApplierSafetyTest {
@@ -27,7 +28,8 @@ class BlockChangeApplierSafetyTest {
 
         assertTrue(mixins.contains("\"CreeperReplayStateAccess\""));
         assertTrue(normalizedApplier.contains("resetCreeperReplayState(entity);"));
-        assertTrue(normalizedApplier.contains("existing.restoreFrom(entity);\n                    resetCreeperReplayState(existing);"));
+        assertTrue(normalizedApplier.contains("existing.restoreFrom(entity);"));
+        assertTrue(normalizedApplier.contains("resetCreeperReplayState(existing);"));
         assertTrue(applier.contains("access.luma$setSwell(0);"));
         assertTrue(applier.contains("access.luma$setOldSwell(0);"));
         assertTrue(applier.contains("creeper.setSwellDir(-1);"));
@@ -35,13 +37,15 @@ class BlockChangeApplierSafetyTest {
     }
 
     @Test
-    void entityReplayDoesNotCreateLiveActionContext() throws IOException {
+    void ordinaryEntityReplayDoesNotInventLiveActionContext() throws IOException {
         String applier = Files.readString(
                 Path.of("src/main/java/io/github/luma/minecraft/world/BlockChangeApplier.java"),
                 StandardCharsets.UTF_8
         );
+        PreparedApplyOperation operation = new PreparedApplyOperation(List.of(), () -> {
+        });
 
-        assertFalse(applier.contains("ReplayContext"));
+        assertNull(operation.replayedEntityContext());
         assertFalse(applier.contains("rememberReplayAction"));
     }
 

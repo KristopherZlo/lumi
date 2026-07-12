@@ -55,6 +55,12 @@ public final class DeferredWorldMutationContexts {
         }
     }
 
+    public static void restore(Object carrier, DeferredWorldMutationContext context) {
+        if (context != null && carrier instanceof DeferredWorldMutationContextAccess access) {
+            access.luma$setDeferredMutationContext(context);
+        }
+    }
+
     public static void push(Object carrier) {
         DeferredWorldMutationContext context = context(carrier);
         APPLIED_FRAMES.get().push(new AppliedFrame(context, context == null ? null : context.push()));

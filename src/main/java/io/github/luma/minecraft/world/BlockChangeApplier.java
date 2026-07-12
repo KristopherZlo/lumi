@@ -4,8 +4,10 @@ import io.github.luma.domain.model.BlockChangeRecord;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.StoredBlockChange;
-import io.github.luma.mixin.CreeperReplayStateAccess;
+import io.github.luma.minecraft.capture.DeferredWorldMutationContext;
+import io.github.luma.minecraft.capture.DeferredWorldMutationContexts;
 import io.github.luma.minecraft.capture.EntitySnapshotService;
+import io.github.luma.mixin.CreeperReplayStateAccess;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.io.IOException;
 import java.util.HashSet;
@@ -268,7 +270,7 @@ public final class BlockChangeApplier {
             EntityBatch entityBatch,
             int startIndex,
             int maxEntities) {
-        return applyEntityBatch(level, chunk, entityBatch, startIndex, maxEntities, null);
+        return applyEntityBatch(level, chunk, entityBatch, startIndex, maxEntities, null, null);
     }
 
     static int applyEntityBatch(
@@ -277,7 +279,8 @@ public final class BlockChangeApplier {
             EntityBatch entityBatch,
             int startIndex,
             int maxEntities,
-            WorldApplyMetrics metrics) {
+            WorldApplyMetrics metrics,
+            DeferredWorldMutationContext replayedEntityContext) {
         if (entityBatch == null || entityBatch.isEmpty() || maxEntities <= 0
                 || startIndex >= entityOperationCount(entityBatch)) {
             return 0;
@@ -303,12 +306,12 @@ public final class BlockChangeApplier {
                 int updateIndex = entityIndex - removalCount;
                 if (updateIndex < updateCount) {
                     CompoundTag entityTag = entityBatch.entitiesToUpdate().get(updateIndex);
-                    spawnEntity(level, entityTag);
+                    spawnEntity(level, entityTag, replayedEntityContext);
                     continue;
                 }
 
                 int spawnIndex = updateIndex - updateCount;
-                spawnEntity(level, entityBatch.entitiesToSpawn().get(spawnIndex));
+                spawnEntity(level, entityBatch.entitiesToSpawn().get(spawnIndex), replayedEntityContext);
             } catch (Exception exception) {
                 recordApplyFailure(metrics, "entity-tail", null, exception);
             }
@@ -443,7 +446,11 @@ public final class BlockChangeApplier {
         }
     }
 
-    private static void spawnEntity(ServerLevel level, CompoundTag entityTag) {
+    private static void spawnEntity(
+            ServerLevel level,
+            CompoundTag entityTag,
+            DeferredWorldMutationContext replayedEntityContext
+    ) {
         if (entityTag == null || entityTag.isEmpty()) {
             return;
         }
@@ -455,6 +462,7 @@ public final class BlockChangeApplier {
         if (entity == null || entity instanceof ServerPlayer) {
             return;
         }
+        DeferredWorldMutationContexts.restore(entity, replayedEntityContext);
         resetCreeperReplayState(entity);
         Optional<UUID> entityId = EntityPayload.readUuid(entityTag);
         if (entityId.isPresent()) {
@@ -465,6 +473,7 @@ public final class BlockChangeApplier {
             if (existing != null && !existing.isRemoved()) {
                 if (existing.getType() == entity.getType()) {
                     existing.restoreFrom(entity);
+                    DeferredWorldMutationContexts.restore(existing, replayedEntityContext);
                     resetCreeperReplayState(existing);
                     return;
                 }

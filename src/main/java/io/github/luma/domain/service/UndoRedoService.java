@@ -9,6 +9,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.UndoRedoActionStack;
+import io.github.luma.minecraft.capture.DeferredWorldMutationContext;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
@@ -119,7 +120,8 @@ public final class UndoRedoService {
                                     draftBlocks,
                                     draftEntities
                             ),
-                            entities.isEmpty() && blocks.size() <= INLINE_COMPLETION_LIMIT
+                            entities.isEmpty() && blocks.size() <= INLINE_COMPLETION_LIMIT,
+                            DeferredWorldMutationContext.replayedExplosiveAction(action.actor(), action.id())
                     );
                 },
                 true

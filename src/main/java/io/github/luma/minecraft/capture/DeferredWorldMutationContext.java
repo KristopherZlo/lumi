@@ -28,6 +28,10 @@ public record DeferredWorldMutationContext(
         return captureCurrent(deferredSource, 0);
     }
 
+    public static DeferredWorldMutationContext replayedExplosiveAction(String actor, String actionId) {
+        return new DeferredWorldMutationContext(WorldMutationSource.EXPLOSIVE, actor, actionId, true, 1);
+    }
+
     static Optional<DeferredWorldMutationContext> captureCurrent(WorldMutationSource deferredSource, int parentDepth) {
         return captureCurrent(deferredSource, parentDepth, true);
     }

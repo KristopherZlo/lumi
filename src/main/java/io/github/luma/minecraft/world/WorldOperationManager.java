@@ -1473,7 +1473,8 @@ public final class WorldOperationManager {
                         this.currentBatch.entityBatch(),
                         this.entityIndex,
                         Math.min(maxBlocks, maxEntityOperations),
-                        this.applyMetrics
+                        this.applyMetrics,
+                        this.prepared.replayedEntityContext()
                 );
                 this.entityIndex += processed;
                 this.applyMetrics.recordEntityOperations(processed);
