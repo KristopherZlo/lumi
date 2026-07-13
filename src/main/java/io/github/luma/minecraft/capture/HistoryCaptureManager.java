@@ -869,6 +869,7 @@ public final class HistoryCaptureManager {
     }
 
     private Optional<TrackedChangeBuffer> freezeWorkingDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
+        EntityMutationTracker.drainPendingSpawns(server);
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         CaptureSessionState sessionState = this.workingDrafts.session(projectId);
         if (trackedProject != null && sessionState != null) {
@@ -881,6 +882,7 @@ public final class HistoryCaptureManager {
             MinecraftServer server,
             String projectId
     ) throws IOException {
+        EntityMutationTracker.drainPendingSpawns(server);
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         CaptureSessionState sessionState = this.workingDrafts.session(projectId);
         if (trackedProject != null && sessionState != null) {

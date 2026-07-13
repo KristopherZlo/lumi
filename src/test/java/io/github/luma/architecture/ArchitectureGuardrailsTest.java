@@ -220,6 +220,27 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
+    void workingDraftFreezeDrainsPendingEntitySpawnsBeforeIsolation() throws IOException {
+        Path captureManager = MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/HistoryCaptureManager.java");
+        String source = Files.readString(captureManager);
+        String drainCall = "EntityMutationTracker.drainPendingSpawns(server);";
+
+        assertDrainsBefore(source, "private Optional<TrackedChangeBuffer> freezeWorkingDraftOnServerThread",
+                "freezeAfterReconciliation", drainCall);
+        assertDrainsBefore(source, "private Optional<TrackedChangeBuffer> freezeWorkingDraftForRecoveryOnServerThread",
+                "freezeForRecoveryAfterReconciliation", drainCall);
+    }
+
+    private static void assertDrainsBefore(String source, String method, String isolationCall, String drainCall) {
+        int methodIndex = source.indexOf(method);
+        int drainIndex = source.indexOf(drainCall, methodIndex);
+        int isolationIndex = source.indexOf(isolationCall, methodIndex);
+
+        assertTrue(methodIndex >= 0 && drainIndex > methodIndex && drainIndex < isolationIndex,
+                method + " must drain pending entity spawns before isolating the working draft");
+    }
+
+    @Test
     void pendingEntitySpawnQueueKeepsInitialPayloadForImmediateSave() throws IOException {
         Path queue = MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/EntitySpawnCaptureQueue.java");
         Path tracker = MAIN_SOURCES.resolve("io/github/luma/minecraft/capture/EntityMutationTracker.java");
