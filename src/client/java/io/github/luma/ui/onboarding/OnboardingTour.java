@@ -47,7 +47,13 @@ public final class OnboardingTour {
             Page.spotlight("save_spotlight", SpotlightTarget.SAVE_BUILD),
             Page.spotlight("changes_spotlight", SpotlightTarget.SEE_CHANGES),
             Page.spotlight("commit_navigation", SpotlightTarget.LATEST_SAVE_RESTORE),
-            Page.info("finish")
+            Page.hold(
+                    "finish",
+                    Transition.OPEN_HOTKEY_INFO,
+                    "luma.onboarding.press_info",
+                    LumiClientKeyBindings.Role.ACTION,
+                    LumiClientKeyBindings.Role.INFO
+            )
     );
 
     private final KeyBindingState keyBindingState = new KeyBindingState();
@@ -107,9 +113,6 @@ public final class OnboardingTour {
         }
         if (page.shortcutsTable()) {
             frame.child(this.shortcutsTable(contentWidth));
-        }
-        if ("finish".equals(page.id())) {
-            frame.child(this.finishInfoRow(contentWidth));
         }
         frame.child(this.actions(page, check, actions));
         if (check != null && !this.shortcutUnbound(check.shortcut())) {
@@ -231,14 +234,6 @@ public final class OnboardingTour {
         return this.shortcutRow(
                 "luma.onboarding.preview_changes_hold",
                 new Shortcut(List.of(LumiClientKeyBindings.Role.ACTION)),
-                contentWidth
-        );
-    }
-
-    private FlowLayout finishInfoRow(int contentWidth) {
-        return this.shortcutRow(
-                "luma.onboarding.press_info",
-                new Shortcut(List.of(LumiClientKeyBindings.Role.ACTION, LumiClientKeyBindings.Role.INFO)),
                 contentWidth
         );
     }
@@ -401,7 +396,7 @@ public final class OnboardingTour {
 
     private Transition advanceAfterHold(Page page) {
         if (this.flow.lastPage()) {
-            return Transition.COMPLETE;
+            return page.onHold();
         }
         if (page.onHold() == Transition.OPEN_QUICK_SAVE) {
             this.resetHoldGate();
@@ -467,6 +462,7 @@ public final class OnboardingTour {
         CLOSE_WORKSPACE,
         OPEN_CONTROLS,
         OPEN_QUICK_SAVE,
+        OPEN_HOTKEY_INFO,
         COMPLETE
     }
 

@@ -57,13 +57,14 @@ public final class HotkeyInfoScreen extends LumaScreen {
             table.child(this.shortcutRow(entry, contentWidth));
         }
 
-        int tableHeight = Math.max(120, Math.min(260, this.height - 92));
+        int tableHeight = Math.max(90, Math.min(240, this.height - 150));
         LumaScrollContainer<FlowLayout> scroll = LumaUi.screenScroll(
                 Sizing.fill(100),
                 Sizing.fixed(tableHeight),
                 table
         );
         frame.child(scroll);
+        frame.child(this.selectionToolTip(contentWidth));
     }
 
     @Override
@@ -106,6 +107,19 @@ public final class HotkeyInfoScreen extends LumaScreen {
         text.child(LumaUi.caption(Component.translatable(entry.helpKey())).maxWidth(textWidth));
         row.child(text);
         return row;
+    }
+
+    private FlowLayout selectionToolTip(int contentWidth) {
+        FlowLayout tip = LumaUi.insetPanel(Sizing.fill(100), Sizing.content());
+        tip.child(LumaUi.value(Component.translatable("luma.onboarding.selection_tool_title")));
+        tip.child(LumaUi.caption(Component.translatable(
+                "luma.onboarding.selection_tool_help",
+                Component.literal(KeyGlyphResolver.bracketedLabel(
+                        LumiClientKeyBindings.key(LumiClientKeyBindings.Role.ACTION),
+                        "ACTION"
+                ))
+        )).maxWidth(contentWidth));
+        return tip;
     }
 
     private void addShortcutVisuals(FlowLayout row, java.util.List<LumiClientKeyBindings.Role> roles) {

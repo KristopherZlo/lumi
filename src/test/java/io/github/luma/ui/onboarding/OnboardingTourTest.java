@@ -87,7 +87,17 @@ class OnboardingTourTest {
         String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/onboarding/OnboardingTour.java"));
 
         Assertions.assertTrue(source.contains("previewShortcutRow("));
-        Assertions.assertTrue(source.contains("finishInfoRow("));
+        Assertions.assertTrue(source.contains("Transition.OPEN_HOTKEY_INFO"));
         Assertions.assertTrue(source.contains("LumiClientKeyBindings.Role.INFO"));
+    }
+
+    @Test
+    void finishingInformationChordOpensHotkeyScreenWithSelectionToolHelp() throws IOException {
+        String projectScreen = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/ProjectScreen.java"));
+        String hotkeyScreen = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/HotkeyInfoScreen.java"));
+
+        Assertions.assertTrue(projectScreen.contains("case OPEN_HOTKEY_INFO -> this.completeOnboardingAndOpenHotkeyInfo()"));
+        Assertions.assertTrue(projectScreen.contains("new HotkeyInfoScreen(this)"));
+        Assertions.assertTrue(hotkeyScreen.contains("luma.onboarding.selection_tool_help"));
     }
 }

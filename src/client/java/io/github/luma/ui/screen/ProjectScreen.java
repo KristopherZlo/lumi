@@ -875,6 +875,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             case OPEN_CONTROLS -> this.openControls();
             case OPEN_WORKSPACE -> {
             }
+            case OPEN_HOTKEY_INFO -> this.completeOnboardingAndOpenHotkeyInfo();
             case COMPLETE -> this.completeOnboarding();
             case NONE -> {
             }
@@ -890,6 +891,11 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
         this.onboardingService.markCompleted();
         this.onboardingTour = null;
         this.refresh(this.statusKey);
+    }
+
+    private void completeOnboardingAndOpenHotkeyInfo() {
+        this.completeOnboarding();
+        this.client.setScreen(new HotkeyInfoScreen(this));
     }
 
     private void closeWorkspaceForWorldTeaching() {

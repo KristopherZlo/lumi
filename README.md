@@ -65,7 +65,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 ### Quick Start
 
 1. Enter a world and let Lumi initialize the current workspace.
-2. Follow the quick tour: make 5 block edits, preview pending work with [ALT], use the wooden sword for restore areas and zone cells, then save with [ALT]+[S].
+2. Follow the quick tour: make 5 block edits, preview pending work with [ALT], save with [ALT]+[S], then hold [ALT]+[I] to finish in the hotkey guide and read the wooden-sword selection tip.
 3. Press [U] to open Build History and inspect the created save card.
 4. Use the Compare tab to pick two saves for the overlay, or use save cards for restore, branches, and older checkpoints when an idea goes wrong.
 

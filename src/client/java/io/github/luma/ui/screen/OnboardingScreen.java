@@ -123,6 +123,7 @@ public final class OnboardingScreen extends LumaScreen implements LumiShortcutSu
             case CLOSE_WORKSPACE -> this.closeWorkspaceForWorldStep();
             case OPEN_CONTROLS -> this.openControls();
             case OPEN_QUICK_SAVE -> this.openQuickSaveDialog();
+            case OPEN_HOTKEY_INFO -> this.completeAndOpenHotkeyInfo();
             case COMPLETE -> this.completeAndOpenWorkspace();
             case NONE -> {
             }
@@ -141,6 +142,12 @@ public final class OnboardingScreen extends LumaScreen implements LumiShortcutSu
         } else {
             Minecraft.getInstance().setScreen(this.parent);
         }
+    }
+
+    private void completeAndOpenHotkeyInfo() {
+        this.completeAndOpenWorkspace();
+        Minecraft client = Minecraft.getInstance();
+        client.setScreen(new HotkeyInfoScreen(client.screen));
     }
 
     private void openWorkspaceWithOnboarding() {
