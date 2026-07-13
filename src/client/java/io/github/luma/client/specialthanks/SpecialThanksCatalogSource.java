@@ -10,6 +10,9 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public final class SpecialThanksCatalogSource {
 
@@ -49,6 +52,7 @@ public final class SpecialThanksCatalogSource {
     }
 
     public List<SpecialThanksEntry> loadRemoteOrBundled() {
+        List<SpecialThanksEntry> bundled = this.loadBundled();
         try {
             HttpRequest request = HttpRequest.newBuilder(this.uri)
                     .GET()
@@ -58,12 +62,28 @@ public final class SpecialThanksCatalogSource {
                     .build();
             HttpResponse<String> response = this.client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                return this.parse(response.body());
+                return this.withBundledSkinAssets(this.parse(response.body()), bundled);
             }
         } catch (Exception exception) {
             LumaMod.LOGGER.debug("Failed to load remote Lumi special thanks catalog", exception);
         }
-        return this.loadBundled();
+        return bundled;
+    }
+
+    List<SpecialThanksEntry> withBundledSkinAssets(
+            List<SpecialThanksEntry> remote,
+            List<SpecialThanksEntry> bundled
+    ) {
+        Map<String, SpecialThanksEntry> bundledByName = bundled.stream().collect(Collectors.toMap(
+                SpecialThanksEntry::displayName,
+                Function.identity(),
+                (first, ignored) -> first
+        ));
+        return remote.stream()
+                .map(entry -> entry.withSkinAssetFallback(
+                        bundledByName.getOrDefault(entry.displayName(), entry).skinAsset()
+                ))
+                .toList();
     }
 
     private List<SpecialThanksEntry> parse(String json) {

@@ -5,16 +5,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SpecialThanksClientCacheTest {
 
     @Test
-    void clientInitializerPreloadsSpecialThanksSkinsAtStartup() throws IOException {
+    void specialThanksScreenPreparesSkinsAfterItOpens() throws IOException {
         String client = Files.readString(Path.of("src/client/java/io/github/luma/LumaClient.java"));
         String cache = Files.readString(Path.of("src/client/java/io/github/luma/client/specialthanks/SpecialThanksClientCache.java"));
+        String screen = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/SpecialThanksScreen.java"));
 
-        assertTrue(client.contains("SpecialThanksClientCache.getInstance().preload(Minecraft.getInstance())"));
+        assertFalse(client.contains("SpecialThanksClientCache.getInstance()"));
+        assertTrue(screen.contains("this.specialThanks.prepare(this.client)"));
         assertTrue(cache.contains("preloadSkins()"));
         assertTrue(cache.contains("skinFor(entry)"));
     }

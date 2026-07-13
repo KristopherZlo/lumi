@@ -12,12 +12,14 @@ class SpecialThanksEntryTest {
                 "Builder",
                 "",
                 "https://example.com/skin.png",
+                "lumi:special-thanks/builder.png",
                 "Tester"
         );
 
         assertEquals("Builder", entry.skinName());
         assertEquals("", entry.profileSkinName());
         assertEquals("https://example.com/skin.png", entry.skinUrl());
+        assertEquals("lumi:special-thanks/builder.png", entry.skinAsset());
         assertEquals("Tester", entry.description());
     }
 
@@ -28,5 +30,20 @@ class SpecialThanksEntryTest {
         assertEquals("SkinNick", entry.skinName());
         assertEquals("", entry.skinUrl());
         assertEquals("Tester", entry.description());
+    }
+
+    @Test
+    void remoteEntryInheritsBundledSkinAsset() {
+        SpecialThanksEntry remote = new SpecialThanksEntry(
+                "Builder",
+                "",
+                "https://example.com/skin.png",
+                "Tester"
+        );
+
+        assertEquals(
+                "lumi:special-thanks/builder.png",
+                remote.withSkinAssetFallback("lumi:special-thanks/builder.png").skinAsset()
+        );
     }
 }

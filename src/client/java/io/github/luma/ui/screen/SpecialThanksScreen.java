@@ -35,7 +35,13 @@ public final class SpecialThanksScreen extends LumaScreen {
         super(Component.translatable("luma.screen.special_thanks.title"));
         this.parent = parent;
         this.projectName = projectName;
-        this.specialThanks.addListener(this.refreshListener);
+    }
+
+    @Override
+    protected void init() {
+        this.specialThanks.addCatalogListener(this.refreshListener);
+        this.specialThanks.prepare(this.client);
+        super.init();
     }
 
     @Override
@@ -69,7 +75,6 @@ public final class SpecialThanksScreen extends LumaScreen {
         );
         root.child(window.root());
         this.sidebarNavigation.attach(window, this, this.projectName, ProjectWorkspaceTab.MORE);
-        this.specialThanks.preload(this.client);
         window.content().child(LumaUi.caption(Component.translatable("luma.special_thanks.help")));
 
         FlowLayout body = LumaUi.screenBody();
@@ -81,14 +86,13 @@ public final class SpecialThanksScreen extends LumaScreen {
 
     @Override
     public void onClose() {
-        this.specialThanks.removeListener(this.refreshListener);
         this.client.setScreen(this.parent);
     }
 
     @Override
     public void removed() {
         super.removed();
-        this.specialThanks.removeListener(this.refreshListener);
+        this.specialThanks.removeCatalogListener(this.refreshListener);
     }
 
     @Override

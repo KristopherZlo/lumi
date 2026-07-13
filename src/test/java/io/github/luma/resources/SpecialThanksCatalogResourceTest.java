@@ -23,11 +23,17 @@ class SpecialThanksCatalogResourceTest {
         JsonObject root = JsonParser.parseString(Files.readString(catalog)).getAsJsonObject();
         JsonArray people = root.getAsJsonArray("people");
         JsonObject first = people.get(0).getAsJsonObject();
+        JsonObject tester = people.get(1).getAsJsonObject();
 
-        assertEquals(1, root.get("schema").getAsInt());
+        assertEquals(2, root.get("schema").getAsInt());
         assertEquals("ImZlo", first.get("displayName").getAsString());
         assertEquals("ImZlo", first.get("skinName").getAsString());
         assertTrue(first.has("skinUrl"));
+        assertTrue(first.has("skinAsset"));
         assertFalse(first.get("description").getAsString().toLowerCase().contains("skins"));
+        assertEquals("Nayakochii", tester.get("displayName").getAsString());
+        assertTrue(tester.get("skinUrl").getAsString().startsWith("https://raw.githubusercontent.com/"));
+        assertEquals("lumi:special-thanks/nayakochii.png", tester.get("skinAsset").getAsString());
+        assertTrue(Files.exists(Path.of("src/main/resources/assets/lumi/special-thanks/nayakochii.png")));
     }
 }

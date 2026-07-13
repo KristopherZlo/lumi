@@ -315,8 +315,11 @@ forces a specific target for diagnostics, including Lumi button tooltips and
 the Special Thanks player showcase, while the icon button flags tune the
 button box and texture draw size.
 Special Thanks entries may use `skinName` for Minecraft profile skin and cape
-lookup, or `skinUrl` for a direct skin PNG while still using the profile cape
-when a name is available.
+lookup, or an HTTPS `skinUrl` for a direct skin PNG while still using the
+profile cape when a name is available. `skinAsset` may name a bundled texture
+used when the direct download fails. Skin downloads start when the Special
+Thanks page opens, are cached under `lumi-special-thanks/`, and are registered
+on the Minecraft client thread.
 
 `-Dlumi.loadLog=true` writes `logs/lumi-load.log`. TNT restore diagnostics use
 `tnt-context/*` and `tnt-replay/*` events to show freeze decisions, deferred

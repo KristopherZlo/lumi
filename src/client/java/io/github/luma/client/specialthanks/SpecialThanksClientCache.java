@@ -5,7 +5,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.DefaultPlayerSkin;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.player.PlayerSkin;
 
@@ -26,7 +25,7 @@ public final class SpecialThanksClientCache {
         return INSTANCE;
     }
 
-    public void preload(Minecraft client) {
+    public void prepare(Minecraft client) {
         if (client == null) {
             return;
         }
@@ -39,23 +38,6 @@ public final class SpecialThanksClientCache {
         return this.entries;
     }
 
-    public Identifier textureFor(Minecraft client, String skinName) {
-        return this.skinFor(client, skinName).body().texturePath();
-    }
-
-    public Identifier textureFor(Minecraft client, SpecialThanksEntry entry) {
-        return this.skinFor(client, entry).body().texturePath();
-    }
-
-    public PlayerSkin skinFor(Minecraft client, String skinName) {
-        if (client == null) {
-            return DefaultPlayerSkin.getDefaultSkin();
-        }
-        this.ensureSkinResolver(client);
-        MinecraftSpecialThanksSkinResolver resolver = this.skinResolver;
-        return resolver == null ? DefaultPlayerSkin.getDefaultSkin() : resolver.skinFor(skinName);
-    }
-
     public PlayerSkin skinFor(Minecraft client, SpecialThanksEntry entry) {
         if (client == null) {
             return DefaultPlayerSkin.getDefaultSkin();
@@ -65,13 +47,13 @@ public final class SpecialThanksClientCache {
         return resolver == null ? DefaultPlayerSkin.getDefaultSkin() : resolver.skinFor(entry);
     }
 
-    public void addListener(Runnable listener) {
+    public void addCatalogListener(Runnable listener) {
         if (listener != null) {
             this.listeners.addIfAbsent(listener);
         }
     }
 
-    public void removeListener(Runnable listener) {
+    public void removeCatalogListener(Runnable listener) {
         if (listener != null) {
             this.listeners.remove(listener);
         }
@@ -79,7 +61,7 @@ public final class SpecialThanksClientCache {
 
     private synchronized void ensureSkinResolver(Minecraft client) {
         if (this.skinResolver == null) {
-            this.skinResolver = new MinecraftSpecialThanksSkinResolver(client, this::notifyListeners);
+            this.skinResolver = new MinecraftSpecialThanksSkinResolver(client);
         }
     }
 
@@ -92,7 +74,7 @@ public final class SpecialThanksClientCache {
             if (!entries.equals(this.entries)) {
                 this.entries = List.copyOf(entries);
                 this.preloadSkins();
-                this.notifyListeners();
+                this.notifyCatalogListeners();
             }
         }));
     }
@@ -107,7 +89,7 @@ public final class SpecialThanksClientCache {
         }
     }
 
-    private void notifyListeners() {
+    private void notifyCatalogListeners() {
         for (Runnable listener : this.listeners) {
             listener.run();
         }

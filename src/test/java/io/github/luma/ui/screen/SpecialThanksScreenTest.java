@@ -35,8 +35,9 @@ class SpecialThanksScreenTest {
 
         assertTrue(source.contains("SpecialThanksClientCache"));
         assertTrue(source.contains("SpecialThanksPlayerShowcaseComponent"));
-        assertTrue(source.contains("addListener"));
-        assertTrue(source.contains("removeListener"));
+        assertTrue(source.contains("addCatalogListener"));
+        assertTrue(source.contains("removeCatalogListener"));
+        assertTrue(source.contains("this.specialThanks.prepare(this.client)"));
         assertTrue(source.contains("rebuildPreservingScroll"));
         assertFalse(source.contains("UIComponents.texture"));
         assertTrue(source.contains("new SpecialThanksPlayerShowcaseComponent(entry)"));
