@@ -170,6 +170,14 @@ Run the integrated singleplayer player-flow regression suite:
 
 The player-flow TNT checks place redstone beside pre-existing TNT, verify that the complete ten-block explosion chain settles into the durable draft, and require quick rollback to restore every TNT block without leaving primed TNT entities. The same flow verifies entity-only quick rollback and a final full restore after the explosion scenarios.
 
+Compare vanilla and Lumi world startup against the same normal-world seed:
+
+```powershell
+.\scripts\compare-idle-startup-load.ps1 -Runs 3
+```
+
+Both client GameTests verify the integrated server seed before their result is accepted.
+
 Run the alpha gate:
 
 ```powershell
