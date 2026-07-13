@@ -1,6 +1,10 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.debug.StartupProfiler;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
+import java.util.WeakHashMap;
 import java.util.concurrent.atomic.LongAdder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -9,10 +13,11 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 
-public final class ChunkSectionOwnershipRegistry {
+public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLookup {
 
     private static final ChunkSectionOwnershipRegistry INSTANCE = new ChunkSectionOwnershipRegistry();
 
+    private final Map<LevelChunkSection, SectionOwner> owners = Collections.synchronizedMap(new WeakHashMap<>());
     private final StartupStats startupStats = StartupProfiler.enabled() ? new StartupStats() : null;
 
     public static ChunkSectionOwnershipRegistry getInstance() {
@@ -64,6 +69,11 @@ public final class ChunkSectionOwnershipRegistry {
         this.register(levelChunk, serverLevel, chunk.getPos(), sectionIndex, section, stats);
     }
 
+    @Override
+    public Optional<SectionOwner> ownerOf(LevelChunkSection section) {
+        return Optional.ofNullable(section == null ? null : this.owners.get(section));
+    }
+
     public void logStartupProfile(String checkpoint) {
         StartupStats stats = this.startupStats;
         if (stats == null) {
@@ -90,8 +100,7 @@ public final class ChunkSectionOwnershipRegistry {
             }
 
             int sectionY = levelChunk.getSectionYFromSectionIndex(sectionIndex);
-            ChunkSectionOwnerAccess access = ownerAccess(section);
-            SectionOwner existing = access.luma$getOwner();
+            SectionOwner existing = this.owners.get(section);
             if (existing != null && existing.matches(serverLevel, chunkPos, sectionY)) {
                 if (stats != null) {
                     stats.registerSectionNoops.increment();
@@ -99,7 +108,9 @@ public final class ChunkSectionOwnershipRegistry {
                 return false;
             }
 
-            access.luma$setOwner(new SectionOwner(serverLevel, chunkPos, sectionY));
+            SectionOwner owner = new SectionOwner(serverLevel, chunkPos, sectionY);
+            this.owners.put(section, owner);
+            ((ChunkSectionOwnerAccess) (Object) section).luma$setOwner(owner);
             if (stats != null) {
                 stats.registeredSections.increment();
             }
@@ -109,10 +120,6 @@ public final class ChunkSectionOwnershipRegistry {
                 stats.registerSectionNanos.add(System.nanoTime() - startedAt);
             }
         }
-    }
-
-    private static ChunkSectionOwnerAccess ownerAccess(LevelChunkSection section) {
-        return (ChunkSectionOwnerAccess) (Object) section;
     }
 
     public record SectionOwner(
@@ -144,6 +151,7 @@ public final class ChunkSectionOwnershipRegistry {
         private final LongAdder registeredSections = new LongAdder();
         private final LongAdder registerSectionNoops = new LongAdder();
         private final LongAdder registerSectionNanos = new LongAdder();
+
         private void log(String checkpoint) {
             long arrayCalls = this.registerArrayCalls.sum();
             long sectionCalls = this.registerSectionCalls.sum();
@@ -173,5 +181,4 @@ public final class ChunkSectionOwnershipRegistry {
             return count <= 0L ? 0L : nanos / count;
         }
     }
-
 }

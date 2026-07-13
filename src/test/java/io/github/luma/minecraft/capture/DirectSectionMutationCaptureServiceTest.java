@@ -5,6 +5,7 @@ import io.github.luma.integration.common.ExternalToolMutationDetector;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
@@ -32,41 +33,17 @@ class DirectSectionMutationCaptureServiceTest {
     }
 
     @Test
-    void bypassesDirectSectionInspectionForVanillaSystemMutations() {
-        ExternalToolMutationDetector detector = new ExternalToolMutationDetector() {
-            @Override
-            public Optional<ObservedExternalToolOperation> detectOperation() {
-                throw new AssertionError("stack detection must stay off");
-            }
-
-            @Override
-            public boolean detectionAvailable() {
-                return false;
-            }
-        };
-        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(detector);
-
-        assertFalse(service.requiresInterception());
-    }
-
-    @Test
-    void keepsDirectSectionInspectionForTrackedSources() {
-        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(Optional::empty);
-
-        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.PISTON)) {
-            assertTrue(service.requiresInterception());
-        }
-    }
-
-    @Test
     void skipsExternalToolStackDetectionWhenSectionHasNoServerOwner() {
         AtomicBoolean inspectedStack = new AtomicBoolean(false);
-        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(() -> {
-            inspectedStack.set(true);
-            return Optional.empty();
-        });
+        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(
+                () -> {
+                    inspectedStack.set(true);
+                    return Optional.empty();
+                },
+                section -> Optional.empty()
+        );
 
-        service.captureBefore(null, null, 0, 0, 0, Blocks.AIR.defaultBlockState());
+        service.captureBefore(null, 0, 0, 0, Blocks.AIR.defaultBlockState());
 
         assertFalse(inspectedStack.get());
     }
@@ -74,38 +51,76 @@ class DirectSectionMutationCaptureServiceTest {
     @Test
     void skipsAllInspectionWhileCaptureIsSuppressed() {
         AtomicBoolean inspectedStack = new AtomicBoolean(false);
-        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(() -> {
-            inspectedStack.set(true);
-            return Optional.empty();
-        });
-        ChunkSectionOwnershipRegistry.SectionOwner owner =
-                new ChunkSectionOwnershipRegistry.SectionOwner(null, new ChunkPos(0, 0), 0);
+        AtomicBoolean inspectedOwner = new AtomicBoolean(false);
+        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(
+                () -> {
+                    inspectedStack.set(true);
+                    return Optional.empty();
+                },
+                section -> {
+                    inspectedOwner.set(true);
+                    return Optional.empty();
+                }
+        );
 
         try (WorldMutationContext.SuppressionFrame ignored = WorldMutationContext.pushCaptureSuppression()) {
-            service.captureBefore(sectionWithDefault(Blocks.BARREL.defaultBlockState()), owner,
+            service.captureBefore(sectionWithDefault(Blocks.BARREL.defaultBlockState()),
                     0, 0, 0, Blocks.AIR.defaultBlockState());
         }
 
         assertFalse(inspectedStack.get());
+        assertFalse(inspectedOwner.get());
     }
 
     @Test
-    void capturesCurrentPistonSourceWithoutExternalToolStackInspection() {
+    void keepsOwnerlessExternalSectionMutationPending() {
         AtomicBoolean inspectedStack = new AtomicBoolean(false);
-        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(() -> {
-            inspectedStack.set(true);
-            return Optional.empty();
-        });
-        ChunkSectionOwnershipRegistry.SectionOwner owner = new ChunkSectionOwnershipRegistry.SectionOwner(
-                null,
-                new ChunkPos(2, -3),
-                4
+        AtomicInteger ownerLookups = new AtomicInteger();
+        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(
+                () -> {
+                    inspectedStack.set(true);
+                    return Optional.of(new ObservedExternalToolOperation(
+                            WorldMutationSource.AXIOM,
+                            "axiom",
+                            "axiom-action"
+                    ));
+                },
+                section -> {
+                    ownerLookups.incrementAndGet();
+                    return Optional.empty();
+                }
+        );
+        LevelChunkSection section = sectionWithDefault(Blocks.STONE.defaultBlockState());
+
+        DirectSectionMutationCaptureService.PendingDirectSectionMutation mutation =
+                service.captureBefore(section, 0, 0, 0, Blocks.AIR.defaultBlockState());
+        service.captureAfter(section, 0, 0, 0, mutation);
+
+        assertTrue(inspectedStack.get());
+        assertEquals(2, ownerLookups.get());
+        assertEquals(WorldMutationSource.AXIOM, mutation.operation().source());
+        assertNull(mutation.pos());
+    }
+
+    @Test
+    void capturesCurrentAxiomSourceWithoutExternalToolStackInspection() {
+        AtomicBoolean inspectedStack = new AtomicBoolean(false);
+        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(
+                () -> {
+                    inspectedStack.set(true);
+                    return Optional.empty();
+                },
+                section -> Optional.of(new ChunkSectionOwnershipRegistry.SectionOwner(
+                        null,
+                        new ChunkPos(2, -3),
+                        4
+                ))
         );
         LevelChunkSection section = sectionWithDefault(Blocks.STONE.defaultBlockState());
 
         DirectSectionMutationCaptureService.PendingDirectSectionMutation mutation;
-        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.PISTON)) {
-            mutation = service.captureBefore(section, owner, 1, 2, 3, Blocks.AIR.defaultBlockState());
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.AXIOM)) {
+            mutation = service.captureBefore(section, 1, 2, 3, Blocks.AIR.defaultBlockState());
         }
 
         assertFalse(inspectedStack.get());

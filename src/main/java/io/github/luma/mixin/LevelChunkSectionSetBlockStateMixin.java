@@ -2,8 +2,6 @@ package io.github.luma.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import io.github.luma.minecraft.capture.ChunkSectionOwnerAccess;
-import io.github.luma.minecraft.capture.ChunkSectionOwnershipRegistry;
 import io.github.luma.minecraft.capture.DirectSectionMutationCaptureService;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -27,23 +25,17 @@ abstract class LevelChunkSectionSetBlockStateMixin {
             Operation<BlockState> original
     ) {
         LevelChunkSection section = (LevelChunkSection) (Object) this;
-        ChunkSectionOwnershipRegistry.SectionOwner owner =
-                ((ChunkSectionOwnerAccess) (Object) this).luma$getOwner();
-        if (owner == null || !LUMA_DIRECT_SECTION_CAPTURE.requiresInterception()) {
-            return original.call(localX, localY, localZ, newState, lock);
+        if (LUMA_DIRECT_SECTION_CAPTURE.blocksWorldMutation(section)) {
+            return section.getBlockState(localX, localY, localZ);
         }
         DirectSectionMutationCaptureService.PendingDirectSectionMutation mutation =
                 LUMA_DIRECT_SECTION_CAPTURE.captureBefore(
                         section,
-                        owner,
                         localX,
                         localY,
                         localZ,
                         newState
                 );
-        if (mutation.blocked()) {
-            return mutation.oldState();
-        }
         try {
             return original.call(localX, localY, localZ, newState, lock);
         } finally {
