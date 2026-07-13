@@ -151,6 +151,28 @@ class VariantServiceTest {
     }
 
     @Test
+    void pendingChangesRejectSwitchBeforeSessionBecomesRecoveryWork() throws IOException {
+        ProjectLayout layout = this.prepareProjectLayout();
+        new VariantRepository().save(layout, List.of(
+                ProjectVariant.main("v0001", NOW),
+                new ProjectVariant("feature", "Feature", "v0001", "v0001", false, NOW)
+        ));
+        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
+        captureSessionLifecycle.pendingChanges = true;
+        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.activateVariantMetadataOnlyForTesting(null, "Tower", "feature")
+        );
+
+        assertTrue(exception.getMessage().startsWith("Discard or save the current recovery draft"));
+        assertEquals(1, captureSessionLifecycle.pendingChangeChecks);
+        assertEquals(0, captureSessionLifecycle.finalizeCalls);
+        assertEquals("main", new ProjectRepository().load(layout).orElseThrow().activeVariantId());
+    }
+
+    @Test
     void metadataOnlyActivationIsExplicitTestingHelper() throws IOException {
         ProjectLayout layout = this.prepareProjectLayout();
         BuildProject project = new ProjectRepository().load(layout).orElseThrow();
@@ -228,8 +250,16 @@ class VariantServiceTest {
 
     private static final class FakeCaptureSessionLifecycle implements VariantService.CaptureSessionLifecycle {
 
+        private boolean pendingChanges;
+        private int pendingChangeChecks;
         private int finalizeCalls;
         private int invalidateCalls;
+
+        @Override
+        public boolean hasPendingChanges(MinecraftServer server, String projectId) {
+            this.pendingChangeChecks += 1;
+            return this.pendingChanges;
+        }
 
         @Override
         public void finalizeProjectSession(MinecraftServer server, String projectId) {

@@ -42,6 +42,14 @@ public final class VariantService {
         this.layoutResolver = this.projectService::resolveLayout;
         this.captureSessionLifecycle = new CaptureSessionLifecycle() {
             @Override
+            public boolean hasPendingChanges(MinecraftServer server, String projectId) throws IOException {
+                return HistoryCaptureManager.getInstance()
+                        .snapshotDraft(server, projectId)
+                        .filter(draft -> !draft.isEmpty())
+                        .isPresent();
+            }
+
+            @Override
             public void finalizeProjectSession(MinecraftServer server, String projectId) throws IOException {
                 HistoryCaptureManager.getInstance().finalizeProjectSession(server, projectId);
             }
@@ -156,10 +164,7 @@ public final class VariantService {
         ProjectLayout layout = this.layoutResolver.resolveLayout(level.getServer(), projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
-        this.captureSessionLifecycle.finalizeProjectSession(level.getServer(), project.id().toString());
-        if (this.recoveryRepository.loadDraft(layout).isPresent()) {
-            throw new IllegalArgumentException("Discard or save the current recovery draft before switching variants");
-        }
+        this.prepareCleanSwitch(level.getServer(), layout, project.id().toString());
 
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVariant targetVariant = variants.stream()
@@ -183,10 +188,7 @@ public final class VariantService {
         ProjectLayout layout = this.layoutResolver.resolveLayout(server, projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
-        this.captureSessionLifecycle.finalizeProjectSession(server, project.id().toString());
-        if (this.recoveryRepository.loadDraft(layout).isPresent()) {
-            throw new IllegalArgumentException("Discard or save the current recovery draft before switching variants");
-        }
+        this.prepareCleanSwitch(server, layout, project.id().toString());
 
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVariant targetVariant = variants.stream()
@@ -205,6 +207,20 @@ public final class VariantService {
         ));
         this.captureSessionLifecycle.invalidateProjectCache(server);
         return targetVariant;
+    }
+
+    private void prepareCleanSwitch(MinecraftServer server, ProjectLayout layout, String projectId) throws IOException {
+        if (this.captureSessionLifecycle.hasPendingChanges(server, projectId)) {
+            throw pendingChangesException();
+        }
+        this.captureSessionLifecycle.finalizeProjectSession(server, projectId);
+        if (this.recoveryRepository.loadDraft(layout).isPresent()) {
+            throw pendingChangesException();
+        }
+    }
+
+    private static IllegalArgumentException pendingChangesException() {
+        return new IllegalArgumentException("Discard or save the current recovery draft before switching variants");
     }
 
     private String slug(String value) {
@@ -240,6 +256,8 @@ public final class VariantService {
     }
 
     interface CaptureSessionLifecycle {
+
+        boolean hasPendingChanges(MinecraftServer server, String projectId) throws IOException;
 
         void finalizeProjectSession(MinecraftServer server, String projectId) throws IOException;
 

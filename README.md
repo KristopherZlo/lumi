@@ -75,7 +75,7 @@ For dedicated servers, install Lumi on both the server and every client that use
 | --- | --- |
 | [U] | Open Build History, or Zones when an active zone is selected |
 | [ALT]+[S] by default | Open Save build, or Save zone when an active zone is selected |
-| [ALT]+[1] ... [0] by default | Switch to the branch bound to that key; `main` defaults to [1], then branches use the first free key from [1]...[0] |
+| [ALT]+[1] ... [0] by default | Switch to the branch bound to that key when there is no unsaved work; `main` defaults to [1], then branches use the first free key from [1]...[0] |
 | [ALT] by default | Hold to preview pending work and enable action-key modifiers |
 | [ALT]+[Z] by default | Undo the current wooden-sword selection edit, otherwise undo the latest tracked world action |
 | [ALT]+[Y] by default | Redo the current wooden-sword selection edit, otherwise redo the latest undone world action |
@@ -88,6 +88,7 @@ Wooden sword hints appear under the crosshair at the GUI Scale 2 visual size; on
 
 All keybinds are remappable in Minecraft controls.
 Lumi keybinds are ignored while the Minecraft pause menu is open.
+Save or discard current unsaved work before switching branches. A rejected switch keeps that draft classified as current work instead of presenting it as interrupted recovery work.
 
 ### Reliability and performance
 
