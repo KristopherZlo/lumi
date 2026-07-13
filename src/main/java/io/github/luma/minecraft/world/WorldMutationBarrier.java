@@ -21,6 +21,10 @@ final class WorldMutationBarrier {
                 && this.blockedServers.contains(level.getServer());
     }
 
+    boolean active() {
+        return !this.blockedServers.isEmpty();
+    }
+
     void acquire(WorldOperationManager.ActiveOperation operation, boolean preparedApply) {
         Lease lease = this.createLease(operation.level(), operation.handle().label(), preparedApply);
         if (lease != null) {

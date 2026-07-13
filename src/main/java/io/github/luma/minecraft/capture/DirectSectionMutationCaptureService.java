@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.capture;
 
+import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.integration.common.ExternalToolMutationDetector;
 import io.github.luma.integration.common.ExternalToolMutationOriginDetector;
 import io.github.luma.integration.common.ExternalToolMutationSourceResolver;
@@ -47,6 +48,21 @@ public final class DirectSectionMutationCaptureService {
         this.detector = detector;
         this.sourceResolver = sourceResolver;
         this.ownershipRegistry = ownershipRegistry;
+    }
+
+    public boolean requiresInterception() {
+        WorldMutationSource source = WorldMutationContext.currentSource();
+        if (source == WorldMutationSource.RESTORE) {
+            return false;
+        }
+        if (WorldOperationManager.getInstance().mayBlockWorldMutations()) {
+            return !WorldMutationContext.captureSuppressed();
+        }
+        if (!HistoryCaptureManager.shouldCaptureMutation(source) && !this.detector.detectionAvailable()) {
+            return false;
+        }
+        return !WorldMutationContext.captureSuppressed()
+                && !WorldMutationCaptureGuard.suppressesDirectSectionCapture();
     }
 
     public PendingDirectSectionMutation captureBefore(

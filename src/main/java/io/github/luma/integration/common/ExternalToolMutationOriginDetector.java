@@ -120,7 +120,7 @@ public final class ExternalToolMutationOriginDetector implements ExternalToolMut
     }
 
     public Optional<ObservedExternalToolOperation> detectOperation() {
-        if (!this.detectionAvailable.getAsBoolean()) {
+        if (!this.detectionAvailable()) {
             return Optional.empty();
         }
 
@@ -130,6 +130,11 @@ public final class ExternalToolMutationOriginDetector implements ExternalToolMut
         }
 
         return this.detectProfile(classNames).map(this::operationFor);
+    }
+
+    @Override
+    public boolean detectionAvailable() {
+        return this.detectionAvailable.getAsBoolean();
     }
 
     static boolean isExternalToolClassName(String className) {

@@ -74,6 +74,10 @@ public final class WorldOperationManager {
         return this.mutationBarrier.blocks(level);
     }
 
+    public boolean mayBlockWorldMutations() {
+        return this.mutationBarrier.active();
+    }
+
     public synchronized Optional<OperationSnapshot> snapshot(MinecraftServer server) {
         return this.lifecycle.snapshot(this.serverKey(server));
     }

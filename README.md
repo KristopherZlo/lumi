@@ -178,6 +178,8 @@ Compare vanilla and Lumi world startup against the same normal-world seed:
 
 Both client GameTests verify the integrated server seed, then teleport the player to three distant locations and wait for each new chunk area to render. The comparison summary reports average and maximum teleport load time and render-wait ticks.
 
+Ordinary world generation bypasses Lumi's direct-section ownership and capture path unless a tracked mutation source, world-operation barrier, or explicitly enabled external-tool stack detector requires it.
+
 Run the alpha gate:
 
 ```powershell

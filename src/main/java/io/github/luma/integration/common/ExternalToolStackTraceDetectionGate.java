@@ -29,16 +29,13 @@ final class ExternalToolStackTraceDetectionGate {
     }
 
     boolean available() {
-        if (!this.stackDetectionEnabled.getAsBoolean()) {
-            return false;
-        }
-
         Boolean cached = this.available;
         if (cached != null) {
             return cached;
         }
 
-        boolean detected = this.externalToolAvailable.getAsBoolean();
+        boolean detected = this.stackDetectionEnabled.getAsBoolean()
+                && this.externalToolAvailable.getAsBoolean();
         this.available = detected;
         return detected;
     }

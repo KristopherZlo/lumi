@@ -1,6 +1,7 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.integration.common.ExternalToolMutationDetector;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,6 +29,41 @@ class DirectSectionMutationCaptureServiceTest {
     static void bootstrapMinecraft() {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+    }
+
+    @Test
+    void bypassesDirectSectionInspectionForVanillaSystemMutations() {
+        ExternalToolMutationDetector detector = new ExternalToolMutationDetector() {
+            @Override
+            public Optional<ObservedExternalToolOperation> detectOperation() {
+                throw new AssertionError("stack detection must stay off");
+            }
+
+            @Override
+            public boolean detectionAvailable() {
+                return false;
+            }
+        };
+        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(
+                detector,
+                section -> {
+                    throw new AssertionError("owner lookup must stay off");
+                }
+        );
+
+        assertFalse(service.requiresInterception());
+    }
+
+    @Test
+    void keepsDirectSectionInspectionForTrackedSources() {
+        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(
+                Optional::empty,
+                section -> Optional.empty()
+        );
+
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.PISTON)) {
+            assertTrue(service.requiresInterception());
+        }
     }
 
     @Test

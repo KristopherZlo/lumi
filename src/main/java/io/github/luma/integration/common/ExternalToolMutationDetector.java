@@ -10,4 +10,8 @@ import java.util.Optional;
 public interface ExternalToolMutationDetector {
 
     Optional<ObservedExternalToolOperation> detectOperation();
+
+    default boolean detectionAvailable() {
+        return true;
+    }
 }
