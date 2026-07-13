@@ -5,6 +5,7 @@ import io.github.luma.integration.common.ExternalToolMutationDetector;
 import io.github.luma.integration.common.ObservedExternalToolOperation;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
@@ -109,6 +110,7 @@ class DirectSectionMutationCaptureServiceTest {
     @Test
     void keepsOwnerlessExternalSectionMutationPending() {
         AtomicBoolean inspectedStack = new AtomicBoolean(false);
+        AtomicInteger ownerLookups = new AtomicInteger();
         DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(
                 () -> {
                     inspectedStack.set(true);
@@ -118,14 +120,19 @@ class DirectSectionMutationCaptureServiceTest {
                             "worldedit-action"
                     ));
                 },
-                section -> Optional.empty()
+                section -> {
+                    ownerLookups.incrementAndGet();
+                    return Optional.empty();
+                }
         );
         LevelChunkSection section = sectionWithDefault(Blocks.STONE.defaultBlockState());
 
         DirectSectionMutationCaptureService.PendingDirectSectionMutation mutation =
                 service.captureBefore(section, 0, 0, 0, Blocks.AIR.defaultBlockState());
+        service.captureAfter(section, 0, 0, 0, mutation);
 
         assertTrue(inspectedStack.get());
+        assertEquals(1, ownerLookups.get());
         assertEquals(WorldMutationSource.WORLDEDIT, mutation.operation().source());
         assertNull(mutation.pos());
     }

@@ -1,10 +1,7 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.debug.StartupProfiler;
-import java.util.Collections;
-import java.util.Map;
 import java.util.Optional;
-import java.util.WeakHashMap;
 import java.util.concurrent.atomic.LongAdder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -17,9 +14,6 @@ public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLoo
 
     private static final ChunkSectionOwnershipRegistry INSTANCE = new ChunkSectionOwnershipRegistry();
 
-    private final Map<LevelChunkSection, SectionOwner> owners = Collections.synchronizedMap(new WeakHashMap<>());
-    private final Map<ChunkAccess, RegisteredSectionArray> registeredSectionArrays =
-            Collections.synchronizedMap(new WeakHashMap<>());
     private final StartupStats startupStats = StartupProfiler.enabled() ? new StartupStats() : null;
 
     public static ChunkSectionOwnershipRegistry getInstance() {
@@ -43,11 +37,14 @@ public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLoo
             ChunkPos chunkPos = chunk.getPos();
             boolean registeredAnySection = false;
             for (int index = 0; index < sections.length; index++) {
-                if (this.hasRegisteredSection(chunk, sections, index, sections[index])) {
-                    continue;
-                }
-                this.register(levelChunk, serverLevel, chunkPos, index, sections[index], stats);
-                registeredAnySection = true;
+                registeredAnySection |= this.register(
+                        levelChunk,
+                        serverLevel,
+                        chunkPos,
+                        index,
+                        sections[index],
+                        stats
+                );
             }
             if (stats != null && !registeredAnySection) {
                 stats.registerArrayCacheHits.increment();
@@ -78,7 +75,7 @@ public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLoo
             if (stats != null) {
                 stats.ownerLookupCalls.increment();
             }
-            SectionOwner owner = this.owners.get(section);
+            SectionOwner owner = ownerAccess(section).luma$getOwner();
             if (stats != null && owner != null) {
                 stats.ownerLookupHits.increment();
             }
@@ -95,30 +92,10 @@ public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLoo
         if (stats == null) {
             return;
         }
-        stats.log(checkpoint, this.owners.size());
+        stats.log(checkpoint);
     }
 
-    private boolean hasRegisteredSection(
-            ChunkAccess chunk,
-            LevelChunkSection[] sections,
-            int index,
-            LevelChunkSection section
-    ) {
-        synchronized (this.registeredSectionArrays) {
-            RegisteredSectionArray registered = this.registeredSectionArrays.get(chunk);
-            if (registered == null || !registered.matches(sections)) {
-                registered = new RegisteredSectionArray(sections);
-                this.registeredSectionArrays.put(chunk, registered);
-            }
-            if (registered.hasSection(index, section)) {
-                return true;
-            }
-            registered.remember(index, section);
-            return false;
-        }
-    }
-
-    private void register(
+    private boolean register(
             LevelChunk levelChunk,
             ServerLevel serverLevel,
             ChunkPos chunkPos,
@@ -132,27 +109,33 @@ public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLoo
                 stats.registerSectionCalls.increment();
             }
             if (section == null) {
-                return;
+                return false;
             }
 
             int sectionY = levelChunk.getSectionYFromSectionIndex(sectionIndex);
-            SectionOwner existing = this.owners.get(section);
+            ChunkSectionOwnerAccess access = ownerAccess(section);
+            SectionOwner existing = access.luma$getOwner();
             if (existing != null && existing.matches(serverLevel, chunkPos, sectionY)) {
                 if (stats != null) {
                     stats.registerSectionNoops.increment();
                 }
-                return;
+                return false;
             }
 
-            this.owners.put(section, new SectionOwner(serverLevel, chunkPos, sectionY));
+            access.luma$setOwner(new SectionOwner(serverLevel, chunkPos, sectionY));
             if (stats != null) {
                 stats.registeredSections.increment();
             }
+            return true;
         } finally {
             if (stats != null) {
                 stats.registerSectionNanos.add(System.nanoTime() - startedAt);
             }
         }
+    }
+
+    private static ChunkSectionOwnerAccess ownerAccess(LevelChunkSection section) {
+        return (ChunkSectionOwnerAccess) (Object) section;
     }
 
     public record SectionOwner(
@@ -188,19 +171,20 @@ public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLoo
         private final LongAdder ownerLookupHits = new LongAdder();
         private final LongAdder ownerLookupNanos = new LongAdder();
 
-        private void log(String checkpoint, int ownerCount) {
+        private void log(String checkpoint) {
             long arrayCalls = this.registerArrayCalls.sum();
             long sectionCalls = this.registerSectionCalls.sum();
             long lookupCalls = this.ownerLookupCalls.sum();
+            long registered = this.registeredSections.sum();
             StartupProfiler.log(
                     "section-ownership checkpoint={} owners={} getSectionsCalls={} getSectionsCacheHits={} sectionEntries={} sectionRegisterCalls={} registeredSections={} sectionNoops={} registerTime={}us avgRegister={}ns ownerLookups={} ownerHits={} ownerLookupTime={}us avgOwnerLookup={}ns",
                     checkpoint,
-                    ownerCount,
+                    registered,
                     arrayCalls,
                     this.registerArrayCacheHits.sum(),
                     this.registerArrayEntries.sum(),
                     sectionCalls,
-                    this.registeredSections.sum(),
+                    registered,
                     this.registerSectionNoops.sum(),
                     this.registerSectionNanos.sum() / 1_000L,
                     averageNanos(this.registerSectionNanos.sum(), sectionCalls),
@@ -222,28 +206,4 @@ public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLoo
         }
     }
 
-    private static final class RegisteredSectionArray {
-
-        private final LevelChunkSection[] sections;
-        private final LevelChunkSection[] knownSections;
-
-        private RegisteredSectionArray(LevelChunkSection[] sections) {
-            this.sections = sections;
-            this.knownSections = new LevelChunkSection[sections.length];
-        }
-
-        private boolean matches(LevelChunkSection[] sections) {
-            return this.sections == sections && this.knownSections.length == sections.length;
-        }
-
-        private boolean hasSection(int index, LevelChunkSection section) {
-            return index >= 0 && index < this.knownSections.length && this.knownSections[index] == section;
-        }
-
-        private void remember(int index, LevelChunkSection section) {
-            if (index >= 0 && index < this.knownSections.length) {
-                this.knownSections[index] = section;
-            }
-        }
-    }
 }

@@ -28,9 +28,6 @@ abstract class LevelChunkSectionSetBlockStateMixin {
             return original.call(localX, localY, localZ, newState, lock);
         }
         LevelChunkSection section = (LevelChunkSection) (Object) this;
-        if (LUMA_DIRECT_SECTION_CAPTURE.blocksWorldMutation(section)) {
-            return section.getBlockState(localX, localY, localZ);
-        }
         DirectSectionMutationCaptureService.PendingDirectSectionMutation mutation =
                 LUMA_DIRECT_SECTION_CAPTURE.captureBefore(
                         section,
@@ -39,6 +36,9 @@ abstract class LevelChunkSectionSetBlockStateMixin {
                         localZ,
                         newState
                 );
+        if (mutation.blocked()) {
+            return mutation.oldState();
+        }
         try {
             return original.call(localX, localY, localZ, newState, lock);
         } finally {

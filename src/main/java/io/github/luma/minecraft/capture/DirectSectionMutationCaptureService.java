@@ -72,8 +72,7 @@ public final class DirectSectionMutationCaptureService {
             int localZ,
             BlockState newState
     ) {
-        if (WorldMutationContext.captureSuppressed()
-                || WorldMutationCaptureGuard.suppressesDirectSectionCapture()) {
+        if (WorldMutationContext.captureSuppressed()) {
             return PendingDirectSectionMutation.skipped();
         }
         if (section == null) {
@@ -82,6 +81,16 @@ public final class DirectSectionMutationCaptureService {
 
         var owner = this.ownershipRegistry.ownerOf(section);
         ChunkSectionOwnershipRegistry.SectionOwner sectionOwner = owner.orElse(null);
+        if (sectionOwner != null
+                && WorldOperationManager.getInstance().blocksWorldMutations(sectionOwner.level())) {
+            return PendingDirectSectionMutation.blocked(
+                    sectionOwner,
+                    section.getBlockState(localX, localY, localZ)
+            );
+        }
+        if (WorldMutationCaptureGuard.suppressesDirectSectionCapture()) {
+            return PendingDirectSectionMutation.skipped();
+        }
         BlockPos pos = sectionOwner == null ? null : sectionOwner.blockPos(localX, localY, localZ);
         BlockState oldState = section.getBlockState(localX, localY, localZ);
         ServerLevel ownerLevel = sectionOwner == null ? null : sectionOwner.level();
@@ -102,11 +111,13 @@ public final class DirectSectionMutationCaptureService {
             return PendingDirectSectionMutation.skipped();
         }
         return new PendingDirectSectionMutation(
+                sectionOwner,
                 pos,
                 oldState,
                 oldBlockEntity,
                 operation,
-                operation == null
+                operation == null,
+                false
         );
     }
 
@@ -121,13 +132,13 @@ public final class DirectSectionMutationCaptureService {
             return;
         }
 
-        var owner = this.ownershipRegistry.ownerOf(section);
-        if (owner.isEmpty()) {
+        ChunkSectionOwnershipRegistry.SectionOwner owner = mutation.owner();
+        if (owner == null) {
             return;
         }
 
-        ServerLevel level = owner.get().level();
-        BlockPos pos = mutation.pos() == null ? owner.get().blockPos(localX, localY, localZ) : mutation.pos();
+        ServerLevel level = owner.level();
+        BlockPos pos = mutation.pos() == null ? owner.blockPos(localX, localY, localZ) : mutation.pos();
         BlockState appliedState = section.getBlockState(localX, localY, localZ);
         if (mutation.currentSource()) {
             HistoryCaptureManager.getInstance().recordBlockChange(
@@ -157,15 +168,6 @@ public final class DirectSectionMutationCaptureService {
                     this.blockEntityTag(level, pos, appliedState)
             );
         }
-    }
-
-    public boolean blocksWorldMutation(LevelChunkSection section) {
-        if (section == null) {
-            return false;
-        }
-        return this.ownershipRegistry.ownerOf(section)
-                .map(owner -> WorldOperationManager.getInstance().blocksWorldMutations(owner.level()))
-                .orElse(false);
     }
 
     private CompoundTag blockEntityTag(ServerLevel level, BlockPos pos, BlockState state) {
@@ -219,15 +221,24 @@ public final class DirectSectionMutationCaptureService {
     }
 
     public record PendingDirectSectionMutation(
+            ChunkSectionOwnershipRegistry.SectionOwner owner,
             BlockPos pos,
             BlockState oldState,
             CompoundTag oldBlockEntity,
             ObservedExternalToolOperation operation,
-            boolean currentSource
+            boolean currentSource,
+            boolean blocked
     ) {
 
         private static PendingDirectSectionMutation skipped() {
-            return new PendingDirectSectionMutation(null, null, null, null, false);
+            return new PendingDirectSectionMutation(null, null, null, null, null, false, false);
+        }
+
+        private static PendingDirectSectionMutation blocked(
+                ChunkSectionOwnershipRegistry.SectionOwner owner,
+                BlockState oldState
+        ) {
+            return new PendingDirectSectionMutation(owner, null, oldState, null, null, false, true);
         }
 
         private boolean shouldCapture() {
