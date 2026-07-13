@@ -22,7 +22,7 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
     private static final float FIT_SCALE = 0.97F;
     private static final float PIVOT_Y = -1.0625F;
     private static final float ROTATION_X = -5.0F;
-    private static final float CAPE_ROTATION_X = (float) Math.toRadians(-10.0D);
+    private static final float CAPE_ROTATION_X = (float) Math.toRadians(-15.0D);
     private static final long WALK_CYCLE_MILLIS = 950L;
     private static final long ORBIT_CYCLE_MILLIS = 9000L;
 
