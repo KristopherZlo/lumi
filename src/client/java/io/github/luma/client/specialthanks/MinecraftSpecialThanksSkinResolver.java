@@ -86,7 +86,7 @@ public final class MinecraftSpecialThanksSkinResolver {
         String hash = Integer.toHexString(skinUrl.hashCode());
         Identifier textureId = Identifier.fromNamespaceAndPath("lumi", "special_thanks/" + hash);
         Path cachePath = this.client.gameDirectory.toPath().resolve("lumi-special-thanks").resolve(hash + ".png");
-        return this.skinTextureDownloader.downloadAndRegisterSkin(textureId, cachePath, skinUrl, false);
+        return this.skinTextureDownloader.downloadAndRegisterSkin(textureId, cachePath, skinUrl, true);
     }
 
     private void rememberLoaded(String key, PlayerSkin skin, Throwable throwable) {
