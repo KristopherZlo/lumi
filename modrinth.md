@@ -4,7 +4,17 @@
 
 **Save the build. Try the idea. Undo the mistake.**
 
+![Minecraft 1.21.11](https://img.shields.io/badge/Minecraft-1.21.11-5E7C16?style=for-the-badge)
+![Fabric](https://img.shields.io/badge/Loader-Fabric-DBD0B4?style=for-the-badge)
+![Java 21](https://img.shields.io/badge/Java-21-1F6FEB?style=for-the-badge)
+
 Lumi is version control for Minecraft builds. Save named versions, compare changes, branch new ideas, and restore mistakes without copying your entire world.
+
+## Video Tutorial
+
+`https://www.youtube.com/watch?v=YOUR_VIDEO_ID`
+
+> GIF placeholder: overview
 
 ## Build without fear
 
@@ -15,7 +25,7 @@ Lumi is version control for Minecraft builds. Save named versions, compare chang
 - **Undo and redo** recent edits or roll back all unsaved work.
 - **Recover** drafts after crashes and interrupted operations.
 - **Use work zones** to save one part of a large project without touching the rest.
-- **Import and export** project history packages.
+- **Build together** with multiplayer and dedicated server support.
 
 Lumi tracks normal Minecraft building, player-caused block and entity changes, and supported **WorldEdit, FAWE, and Axiom** edits on a best-effort basis. Heavy save and restore preparation runs in the background while progress stays visible in-game.
 
