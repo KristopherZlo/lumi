@@ -1,64 +1,80 @@
 # Lumi
 
-![Lumi banner](lumi-banner.png)
+<p align="center">
+  <img alt="Lumi banner" src="https://raw.githubusercontent.com/KristopherZlo/lumi/main/lumi-banner.png" />
+</p>
 
-![Minecraft 1.21.11](https://img.shields.io/badge/Minecraft-1.21.11-5E7C16?style=for-the-badge)
-![Fabric](https://img.shields.io/badge/Loader-Fabric-DBD0B4?style=for-the-badge)
+<p align="center">
+  <strong>Save the build. Try the idea. Undo the mistake.</strong>
+</p>
 
-**Save the build. Try the idea. Undo the mistake.**
+<p align="center">
+  <img alt="Minecraft 1.21.11" src="https://img.shields.io/badge/Minecraft-1.21.11-5E7C16?style=for-the-badge" />
+  <img alt="Fabric" src="https://img.shields.io/badge/Loader-Fabric-DBD0B4?style=for-the-badge" />
+  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-1F6FEB?style=for-the-badge" />
+</p>
 
-Lumi is project history for Minecraft builders. Pick a build area, save named checkpoints, compare what changed, branch risky ideas, restore older states, and recover interrupted work without copying the whole world folder every time.
+Lumi gives Minecraft builders a **project history for every build**. Save named versions, compare ideas, create branches, restore exactly what you need, and recover interrupted work—all without copying the entire world folder for every checkpoint.
 
-> GIF placeholder: overview
+Think of it as version control for structures, designed around Minecraft instead of code.
 
-## Features
+## Build freely, without losing good ideas
 
-- Save named checkpoints for a build, with stats, previews, and restore data
-- Compare two saves, branches, or unsaved edits with an in-world overlay
-- Restore a whole build, only a selected region, or everything outside a region
-- Branch risky ideas so alternate designs do not overwrite the main build
-- Quick save, amend the latest save, rollback, undo, and redo recent edits
-- Recover draft work after a crash or interrupted operation
-- Import and export project history packages
-- Track normal Minecraft edits plus WorldEdit, FAWE, and Axiom edits on a best-effort basis
+### Save meaningful versions
 
-> GIF placeholder: save and restore
+Turn your work into named checkpoints with previews, change statistics, and everything Lumi needs to restore the build later. Quick-save from the world, amend the latest version, or keep working until the next milestone.
 
-> GIF placeholder: compare overlay
+### Compare before you decide
 
-> GIF placeholder: branching
+Compare two saved versions, different branches, or your current unsaved edits. Lumi highlights changed blocks in the world, so you can see what moved, appeared, or disappeared instead of guessing from screenshots.
 
-## Video Tutorial
+### Explore ideas on separate branches
 
-`https://www.youtube.com/watch?v=YOUR_VIDEO_ID`
+Try a new roof, palette, redstone layout, or entire redesign without overwriting the version you trust. Switch between branches and merge the idea you want to keep.
 
-## Controls
+### Restore only what went wrong
+
+Restore a complete build, one selected region, or everything outside the selection. Lumi also provides quick rollback plus undo and redo for recent tracked edits.
+
+### Keep focused work separate
+
+Create **work zones** inside a larger project, save a zone on its own, and leave unrelated pending changes untouched. This is useful when several parts of a large build are moving at once.
+
+### Recover and share
+
+Recovery drafts protect unsaved work after crashes or interrupted operations. Project history packages can also be imported and exported when you want to move or share a build history.
+
+## What Lumi tracks
+
+Lumi captures normal Minecraft building and player-caused block or entity fallout. It also supports edits made with **WorldEdit, FAWE, and Axiom** on a best-effort basis.
+
+Save, compare, and restore preparation runs in the background where possible, while long operations report their progress in-game.
+
+## Quick start
+
+1. Enter a world and give Lumi a moment to initialize the workspace.
+2. Build normally, then hold **[ALT]** to preview pending changes.
+3. Press **[ALT]+[S]** to save your first version.
+4. Press **[U]** to open Build History.
+5. Use the Compare tab to inspect changes, or open a saved version to restore it.
+
+## Default controls
 
 | Key | Action |
 | --- | --- |
-| [U] | Open Build History |
-| [ALT]+[S] by default | Quick save |
-| [ALT]+[1] ... [0] by default | Switch to bound branch |
-| [ALT]+[Z] by default | Undo |
-| [ALT]+[Y] by default | Redo |
-| [R] | Quick rollback |
-| [H] | Toggle compare overlay |
-| [ALT]+[I] by default | Show Lumi hotkeys |
-| Wooden sword | Select a region for partial restore |
+| **[U]** | Open Build History, or Zones when a zone is active |
+| **[ALT]+[S]** | Save the build, or save the active zone |
+| **[ALT]** | Preview pending changes |
+| **[ALT]+[1] … [0]** | Switch to a bound branch |
+| **[ALT]+[Z]** / **[ALT]+[Y]** | Undo / redo |
+| **[R]** | Roll back unsaved work |
+| **[H]** | Toggle the compare overlay |
+| **[ALT]+[I]** | Show Lumi hotkeys |
+| **Wooden sword** | Select regions for partial restore and work zones |
 
-Keybinds can be changed in Minecraft controls.
+All keybinds can be changed in Minecraft controls.
 
-## Status
-
-Lumi is in alpha and may have bugs. Keep normal backups while testing.
-
-Current target: Minecraft `1.21.11` on Fabric. Updates for newer Minecraft versions are planned soon.
-
-Lumi is looking for testers, especially builders and redstoners. Join the mod Discord to test builds and report issues.
-
-Discord: `PASTE_DISCORD_INVITE_HERE`
-
-## Requirements
+## Compatibility and requirements
 
 - Minecraft `1.21.11`
 - Fabric Loader `0.19.2+`
@@ -66,3 +82,13 @@ Discord: `PASTE_DISCORD_INVITE_HERE`
 - Java `21+`
 - owo-lib `0.13.0+1.21.11`
 - Cloth Config `21.11.153+`
+
+Lumi is singleplayer-first. On a dedicated server, install it on the server and on every client that uses Lumi screens or overlays. Server-side history actions require operator permission.
+
+## Alpha notice
+
+Lumi is currently in **alpha**. Features and storage may evolve, and bugs are still possible. Keep normal world backups while testing—history tools should add safety, not replace a backup strategy.
+
+Found a problem or have an idea? [Open an issue on GitHub](https://github.com/KristopherZlo/lumi/issues).
+
+Lumi is licensed under [GPL-3.0](https://github.com/KristopherZlo/lumi/blob/main/LICENSE).
