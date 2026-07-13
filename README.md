@@ -178,7 +178,7 @@ Compare vanilla and Lumi world startup against the same normal-world seed:
 
 Both client GameTests verify the integrated server seed, then teleport the player to three distant locations and wait for each new chunk area to render. The comparison summary reports average and maximum teleport load time and render-wait ticks.
 
-Direct section writes keep weak ownership metadata so supported external tools can still be attributed when they bypass ordinary Minecraft block mutation paths.
+Axiom custom payloads open one version-independent `AXIOM` source scope by namespace. Direct section capture stays enabled under that scope, so bulk capture remains an optimization rather than the only record of an edit.
 
 Run the alpha gate:
 

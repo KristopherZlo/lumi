@@ -89,6 +89,29 @@ class ServerGamePacketListenerMixinTest {
     }
 
     @Test
+    void everyAxiomPayloadKeepsDirectSectionCaptureEnabled() throws IOException {
+        String listener = Files.readString(
+                Path.of("src/main/java/io/github/luma/mixin/ServerGamePacketListenerMixin.java"),
+                StandardCharsets.UTF_8
+        );
+        String buffer = Files.readString(
+                Path.of("src/main/java/io/github/luma/mixin/AxiomSetBufferPacketMixin.java"),
+                StandardCharsets.UTF_8
+        );
+
+        int method = listener.indexOf("luma$wrapCustomPayload");
+        int namespace = listener.indexOf("\"axiom\".equals(packet.payload().type().id().getNamespace())");
+        int source = listener.indexOf("pushPacketSource(this.player)", method);
+        int original = listener.indexOf("original.call(packet)", source);
+
+        assertTrue(method > 0);
+        assertTrue(namespace > method);
+        assertTrue(source > method);
+        assertTrue(original > source);
+        assertFalse(buffer.contains("pushDirectSectionCaptureSuppression"));
+    }
+
+    @Test
     void playerOwnedDamageSourcesCreateEntityCausalContext() throws IOException {
         String source = Files.readString(
                 Path.of("src/main/java/io/github/luma/mixin/LivingEntityCausalContextMixin.java"),

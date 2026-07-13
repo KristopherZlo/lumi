@@ -2,10 +2,9 @@ package io.github.luma.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import io.github.luma.integration.axiom.AxiomBlockBufferCaptureService;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.integration.axiom.AxiomBlockBufferCaptureService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
-import io.github.luma.minecraft.capture.WorldMutationCaptureGuard;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -28,7 +27,6 @@ abstract class AxiomSetBufferPacketMixin {
             @Coerce Object player,
             Operation<Void> original
     ) {
-        WorldMutationCaptureGuard.CaptureBoundary directSectionSuppression = null;
         WorldMutationContext.SourceFrame axiomSourceFrame = null;
         AxiomBlockBufferCaptureService.PreparedCapture preparedCapture = null;
         try {
@@ -40,7 +38,6 @@ abstract class AxiomSetBufferPacketMixin {
                         serverPlayer
                 );
                 if (preparedCapture.hasSourceContext()) {
-                    directSectionSuppression = WorldMutationCaptureGuard.pushDirectSectionCaptureSuppression();
                     axiomSourceFrame = WorldMutationContext.pushExternalSource(
                             WorldMutationSource.AXIOM,
                             preparedCapture.actor(),
@@ -54,9 +51,6 @@ abstract class AxiomSetBufferPacketMixin {
         } finally {
             if (axiomSourceFrame != null) {
                 axiomSourceFrame.close();
-            }
-            if (directSectionSuppression != null) {
-                directSectionSuppression.close();
             }
         }
     }

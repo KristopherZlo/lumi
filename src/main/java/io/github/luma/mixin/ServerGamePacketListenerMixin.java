@@ -3,10 +3,12 @@ package io.github.luma.mixin;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.integration.axiom.AxiomSetBlockPacketCaptureService;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.minecraft.capture.AutoCheckpointService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
+import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
 import net.minecraft.network.protocol.game.ServerboundChatCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundChatCommandSignedPacket;
 import net.minecraft.network.protocol.game.ServerboundContainerButtonClickPacket;
@@ -40,6 +42,18 @@ abstract class ServerGamePacketListenerMixin {
 
     @Unique
     private static final WorldOperationManager LUMA_WORLD_OPERATIONS = WorldOperationManager.getInstance();
+
+    @WrapMethod(method = "handleCustomPayload")
+    private void luma$wrapCustomPayload(ServerboundCustomPayloadPacket packet, Operation<Void> original) {
+        if (!luma$isAxiomPayload(packet)) {
+            original.call(packet);
+            return;
+        }
+        try (WorldMutationContext.SourceFrame ignored =
+                     AxiomSetBlockPacketCaptureService.getInstance().pushPacketSource(this.player)) {
+            original.call(packet);
+        }
+    }
 
     @Inject(
             method = {
@@ -184,5 +198,14 @@ abstract class ServerGamePacketListenerMixin {
         return this.player != null
                 && this.player.level() instanceof ServerLevel level
                 && LUMA_WORLD_OPERATIONS.blocksWorldMutations(level);
+    }
+
+    @Unique
+    private static boolean luma$isAxiomPayload(ServerboundCustomPayloadPacket packet) {
+        return packet != null
+                && packet.payload() != null
+                && packet.payload().type() != null
+                && packet.payload().type().id() != null
+                && "axiom".equals(packet.payload().type().id().getNamespace());
     }
 }
