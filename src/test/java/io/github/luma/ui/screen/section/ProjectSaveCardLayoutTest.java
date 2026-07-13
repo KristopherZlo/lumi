@@ -20,8 +20,13 @@ class ProjectSaveCardLayoutTest {
     }
 
     @Test
-    void narrowScreensKeepActionsBelowContent() {
-        assertEquals(ProjectSaveCardLayout.Placement.STACKED_BELOW, ProjectSaveCardLayout.placementFor(720));
+    void adaptiveScaleReferenceViewportKeepsActionsInline() {
+        assertEquals(ProjectSaveCardLayout.Placement.INLINE_RIGHT, ProjectSaveCardLayout.placementFor(640));
+    }
+
+    @Test
+    void smallerWindowsKeepActionsBelowContent() {
+        assertEquals(ProjectSaveCardLayout.Placement.STACKED_BELOW, ProjectSaveCardLayout.placementFor(639));
     }
 
     @Test
