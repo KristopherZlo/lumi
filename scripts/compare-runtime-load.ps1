@@ -244,6 +244,10 @@ function Measure-Log {
         $content,
         "(?:Lumi singleplayer testing|Lumi baseline gameplay testing|Lumi idle startup testing|Lumi baseline idle startup testing) (?<result>passed|completed with failures): (?<passed>\d+) passed, (?<failed>\d+) failed"
     )
+    $teleportMatches = [regex]::Matches(
+        $content,
+        "Lumi (?:baseline )?idle teleport load: index=(?<index>\d+), seed=-?\d+, elapsedMs=(?<ms>\d+), renderWaitTicks=(?<ticks>\d+)"
+    )
     $uniqueActionMatches = [System.Collections.Generic.List[object]]::new()
     $seenActionLines = [System.Collections.Generic.HashSet[string]]::new()
     foreach ($match in $actionMatches) {
@@ -251,6 +255,11 @@ function Measure-Log {
             $uniqueActionMatches.Add($match)
         }
     }
+    $teleportMatchesByIndex = @{}
+    foreach ($match in $teleportMatches) {
+        $teleportMatchesByIndex[$match.Groups["index"].Value] = $match
+    }
+    $uniqueTeleportMatches = @($teleportMatchesByIndex.Values)
 
     $maxKeepUpMs = 0
     $totalKeepUpMs = 0
@@ -273,6 +282,9 @@ function Measure-Log {
         $actionChecksFailed += [int]$match.Groups["failed"].Value
     }
 
+    $teleportLoadMs = @($uniqueTeleportMatches | ForEach-Object { [int64]$_.Groups["ms"].Value })
+    $teleportRenderTicks = @($uniqueTeleportMatches | ForEach-Object { [int]$_.Groups["ticks"].Value })
+
     return [PSCustomObject]@{
         LogPath = $LogPath
         ExitCode = $ExitCode
@@ -289,6 +301,11 @@ function Measure-Log {
         ActionRuns = $uniqueActionMatches.Count
         ActionChecksPassed = $actionChecksPassed
         ActionChecksFailed = $actionChecksFailed
+        TeleportLoads = $uniqueTeleportMatches.Count
+        TotalTeleportLoadMs = [int64](($teleportLoadMs | Measure-Object -Sum).Sum)
+        MaxTeleportLoadMs = [int64](($teleportLoadMs | Measure-Object -Maximum).Maximum)
+        TotalTeleportRenderTicks = [int](($teleportRenderTicks | Measure-Object -Sum).Sum)
+        MaxTeleportRenderTicks = [int](($teleportRenderTicks | Measure-Object -Maximum).Maximum)
     }
 }
 
@@ -323,6 +340,9 @@ function New-Summary {
     )
 
     $wall = ($Samples | Measure-Object -Property WallClockMs -Average -Maximum)
+    $teleportLoads = [int](($Samples | Measure-Object -Property TeleportLoads -Sum).Sum)
+    $totalTeleportLoadMs = [int64](($Samples | Measure-Object -Property TotalTeleportLoadMs -Sum).Sum)
+    $totalTeleportRenderTicks = [int](($Samples | Measure-Object -Property TotalTeleportRenderTicks -Sum).Sum)
     return [PSCustomObject]@{
         Runs = $Samples.Count
         FailedRuns = ($Samples | Where-Object { $_.ExitCode -ne 0 }).Count
@@ -340,6 +360,11 @@ function New-Summary {
         ActionRuns = [int](($Samples | Measure-Object -Property ActionRuns -Sum).Sum)
         ActionChecksPassed = [int](($Samples | Measure-Object -Property ActionChecksPassed -Sum).Sum)
         ActionChecksFailed = [int](($Samples | Measure-Object -Property ActionChecksFailed -Sum).Sum)
+        TeleportLoads = $teleportLoads
+        AverageTeleportLoadMs = if ($teleportLoads -eq 0) { 0 } else { [int64]($totalTeleportLoadMs / $teleportLoads) }
+        MaxTeleportLoadMs = [int64](($Samples | Measure-Object -Property MaxTeleportLoadMs -Maximum).Maximum)
+        AverageTeleportRenderTicks = if ($teleportLoads -eq 0) { 0 } else { [int]($totalTeleportRenderTicks / $teleportLoads) }
+        MaxTeleportRenderTicks = [int](($Samples | Measure-Object -Property MaxTeleportRenderTicks -Maximum).Maximum)
     }
 }
 
@@ -395,6 +420,21 @@ function Write-MarkdownSummary {
         "",
         "Lumi action checks: $($Result.Lumi.Summary.ActionChecksPassed) passed, $($Result.Lumi.Summary.ActionChecksFailed) failed",
         "",
+        "| Scenario | Teleports | Avg load ms | Max load ms | Avg render ticks | Max render ticks |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+        ("| Baseline | {0} | {1} | {2} | {3} | {4} |" -f
+            $Result.Baseline.Summary.TeleportLoads,
+            $Result.Baseline.Summary.AverageTeleportLoadMs,
+            $Result.Baseline.Summary.MaxTeleportLoadMs,
+            $Result.Baseline.Summary.AverageTeleportRenderTicks,
+            $Result.Baseline.Summary.MaxTeleportRenderTicks),
+        ("| Lumi | {0} | {1} | {2} | {3} | {4} |" -f
+            $Result.Lumi.Summary.TeleportLoads,
+            $Result.Lumi.Summary.AverageTeleportLoadMs,
+            $Result.Lumi.Summary.MaxTeleportLoadMs,
+            $Result.Lumi.Summary.AverageTeleportRenderTicks,
+            $Result.Lumi.Summary.MaxTeleportRenderTicks),
+        "",
         "Raw logs and JSON: ``$($Result.OutputDirectory)``"
     )
     Set-Content -Path $Path -Value $lines
@@ -421,6 +461,8 @@ $result = [PSCustomObject]@{
     }
     Regression = [PSCustomObject]@{
         AverageWallClockDeltaMs = $lumiSummary.AverageWallClockMs - $baselineSummary.AverageWallClockMs
+        AverageTeleportLoadDeltaMs = $lumiSummary.AverageTeleportLoadMs - $baselineSummary.AverageTeleportLoadMs
+        AverageTeleportRenderTickDelta = $lumiSummary.AverageTeleportRenderTicks - $baselineSummary.AverageTeleportRenderTicks
         MaxKeepUpDeltaMs = $lumiSummary.MaxKeepUpMs - $baselineSummary.MaxKeepUpMs
         MaxLongTickDeltaMs = $lumiSummary.MaxLongTickMs - $baselineSummary.MaxLongTickMs
         RenderPipelineFailureDelta = $lumiSummary.RenderPipelineFailures - $baselineSummary.RenderPipelineFailures

@@ -176,7 +176,7 @@ Compare vanilla and Lumi world startup against the same normal-world seed:
 .\scripts\compare-idle-startup-load.ps1 -Runs 3
 ```
 
-Both client GameTests verify the integrated server seed before their result is accepted.
+Both client GameTests verify the integrated server seed, then teleport the player to three distant locations and wait for each new chunk area to render. The comparison summary reports average and maximum teleport load time and render-wait ticks.
 
 Run the alpha gate:
 
