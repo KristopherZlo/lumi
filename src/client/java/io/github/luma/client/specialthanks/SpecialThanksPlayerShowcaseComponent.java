@@ -24,9 +24,9 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
     private static final float ROTATION_X = -5.0F;
     private static final float CAPE_ROTATION_CENTER_DEGREES = -17.5F;
     private static final float CAPE_ROTATION_AMPLITUDE_DEGREES = 2.5F;
-    private static final long CAPE_SWAY_CYCLE_MILLIS = 3000L;
+    private static final long CAPE_SWAY_CYCLE_MILLIS = 1500L;
     private static final long WALK_CYCLE_MILLIS = 950L;
-    private static final long ORBIT_CYCLE_MILLIS = 9000L;
+    private static final long ORBIT_CYCLE_MILLIS = 18000L;
 
     private final SpecialThanksClientCache specialThanks = SpecialThanksClientCache.getInstance();
     private final SpecialThanksEntry entry;

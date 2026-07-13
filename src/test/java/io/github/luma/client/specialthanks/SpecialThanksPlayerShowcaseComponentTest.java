@@ -31,6 +31,7 @@ class SpecialThanksPlayerShowcaseComponentTest {
         assertTrue(source.contains("PlayerModelType.SLIM"));
         assertTrue(source.contains("Math.sin"));
         assertTrue(source.contains("rotationY"));
+        assertTrue(source.contains("ORBIT_CYCLE_MILLIS = 18000L"));
     }
 
     @Test
@@ -68,8 +69,8 @@ class SpecialThanksPlayerShowcaseComponentTest {
         assertTrue(source.contains(".luma$cape().xRot = capeRotationX(now)"));
         assertTrue(mixins.contains("client.PlayerCapeModelAccessor"));
         assertEquals((float) Math.toRadians(-15.0D), SpecialThanksPlayerShowcaseComponent.capeRotationX(0L), 0.0001F);
-        assertEquals((float) Math.toRadians(-20.0D), SpecialThanksPlayerShowcaseComponent.capeRotationX(1500L), 0.0001F);
-        assertEquals((float) Math.toRadians(-15.0D), SpecialThanksPlayerShowcaseComponent.capeRotationX(3000L), 0.0001F);
+        assertEquals((float) Math.toRadians(-20.0D), SpecialThanksPlayerShowcaseComponent.capeRotationX(750L), 0.0001F);
+        assertEquals((float) Math.toRadians(-15.0D), SpecialThanksPlayerShowcaseComponent.capeRotationX(1500L), 0.0001F);
     }
 
     @Test
