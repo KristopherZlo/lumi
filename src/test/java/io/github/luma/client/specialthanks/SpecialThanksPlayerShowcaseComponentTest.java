@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,16 +58,18 @@ class SpecialThanksPlayerShowcaseComponentTest {
     }
 
     @Test
-    void capeIsTiltedAwayFromBack() throws IOException {
+    void capeSwaysSmoothlyBetweenFifteenAndTwentyDegrees() throws IOException {
         String source = Files.readString(Path.of(
                 "src/client/java/io/github/luma/client/specialthanks/SpecialThanksPlayerShowcaseComponent.java"
         ));
         String mixins = Files.readString(Path.of("src/main/resources/lumi.mixins.json"));
 
-        assertTrue(source.contains("CAPE_ROTATION_X"));
         assertTrue(source.contains("PlayerCapeModelAccessor"));
-        assertTrue(source.contains(".luma$cape().xRot = CAPE_ROTATION_X"));
+        assertTrue(source.contains(".luma$cape().xRot = capeRotationX(now)"));
         assertTrue(mixins.contains("client.PlayerCapeModelAccessor"));
+        assertEquals((float) Math.toRadians(-15.0D), SpecialThanksPlayerShowcaseComponent.capeRotationX(0L), 0.0001F);
+        assertEquals((float) Math.toRadians(-20.0D), SpecialThanksPlayerShowcaseComponent.capeRotationX(1500L), 0.0001F);
+        assertEquals((float) Math.toRadians(-15.0D), SpecialThanksPlayerShowcaseComponent.capeRotationX(3000L), 0.0001F);
     }
 
     @Test

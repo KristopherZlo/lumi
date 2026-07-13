@@ -22,7 +22,9 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
     private static final float FIT_SCALE = 0.97F;
     private static final float PIVOT_Y = -1.0625F;
     private static final float ROTATION_X = -5.0F;
-    private static final float CAPE_ROTATION_X = (float) Math.toRadians(-15.0D);
+    private static final float CAPE_ROTATION_CENTER_DEGREES = -17.5F;
+    private static final float CAPE_ROTATION_AMPLITUDE_DEGREES = 2.5F;
+    private static final long CAPE_SWAY_CYCLE_MILLIS = 3000L;
     private static final long WALK_CYCLE_MILLIS = 950L;
     private static final long ORBIT_CYCLE_MILLIS = 9000L;
 
@@ -66,7 +68,7 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
         float scale = FIT_SCALE * this.height / MODEL_HEIGHT;
         float lumaScale = LumaUiScale.current().renderScale(client.getWindow().getGuiScale());
         float rotationY = this.rotationY(now);
-        this.attachCape(model, skin);
+        this.attachCape(model, skin, now);
         graphics.submitSkinRenderState(
                 model,
                 skin.body().texturePath(),
@@ -81,15 +83,22 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
         );
     }
 
-    private void attachCape(PlayerModel model, PlayerSkin skin) {
+    private void attachCape(PlayerModel model, PlayerSkin skin, long now) {
         ClientAsset.Texture cape = skin.cape();
         if (cape == null) {
             SpecialThanksCapeRenderRegistry.getInstance().clear(model);
             return;
         }
         this.capeModel.resetPose();
-        ((PlayerCapeModelAccessor) (Object) this.capeModel).luma$cape().xRot = CAPE_ROTATION_X;
+        ((PlayerCapeModelAccessor) (Object) this.capeModel).luma$cape().xRot = capeRotationX(now);
         SpecialThanksCapeRenderRegistry.getInstance().attach(model, this.capeModel, cape.texturePath());
+    }
+
+    static float capeRotationX(long now) {
+        double progress = Math.floorMod(now, CAPE_SWAY_CYCLE_MILLIS) / (double) CAPE_SWAY_CYCLE_MILLIS;
+        double degrees = CAPE_ROTATION_CENTER_DEGREES
+                + CAPE_ROTATION_AMPLITUDE_DEGREES * Math.cos(progress * Math.PI * 2.0D);
+        return (float) Math.toRadians(degrees);
     }
 
     private static int scaled(int coordinate, float scale) {
