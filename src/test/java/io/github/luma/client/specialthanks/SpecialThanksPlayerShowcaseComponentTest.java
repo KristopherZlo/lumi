@@ -89,7 +89,7 @@ class SpecialThanksPlayerShowcaseComponentTest {
                 "src/client/java/io/github/luma/client/specialthanks/SpecialThanksPlayerShowcaseComponent.java"
         ));
 
-        assertTrue(source.contains("LumaUiScale.renderScale"));
+        assertTrue(source.contains("LumaUiScale.current().renderScale"));
         assertTrue(source.contains("float lumaScale ="));
         assertTrue(source.contains("scale * lumaScale"));
         assertTrue(source.contains("scaled(this.x, lumaScale)"));

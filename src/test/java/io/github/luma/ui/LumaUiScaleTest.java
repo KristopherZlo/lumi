@@ -15,26 +15,52 @@ class LumaUiScaleTest {
     }
 
     @Test
-    void virtualSizeMatchesGuiScaleTwoAcrossMinecraftGuiScales() {
-        Assertions.assertEquals(960, LumaUiScale.virtualSize(1920, 1));
-        Assertions.assertEquals(960, LumaUiScale.virtualSize(960, 2));
-        Assertions.assertEquals(960, LumaUiScale.virtualSize(640, 3));
-        Assertions.assertEquals(540, LumaUiScale.virtualSize(360, 3));
+    void commonDisplaySizesResolveToAConsistentVirtualViewport() {
+        this.assertProfile(1280, 720, 2);
+        this.assertProfile(1920, 1080, 3);
+        this.assertProfile(2560, 1440, 4);
+        this.assertProfile(3840, 2160, 6);
+    }
+
+    @Test
+    void unsupportedIntermediateProfilesRoundDown() {
+        Assertions.assertEquals(4, LumaUiScale.forFramebuffer(3200, 1800).targetGuiScale());
+        Assertions.assertEquals(6, LumaUiScale.forFramebuffer(4480, 2520).targetGuiScale());
+    }
+
+    @Test
+    void scaleThreeKeepsTwentyFourPixelIconsAtNativeFramebufferSize() {
+        LumaUiScale scale = LumaUiScale.forFramebuffer(1920, 1080);
+
+        Assertions.assertEquals(3, scale.targetGuiScale());
+        Assertions.assertEquals(8, scale.iconDrawSize());
+        Assertions.assertEquals(24, scale.iconDrawSize() * scale.targetGuiScale());
+    }
+
+    @Test
+    void virtualSizeMatchesResolvedScaleAcrossMinecraftGuiScales() {
+        LumaUiScale scale = new LumaUiScale(2);
+
+        Assertions.assertEquals(960, scale.virtualSize(1920, 1));
+        Assertions.assertEquals(960, scale.virtualSize(960, 2));
+        Assertions.assertEquals(960, scale.virtualSize(640, 3));
+        Assertions.assertEquals(540, scale.virtualSize(360, 3));
     }
 
     @Test
     void virtualSizeDoesNotRoundPastMinecraftViewport() {
-        int virtualSize = LumaUiScale.virtualSize(641, 3);
+        LumaUiScale scale = new LumaUiScale(2);
+        int virtualSize = scale.virtualSize(641, 3);
 
         Assertions.assertEquals(961, virtualSize);
-        Assertions.assertTrue(virtualSize * LumaUiScale.renderScale(3) <= 641.0F);
+        Assertions.assertTrue(virtualSize * scale.renderScale(3) <= 641.0F);
     }
 
     @Test
     void defaultIconButtonsStayNearNativePixelSizeAtTargetScale() {
         Assertions.assertEquals(26, LumaUiScale.iconButtonWidth());
         Assertions.assertEquals(18, LumaUiScale.iconButtonHeight());
-        Assertions.assertEquals(12, LumaUiScale.iconDrawSize());
+        Assertions.assertEquals(12, new LumaUiScale(2).iconDrawSize());
     }
 
     @Test
@@ -45,7 +71,7 @@ class LumaUiScaleTest {
 
         Assertions.assertEquals(28, LumaUiScale.iconButtonWidth());
         Assertions.assertEquals(18, LumaUiScale.iconButtonHeight());
-        Assertions.assertEquals(13, LumaUiScale.iconDrawSize());
+        Assertions.assertEquals(13, new LumaUiScale(3).iconDrawSize());
     }
 
     @Test
@@ -55,9 +81,20 @@ class LumaUiScaleTest {
         System.setProperty(LumaUiScale.ICON_BUTTON_HEIGHT_PROPERTY, "1");
         System.setProperty(LumaUiScale.ICON_DRAW_SIZE_PROPERTY, "99");
 
-        Assertions.assertEquals(1920, LumaUiScale.virtualSize(1920, 1));
+        LumaUiScale scale = LumaUiScale.forFramebuffer(1920, 1080);
+
+        Assertions.assertEquals(1, scale.targetGuiScale());
+        Assertions.assertEquals(1920, scale.virtualSize(1920, 1));
         Assertions.assertEquals(64, LumaUiScale.iconButtonWidth());
         Assertions.assertEquals(10, LumaUiScale.iconButtonHeight());
-        Assertions.assertEquals(24, LumaUiScale.iconDrawSize());
+        Assertions.assertEquals(24, scale.iconDrawSize());
+    }
+
+    private void assertProfile(int width, int height, int expectedScale) {
+        LumaUiScale scale = LumaUiScale.forFramebuffer(width, height);
+
+        Assertions.assertEquals(expectedScale, scale.targetGuiScale());
+        Assertions.assertEquals(640, width / scale.targetGuiScale());
+        Assertions.assertEquals(360, height / scale.targetGuiScale());
     }
 }

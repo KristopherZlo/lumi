@@ -59,7 +59,7 @@ class LumaIconAssetsTest {
         Assertions.assertTrue(uiSource.contains("LumaUiScale.iconButtonWidth()"));
         Assertions.assertTrue(uiSource.contains("LumaUiScale.iconButtonHeight()"));
         Assertions.assertTrue(rendererSource.contains("private static final int TEXTURE_SIZE = 24;"));
-        Assertions.assertTrue(rendererSource.contains("LumaUiScale.iconDrawSize()"));
+        Assertions.assertTrue(rendererSource.contains("LumaUiScale.current().iconDrawSize()"));
     }
 
     private List<Path> iconPngs() throws IOException {

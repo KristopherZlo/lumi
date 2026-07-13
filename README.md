@@ -302,14 +302,18 @@ Useful JVM flags:
 -Dlumi.testerDiagnostics=true
 -Dlumi.ui.targetGuiScale=2
 -Dlumi.ui.iconButtonWidth=26
--Dlumi.ui.iconButtonHeight=16
+-Dlumi.ui.iconButtonHeight=18
 -Dlumi.ui.iconDrawSize=12
 ```
 
 The `lumi.ui.*` flags are dev-only tuning knobs for Lumi's in-game menus.
-`targetGuiScale=2` makes Lumi screens render as if Minecraft GUI Scale were set
-to 2, including Lumi button tooltips and the Special Thanks player showcase,
-and the icon button flags tune the button box and the 24x24 texture draw size.
+Without an override, Lumi selects target GUI scales `2`, `3`, `4`, and `6` for
+HD, Full HD, QHD, and 4K framebuffers so those displays share a 640x360 virtual
+layout. At target scale `3`, 24x24 pixel-art icons stay at their native 24x24
+framebuffer size instead of being resampled to 36x36. `targetGuiScale=2`
+forces a specific target for diagnostics, including Lumi button tooltips and
+the Special Thanks player showcase, while the icon button flags tune the
+button box and texture draw size.
 Special Thanks entries may use `skinName` for Minecraft profile skin and cape
 lookup, or `skinUrl` for a direct skin PNG while still using the profile cape
 when a name is available.

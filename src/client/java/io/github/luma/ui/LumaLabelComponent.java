@@ -13,7 +13,7 @@ public final class LumaLabelComponent extends LabelComponent {
 
     @Override
     public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
-        graphics.push().translate(0, LumaUiScale.targetPixelOffset());
+        graphics.push().translate(0, LumaUiScale.current().targetPixelOffset());
         try {
             this.drawText((renderX, renderY, text, shadow, color) -> graphics.drawString(
                     Minecraft.getInstance().font,

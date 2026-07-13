@@ -444,7 +444,7 @@ public final class VariantsScreen extends LumaScreen {
         previews.child(this.mergePreviewColumn(Component.translatable("luma.ideas.merge_source_preview"), sourceHead));
         var chevron = UIComponents.texture(MERGE_CHEVRON, 0, 0, 24, 24, 24, 24);
         chevron.blend(true);
-        int chevronSize = LumaUiScale.iconDrawSize();
+        int chevronSize = LumaUiScale.current().iconDrawSize();
         chevron.sizing(Sizing.fixed(chevronSize), Sizing.fixed(chevronSize));
         previews.child(chevron);
         previews.child(this.mergePreviewColumn(Component.translatable("luma.ideas.merge_target_preview"), targetHead));

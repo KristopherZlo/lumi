@@ -64,7 +64,7 @@ public final class SpecialThanksPlayerShowcaseComponent extends BaseUIComponent 
 
         this.poseWalking(model, now);
         float scale = FIT_SCALE * this.height / MODEL_HEIGHT;
-        float lumaScale = LumaUiScale.renderScale(client.getWindow().getGuiScale());
+        float lumaScale = LumaUiScale.current().renderScale(client.getWindow().getGuiScale());
         float rotationY = this.rotationY(now);
         this.attachCape(model, skin);
         graphics.submitSkinRenderState(

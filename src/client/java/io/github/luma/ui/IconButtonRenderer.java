@@ -29,7 +29,7 @@ final class IconButtonRenderer implements ButtonComponent.Renderer {
                 ? button.isHovered() ? this.hover : this.fill
                 : this.disabled;
         context.fill(button.getX(), button.getY(), button.getX() + button.getWidth(), button.getY() + button.getHeight(), color);
-        int drawSize = Math.min(LumaUiScale.iconDrawSize(), Math.min(button.getWidth(), button.getHeight()));
+        int drawSize = Math.min(LumaUiScale.current().iconDrawSize(), Math.min(button.getWidth(), button.getHeight()));
         int iconX = button.getX() + ((button.getWidth() - drawSize) / 2);
         int iconY = button.getY() + ((button.getHeight() - drawSize) / 2);
         context.blit(RenderPipelines.GUI_TEXTURED, button.active() ? this.icon : this.disabledIcon, iconX, iconY, 0, 0, drawSize, drawSize, TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE);

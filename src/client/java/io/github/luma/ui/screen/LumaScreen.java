@@ -27,6 +27,7 @@ import org.lwjgl.glfw.GLFW;
 public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
 
     private boolean openingAnimationPending = true;
+    private LumaUiScale uiScale = LumaUiScale.forFramebuffer(1280, 720);
 
     protected LumaScreen(Component title) {
         super(title);
@@ -35,8 +36,9 @@ public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
     @Override
     protected void init() {
         int currentGuiScale = this.currentGuiScale();
-        this.width = LumaUiScale.virtualSize(this.width, currentGuiScale);
-        this.height = LumaUiScale.virtualSize(this.height, currentGuiScale);
+        this.uiScale = LumaUiScale.current();
+        this.width = this.uiScale.virtualSize(this.width, currentGuiScale);
+        this.height = this.uiScale.virtualSize(this.height, currentGuiScale);
         super.init();
     }
 
@@ -183,11 +185,11 @@ public abstract class LumaScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private double virtualCoordinate(double coordinate) {
-        return LumaUiScale.virtualCoordinate(coordinate, this.currentGuiScale());
+        return this.uiScale.virtualCoordinate(coordinate, this.currentGuiScale());
     }
 
     private float lumaUiScale() {
-        return LumaUiScale.renderScale(this.currentGuiScale());
+        return this.uiScale.renderScale(this.currentGuiScale());
     }
 
     private int currentGuiScale() {

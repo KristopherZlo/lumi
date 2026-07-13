@@ -13,11 +13,13 @@ class LumaScreenScaleTest {
         String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/LumaScreen.java"))
                 .replace("\r\n", "\n");
 
-        int widthIndex = source.indexOf("this.width = LumaUiScale.virtualSize(this.width, currentGuiScale);");
-        int heightIndex = source.indexOf("this.height = LumaUiScale.virtualSize(this.height, currentGuiScale);");
+        int resolveIndex = source.indexOf("this.uiScale = LumaUiScale.current();");
+        int widthIndex = source.indexOf("this.width = this.uiScale.virtualSize(this.width, currentGuiScale);");
+        int heightIndex = source.indexOf("this.height = this.uiScale.virtualSize(this.height, currentGuiScale);");
         int superIndex = source.indexOf("super.init();");
 
-        Assertions.assertTrue(widthIndex >= 0);
+        Assertions.assertTrue(resolveIndex >= 0);
+        Assertions.assertTrue(widthIndex > resolveIndex);
         Assertions.assertTrue(heightIndex > widthIndex);
         Assertions.assertTrue(superIndex > heightIndex);
         Assertions.assertFalse(source.contains("resizeLumaUi()"));
@@ -47,7 +49,7 @@ class LumaScreenScaleTest {
 
         Assertions.assertTrue(source.contains("new LumaLabelComponent(text)"));
         Assertions.assertFalse(source.contains("UIComponents.label("));
-        Assertions.assertTrue(label.contains("LumaUiScale.targetPixelOffset()"));
+        Assertions.assertTrue(label.contains("LumaUiScale.current().targetPixelOffset()"));
         Assertions.assertFalse(label.contains("getGuiScale()"));
     }
 }

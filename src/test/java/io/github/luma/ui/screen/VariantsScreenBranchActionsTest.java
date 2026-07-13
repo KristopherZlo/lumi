@@ -74,7 +74,7 @@ class VariantsScreenBranchActionsTest {
         assertTrue(methodBody.contains("ProjectUiSupport.versionPreview"));
         assertTrue(methodBody.contains("MERGE_CHEVRON"));
         assertTrue(methodBody.contains("UIComponents.texture(MERGE_CHEVRON, 0, 0, 24, 24, 24, 24)"));
-        assertTrue(methodBody.contains("LumaUiScale.iconDrawSize()"));
+        assertTrue(methodBody.contains("LumaUiScale.current().iconDrawSize()"));
         assertTrue(methodBody.contains("input.setHint(Component.literal(ProjectUiSupport.displayVariantName(sourceVariant)))"));
         assertTrue(methodBody.contains("merge.active(this.canConfirmMerge(sourceVariant))"));
     }
