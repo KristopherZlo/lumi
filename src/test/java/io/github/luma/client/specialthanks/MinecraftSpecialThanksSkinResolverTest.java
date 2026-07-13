@@ -13,7 +13,7 @@ class MinecraftSpecialThanksSkinResolverTest {
     void directSkinUrlsUseVanillaProcessingAndBundledFallback() throws IOException {
         String source = Files.readString(Path.of(
                 "src/client/java/io/github/luma/client/specialthanks/MinecraftSpecialThanksSkinResolver.java"
-        ));
+        )).replace("\r\n", "\n");
 
         assertTrue(source.contains("client.getTextureManager(),\n                client"));
         assertTrue(source.contains("downloadAndRegisterSkin(textureId, cachePath, skinUrl, true)"));

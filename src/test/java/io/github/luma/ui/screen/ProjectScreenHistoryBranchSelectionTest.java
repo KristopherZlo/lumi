@@ -218,9 +218,9 @@ class ProjectScreenHistoryBranchSelectionTest {
     @Test
     void restoreEntityTypeListIsHeightBoundedAndScrollable() throws IOException {
         String source = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/section/RestoreConfirmationDialogView.java"));
-        String projectScreen = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/ProjectScreen.java"));
-        String saveDetails = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/SaveDetailsScreen.java"));
-        String workZone = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/WorkZoneScreen.java"));
+        String projectScreen = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/ProjectScreen.java")).replace("\r\n", "\n");
+        String saveDetails = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/SaveDetailsScreen.java")).replace("\r\n", "\n");
+        String workZone = Files.readString(Path.of("src/client/java/io/github/luma/ui/screen/WorkZoneScreen.java")).replace("\r\n", "\n");
 
         assertTrue(source.contains("LumaUi.screenScroll(Sizing.fill(100), Sizing.fixed(model.entityListHeight()), list)"));
         assertTrue(source.contains("Math.min(ENTITY_LIST_MAX_HEIGHT, Math.max(ENTITY_LIST_MIN_HEIGHT, this.height - ENTITY_LIST_SCREEN_MARGIN))"));
