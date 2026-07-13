@@ -15,6 +15,7 @@ class MinecraftSpecialThanksSkinResolverTest {
                 "src/client/java/io/github/luma/client/specialthanks/MinecraftSpecialThanksSkinResolver.java"
         ));
 
+        assertTrue(source.contains("client.getTextureManager(),\n                client"));
         assertTrue(source.contains("downloadAndRegisterSkin(textureId, cachePath, skinUrl, true)"));
     }
 }

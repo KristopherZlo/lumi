@@ -29,7 +29,7 @@ public final class MinecraftSpecialThanksSkinResolver {
         this.skinTextureDownloader = new SkinTextureDownloader(
                 client.getProxy(),
                 client.getTextureManager(),
-                Util.backgroundExecutor()
+                client
         );
     }
 
