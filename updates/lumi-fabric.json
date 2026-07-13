@@ -3,18 +3,17 @@
   "modId": "lumi",
   "versions": [
     {
-      "version": "0.1.0-alpha.3",
-      "versionCode": 100003,
+      "version": "0.1.0",
+      "versionCode": 100100,
       "minecraftVersions": [
         "1.21.11"
       ],
       "loader": "fabric",
       "channel": "alpha",
-      "title": "Lumi alpha 0.1.0-alpha.3",
-      "summary": "Alpha 0.1.0-alpha.3 changes:\nImproved live undo/redo ownership for TNT, explosions, redstone, and mob fallout.\nPrevented replay-restored TNT from re-igniting through stale queued callbacks.\nAdded player-scoped undo/redo selection, native-tool verification, and queued shortcut handling.\nImproved overlay performance, restore reliability, and localized UI coverage.",
-      "downloadUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.3",
-      "changelogUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0-alpha.3",
-      "sha256": "54484E9A25B6AF1D10CF2A400C97A3E524553122BAC49BB838A1B54BA99C4551"
+      "title": "Lumi 0.1.0 Alpha",
+      "summary": "Alpha 0.1.0 includes:\nProject-based versions, branches, compare, restore, and recovery.\nDurable quick rollback with live undo/redo for recent building changes.\nWork zones, previews, tags, partial restores, and background progress.\nBest-effort WorldEdit, FAWE, and Axiom capture plus dedicated-server support.",
+      "downloadUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0",
+      "changelogUrl": "https://github.com/KristopherZlo/lumi/releases/tag/v0.1.0"
     }
   ]
 }
