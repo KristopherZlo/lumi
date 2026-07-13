@@ -15,14 +15,13 @@ import net.minecraft.server.MinecraftServer;
  */
 public final class WorldBootstrapService implements AutoCloseable {
 
-    private static final int PLAYER_JOIN_BOOTSTRAP_DELAY_TICKS = 20 * 10;
     private static final AtomicInteger NEXT_BOOTSTRAP_THREAD_INDEX = new AtomicInteger(1);
 
     private final ProjectService projectService;
     private ExecutorService executor;
     private final AtomicReference<CompletableFuture<Void>> pendingBootstrap = new AtomicReference<>();
+    private final WorldBootstrapDelay delay = new WorldBootstrapDelay();
     private MinecraftServer scheduledServer;
-    private int ticksUntilBootstrap = -1;
 
     public WorldBootstrapService() {
         this(new ProjectService(), Executors.newSingleThreadExecutor(WorldBootstrapService::bootstrapThread));
@@ -43,30 +42,28 @@ public final class WorldBootstrapService implements AutoCloseable {
         }
 
         this.scheduledServer = server;
-        this.ticksUntilBootstrap = PLAYER_JOIN_BOOTSTRAP_DELAY_TICKS;
+        this.delay.reset();
     }
 
     public void tick(MinecraftServer server) {
-        if (server == null || this.scheduledServer != server || this.ticksUntilBootstrap < 0) {
+        if (server == null || this.scheduledServer != server) {
             return;
         }
         if (server.getPlayerList().getPlayerCount() <= 0) {
             return;
         }
-        this.ticksUntilBootstrap -= 1;
-        if (this.ticksUntilBootstrap > 0) {
+        if (!this.delay.tick(this.chunkLoadingActive(server))) {
             return;
         }
 
         this.scheduledServer = null;
-        this.ticksUntilBootstrap = -1;
         this.startBootstrap(server);
     }
 
     @Override
     public synchronized void close() {
         this.scheduledServer = null;
-        this.ticksUntilBootstrap = -1;
+        this.delay.reset();
         CompletableFuture<Void> pending = this.pendingBootstrap.getAndSet(null);
         if (pending != null) {
             pending.cancel(false);
@@ -91,6 +88,15 @@ public final class WorldBootstrapService implements AutoCloseable {
         } catch (Throwable throwable) {
             LumaMod.LOGGER.warn("Failed to bootstrap world origin metadata", throwable);
         }
+    }
+
+    private boolean chunkLoadingActive(MinecraftServer server) {
+        for (var level : server.getAllLevels()) {
+            if (level.getChunkSource().getPendingTasksCount() > 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private synchronized ExecutorService executor() {
