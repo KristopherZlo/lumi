@@ -1,7 +1,6 @@
 package io.github.luma.minecraft.capture;
 
 import io.github.luma.debug.StartupProfiler;
-import java.util.Optional;
 import java.util.concurrent.atomic.LongAdder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -10,7 +9,7 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 
-public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLookup {
+public final class ChunkSectionOwnershipRegistry {
 
     private static final ChunkSectionOwnershipRegistry INSTANCE = new ChunkSectionOwnershipRegistry();
 
@@ -63,28 +62,6 @@ public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLoo
         }
 
         this.register(levelChunk, serverLevel, chunk.getPos(), sectionIndex, section, stats);
-    }
-
-    public Optional<SectionOwner> ownerOf(LevelChunkSection section) {
-        if (section == null) {
-            return Optional.empty();
-        }
-        StartupStats stats = this.startupStats;
-        long startedAt = stats == null ? 0L : System.nanoTime();
-        try {
-            if (stats != null) {
-                stats.ownerLookupCalls.increment();
-            }
-            SectionOwner owner = ownerAccess(section).luma$getOwner();
-            if (stats != null && owner != null) {
-                stats.ownerLookupHits.increment();
-            }
-            return Optional.ofNullable(owner);
-        } finally {
-            if (stats != null) {
-                stats.ownerLookupNanos.add(System.nanoTime() - startedAt);
-            }
-        }
     }
 
     public void logStartupProfile(String checkpoint) {
@@ -167,17 +144,12 @@ public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLoo
         private final LongAdder registeredSections = new LongAdder();
         private final LongAdder registerSectionNoops = new LongAdder();
         private final LongAdder registerSectionNanos = new LongAdder();
-        private final LongAdder ownerLookupCalls = new LongAdder();
-        private final LongAdder ownerLookupHits = new LongAdder();
-        private final LongAdder ownerLookupNanos = new LongAdder();
-
         private void log(String checkpoint) {
             long arrayCalls = this.registerArrayCalls.sum();
             long sectionCalls = this.registerSectionCalls.sum();
-            long lookupCalls = this.ownerLookupCalls.sum();
             long registered = this.registeredSections.sum();
             StartupProfiler.log(
-                    "section-ownership checkpoint={} owners={} getSectionsCalls={} getSectionsCacheHits={} sectionEntries={} sectionRegisterCalls={} registeredSections={} sectionNoops={} registerTime={}us avgRegister={}ns ownerLookups={} ownerHits={} ownerLookupTime={}us avgOwnerLookup={}ns",
+                    "section-ownership checkpoint={} owners={} getSectionsCalls={} getSectionsCacheHits={} sectionEntries={} sectionRegisterCalls={} registeredSections={} sectionNoops={} registerTime={}us avgRegister={}ns",
                     checkpoint,
                     registered,
                     arrayCalls,
@@ -187,11 +159,7 @@ public final class ChunkSectionOwnershipRegistry implements ChunkSectionOwnerLoo
                     registered,
                     this.registerSectionNoops.sum(),
                     this.registerSectionNanos.sum() / 1_000L,
-                    averageNanos(this.registerSectionNanos.sum(), sectionCalls),
-                    lookupCalls,
-                    this.ownerLookupHits.sum(),
-                    this.ownerLookupNanos.sum() / 1_000L,
-                    averageNanos(this.ownerLookupNanos.sum(), lookupCalls)
+                    averageNanos(this.registerSectionNanos.sum(), sectionCalls)
             );
             StartupProfiler.log(
                     "section-ownership-array checkpoint={} getSectionsTime={}us avgGetSections={}ns",

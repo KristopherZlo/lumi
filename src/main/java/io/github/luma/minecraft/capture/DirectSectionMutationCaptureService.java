@@ -19,7 +19,6 @@ public final class DirectSectionMutationCaptureService {
 
     private final ExternalToolMutationDetector detector;
     private final ExternalToolMutationSourceResolver sourceResolver;
-    private final ChunkSectionOwnerLookup ownershipRegistry;
 
     public static DirectSectionMutationCaptureService getInstance() {
         return INSTANCE;
@@ -28,26 +27,20 @@ public final class DirectSectionMutationCaptureService {
     private DirectSectionMutationCaptureService() {
         this(
                 ExternalToolMutationOriginDetector.getInstance(),
-                ExternalToolMutationSourceResolver.getInstance(),
-                ChunkSectionOwnershipRegistry.getInstance()
+                ExternalToolMutationSourceResolver.getInstance()
         );
     }
 
-    DirectSectionMutationCaptureService(
-            ExternalToolMutationDetector detector,
-            ChunkSectionOwnerLookup ownershipRegistry
-    ) {
-        this(detector, ExternalToolMutationSourceResolver.getInstance(), ownershipRegistry);
+    DirectSectionMutationCaptureService(ExternalToolMutationDetector detector) {
+        this(detector, ExternalToolMutationSourceResolver.getInstance());
     }
 
     DirectSectionMutationCaptureService(
             ExternalToolMutationDetector detector,
-            ExternalToolMutationSourceResolver sourceResolver,
-            ChunkSectionOwnerLookup ownershipRegistry
+            ExternalToolMutationSourceResolver sourceResolver
     ) {
         this.detector = detector;
         this.sourceResolver = sourceResolver;
-        this.ownershipRegistry = ownershipRegistry;
     }
 
     public boolean requiresInterception() {
@@ -67,6 +60,7 @@ public final class DirectSectionMutationCaptureService {
 
     public PendingDirectSectionMutation captureBefore(
             LevelChunkSection section,
+            ChunkSectionOwnershipRegistry.SectionOwner sectionOwner,
             int localX,
             int localY,
             int localZ,
@@ -75,14 +69,11 @@ public final class DirectSectionMutationCaptureService {
         if (WorldMutationContext.captureSuppressed()) {
             return PendingDirectSectionMutation.skipped();
         }
-        if (section == null) {
+        if (section == null || sectionOwner == null) {
             return PendingDirectSectionMutation.skipped();
         }
 
-        var owner = this.ownershipRegistry.ownerOf(section);
-        ChunkSectionOwnershipRegistry.SectionOwner sectionOwner = owner.orElse(null);
-        if (sectionOwner != null
-                && WorldOperationManager.getInstance().blocksWorldMutations(sectionOwner.level())) {
+        if (WorldOperationManager.getInstance().blocksWorldMutations(sectionOwner.level())) {
             return PendingDirectSectionMutation.blocked(
                     sectionOwner,
                     section.getBlockState(localX, localY, localZ)
@@ -91,9 +82,9 @@ public final class DirectSectionMutationCaptureService {
         if (WorldMutationCaptureGuard.suppressesDirectSectionCapture()) {
             return PendingDirectSectionMutation.skipped();
         }
-        BlockPos pos = sectionOwner == null ? null : sectionOwner.blockPos(localX, localY, localZ);
+        BlockPos pos = sectionOwner.blockPos(localX, localY, localZ);
         BlockState oldState = section.getBlockState(localX, localY, localZ);
-        ServerLevel ownerLevel = sectionOwner == null ? null : sectionOwner.level();
+        ServerLevel ownerLevel = sectionOwner.level();
         CompoundTag oldBlockEntity = this.blockEntityTag(ownerLevel, pos, oldState);
         boolean captureCurrentSource = this.currentSourceCaptures();
         ObservedExternalToolOperation operation = this.detectOperation(captureCurrentSource);
