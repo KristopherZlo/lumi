@@ -178,34 +178,6 @@ public final class VariantService {
         return targetVariant;
     }
 
-    public ProjectVariant activateVariantMetadataOnlyForTesting(
-            MinecraftServer server,
-            String projectName,
-            String variantId
-    ) throws IOException {
-        ProjectLayout layout = this.layoutResolver.resolveLayout(server, projectName);
-        var project = this.projectRepository.load(layout)
-                .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
-        this.prepareCleanSwitch(server, layout, project.id().toString());
-
-        List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
-        ProjectVariant targetVariant = variants.stream()
-                .filter(variant -> variant.id().equals(variantId))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Variant not found: " + variantId));
-
-        this.projectRepository.save(layout, project.withActiveVariantId(targetVariant.id(), Instant.now()).withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION));
-        this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
-                Instant.now(),
-                "variant-switched",
-                "Switched active variant to " + targetVariant.id(),
-                targetVariant.headVersionId(),
-                targetVariant.id()
-        ));
-        this.captureSessionLifecycle.invalidateProjectCache(server);
-        return targetVariant;
-    }
-
     private void prepareCleanSwitch(MinecraftServer server, ProjectLayout layout, String projectId) throws IOException {
         if (this.captureSessionLifecycle.hasPendingChanges(server, projectId)) {
             throw pendingChangesException();

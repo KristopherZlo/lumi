@@ -93,11 +93,6 @@ public final class EntityCausalContextRegistry {
         }
     }
 
-    synchronized void clearForTests() {
-        this.contexts.clear();
-        ACTIVE_STARTED_AT.remove();
-    }
-
     private boolean canRemember(Entity entity, ServerLevel level) {
         if (entity == null || level == null || entity instanceof ServerPlayer || entity.getUUID() == null) {
             return false;

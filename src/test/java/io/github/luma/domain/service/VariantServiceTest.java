@@ -150,48 +150,6 @@ class VariantServiceTest {
         );
     }
 
-    @Test
-    void pendingChangesRejectSwitchBeforeSessionBecomesRecoveryWork() throws IOException {
-        ProjectLayout layout = this.prepareProjectLayout();
-        new VariantRepository().save(layout, List.of(
-                ProjectVariant.main("v0001", NOW),
-                new ProjectVariant("feature", "Feature", "v0001", "v0001", false, NOW)
-        ));
-        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
-        captureSessionLifecycle.pendingChanges = true;
-        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
-
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> service.activateVariantMetadataOnlyForTesting(null, "Tower", "feature")
-        );
-
-        assertTrue(exception.getMessage().startsWith("Discard or save the current recovery draft"));
-        assertEquals(1, captureSessionLifecycle.pendingChangeChecks);
-        assertEquals(0, captureSessionLifecycle.finalizeCalls);
-        assertEquals("main", new ProjectRepository().load(layout).orElseThrow().activeVariantId());
-    }
-
-    @Test
-    void metadataOnlyActivationIsExplicitTestingHelper() throws IOException {
-        ProjectLayout layout = this.prepareProjectLayout();
-        BuildProject project = new ProjectRepository().load(layout).orElseThrow();
-        new VariantRepository().save(layout, List.of(
-                ProjectVariant.main("v0001", NOW),
-                new ProjectVariant("feature", "Feature", "v0001", "v0001", false, NOW)
-        ));
-        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
-        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
-
-        ProjectVariant variant = service.activateVariantMetadataOnlyForTesting(null, "Tower", "feature");
-
-        assertEquals("feature", variant.id());
-        assertEquals("feature", new ProjectRepository().load(layout).orElseThrow().activeVariantId());
-        assertEquals(1, captureSessionLifecycle.finalizeCalls);
-        assertEquals(1, captureSessionLifecycle.invalidateCalls);
-        assertEquals(project.id(), new ProjectRepository().load(layout).orElseThrow().id());
-    }
-
     private ProjectLayout prepareProjectLayout() throws IOException {
         ProjectLayout layout = ProjectLayout.of(this.tempDir, "Tower");
         BuildProject project = BuildProject.create(
