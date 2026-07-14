@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BlockChangeRecord;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.EntityPayload;
@@ -294,7 +295,15 @@ public final class BlockChangeApplier {
         for (int index = startIndex; index < endIndex; index++) {
             try {
                 if (entityBatch.replaceEntities() && index == 0) {
-                    removeExtraEntities(level, chunk, entityBatch);
+                    int removed = removeExtraEntities(level, chunk, entityBatch);
+                    if (removed > 0) {
+                        LumaMod.LOGGER.info(
+                                "Removed {} extra entities from authoritative restore chunk {}:{}",
+                                removed,
+                                chunk.x(),
+                                chunk.z()
+                        );
+                    }
                     continue;
                 }
 
@@ -506,12 +515,15 @@ public final class BlockChangeApplier {
         creeper.getEntityData().set(CreeperReplayStateAccess.luma$dataIsIgnited(), false);
     }
 
-    private static void removeExtraEntities(ServerLevel level, ChunkPoint chunk, EntityBatch targetBatch) {
+    private static int removeExtraEntities(ServerLevel level, ChunkPoint chunk, EntityBatch targetBatch) {
         if (level == null || chunk == null || targetBatch == null || !targetBatch.replaceEntities()) {
-            return;
+            return 0;
         }
         Set<String> targetIds = new HashSet<>();
         for (CompoundTag tag : targetBatch.entitiesToSpawn()) {
+            EntityPayload.readUuid(tag).map(UUID::toString).ifPresent(targetIds::add);
+        }
+        for (CompoundTag tag : targetBatch.entitiesToUpdate()) {
             EntityPayload.readUuid(tag).map(UUID::toString).ifPresent(targetIds::add);
         }
         for (CompoundTag tag : targetBatch.entitiesToUpdate()) {
@@ -525,6 +537,7 @@ public final class BlockChangeApplier {
                 level.getMaxY() + 1,
                 (chunk.z() << 4) + 18
         );
+        int removed = 0;
         for (Entity entity : level.getEntities((Entity) null, bounds,
                 RESTORE_ENTITY_CLEANUP_POLICY::shouldInspectExtraEntity)) {
             String entityType = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
@@ -536,6 +549,8 @@ public final class BlockChangeApplier {
                 continue;
             }
             entity.discard();
+            removed += 1;
         }
+        return removed;
     }
 }

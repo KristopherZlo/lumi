@@ -404,6 +404,7 @@ public final class PreparedChunkBatchCollapser {
 
         private void markReplace(ChunkPoint chunk, Iterable<String> excludedEntityTypes) {
             if (chunk != null) {
+                this.operations.values().removeIf(operation -> chunk.equals(operation.chunk()));
                 LinkedHashSet<String> exclusions = new LinkedHashSet<>();
                 for (String entityType : excludedEntityTypes == null ? List.<String>of() : excludedEntityTypes) {
                     if (entityType != null && !entityType.isBlank()) {

@@ -127,6 +127,30 @@ class PreparedChunkBatchCollapserTest {
     }
 
     @Test
+    void authoritativeReplacementSupersedesEarlierEntityDeltaInTheChunk() {
+        CompoundTag transientItem = entity("00000000-0000-0000-0000-000000000056", 32.0D);
+        ChunkPoint chunk = new ChunkPoint(2, 0);
+        PreparedChunkBatch fallout = new PreparedChunkBatch(
+                chunk,
+                List.of(),
+                new EntityBatch(List.of(transientItem), List.of(), List.of())
+        );
+        PreparedChunkBatch authoritativeTarget = new PreparedChunkBatch(
+                chunk,
+                List.of(),
+                EntityBatch.replaceEntities(List.of())
+        );
+
+        List<PreparedChunkBatch> collapsed = this.collapser.collapse(List.of(fallout, authoritativeTarget));
+
+        assertEquals(1, collapsed.size());
+        assertTrue(collapsed.getFirst().entityBatch().replaceEntities());
+        assertTrue(collapsed.getFirst().entityBatch().entitiesToSpawn().isEmpty());
+        assertTrue(collapsed.getFirst().entityBatch().entitiesToUpdate().isEmpty());
+        assertTrue(collapsed.getFirst().entityBatch().entityIdsToRemove().isEmpty());
+    }
+
+    @Test
     void laterEntityRemovalWinsOverEarlierUpdate() {
         String entityId = "00000000-0000-0000-0000-000000000051";
         PreparedChunkBatch update = new PreparedChunkBatch(
