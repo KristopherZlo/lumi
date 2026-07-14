@@ -4,8 +4,6 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.ui.controller.ClientProjectAccess;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -18,8 +16,7 @@ import net.minecraft.client.Minecraft;
 public final class PendingChangesOverlayCoordinator {
 
     private static final PendingChangesOverlayCoordinator INSTANCE = new PendingChangesOverlayCoordinator();
-    private static final int SNAPSHOT_REQUEST_INTERVAL_TICKS = 10;
-    private static final Duration ACTIVE_DRAFT_PREVIEW_QUIET_PERIOD = Duration.ofMillis(500);
+    private static final int SNAPSHOT_REQUEST_INTERVAL_TICKS = 1;
 
     private final HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
     private final ExecutorService previewExecutor = Executors.newSingleThreadExecutor(task -> {
@@ -125,22 +122,11 @@ public final class PendingChangesOverlayCoordinator {
 
     private PendingChangesOverlaySnapshot loadSnapshot(Minecraft client, String projectId) {
         try {
-            Instant now = Instant.now();
             var server = ClientProjectAccess.requireSingleplayerServer(client);
-            if (this.captureManager.activeDraftUpdatedAfter(
-                    server,
-                    projectId,
-                    now.minus(ACTIVE_DRAFT_PREVIEW_QUIET_PERIOD)
-            )) {
-                return null;
-            }
             Optional<RecoveryDraft> draft = this.captureManager.snapshotDraft(
                     server,
                     projectId
             );
-            if (draft.isPresent() && shouldDeferHotDraft(draft.get(), Instant.now())) {
-                return null;
-            }
             return draft
                     .map(value -> PendingChangesOverlaySnapshot.fromDraft(projectId, value))
                     .orElseGet(() -> PendingChangesOverlaySnapshot.empty(projectId));
@@ -154,13 +140,6 @@ public final class PendingChangesOverlayCoordinator {
         this.pendingKey = null;
         this.requestCooldown = 0;
         PendingChangesOverlayRenderer.clear();
-    }
-
-    static boolean shouldDeferHotDraft(RecoveryDraft draft, Instant now) {
-        if (draft == null || draft.updatedAt() == null || now == null) {
-            return false;
-        }
-        return Duration.between(draft.updatedAt(), now).compareTo(ACTIVE_DRAFT_PREVIEW_QUIET_PERIOD) < 0;
     }
 
     private record RequestKey(String projectId) {
