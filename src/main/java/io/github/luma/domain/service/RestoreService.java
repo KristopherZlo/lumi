@@ -15,6 +15,7 @@ import io.github.luma.domain.model.PartialRestorePlanSummary;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.RestorePlanMode;
@@ -111,6 +112,8 @@ public final class RestoreService {
     );
     private final PartialRestoreDiagnosticsLog partialRestoreDiagnosticsLog = new PartialRestoreDiagnosticsLog();
     private final BlockTargetStateResolver blockTargetStateResolver = new BlockTargetStateResolver();
+    private final DirtyScopeReconciliationService dirtyScopeReconciliationService =
+            new DirtyScopeReconciliationService();
     private final RestoreMechanismReconciliationPlanner mechanismReconciliationPlanner =
             new RestoreMechanismReconciliationPlanner();
     private final ExactRootStateRestoreDecoder exactRootStateRestoreDecoder = new ExactRootStateRestoreDecoder(
@@ -272,9 +275,37 @@ public final class RestoreService {
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
                 .freezeWorkingDraft(level.getServer(), project.id().toString());
         Optional<RecoveryDraft> frozenDraft = frozenSession.map(TrackedChangeBuffer::toDraft);
-        RecoveryDraft pendingDraft = frozenDraft
+        RecoveryDraft capturedDraft = frozenDraft
                 .or(() -> persistedDraft)
                 .orElse(null);
+        HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
+        ProjectDirtyScope dirtyScope = captureManager.loadProjectDirtyScope(
+                level.getServer(),
+                project.id().toString()
+        );
+        RecoveryDraft reconciledDraft = capturedDraft;
+        if (!dirtyScope.isEmpty()) {
+            ProjectVersion activeHead = versions.stream()
+                    .filter(candidate -> candidate.id().equals(activeHeadVersionId))
+                    .findFirst()
+                    .orElseThrow(() -> new IOException("Active head is missing for dirty restore reconciliation"));
+            reconciledDraft = this.dirtyScopeReconciliationService.reconcileBlocks(
+                    layout,
+                    project,
+                    versions,
+                    activeHead,
+                    dirtyScope,
+                    captureManager.captureProjectDirtyScope(
+                            level.getServer(),
+                            project.id().toString(),
+                            dirtyScope
+                    ),
+                    capturedDraft,
+                    "Lumi safety ledger",
+                    Instant.now()
+            );
+        }
+        RecoveryDraft pendingDraft = reconciledDraft;
         LumaMod.LOGGER.info(
                 "Starting restore request for project {} to version {} on variant {}",
                 project.name(),
@@ -394,15 +425,25 @@ public final class RestoreService {
         );
         return new PreparedApplyOperation(
                 finalBatches,
-                () -> this.completionCoordinator.completeRestore(
-                        level,
-                        layout,
-                        project,
-                        variants,
-                        targetVariant,
-                        version,
-                        finalBatches.size()
-                )
+                () -> {
+                    this.completionCoordinator.completeRestore(
+                            level,
+                            layout,
+                            project,
+                            variants,
+                            targetVariant,
+                            version,
+                            finalBatches.size()
+                    );
+                    if (!dirtyScope.isEmpty()) {
+                        captureManager.completeProjectDirtyScopeRestore(
+                                level.getServer(),
+                                project.id().toString(),
+                                dirtyScope,
+                                version.id()
+                        );
+                    }
+                }
         );
     }
 

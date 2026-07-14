@@ -952,6 +952,27 @@ public final class HistoryCaptureManager {
         );
     }
 
+    /** Clears the isolated ledger after a restore has passed final verification. */
+    public void completeProjectDirtyScopeRestore(
+            MinecraftServer server,
+            String projectId,
+            ProjectDirtyScope expectedScope,
+            String restoredVersionId
+    ) throws IOException {
+        ProjectDirtyScope empty = ProjectDirtyScope.empty(
+                expectedScope.projectId(),
+                expectedScope.variantId(),
+                expectedScope.baseVersionId()
+        );
+        this.completeProjectDirtyScopeSave(
+                server,
+                projectId,
+                expectedScope,
+                empty,
+                restoredVersionId
+        );
+    }
+
     private List<ChunkSnapshotPayload> captureProjectDirtyScopeOnServerThread(
             MinecraftServer server,
             String projectId,
