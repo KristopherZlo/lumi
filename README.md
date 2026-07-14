@@ -21,6 +21,18 @@ It runs inside your world: save named moments of a build, compare what changed, 
 
 Status: alpha. Keep normal world backups.
 
+## Product North Star
+
+Lumi is an invisible, reliable versioning safety net for Minecraft builders. It should let a builder save a good moment, try another idea, compare the result, and return safely without understanding Git or fearing world loss.
+
+Lumi records the minimum state required for exact recovery, not every raw block event or game tick. Save must match the visible world; restore must leave blocks, block entities, and entities exactly at the requested state; a crash must not destroy previously valid history; and removing Lumi must leave a normal usable Minecraft world.
+
+When Lumi has no useful work to perform, idle play and chunk loading should be statistically indistinguishable from vanilla. Heavy preparation stays off the server tick, long work is incremental and observable, and memory is bounded by the current work batch rather than the whole operation. Reliability is never traded for speed: remove unnecessary work instead of weakening guarantees.
+
+The core scenario is deliberately narrow: **save a good build, try a different idea, compare it, and return safely**. Lumi is not a universal Git implementation, a multiplayer collaboration platform, or a permanent archive of every tick. Features and complexity that do not strengthen this scenario do not belong in the product.
+
+Release readiness requires repeated vanilla/Lumi idle measurements, an exact save/compare/restore workflow over 100,000 changes with bounded tick time and memory, injected crash coverage for every persistence phase, real integrated coverage for supported builder tools, enforcement of one operation per world, and a load-regression gate that blocks the release.
+
 ## For Players
 
 ### Download
