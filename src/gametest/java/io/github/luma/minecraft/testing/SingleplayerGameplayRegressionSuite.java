@@ -465,7 +465,7 @@ final class SingleplayerGameplayRegressionSuite {
                 return;
             }
 
-            BlockPos marker = context.volume.min().offset(2, 1, 2);
+            BlockPos marker = context.volume.min().offset(12, 1, 1);
             entity.snapTo(marker.getX() + 0.5D, marker.getY(), marker.getZ() + 0.5D, 0.0F, 0.0F);
             context.trackedPlayerAction(() -> {
                 context.level.addFreshEntity(entity);
@@ -571,7 +571,7 @@ final class SingleplayerGameplayRegressionSuite {
 
         @Override
         public void run(GameplayScenarioContext context) {
-            BlockPos anchor = context.volume.min().offset(1, 2, 8);
+            BlockPos anchor = context.volume.min().offset(1, 4, 8);
             List<BlockPos> bridge = new ArrayList<>();
             context.beginLatestCaptureGroup();
             Set<BlockPos> fixtureBlocks = new LinkedHashSet<>();
@@ -582,12 +582,22 @@ final class SingleplayerGameplayRegressionSuite {
                     BlockPos water = anchor.offset(index, -1, 0);
                     BlockPos placementAnchor = anchor.offset(index, 0, 1);
                     context.level.setBlock(water.below(), Blocks.STONE.defaultBlockState(), 3);
+                    context.level.setBlock(water.north(), Blocks.STONE.defaultBlockState(), 3);
+                    context.level.setBlock(water.south(), Blocks.STONE.defaultBlockState(), 3);
                     context.level.setBlock(water, Blocks.WATER.defaultBlockState(), 3);
                     context.level.setBlock(placementAnchor, Blocks.STONE.defaultBlockState(), 3);
                     fixtureBlocks.add(water.below());
+                    fixtureBlocks.add(water.north());
+                    fixtureBlocks.add(water.south());
                     fixtureBlocks.add(water);
                     fixtureBlocks.add(placementAnchor);
                 }
+                BlockPos westWall = anchor.offset(0, -1, 0);
+                BlockPos eastWall = anchor.offset(BRIDGE_LENGTH + 1, -1, 0);
+                context.level.setBlock(westWall, Blocks.STONE.defaultBlockState(), 3);
+                context.level.setBlock(eastWall, Blocks.STONE.defaultBlockState(), 3);
+                fixtureBlocks.add(westWall);
+                fixtureBlocks.add(eastWall);
             });
 
             boolean placedAll = true;
