@@ -74,7 +74,11 @@ abstract class LevelChunkSetBlockStateMixin {
 
         PendingBlockMutation mutation = this.luma$captureBeforeChunkSetBlock(serverLevel, pos, newState);
         if (mutation == null) {
-            BlockState previous = original.call(pos, newState, flags);
+            BlockState previous;
+            try (WorldMutationCaptureGuard.CaptureBoundary ignored =
+                         WorldMutationCaptureGuard.pushChunkSetBlockBoundary()) {
+                previous = original.call(pos, newState, flags);
+            }
             if (previous != null && !WorldMutationCaptureGuard.isWithinLevelSetBlockBoundary()) {
                 HistoryCaptureManager.getInstance().recordPersistentBlockMutation(serverLevel, pos);
             }

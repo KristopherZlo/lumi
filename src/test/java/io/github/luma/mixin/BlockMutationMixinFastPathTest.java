@@ -18,6 +18,13 @@ class BlockMutationMixinFastPathTest {
     void nestedChunkMutationBypassesDuplicateInterception() throws Exception {
         String source = this.source("LevelChunkSetBlockStateMixin.java");
         this.assertBefore(source, "isWithinLevelSetBlockBoundary()", "LUMA_WORLD_OPERATIONS.blocksWorldMutations");
+        assertTrue(source.contains("WorldMutationCaptureGuard.pushChunkSetBlockBoundary()"));
+    }
+
+    @Test
+    void vanillaDirectSectionMutationBypassesCaptureServices() throws Exception {
+        String source = this.source("LevelChunkSectionSetBlockStateMixin.java");
+        this.assertBefore(source, "requiresInterception()", "blocksWorldMutation(section)");
     }
 
     private void assertEligibilityBeforeStateRead(String fileName) throws Exception {

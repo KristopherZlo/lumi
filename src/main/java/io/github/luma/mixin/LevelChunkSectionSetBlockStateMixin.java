@@ -24,6 +24,9 @@ abstract class LevelChunkSectionSetBlockStateMixin {
             boolean lock,
             Operation<BlockState> original
     ) {
+        if (!LUMA_DIRECT_SECTION_CAPTURE.requiresInterception()) {
+            return original.call(localX, localY, localZ, newState, lock);
+        }
         LevelChunkSection section = (LevelChunkSection) (Object) this;
         if (LUMA_DIRECT_SECTION_CAPTURE.blocksWorldMutation(section)) {
             return section.getBlockState(localX, localY, localZ);

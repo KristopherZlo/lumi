@@ -33,6 +33,39 @@ class DirectSectionMutationCaptureServiceTest {
     }
 
     @Test
+    void bypassesDirectSectionInspectionForVanillaSystemMutations() {
+        ExternalToolMutationDetector detector = new ExternalToolMutationDetector() {
+            @Override
+            public Optional<ObservedExternalToolOperation> detectOperation() {
+                throw new AssertionError("stack detection must stay off");
+            }
+
+            @Override
+            public boolean detectionAvailable() {
+                return false;
+            }
+        };
+        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(
+                detector,
+                section -> Optional.empty()
+        );
+
+        assertFalse(service.requiresInterception());
+    }
+
+    @Test
+    void keepsDirectSectionInspectionForTrackedSources() {
+        DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(
+                Optional::empty,
+                section -> Optional.empty()
+        );
+
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(WorldMutationSource.AXIOM)) {
+            assertTrue(service.requiresInterception());
+        }
+    }
+
+    @Test
     void skipsExternalToolStackDetectionWhenSectionHasNoServerOwner() {
         AtomicBoolean inspectedStack = new AtomicBoolean(false);
         DirectSectionMutationCaptureService service = new DirectSectionMutationCaptureService(

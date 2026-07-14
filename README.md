@@ -185,7 +185,7 @@ Compare vanilla and Lumi world startup against the same normal-world seed:
 
 Both client GameTests verify the integrated server seed, then teleport the player to three distant locations and wait for each new chunk area to render. The comparison summary reports average and maximum teleport load time and render-wait ticks.
 
-Axiom custom payloads open one version-independent `AXIOM` source scope by namespace. Direct section capture stays enabled under that scope, so bulk capture remains an optimization rather than the only record of an edit.
+Axiom custom payloads open one version-independent `AXIOM` source scope by namespace. Ordinary world generation bypasses direct-section capture, while direct section capture stays enabled under an `AXIOM` scope, an active world-operation barrier, or explicitly enabled external-tool stack detection. Loaded section ownership is stored directly on each section, so bulk capture remains an optimization rather than the only record of an edit.
 
 Run the alpha gate:
 
