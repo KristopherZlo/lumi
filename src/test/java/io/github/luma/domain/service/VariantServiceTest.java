@@ -47,15 +47,14 @@ class VariantServiceTest {
         RecoveryRepository recoveryRepository = new RecoveryRepository();
         recoveryRepository.saveDraft(layout, draft(project));
 
-        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
-        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+        FakeProjectCacheInvalidator cacheInvalidator = new FakeProjectCacheInvalidator();
+        VariantService service = new VariantService((server, projectName) -> layout, cacheInvalidator);
 
         ProjectVariant variant = service.createVariant(null, "Tower", "Feature branch", "");
 
         assertEquals("feature-branch", variant.id());
         assertEquals("v0001", variant.baseVersionId());
-        assertEquals(0, captureSessionLifecycle.finalizeCalls);
-        assertEquals(1, captureSessionLifecycle.invalidateCalls);
+        assertEquals(1, cacheInvalidator.invalidateCalls);
         assertTrue(recoveryRepository.loadDraft(layout).isPresent());
         assertEquals(
                 List.of("main", "feature-branch"),
@@ -66,8 +65,8 @@ class VariantServiceTest {
     @Test
     void createVariantGeneratesUniqueIdsForDifferentNamesWithFallbackSlugs() throws IOException {
         ProjectLayout layout = this.prepareProjectLayout();
-        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
-        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+        FakeProjectCacheInvalidator cacheInvalidator = new FakeProjectCacheInvalidator();
+        VariantService service = new VariantService((server, projectName) -> layout, cacheInvalidator);
 
         ProjectVariant first = service.createVariant(null, "Tower", "!!!", "");
         ProjectVariant second = service.createVariant(null, "Tower", "$$$", "");
@@ -85,8 +84,8 @@ class VariantServiceTest {
     @Test
     void createVariantAssignsNextDefaultSwitchKey() throws IOException {
         ProjectLayout layout = this.prepareProjectLayout();
-        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
-        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+        FakeProjectCacheInvalidator cacheInvalidator = new FakeProjectCacheInvalidator();
+        VariantService service = new VariantService((server, projectName) -> layout, cacheInvalidator);
 
         ProjectVariant variant = service.createVariant(null, "Tower", "Feature", "");
 
@@ -102,8 +101,8 @@ class VariantServiceTest {
                 new ProjectVariant("deleted", "Deleted", "v0001", "v0001", false, NOW.plusSeconds(1), "key.keyboard.2")
         ));
         new HistoryTombstoneRepository().tombstoneVariant(layout, "deleted", NOW.plusSeconds(2));
-        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
-        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+        FakeProjectCacheInvalidator cacheInvalidator = new FakeProjectCacheInvalidator();
+        VariantService service = new VariantService((server, projectName) -> layout, cacheInvalidator);
 
         ProjectVariant variant = service.createVariant(null, "Tower", "Feature", "");
 
@@ -116,8 +115,8 @@ class VariantServiceTest {
         new VariantRepository().save(layout, List.of(
                 new ProjectVariant("main", "main", "v0001", "v0001", true, NOW, "key.keyboard.2")
         ));
-        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
-        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+        FakeProjectCacheInvalidator cacheInvalidator = new FakeProjectCacheInvalidator();
+        VariantService service = new VariantService((server, projectName) -> layout, cacheInvalidator);
 
         ProjectVariant variant = service.createVariant(null, "Tower", "Feature", "");
 
@@ -132,8 +131,8 @@ class VariantServiceTest {
                 new ProjectVariant("feature", "Feature", "v0001", "v0001", false, NOW, "key.keyboard.2"),
                 new ProjectVariant("review", "Review", "v0001", "v0001", false, NOW, "key.keyboard.3")
         ));
-        FakeCaptureSessionLifecycle captureSessionLifecycle = new FakeCaptureSessionLifecycle();
-        VariantService service = new VariantService((server, projectName) -> layout, captureSessionLifecycle);
+        FakeProjectCacheInvalidator cacheInvalidator = new FakeProjectCacheInvalidator();
+        VariantService service = new VariantService((server, projectName) -> layout, cacheInvalidator);
 
         service.setVariantSwitchKey(null, "Tower", "review", "key.keyboard.2");
 
@@ -206,26 +205,12 @@ class VariantServiceTest {
         return tag;
     }
 
-    private static final class FakeCaptureSessionLifecycle implements VariantService.CaptureSessionLifecycle {
+    private static final class FakeProjectCacheInvalidator implements VariantService.ProjectCacheInvalidator {
 
-        private boolean pendingChanges;
-        private int pendingChangeChecks;
-        private int finalizeCalls;
         private int invalidateCalls;
 
         @Override
-        public boolean hasPendingChanges(MinecraftServer server, String projectId) {
-            this.pendingChangeChecks += 1;
-            return this.pendingChanges;
-        }
-
-        @Override
-        public void finalizeProjectSession(MinecraftServer server, String projectId) {
-            this.finalizeCalls += 1;
-        }
-
-        @Override
-        public void invalidateProjectCache(MinecraftServer server) {
+        public void invalidate(MinecraftServer server) {
             this.invalidateCalls += 1;
         }
     }

@@ -100,7 +100,7 @@ Wooden sword hints appear under the crosshair at the GUI Scale 2 visual size; on
 
 All keybinds are remappable in Minecraft controls.
 Lumi keybinds are ignored while the Minecraft pause menu is open.
-Save or discard current unsaved work before switching branches. A rejected switch keeps that draft classified as current work instead of presenting it as interrupted recovery work.
+Save or discard current unsaved work before switching branches. Branch switching enters the operation queue before draft reconciliation, so the UI never waits on the integrated server thread; preparation rejects a non-empty draft without changing the active branch and keeps it classified as current work instead of interrupted recovery work.
 
 ### Reliability and performance
 

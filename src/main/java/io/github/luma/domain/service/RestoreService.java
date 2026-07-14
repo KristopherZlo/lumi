@@ -148,7 +148,15 @@ public final class RestoreService {
             String versionId,
             RestoreEntityTypeSelection entityTypeSelection
     ) throws IOException {
-        return this.restore(level, projectName, versionId, "", false, entityTypeSelection);
+        return this.restore(
+                level,
+                projectName,
+                versionId,
+                "",
+                false,
+                entityTypeSelection,
+                PendingDraftPolicy.ALLOW_CHECKPOINT
+        );
     }
 
     public OperationHandle restore(
@@ -157,7 +165,15 @@ public final class RestoreService {
             String versionId,
             boolean trustedImportedPackage
     ) throws IOException {
-        return this.restore(level, projectName, versionId, "", trustedImportedPackage, RestoreEntityTypeSelection.includeAll());
+        return this.restore(
+                level,
+                projectName,
+                versionId,
+                "",
+                trustedImportedPackage,
+                RestoreEntityTypeSelection.includeAll(),
+                PendingDraftPolicy.ALLOW_CHECKPOINT
+        );
     }
 
     /**
@@ -175,7 +191,15 @@ public final class RestoreService {
         if (targetVariant.headVersionId() == null || targetVariant.headVersionId().isBlank()) {
             throw new IllegalArgumentException("Variant head version is missing: " + targetVariantId);
         }
-        return this.restore(level, projectName, targetVariant.headVersionId(), targetVariant.id(), false);
+        return this.restore(
+                level,
+                projectName,
+                targetVariant.headVersionId(),
+                targetVariant.id(),
+                false,
+                RestoreEntityTypeSelection.includeAll(),
+                PendingDraftPolicy.REQUIRE_CLEAN
+        );
     }
 
     public OperationHandle restoreToVariant(
@@ -200,23 +224,14 @@ public final class RestoreService {
             String targetVariantId,
             RestoreEntityTypeSelection entityTypeSelection
     ) throws IOException {
-        return this.restore(level, projectName, versionId, targetVariantId, false, entityTypeSelection);
-    }
-
-    private OperationHandle restore(
-            ServerLevel level,
-            String projectName,
-            String versionId,
-            String targetVariantId,
-            boolean trustedImportedPackage
-    ) throws IOException {
         return this.restore(
                 level,
                 projectName,
                 versionId,
                 targetVariantId,
-                trustedImportedPackage,
-                RestoreEntityTypeSelection.includeAll()
+                false,
+                entityTypeSelection,
+                PendingDraftPolicy.ALLOW_CHECKPOINT
         );
     }
 
@@ -226,7 +241,8 @@ public final class RestoreService {
             String versionId,
             String targetVariantId,
             boolean trustedImportedPackage,
-            RestoreEntityTypeSelection entityTypeSelection
+            RestoreEntityTypeSelection entityTypeSelection,
+            PendingDraftPolicy pendingDraftPolicy
     ) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         var project = this.projectRepository.load(layout)
@@ -246,6 +262,7 @@ public final class RestoreService {
                         targetVariantId,
                         trustedImportedPackage,
                         entityTypeSelection,
+                        pendingDraftPolicy,
                         progressSink
                 )
         );
@@ -259,6 +276,7 @@ public final class RestoreService {
             String targetVariantId,
             boolean trustedImportedPackage,
             RestoreEntityTypeSelection entityTypeSelection,
+            PendingDraftPolicy pendingDraftPolicy,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         progressSink.update(OperationStage.PREPARING, 0, 0, "Preparing restore request");
@@ -306,6 +324,13 @@ public final class RestoreService {
             );
         }
         RecoveryDraft pendingDraft = reconciledDraft;
+        if (pendingDraftPolicy == PendingDraftPolicy.REQUIRE_CLEAN
+                && pendingDraft != null
+                && !pendingDraft.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Discard or save the current recovery draft before switching variants"
+            );
+        }
         LumaMod.LOGGER.info(
                 "Starting restore request for project {} to version {} on variant {}",
                 project.name(),
@@ -454,6 +479,11 @@ public final class RestoreService {
         return project.settings().safetySnapshotBeforeRestore()
                 && pendingDraft != null
                 && !pendingDraft.isEmpty();
+    }
+
+    private enum PendingDraftPolicy {
+        ALLOW_CHECKPOINT,
+        REQUIRE_CLEAN
     }
 
     public RestorePlanSummary summarizeRestorePlan(ServerLevel level, String projectName, String versionId) throws IOException {
