@@ -561,7 +561,7 @@ final class SingleplayerGameplayRegressionSuite {
             );
             context.trackedPlayerAction(() -> context.level.addFreshEntity(item));
             context.checks.check(!item.isRemoved(), "gameplay spawned item entity");
-            context.expectEntityChange(item);
+            context.trackSpawnedEntity(item);
         }
     }
 
@@ -580,21 +580,23 @@ final class SingleplayerGameplayRegressionSuite {
                 fixtureBlocks.add(anchor);
                 for (int index = 1; index <= BRIDGE_LENGTH; index++) {
                     BlockPos water = anchor.offset(index, -1, 0);
+                    BlockPos placementAnchor = anchor.offset(index, 0, 1);
                     context.level.setBlock(water.below(), Blocks.STONE.defaultBlockState(), 3);
                     context.level.setBlock(water, Blocks.WATER.defaultBlockState(), 3);
+                    context.level.setBlock(placementAnchor, Blocks.STONE.defaultBlockState(), 3);
                     fixtureBlocks.add(water.below());
                     fixtureBlocks.add(water);
+                    fixtureBlocks.add(placementAnchor);
                 }
             });
 
-            BlockPos clicked = anchor;
             boolean placedAll = true;
             for (int index = 1; index <= BRIDGE_LENGTH; index++) {
                 BlockPos expected = anchor.offset(index, 0, 0);
-                placedAll = context.playerActions.placeAgainst(clicked, Direction.EAST, Blocks.SPRUCE_PLANKS, expected)
+                placedAll = context.playerActions.placeAgainst(
+                                expected.south(), Direction.NORTH, Blocks.SPRUCE_PLANKS, expected)
                         && placedAll;
                 bridge.add(expected);
-                clicked = expected;
             }
 
             context.checks.check(placedAll, "gameplay player placed a bridge over water through gameMode useItemOn");

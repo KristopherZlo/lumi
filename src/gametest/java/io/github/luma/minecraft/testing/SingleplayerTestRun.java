@@ -1038,9 +1038,11 @@ final class SingleplayerTestRun {
         Entity entity = this.entityById(this.savedGameplayEntityId);
         this.check(entity != null && !entity.isRemoved(), "Quick rollback kept the saved gameplay entity alive");
         if (entity != null) {
+            BlockPoint restoredPosition = BlockPoint.from(entity.blockPosition());
             this.check(this.savedGameplayEntityPosition != null
-                            && this.savedGameplayEntityPosition.equals(BlockPoint.from(entity.blockPosition())),
-                    "Quick rollback restored gameplay entity position");
+                            && this.savedGameplayEntityPosition.equals(restoredPosition),
+                    "Quick rollback restored gameplay entity position expected="
+                            + this.savedGameplayEntityPosition + " actual=" + restoredPosition);
             this.check(entity.hasCustomName()
                             && "lumi-runtime-entity".equals(entity.getCustomName().getString()),
                     "Quick rollback restored gameplay entity name");
