@@ -4,6 +4,8 @@ import io.github.luma.domain.model.HistoryProtectionState;
 import io.github.luma.domain.model.HistoryProtectionStatus;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationSnapshot;
+import io.github.luma.domain.model.WorkZone;
+import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.HistoryProtectionRepository;
 import io.github.luma.storage.repository.ProjectDirtyScopeRepository;
@@ -53,6 +55,20 @@ public final class HistoryProtectionService {
 
     public boolean hasSafetyChanges(ProjectLayout layout) throws IOException {
         return this.dirtyScopeRepository.load(layout).filter(scope -> !scope.isEmpty()).isPresent();
+    }
+
+    public boolean hasSafetyChanges(ProjectLayout layout, WorkZone zone) throws IOException {
+        if (zone == null) {
+            return false;
+        }
+        return this.dirtyScopeRepository.load(layout)
+                .stream()
+                .flatMap(scope -> scope.blockSections().stream())
+                .anyMatch(section -> zone.contains(new WorkZoneCell(
+                        section.chunkX(),
+                        section.sectionY(),
+                        section.chunkZ()
+                )));
     }
 
     public void markDegraded(ProjectLayout layout, String detail) throws IOException {

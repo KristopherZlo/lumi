@@ -16,8 +16,22 @@ public record WorkZoneViewState(
         String actor,
         String focusedZoneId,
         PendingChangeSummary pendingChanges,
-        String status
+        String status,
+        boolean hasSafetyChanges
 ) {
+
+    public WorkZoneViewState(
+            BuildProject project,
+            List<ProjectVariant> variants,
+            List<ProjectVersion> versions,
+            WorkZoneState zones,
+            String actor,
+            String focusedZoneId,
+            PendingChangeSummary pendingChanges,
+            String status
+    ) {
+        this(project, variants, versions, zones, actor, focusedZoneId, pendingChanges, status, false);
+    }
 
     public WorkZoneViewState {
         variants = variants == null ? List.of() : List.copyOf(variants);
@@ -53,7 +67,12 @@ public record WorkZoneViewState(
                 snapshot.actor(),
                 snapshot.focusedZoneId(),
                 snapshot.pendingChanges(),
-                snapshot.status()
+                snapshot.status(),
+                false
         );
+    }
+
+    public boolean hasUnsavedChanges() {
+        return this.hasSafetyChanges || !this.pendingChanges.isEmpty();
     }
 }

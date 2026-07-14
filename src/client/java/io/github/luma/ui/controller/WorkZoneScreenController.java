@@ -9,6 +9,7 @@ import io.github.luma.domain.model.WorkZone;
 import io.github.luma.domain.model.WorkZoneCell;
 import io.github.luma.domain.model.WorkZoneState;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.domain.service.HistoryProtectionService;
 import io.github.luma.domain.service.RecoveryService;
 import io.github.luma.domain.service.VersionService;
 import io.github.luma.domain.service.WorkZoneService;
@@ -28,6 +29,7 @@ public final class WorkZoneScreenController {
     private final VersionService versionService = new VersionService();
     private final WorkZoneService workZoneService = new WorkZoneService();
     private final RecoveryService recoveryService = new RecoveryService();
+    private final HistoryProtectionService historyProtectionService = new HistoryProtectionService();
 
     public WorkZoneViewState load(String projectName, String status) {
         if (!this.client.hasSingleplayerServer()) {
@@ -39,6 +41,7 @@ public final class WorkZoneScreenController {
             var project = this.projectService.loadProject(server, projectName);
             WorkZoneState zones = this.workZoneService.load(layout);
             String actor = this.actor();
+            WorkZone activeZone = this.workZoneService.activeZone(layout, actor).orElse(null);
             return new WorkZoneViewState(
                     project,
                     this.projectService.loadVariants(server, projectName),
@@ -46,8 +49,9 @@ public final class WorkZoneScreenController {
                     zones,
                     actor,
                     this.focusedZoneId(zones, actor),
-                    this.pendingChanges(server, project.name(), layout, actor),
-                    status
+                    this.pendingChanges(server, project.name(), activeZone),
+                    status,
+                    this.historyProtectionService.hasSafetyChanges(layout, activeZone)
             );
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Failed to load work zones for project {}", projectName, exception);
@@ -191,10 +195,8 @@ public final class WorkZoneScreenController {
     private PendingChangeSummary pendingChanges(
             MinecraftServer server,
             String projectName,
-            ProjectLayout layout,
-            String actor
+            WorkZone activeZone
     ) throws Exception {
-        WorkZone activeZone = this.workZoneService.activeZone(layout, actor).orElse(null);
         if (activeZone == null) {
             return PendingChangeSummary.empty();
         }

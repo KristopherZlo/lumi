@@ -374,6 +374,7 @@ public final class WorkZoneScreen extends LumaScreen {
                 this.state.versions()
         );
         PendingChangeSummary pending = active ? this.state.pendingChanges() : PendingChangeSummary.empty();
+        boolean unsavedChanges = active && this.state.hasUnsavedChanges();
         FlowLayout section = LumaUi.panel(Sizing.fill(100), Sizing.content());
 
         FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
@@ -383,7 +384,7 @@ public final class WorkZoneScreen extends LumaScreen {
         copy.gap(2);
         copy.child(LumaUi.value(Component.translatable("luma.build.status_title")));
         copy.child(LumaUi.caption(Component.translatable(active
-                ? pending.isEmpty() ? "luma.build.status_clean" : "luma.build.status_dirty"
+                ? unsavedChanges ? "luma.build.status_dirty" : "luma.build.status_clean"
                 : "luma.zones.save_enter_first"
         )));
         header.child(copy);
@@ -414,7 +415,7 @@ public final class WorkZoneScreen extends LumaScreen {
         ButtonComponent save = LumaUi.primaryButton(Component.translatable("luma.zones.save_button"), button ->
                 this.openZoneSaveDialog(zone.id()));
         save.tooltip(Component.translatable("luma.zones.save_help"));
-        save.active(active && !pending.isEmpty());
+        save.active(unsavedChanges);
         actions.child(save);
 
         ButtonComponent amend = LumaUi.button(
@@ -422,7 +423,7 @@ public final class WorkZoneScreen extends LumaScreen {
                 button -> this.openZoneAmendDialog(zone.id(), activeHead)
         );
         amend.tooltip(Component.translatable("luma.action.amend_version.tooltip"));
-        amend.active(active && activeHead != null && !pending.isEmpty());
+        amend.active(activeHead != null && unsavedChanges);
         actions.child(amend);
 
         ButtonComponent changes = LumaUi.iconButton("see-changes", Component.translatable("luma.action.see_changes"), button -> this.requestCompareOverlay(
