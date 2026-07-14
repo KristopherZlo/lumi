@@ -183,7 +183,7 @@ Run the current client GameTests:
 .\gradlew.bat runClientGameTest --no-daemon
 ```
 
-This suite exercises the current screen action wiring and the pending/compare overlays, including the held-Alt view. Server GameTests retain focused regressions for falling-block entity capture and random crop ticks. Legacy mode-driven journeys that called domain services directly are intentionally excluded because they did not exercise user-accessible workflows.
+This suite exercises the core builder save/compare/restore/branch journey, current screen action wiring, and the pending/compare overlays, including the held-Alt view. Repeat only the core stability gate with `.\gradlew.bat runClientGameTest -PlumiClientGameTestSuite=core --no-daemon`; `screens` and `overlays` are the other valid focused values. Server GameTests retain focused regressions for falling-block entity capture and random crop ticks. Legacy mode-driven journeys that called domain services directly are intentionally excluded because they did not exercise user-accessible workflows.
 
 Compare vanilla and Lumi world startup against the same normal-world seed:
 

@@ -10,6 +10,9 @@ public final class LumiOverlayClientGameTests implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
+        if (!ClientGameTestSuiteSelection.includes("overlays")) {
+            return;
+        }
         try (TestSingleplayerContext singleplayer = context.worldBuilder()
                 .adjustSettings(settings -> settings.setAllowCommands(true))
                 .create()) {

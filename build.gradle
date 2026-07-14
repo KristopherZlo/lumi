@@ -345,6 +345,9 @@ def writeQuietClientRuntimeOptions = { String runDirPath ->
 tasks.named('runClientGameTest').configure {
     jvmArgs('-Dlumi.testing.enabled=true')
     jvmArgs('-Dlumi.clientLoadLog=true')
+    if (providers.gradleProperty('lumiClientGameTestSuite').isPresent()) {
+        jvmArgs("-Dlumi.client.gametest.suite=${providers.gradleProperty('lumiClientGameTestSuite').get()}")
+    }
 }
 
 ['runClient',

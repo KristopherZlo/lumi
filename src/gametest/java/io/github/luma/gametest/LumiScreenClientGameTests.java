@@ -58,6 +58,9 @@ public final class LumiScreenClientGameTests implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
+        if (!ClientGameTestSuiteSelection.includes("screens")) {
+            return;
+        }
         try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
             ClientGameTestSingleplayerSupport.prepare(singleplayer);
             this.exerciseSafeScreens(context);

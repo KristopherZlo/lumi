@@ -28,6 +28,9 @@ public final class LumiCoreHistoryClientGameTests implements FabricClientGameTes
 
     @Override
     public void runTest(ClientGameTestContext context) {
+        if (!ClientGameTestSuiteSelection.includes("core")) {
+            return;
+        }
         try (TestSingleplayerContext singleplayer = context.worldBuilder()
                 .adjustSettings(settings -> settings.setAllowCommands(true))
                 .create()) {
