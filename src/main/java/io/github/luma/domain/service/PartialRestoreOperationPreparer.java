@@ -13,12 +13,14 @@ import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.PatchWorldChanges;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RestoreEntityTypeSelection;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.debug.PartialRestoreDiagnosticsLog;
 import io.github.luma.minecraft.world.EntityApplyMode;
 import io.github.luma.minecraft.world.PreparedApplyOperation;
@@ -57,6 +59,8 @@ final class PartialRestoreOperationPreparer {
     private final PartialRestorePlanner partialRestorePlanner = new PartialRestorePlanner();
     private final PartialRestoreEntityPlanner partialRestoreEntityPlanner = new PartialRestoreEntityPlanner();
     private final PartialRestoreTargetStatePlanner targetStatePlanner = new PartialRestoreTargetStatePlanner();
+    private final DirtyScopeReconciliationService dirtyScopeReconciliationService =
+            new DirtyScopeReconciliationService();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final PreparedChunkBatchCollapser batchCollapser = new PreparedChunkBatchCollapser();
     private final RestoreCompletionCoordinator completionCoordinator = new RestoreCompletionCoordinator();
@@ -81,8 +85,36 @@ final class PartialRestoreOperationPreparer {
         List<ProjectVariant> variants = this.variantRepository.loadAll(layout);
         ProjectVersion targetVersion = this.requestResolver.resolveVersion(project, versions, variants, request.targetVersionId());
         ProjectVariant activeVariant = this.requestResolver.activeVariant(project, variants);
-        RecoveryDraft pendingDraft = this.pendingDraftProvider.freeze(level, layout, project.id().toString())
+        RecoveryDraft capturedDraft = this.pendingDraftProvider.freeze(level, layout, project.id().toString())
                 .orElse(null);
+        HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
+        ProjectDirtyScope dirtyScope = captureManager.loadProjectDirtyScope(
+                level.getServer(), project.id().toString()
+        );
+        ProjectDirtyScope selectedDirtyScope = this.selectDirtyScope(
+                dirtyScope, project, request, hardScope
+        );
+        RecoveryDraft reconciledDraft = capturedDraft;
+        if (!selectedDirtyScope.isEmpty()) {
+            ProjectVersion activeHead = versions.stream()
+                    .filter(candidate -> candidate.id().equals(activeVariant.headVersionId()))
+                    .findFirst()
+                    .orElseThrow(() -> new IOException("Active head is missing for partial dirty reconciliation"));
+            reconciledDraft = this.dirtyScopeReconciliationService.reconcileBlocks(
+                    layout,
+                    project,
+                    versions,
+                    activeHead,
+                    selectedDirtyScope,
+                    captureManager.captureProjectDirtyScope(
+                            level.getServer(), project.id().toString(), selectedDirtyScope
+                    ),
+                    capturedDraft,
+                    "Lumi safety ledger",
+                    Instant.now()
+            );
+        }
+        RecoveryDraft pendingDraft = reconciledDraft;
 
         LumaMod.LOGGER.info(
                 "Starting {} for project {} to version {} over {}",
@@ -162,6 +194,17 @@ final class PartialRestoreOperationPreparer {
                             partialDraft.draft(),
                             batches.size()
                     );
+                    ProjectDirtyScope appliedScope = this.appliedDirtyScope(
+                            dirtyScope,
+                            partialDraft.draft()
+                    );
+                    captureManager.completeProjectDirtyScopeSave(
+                            level.getServer(),
+                            project.id().toString(),
+                            dirtyScope,
+                            appliedScope,
+                            activeVariant.headVersionId()
+                    );
                 },
                 diagnosticsEnabled
         );
@@ -170,6 +213,65 @@ final class PartialRestoreOperationPreparer {
     private static boolean zoneRestoreRequest(PartialRestoreRequest request) {
         return request != null
                 && !request.metadata().getOrDefault(ProjectVersionVisibility.WORK_ZONE_ID_METADATA, "").isBlank();
+    }
+
+    ProjectDirtyScope selectDirtyScope(
+            ProjectDirtyScope dirtyScope,
+            BuildProject project,
+            PartialRestoreRequest request,
+            Predicate<BlockPoint> hardScope
+    ) {
+        Predicate<BlockPoint> included = point -> (project.tracksWholeDimension() || project.bounds().contains(point))
+                && (hardScope == null || hardScope.test(point))
+                && request.restoreMode().includes(request.bounds().contains(point));
+        return dirtyScope.split(
+                section -> this.sectionContains(section, included),
+                chunk -> request.restoreMode() == PartialRestoreMode.OUTSIDE_SELECTED_AREA
+                        || chunkIntersects(request, chunk)
+        ).selected();
+    }
+
+    private boolean sectionContains(
+            io.github.luma.domain.model.ChunkSectionPoint section,
+            Predicate<BlockPoint> included
+    ) {
+        for (int localY = 0; localY < 16; localY++) {
+            for (int localZ = 0; localZ < 16; localZ++) {
+                for (int localX = 0; localX < 16; localX++) {
+                    if (included.test(new BlockPoint(
+                            (section.chunkX() << 4) + localX,
+                            (section.sectionY() << 4) + localY,
+                            (section.chunkZ() << 4) + localZ
+                    ))) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean chunkIntersects(PartialRestoreRequest request, ChunkPoint chunk) {
+        return request.bounds().max().x() >= (chunk.x() << 4)
+                && request.bounds().min().x() <= (chunk.x() << 4) + 15
+                && request.bounds().max().z() >= (chunk.z() << 4)
+                && request.bounds().min().z() <= (chunk.z() << 4) + 15;
+    }
+
+    ProjectDirtyScope appliedDirtyScope(ProjectDirtyScope current, RecoveryDraft appliedDraft) {
+        ProjectDirtyScope applied = current.copy();
+        for (StoredBlockChange change : appliedDraft.changes()) {
+            applied.markBlockSection(io.github.luma.domain.model.ChunkSectionPoint.from(change.pos()));
+        }
+        for (StoredEntityChange change : appliedDraft.entityChanges()) {
+            if (change.oldValue() != null) {
+                applied.markEntityChunk(change.oldValue().chunk());
+            }
+            if (change.newValue() != null) {
+                applied.markEntityChunk(change.newValue().chunk());
+            }
+        }
+        return applied;
     }
 
     PartialRestorePlanSummary summarize(
