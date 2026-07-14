@@ -34,7 +34,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
 
     private static final String BASELINE_THREADS_PROPERTY = "lumi.capture.baselineThreads";
     private static final String BASELINE_LOG_CATEGORY = "capture-baseline";
-    private static final int DEFAULT_BASELINE_THREAD_LIMIT = 1;
+    private static final int DEFAULT_BASELINE_THREAD_LIMIT = 4;
     private static final int MAX_BASELINE_THREAD_LIMIT = 8;
 
     private final RecoveryRepository recoveryRepository;
@@ -485,7 +485,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
                     return Math.min(configured, MAX_BASELINE_THREAD_LIMIT);
                 }
             } catch (NumberFormatException ignored) {
-                // Invalid values fall back to the conservative single-writer default.
+                // Invalid values fall back to the bounded default.
             }
         }
 
