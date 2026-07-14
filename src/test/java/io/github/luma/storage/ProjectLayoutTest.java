@@ -18,6 +18,7 @@ class ProjectLayoutTest {
         assertEquals(Path.of("projects", "My_Project.mbp", "recovery", "draft.bin.lz4"), layout.recoveryDraftFile());
         assertEquals(Path.of("projects", "My_Project.mbp", "recovery", "last-restore-return.json"), layout.restoreReturnPointFile());
         assertEquals(Path.of("projects", "My_Project.mbp", "recovery", "operation-draft.bin.lz4"), layout.recoveryOperationDraftFile());
+        assertEquals(Path.of("projects", "My_Project.mbp", "recovery", "dirty-scope.bin"), layout.projectDirtyScopeFile());
         assertEquals(Path.of("projects", "My_Project.mbp", "cache", "content", "abc.bin.lz4"), layout.contentFile("abc"));
     }
 

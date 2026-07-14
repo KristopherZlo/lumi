@@ -150,4 +150,8 @@ public record ProjectLayout(Path root) {
     public Path recoveryOperationDraftFile() {
         return this.recoveryDir().resolve("operation-draft.bin.lz4");
     }
+
+    public Path projectDirtyScopeFile() {
+        return this.recoveryDir().resolve("dirty-scope.bin");
+    }
 }

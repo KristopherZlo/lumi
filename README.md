@@ -275,7 +275,7 @@ Hard rules:
 - Replaced or cleared compare requests interrupt their worker task; long diff passes stop cooperatively instead of consuming CPU after the UI no longer needs them.
 - Cancelled compare/preview mesh preparation interrupts the submitted worker, and stale pending overlay meshes are closed before they can retain CPU-side or GPU-side buffers.
 - Bounds arithmetic rejects reversed ranges and cannot silently overflow; a single work-zone selection edit is capped at 65,536 section cells to prevent an accidental unbounded client allocation.
-- Recovery drafts are serialized once per flush; zone save reuses that durable draft instead of rewriting the full draft before isolating its operation draft, and the operational journal retains only its newest 512 entries.
+- Recovery drafts are serialized once per flush; zone save reuses that durable draft instead of rewriting the full draft before isolating its operation draft, and the operational journal retains only its newest 512 entries. Project dirty block sections and entity chunks are coalesced in the compact `recovery/dirty-scope.bin` sidecar instead of storing per-tick payloads.
 - Repeated unchanged-draft checks reuse a cached content fingerprint until the tracked block or entity set changes.
 - Empty entity-causal lookups reuse one inactive frame, and normal mob ticks only expire a matched context instead of sweeping the whole registry.
 - Snapshot sections are encoded once per chunk and reused for content deduplication, fingerprints, and the compressed snapshot frame; existing content blobs skip redundant LZ4 compression.
