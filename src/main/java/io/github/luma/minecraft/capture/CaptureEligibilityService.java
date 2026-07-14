@@ -49,6 +49,10 @@ final class CaptureEligibilityService {
         return this.sourcePolicy.allowsSessionBootstrap(source, causalAction);
     }
 
+    boolean shouldTrackPersistentMutation(WorldMutationSource source, boolean activeGameplayChunk) {
+        return this.sourcePolicy.shouldTrackPersistentMutation(source, activeGameplayChunk);
+    }
+
     boolean allowsTrackedChunkExpansion(WorldMutationSource source) {
         return this.sourcePolicy.allowsTrackedChunkExpansion(source);
     }

@@ -90,6 +90,14 @@ class MutationSourcePolicyTest {
     }
 
     @Test
+    void unattributedSafetyTrackingRequiresAnActiveGameplayChunk() {
+        assertTrue(this.policy.shouldTrackPersistentMutation(WorldMutationSource.SYSTEM, true));
+        assertFalse(this.policy.shouldTrackPersistentMutation(WorldMutationSource.SYSTEM, false));
+        assertTrue(this.policy.shouldTrackPersistentMutation(WorldMutationSource.PLAYER, false));
+        assertFalse(this.policy.shouldTrackPersistentMutation(WorldMutationSource.RESTORE, true));
+    }
+
+    @Test
     void deferredStabilizationNeedsTheActiveRegion() {
         assertTrue(this.policy.canUseDeferredStabilization(
                 this.project,

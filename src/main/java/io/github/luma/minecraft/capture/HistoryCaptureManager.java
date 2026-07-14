@@ -36,6 +36,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -121,7 +122,7 @@ public final class HistoryCaptureManager {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
         boolean explicitRootSource = ELIGIBILITY.isExplicitRootSource(source);
         if (level == null || pos == null
-                || !shouldTrackPersistentMutation(source)) {
+                || !shouldTrackPersistentMutation(level, pos, source)) {
             return;
         }
 
@@ -165,18 +166,6 @@ public final class HistoryCaptureManager {
                 if (session == null) {
                     continue;
                 }
-                if (!session.hasBaselineChunk(chunk)
-                        && !this.persistenceCoordinator.hasPendingBaselineWrite(projectId, chunk)
-                        && !this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
-                    projectBaseline = this.captureChunkBaseline(
-                            trackedProject,
-                            level,
-                            pos,
-                            oldState,
-                            oldBlockEntity,
-                            now
-                    );
-                }
                 this.baselineCoordinator.captureSessionChunkBaseline(session, chunk, projectBaseline);
                 this.liveBlockSectionReconciliationMarker.mark(
                         trackedProject,
@@ -196,7 +185,8 @@ public final class HistoryCaptureManager {
     }
 
     public void recordPersistentBlockMutation(ServerLevel level, BlockPos pos) {
-        if (level == null || pos == null || !shouldTrackPersistentMutation(WorldMutationContext.currentSource())) {
+        if (level == null || pos == null
+                || !shouldTrackPersistentMutation(level, pos, WorldMutationContext.currentSource())) {
             return;
         }
         try {
@@ -215,9 +205,10 @@ public final class HistoryCaptureManager {
             return;
         }
         try {
+            io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
             Map<TrackedProject, LinkedHashSet<ChunkSectionPoint>> sectionsByProject = new LinkedHashMap<>();
             for (BlockPos pos : positions) {
-                if (pos == null) {
+                if (pos == null || !shouldTrackPersistentMutation(level, pos, source)) {
                     continue;
                 }
                 ChunkSectionPoint section = ChunkSectionPoint.from(io.github.luma.domain.model.BlockPoint.from(pos));
@@ -1721,8 +1712,21 @@ public final class HistoryCaptureManager {
 
     static boolean shouldTrackPersistentMutation(io.github.luma.domain.model.WorldMutationSource source) {
         return !WorldMutationContext.captureSuppressed()
-                && source != null
-                && source != io.github.luma.domain.model.WorldMutationSource.RESTORE;
+                && ELIGIBILITY.shouldTrackPersistentMutation(source, true);
+    }
+
+    private static boolean shouldTrackPersistentMutation(
+            ServerLevel level,
+            BlockPos pos,
+            io.github.luma.domain.model.WorldMutationSource source
+    ) {
+        if (WorldMutationContext.captureSuppressed() || level == null || pos == null) {
+            return false;
+        }
+        boolean activeGameplayChunk = source != io.github.luma.domain.model.WorldMutationSource.SYSTEM
+                || (level.getServer().isSameThread()
+                    && level.getChunkSource().isPositionTicking(ChunkPos.asLong(pos)));
+        return ELIGIBILITY.shouldTrackPersistentMutation(source, activeGameplayChunk);
     }
 
     public static boolean allowsAutomaticProjectCreation(io.github.luma.domain.model.WorldMutationSource source) {

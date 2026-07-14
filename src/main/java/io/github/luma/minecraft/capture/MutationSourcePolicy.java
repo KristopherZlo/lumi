@@ -56,6 +56,12 @@ final class MutationSourcePolicy {
         return this.isExplicitRootSource(source) || this.isCausalSecondarySource(source, causalAction);
     }
 
+    boolean shouldTrackPersistentMutation(WorldMutationSource source, boolean activeGameplayChunk) {
+        return source != null
+                && source != WorldMutationSource.RESTORE
+                && (source != WorldMutationSource.SYSTEM || activeGameplayChunk);
+    }
+
     boolean allowsTrackedChunkExpansion(WorldMutationSource source) {
         return source != null && TRACKED_CHUNK_EXPANSION_SOURCES.contains(source);
     }
