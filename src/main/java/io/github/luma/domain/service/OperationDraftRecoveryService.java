@@ -6,6 +6,8 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StoredChangeAccumulator;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.RecoveryRepository;
+import io.github.luma.storage.repository.ProjectDirtyScopeRepository;
+import io.github.luma.storage.repository.VariantRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Objects;
@@ -17,13 +19,25 @@ import java.util.Optional;
 public final class OperationDraftRecoveryService {
 
     private final RecoveryRepository recoveryRepository;
+    private final ProjectDirtyScopeRepository dirtyScopeRepository;
+    private final VariantRepository variantRepository;
 
     public OperationDraftRecoveryService() {
-        this(new RecoveryRepository());
+        this(new RecoveryRepository(), new ProjectDirtyScopeRepository(), new VariantRepository());
     }
 
     OperationDraftRecoveryService(RecoveryRepository recoveryRepository) {
+        this(recoveryRepository, new ProjectDirtyScopeRepository(), new VariantRepository());
+    }
+
+    OperationDraftRecoveryService(
+            RecoveryRepository recoveryRepository,
+            ProjectDirtyScopeRepository dirtyScopeRepository,
+            VariantRepository variantRepository
+    ) {
         this.recoveryRepository = Objects.requireNonNull(recoveryRepository, "recoveryRepository");
+        this.dirtyScopeRepository = Objects.requireNonNull(dirtyScopeRepository, "dirtyScopeRepository");
+        this.variantRepository = Objects.requireNonNull(variantRepository, "variantRepository");
     }
 
     public Optional<RecoveryDraft> restoreInterruptedOperationDraft(
@@ -43,6 +57,15 @@ public final class OperationDraftRecoveryService {
                     "Keeping operation draft for project {} hidden because it belongs to project id {}",
                     project.name(),
                     pending.projectId()
+            );
+            return Optional.empty();
+        }
+        if (this.alreadyPublished(layout, project, pending)) {
+            this.recoveryRepository.deleteOperationDraft(layout);
+            LumaMod.LOGGER.warn(
+                    "Discarded stale operation draft for project {} after its head advanced from {}",
+                    project.name(),
+                    pending.baseVersionId()
             );
             return Optional.empty();
         }
@@ -70,6 +93,20 @@ public final class OperationDraftRecoveryService {
                 draft.totalChangeCount()
         );
         return Optional.of(draft);
+    }
+
+    private boolean alreadyPublished(ProjectLayout layout, BuildProject project, RecoveryDraft operationDraft) throws IOException {
+        var dirtyScope = this.dirtyScopeRepository.load(layout).orElse(null);
+        if (dirtyScope == null
+                || !dirtyScope.projectId().equals(operationDraft.projectId())
+                || !dirtyScope.variantId().equals(operationDraft.variantId())
+                || !dirtyScope.baseVersionId().equals(operationDraft.baseVersionId())) {
+            return false;
+        }
+        return this.variantRepository.loadAll(layout).stream()
+                .filter(variant -> variant.id().equals(project.activeVariantId()))
+                .map(io.github.luma.domain.model.ProjectVariant::headVersionId)
+                .anyMatch(head -> !head.equals(operationDraft.baseVersionId()));
     }
 
     private Optional<RecoveryDraft> mergeCompatibleDrafts(

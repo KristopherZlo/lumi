@@ -58,7 +58,30 @@ final class ProjectDirtyScopeManager {
     ProjectDirtyScope loadDurable(TrackedProject project) throws IOException {
         String projectId = project.project().id().toString();
         this.persistenceCoordinator.drainDirtyScopeFlushes(projectId, project.project().name());
-        return this.repository.load(project.layout()).orElseGet(() -> this.snapshot(project));
+        ProjectDirtyScope durable = this.repository.load(project.layout()).orElseGet(() -> this.snapshot(project));
+        ProjectDirtyScope expectedBase = this.newScope(project);
+        if (!durable.projectId().equals(expectedBase.projectId())) {
+            throw new IOException("Dirty scope belongs to another project");
+        }
+        if (!sameBase(durable, expectedBase)) {
+            durable = new ProjectDirtyScope(
+                    expectedBase.projectId(),
+                    expectedBase.variantId(),
+                    expectedBase.baseVersionId(),
+                    durable.blockSections(),
+                    durable.entityChunks()
+            );
+            this.repository.save(project.layout(), durable);
+        }
+        synchronized (this) {
+            this.scopes.put(projectId, new ScopeEntry(
+                    projectId,
+                    project.project().name(),
+                    project.layout(),
+                    durable.copy()
+            ));
+        }
+        return durable;
     }
 
     void clear(TrackedProject project) throws IOException {

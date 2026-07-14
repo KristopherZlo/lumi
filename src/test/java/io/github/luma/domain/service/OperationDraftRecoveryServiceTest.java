@@ -4,12 +4,16 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ProjectSettings;
+import io.github.luma.domain.model.ProjectDirtyScope;
+import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.RecoveryRepository;
+import io.github.luma.storage.repository.ProjectDirtyScopeRepository;
+import io.github.luma.storage.repository.VariantRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -134,6 +138,26 @@ class OperationDraftRecoveryServiceTest {
 
         assertTrue(restored.isEmpty());
         assertTrue(Files.exists(layout.recoveryOperationDraftFile()));
+        assertTrue(this.repository.loadDraft(layout).isEmpty());
+    }
+
+    @Test
+    void discardsOperationDraftPublishedBeforeCrashWhenDirtyScopeStillHasOldBase() throws Exception {
+        ProjectLayout layout = ProjectLayout.of(this.tempDir, "Tower");
+        BuildProject project = project();
+        this.repository.saveOperationDraft(layout, draft(
+                project.id().toString(), "main", "v0001",
+                List.of(change(1, "minecraft:stone", "minecraft:gold_block")), NOW
+        ));
+        ProjectDirtyScope scope = ProjectDirtyScope.empty(project.id().toString(), "main", "v0001");
+        scope.markBlockSection(new io.github.luma.domain.model.ChunkSectionPoint(0, 0, 4));
+        new ProjectDirtyScopeRepository().save(layout, scope);
+        new VariantRepository().save(layout, List.of(ProjectVariant.main("v0002", NOW.plusSeconds(1))));
+
+        var restored = this.service.restoreInterruptedOperationDraft(layout, project);
+
+        assertTrue(restored.isEmpty());
+        assertFalse(Files.exists(layout.recoveryOperationDraftFile()));
         assertTrue(this.repository.loadDraft(layout).isEmpty());
     }
 

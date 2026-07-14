@@ -111,6 +111,36 @@ class ProjectDirtyScopeManagerTest {
         }
     }
 
+    @Test
+    void restartRebasesPublishedDirtyScopeWithoutDroppingItsSections() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        TrackedProject oldHead = trackedProject(layout);
+        ProjectDirtyScope stored = ProjectDirtyScope.empty(
+                oldHead.project().id().toString(), "main", "v0001"
+        );
+        ChunkSectionPoint section = new ChunkSectionPoint(7, 8, 9);
+        stored.markBlockSection(section);
+        ProjectDirtyScopeRepository repository = new ProjectDirtyScopeRepository();
+        repository.save(layout, stored);
+        TrackedProject publishedHead = new TrackedProject(
+                layout,
+                oldHead.project(),
+                List.of(ProjectVariant.main("v0002", Instant.parse("2026-07-14T10:01:00Z")))
+        );
+
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(), new BaselineChunkRepository(), repository,
+                Executors.newSingleThreadExecutor(), Executors.newSingleThreadExecutor()
+        )) {
+            ProjectDirtyScope durable = new ProjectDirtyScopeManager(coordinator, repository)
+                    .loadDurable(publishedHead);
+
+            assertEquals("v0002", durable.baseVersionId());
+            assertEquals(List.of(section), durable.blockSections().stream().toList());
+            assertEquals("v0002", repository.load(layout).orElseThrow().baseVersionId());
+        }
+    }
+
     private static TrackedProject trackedProject(ProjectLayout layout) {
         Instant now = Instant.parse("2026-07-14T10:00:00Z");
         BuildProject project = BuildProject.createWorldWorkspace("World", "minecraft:overworld", now);
