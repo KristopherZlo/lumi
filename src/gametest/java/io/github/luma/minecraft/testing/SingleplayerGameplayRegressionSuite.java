@@ -150,6 +150,7 @@ final class SingleplayerGameplayRegressionSuite {
         private final String actor;
         private final GameplayChecks checks;
         private final SingleplayerPlayerActionDriver playerActions;
+        private final Map<BlockPoint, BlockState> initialBlockStates = new LinkedHashMap<>();
         private final Set<BlockPoint> expectedDraftBlocks = new LinkedHashSet<>();
         private final Set<BlockPoint> unexpectedDraftBlocks = new LinkedHashSet<>();
         private final Map<BlockPoint, Map<String, String>> expectedDraftProperties = new LinkedHashMap<>();
@@ -175,6 +176,9 @@ final class SingleplayerGameplayRegressionSuite {
             this.actor = actor;
             this.checks = checks;
             this.playerActions = new SingleplayerPlayerActionDriver(level, player);
+            for (BlockPos pos : BlockPos.betweenClosed(volume.min(), volume.max())) {
+                this.initialBlockStates.put(BlockPoint.from(pos), level.getBlockState(pos));
+            }
         }
 
         private void trackedPlayerAction(Runnable runnable) {
@@ -192,8 +196,16 @@ final class SingleplayerGameplayRegressionSuite {
             }
         }
 
-        private void expectDraftBlock(BlockPos pos) {
-            this.expectedDraftBlocks.add(BlockPoint.from(pos));
+        private boolean expectDraftBlock(BlockPos pos) {
+            BlockPoint point = BlockPoint.from(pos);
+            BlockState initialState = this.initialBlockStates.get(point);
+            if (initialState != null && initialState.equals(this.level.getBlockState(pos))) {
+                this.expectedDraftBlocks.remove(point);
+                this.expectedDraftProperties.remove(point);
+                return false;
+            }
+            this.expectedDraftBlocks.add(point);
+            return true;
         }
 
         private void expectNoDraftBlock(BlockPos pos) {
@@ -201,7 +213,9 @@ final class SingleplayerGameplayRegressionSuite {
         }
 
         private void expectDraftProperty(BlockPos pos, String propertyName, String propertyValue) {
-            this.expectDraftBlock(pos);
+            if (!this.expectDraftBlock(pos)) {
+                return;
+            }
             this.expectedDraftProperties
                     .computeIfAbsent(BlockPoint.from(pos), ignored -> new LinkedHashMap<>())
                     .put(propertyName, propertyValue);

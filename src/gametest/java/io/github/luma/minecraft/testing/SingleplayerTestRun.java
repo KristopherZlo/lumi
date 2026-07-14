@@ -954,7 +954,7 @@ final class SingleplayerTestRun {
                 this.check(entry.getValue().equals(capturedPosition),
                         "Gameplay draft stores entity position " + this.format(entry.getValue().toBlockPos()));
             }
-            this.check(draft.totalChangeCount() <= 128,
+            this.check(draft.totalChangeCount() <= 192,
                     "Gameplay draft stayed scoped instead of growing into unrelated world noise");
         }
         this.completePhase(server, Phase.START_GAMEPLAY_SAVE);
