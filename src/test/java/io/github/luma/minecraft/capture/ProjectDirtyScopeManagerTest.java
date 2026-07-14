@@ -87,6 +87,30 @@ class ProjectDirtyScopeManagerTest {
         }
     }
 
+    @Test
+    void verifiedApplyCanCreateScopeFromEmptyLedger() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        TrackedProject project = trackedProject(layout);
+        ProjectDirtyScope empty = ProjectDirtyScope.empty(
+                project.project().id().toString(), "main", "v0001"
+        );
+        ProjectDirtyScope applied = empty.copy();
+        ChunkSectionPoint section = new ChunkSectionPoint(1, 2, 3);
+        applied.markBlockSection(section);
+        ProjectDirtyScopeRepository repository = new ProjectDirtyScopeRepository();
+
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(), new BaselineChunkRepository(), repository,
+                Executors.newSingleThreadExecutor(), Executors.newSingleThreadExecutor()
+        )) {
+            ProjectDirtyScopeManager manager = new ProjectDirtyScopeManager(coordinator, repository);
+
+            manager.replaceAfterCommit(project, empty, applied, "v0001");
+
+            assertEquals(List.of(section), repository.load(layout).orElseThrow().blockSections().stream().toList());
+        }
+    }
+
     private static TrackedProject trackedProject(ProjectLayout layout) {
         Instant now = Instant.parse("2026-07-14T10:00:00Z");
         BuildProject project = BuildProject.createWorldWorkspace("World", "minecraft:overworld", now);

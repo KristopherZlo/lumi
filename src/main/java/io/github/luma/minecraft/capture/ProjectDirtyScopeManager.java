@@ -81,7 +81,8 @@ final class ProjectDirtyScopeManager {
         String projectId = project.project().id().toString();
         this.persistenceCoordinator.drainDirtyScopeFlushes(projectId, project.project().name());
         ProjectDirtyScope durable = this.repository.load(project.layout()).orElse(null);
-        if (durable == null || !sameScope(durable, expectedScope)) {
+        boolean expectedEmptyScope = expectedScope.isEmpty() && (durable == null || durable.isEmpty());
+        if (!expectedEmptyScope && (durable == null || !sameScope(durable, expectedScope))) {
             throw new IOException("Durable dirty scope changed while save was publishing");
         }
 
