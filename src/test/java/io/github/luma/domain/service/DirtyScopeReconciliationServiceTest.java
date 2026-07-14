@@ -97,6 +97,25 @@ class DirtyScopeReconciliationServiceTest {
         assertEquals("minecraft:item_frame", draft.entityChanges().getFirst().newValue().entityType());
     }
 
+    @Test
+    void acceptsForkHeadWhoseVersionWasCreatedOnParentVariant() throws Exception {
+        BuildProject project = project();
+        ProjectVersion inheritedHead = head(project);
+        ProjectDirtyScope scope = ProjectDirtyScope.empty(project.id().toString(), "feature", inheritedHead.id());
+        scope.markBlockSection(new ChunkSectionPoint(0, 0, 4));
+        DirtyScopeReconciliationService service = new DirtyScopeReconciliationService(
+                (layout, ignoredProject, versions, target, positions) -> states(positions, "minecraft:stone")
+        );
+
+        var draft = service.reconcileBlocks(
+                new ProjectLayout(this.tempDir), project, List.of(inheritedHead), inheritedHead, scope,
+                List.of(liveChunk("minecraft:gold_block")), null, "Lumi safety ledger", NOW
+        );
+
+        assertEquals("feature", draft.variantId());
+        assertEquals(inheritedHead.id(), draft.baseVersionId());
+    }
+
     private static ProjectDirtyScope dirty(BuildProject project, ProjectVersion head) {
         ProjectDirtyScope scope = ProjectDirtyScope.empty(project.id().toString(), "main", head.id());
         scope.markBlockSection(new ChunkSectionPoint(0, 0, 4));

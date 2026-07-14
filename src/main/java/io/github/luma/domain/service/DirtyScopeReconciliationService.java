@@ -214,8 +214,7 @@ final class DirtyScopeReconciliationService {
             throw new IllegalArgumentException("Dirty reconciliation requires project, head, and scope");
         }
         if (!project.id().toString().equals(dirtyScope.projectId())
-                || !head.id().equals(dirtyScope.baseVersionId())
-                || !head.variantId().equals(dirtyScope.variantId())) {
+                || !head.id().equals(dirtyScope.baseVersionId())) {
             throw new IllegalStateException("Dirty scope does not match the active saved head");
         }
         if (pendingDraft != null
