@@ -306,7 +306,7 @@ Hard rules:
 - Preview pixel cropping, PNG encoding, request cleanup, and version metadata updates run on the low-priority preview worker instead of the render/client thread.
 - Compare overlays build geometry in the cancellable background worker above 2,048 changed blocks, reject stale worker results after show/refresh/clear transitions, and skip rebuilding when refreshed content is unchanged.
 - World-apply no-op pruning reuses its first live-state scan instead of decoding and comparing every target block twice.
-- Shutdown fully drains dirty-chunk stabilization, and restore verification retains original targets even when no-op pruning skips their initial write while scanning those targets incrementally within the current tick deadline.
+- Shutdown fully drains dirty-chunk stabilization, and restore verification retains original targets even when no-op pruning skips their initial write while scanning those targets incrementally within the current tick deadline. Mechanism reconciliation expands a complete 4,096-block section only for volatile callback-suppressed states; containers and ordinary signal sources keep a bounded changed-position plus six-neighbor scope.
 - Snapshot and patch storage no longer inserts fixed sleeps between chunks; background thread priority and cooperative cancellation control contention without slowing completed work.
 - Restore, recovery, merge, and rollback replay must not capture themselves as new user edits.
 - Restore, recovery, merge, and quick rollback verify final target state before reporting success. A mismatch gets one repair pass followed by a fresh read-back; a remaining mismatch fails the operation. Saved history and recovery are the return path.

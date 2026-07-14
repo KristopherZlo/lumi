@@ -459,6 +459,10 @@ public final class WorldChangeBatchPreparer {
             BlockPos pos = change.placement().pos();
             builder.addMechanismPosition(pos);
             builder.addSignalHalo(pos);
+            if (MECHANISM_STATE_POLICY.shouldSuppressReplayCallbacks(sourceState)
+                    || MECHANISM_STATE_POLICY.shouldSuppressReplayCallbacks(targetState)) {
+                builder.addMechanismSection(pos);
+            }
             MECHANISM_STATE_POLICY.attachedNeighbor(pos, sourceState).ifPresent(builder::addContextPosition);
             MECHANISM_STATE_POLICY.attachedNeighbor(pos, targetState).ifPresent(builder::addContextPosition);
         }

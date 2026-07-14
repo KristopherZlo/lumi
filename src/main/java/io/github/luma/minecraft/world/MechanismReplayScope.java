@@ -44,6 +44,13 @@ public record MechanismReplayScope(
                 return this;
             }
             this.addContextPosition(pos);
+            return this;
+        }
+
+        public Builder addMechanismSection(BlockPos pos) {
+            if (pos == null) {
+                return this;
+            }
             ChunkSectionPoint section = ChunkSectionPoint.from(BlockPoint.from(pos));
             this.sections.putIfAbsent(sectionKey(section), section);
             return this;

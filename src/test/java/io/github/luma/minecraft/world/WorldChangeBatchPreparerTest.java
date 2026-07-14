@@ -508,7 +508,33 @@ class WorldChangeBatchPreparerTest {
         assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(1, 64, 3)));
         assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(2, 64, 4)));
         assertTrue(analyzed.mechanismReplayScope().positions().contains(new BlockPoint(2, 64, 2)));
-        assertTrue(analyzed.mechanismReplayScope().sections().contains(new ChunkSectionPoint(0, 0, 4)));
+        assertTrue(analyzed.mechanismReplayScope().sections().isEmpty());
+    }
+
+    @Test
+    void analyzedPrepareKeepsContainerNbtReconciliationBounded() throws Exception {
+        BlockPoint pos = new BlockPoint(2, 64, 3);
+        CompoundTag oldTag = blockEntityTag("minecraft:barrel");
+        oldTag.putInt("value", 1);
+        CompoundTag newTag = blockEntityTag("minecraft:barrel");
+        newTag.putInt("value", 2);
+
+        PreparedWorldChangeBatches analyzed = this.preparer.prepareAnalyzed(
+                null,
+                List.of(new StoredBlockChange(
+                        pos,
+                        new StatePayload(stateTag(Blocks.BARREL.defaultBlockState()), oldTag),
+                        new StatePayload(stateTag(Blocks.BARREL.defaultBlockState()), newTag)
+                )),
+                List.of(),
+                true,
+                NO_OP,
+                EntityApplyMode.DELTA
+        );
+
+        assertEquals(7, analyzed.mechanismReplayScope().positions().size());
+        assertTrue(analyzed.mechanismReplayScope().positions().contains(pos));
+        assertTrue(analyzed.mechanismReplayScope().sections().isEmpty());
     }
 
     @Test
