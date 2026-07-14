@@ -11,6 +11,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class WorldMutationContextTest {
 
     @Test
+    void causalActionRequiresAnAuthorizedActionIdentity() {
+        assertFalse(WorldMutationContext.hasCausalAction());
+
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushPlayerSource(
+                WorldMutationSource.PLAYER,
+                "builder",
+                true
+        )) {
+            assertTrue(WorldMutationContext.hasCausalAction());
+        }
+
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(
+                WorldMutationSource.EXPLOSION,
+                "builder",
+                "action-1",
+                false
+        )) {
+            assertFalse(WorldMutationContext.hasCausalAction());
+        }
+    }
+
+    @Test
     void externalSourcePreservesToolActorAndActionId() {
         WorldMutationContext.pushExternalSource(WorldMutationSource.WORLDEDIT, "worldedit:builder", "action-1", true);
         try {

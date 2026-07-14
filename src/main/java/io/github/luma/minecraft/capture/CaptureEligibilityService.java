@@ -45,12 +45,20 @@ final class CaptureEligibilityService {
         return this.sourcePolicy.allowsSessionBootstrap(source);
     }
 
+    boolean allowsSessionBootstrap(WorldMutationSource source, boolean causalAction) {
+        return this.sourcePolicy.allowsSessionBootstrap(source, causalAction);
+    }
+
     boolean allowsTrackedChunkExpansion(WorldMutationSource source) {
         return this.sourcePolicy.allowsTrackedChunkExpansion(source);
     }
 
-    boolean allowsTrackedChunkExpansion(WorldMutationSource source, boolean activeSessionRegion) {
-        return this.sourcePolicy.allowsTrackedChunkExpansion(source, activeSessionRegion);
+    boolean allowsTrackedChunkExpansion(
+            WorldMutationSource source,
+            boolean activeSessionRegion,
+            boolean causalAction
+    ) {
+        return this.sourcePolicy.allowsTrackedChunkExpansion(source, activeSessionRegion, causalAction);
     }
 
     boolean requiresActiveRegionMembership(WorldMutationSource source) {
@@ -72,22 +80,30 @@ final class CaptureEligibilityService {
     boolean canUseDeferredStabilization(
             BuildProject project,
             WorldMutationSource source,
-            boolean activeSessionRegion
+            boolean activeSessionRegion,
+            boolean causalAction
     ) {
-        return this.sourcePolicy.canUseDeferredStabilization(project, source, activeSessionRegion);
+        return this.sourcePolicy.canUseDeferredStabilization(
+                project,
+                source,
+                activeSessionRegion,
+                causalAction
+        );
     }
 
     boolean canInspectBlockMutationPayload(
             BuildProject project,
             WorldMutationSource source,
             boolean hasActiveSession,
-            boolean activeSessionRegion
+            boolean activeSessionRegion,
+            boolean causalAction
     ) {
         return this.sourcePolicy.canInspectBlockMutationPayload(
                 project,
                 source,
                 hasActiveSession,
-                activeSessionRegion
+                activeSessionRegion,
+                causalAction
         );
     }
 

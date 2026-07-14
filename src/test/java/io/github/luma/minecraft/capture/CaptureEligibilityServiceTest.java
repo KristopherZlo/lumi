@@ -31,17 +31,20 @@ class CaptureEligibilityServiceTest {
                 project,
                 WorldMutationSource.PLAYER,
                 false,
+                false,
                 false
         ));
         assertTrue(this.eligibility.canInspectBlockMutationPayload(
                 project,
                 WorldMutationSource.GROWTH,
                 true,
-                true
+                true,
+                false
         ));
         assertFalse(this.eligibility.canInspectBlockMutationPayload(
                 project,
                 WorldMutationSource.GROWTH,
+                false,
                 false,
                 false
         ));

@@ -31,13 +31,15 @@ final class BlockMutationCaptureGate {
             WorldMutationSource source,
             BlockPos pos,
             boolean hasActiveSession,
-            boolean activeSessionRegion
+            boolean activeSessionRegion,
+            boolean causalAction
     ) {
         if (this.eligibility.canInspectBlockMutationPayload(
                 trackedProject.project(),
                 source,
                 hasActiveSession,
-                activeSessionRegion
+                activeSessionRegion,
+                causalAction
         )) {
             return true;
         }

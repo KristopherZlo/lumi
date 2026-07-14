@@ -38,6 +38,11 @@ public final class WorldMutationContext {
         return currentFrame().survivalMode();
     }
 
+    public static boolean hasCausalAction() {
+        Frame frame = currentFrame();
+        return frame.hasAction() && frame.accessAllowed();
+    }
+
     public static boolean captureSuppressed() {
         return CAPTURE_SUPPRESSION_DEPTH.get() > 0;
     }

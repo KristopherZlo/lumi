@@ -49,16 +49,25 @@ final class MutationSourcePolicy {
     }
 
     boolean allowsSessionBootstrap(WorldMutationSource source) {
-        return this.isExplicitRootSource(source);
+        return this.allowsSessionBootstrap(source, false);
+    }
+
+    boolean allowsSessionBootstrap(WorldMutationSource source, boolean causalAction) {
+        return this.isExplicitRootSource(source) || this.isCausalSecondarySource(source, causalAction);
     }
 
     boolean allowsTrackedChunkExpansion(WorldMutationSource source) {
         return source != null && TRACKED_CHUNK_EXPANSION_SOURCES.contains(source);
     }
 
-    boolean allowsTrackedChunkExpansion(WorldMutationSource source, boolean activeSessionRegion) {
+    boolean allowsTrackedChunkExpansion(
+            WorldMutationSource source,
+            boolean activeSessionRegion,
+            boolean causalAction
+    ) {
         return this.allowsTrackedChunkExpansion(source)
-                || (activeSessionRegion && this.requiresActiveRegionMembership(source));
+                || (activeSessionRegion && this.requiresActiveRegionMembership(source))
+                || this.isCausalSecondarySource(source, causalAction);
     }
 
     boolean requiresActiveRegionMembership(WorldMutationSource source) {
@@ -86,26 +95,31 @@ final class MutationSourcePolicy {
     boolean canUseDeferredStabilization(
             BuildProject project,
             WorldMutationSource source,
-            boolean activeSessionRegion
+            boolean activeSessionRegion,
+            boolean causalAction
     ) {
         return this.usesDeferredStabilization(project, source)
-                && activeSessionRegion;
+                && (activeSessionRegion || this.isCausalSecondarySource(source, causalAction));
     }
 
     boolean canInspectBlockMutationPayload(
             BuildProject project,
             WorldMutationSource source,
             boolean hasActiveSession,
-            boolean activeSessionRegion
+            boolean activeSessionRegion,
+            boolean causalAction
     ) {
         if (source == null) {
             return false;
+        }
+        if (this.isCausalSecondarySource(source, causalAction)) {
+            return true;
         }
         if (hasActiveSession && activeSessionRegion) {
             return true;
         }
         if (this.usesDeferredStabilization(project, source)) {
-            return this.canUseDeferredStabilization(project, source, activeSessionRegion);
+            return this.canUseDeferredStabilization(project, source, activeSessionRegion, false);
         }
         if (!hasActiveSession) {
             return this.allowsSessionBootstrap(source);
@@ -114,6 +128,13 @@ final class MutationSourcePolicy {
             return false;
         }
         return this.isExplicitRootSource(source);
+    }
+
+    private boolean isCausalSecondarySource(WorldMutationSource source, boolean causalAction) {
+        return causalAction
+                && source != null
+                && source != WorldMutationSource.RESTORE
+                && source != WorldMutationSource.SYSTEM;
     }
 
     String defaultActor(WorldMutationSource source) {

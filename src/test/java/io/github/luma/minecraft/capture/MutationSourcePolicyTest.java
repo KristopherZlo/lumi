@@ -31,7 +31,7 @@ class MutationSourcePolicyTest {
             if (source == WorldMutationSource.RESTORE || source == WorldMutationSource.SYSTEM) {
                 continue;
             }
-            assertTrue(this.policy.canInspectBlockMutationPayload(this.project, source, true, true), source.name());
+            assertTrue(this.policy.canInspectBlockMutationPayload(this.project, source, true, true, false), source.name());
         }
     }
 
@@ -41,20 +41,52 @@ class MutationSourcePolicyTest {
                 this.project,
                 WorldMutationSource.EXPLOSION,
                 true,
+                false,
                 false
         ));
         assertFalse(this.policy.canInspectBlockMutationPayload(
                 this.project,
                 WorldMutationSource.FLUID,
                 true,
+                false,
                 false
         ));
         assertTrue(this.policy.canInspectBlockMutationPayload(
                 this.project,
                 WorldMutationSource.PLAYER,
                 true,
+                false,
                 false
         ));
+    }
+
+    @Test
+    void causalSecondarySourcesBootstrapAndEscapeTheActiveRegion() {
+        assertTrue(this.policy.allowsSessionBootstrap(WorldMutationSource.EXPLOSION, true));
+        assertTrue(this.policy.canInspectBlockMutationPayload(
+                this.project,
+                WorldMutationSource.EXPLOSION,
+                false,
+                false,
+                true
+        ));
+        assertTrue(this.policy.allowsTrackedChunkExpansion(
+                WorldMutationSource.PISTON,
+                false,
+                true
+        ));
+        assertTrue(this.policy.canUseDeferredStabilization(
+                this.project,
+                WorldMutationSource.BLOCK_UPDATE,
+                false,
+                true
+        ));
+    }
+
+    @Test
+    void causalFlagNeverEnablesInternalSources() {
+        assertFalse(this.policy.allowsSessionBootstrap(WorldMutationSource.RESTORE, true));
+        assertFalse(this.policy.allowsSessionBootstrap(WorldMutationSource.SYSTEM, true));
     }
 
     @Test
@@ -62,11 +94,13 @@ class MutationSourcePolicyTest {
         assertTrue(this.policy.canUseDeferredStabilization(
                 this.project,
                 WorldMutationSource.BLOCK_UPDATE,
-                true
+                true,
+                false
         ));
         assertFalse(this.policy.canUseDeferredStabilization(
                 this.project,
                 WorldMutationSource.BLOCK_UPDATE,
+                false,
                 false
         ));
     }

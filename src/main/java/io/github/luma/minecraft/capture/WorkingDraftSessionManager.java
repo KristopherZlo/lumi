@@ -118,6 +118,15 @@ final class WorkingDraftSessionManager {
             WorldMutationSource source,
             Instant now
     ) throws IOException {
+        return this.getOrCreate(trackedProject, source, defaultActor(source), now);
+    }
+
+    TrackedChangeBuffer getOrCreate(
+            TrackedProject trackedProject,
+            WorldMutationSource source,
+            String actor,
+            Instant now
+    ) throws IOException {
         String projectId = trackedProject.project().id().toString();
         TrackedChangeBuffer existing = this.sessionRegistry.buffer(projectId);
         CaptureSessionDiagnostics diagnostics = this.diagnosticsForSession(projectId);
@@ -146,7 +155,7 @@ final class WorkingDraftSessionManager {
                         projectId,
                         activeVariant.id(),
                         activeVariant.headVersionId(),
-                        defaultActor(source),
+                        actor == null || actor.isBlank() ? defaultActor(source) : actor,
                         source,
                         now
                 ));

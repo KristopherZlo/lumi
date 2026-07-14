@@ -251,6 +251,7 @@ public final class HistoryCaptureManager {
                 CaptureSessionState existingSession = this.workingDrafts.session(projectId);
                 ChunkPoint chunk = ChunkPoint.from(pos);
                 boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
+                boolean causalAction = this.hasActiveCausalAction(projectId);
                 boolean hiddenReconciliation = this.hiddenReconciliation(existingSession, chunk, source);
                 boolean usesDeferredStabilization = ELIGIBILITY.usesDeferredStabilization(
                         trackedProject.project(),
@@ -261,7 +262,8 @@ public final class HistoryCaptureManager {
                         source,
                         pos,
                         existingSession != null,
-                        activeSessionRegion
+                        activeSessionRegion,
+                        causalAction
                 )) {
                     continue;
                 }
@@ -289,7 +291,8 @@ public final class HistoryCaptureManager {
                         && !ELIGIBILITY.canUseDeferredStabilization(
                                 trackedProject.project(),
                                 source,
-                                activeSessionRegion
+                                activeSessionRegion,
+                                causalAction
                         )) {
                     this.diagnosticsLogger.logSkippedCapture(
                             trackedProject,
@@ -503,13 +506,15 @@ public final class HistoryCaptureManager {
         CaptureSessionState existingSession = this.workingDrafts.session(projectId);
         ChunkPoint chunk = ChunkPoint.from(input.pos());
         boolean activeSessionRegion = this.activeSessionRegionPolicy.contains(level, existingSession, chunk);
+        boolean causalAction = this.hasActiveCausalAction(projectId);
         boolean hiddenReconciliation = this.hiddenReconciliation(existingSession, chunk, source);
         boolean usesDeferredStabilization = ELIGIBILITY.usesDeferredStabilization(trackedProject.project(), source);
         if (usesDeferredStabilization
                 && !ELIGIBILITY.canUseDeferredStabilization(
                         trackedProject.project(),
                         source,
-                        activeSessionRegion
+                        activeSessionRegion,
+                        causalAction
                 )) {
             this.diagnosticsLogger.logSkippedCapture(
                     trackedProject,
@@ -1095,7 +1100,20 @@ public final class HistoryCaptureManager {
             io.github.luma.domain.model.WorldMutationSource source,
             Instant now
     ) throws IOException {
-        return this.workingDrafts.getOrCreate(trackedProject, source, now);
+        return this.workingDrafts.getOrCreate(
+                trackedProject,
+                source,
+                WorldMutationContext.currentActor(),
+                now
+        );
+    }
+
+    private boolean hasActiveCausalAction(String projectId) {
+        return WorldMutationContext.hasCausalAction()
+                && !UndoRedoHistoryManager.getInstance().hasRedoAction(
+                        projectId,
+                        WorldMutationContext.currentActionId()
+                );
     }
 
     private TrackedProject findTrackedProject(MinecraftServer server, String projectId) throws IOException {
@@ -1220,7 +1238,11 @@ public final class HistoryCaptureManager {
         if (this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
             return true;
         }
-        if (!ELIGIBILITY.allowsTrackedChunkExpansion(source, activeSessionRegion)) {
+        if (!ELIGIBILITY.allowsTrackedChunkExpansion(
+                source,
+                activeSessionRegion,
+                this.hasActiveCausalAction(trackedProject.project().id().toString())
+        )) {
             this.diagnosticsLogger.logSkippedCapture(
                     trackedProject,
                     source,
@@ -1264,6 +1286,9 @@ public final class HistoryCaptureManager {
             if (ELIGIBILITY.isExplicitRootSource(source)) {
                 return true;
             }
+            if (this.hasActiveCausalAction(projectId)) {
+                return true;
+            }
             this.diagnosticsLogger.logSkippedCapture(
                     trackedProject,
                     source,
@@ -1274,7 +1299,7 @@ public final class HistoryCaptureManager {
             );
             return false;
         }
-        if (allowsSessionBootstrap(source)) {
+        if (ELIGIBILITY.allowsSessionBootstrap(source, this.hasActiveCausalAction(projectId))) {
             return true;
         }
         this.diagnosticsLogger.logSkippedCapture(
