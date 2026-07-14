@@ -1715,7 +1715,7 @@ public final class HistoryCaptureManager {
                 && ELIGIBILITY.shouldTrackPersistentMutation(source, true);
     }
 
-    private static boolean shouldTrackPersistentMutation(
+    public static boolean shouldTrackPersistentMutation(
             ServerLevel level,
             BlockPos pos,
             io.github.luma.domain.model.WorldMutationSource source

@@ -70,7 +70,11 @@ abstract class LevelSetBlockMixin {
 
         PendingBlockMutation mutation = this.luma$captureBeforeSetBlock(serverLevel, pos, newState);
         if (mutation == null) {
-            boolean changed = original.call(pos, newState, flags, recursionLeft);
+            boolean changed;
+            try (WorldMutationCaptureGuard.CaptureBoundary ignored =
+                         WorldMutationCaptureGuard.pushLevelSetBlockBoundary()) {
+                changed = original.call(pos, newState, flags, recursionLeft);
+            }
             if (changed) {
                 HistoryCaptureManager.getInstance().recordPersistentBlockMutation(serverLevel, pos);
             }
@@ -101,6 +105,11 @@ abstract class LevelSetBlockMixin {
                 : LUMA_TOOL_SOURCE_RESOLVER.detectUnattributedOperation(captureSuppressed).orElse(null);
         if (operation != null && currentSourceCaptures) {
             operation = operation.withAccessAllowed(WorldMutationContext.currentAccessAllowed());
+        }
+        if (!currentSourceCaptures
+                && operation == null
+                && !HistoryCaptureManager.shouldTrackPersistentMutation(serverLevel, pos, currentSource)) {
+            return null;
         }
 
         BlockState oldState = serverLevel.getBlockState(pos);

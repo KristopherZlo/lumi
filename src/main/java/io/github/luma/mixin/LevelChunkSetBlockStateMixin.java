@@ -52,6 +52,9 @@ abstract class LevelChunkSetBlockStateMixin {
         if (!(this.level instanceof ServerLevel serverLevel)) {
             return original.call(pos, newState, flags);
         }
+        if (WorldMutationCaptureGuard.isWithinLevelSetBlockBoundary()) {
+            return original.call(pos, newState, flags);
+        }
         if (LUMA_WORLD_OPERATIONS.blocksWorldMutations(serverLevel)) {
             return null;
         }
@@ -134,6 +137,11 @@ abstract class LevelChunkSetBlockStateMixin {
                 : LUMA_TOOL_SOURCE_RESOLVER.detectUnattributedOperation(captureSuppressed).orElse(null);
         if (operation != null && currentSourceCaptures) {
             operation = operation.withAccessAllowed(WorldMutationContext.currentAccessAllowed());
+        }
+        if (!currentSourceCaptures
+                && operation == null
+                && !HistoryCaptureManager.shouldTrackPersistentMutation(serverLevel, pos, currentSource)) {
+            return null;
         }
 
         LevelChunk chunk = (LevelChunk) (Object) this;
