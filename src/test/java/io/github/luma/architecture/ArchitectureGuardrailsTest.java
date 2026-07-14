@@ -350,27 +350,6 @@ class ArchitectureGuardrailsTest {
     }
 
     @Test
-    void gametestRuntimeSuiteHasDedicatedServerTickHook() throws IOException {
-        Path metadata = Path.of("src/gametest/resources/fabric.mod.json");
-        Path hook = Path.of("src/gametest/java/io/github/luma/gametest/LumiGameTestRuntimeHooks.java");
-        String metadataSource = Files.readString(metadata);
-
-        assertTrue(
-                metadataSource.contains("\"main\"")
-                        && metadataSource.contains("io.github.luma.gametest.LumiGameTestRuntimeHooks"),
-                "The GameTest mod must load a main entrypoint for server tick wiring"
-        );
-
-        assertTrue(Files.exists(hook), "The runtime suite tick hook must live in the GameTest source set");
-        String hookSource = Files.readString(hook);
-        assertTrue(
-                hookSource.contains("ServerTickEvents.END_SERVER_TICK.register")
-                        && hookSource.contains("SingleplayerTestingService.getInstance().tick(server)"),
-                "The singleplayer runtime suite must advance on integrated-server ticks"
-        );
-    }
-
-    @Test
     void worldBootstrapCreatesPlayerWorkspaceOnWorldEntry() throws IOException {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/domain/service/ProjectService.java"));
 

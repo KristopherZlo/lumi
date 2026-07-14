@@ -5,16 +5,12 @@
   "name": "Lumi Game Tests",
   "environment": "*",
   "entrypoints": {
-    "main": [
-      "io.github.luma.gametest.LumiGameTestRuntimeHooks"
-    ],
     "fabric-gametest": [
       "io.github.luma.gametest.LumiGameTests"
     ],
     "fabric-client-gametest": [
       "io.github.luma.gametest.LumiScreenClientGameTests",
-      "io.github.luma.gametest.LumiOverlayClientGameTests",
-      "io.github.luma.gametest.LumiClientGameTests"
+      "io.github.luma.gametest.LumiOverlayClientGameTests"
     ]
   },
   "depends": {

@@ -30,10 +30,8 @@ repositories {
     mavenCentral()
 }
 
-sourceSets.create('baselineGametest')
 sourceSets.create('idleGametest')
 sourceSets.create('baselineIdleGametest')
-sourceSets.create('runtimeGametestSupport')
 
 def lumiStartupProfileEnabled = providers.gradleProperty('lumi.startupProfile')
         .map { it.toBoolean() }
@@ -59,15 +57,6 @@ loom {
             programArg '--username'
             programArg providers.gradleProperty('lumi.testUsername').orElse('LumiTestClient').get()
             vmArg '-Dlumi.testing.enabled=true'
-        }
-
-        baselineClientGameTest {
-            inherit client
-            configName = 'Lumi Baseline Client GameTest'
-            runDir = 'build/run/baselineClientGameTest'
-            source sourceSets.baselineGametest
-            vmArg '-Dfabric.client.gametest'
-            vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
         }
 
         idleClientGameTest {
@@ -131,26 +120,6 @@ tasks.named('runGameTest').configure {
 }
 
 sourceSets {
-    runtimeGametestSupport {
-        compileClasspath += sourceSets.main.output
-        compileClasspath += sourceSets.main.compileClasspath
-        runtimeClasspath += output
-        runtimeClasspath += sourceSets.main.runtimeClasspath
-    }
-
-    gametest {
-        compileClasspath += sourceSets.runtimeGametestSupport.output
-        runtimeClasspath += sourceSets.runtimeGametestSupport.output
-    }
-
-    baselineGametest {
-        compileClasspath += sourceSets.main.compileClasspath
-        compileClasspath += sourceSets.client.compileClasspath
-        runtimeClasspath += output
-        runtimeClasspath += sourceSets.main.runtimeClasspath
-        runtimeClasspath += sourceSets.client.runtimeClasspath
-    }
-
     idleGametest {
         compileClasspath += sourceSets.main.output
         compileClasspath += sourceSets.client.output
@@ -170,9 +139,7 @@ sourceSets {
     }
 
     test {
-        compileClasspath += sourceSets.runtimeGametestSupport.output
         compileClasspath += sourceSets.client.output
-        runtimeClasspath += sourceSets.runtimeGametestSupport.output
         runtimeClasspath += sourceSets.client.output
     }
 }
@@ -367,7 +334,6 @@ def writeQuietClientRuntimeOptions = { String runDirPath ->
 
 [
         'runClientGameTest': 'build/run/clientGameTest',
-        'runBaselineClientGameTest': 'build/run/baselineClientGameTest',
         'runIdleClientGameTest': 'build/run/idleClientGameTest',
         'runBaselineIdleClientGameTest': 'build/run/baselineIdleClientGameTest'
 ].each { taskName, runDirPath ->
@@ -382,23 +348,12 @@ tasks.named('runClientGameTest').configure {
     jvmArgs('-Dfabric.client.gametest.disableNetworkSynchronizer=true')
     jvmArgs('-Dlumi.testing.enabled=true')
     jvmArgs('-Dlumi.clientLoadLog=true')
-    def singleplayerTestMode = System.getProperty('lumi.singleplayerTest.mode')
-            ?: System.getProperty('lumi.singleplayerTestMode')
-            ?: System.getenv('LUMI_SINGLEPLAYER_TEST_MODE')
-    if (singleplayerTestMode != null && !singleplayerTestMode.isBlank()) {
-        jvmArgs("-Dlumi.singleplayerTest.mode=${singleplayerTestMode}")
-    }
-    if ('backup-stress'.equalsIgnoreCase(singleplayerTestMode ?: '')) {
-        jvmArgs('-Xmx1G')
-        jvmArgs('-Dlumi.preModBackup.maxMiB=1024')
-    }
 }
 
 ['runClient',
  'runTestClient',
  'runGameTest',
  'runClientGameTest',
- 'runBaselineClientGameTest',
  'runIdleClientGameTest',
  'runBaselineIdleClientGameTest',
  'runProductionClientGameTest'].each { taskName ->
@@ -409,7 +364,7 @@ tasks.named('runClientGameTest').configure {
 
 def configureNoLumiClientGameTest = { String taskName, String sourceSetName ->
     tasks.named(taskName).configure {
-        def devSourceSets = ['main', 'client', 'gametest', 'baselineGametest', 'idleGametest', 'baselineIdleGametest']
+        def devSourceSets = ['main', 'client', 'gametest', 'idleGametest', 'baselineIdleGametest']
         def excludedGroups = devSourceSets.findAll { it != sourceSetName }.collectMany { name ->
             ["/build/classes/java/${name}", "/build/resources/${name}"]
         }
@@ -449,7 +404,6 @@ def configureNoLumiClientGameTest = { String taskName, String sourceSetName ->
     }
 }
 
-configureNoLumiClientGameTest('runBaselineClientGameTest', 'baselineGametest')
 configureNoLumiClientGameTest('runBaselineIdleClientGameTest', 'baselineIdleGametest')
 
 def targetJavaVersion = 21

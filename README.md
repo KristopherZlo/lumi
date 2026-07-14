@@ -165,17 +165,13 @@ Run the server GameTest smoke suite:
 
 This task clears `build/run/gameTest/world` before launch so server GameTests do not reuse stale local projects.
 
-Run the integrated singleplayer player-flow regression suite:
+Run the current client GameTests:
 
 ```powershell
-.\gradlew.bat runClientGameTest -Dlumi.singleplayerTest.mode=player-flow --no-daemon
+.\gradlew.bat runClientGameTest --no-daemon
 ```
 
-The player-flow TNT checks begin from an empty post-save draft, place and ignite one TNT through normal player APIs, let its fallout settle, and require one live undo to restore every witness block. A save-during-fuse regression publishes while powered TNT is primed, then requires later blast damage to retain its original action id and rebase onto the new HEAD. Fuse-time undo, powered undo, and ten-block chain scenarios use live undo, which invalidates their deferred causal contexts and prevents later scheduled fallout from reopening an already-undone action. The same flow strikes deterministic fixtures with an unowned creeper and lightning, verifies one `world incident` action for each, and restores each fixture with one undo. Quick-rollback load checks are bounded by reconciled dirty sections because safety history can intentionally cover persistent changes that are absent from the player draft.
-
-Full restore reasserts authoritative entity chunks after block replay, deferred redstone work, and block verification. This final budgeted pass removes transient fallout created while nearby chunks were still settling and reapplies only the target entity payloads before the restore is published as complete; earlier delta operations in the same chunk cannot survive the authoritative target merge. A decode, replacement, or spawn failure fails the restore instead of publishing an unverified entity result.
-
-The same runtime flow creates a narrow isolated project HEAD, adds fluid without a player context, verifies that it adds neither a player draft nor an undo action, rolls it back through the dirty scope, then repeats the mutation and verifies that a normal save publishes it. The isolated project prevents older gameplay fallout in the broad shared fixture from satisfying or invalidating the actionless assertions.
+This suite exercises the current screen action wiring and the pending/compare overlays, including the held-Alt view. Server GameTests retain focused regressions for falling-block entity capture and random crop ticks. Legacy mode-driven journeys that called domain services directly are intentionally excluded because they did not exercise user-accessible workflows.
 
 Compare vanilla and Lumi world startup against the same normal-world seed:
 
@@ -195,7 +191,7 @@ Run the alpha gate:
 
 The wrapper stops and returns a non-zero exit code on the first failing child check.
 
-The runtime smoke behavior contract is tracked in [SMOKE_BEHAVIOR.md](SMOKE_BEHAVIOR.md). Developer workflow details are in [docs/development.md](docs/development.md).
+The automated behavior coverage contract is tracked in [SMOKE_BEHAVIOR.md](SMOKE_BEHAVIOR.md). Developer workflow details are in [docs/development.md](docs/development.md).
 
 ### Stack
 
@@ -362,7 +358,7 @@ replay suppression, fluid-tail guards, and settled capture diagnostics. It is
 separate from `lumi.loadLog`, so it can be enabled alone while the broader logs
 stay off.
 
-Runtime logs are written under the normal Minecraft `logs/` directory or the world-local `lumi/test-logs/` directory for test profiles, including multiplayer work-zone smoke behavior logs.
+Runtime logs are written under the normal Minecraft `logs/` directory or the world-local `lumi/test-logs/` directory for focused test profiles.
 
 ## License
 

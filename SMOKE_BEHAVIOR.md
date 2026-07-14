@@ -1,7 +1,7 @@
-# Lumi In-Game Smoke Behavior
+# Lumi Automated Behavior Coverage
 
-This is the contract for runtime smoke tests. Keep it short and update it when
-history behavior changes.
+This is the product behavior contract used to choose focused automated coverage.
+Keep it short and update it when history behavior or the executable test surface changes.
 
 ## History
 
@@ -35,9 +35,6 @@ history behavior changes.
   zone. Out-of-zone changes remain pending.
 - Zone amend follows the same replacement-head rule as normal amend.
 - Zone history shows only visible zone versions.
-- Multiplayer work-zone smoke runs on the dedicated GameTest server with two
-  actor-scoped zones, randomized block edits, scoped quick rollback, and a
-  world-local behavior log.
 
 ## Settings And Operations
 
@@ -49,14 +46,9 @@ history behavior changes.
 
 ## Runtime Scope
 
-- Singleplayer smoke tests run in an integrated server and exercise real domain,
-  storage, capture, and world-apply services.
-- Saved structure fixtures treat entity-only movement without a live undo action
-  as explicit unsupported dynamic fixture coverage; generated fixtures and block
-  diffs remain strict failures.
-- `load-smoke` runs the singleplayer smoke route through the first history
-  operations, records JVM load samples, and fails on large heap, direct/mapped
-  buffer, thread, first-world-interaction CPU/wall regressions, or a core save,
-  restore, branch, or zone operation that exceeds two seconds.
-- Dedicated multiplayer smoke uses the server GameTest runner for work-zone
-  save isolation and scoped rollback behavior.
+- Client GameTests exercise current screen action wiring and compare/pending overlay rendering in an integrated world.
+- The pending-overlay GameTest creates a real draft, holds Left Alt, requires a visible mesh, then requires it to clear on release.
+- Server GameTests keep focused Minecraft regressions for falling-block entity capture and crop random ticks.
+- Domain, storage, capture, restore, undo/redo, and recovery rules are verified by focused JUnit tests with explicit assertions.
+- Idle startup comparison runs matching vanilla and Lumi workloads; it does not claim save/restore workflow coverage.
+- Mode-driven journeys that call domain services directly are not accepted as product behavior coverage.
