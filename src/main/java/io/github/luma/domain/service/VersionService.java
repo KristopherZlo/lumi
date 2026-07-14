@@ -77,6 +77,7 @@ public final class VersionService {
     private final SaveDraftIsolationService draftIsolationService = new SaveDraftIsolationService();
     private final DirtyScopeReconciliationService dirtyScopeReconciliationService =
             new DirtyScopeReconciliationService();
+    private final VersionPayloadVerifier payloadVerifier = new VersionPayloadVerifier();
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final PreviewBoundsResolver previewBoundsResolver = new PreviewBoundsResolver();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
@@ -744,6 +745,13 @@ public final class VersionService {
         } finally {
             recordTiming(timing, VersionSaveTiming.PATCH_META_WRITE, sectionStartedAt);
         }
+        progressSink.update(
+                OperationStage.FINALIZING,
+                draft.totalChangeCount(),
+                draft.totalChangeCount(),
+                "Verifying version payload"
+        );
+        this.payloadVerifier.verify(layout, patchMetadata, draft, snapshotId, entityCheckpointId);
 
         if (createSnapshot) {
             LumaDebugLog.log(
