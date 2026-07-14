@@ -181,6 +181,7 @@ try {
     $arguments = @()
     $arguments += $GradleTasks
     $arguments += "-Plumi.testUsername=$Username"
+    $arguments += "--no-daemon"
 
     & .\gradlew.bat @arguments
     $gradleExitCode = $LASTEXITCODE
