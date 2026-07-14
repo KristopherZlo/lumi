@@ -4,9 +4,11 @@ import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
+import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
+import io.github.luma.storage.repository.ProjectDirtyScopeRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,15 +38,18 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
 
     private final RecoveryRepository recoveryRepository;
     private final BaselineChunkRepository baselineChunkRepository;
+    private final ProjectDirtyScopeRepository dirtyScopeRepository;
     private final ExecutorService draftFlushExecutor;
     private final ExecutorService baselineExecutor;
     private final Map<String, CompletableFuture<Void>> pendingBaselineWrites = new HashMap<>();
     private final Map<String, PendingDraftFlush> pendingDraftFlushes = new HashMap<>();
+    private final Map<String, PendingDirtyScopeFlush> pendingDirtyScopeFlushes = new HashMap<>();
 
     public CapturePersistenceCoordinator() {
         this(
                 new RecoveryRepository(),
                 new BaselineChunkRepository(),
+                new ProjectDirtyScopeRepository(),
                 Executors.newSingleThreadExecutor(maintenanceThreadFactory("draft")),
                 Executors.newFixedThreadPool(
                         defaultBaselineWriterThreads(),
@@ -58,7 +63,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
             BaselineChunkRepository baselineChunkRepository,
             ExecutorService maintenanceExecutor
     ) {
-        this(recoveryRepository, baselineChunkRepository, maintenanceExecutor, maintenanceExecutor);
+        this(recoveryRepository, baselineChunkRepository, new ProjectDirtyScopeRepository(), maintenanceExecutor, maintenanceExecutor);
     }
 
     CapturePersistenceCoordinator(
@@ -67,8 +72,19 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
             ExecutorService draftFlushExecutor,
             ExecutorService baselineExecutor
     ) {
+        this(recoveryRepository, baselineChunkRepository, new ProjectDirtyScopeRepository(), draftFlushExecutor, baselineExecutor);
+    }
+
+    CapturePersistenceCoordinator(
+            RecoveryRepository recoveryRepository,
+            BaselineChunkRepository baselineChunkRepository,
+            ProjectDirtyScopeRepository dirtyScopeRepository,
+            ExecutorService draftFlushExecutor,
+            ExecutorService baselineExecutor
+    ) {
         this.recoveryRepository = Objects.requireNonNull(recoveryRepository, "recoveryRepository");
         this.baselineChunkRepository = Objects.requireNonNull(baselineChunkRepository, "baselineChunkRepository");
+        this.dirtyScopeRepository = Objects.requireNonNull(dirtyScopeRepository, "dirtyScopeRepository");
         this.draftFlushExecutor = Objects.requireNonNull(draftFlushExecutor, "draftFlushExecutor");
         this.baselineExecutor = Objects.requireNonNull(baselineExecutor, "baselineExecutor");
     }
@@ -122,6 +138,24 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         }
     }
 
+    public void enqueueDirtyScopeFlush(
+            ProjectLayout layout,
+            String projectId,
+            String projectName,
+            ProjectDirtyScope scope
+    ) {
+        synchronized (this) {
+            PendingDirtyScopeFlush pending = this.pendingDirtyScopeFlushes.get(projectId);
+            if (pending == null) {
+                pending = new PendingDirtyScopeFlush(projectId, projectName, layout, scope.copy());
+                this.pendingDirtyScopeFlushes.put(projectId, pending);
+                this.scheduleDirtyScopeFlush(pending);
+            } else {
+                pending.update(scope.copy());
+            }
+        }
+    }
+
     public boolean hasPendingBaselineWrite(String projectId, ChunkPoint chunk) {
         if (projectId == null || projectId.isBlank() || chunk == null) {
             return false;
@@ -137,6 +171,12 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         }
         synchronized (this) {
             return this.pendingDraftFlushes.containsKey(projectId);
+        }
+    }
+
+    public boolean hasPendingDirtyScopeFlush(String projectId) {
+        synchronized (this) {
+            return projectId != null && this.pendingDirtyScopeFlushes.containsKey(projectId);
         }
     }
 
@@ -202,9 +242,36 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         }
     }
 
+    public void drainDirtyScopeFlushes(String projectId, String projectName) throws IOException {
+        while (true) {
+            CompletableFuture<Void> future;
+            synchronized (this) {
+                PendingDirtyScopeFlush pending = this.pendingDirtyScopeFlushes.get(projectId);
+                if (pending == null) {
+                    return;
+                }
+                future = pending.future;
+            }
+            try {
+                future.join();
+            } catch (CompletionException exception) {
+                Throwable cause = exception.getCause() == null ? exception : exception.getCause();
+                if (cause instanceof IOException ioException) {
+                    throw ioException;
+                }
+                throw new IOException("Failed to drain capture dirty scope for " + projectName, cause);
+            }
+        }
+    }
+
     public void deleteDraft(ProjectLayout layout, String projectId, String projectName) throws IOException {
         this.drainDraftFlushes(projectId, projectName);
         this.recoveryRepository.deleteDraft(layout);
+    }
+
+    public void deleteDirtyScope(ProjectLayout layout, String projectId, String projectName) throws IOException {
+        this.drainDirtyScopeFlushes(projectId, projectName);
+        this.dirtyScopeRepository.delete(layout);
     }
 
     @Override
@@ -248,6 +315,36 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
     private void scheduleDraftFlush(PendingDraftFlush pending) {
         pending.scheduled = true;
         this.draftFlushExecutor.execute(() -> this.flushDraftLoop(pending));
+    }
+
+    private void scheduleDirtyScopeFlush(PendingDirtyScopeFlush pending) {
+        this.draftFlushExecutor.execute(() -> this.flushDirtyScopeLoop(pending));
+    }
+
+    private void flushDirtyScopeLoop(PendingDirtyScopeFlush pending) {
+        while (true) {
+            ProjectDirtyScope scope;
+            synchronized (this) {
+                scope = pending.latestScope;
+                pending.dirty = false;
+            }
+            try {
+                this.dirtyScopeRepository.save(pending.layout, scope);
+            } catch (Throwable throwable) {
+                synchronized (this) {
+                    this.pendingDirtyScopeFlushes.remove(pending.projectId, pending);
+                }
+                pending.future.completeExceptionally(throwable);
+                return;
+            }
+            synchronized (this) {
+                if (!pending.dirty) {
+                    this.pendingDirtyScopeFlushes.remove(pending.projectId, pending);
+                    pending.future.complete(null);
+                    return;
+                }
+            }
+        }
     }
 
     private void flushDraftLoop(PendingDraftFlush pending) {
@@ -295,6 +392,10 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
             PendingDraftFlush pendingDraftFlush = this.pendingDraftFlushes.get(projectId);
             if (pendingDraftFlush != null) {
                 futures.add(pendingDraftFlush.future);
+            }
+            PendingDirtyScopeFlush pendingDirtyScopeFlush = this.pendingDirtyScopeFlushes.get(projectId);
+            if (pendingDirtyScopeFlush != null) {
+                futures.add(pendingDirtyScopeFlush.future);
             }
             return futures;
         }
@@ -356,6 +457,33 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
 
         private void update(RecoveryDraft draft) {
             this.latestDraft = draft;
+            this.dirty = true;
+        }
+    }
+
+    private static final class PendingDirtyScopeFlush {
+
+        private final String projectId;
+        private final String projectName;
+        private final ProjectLayout layout;
+        private final CompletableFuture<Void> future = new CompletableFuture<>();
+        private ProjectDirtyScope latestScope;
+        private boolean dirty = true;
+
+        private PendingDirtyScopeFlush(
+                String projectId,
+                String projectName,
+                ProjectLayout layout,
+                ProjectDirtyScope latestScope
+        ) {
+            this.projectId = projectId;
+            this.projectName = projectName;
+            this.layout = layout;
+            this.latestScope = latestScope;
+        }
+
+        private void update(ProjectDirtyScope scope) {
+            this.latestScope = scope;
             this.dirty = true;
         }
     }

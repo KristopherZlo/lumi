@@ -3,12 +3,15 @@ package io.github.luma.minecraft.capture;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
+import io.github.luma.domain.model.ChunkSectionPoint;
+import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
+import io.github.luma.storage.repository.ProjectDirtyScopeRepository;
 import io.github.luma.storage.repository.RecoveryRepository;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -287,6 +290,28 @@ class CapturePersistenceCoordinatorTest {
         }
         for (ExecutorService executor : executors) {
             assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void coalescesDirtyScopeFlushesOffThread() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        ProjectDirtyScope scope = ProjectDirtyScope.empty("project", "main", "v0001");
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(),
+                new BaselineChunkRepository(),
+                Executors.newSingleThreadExecutor()
+        )) {
+            scope.markBlockSection(new ChunkSectionPoint(1, 2, 3));
+            coordinator.enqueueDirtyScopeFlush(layout, "project", "Project", scope);
+            scope.markBlockSection(new ChunkSectionPoint(4, 5, 6));
+            coordinator.enqueueDirtyScopeFlush(layout, "project", "Project", scope);
+
+            coordinator.drainDirtyScopeFlushes("project", "Project");
+
+            ProjectDirtyScope restored = new ProjectDirtyScopeRepository().load(layout).orElseThrow();
+            assertEquals(scope.blockSections(), restored.blockSections());
+            assertFalse(coordinator.hasPendingDirtyScopeFlush("project"));
         }
     }
 }
