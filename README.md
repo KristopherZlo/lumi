@@ -193,6 +193,8 @@ Run the alpha gate:
 .\scripts\run-alpha-release-check.ps1
 ```
 
+The wrapper stops and returns a non-zero exit code on the first failing child check.
+
 The runtime smoke behavior contract is tracked in [SMOKE_BEHAVIOR.md](SMOKE_BEHAVIOR.md). Developer workflow details are in [docs/development.md](docs/development.md).
 
 ### Stack

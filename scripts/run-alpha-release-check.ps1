@@ -39,6 +39,9 @@ function Invoke-TestClientGradle {
             $arguments.JavaHome = $JavaHome
         }
         & $testClientScript @arguments
+        if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+        }
     } finally {
         if ($null -eq $previousMode) {
             Remove-Item Env:\LUMI_SINGLEPLAYER_TEST_MODE -ErrorAction SilentlyContinue
@@ -74,6 +77,9 @@ try {
             -RequireBaselineActionRun `
             -RequireLumiActionRun `
             -FailOnRegression
+        if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+        }
     }
 
     if (-not $SkipCrashHarness) {
@@ -87,6 +93,9 @@ try {
             $arguments.Failpoints = $CrashHarnessFailpoints
         }
         & $crashHarnessScript @arguments
+        if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+        }
     }
 } finally {
     Pop-Location
