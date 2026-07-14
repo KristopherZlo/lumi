@@ -119,6 +119,20 @@ public final class AxiomBlockBufferCaptureService {
         }
     }
 
+    public void captureBaselinesBeforeApply(PreparedCapture preparedCapture) {
+        if (preparedCapture == null || !preparedCapture.prepared()) {
+            return;
+        }
+        for (HistoryCaptureManager.BlockChangeInput input : preparedCapture.inputs()) {
+            HistoryCaptureManager.getInstance().capturePreMutationBaseline(
+                    preparedCapture.level(),
+                    input.pos(),
+                    input.oldState(),
+                    input.oldBlockEntity()
+            );
+        }
+    }
+
     private List<HistoryCaptureManager.BlockChangeInput> captureInputs(
             ServerLevel level,
             List<AxiomBlockMutation> mutations

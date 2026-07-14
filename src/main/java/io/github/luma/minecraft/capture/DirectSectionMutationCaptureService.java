@@ -80,9 +80,6 @@ public final class DirectSectionMutationCaptureService {
                     captureCurrentSource
             );
         }
-        if (operation == null && !captureCurrentSource) {
-            return PendingDirectSectionMutation.skipped();
-        }
         return new PendingDirectSectionMutation(
                 pos,
                 oldState,
@@ -99,7 +96,7 @@ public final class DirectSectionMutationCaptureService {
             int localZ,
             PendingDirectSectionMutation mutation
     ) {
-        if (section == null || mutation == null || !mutation.shouldCapture()) {
+        if (section == null || mutation == null) {
             return;
         }
 
@@ -111,6 +108,12 @@ public final class DirectSectionMutationCaptureService {
         ServerLevel level = owner.get().level();
         BlockPos pos = mutation.pos() == null ? owner.get().blockPos(localX, localY, localZ) : mutation.pos();
         BlockState appliedState = section.getBlockState(localX, localY, localZ);
+        if (mutation.oldState() != null && !mutation.oldState().equals(appliedState)) {
+            HistoryCaptureManager.getInstance().recordPersistentBlockMutation(level, pos);
+        }
+        if (!mutation.shouldCapture()) {
+            return;
+        }
         if (mutation.currentSource()) {
             HistoryCaptureManager.getInstance().recordBlockChange(
                     level,

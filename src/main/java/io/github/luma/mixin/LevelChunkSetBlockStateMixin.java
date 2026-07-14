@@ -71,12 +71,17 @@ abstract class LevelChunkSetBlockStateMixin {
 
         PendingBlockMutation mutation = this.luma$captureBeforeChunkSetBlock(serverLevel, pos, newState);
         if (mutation == null) {
-            return original.call(pos, newState, flags);
+            BlockState previous = original.call(pos, newState, flags);
+            if (previous != null && !WorldMutationCaptureGuard.isWithinLevelSetBlockBoundary()) {
+                HistoryCaptureManager.getInstance().recordPersistentBlockMutation(serverLevel, pos);
+            }
+            return previous;
         }
 
         try {
             BlockState previous = original.call(pos, newState, flags);
             if (previous != null) {
+                HistoryCaptureManager.getInstance().recordPersistentBlockMutation(serverLevel, mutation.pos());
                 LevelChunk chunk = (LevelChunk) (Object) this;
                 BlockState appliedState = chunk.getBlockState(mutation.pos());
                 CompoundTag newBlockEntity = this.luma$blockEntityTag(serverLevel, chunk, mutation.pos(), appliedState);

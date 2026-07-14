@@ -5,6 +5,7 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -22,6 +23,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -53,6 +56,8 @@ public final class HistoryCaptureManager {
             new BlockMutationCaptureGate(ELIGIBILITY, this.diagnosticsLogger);
     private final CapturePersistenceCoordinator persistenceCoordinator = new CapturePersistenceCoordinator();
     private final WorkingDraftSessionManager workingDrafts = new WorkingDraftSessionManager(this.persistenceCoordinator);
+    private final ProjectDirtyScopeManager projectDirtyScopes =
+            new ProjectDirtyScopeManager(this.persistenceCoordinator);
     private final ProjectService projectService = new ProjectService();
     private final ActiveWorkZoneTouchRecorder activeWorkZoneTouchRecorder = new ActiveWorkZoneTouchRecorder();
     private final ProjectRepository projectRepository = new ProjectRepository();
@@ -137,6 +142,18 @@ public final class HistoryCaptureManager {
                 String projectId = trackedProject.project().id().toString();
                 CaptureSessionState existingSession = this.workingDrafts.session(projectId);
                 ChunkPoint chunk = ChunkPoint.from(pos);
+                ChunkSnapshotPayload projectBaseline = null;
+                if (!this.baselineChunkRepository.contains(trackedProject.layout(), chunk)
+                        && !this.persistenceCoordinator.hasPendingBaselineWrite(projectId, chunk)) {
+                    projectBaseline = this.captureChunkBaseline(
+                            trackedProject,
+                            level,
+                            pos,
+                            oldState,
+                            oldBlockEntity,
+                            now
+                    );
+                }
                 boolean hiddenReconciliation = this.hiddenReconciliation(existingSession, chunk, source);
                 if (!this.canCaptureIntoSession(trackedProject, level, source, pos)) {
                     continue;
@@ -149,7 +166,7 @@ public final class HistoryCaptureManager {
                 if (!session.hasBaselineChunk(chunk)
                         && !this.persistenceCoordinator.hasPendingBaselineWrite(projectId, chunk)
                         && !this.baselineChunkRepository.contains(trackedProject.layout(), chunk)) {
-                    ChunkSnapshotPayload baseline = this.captureChunkBaseline(
+                    projectBaseline = this.captureChunkBaseline(
                             trackedProject,
                             level,
                             pos,
@@ -157,8 +174,8 @@ public final class HistoryCaptureManager {
                             oldBlockEntity,
                             now
                     );
-                    this.baselineCoordinator.captureSessionChunkBaseline(session, chunk, baseline);
                 }
+                this.baselineCoordinator.captureSessionChunkBaseline(session, chunk, projectBaseline);
                 this.liveBlockSectionReconciliationMarker.mark(
                         trackedProject,
                         level,
@@ -173,6 +190,42 @@ public final class HistoryCaptureManager {
             }
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Failed to capture pre-mutation baseline at {} in {}", pos, level.dimension().identifier(), exception);
+        }
+    }
+
+    public void recordPersistentBlockMutation(ServerLevel level, BlockPos pos) {
+        if (level == null || pos == null || !shouldTrackPersistentMutation(WorldMutationContext.currentSource())) {
+            return;
+        }
+        try {
+            ChunkSectionPoint section = ChunkSectionPoint.from(io.github.luma.domain.model.BlockPoint.from(pos));
+            for (TrackedProject project : this.matchingProjects(level, pos)) {
+                this.projectDirtyScopes.markBlockSection(project, section);
+            }
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to mark persistent mutation dirty at {} in {}", pos, level.dimension().identifier(), exception);
+        }
+    }
+
+    public void recordPersistentBlockMutations(ServerLevel level, List<BlockPos> positions) {
+        if (level == null || positions == null || positions.isEmpty()
+                || !shouldTrackPersistentMutation(WorldMutationContext.currentSource())) {
+            return;
+        }
+        try {
+            Map<TrackedProject, LinkedHashSet<ChunkSectionPoint>> sectionsByProject = new LinkedHashMap<>();
+            for (BlockPos pos : positions) {
+                if (pos == null) {
+                    continue;
+                }
+                ChunkSectionPoint section = ChunkSectionPoint.from(io.github.luma.domain.model.BlockPoint.from(pos));
+                for (TrackedProject project : this.matchingProjects(level, pos)) {
+                    sectionsByProject.computeIfAbsent(project, ignored -> new LinkedHashSet<>()).add(section);
+                }
+            }
+            sectionsByProject.forEach(this.projectDirtyScopes::markBlockSections);
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to bulk-mark persistent mutations dirty in {}", level.dimension().identifier(), exception);
         }
     }
 
@@ -415,8 +468,11 @@ public final class HistoryCaptureManager {
             List<BlockChangeInput> changes
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        if (level == null || changes == null || changes.isEmpty()
-                || !shouldCaptureMutation(source)
+        if (level == null || changes == null || changes.isEmpty()) {
+            return;
+        }
+        this.recordPersistentBlockMutations(level, changes.stream().map(BlockChangeInput::pos).toList());
+        if (!shouldCaptureMutation(source)
                 || !this.accessGuard.canUseMutationSource(level.getServer(), source)) {
             return;
         }
@@ -642,8 +698,11 @@ public final class HistoryCaptureManager {
             Instant actionStartedAt
     ) {
         io.github.luma.domain.model.WorldMutationSource source = WorldMutationContext.currentSource();
-        if (level == null
-                || !this.accessGuard.canUseMutationSource(level.getServer(), source)) {
+        if (level == null) {
+            return;
+        }
+        this.recordPersistentEntityMutation(level, oldPayload, newPayload);
+        if (!this.accessGuard.canUseMutationSource(level.getServer(), source)) {
             return;
         }
 
@@ -743,6 +802,35 @@ public final class HistoryCaptureManager {
             }
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Failed to capture entity change in {}", level.dimension().identifier(), exception);
+        }
+    }
+
+    private void recordPersistentEntityMutation(
+            ServerLevel level,
+            EntityPayload oldPayload,
+            EntityPayload newPayload
+    ) {
+        if (!shouldTrackPersistentMutation(WorldMutationContext.currentSource())
+                || java.util.Objects.equals(oldPayload, newPayload)) {
+            return;
+        }
+        try {
+            Map<TrackedProject, LinkedHashSet<ChunkPoint>> chunksByProject = new LinkedHashMap<>();
+            for (EntityPayload payload : new EntityPayload[] {oldPayload, newPayload}) {
+                if (payload == null) {
+                    continue;
+                }
+                for (TrackedProject project : this.matchingProjects(level, payload.blockPos())) {
+                    chunksByProject.computeIfAbsent(project, ignored -> new LinkedHashSet<>()).add(payload.chunk());
+                }
+            }
+            for (Map.Entry<TrackedProject, LinkedHashSet<ChunkPoint>> entry : chunksByProject.entrySet()) {
+                for (ChunkPoint chunk : entry.getValue()) {
+                    this.projectDirtyScopes.markEntityChunk(entry.getKey(), chunk);
+                }
+            }
+        } catch (Exception exception) {
+            LumaMod.LOGGER.warn("Failed to mark persistent entity mutation dirty in {}", level.dimension().identifier(), exception);
         }
     }
 
@@ -1050,6 +1138,11 @@ public final class HistoryCaptureManager {
             } catch (IOException exception) {
                 LumaMod.LOGGER.warn("Failed to flush session for {}", projectId, exception);
             }
+        }
+        try {
+            this.projectDirtyScopes.drainAll();
+        } catch (IOException exception) {
+            LumaMod.LOGGER.warn("Failed to flush project dirty scopes during shutdown", exception);
         }
     }
 

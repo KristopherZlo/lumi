@@ -44,6 +44,7 @@ abstract class AxiomSetBufferPacketMixin {
                             preparedCapture.actionId(),
                             preparedCapture.accessAllowed()
                     );
+                    AxiomBlockBufferCaptureService.getInstance().captureBaselinesBeforeApply(preparedCapture);
                 }
             }
             original.call(blockBuffer, level, changedRegion, player);

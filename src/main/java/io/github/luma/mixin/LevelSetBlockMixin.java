@@ -70,12 +70,17 @@ abstract class LevelSetBlockMixin {
 
         PendingBlockMutation mutation = this.luma$captureBeforeSetBlock(serverLevel, pos, newState);
         if (mutation == null) {
-            return original.call(pos, newState, flags, recursionLeft);
+            boolean changed = original.call(pos, newState, flags, recursionLeft);
+            if (changed) {
+                HistoryCaptureManager.getInstance().recordPersistentBlockMutation(serverLevel, pos);
+            }
+            return changed;
         }
 
         try {
             boolean changed = original.call(pos, newState, flags, recursionLeft);
             if (changed) {
+                HistoryCaptureManager.getInstance().recordPersistentBlockMutation(serverLevel, mutation.pos());
                 BlockState appliedState = serverLevel.getBlockState(mutation.pos());
                 CompoundTag newBlockEntity = this.luma$blockEntityTag(serverLevel, mutation.pos(), appliedState);
                 this.luma$recordMutation(serverLevel, mutation, newState, appliedState, newBlockEntity);
