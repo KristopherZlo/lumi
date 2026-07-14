@@ -7,6 +7,7 @@ import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectDirtyScope;
@@ -73,6 +74,29 @@ class DirtyScopeReconciliationServiceTest {
         ));
     }
 
+    @Test
+    void reconcilesDirtyEntityChunkAgainstHead() throws Exception {
+        BuildProject project = project();
+        ProjectVersion head = head(project);
+        EntityPayload oldEntity = entity("00000000-0000-0000-0000-000000000001", "minecraft:armor_stand");
+        EntityPayload liveEntity = entity(oldEntity.entityId(), "minecraft:item_frame");
+        DirtyScopeReconciliationService service = new DirtyScopeReconciliationService(
+                (layout, ignoredProject, versions, target, positions) -> Map.of(),
+                (layout, versions, target, chunks) -> Map.of(oldEntity.entityId(), oldEntity)
+        );
+        ProjectDirtyScope scope = ProjectDirtyScope.empty(project.id().toString(), "main", head.id());
+        scope.markEntityChunk(oldEntity.chunk());
+        ChunkSnapshotPayload live = new ChunkSnapshotPayload(0, 0, 0, 255, List.of(), Map.of(), List.of(liveEntity));
+
+        var draft = service.reconcileBlocks(
+                new ProjectLayout(this.tempDir), project, List.of(head), head, scope,
+                List.of(live), null, "Lumi safety ledger", NOW
+        );
+
+        assertEquals(1, draft.entityChanges().size());
+        assertEquals("minecraft:item_frame", draft.entityChanges().getFirst().newValue().entityType());
+    }
+
     private static ProjectDirtyScope dirty(BuildProject project, ProjectVersion head) {
         ProjectDirtyScope scope = ProjectDirtyScope.empty(project.id().toString(), "main", head.id());
         scope.markBlockSection(new ChunkSectionPoint(0, 0, 4));
@@ -95,6 +119,13 @@ class DirtyScopeReconciliationServiceTest {
         LinkedHashMap<BlockPoint, StatePayload> result = new LinkedHashMap<>();
         positions.forEach(position -> result.put(position, new StatePayload(state, null)));
         return result;
+    }
+
+    private static EntityPayload entity(String id, String type) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("UUID", id);
+        tag.putString("id", type);
+        return new EntityPayload(tag);
     }
 
     private static BuildProject project() {

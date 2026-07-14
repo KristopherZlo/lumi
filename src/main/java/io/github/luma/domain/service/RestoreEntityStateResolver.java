@@ -12,6 +12,7 @@ import io.github.luma.minecraft.world.PreparedChunkBatch;
 import io.github.luma.minecraft.world.PreparedChunkBatchCollapser;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
+import io.github.luma.storage.repository.PatchMetaRepository;
 import io.github.luma.storage.repository.SnapshotReader;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -34,6 +35,17 @@ final class RestoreEntityStateResolver {
     private final RestorePayloadLoader payloadLoader;
     private final RestorePlanBuilder restorePlanBuilder;
     private final PreparedChunkBatchCollapser batchCollapser;
+
+    RestoreEntityStateResolver() {
+        this(
+                new RestoreChunkCollector(new PatchMetaRepository()),
+                new BaselineChunkRepository(),
+                new SnapshotReader(),
+                new RestorePayloadLoader(),
+                new RestorePlanBuilder(),
+                new PreparedChunkBatchCollapser()
+        );
+    }
 
     RestoreEntityStateResolver(
             RestoreChunkCollector chunkCollector,
@@ -349,7 +361,7 @@ final class RestoreEntityStateResolver {
         chunks.add(payload.chunk());
     }
 
-    private Map<String, EntityPayload> targetEntityStatesForChunks(
+    Map<String, EntityPayload> targetEntityStatesForChunks(
             ProjectLayout layout,
             List<ProjectVersion> versions,
             ProjectVersion targetVersion,
@@ -409,6 +421,8 @@ final class RestoreEntityStateResolver {
                     states.put(entity.entityId(), entity);
                 }
             }
+        } else if (chain.anchor().versionKind() == VersionKind.WORLD_ROOT) {
+            this.seedWorldRootEntityStates(layout, null, List.copyOf(selected), states);
         }
         for (ProjectVersion version : chain.patchVersions()) {
             for (StoredEntityChange change : this.payloadLoader.loadVersionEntityChangesForChunks(layout, version, selected)) {

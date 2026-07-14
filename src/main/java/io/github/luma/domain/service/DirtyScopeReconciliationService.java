@@ -6,12 +6,14 @@ import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
+import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredChangeAccumulator;
+import io.github.luma.domain.model.StoredEntityChange;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.SnapshotWriter;
@@ -20,6 +22,8 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /** Reconciles dirty live block sections against their authoritative saved head. */
 final class DirtyScopeReconciliationService {
@@ -27,14 +31,25 @@ final class DirtyScopeReconciliationService {
     private static final StatePayload AIR = StatePayload.air();
 
     private final TargetStateLookup targetStateLookup;
+    private final EntityTargetStateLookup entityTargetStateLookup;
 
     DirtyScopeReconciliationService() {
-        BlockTargetStateResolver resolver = new BlockTargetStateResolver();
-        this.targetStateLookup = resolver::resolve;
+        this(
+                new BlockTargetStateResolver()::resolve,
+                new RestoreEntityStateResolver()::targetEntityStatesForChunks
+        );
     }
 
     DirtyScopeReconciliationService(TargetStateLookup targetStateLookup) {
+        this(targetStateLookup, (layout, versions, target, chunks) -> Map.of());
+    }
+
+    DirtyScopeReconciliationService(
+            TargetStateLookup targetStateLookup,
+            EntityTargetStateLookup entityTargetStateLookup
+    ) {
         this.targetStateLookup = targetStateLookup;
+        this.entityTargetStateLookup = entityTargetStateLookup;
     }
 
     RecoveryDraft reconcileBlocks(
@@ -88,6 +103,7 @@ final class DirtyScopeReconciliationService {
                 changes.addBlockChange(new StoredBlockChange(entry.getKey(), oldValue, entry.getValue()));
             }
         }
+        this.reconcileEntities(layout, versions, head, dirtyScope, liveChunks, changes);
 
         Instant timestamp = now == null ? Instant.now() : now;
         return new RecoveryDraft(
@@ -101,6 +117,46 @@ final class DirtyScopeReconciliationService {
                 changes.blockChanges(),
                 changes.entityChanges()
         );
+    }
+
+    private void reconcileEntities(
+            ProjectLayout layout,
+            List<ProjectVersion> versions,
+            ProjectVersion head,
+            ProjectDirtyScope dirtyScope,
+            List<ChunkSnapshotPayload> liveChunks,
+            StoredChangeAccumulator changes
+    ) throws IOException {
+        if (dirtyScope.entityChunks().isEmpty()) {
+            return;
+        }
+        LinkedHashMap<String, EntityPayload> liveEntities = new LinkedHashMap<>();
+        for (ChunkSnapshotPayload chunk : liveChunks == null ? List.<ChunkSnapshotPayload>of() : liveChunks) {
+            if (!dirtyScope.entityChunks().contains(chunk.chunk())) {
+                continue;
+            }
+            for (EntityPayload entity : chunk.entitySnapshots()) {
+                if (entity != null && !entity.entityId().isBlank()) {
+                    liveEntities.put(entity.entityId(), entity);
+                }
+            }
+        }
+        Map<String, EntityPayload> headEntities = this.entityTargetStateLookup.resolve(
+                layout,
+                versions,
+                head,
+                dirtyScope.entityChunks()
+        );
+        Set<String> entityIds = new java.util.LinkedHashSet<>(headEntities.keySet());
+        entityIds.addAll(liveEntities.keySet());
+        for (String entityId : entityIds) {
+            EntityPayload oldValue = headEntities.get(entityId);
+            EntityPayload newValue = liveEntities.get(entityId);
+            if (!Objects.equals(oldValue, newValue)) {
+                String entityType = newValue == null ? oldValue.entityType() : newValue.entityType();
+                changes.addEntityChange(new StoredEntityChange(entityId, entityType, oldValue, newValue));
+            }
+        }
     }
 
     private void materializeSection(
@@ -178,6 +234,16 @@ final class DirtyScopeReconciliationService {
                 List<ProjectVersion> versions,
                 ProjectVersion targetVersion,
                 List<BlockPoint> positions
+        ) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface EntityTargetStateLookup {
+        Map<String, EntityPayload> resolve(
+                ProjectLayout layout,
+                List<ProjectVersion> versions,
+                ProjectVersion targetVersion,
+                Iterable<ChunkPoint> chunks
         ) throws IOException;
     }
 }
