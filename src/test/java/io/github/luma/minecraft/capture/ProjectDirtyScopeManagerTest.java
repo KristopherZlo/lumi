@@ -56,6 +56,37 @@ class ProjectDirtyScopeManagerTest {
         }
     }
 
+    @Test
+    void replacesCommittedScopeWithRebasedRemainder() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        TrackedProject project = trackedProject(layout);
+        ProjectDirtyScope expected = ProjectDirtyScope.empty(
+                project.project().id().toString(), "main", "v0001"
+        );
+        ChunkSectionPoint saved = new ChunkSectionPoint(1, 2, 3);
+        ChunkSectionPoint remainderSection = new ChunkSectionPoint(4, 5, 6);
+        expected.markBlockSections(List.of(saved, remainderSection));
+        ProjectDirtyScope remainder = ProjectDirtyScope.empty(
+                project.project().id().toString(), "main", "v0001"
+        );
+        remainder.markBlockSection(remainderSection);
+        ProjectDirtyScopeRepository repository = new ProjectDirtyScopeRepository();
+        repository.save(layout, expected);
+
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(), new BaselineChunkRepository(), repository,
+                Executors.newSingleThreadExecutor(), Executors.newSingleThreadExecutor()
+        )) {
+            ProjectDirtyScopeManager manager = new ProjectDirtyScopeManager(coordinator, repository);
+
+            manager.replaceAfterCommit(project, expected, remainder, "v0002");
+
+            ProjectDirtyScope stored = repository.load(layout).orElseThrow();
+            assertEquals("v0002", stored.baseVersionId());
+            assertEquals(List.of(remainderSection), stored.blockSections().stream().toList());
+        }
+    }
+
     private static TrackedProject trackedProject(ProjectLayout layout) {
         Instant now = Instant.parse("2026-07-14T10:00:00Z");
         BuildProject project = BuildProject.createWorldWorkspace("World", "minecraft:overworld", now);

@@ -69,6 +69,42 @@ final class ProjectDirtyScopeManager {
         }
     }
 
+    void replaceAfterCommit(
+            TrackedProject project,
+            ProjectDirtyScope expectedScope,
+            ProjectDirtyScope remainder,
+            String newBaseVersionId
+    ) throws IOException {
+        if (project == null || expectedScope == null || remainder == null) {
+            throw new IllegalArgumentException("Project, expected scope, and remainder are required");
+        }
+        String projectId = project.project().id().toString();
+        this.persistenceCoordinator.drainDirtyScopeFlushes(projectId, project.project().name());
+        ProjectDirtyScope durable = this.repository.load(project.layout()).orElse(null);
+        if (durable == null || !sameScope(durable, expectedScope)) {
+            throw new IOException("Durable dirty scope changed while save was publishing");
+        }
+
+        ProjectDirtyScope rebased = remainder.withBaseVersionId(newBaseVersionId);
+        if (rebased.isEmpty()) {
+            this.repository.delete(project.layout());
+        } else {
+            this.repository.save(project.layout(), rebased);
+        }
+        synchronized (this) {
+            if (rebased.isEmpty()) {
+                this.scopes.remove(projectId);
+            } else {
+                this.scopes.put(projectId, new ScopeEntry(
+                        projectId,
+                        project.project().name(),
+                        project.layout(),
+                        rebased
+                ));
+            }
+        }
+    }
+
     void drainAll() throws IOException {
         List<ScopeEntry> entries;
         synchronized (this) {
@@ -127,6 +163,12 @@ final class ProjectDirtyScopeManager {
         return left.projectId().equals(right.projectId())
                 && left.variantId().equals(right.variantId())
                 && left.baseVersionId().equals(right.baseVersionId());
+    }
+
+    private static boolean sameScope(ProjectDirtyScope left, ProjectDirtyScope right) {
+        return sameBase(left, right)
+                && left.blockSections().equals(right.blockSections())
+                && left.entityChunks().equals(right.entityChunks());
     }
 
     private record ScopeEntry(

@@ -3,6 +3,7 @@ package io.github.luma.domain.model;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /** Project-level spatial scope that must be reconciled against its saved head. */
 public final class ProjectDirtyScope {
@@ -85,6 +86,41 @@ public final class ProjectDirtyScope {
                 this.blockSections,
                 this.entityChunks
         );
+    }
+
+    public ProjectDirtyScope withBaseVersionId(String baseVersionId) {
+        return new ProjectDirtyScope(
+                this.projectId,
+                this.variantId,
+                baseVersionId,
+                this.blockSections,
+                this.entityChunks
+        );
+    }
+
+    public Split split(
+            Predicate<ChunkSectionPoint> selectBlockSection,
+            Predicate<ChunkPoint> selectEntityChunk
+    ) {
+        Predicate<ChunkSectionPoint> blockSelector = selectBlockSection == null ? ignored -> true : selectBlockSection;
+        Predicate<ChunkPoint> entitySelector = selectEntityChunk == null ? ignored -> true : selectEntityChunk;
+        LinkedHashSet<ChunkSectionPoint> selectedBlocks = new LinkedHashSet<>();
+        LinkedHashSet<ChunkSectionPoint> remainderBlocks = new LinkedHashSet<>();
+        for (ChunkSectionPoint section : this.blockSections) {
+            (blockSelector.test(section) ? selectedBlocks : remainderBlocks).add(section);
+        }
+        LinkedHashSet<ChunkPoint> selectedEntities = new LinkedHashSet<>();
+        LinkedHashSet<ChunkPoint> remainderEntities = new LinkedHashSet<>();
+        for (ChunkPoint chunk : this.entityChunks) {
+            (entitySelector.test(chunk) ? selectedEntities : remainderEntities).add(chunk);
+        }
+        return new Split(
+                new ProjectDirtyScope(this.projectId, this.variantId, this.baseVersionId, selectedBlocks, selectedEntities),
+                new ProjectDirtyScope(this.projectId, this.variantId, this.baseVersionId, remainderBlocks, remainderEntities)
+        );
+    }
+
+    public record Split(ProjectDirtyScope selected, ProjectDirtyScope remainder) {
     }
 
     private static LinkedHashSet<ChunkSectionPoint> copyBlockSections(Collection<ChunkSectionPoint> sections) {

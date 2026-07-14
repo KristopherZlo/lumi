@@ -6,6 +6,7 @@ import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.storage.ProjectLayout;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -51,5 +52,21 @@ class ProjectDirtyScopeRepositoryTest {
 
         assertTrue(scope.markBlockSection(section));
         assertFalse(scope.markBlockSection(section));
+    }
+
+    @Test
+    void splitsSpatialScopeAndRebasesRemainder() {
+        ProjectDirtyScope scope = ProjectDirtyScope.empty("project", "main", "v1");
+        ChunkSectionPoint selected = new ChunkSectionPoint(1, 2, 3);
+        ChunkSectionPoint remainder = new ChunkSectionPoint(4, 5, 6);
+        scope.markBlockSections(List.of(selected, remainder));
+        scope.markEntityChunk(new ChunkPoint(1, 2));
+
+        ProjectDirtyScope.Split split = scope.split(selected::equals, chunk -> false);
+
+        assertEquals(Set.of(selected), split.selected().blockSections());
+        assertEquals(Set.of(remainder), split.remainder().blockSections());
+        assertEquals(Set.of(new ChunkPoint(1, 2)), split.remainder().entityChunks());
+        assertEquals("v2", split.remainder().withBaseVersionId("v2").baseVersionId());
     }
 }

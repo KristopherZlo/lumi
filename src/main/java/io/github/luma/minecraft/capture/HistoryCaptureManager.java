@@ -928,6 +928,29 @@ public final class HistoryCaptureManager {
         );
     }
 
+    /** Replaces the isolated ledger only after the new head is durable. */
+    public void completeProjectDirtyScopeSave(
+            MinecraftServer server,
+            String projectId,
+            ProjectDirtyScope expectedScope,
+            ProjectDirtyScope remainder,
+            String newBaseVersionId
+    ) throws IOException {
+        TrackedProject trackedProject = this.serverThreadExecutor.call(
+                server,
+                () -> this.findTrackedProject(server, projectId)
+        );
+        if (trackedProject == null) {
+            throw new IllegalArgumentException("Tracked project is missing: " + projectId);
+        }
+        this.projectDirtyScopes.replaceAfterCommit(
+                trackedProject,
+                expectedScope,
+                remainder,
+                newBaseVersionId
+        );
+    }
+
     private List<ChunkSnapshotPayload> captureProjectDirtyScopeOnServerThread(
             MinecraftServer server,
             String projectId,
