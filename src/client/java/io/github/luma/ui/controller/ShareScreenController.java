@@ -178,7 +178,7 @@ public final class ShareScreenController {
             this.captureValidationMessage(exception);
             return exception.getMessage() != null && exception.getMessage().contains("does not add any new changes")
                     ? "luma.status.merge_no_changes"
-                    : "luma.status.merge_conflicts_found";
+                    : "luma.status.operation_failed";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Merge start failed for project {}", request.targetProjectName(), exception);
             TelemetryService.getInstance().recordOperationFailed(null, null, exception);
@@ -187,7 +187,7 @@ public final class ShareScreenController {
         }
     }
 
-    public String clearConflictZoneOverlay() {
+    public String clearCompareOverlay() {
         CompareOverlayRenderer.clear();
         this.clearValidationMessage();
         return "luma.status.compare_overlay_cleared";

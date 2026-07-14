@@ -106,13 +106,13 @@ public final class ShareMergeReviewSection {
                 Component.translatable("luma.action.apply_combine"),
                 button -> this.actions.applyMerge()
         );
-        mergeButton.active(model.mergePlan().canApply(List.of())
+        mergeButton.active(model.mergePlan().canApply()
                 && !model.operationActive()
                 && (!model.mergePlan().safetyReport().requiresTrustedConfirmation() || model.trustedPackageConfirmed()));
         actionsRow.child(mergeButton);
         section.child(actionsRow);
 
-        if (model.mergePlan().canApply(List.of())) {
+        if (model.mergePlan().canApply()) {
             section.child(LumaUi.caption(Component.translatable(
                     "luma.share.merge_ready",
                     model.mergePlan().mergeChangeCount()

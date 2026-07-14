@@ -1,6 +1,7 @@
 package io.github.luma.ui.controller;
 
 import io.github.luma.domain.model.VariantMergePlan;
+import io.github.luma.domain.model.HistoryPackageSafetyReport;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,8 @@ class MergePreviewCacheTest {
                 0,
                 0,
                 List.of(),
-                List.of()
+                List.of(),
+                HistoryPackageSafetyReport.clean()
         );
     }
 }

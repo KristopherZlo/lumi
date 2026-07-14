@@ -528,7 +528,6 @@ public final class ProjectScreenController {
                     ClientProjectAccess.resolveProjectLevel(this.client, this.projectService, projectName),
                     projectName,
                     sourceVariantId,
-                    List.of(),
                     this.client.getUser().getName()
             );
             return "luma.status.merge_started";
@@ -675,9 +674,6 @@ public final class ProjectScreenController {
         if (message.contains("does not add any new changes")
                 || message.contains("Source branch does not add")) {
             return "luma.status.merge_no_changes";
-        }
-        if (message.contains("conflicts")) {
-            return "luma.status.merge_conflicts_found";
         }
         if (message.contains("current recovery draft")) {
             return "luma.status.merge_requires_saved_draft";

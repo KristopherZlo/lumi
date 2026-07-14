@@ -444,7 +444,7 @@ public final class ShareScreen extends LumaScreen {
             this.mergePlan = null;
             this.mergePreviewPending = false;
             this.trustedPackageConfirmed = false;
-            this.controller.clearConflictZoneOverlay();
+            this.controller.clearCompareOverlay();
         }
         this.refresh(statusKey);
     }
@@ -554,7 +554,7 @@ public final class ShareScreen extends LumaScreen {
 
         @Override
         public void clearOverlay() {
-            String statusKey = controller.clearConflictZoneOverlay();
+            String statusKey = controller.clearCompareOverlay();
             validationMessage = controller.lastValidationMessage();
             refresh(statusKey);
         }
@@ -572,7 +572,6 @@ public final class ShareScreen extends LumaScreen {
                     selectedImportedProjectName,
                     selectedImportedVariantId,
                     selectedTargetVariantId,
-                    List.of(),
                     trustedPackageConfirmed
             ));
             validationMessage = controller.lastValidationMessage();

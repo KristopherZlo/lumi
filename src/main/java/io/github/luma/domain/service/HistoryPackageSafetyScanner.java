@@ -87,11 +87,7 @@ public final class HistoryPackageSafetyScanner {
         if (plan == null) {
             return HistoryPackageSafetyReport.clean();
         }
-        List<StoredBlockChange> blockChanges = new ArrayList<>(plan.mergeChanges());
-        for (var zone : plan.conflictZones()) {
-            blockChanges.addAll(zone.importedChanges());
-        }
-        return this.scanChanges(blockChanges, plan.mergeEntityChanges());
+        return this.scanChanges(plan.mergeChanges(), plan.mergeEntityChanges());
     }
 
     public HistoryPackageSafetyReport scanProjectHistory(

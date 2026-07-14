@@ -63,7 +63,6 @@ class VariantMergeServiceTest {
         );
 
         assertEquals("v0001", plan.commonAncestorVersionId());
-        assertFalse(plan.hasConflicts());
         assertTrue(plan.safetyReport().safe());
         assertEquals(1, plan.mergeBlockCount());
         assertEquals(new BlockPoint(8, 65, 8), plan.mergeChanges().getFirst().pos());
@@ -114,7 +113,6 @@ class VariantMergeServiceTest {
                 "roof-pass"
         );
 
-        assertFalse(plan.hasConflicts());
         assertEquals(1, plan.mergeBlockCount());
         StoredBlockChange change = plan.mergeChanges().getFirst();
         assertEquals(new BlockPoint(4, 65, 4), change.pos());
@@ -155,8 +153,6 @@ class VariantMergeServiceTest {
                 "roof-pass"
         );
 
-        assertFalse(plan.hasConflicts());
-        assertEquals(0, plan.conflictChunkCount());
         assertEquals(List.of(
                 new BlockPoint(4, 65, 4),
                 new BlockPoint(20, 65, 4),
@@ -169,7 +165,7 @@ class VariantMergeServiceTest {
     }
 
     @Test
-    void resolveMergeChangesDoesNotRequireConflictResolutions() throws Exception {
+    void planMergeReturnsAllIncomingChangesWithoutResolutionStep() throws Exception {
         UUID projectId = UUID.fromString("55555555-5555-5555-5555-555555555555");
         ProjectLayout targetLayout = this.seedTargetProject(this.tempDir.resolve("tower-resolve.mbp"), projectId, false);
         ProjectLayout sourceLayout = this.seedProject(layout(this.tempDir.resolve("tower-resolve-shared.mbp")), projectId, "Tower Shared", List.of(
@@ -195,9 +191,7 @@ class VariantMergeServiceTest {
                 "roof-pass"
         );
 
-        assertFalse(plan.hasConflicts());
         assertEquals(2, plan.mergeChanges().size());
-        assertEquals(plan.mergeChanges(), this.variantMergeService.resolveMergeChanges(plan, List.of()));
     }
 
     @Test
@@ -228,7 +222,7 @@ class VariantMergeServiceTest {
 
         assertEquals(0, plan.mergeBlockCount());
         assertEquals(1, plan.mergeEntityCount());
-        assertTrue(plan.canApply(List.of()));
+        assertTrue(plan.canApply());
         assertEquals(entityId, plan.mergeEntityChanges().getFirst().entityId());
     }
 
@@ -250,7 +244,6 @@ class VariantMergeServiceTest {
         BuildProject project = this.projectRepository.load(layout).orElseThrow();
         VariantMergePlan plan = this.variantMergeService.planMerge(layout, project, "main", layout, project, "roof-pass");
 
-        assertFalse(plan.hasConflicts());
         assertEquals("v0001", plan.commonAncestorVersionId());
         assertEquals("main", plan.targetVariantId());
         assertEquals("roof-pass", plan.sourceVariantId());
@@ -286,7 +279,6 @@ class VariantMergeServiceTest {
                 "roof-pass"
         );
 
-        assertFalse(plan.hasConflicts());
         assertEquals(1, plan.mergeEntityCount());
         StoredEntityChange change = plan.mergeEntityChanges().getFirst();
         assertEquals(entityId, change.entityId());

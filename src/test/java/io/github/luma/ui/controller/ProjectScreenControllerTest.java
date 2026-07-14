@@ -83,12 +83,6 @@ class ProjectScreenControllerTest {
                 "luma.status.merge_no_changes",
                 ProjectScreenController.mergeFailureStatus(new IllegalArgumentException("Source branch does not add any new changes"))
         );
-        assertEquals(
-                "luma.status.merge_conflicts_found",
-                ProjectScreenController.mergeFailureStatus(new IllegalArgumentException(
-                        "Merge conflicts must be resolved before applying the merge"
-                ))
-        );
     }
 
     @Test

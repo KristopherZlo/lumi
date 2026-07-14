@@ -5,9 +5,6 @@ import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.domain.model.HistoryPackageSafetyReport;
-import io.github.luma.domain.model.MergeConflictResolution;
-import io.github.luma.domain.model.MergeConflictZone;
-import io.github.luma.domain.model.MergeConflictZoneResolution;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.PatchWorldChanges;
@@ -82,7 +79,6 @@ public final class VariantMergeService {
             ServerLevel level,
             String projectName,
             String sourceVariantId,
-            List<MergeConflictZoneResolution> conflictResolutions,
             String author
     ) throws IOException {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
@@ -114,7 +110,6 @@ public final class VariantMergeService {
                             project,
                             activeVariantId,
                             sourceVariantId,
-                            conflictResolutions,
                             author,
                             progressSink
                     );
@@ -164,7 +159,6 @@ public final class VariantMergeService {
                         sourceProjectName,
                         sourceVariantId,
                         targetVariantId,
-                        List.of(),
                         false
                 ),
                 author
@@ -203,7 +197,7 @@ public final class VariantMergeService {
                             request.sourceVariantId()
                     );
                     this.requireTrustedImportedPackage(plan, targetLayout, sourceLayout, request.trustedPackageConfirmed());
-                    List<StoredBlockChange> mergeChanges = this.resolveMergeChanges(plan, request.conflictResolutions());
+                    List<StoredBlockChange> mergeChanges = plan.mergeChanges();
                     List<StoredEntityChange> mergeEntityChanges = plan.mergeEntityChanges();
                     if (mergeChanges.isEmpty() && mergeEntityChanges.isEmpty()) {
                         throw new IllegalArgumentException("Imported variant does not add any new changes");
@@ -250,13 +244,12 @@ public final class VariantMergeService {
             BuildProject project,
             String activeVariantId,
             String sourceVariantId,
-            List<MergeConflictZoneResolution> conflictResolutions,
             String author,
             WorldOperationManager.ProgressSink progressSink
     ) throws IOException {
         progressSink.update(OperationStage.PREPARING, 0, 1, "Planning branch merge");
         VariantMergePlan plan = this.planMerge(layout, project, activeVariantId, layout, project, sourceVariantId);
-        List<StoredBlockChange> mergeChanges = this.resolveMergeChanges(plan, conflictResolutions);
+        List<StoredBlockChange> mergeChanges = plan.mergeChanges();
         List<StoredEntityChange> mergeEntityChanges = plan.mergeEntityChanges();
         if (mergeChanges.isEmpty() && mergeEntityChanges.isEmpty()) {
             throw new IllegalArgumentException("Source branch does not add any new changes");
@@ -424,7 +417,6 @@ public final class VariantMergeService {
                 targetStates.size(),
                 List.copyOf(mergeChanges),
                 mergeEntityChanges,
-                List.of(),
                 HistoryPackageSafetyReport.clean()
         );
         if (targetLayout.root().toAbsolutePath().normalize().equals(sourceLayout.root().toAbsolutePath().normalize())) {
@@ -460,40 +452,8 @@ public final class VariantMergeService {
                 plan.targetChangedBlocks(),
                 plan.mergeChanges(),
                 plan.mergeEntityChanges(),
-                plan.conflictZones(),
                 safetyReport
         );
-    }
-
-    List<StoredBlockChange> resolveMergeChanges(
-            VariantMergePlan plan,
-            List<MergeConflictZoneResolution> conflictResolutions
-    ) {
-        List<StoredBlockChange> resolved = new ArrayList<>(plan.mergeChanges());
-        if (!plan.hasConflicts()) {
-            return List.copyOf(resolved);
-        }
-
-        Map<String, MergeConflictResolution> resolutionMap = new LinkedHashMap<>();
-        if (conflictResolutions != null) {
-            for (MergeConflictZoneResolution resolution : conflictResolutions) {
-                if (resolution == null || resolution.zoneId() == null || resolution.zoneId().isBlank()) {
-                    continue;
-                }
-                resolutionMap.put(resolution.zoneId(), resolution.resolution());
-            }
-        }
-
-        for (MergeConflictZone zone : plan.conflictZones()) {
-            MergeConflictResolution resolution = resolutionMap.get(zone.id());
-            if (resolution == null) {
-                throw new IllegalArgumentException("Merge conflicts must be resolved before applying the merge");
-            }
-            if (resolution == MergeConflictResolution.USE_IMPORTED) {
-                resolved.addAll(zone.importedChanges());
-            }
-        }
-        return List.copyOf(resolved);
     }
 
     private void validateCompatibility(BuildProject targetProject, BuildProject sourceProject) {
