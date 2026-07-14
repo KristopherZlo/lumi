@@ -108,6 +108,31 @@ class ProjectDirtyScopeManagerTest {
     }
 
     @Test
+    void clearsReconciledNoOpScopeWithoutAdvancingHead() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("no-op-scope.mbp"));
+        TrackedProject project = trackedProject(layout);
+        ProjectDirtyScope expected = ProjectDirtyScope.empty(
+                project.project().id().toString(), "main", "v0001"
+        );
+        expected.markBlockSection(new ChunkSectionPoint(1, 2, 3));
+        ProjectDirtyScope remainder = ProjectDirtyScope.empty(
+                project.project().id().toString(), "main", "v0001"
+        );
+        ProjectDirtyScopeRepository repository = new ProjectDirtyScopeRepository();
+        repository.save(layout, expected);
+
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(), new BaselineChunkRepository(), repository,
+                Executors.newSingleThreadExecutor(), Executors.newSingleThreadExecutor()
+        )) {
+            new ProjectDirtyScopeManager(coordinator, repository)
+                    .replaceAfterCommit(project, expected, remainder, "v0001");
+
+            assertTrue(repository.load(layout).isEmpty());
+        }
+    }
+
+    @Test
     void verifiedApplyCanCreateScopeFromEmptyLedger() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         TrackedProject project = trackedProject(layout);
@@ -184,6 +209,7 @@ class ProjectDirtyScopeManagerTest {
             ProjectDirtyScope scope = manager.runtimeSnapshot(publishedHead);
             assertEquals("v0002", scope.baseVersionId());
             assertEquals(List.of(section), scope.blockSections().stream().toList());
+            manager.loadDurable(publishedHead);
         }
     }
 

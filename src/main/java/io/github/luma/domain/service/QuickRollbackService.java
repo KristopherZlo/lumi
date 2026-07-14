@@ -150,6 +150,15 @@ public final class QuickRollbackService {
         this.requireCurrentHeadDraft(pendingDraft, activeVariant, projectName);
         QuickRollbackDraftPlan plan = QuickRollbackDraftPlan.fromDraft(pendingDraft, selectedBounds);
         if (plan.isEmpty()) {
+            if (!dirtySplit.selected().isEmpty()) {
+                this.captureManager.completeProjectDirtyScopeSave(
+                        level.getServer(),
+                        project.id().toString(),
+                        dirtyScope,
+                        dirtySplit.remainder(),
+                        activeVariant.headVersionId()
+                );
+            }
             throw new IllegalArgumentException("No pending tracked changes for " + projectName);
         }
         this.logQuickRollbackStart(layout, project, activeVariant, frozenDraft.isPresent(), plan);

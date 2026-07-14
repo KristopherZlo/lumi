@@ -75,14 +75,24 @@ public final class HistoryProtectionService {
         this.protectionRepository.saveDegraded(layout, HistoryProtectionStatus.degraded(detail, Instant.now()));
     }
 
-    public void recordOperationFailure(MinecraftServer server, OperationHandle handle, String detail) throws IOException {
-        if (server == null || handle == null || !reliabilityOperation(handle.label())) {
+    public void recordOperationFailure(
+            MinecraftServer server,
+            OperationHandle handle,
+            String detail,
+            Throwable failure
+    ) throws IOException {
+        if (server == null || handle == null || !reliabilityOperation(handle.label())
+                || !this.shouldMarkDegraded(failure)) {
             return;
         }
         var projectsRoot = server.getWorldPath(LevelResource.ROOT).resolve("lumi").resolve("projects");
         ProjectLayout layout = this.projectRepository.findLayoutByProjectId(projectsRoot, handle.projectId())
                 .orElseThrow(() -> new IOException("Project layout is missing for " + handle.projectId()));
         this.markDegraded(layout, detail);
+    }
+
+    boolean shouldMarkDegraded(Throwable failure) {
+        return failure != null && !(failure instanceof IllegalArgumentException);
     }
 
     private static boolean savingOperation(String label) {

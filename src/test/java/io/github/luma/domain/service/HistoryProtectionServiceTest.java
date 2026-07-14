@@ -47,6 +47,15 @@ class HistoryProtectionServiceTest {
     }
 
     @Test
+    void expectedValidationFailuresDoNotDegradeHistory() {
+        HistoryProtectionService service = new HistoryProtectionService();
+
+        assertFalse(service.shouldMarkDegraded(new IllegalArgumentException("No pending tracked changes")));
+        assertTrue(service.shouldMarkDegraded(new java.io.IOException("Patch write failed")));
+        assertTrue(service.shouldMarkDegraded(new IllegalStateException("Restore verification mismatch")));
+    }
+
+    @Test
     void exposesActionlessDirtyScopeWithoutPlayerDraft() throws Exception {
         HistoryProtectionService service = new HistoryProtectionService();
         ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("project.mbp"));

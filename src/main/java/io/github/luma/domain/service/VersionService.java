@@ -373,6 +373,7 @@ public final class VersionService {
             throw new IllegalArgumentException("No pending tracked changes for " + project.name());
         }
         if (draft.isEmpty()) {
+            this.completeReconciledNoOpScope(level, project, dirtyScope, dirtySplit);
             throw new IllegalArgumentException("No pending tracked changes for " + project.name());
         }
 
@@ -396,6 +397,7 @@ public final class VersionService {
                 this.draftIsolationService.splitForActiveZone(layout, draft, author);
         DraftSplit split = scoped.split();
         if (split.selected().isEmpty()) {
+            this.completeReconciledNoOpScope(level, project, dirtyScope, dirtySplit);
             if (!split.remainder().isEmpty()) {
                 this.recoveryRepository.saveDraft(layout, split.remainder());
             }
@@ -420,6 +422,24 @@ public final class VersionService {
                 scoped.workZone(),
                 dirtyScope.isEmpty() ? null : dirtyScope,
                 dirtySplit.remainder()
+        );
+    }
+
+    private void completeReconciledNoOpScope(
+            ServerLevel level,
+            BuildProject project,
+            ProjectDirtyScope dirtyScope,
+            ProjectDirtyScope.Split dirtySplit
+    ) throws IOException {
+        if (dirtySplit.selected().isEmpty()) {
+            return;
+        }
+        HistoryCaptureManager.getInstance().completeProjectDirtyScopeSave(
+                level.getServer(),
+                project.id().toString(),
+                dirtyScope,
+                dirtySplit.remainder(),
+                dirtyScope.baseVersionId()
         );
     }
 

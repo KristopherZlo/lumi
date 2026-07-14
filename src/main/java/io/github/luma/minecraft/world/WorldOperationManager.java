@@ -262,7 +262,8 @@ public final class WorldOperationManager {
             this.historyProtectionService.recordOperationFailure(
                     server,
                     operation.handle(),
-                    operation.snapshot().detail()
+                    operation.snapshot().detail(),
+                    operation.failure()
             );
         } catch (Exception exception) {
             LumaMod.LOGGER.error(
@@ -311,6 +312,7 @@ public final class WorldOperationManager {
         private final OperationHandle handle;
         private final String unitLabel;
         private volatile OperationSnapshot snapshot;
+        private volatile Exception failure;
         private volatile OperationStage lastLoggedStage;
         private volatile int lastLoggedPercent = -1;
         protected final WorldApplyPerformanceGovernor performanceGovernor = new WorldApplyPerformanceGovernor();
@@ -438,6 +440,7 @@ public final class WorldOperationManager {
 
         protected void fail(Exception exception) {
             this.releaseWorldTickFreeze();
+            this.failure = exception;
             this.snapshot = new OperationSnapshot(
                     this.handle,
                     OperationStage.FAILED,
@@ -459,6 +462,10 @@ public final class WorldOperationManager {
                     this.handle.label(),
                     this.snapshot.detail()
             );
+        }
+
+        Exception failure() {
+            return this.failure;
         }
 
         abstract boolean advance(WorldApplyBudget budget, long deadlineNanos) throws Exception;
