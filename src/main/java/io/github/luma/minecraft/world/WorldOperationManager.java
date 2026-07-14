@@ -4,7 +4,6 @@ import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.debug.LumaDiagnosticsLog;
 import io.github.luma.debug.LumaLoadLog;
-import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationProgress;
 import io.github.luma.domain.model.OperationSnapshot;
@@ -787,7 +786,6 @@ public final class WorldOperationManager {
                     int maxBlocks = this.maxWorkForCurrentStep(budget, tickCounters.workUnits(), tickCounters.nativeCells());
                     int maxDirectSections = Math.max(0, budget.maxDirectSections() - tickCounters.directSections());
                     try {
-                        LumiTestFailpoints.hit(LumiTestFailpoints.MID_WORLD_OPERATION_APPLY);
                         processed = this.applyCurrentChunk(
                                 maxBlocks,
                                 maxDirectSections,

@@ -15,8 +15,6 @@ class LumaCommandsTest {
         String source = Files.readString(Path.of("src/main/java/io/github/luma/minecraft/command/LumaCommands.java"));
 
         assertFalse(source.contains("Commands.literal(\"testing\")"));
-        assertFalse(source.contains("SingleplayerTestingService"));
-        assertFalse(source.contains("RuntimeTestingHooks"));
     }
 
     @Test

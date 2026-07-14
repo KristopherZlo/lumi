@@ -4,7 +4,6 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVariantSwitchKeys;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
-import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.HistoryTombstoneRepository;
 import io.github.luma.storage.repository.ProjectRepository;
@@ -119,7 +118,6 @@ public final class VariantService {
         );
         List<ProjectVariant> nextVariants = new ArrayList<>(variants);
         nextVariants.add(variant);
-        LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VARIANT_METADATA_WRITE);
         this.variantRepository.save(layout, nextVariants);
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
@@ -196,7 +194,6 @@ public final class VariantService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Variant not found: " + variantId));
 
-        LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VARIANT_METADATA_WRITE);
         this.projectRepository.save(layout, project.withActiveVariantId(targetVariant.id(), Instant.now()).withSchemaVersion(io.github.luma.domain.model.BuildProject.CURRENT_SCHEMA_VERSION));
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),

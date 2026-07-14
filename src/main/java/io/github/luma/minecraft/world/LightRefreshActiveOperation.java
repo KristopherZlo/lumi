@@ -3,7 +3,6 @@ package io.github.luma.minecraft.world;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.debug.LumaDiagnosticsLog;
 import io.github.luma.debug.LumaLoadLog;
-import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
@@ -161,7 +160,6 @@ final class LightRefreshActiveOperation extends WorldOperationManager.ActiveOper
     }
 
     private boolean drainDeferredLightUpdates(WorldApplyBudget budget, long deadlineNanos) {
-        LumiTestFailpoints.hit(LumiTestFailpoints.LIGHT_REFRESH_DRAIN_START);
         if (!this.lightUpdateQueue.prepareDrainPositionsAsync(this.executorSupplier.get())) {
             if (!this.prepareWaitLogged) {
                 this.prepareWaitLogged = true;

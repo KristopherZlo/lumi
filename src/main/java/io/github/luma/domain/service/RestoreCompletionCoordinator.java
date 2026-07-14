@@ -1,7 +1,6 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.LumaMod;
-import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.PartialRestoreRequest;
 import io.github.luma.domain.model.PendingRestoreCompletion;
@@ -113,7 +112,6 @@ final class RestoreCompletionCoordinator {
                 now
         ));
         List<ProjectVariant> latestVariants = this.variantRepository.loadAll(layout);
-        LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_RESTORE_METADATA_WRITE);
         this.variantRepository.save(layout, this.replaceVariantHead(
                 latestVariants.isEmpty() ? variants : latestVariants,
                 targetVariant.id(),

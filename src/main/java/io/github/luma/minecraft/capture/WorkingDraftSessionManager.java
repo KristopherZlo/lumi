@@ -7,7 +7,6 @@ import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.TrackedChangeBuffer;
 import io.github.luma.domain.model.WorldMutationSource;
-import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.storage.repository.RecoveryRepository;
 import java.io.IOException;
 import java.time.Duration;
@@ -315,7 +314,6 @@ final class WorkingDraftSessionManager {
             PersistenceDrainMode drainMode,
             boolean durableCurrentRunMarker
     ) throws IOException {
-        LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_DRAFT_FREEZE);
         if (trackedProject != null) {
             if (drainMode == PersistenceDrainMode.ALL) {
                 this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
@@ -329,7 +327,6 @@ final class WorkingDraftSessionManager {
         this.clearSessionDiagnostics(projectId);
         if (session == null) {
             if (trackedProject == null) {
-                LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
                 return Optional.empty();
             }
             LumaDebugLog.log(
@@ -343,14 +340,12 @@ final class WorkingDraftSessionManager {
             if (persistedDraft.isPresent() && !durableCurrentRunMarker) {
                 this.clearCurrentRunDraft(projectId, trackedProject);
             }
-            LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
             return persistedDraft;
         }
 
         if (trackedProject != null && !session.isEmpty()) {
             if (persistedDraftIsCurrent) {
                 this.markCurrentRunDraft(projectId, trackedProject, durableCurrentRunMarker);
-                LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
                 LumaMod.LOGGER.info(
                         "Skipped shutdown draft rewrite for project {} because the active working draft is already persisted",
                         trackedProject.project().name()
@@ -366,7 +361,6 @@ final class WorkingDraftSessionManager {
                     session.size()
             );
             this.recoveryRepository.saveDraft(trackedProject.layout(), session.toDraft());
-            LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
             this.markCurrentRunDraft(projectId, trackedProject, durableCurrentRunMarker);
             LumaMod.LOGGER.info(
                     "Persisted active working draft for project {} with {} pending changes",
@@ -375,7 +369,6 @@ final class WorkingDraftSessionManager {
             );
         }
         Optional<TrackedChangeBuffer> frozenSession = session.isEmpty() ? Optional.empty() : Optional.of(session);
-        LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_DRAFT_FREEZE);
         return frozenSession;
     }
 

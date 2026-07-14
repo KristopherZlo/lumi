@@ -32,7 +32,6 @@ import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.LiveEntityChunkCollector;
 import io.github.luma.minecraft.capture.PlayerRespawnCaptureService;
 import io.github.luma.minecraft.capture.SnapshotCaptureService;
-import io.github.luma.debug.LumiTestFailpoints;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
@@ -408,7 +407,6 @@ public final class VersionService {
         progressSink.update(OperationStage.WRITING, 0, split.selected().totalChangeCount(), "Writing operation draft");
         this.recoveryRepository.saveOperationDraft(layout, split.selected());
         recordTiming(timing, VersionSaveTiming.OPERATION_DRAFT_WRITE, sectionStartedAt);
-        LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_OPERATION_DRAFT_WRITE);
 
         sectionStartedAt = System.nanoTime();
         if (split.remainder().isEmpty()) {
@@ -754,7 +752,6 @@ public final class VersionService {
                     draft.changes(),
                     draft.entityChanges()
             );
-            LumiTestFailpoints.hit(LumiTestFailpoints.AFTER_PATCH_DATA_WRITE);
         } finally {
             recordTiming(timing, VersionSaveTiming.PATCH_PAYLOAD_WRITE, sectionStartedAt);
         }
@@ -821,7 +818,6 @@ public final class VersionService {
         progressSink.update(OperationStage.FINALIZING, draft.changes().size(), draft.changes().size(), "Finalizing version");
         sectionStartedAt = System.nanoTime();
         try (var ignored = LumaLoadLog.measure("save", "VersionService.writeVersionManifests", "version=" + version.id())) {
-            LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VERSION_MANIFEST_WRITE);
             this.versionRepository.save(layout, version);
             if (publishHead) {
                 this.publishVersionMetadata(layout, project, variants, activeVariant, version, now);
@@ -867,7 +863,6 @@ public final class VersionService {
             ProjectVersion version,
             Instant now
     ) throws IOException {
-        LumiTestFailpoints.hit(LumiTestFailpoints.BEFORE_VARIANT_METADATA_WRITE);
         List<ProjectVariant> updatedVariants = new ArrayList<>();
         for (ProjectVariant variant : variants) {
             updatedVariants.add(variant.id().equals(activeVariant.id())

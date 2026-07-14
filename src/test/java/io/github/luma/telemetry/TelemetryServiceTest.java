@@ -142,7 +142,7 @@ class TelemetryServiceTest {
     private static IllegalStateException failureWithPrivateMessage() {
         IllegalArgumentException cause = new IllegalArgumentException("Nested C:\\Users\\Alex\\Castle World failure");
         cause.setStackTrace(new StackTraceElement[]{
-                new StackTraceElement("io.github.luma.storage.repository.SnapshotRepository", "load", "SnapshotRepository.java", 31)
+                new StackTraceElement("io.github.luma.storage.repository.SnapshotReader", "readFile", "SnapshotReader.java", 31)
         });
         IllegalStateException failure = new IllegalStateException(
                 "Failed block write at x=12 y=64 z=-4 in C:\\Users\\Alex\\Castle World",
