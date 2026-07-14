@@ -583,6 +583,8 @@ public final class WorldOperationManager {
         private final ExactReplayStateQueue exactReplayStateQueue = new ExactReplayStateQueue();
         private final WorldApplyNoOpPruner noOpPruner = new WorldApplyNoOpPruner();
         private final WorldApplyFinalVerificationGate finalVerificationGate = new WorldApplyFinalVerificationGate();
+        private final AuthoritativeEntityFinalizer authoritativeEntityFinalizer =
+                new AuthoritativeEntityFinalizer();
 
         private PreparedApplyActiveOperation(
                 ServerLevel level,
@@ -836,6 +838,7 @@ public final class WorldOperationManager {
                     tickCounters.recordChunkFinished();
                     this.exactReplayStateQueue.record(this.currentBatch);
                     this.finalVerificationGate.record(this.currentTargetBatch);
+                    this.authoritativeEntityFinalizer.record(this.currentTargetBatch);
                     this.logBlockApplyChunkFinish(this.currentBatch);
                     this.currentBatch = null;
                     this.currentTargetBatch = null;
@@ -911,6 +914,9 @@ public final class WorldOperationManager {
                 )) {
                     return false;
                 }
+                if (!this.finalizeAuthoritativeEntities(budget, deadlineNanos)) {
+                    return false;
+                }
                 this.progressSink().update(
                         OperationStage.FINALIZING,
                         this.appliedWorkUnits,
@@ -929,6 +935,34 @@ public final class WorldOperationManager {
             }
 
             return false;
+        }
+
+        private boolean finalizeAuthoritativeEntities(WorldApplyBudget budget, long deadlineNanos) {
+            boolean complete;
+            try (
+                    WorldMutationContext.SourceFrame ignoredSource =
+                            WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
+                    WorldMutationContext.SuppressionFrame ignoredSuppression =
+                            WorldMutationContext.pushCaptureSuppression()
+            ) {
+                complete = this.authoritativeEntityFinalizer.advance(
+                        this.level(),
+                        budget.maxEntityOperations(),
+                        deadlineNanos,
+                        this.applyMetrics,
+                        this.prepared.replayedEntityContext()
+                );
+            }
+            if (!complete) {
+                this.progressSink().update(
+                        OperationStage.FINALIZING,
+                        this.appliedWorkUnits,
+                        this.prepared.totalWorkUnits(),
+                        this.applyDetail("Reasserting authoritative entities, "
+                                + this.authoritativeEntityFinalizer.pendingChunks() + " chunks queued")
+                );
+            }
+            return complete;
         }
 
         private boolean advancePreload(WorldApplyBudget budget, long deadlineNanos) {
