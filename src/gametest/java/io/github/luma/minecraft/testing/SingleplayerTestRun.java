@@ -118,6 +118,7 @@ final class SingleplayerTestRun {
     private OperationHandle pendingOperation;
     private String lastOperationProgressKey = "";
     private BuildProject project;
+    private BuildProject actionlessProject;
     private ProjectVariant branch;
     private SingleplayerGameplayRegressionSuite.GameplayRegressionReport gameplayReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport primedTntUndoReport;
@@ -267,6 +268,7 @@ final class SingleplayerTestRun {
                 case CHECK_CHAINED_TNT_CAPTURE -> this.checkChainedTntCapture(server);
                 case START_CHAINED_TNT_UNDO -> this.startChainedTntUndo();
                 case CHECK_CHAINED_TNT_UNDO -> this.checkChainedTntUndo();
+                case CREATE_ACTIONLESS_PROJECT -> this.createActionlessProject(server);
                 case START_ACTIONLESS_FLUID -> this.startActionlessFluid(server);
                 case CHECK_ACTIONLESS_FLUID -> this.checkActionlessFluid(server);
                 case START_ACTIONLESS_ROLLBACK -> this.startActionlessRollback();
@@ -1187,14 +1189,30 @@ final class SingleplayerTestRun {
                         + (this.chainedTntReport == null
                         ? "missing report"
                         : this.chainedTntReport.restorationMismatches(this.level)));
-        this.completePhase(this.level.getServer(), Phase.START_ACTIONLESS_FLUID);
+        this.completePhase(this.level.getServer(), Phase.CREATE_ACTIONLESS_PROJECT);
+    }
+
+    private void createActionlessProject(MinecraftServer server) throws Exception {
+        BlockPos rollbackPos = this.volume.min().offset(2, 8, 12);
+        BlockPos savePos = this.volume.min().offset(12, 8, 12);
+        String projectName = "Lumi Actionless Safety " + System.currentTimeMillis();
+        this.actionlessProject = this.projectService.createProject(
+                this.level,
+                projectName,
+                rollbackPos,
+                savePos,
+                ACTOR
+        );
+        this.check(this.projectService.loadVersions(server, projectName).size() == 1,
+                "Actionless safety fixture has an isolated initial HEAD");
+        this.completePhase(server, Phase.START_ACTIONLESS_FLUID);
     }
 
     private void startActionlessFluid(MinecraftServer server) {
         this.actionlessFluidPos = this.volume.min().offset(2, 8, 12);
         this.actionlessWaitTicks = 0;
         this.actionlessUndoCount = UndoRedoHistoryManager.getInstance()
-                .recentUndoActions(this.project.id().toString(), 100).size();
+                .recentUndoActions(this.actionlessProject.id().toString(), 100).size();
         this.level.setBlock(this.actionlessFluidPos, Blocks.WATER.defaultBlockState(), 3);
         this.completePhase(server, Phase.CHECK_ACTIONLESS_FLUID);
     }
@@ -1203,22 +1221,22 @@ final class SingleplayerTestRun {
         if (++this.actionlessWaitTicks < 20) {
             return;
         }
-        this.check(this.recoveryService.loadDraft(server, this.project.name()).isEmpty(),
+        this.check(this.recoveryService.loadDraft(server, this.actionlessProject.name()).isEmpty(),
                 "Actionless fluid does not create a player recovery draft");
         this.check(
-                UndoRedoHistoryManager.getInstance().recentUndoActions(this.project.id().toString(), 100).size()
+                UndoRedoHistoryManager.getInstance().recentUndoActions(this.actionlessProject.id().toString(), 100).size()
                         == this.actionlessUndoCount,
                 "Actionless fluid does not create a player undo action"
         );
         var dirtyScope = HistoryCaptureManager.getInstance()
-                .loadProjectDirtyScope(server, this.project.id().toString());
+                .loadProjectDirtyScope(server, this.actionlessProject.id().toString());
         this.check(dirtyScope.blockSections().contains(ChunkSectionPoint.from(BlockPoint.from(this.actionlessFluidPos))),
                 "Actionless fluid marks its durable dirty section");
         this.completePhase(server, Phase.START_ACTIONLESS_ROLLBACK);
     }
 
     private void startActionlessRollback() throws Exception {
-        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
+        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.actionlessProject.name());
         this.log.info("Queued actionless fluid rollback " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_ACTIONLESS_ROLLBACK);
     }
@@ -1227,7 +1245,7 @@ final class SingleplayerTestRun {
         this.check(this.level.getFluidState(this.actionlessFluidPos).isEmpty(),
                 "Rollback to HEAD removes actionless fluid");
         this.check(HistoryCaptureManager.getInstance()
-                        .loadProjectDirtyScope(server, this.project.id().toString()).isEmpty(),
+                        .loadProjectDirtyScope(server, this.actionlessProject.id().toString()).isEmpty(),
                 "Verified rollback clears the actionless dirty scope");
         this.completePhase(server, Phase.START_ACTIONLESS_SAVE);
     }
@@ -1236,10 +1254,10 @@ final class SingleplayerTestRun {
         this.actionlessFluidPos = this.volume.min().offset(12, 8, 12);
         this.check(this.level.setBlock(this.actionlessFluidPos, Blocks.WATER.defaultBlockState(), 3),
                 "Actionless safety-save fluid changed a fresh block");
-        this.actionlessSaveVersionId = this.nextVersionId(server);
+        this.actionlessSaveVersionId = this.nextVersionId(server, this.actionlessProject.name());
         this.pendingOperation = this.versionService.startSaveVersion(
                 this.level,
-                this.project.name(),
+                this.actionlessProject.name(),
                 "Actionless fluid safety save",
                 ACTOR
         );
@@ -1249,13 +1267,17 @@ final class SingleplayerTestRun {
 
     private void checkActionlessSave(MinecraftServer server) throws Exception {
         VersionDiff diff = this.value("Actionless fluid save diff can be built", () ->
-                this.diffService.compareVersionToParent(server, this.project.name(), this.actionlessSaveVersionId));
+                this.diffService.compareVersionToParent(
+                        server,
+                        this.actionlessProject.name(),
+                        this.actionlessSaveVersionId
+                ));
         if (diff != null) {
             this.check(diff.changedBlocks().stream()
                             .anyMatch(entry -> entry.pos().equals(BlockPoint.from(this.actionlessFluidPos))),
                     "Save includes the actionless fluid from the dirty scope");
         }
-        this.check(this.recoveryService.loadDraft(server, this.project.name()).isEmpty(),
+        this.check(this.recoveryService.loadDraft(server, this.actionlessProject.name()).isEmpty(),
                 "Actionless safety save still exposes no player draft");
         this.completePhase(server, Phase.START_CREEPER_INCIDENT);
     }
@@ -1810,11 +1832,19 @@ final class SingleplayerTestRun {
     }
 
     private int storedVersionCount(MinecraftServer server) throws Exception {
-        return this.versionRepository.loadAll(this.projectService.resolveLayout(server, this.project.name())).size();
+        return this.storedVersionCount(server, this.project.name());
+    }
+
+    private int storedVersionCount(MinecraftServer server, String projectName) throws Exception {
+        return this.versionRepository.loadAll(this.projectService.resolveLayout(server, projectName)).size();
     }
 
     private String nextVersionId(MinecraftServer server) throws Exception {
-        return ProjectService.versionId(this.storedVersionCount(server) + 1);
+        return this.nextVersionId(server, this.project.name());
+    }
+
+    private String nextVersionId(MinecraftServer server, String projectName) throws Exception {
+        return ProjectService.versionId(this.storedVersionCount(server, projectName) + 1);
     }
 
     private boolean previewReady(MinecraftServer server, ProjectVersion version) throws Exception {
@@ -2023,6 +2053,7 @@ final class SingleplayerTestRun {
         CHECK_CHAINED_TNT_CAPTURE("Verify TNT chain capture", "check that one live undo action owns the full chain"),
         START_CHAINED_TNT_UNDO("Queue TNT chain undo", "undo the redstone TNT chain through the operation model"),
         CHECK_CHAINED_TNT_UNDO("Verify TNT chain undo", "check that persistent TNT chain blocks and witnesses were restored"),
+        CREATE_ACTIONLESS_PROJECT("Actionless safety fixture", "create an isolated project HEAD for ambient mutation checks"),
         START_ACTIONLESS_FLUID("Actionless fluid", "mutate fluid without a player action and wait for ambient fallout"),
         CHECK_ACTIONLESS_FLUID("Verify actionless safety capture", "check dirty scope without player draft or undo"),
         START_ACTIONLESS_ROLLBACK("Queue actionless rollback", "restore actionless fluid to the active head"),
@@ -2127,6 +2158,7 @@ final class SingleplayerTestRun {
                      START_POWERED_TNT_UNDO_INTERACTION, START_POWERED_TNT_UNDO, CHECK_POWERED_TNT_UNDO,
                      START_CHAINED_TNT_INTERACTION, CHECK_CHAINED_TNT_CAPTURE,
                      START_CHAINED_TNT_UNDO, CHECK_CHAINED_TNT_UNDO,
+                     CREATE_ACTIONLESS_PROJECT,
                      START_ACTIONLESS_FLUID, CHECK_ACTIONLESS_FLUID,
                      START_ACTIONLESS_ROLLBACK, CHECK_ACTIONLESS_ROLLBACK,
                      START_ACTIONLESS_SAVE, CHECK_ACTIONLESS_SAVE,

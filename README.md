@@ -173,7 +173,7 @@ Run the integrated singleplayer player-flow regression suite:
 
 The player-flow TNT checks begin from an empty post-save draft, place and ignite one TNT through normal player APIs, let its fallout settle, and require one live undo to restore every witness block. A save-during-fuse regression publishes while powered TNT is primed, then requires later blast damage to retain its original action id and rebase onto the new HEAD. Fuse-time undo, powered undo, and ten-block chain scenarios use live undo, which invalidates their deferred causal contexts and prevents later scheduled fallout from reopening an already-undone action. The same flow strikes deterministic fixtures with an unowned creeper and lightning, verifies one `world incident` action for each, and restores each fixture with one undo. Quick-rollback load checks are bounded by reconciled dirty sections because safety history can intentionally cover persistent changes that are absent from the player draft.
 
-The same runtime flow creates fluid without a player context, verifies that it adds neither a player draft nor an undo action, rolls it back through the dirty scope, then repeats the mutation and verifies that a normal save publishes it.
+The same runtime flow creates a narrow isolated project HEAD, adds fluid without a player context, verifies that it adds neither a player draft nor an undo action, rolls it back through the dirty scope, then repeats the mutation and verifies that a normal save publishes it. The isolated project prevents older gameplay fallout in the broad shared fixture from satisfying or invalidating the actionless assertions.
 
 Compare vanilla and Lumi world startup against the same normal-world seed:
 
