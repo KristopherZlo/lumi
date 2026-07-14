@@ -16,7 +16,6 @@ import io.github.luma.domain.model.WorldOriginInfo;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.capture.SnapshotCaptureService;
 import io.github.luma.minecraft.bootstrap.WorldInitialBackupService;
-import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.minecraft.access.LumaAccessControl;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.HistoryTombstoneRepository;
@@ -62,7 +61,6 @@ public final class ProjectService {
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final WorldOriginRepository worldOriginRepository = new WorldOriginRepository();
     private final WorldInitialBackupService worldInitialBackupService = new WorldInitialBackupService();
-    private final WorldOperationManager worldOperationManager = WorldOperationManager.getInstance();
     private final ProjectVersionVisibility versionVisibility = new ProjectVersionVisibility();
     private final VersionLineageService versionLineageService = new VersionLineageService();
 
@@ -150,14 +148,11 @@ public final class ProjectService {
             }
             this.ensureWorldProject(player.level(), "Lumi");
         }
-        boolean activeOperation = this.worldOperationManager.hasActiveOperation(server);
         for (BuildProject project : this.listProjects(server)) {
             ProjectLayout layout = this.resolveLayout(server, project.name());
             this.historyMigrationService.migrate(layout, project);
-            if (!activeOperation) {
-                this.restoreCompletionRecoveryService.completePending(layout, project, server);
-                this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
-            }
+            this.restoreCompletionRecoveryService.completePending(layout, project, server);
+            this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
             if (!project.tracksWholeDimension()) {
                 continue;
             }

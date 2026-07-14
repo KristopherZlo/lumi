@@ -1,13 +1,10 @@
 package io.github.luma.minecraft.bootstrap;
 
 import io.github.luma.LumaMod;
+import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.service.ProjectService;
+import io.github.luma.minecraft.world.WorldOperationManager;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import net.minecraft.server.MinecraftServer;
 
 /**
@@ -15,32 +12,26 @@ import net.minecraft.server.MinecraftServer;
  */
 public final class WorldBootstrapService implements AutoCloseable {
 
-    private static final AtomicInteger NEXT_BOOTSTRAP_THREAD_INDEX = new AtomicInteger(1);
+    private static final String OPERATION_ID = "world-bootstrap";
 
     private final ProjectService projectService;
-    private ExecutorService executor;
-    private final AtomicReference<CompletableFuture<Void>> pendingBootstrap = new AtomicReference<>();
+    private final WorldOperationManager worldOperationManager;
     private final WorldBootstrapDelay delay = new WorldBootstrapDelay();
     private MinecraftServer scheduledServer;
 
     public WorldBootstrapService() {
-        this(new ProjectService(), Executors.newSingleThreadExecutor(WorldBootstrapService::bootstrapThread));
+        this(new ProjectService(), WorldOperationManager.getInstance());
     }
 
-    WorldBootstrapService(ProjectService projectService, ExecutorService executor) {
+    WorldBootstrapService(ProjectService projectService, WorldOperationManager worldOperationManager) {
         this.projectService = Objects.requireNonNull(projectService, "projectService");
-        this.executor = Objects.requireNonNull(executor, "executor");
+        this.worldOperationManager = Objects.requireNonNull(worldOperationManager, "worldOperationManager");
     }
 
     public void bootstrap(MinecraftServer server) {
         if (server == null) {
             return;
         }
-        CompletableFuture<Void> previous = this.pendingBootstrap.get();
-        if (previous != null && !previous.isDone()) {
-            return;
-        }
-
         this.scheduledServer = server;
         this.delay.reset();
     }
@@ -52,42 +43,33 @@ public final class WorldBootstrapService implements AutoCloseable {
         if (server.getPlayerList().getPlayerCount() <= 0) {
             return;
         }
-        if (!this.delay.tick(this.chunkLoadingActive(server))) {
+        if (!this.delay.tick(this.chunkLoadingActive(server))
+                || this.worldOperationManager.hasActiveOperation(server)) {
             return;
         }
 
         this.scheduledServer = null;
-        this.startBootstrap(server);
+        this.worldOperationManager.startBackgroundOperation(
+                server.overworld(),
+                OPERATION_ID,
+                OPERATION_ID,
+                "steps",
+                false,
+                progress -> this.bootstrapNow(server, progress)
+        );
     }
 
     @Override
-    public synchronized void close() {
+    public void close() {
         this.scheduledServer = null;
         this.delay.reset();
-        CompletableFuture<Void> pending = this.pendingBootstrap.getAndSet(null);
-        if (pending != null) {
-            pending.cancel(false);
-        }
-        this.executor.shutdownNow();
     }
 
-    private void startBootstrap(MinecraftServer server) {
-        CompletableFuture<Void> previous = this.pendingBootstrap.get();
-        if (previous != null && !previous.isDone()) {
-            return;
-        }
-
-        CompletableFuture<Void> next = CompletableFuture.runAsync(() -> this.bootstrapNow(server), this.executor());
-        this.pendingBootstrap.set(next);
-    }
-
-    private void bootstrapNow(MinecraftServer server) {
-        try {
-            this.projectService.bootstrapWorld(server);
-            LumaMod.LOGGER.info("Completed async world origin metadata bootstrap");
-        } catch (Throwable throwable) {
-            LumaMod.LOGGER.warn("Failed to bootstrap world origin metadata", throwable);
-        }
+    private void bootstrapNow(MinecraftServer server, WorldOperationManager.ProgressSink progress) throws Exception {
+        progress.update(OperationStage.PREPARING, 0, 1, "Preparing world history");
+        this.projectService.bootstrapWorld(server);
+        progress.update(OperationStage.FINALIZING, 1, 1, "World history ready");
+        LumaMod.LOGGER.info("Completed async world origin metadata bootstrap");
     }
 
     private boolean chunkLoadingActive(MinecraftServer server) {
@@ -99,17 +81,4 @@ public final class WorldBootstrapService implements AutoCloseable {
         return false;
     }
 
-    private synchronized ExecutorService executor() {
-        if (this.executor.isShutdown() || this.executor.isTerminated()) {
-            this.executor = Executors.newSingleThreadExecutor(WorldBootstrapService::bootstrapThread);
-        }
-        return this.executor;
-    }
-
-    private static Thread bootstrapThread(Runnable runnable) {
-        Thread thread = new Thread(runnable, "lumi-world-bootstrap-" + NEXT_BOOTSTRAP_THREAD_INDEX.getAndIncrement());
-        thread.setDaemon(true);
-        thread.setPriority(Thread.MIN_PRIORITY);
-        return thread;
-    }
 }

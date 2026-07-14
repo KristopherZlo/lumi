@@ -4,7 +4,6 @@ final class WorldBootstrapDelay {
 
     private static final int MINIMUM_DELAY_TICKS = 20 * 10;
     private static final int QUIET_WINDOW_TICKS = 20 * 5;
-    private static final int MAXIMUM_DELAY_TICKS = 20 * 30;
 
     private int playerTicks;
     private int quietTicks;
@@ -13,7 +12,7 @@ final class WorldBootstrapDelay {
         this.playerTicks += 1;
         this.quietTicks = chunkLoadingActive ? 0 : this.quietTicks + 1;
         return this.playerTicks >= MINIMUM_DELAY_TICKS
-                && (this.quietTicks >= QUIET_WINDOW_TICKS || this.playerTicks >= MAXIMUM_DELAY_TICKS);
+                && this.quietTicks >= QUIET_WINDOW_TICKS;
     }
 
     void reset() {

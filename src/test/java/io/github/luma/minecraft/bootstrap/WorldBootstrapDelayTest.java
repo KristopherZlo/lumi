@@ -23,13 +23,15 @@ class WorldBootstrapDelayTest {
     }
 
     @Test
-    void forcesBootstrapAfterMaximumDelay() {
+    void doesNotForceBootstrapWhileChunksAreLoading() {
         WorldBootstrapDelay delay = new WorldBootstrapDelay();
 
-        for (int tick = 0; tick < 599; tick++) {
+        for (int tick = 0; tick < 1_200; tick++) {
             assertFalse(delay.tick(true));
         }
-
-        assertTrue(delay.tick(true));
+        for (int tick = 0; tick < 99; tick++) {
+            assertFalse(delay.tick(false));
+        }
+        assertTrue(delay.tick(false));
     }
 }

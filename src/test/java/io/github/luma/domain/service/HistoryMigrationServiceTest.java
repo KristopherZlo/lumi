@@ -124,53 +124,20 @@ class HistoryMigrationServiceTest {
     }
 
     @Test
-    void quarantinesWholeDimensionBaselinesWithoutHistoryReferences() throws Exception {
+    void leavesOrphanBaselinesUntouchedDuringAutomaticMigration() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("orphan-baselines.mbp"));
         Instant now = Instant.parse("2026-04-20T10:00:00Z");
         BuildProject project = BuildProject.createWorldWorkspace("Tower", "minecraft:overworld", now);
-        ChunkPoint retainedChunk = new ChunkPoint(0, 0);
         ChunkPoint orphanChunk = new ChunkPoint(99, -99);
         BaselineChunkRepository baselines = new BaselineChunkRepository();
-        for (ChunkPoint chunk : List.of(retainedChunk, orphanChunk)) {
-            Path file = baselines.filePath(layout, chunk);
-            Files.createDirectories(file.getParent());
-            Files.write(file, new byte[] {1});
-        }
-        PatchMetadata metadata = this.patchDataRepository.writePayload(
-                layout,
-                "patch-0001",
-                project.id().toString(),
-                "v0001",
-                List.of(new StoredBlockChange(
-                        new io.github.luma.domain.model.BlockPoint(1, 64, 1),
-                        payload("minecraft:stone"),
-                        payload("minecraft:gold_block")
-                ))
-        );
-        this.patchMetaRepository.save(layout, metadata);
-        this.versionRepository.save(layout, new ProjectVersion(
-                "v0001",
-                project.id().toString(),
-                "main",
-                "",
-                "",
-                List.of("patch-0001"),
-                VersionKind.MANUAL,
-                "tester",
-                "Save",
-                ChangeStats.empty(),
-                PreviewInfo.none(),
-                ExternalSourceInfo.manual(),
-                now
-        ));
+        Path file = baselines.filePath(layout, orphanChunk);
+        Files.createDirectories(file.getParent());
+        Files.write(file, new byte[] {1});
 
         this.migrationService.migrate(layout, project);
 
-        assertEquals(true, baselines.contains(layout, retainedChunk));
-        assertEquals(false, baselines.contains(layout, orphanChunk));
-        assertEquals(true, Files.exists(layout.cacheDir()
-                .resolve("baseline-chunks-orphaned")
-                .resolve(baselines.filePath(layout, orphanChunk).getFileName())));
+        assertEquals(true, baselines.contains(layout, orphanChunk));
+        assertEquals(false, Files.exists(layout.cacheDir().resolve("baseline-chunks-orphaned")));
     }
 
     @Test
