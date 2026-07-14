@@ -1160,8 +1160,8 @@ final class SingleplayerTestRun {
     }
 
     private void startChainedTntUndo() throws Exception {
-        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
-        this.log.info("Queued redstone TNT chain quick rollback " + this.pendingOperation.id());
+        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
+        this.log.info("Queued redstone TNT chain live undo " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_CHAINED_TNT_UNDO);
     }
 
