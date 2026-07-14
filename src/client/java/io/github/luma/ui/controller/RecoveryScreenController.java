@@ -73,6 +73,10 @@ public final class RecoveryScreenController {
         try {
             this.recoveryService.discardDraft(ClientProjectAccess.requireSingleplayerServer(this.client), projectName);
             return "luma.status.draft_discarded";
+        } catch (IllegalStateException exception) {
+            LumaMod.LOGGER.warn("Discard draft rejected for project {}", projectName, exception);
+            TelemetryService.getInstance().recordOperationRejected("recovery_discard", "luma.status.world_operation_busy", exception);
+            return "luma.status.world_operation_busy";
         } catch (Exception exception) {
             LumaMod.LOGGER.warn("Discard draft failed for project {}", projectName, exception);
             TelemetryService.getInstance().recordOperationFailed(null, null, exception);

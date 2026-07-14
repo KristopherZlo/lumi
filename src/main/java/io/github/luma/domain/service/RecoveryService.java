@@ -87,6 +87,7 @@ public final class RecoveryService {
         ProjectLayout layout = this.projectService.resolveLayout(level.getServer(), projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        this.requireIdle(level.getServer());
         this.restoreInterruptedOperationDraftIfIdle(level.getServer(), layout, project);
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout);
         Optional<TrackedChangeBuffer> frozenSession = HistoryCaptureManager.getInstance()
@@ -158,6 +159,7 @@ public final class RecoveryService {
         ProjectLayout layout = this.projectService.resolveLayout(server, projectName);
         var project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
+        this.requireIdle(server);
         HistoryCaptureManager.getInstance().discardSession(server, project.id().toString());
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
@@ -190,6 +192,12 @@ public final class RecoveryService {
         if (!activeOperation) {
             this.restoreCompletionRecoveryService.completePending(layout, project, server);
             this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
+        }
+    }
+
+    private void requireIdle(MinecraftServer server) {
+        if (this.worldOperationManager.hasActiveOperation(server)) {
+            throw new IllegalStateException("Another world operation is already running");
         }
     }
 

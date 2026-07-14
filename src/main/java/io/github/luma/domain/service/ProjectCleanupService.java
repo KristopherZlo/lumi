@@ -35,6 +35,9 @@ public final class ProjectCleanupService {
 
     public ProjectCleanupReport apply(MinecraftServer server, String projectName) throws IOException {
         CleanupContext context = this.context(server, projectName);
+        if (context.activeOperation()) {
+            throw new IllegalStateException("Another world operation is already running");
+        }
         List<String> warnings = this.warnings(context);
         var candidates = this.projectCleanupRepository.apply(context.layout(), context.policy());
         return new ProjectCleanupReport(false, candidates, warnings, this.totalBytes(candidates));
