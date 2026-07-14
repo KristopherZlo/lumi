@@ -10,6 +10,22 @@ param(
 
     [int]$KeepUpRegressionMs = 250,
 
+    [int]$WallClockRegressionMs = 3000,
+
+    [int]$WallClockRegressionPercent = 10,
+
+    [int]$IdleCpuRegressionMs = 75,
+
+    [int]$IdleCpuRegressionPercent = 20,
+
+    [int]$IdleWallRegressionMs = 250,
+
+    [int]$TeleportLoadRegressionMs = 500,
+
+    [int]$TeleportLoadRegressionPercent = 15,
+
+    [int]$TeleportRenderTickRegression = 2,
+
     [switch]$FailOnRegression,
 
     [string]$OutputRoot,
@@ -27,11 +43,19 @@ param(
 
     [switch]$RequireBaselineActionRun,
 
+    [switch]$RequireIdleSamples,
+
     [ValidateRange(60, 7200)]
     [int]$SampleTimeoutSeconds = 900,
 
     [ValidateRange(5, 300)]
-    [int]$HeartbeatSeconds = 30
+    [int]$HeartbeatSeconds = 30,
+
+    [ValidateRange(0, 900)]
+    [int]$SampleStallTimeoutSeconds = 0,
+
+    [ValidateRange(0, 2)]
+    [int]$SampleRetries = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,6 +81,36 @@ function Resolve-RepoPath {
         return [System.IO.Path]::GetFullPath($Path)
     }
     return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
+}
+
+function Get-FilePrefix {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [int]$Length
+    )
+
+    if ($Length -eq 0 -or -not [System.IO.File]::Exists($Path)) {
+        return ""
+    }
+
+    $bytes = [byte[]]::new($Length)
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $read = 0
+        while ($read -lt $Length) {
+            $count = $stream.Read($bytes, $read, $Length - $read)
+            if ($count -eq 0) {
+                break
+            }
+            $read += $count
+        }
+    } finally {
+        $stream.Dispose()
+    }
+    return [Convert]::ToBase64String($bytes)
 }
 
 function Stop-ProcessTree {
@@ -87,10 +141,18 @@ function Get-LogOffsets {
         if ([System.IO.File]::Exists($resolved)) {
             $length = [int64](Get-Item -LiteralPath $resolved).Length
         }
+        $prefixLength = [int][Math]::Min($length, 4096)
         $offsets += [PSCustomObject]@{
             OriginalPath = $path
             Path = $resolved
             Offset = $length
+            PrefixLength = $prefixLength
+            Prefix = Get-FilePrefix -Path $resolved -Length $prefixLength
+            LastWriteTimeUtc = if ([System.IO.File]::Exists($resolved)) {
+                (Get-Item -LiteralPath $resolved).LastWriteTimeUtc
+            } else {
+                [DateTime]::MinValue
+            }
         }
     }
     return $offsets
@@ -113,14 +175,19 @@ function Append-ExtraLogs {
         }
 
         $currentLength = [int64](Get-Item -LiteralPath $offset.Path).Length
-        if ($currentLength -le $offset.Offset) {
+        $appendOffset = $offset.Offset
+        $currentPrefix = Get-FilePrefix -Path $offset.Path -Length $offset.PrefixLength
+        if ($currentLength -lt $offset.Offset -or $currentPrefix -ne $offset.Prefix) {
+            $appendOffset = [int64]0
+        }
+        if ($currentLength -le $appendOffset) {
             Add-Content -Path $LogPath -Value "No new content."
             continue
         }
 
         $stream = [System.IO.File]::Open($offset.Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
         try {
-            [void]$stream.Seek($offset.Offset, [System.IO.SeekOrigin]::Begin)
+            [void]$stream.Seek($appendOffset, [System.IO.SeekOrigin]::Begin)
             $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::UTF8, $true)
             $content = $reader.ReadToEnd()
             Add-Content -Path $LogPath -Value $content
@@ -160,13 +227,33 @@ function Invoke-LoggedCommand {
     $deadline = [DateTime]::UtcNow.AddSeconds($SampleTimeoutSeconds)
     $nextHeartbeat = [DateTime]::UtcNow.AddSeconds($HeartbeatSeconds)
     $timedOut = $false
+    $stalled = $false
+    $lastLogActivity = [DateTime]::MinValue
     while (-not $process.WaitForExit(1000)) {
         $now = [DateTime]::UtcNow
+        foreach ($offset in $extraLogOffsets) {
+            if (-not [System.IO.File]::Exists($offset.Path)) {
+                continue
+            }
+            $lastWriteTime = (Get-Item -LiteralPath $offset.Path).LastWriteTimeUtc
+            if ($lastWriteTime -gt $offset.LastWriteTimeUtc -and $lastWriteTime -gt $lastLogActivity) {
+                $lastLogActivity = $lastWriteTime
+            }
+        }
         if ($now -ge $nextHeartbeat) {
             Write-Host ("Still running sample for {0}s: {1}" -f [int]$start.Elapsed.TotalSeconds, $Command)
             $nextHeartbeat = $now.AddSeconds($HeartbeatSeconds)
         }
-        if ($now -ge $deadline) {
+        if ($SampleStallTimeoutSeconds -gt 0 `
+                -and $lastLogActivity -ne [DateTime]::MinValue `
+                -and ($now - $lastLogActivity).TotalSeconds -ge $SampleStallTimeoutSeconds) {
+            $timedOut = $true
+            $stalled = $true
+            Write-Warning ("Runtime-load sample log stalled for {0}s: {1}" -f $SampleStallTimeoutSeconds, $Command)
+            Stop-ProcessTree -ProcessId $process.Id
+            $process.WaitForExit(10000) | Out-Null
+            break
+        } elseif ($now -ge $deadline) {
             $timedOut = $true
             Write-Warning ("Runtime-load sample timed out after {0}s: {1}" -f $SampleTimeoutSeconds, $Command)
             Stop-ProcessTree -ProcessId $process.Id
@@ -201,6 +288,7 @@ function Invoke-LoggedCommand {
         "ExitCode: $exitCode"
         "WallClockMs: $($start.ElapsedMilliseconds)"
         "TimedOut: $timedOut"
+        "Stalled: $stalled"
         ""
         $stdout
         $stderr
@@ -248,6 +336,11 @@ function Measure-Log {
         $content,
         "Lumi (?:baseline )?idle teleport load: index=(?<index>\d+), seed=-?\d+, elapsedMs=(?<ms>\d+), renderWaitTicks=(?<ticks>\d+)"
     )
+    $idleMatches = [regex]::Matches(
+        $content,
+        "Lumi (?:baseline )?idle tick sample: ticks=(?<ticks>\d+), wallMs=(?<wall>\d+), serverCpuMs=(?<cpu>\d+)"
+    )
+    $worldStartMatches = [regex]::Matches($content, "Starting integrated minecraft server version")
     $uniqueActionMatches = [System.Collections.Generic.List[object]]::new()
     $seenActionLines = [System.Collections.Generic.HashSet[string]]::new()
     foreach ($match in $actionMatches) {
@@ -284,6 +377,9 @@ function Measure-Log {
 
     $teleportLoadMs = @($uniqueTeleportMatches | ForEach-Object { [int64]$_.Groups["ms"].Value })
     $teleportRenderTicks = @($uniqueTeleportMatches | ForEach-Object { [int]$_.Groups["ticks"].Value })
+    $idleMatch = if ($idleMatches.Count -eq 0) { $null } else { $idleMatches[$idleMatches.Count - 1] }
+    $teleportLoadTotal = [int64](($teleportLoadMs | Measure-Object -Sum).Sum)
+    $teleportRenderTotal = [int](($teleportRenderTicks | Measure-Object -Sum).Sum)
 
     return [PSCustomObject]@{
         LogPath = $LogPath
@@ -302,14 +398,21 @@ function Measure-Log {
         ActionChecksPassed = $actionChecksPassed
         ActionChecksFailed = $actionChecksFailed
         TeleportLoads = $uniqueTeleportMatches.Count
-        TotalTeleportLoadMs = [int64](($teleportLoadMs | Measure-Object -Sum).Sum)
+        TotalTeleportLoadMs = $teleportLoadTotal
         MaxTeleportLoadMs = [int64](($teleportLoadMs | Measure-Object -Maximum).Maximum)
-        TotalTeleportRenderTicks = [int](($teleportRenderTicks | Measure-Object -Sum).Sum)
+        AverageTeleportLoadMs = if ($uniqueTeleportMatches.Count -eq 0) { 0 } else { [int64]($teleportLoadTotal / $uniqueTeleportMatches.Count) }
+        TotalTeleportRenderTicks = $teleportRenderTotal
         MaxTeleportRenderTicks = [int](($teleportRenderTicks | Measure-Object -Maximum).Maximum)
+        AverageTeleportRenderTicks = if ($uniqueTeleportMatches.Count -eq 0) { 0 } else { [int]($teleportRenderTotal / $uniqueTeleportMatches.Count) }
+        IdleSamples = if ($null -eq $idleMatch) { 0 } else { 1 }
+        IdleTicks = if ($null -eq $idleMatch) { 0 } else { [int]$idleMatch.Groups["ticks"].Value }
+        IdleWallMs = if ($null -eq $idleMatch) { 0 } else { [int64]$idleMatch.Groups["wall"].Value }
+        IdleServerCpuMs = if ($null -eq $idleMatch) { 0 } else { [int64]$idleMatch.Groups["cpu"].Value }
+        WorldStarts = $worldStartMatches.Count
     }
 }
 
-function Invoke-Scenario {
+function Invoke-ScenarioSample {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Name,
@@ -320,17 +423,77 @@ function Invoke-Scenario {
         [Parameter(Mandatory = $true)]
         [string]$RunDirectory,
 
+        [int]$PairIndex,
+
         [string[]]$ExtraLogs
     )
 
-    $samples = @()
-    for ($index = 1; $index -le $Runs; $index++) {
-        $logPath = Join-Path $RunDirectory ("{0}-run-{1}.log" -f $Name, $index)
-        Write-Host "Running $Name sample $index/$Runs"
+    $attempts = 1 + $SampleRetries
+    $sample = $null
+    for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+        $suffix = if ($attempts -eq 1) { "" } else { "-attempt-$attempt" }
+        $logPath = Join-Path $RunDirectory ("{0}-run-{1}{2}.log" -f $Name, $PairIndex, $suffix)
+        Write-Host "Running $Name sample $PairIndex/$Runs (attempt $attempt/$attempts)"
         $run = Invoke-LoggedCommand -Command $Command -LogPath $logPath -ExtraLogs $ExtraLogs
-        $samples += Measure-Log -LogPath $logPath -WallClockMs $run.WallClockMs -ExitCode $run.ExitCode
+        $sample = Measure-Log -LogPath $logPath -WallClockMs $run.WallClockMs -ExitCode $run.ExitCode
+        if ($sample.ExitCode -ne 124 -or $sample.WorldStarts -gt 0 -or $attempt -eq $attempts) {
+            break
+        }
+        Write-Warning "$Name sample $PairIndex never started a world; retrying once."
+        Start-Sleep -Seconds 5
     }
-    return $samples
+    $sample | Add-Member -NotePropertyName PairIndex -NotePropertyValue $PairIndex
+    return $sample
+}
+
+function Invoke-PairedScenarios {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RunDirectory
+    )
+
+    $baselineSamples = @()
+    $lumiSamples = @()
+    for ($index = 1; $index -le $Runs; $index++) {
+        if (($index % 2) -eq 1) {
+            $baselineSamples += Invoke-ScenarioSample -Name "baseline" -Command $BaselineCommand -RunDirectory $RunDirectory -PairIndex $index -ExtraLogs $BaselineExtraLogs
+            $lumiSamples += Invoke-ScenarioSample -Name "lumi" -Command $LumiCommand -RunDirectory $RunDirectory -PairIndex $index -ExtraLogs $LumiExtraLogs
+        } else {
+            $lumiSamples += Invoke-ScenarioSample -Name "lumi" -Command $LumiCommand -RunDirectory $RunDirectory -PairIndex $index -ExtraLogs $LumiExtraLogs
+            $baselineSamples += Invoke-ScenarioSample -Name "baseline" -Command $BaselineCommand -RunDirectory $RunDirectory -PairIndex $index -ExtraLogs $BaselineExtraLogs
+        }
+    }
+    return [PSCustomObject]@{
+        Baseline = $baselineSamples
+        Lumi = $lumiSamples
+    }
+}
+
+function Get-Median {
+    param([double[]]$Values)
+
+    $sorted = @($Values | Sort-Object)
+    if ($sorted.Count -eq 0) {
+        return 0.0
+    }
+    $middle = [int][Math]::Floor($sorted.Count / 2.0)
+    if (($sorted.Count % 2) -eq 1) {
+        return [double]$sorted[$middle]
+    }
+    return ([double]$sorted[$middle - 1] + [double]$sorted[$middle]) / 2.0
+}
+
+function Get-PairedMedianDelta {
+    param(
+        [object[]]$Baseline,
+        [object[]]$Lumi,
+        [string]$Property
+    )
+
+    $deltas = for ($index = 0; $index -lt [Math]::Min($Baseline.Count, $Lumi.Count); $index++) {
+        [double]$Lumi[$index].$Property - [double]$Baseline[$index].$Property
+    }
+    return Get-Median -Values $deltas
 }
 
 function New-Summary {
@@ -347,6 +510,7 @@ function New-Summary {
         Runs = $Samples.Count
         FailedRuns = ($Samples | Where-Object { $_.ExitCode -ne 0 }).Count
         AverageWallClockMs = [int64]$wall.Average
+        MedianWallClockMs = [int64](Get-Median -Values @($Samples | ForEach-Object { [double]$_.WallClockMs }))
         MaxWallClockMs = [int64]$wall.Maximum
         KeepUpEvents = [int](($Samples | Measure-Object -Property KeepUpEvents -Sum).Sum)
         MaxKeepUpMs = [int](($Samples | Measure-Object -Property MaxKeepUpMs -Maximum).Maximum)
@@ -362,9 +526,14 @@ function New-Summary {
         ActionChecksFailed = [int](($Samples | Measure-Object -Property ActionChecksFailed -Sum).Sum)
         TeleportLoads = $teleportLoads
         AverageTeleportLoadMs = if ($teleportLoads -eq 0) { 0 } else { [int64]($totalTeleportLoadMs / $teleportLoads) }
+        MedianTeleportLoadMs = [int64](Get-Median -Values @($Samples | ForEach-Object { [double]$_.AverageTeleportLoadMs }))
         MaxTeleportLoadMs = [int64](($Samples | Measure-Object -Property MaxTeleportLoadMs -Maximum).Maximum)
         AverageTeleportRenderTicks = if ($teleportLoads -eq 0) { 0 } else { [int]($totalTeleportRenderTicks / $teleportLoads) }
+        MedianTeleportRenderTicks = [int](Get-Median -Values @($Samples | ForEach-Object { [double]$_.AverageTeleportRenderTicks }))
         MaxTeleportRenderTicks = [int](($Samples | Measure-Object -Property MaxTeleportRenderTicks -Maximum).Maximum)
+        IdleSamples = [int](($Samples | Measure-Object -Property IdleSamples -Sum).Sum)
+        MedianIdleWallMs = [int64](Get-Median -Values @($Samples | Where-Object { $_.IdleSamples -gt 0 } | ForEach-Object { [double]$_.IdleWallMs }))
+        MedianIdleServerCpuMs = [int64](Get-Median -Values @($Samples | Where-Object { $_.IdleSamples -gt 0 } | ForEach-Object { [double]$_.IdleServerCpuMs }))
     }
 }
 
@@ -379,12 +548,13 @@ function Write-MarkdownSummary {
     $lines = @(
         "# Lumi Runtime Load Comparison",
         "",
-        "| Scenario | Runs | Failed | Avg wall ms | Max wall ms | Keep-up events | Max behind ms | Long ticks | Max long tick ms | WARN | ERROR | Lumi WARN | Render failures | Action runs | Action failed |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-        ("| Baseline | {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} | {12} | {13} |" -f
+        "| Scenario | Runs | Failed | Avg wall ms | Median wall ms | Max wall ms | Keep-up events | Max behind ms | Long ticks | Max long tick ms | WARN | ERROR | Lumi WARN | Render failures | Action runs | Action failed |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ("| Baseline | {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} | {12} | {13} | {14} |" -f
             $Result.Baseline.Summary.Runs,
             $Result.Baseline.Summary.FailedRuns,
             $Result.Baseline.Summary.AverageWallClockMs,
+            $Result.Baseline.Summary.MedianWallClockMs,
             $Result.Baseline.Summary.MaxWallClockMs,
             $Result.Baseline.Summary.KeepUpEvents,
             $Result.Baseline.Summary.MaxKeepUpMs,
@@ -396,10 +566,11 @@ function Write-MarkdownSummary {
             $Result.Baseline.Summary.RenderPipelineFailures,
             $Result.Baseline.Summary.ActionRuns,
             $Result.Baseline.Summary.ActionChecksFailed),
-        ("| Lumi | {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} | {12} | {13} |" -f
+        ("| Lumi | {0} | {1} | {2} | {3} | {4} | {5} | {6} | {7} | {8} | {9} | {10} | {11} | {12} | {13} | {14} |" -f
             $Result.Lumi.Summary.Runs,
             $Result.Lumi.Summary.FailedRuns,
             $Result.Lumi.Summary.AverageWallClockMs,
+            $Result.Lumi.Summary.MedianWallClockMs,
             $Result.Lumi.Summary.MaxWallClockMs,
             $Result.Lumi.Summary.KeepUpEvents,
             $Result.Lumi.Summary.MaxKeepUpMs,
@@ -420,20 +591,37 @@ function Write-MarkdownSummary {
         "",
         "Lumi action checks: $($Result.Lumi.Summary.ActionChecksPassed) passed, $($Result.Lumi.Summary.ActionChecksFailed) failed",
         "",
-        "| Scenario | Teleports | Avg load ms | Max load ms | Avg render ticks | Max render ticks |",
-        "| --- | ---: | ---: | ---: | ---: | ---: |",
-        ("| Baseline | {0} | {1} | {2} | {3} | {4} |" -f
+        "| Scenario | Teleports | Avg load ms | Median run load ms | Max load ms | Avg render ticks | Median run render ticks | Max render ticks |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ("| Baseline | {0} | {1} | {2} | {3} | {4} | {5} | {6} |" -f
             $Result.Baseline.Summary.TeleportLoads,
             $Result.Baseline.Summary.AverageTeleportLoadMs,
+            $Result.Baseline.Summary.MedianTeleportLoadMs,
             $Result.Baseline.Summary.MaxTeleportLoadMs,
             $Result.Baseline.Summary.AverageTeleportRenderTicks,
+            $Result.Baseline.Summary.MedianTeleportRenderTicks,
             $Result.Baseline.Summary.MaxTeleportRenderTicks),
-        ("| Lumi | {0} | {1} | {2} | {3} | {4} |" -f
+        ("| Lumi | {0} | {1} | {2} | {3} | {4} | {5} | {6} |" -f
             $Result.Lumi.Summary.TeleportLoads,
             $Result.Lumi.Summary.AverageTeleportLoadMs,
+            $Result.Lumi.Summary.MedianTeleportLoadMs,
             $Result.Lumi.Summary.MaxTeleportLoadMs,
             $Result.Lumi.Summary.AverageTeleportRenderTicks,
+            $Result.Lumi.Summary.MedianTeleportRenderTicks,
             $Result.Lumi.Summary.MaxTeleportRenderTicks),
+        "",
+        "| Scenario | Idle samples | Median idle wall ms | Median server CPU ms |",
+        "| --- | ---: | ---: | ---: |",
+        ("| Baseline | {0} | {1} | {2} |" -f
+            $Result.Baseline.Summary.IdleSamples,
+            $Result.Baseline.Summary.MedianIdleWallMs,
+            $Result.Baseline.Summary.MedianIdleServerCpuMs),
+        ("| Lumi | {0} | {1} | {2} |" -f
+            $Result.Lumi.Summary.IdleSamples,
+            $Result.Lumi.Summary.MedianIdleWallMs,
+            $Result.Lumi.Summary.MedianIdleServerCpuMs),
+        "",
+        "Paired median deltas: wall $($Result.Regression.PairedMedianWallClockDeltaMs) ms; idle wall $($Result.Regression.PairedMedianIdleWallDeltaMs) ms; idle server CPU $($Result.Regression.PairedMedianIdleServerCpuDeltaMs) ms; teleport load $($Result.Regression.PairedMedianTeleportLoadDeltaMs) ms; teleport render $($Result.Regression.PairedMedianTeleportRenderTickDelta) ticks.",
         "",
         "Raw logs and JSON: ``$($Result.OutputDirectory)``"
     )
@@ -441,8 +629,9 @@ function Write-MarkdownSummary {
 }
 
 $runDirectory = New-RunDirectory
-$baselineSamples = Invoke-Scenario -Name "baseline" -Command $BaselineCommand -RunDirectory $runDirectory -ExtraLogs $BaselineExtraLogs
-$lumiSamples = Invoke-Scenario -Name "lumi" -Command $LumiCommand -RunDirectory $runDirectory -ExtraLogs $LumiExtraLogs
+$pairedSamples = Invoke-PairedScenarios -RunDirectory $runDirectory
+$baselineSamples = @($pairedSamples.Baseline)
+$lumiSamples = @($pairedSamples.Lumi)
 
 $baselineSummary = New-Summary -Samples $baselineSamples
 $lumiSummary = New-Summary -Samples $lumiSamples
@@ -466,6 +655,11 @@ $result = [PSCustomObject]@{
         MaxKeepUpDeltaMs = $lumiSummary.MaxKeepUpMs - $baselineSummary.MaxKeepUpMs
         MaxLongTickDeltaMs = $lumiSummary.MaxLongTickMs - $baselineSummary.MaxLongTickMs
         RenderPipelineFailureDelta = $lumiSummary.RenderPipelineFailures - $baselineSummary.RenderPipelineFailures
+        PairedMedianWallClockDeltaMs = [int64](Get-PairedMedianDelta -Baseline $baselineSamples -Lumi $lumiSamples -Property "WallClockMs")
+        PairedMedianIdleWallDeltaMs = [int64](Get-PairedMedianDelta -Baseline $baselineSamples -Lumi $lumiSamples -Property "IdleWallMs")
+        PairedMedianIdleServerCpuDeltaMs = [int64](Get-PairedMedianDelta -Baseline $baselineSamples -Lumi $lumiSamples -Property "IdleServerCpuMs")
+        PairedMedianTeleportLoadDeltaMs = [int64](Get-PairedMedianDelta -Baseline $baselineSamples -Lumi $lumiSamples -Property "AverageTeleportLoadMs")
+        PairedMedianTeleportRenderTickDelta = [int](Get-PairedMedianDelta -Baseline $baselineSamples -Lumi $lumiSamples -Property "AverageTeleportRenderTicks")
     }
 }
 
@@ -478,9 +672,19 @@ Write-Host "Wrote $jsonPath"
 Write-Host "Wrote $markdownPath"
 
 $hasFailedRuns = $baselineSummary.FailedRuns -gt 0 -or $lumiSummary.FailedRuns -gt 0
+$wallClockAllowance = [Math]::Max($WallClockRegressionMs, $baselineSummary.MedianWallClockMs * $WallClockRegressionPercent / 100.0)
+$idleCpuAllowance = [Math]::Max($IdleCpuRegressionMs, $baselineSummary.MedianIdleServerCpuMs * $IdleCpuRegressionPercent / 100.0)
+$teleportLoadAllowance = [Math]::Max($TeleportLoadRegressionMs, $baselineSummary.MedianTeleportLoadMs * $TeleportLoadRegressionPercent / 100.0)
 $hasRegression = $lumiSummary.MaxKeepUpMs -gt ($baselineSummary.MaxKeepUpMs + $KeepUpRegressionMs) `
     -or $lumiSummary.MaxLongTickMs -gt ($baselineSummary.MaxLongTickMs + $KeepUpRegressionMs) `
-    -or $lumiSummary.RenderPipelineFailures -gt $baselineSummary.RenderPipelineFailures
+    -or $lumiSummary.RenderPipelineFailures -gt $baselineSummary.RenderPipelineFailures `
+    -or $result.Regression.PairedMedianWallClockDeltaMs -gt $wallClockAllowance `
+    -or $result.Regression.PairedMedianIdleWallDeltaMs -gt $IdleWallRegressionMs `
+    -or $result.Regression.PairedMedianIdleServerCpuDeltaMs -gt $idleCpuAllowance `
+    -or $result.Regression.PairedMedianTeleportLoadDeltaMs -gt $teleportLoadAllowance `
+    -or $result.Regression.PairedMedianTeleportRenderTickDelta -gt $TeleportRenderTickRegression
+$missingIdleSamples = $RequireIdleSamples `
+    -and ($baselineSummary.IdleSamples -lt $Runs -or $lumiSummary.IdleSamples -lt $Runs)
 $missingRequiredLumiActionRun = $RequireLumiActionRun `
     -and ($lumiSummary.ActionRuns -eq 0 -or $lumiSummary.ActionChecksFailed -gt 0)
 $missingRequiredBaselineActionRun = $RequireBaselineActionRun `
@@ -494,6 +698,14 @@ if ($missingRequiredBaselineActionRun) {
     Write-Error "Baseline action run is required but no passing baseline gameplay suite result was found."
 }
 
-if ($hasFailedRuns -or ($FailOnRegression -and $hasRegression) -or $missingRequiredLumiActionRun -or $missingRequiredBaselineActionRun) {
+if ($FailOnRegression -and $Runs -lt 3) {
+    Write-Error "A blocking runtime-load comparison requires at least three paired runs."
+}
+
+if ($missingIdleSamples) {
+    Write-Error "Every paired run must report an idle server-thread CPU sample."
+}
+
+if ($hasFailedRuns -or ($FailOnRegression -and ($hasRegression -or $Runs -lt 3)) -or $missingIdleSamples -or $missingRequiredLumiActionRun -or $missingRequiredBaselineActionRun) {
     exit 1
 }
