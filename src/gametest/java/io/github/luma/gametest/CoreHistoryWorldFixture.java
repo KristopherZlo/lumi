@@ -94,14 +94,18 @@ final class CoreHistoryWorldFixture {
 
     void assertStateB(ServerLevel level, UUID entityId) {
         this.assertBlock(level, Blocks.GOLD_BLOCK, "state B block");
+        this.assertStateBDetails(level, entityId);
+    }
+
+    private void assertStateBDetails(ServerLevel level, UUID entityId) {
         this.assertStairs(level, Direction.WEST, "state B stairs");
         this.assertBarrel(level, Items.EMERALD, 5, "state B barrel");
         this.assertEntity(level, entityId, this.entity.east(), "core-state-b", true, "state B entity");
     }
 
     void assertStateC(ServerLevel level, UUID entityId) {
-        this.assertStateB(level, entityId);
         this.assertBlock(level, Blocks.DIAMOND_BLOCK, "branch state block");
+        this.assertStateBDetails(level, entityId);
     }
 
     String projectName() {

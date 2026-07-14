@@ -9,6 +9,7 @@
       "io.github.luma.gametest.LumiGameTests"
     ],
     "fabric-client-gametest": [
+      "io.github.luma.gametest.LumiCoreHistoryClientGameTests",
       "io.github.luma.gametest.LumiScreenClientGameTests",
       "io.github.luma.gametest.LumiOverlayClientGameTests"
     ]
