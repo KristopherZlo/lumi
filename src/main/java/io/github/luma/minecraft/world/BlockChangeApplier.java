@@ -324,6 +324,7 @@ public final class BlockChangeApplier {
                 spawnEntity(level, entityBatch.entitiesToSpawn().get(spawnIndex), replayedEntityContext);
             } catch (Exception exception) {
                 recordApplyFailure(metrics, "entity-tail", null, exception);
+                throw new IllegalStateException("Failed to apply stored entity state", exception);
             }
         }
         return endIndex - startIndex;
@@ -452,7 +453,8 @@ public final class BlockChangeApplier {
                 return;
             }
             entity.discard();
-        } catch (IllegalArgumentException ignored) {
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("Stored entity id is not a UUID: " + entityId, exception);
         }
     }
 
@@ -469,7 +471,10 @@ public final class BlockChangeApplier {
                 level,
                 EntitySpawnReason.LOAD,
                 EntityProcessor.NOP);
-        if (entity == null || entity instanceof ServerPlayer) {
+        if (entity == null) {
+            throw new IllegalStateException("Stored entity payload could not be decoded");
+        }
+        if (entity instanceof ServerPlayer) {
             return;
         }
         DeferredWorldMutationContexts.restore(entity, replayedEntityContext);
@@ -485,17 +490,28 @@ public final class BlockChangeApplier {
                     existing.restoreFrom(entity);
                     DeferredWorldMutationContexts.restore(existing, replayedEntityContext);
                     resetCreeperReplayState(existing);
+                    if (existing.isRemoved()) {
+                        throw new IllegalStateException("Stored entity update removed its target: " + entityId.get());
+                    }
                     return;
                 }
                 existing.discard();
-                if (level.getEntity(entityId.get()) != null) {
-                    return;
+                Entity remaining = level.getEntity(entityId.get());
+                if (remaining != null && !remaining.isRemoved()) {
+                    throw new IllegalStateException("Existing entity could not be replaced: " + entityId.get());
                 }
             }
         }
         try (WorldMutationContext.EntityReplayFrame ignored = WorldMutationContext.pushHistoryEntityReplay()) {
-            if (level.tryAddFreshEntityWithPassengers(entity)) {
-                resetCreeperReplayState(entity);
+            if (!level.tryAddFreshEntityWithPassengers(entity)) {
+                throw new IllegalStateException("Stored entity could not be spawned: " + entity.getUUID());
+            }
+            resetCreeperReplayState(entity);
+            if (entityId.isPresent()) {
+                Entity restored = level.getEntity(entityId.get());
+                if (restored == null || restored.isRemoved() || restored.getType() != entity.getType()) {
+                    throw new IllegalStateException("Stored entity failed post-apply verification: " + entityId.get());
+                }
             }
         }
     }
@@ -549,6 +565,9 @@ public final class BlockChangeApplier {
                 continue;
             }
             entity.discard();
+            if (!entity.isRemoved()) {
+                throw new IllegalStateException("Extra entity could not be removed: " + entity.getUUID());
+            }
             removed += 1;
         }
         return removed;
