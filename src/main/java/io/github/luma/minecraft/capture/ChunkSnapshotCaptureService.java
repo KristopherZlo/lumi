@@ -7,10 +7,14 @@ import io.github.luma.domain.model.EntityPayload;
 import io.github.luma.minecraft.world.PersistentBlockStatePolicy;
 import io.github.luma.storage.repository.SnapshotWriter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -96,6 +100,29 @@ public final class ChunkSnapshotCaptureService {
                 List.of(),
                 Map.of(),
                 this.captureEntities(level, levelChunk, EntitySnapshotOverride.none())
+        ));
+    }
+
+    /** Copies only the block sections and entity chunk selected by a dirty scope. */
+    public Optional<ChunkSnapshotPayload> captureDirtyScopeChunk(
+            ServerLevel level,
+            ChunkPoint chunk,
+            Collection<Integer> sectionYs,
+            boolean includeEntities
+    ) {
+        if (level == null || chunk == null) {
+            return Optional.empty();
+        }
+        Set<Integer> selectedSections = new LinkedHashSet<>(sectionYs == null ? Set.of() : sectionYs);
+        LevelChunk levelChunk = level.getChunk(chunk.x(), chunk.z());
+        return Optional.of(this.capture(
+                level,
+                levelChunk,
+                List.of(),
+                EntitySnapshotOverride.none(),
+                false,
+                includeEntities,
+                selectedSections::contains
         ));
     }
 
@@ -188,6 +215,26 @@ public final class ChunkSnapshotCaptureService {
             boolean rejectTransientState,
             boolean includeEntities
     ) {
+        return this.capture(
+                level,
+                chunk,
+                blockStateOverrides,
+                entityOverride,
+                rejectTransientState,
+                includeEntities,
+                ignored -> true
+        );
+    }
+
+    private ChunkSnapshotPayload capture(
+            ServerLevel level,
+            LevelChunk chunk,
+            List<BlockStateOverride> blockStateOverrides,
+            EntitySnapshotOverride entityOverride,
+            boolean rejectTransientState,
+            boolean includeEntities,
+            IntPredicate includeSection
+    ) {
         Map<Integer, List<NormalizedBlockStateOverride>> overridesBySection =
                 this.normalizedOverridesBySection(blockStateOverrides);
         List<ChunkSectionSnapshotPayload> sections = new ArrayList<>();
@@ -199,6 +246,9 @@ public final class ChunkSnapshotCaptureService {
                 continue;
             }
             int sectionY = level.getSectionYFromSectionIndex(index);
+            if (!includeSection.test(sectionY)) {
+                continue;
+            }
             LevelChunkSection capturedSection = section;
             List<NormalizedBlockStateOverride> overrides = overridesBySection.getOrDefault(sectionY, List.of());
             if (!overrides.isEmpty()) {
@@ -221,7 +271,7 @@ public final class ChunkSnapshotCaptureService {
             }
         }
 
-        Map<Integer, CompoundTag> blockEntities = this.captureBlockEntities(level, chunk);
+        Map<Integer, CompoundTag> blockEntities = this.captureBlockEntities(level, chunk, includeSection);
         for (List<NormalizedBlockStateOverride> sectionOverrides : overridesBySection.values()) {
             for (NormalizedBlockStateOverride override : sectionOverrides) {
                 int packedIndex = SnapshotWriter.packVerticalIndex(
@@ -302,7 +352,11 @@ public final class ChunkSnapshotCaptureService {
         );
     }
 
-    private Map<Integer, CompoundTag> captureBlockEntities(ServerLevel level, LevelChunk chunk) {
+    private Map<Integer, CompoundTag> captureBlockEntities(
+            ServerLevel level,
+            LevelChunk chunk,
+            IntPredicate includeSection
+    ) {
         LinkedHashMap<Integer, CompoundTag> blockEntities = new LinkedHashMap<>();
         for (Map.Entry<BlockPos, BlockEntity> entry : chunk.getBlockEntities().entrySet()) {
             BlockEntity blockEntity = entry.getValue();
@@ -310,6 +364,9 @@ public final class ChunkSnapshotCaptureService {
                 continue;
             }
             BlockPos pos = entry.getKey();
+            if (!includeSection.test(Math.floorDiv(pos.getY(), 16))) {
+                continue;
+            }
             CompoundTag blockEntityTag = BlockEntitySnapshot.capture(level, blockEntity);
             if (blockEntityTag == null) {
                 continue;

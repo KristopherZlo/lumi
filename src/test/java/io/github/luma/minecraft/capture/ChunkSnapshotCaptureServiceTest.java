@@ -51,6 +51,16 @@ class ChunkSnapshotCaptureServiceTest {
         assertFalse(source.contains("sectionCopy.setBlockState("));
     }
 
+    @Test
+    void dirtyScopeCaptureFiltersSectionsBeforeCopyingThem() throws Exception {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/minecraft/capture/ChunkSnapshotCaptureService.java")
+        );
+
+        assertTrue(source.contains("if (!includeSection.test(sectionY))"));
+        assertTrue(source.contains("captureBlockEntities(level, chunk, includeSection)"));
+    }
+
     private static LevelChunkSection sectionWithDefault(BlockState state) {
         Strategy<BlockState> strategy = Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY);
         return new LevelChunkSection(new PalettedContainer<>(state, strategy), null);

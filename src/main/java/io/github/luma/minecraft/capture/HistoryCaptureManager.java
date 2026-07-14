@@ -8,6 +8,7 @@ import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
@@ -28,6 +29,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -900,6 +902,65 @@ public final class HistoryCaptureManager {
 
     public Optional<RecoveryDraft> snapshotDraft(MinecraftServer server, String projectId) throws IOException {
         return this.serverThreadExecutor.call(server, () -> this.snapshotDraftOnServerThread(server, projectId));
+    }
+
+    /** Loads the durable safety scope without blocking the server thread on persistence. */
+    public ProjectDirtyScope loadProjectDirtyScope(MinecraftServer server, String projectId) throws IOException {
+        TrackedProject trackedProject = this.serverThreadExecutor.call(
+                server,
+                () -> this.findTrackedProject(server, projectId)
+        );
+        if (trackedProject == null) {
+            throw new IllegalArgumentException("Tracked project is missing: " + projectId);
+        }
+        return this.projectDirtyScopes.loadDurable(trackedProject);
+    }
+
+    /** Copies the live chunks selected by a previously isolated dirty scope. */
+    public List<ChunkSnapshotPayload> captureProjectDirtyScope(
+            MinecraftServer server,
+            String projectId,
+            ProjectDirtyScope dirtyScope
+    ) throws IOException {
+        return this.serverThreadExecutor.call(
+                server,
+                () -> this.captureProjectDirtyScopeOnServerThread(server, projectId, dirtyScope)
+        );
+    }
+
+    private List<ChunkSnapshotPayload> captureProjectDirtyScopeOnServerThread(
+            MinecraftServer server,
+            String projectId,
+            ProjectDirtyScope dirtyScope
+    ) throws IOException {
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        if (trackedProject == null || dirtyScope == null) {
+            throw new IllegalArgumentException("Tracked project and dirty scope are required");
+        }
+        ServerLevel level = this.resolveProjectLevel(server, trackedProject.project());
+        if (level == null) {
+            throw new IOException("Project dimension is unavailable for dirty reconciliation");
+        }
+
+        Map<ChunkPoint, Set<Integer>> sectionsByChunk = new LinkedHashMap<>();
+        for (ChunkSectionPoint section : dirtyScope.blockSections()) {
+            sectionsByChunk.computeIfAbsent(section.chunk(), ignored -> new LinkedHashSet<>())
+                    .add(section.sectionY());
+        }
+        for (ChunkPoint chunk : dirtyScope.entityChunks()) {
+            sectionsByChunk.computeIfAbsent(chunk, ignored -> new LinkedHashSet<>());
+        }
+
+        List<ChunkSnapshotPayload> snapshots = new ArrayList<>(sectionsByChunk.size());
+        for (Map.Entry<ChunkPoint, Set<Integer>> entry : sectionsByChunk.entrySet()) {
+            snapshots.add(this.chunkSnapshotCaptureService.captureDirtyScopeChunk(
+                    level,
+                    entry.getKey(),
+                    entry.getValue(),
+                    dirtyScope.entityChunks().contains(entry.getKey())
+            ).orElseThrow(() -> new IOException("Dirty chunk is unavailable: " + entry.getKey())));
+        }
+        return List.copyOf(snapshots);
     }
 
     public Optional<BuildProject> findWholeDimensionProject(ServerLevel level) throws IOException {
