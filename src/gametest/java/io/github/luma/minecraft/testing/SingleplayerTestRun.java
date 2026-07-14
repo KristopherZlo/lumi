@@ -1217,7 +1217,9 @@ final class SingleplayerTestRun {
     }
 
     private void startActionlessSave(MinecraftServer server) throws Exception {
-        this.level.setBlock(this.actionlessFluidPos, Blocks.WATER.defaultBlockState(), 3);
+        this.actionlessFluidPos = this.volume.min().offset(12, 8, 12);
+        this.check(this.level.setBlock(this.actionlessFluidPos, Blocks.WATER.defaultBlockState(), 3),
+                "Actionless safety-save fluid changed a fresh block");
         this.actionlessSaveVersionId = this.nextVersionId(server);
         this.pendingOperation = this.versionService.startSaveVersion(
                 this.level,
