@@ -6,6 +6,7 @@ import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectIntegrityReport;
+import io.github.luma.domain.model.HistoryProtectionState;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.SnapshotData;
@@ -130,6 +131,7 @@ class ProjectIntegrityServiceTest {
         assertTrue(report.errors().stream().anyMatch(error -> error.contains("Corrupt patch payload header patch-corrupt")));
         assertTrue(report.errors().stream().anyMatch(error -> error.contains("Corrupt snapshot header")));
         assertTrue(report.errors().stream().anyMatch(error -> error.contains("Corrupt entity checkpoint header")));
+        assertTrue(new HistoryProtectionService().load(layout, null).state() == HistoryProtectionState.DEGRADED);
     }
 
     @Test

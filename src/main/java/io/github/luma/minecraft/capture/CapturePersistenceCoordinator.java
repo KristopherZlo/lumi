@@ -6,6 +6,7 @@ import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.domain.model.RecoveryDraft;
+import io.github.luma.domain.service.HistoryProtectionService;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.ProjectDirtyScopeRepository;
@@ -39,11 +40,13 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
     private final RecoveryRepository recoveryRepository;
     private final BaselineChunkRepository baselineChunkRepository;
     private final ProjectDirtyScopeRepository dirtyScopeRepository;
+    private final HistoryProtectionService historyProtectionService = new HistoryProtectionService();
     private final ExecutorService draftFlushExecutor;
     private final ExecutorService baselineExecutor;
     private final Map<String, CompletableFuture<Void>> pendingBaselineWrites = new HashMap<>();
     private final Map<String, PendingDraftFlush> pendingDraftFlushes = new HashMap<>();
     private final Map<String, PendingDirtyScopeFlush> pendingDirtyScopeFlushes = new HashMap<>();
+    private final Map<String, Throwable> persistenceFailures = new HashMap<>();
 
     public CapturePersistenceCoordinator() {
         this(
@@ -185,6 +188,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         boolean waited = false;
         int peakPendingTasks = 0;
         while (true) {
+            this.throwRecordedFailure(projectId, projectName);
             List<CompletableFuture<Void>> futures = this.projectFutures(projectId);
             if (futures.isEmpty()) {
                 if (waited) {
@@ -221,6 +225,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
 
     public void drainDraftFlushes(String projectId, String projectName) throws IOException {
         while (true) {
+            this.throwRecordedFailure(projectId, projectName);
             CompletableFuture<Void> future;
             synchronized (this) {
                 PendingDraftFlush pendingDraftFlush = this.pendingDraftFlushes.get(projectId);
@@ -244,6 +249,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
 
     public void drainDirtyScopeFlushes(String projectId, String projectName) throws IOException {
         while (true) {
+            this.throwRecordedFailure(projectId, projectName);
             CompletableFuture<Void> future;
             synchronized (this) {
                 PendingDirtyScopeFlush pending = this.pendingDirtyScopeFlushes.get(projectId);
@@ -304,6 +310,8 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
             }
             future.complete(null);
         } catch (Throwable throwable) {
+            this.markDegraded(layout, "Baseline persistence failed: " + failureDetail(throwable));
+            this.recordFailure(projectId, throwable);
             future.completeExceptionally(throwable);
         } finally {
             synchronized (this) {
@@ -342,6 +350,11 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
                 }
                 this.dirtyScopeRepository.save(pending.layout, scope);
             } catch (Throwable throwable) {
+                this.markDegraded(
+                        pending.layout,
+                        "Dirty scope persistence failed: " + failureDetail(throwable)
+                );
+                this.recordFailure(pending.projectId, throwable);
                 synchronized (this) {
                     this.pendingDirtyScopeFlushes.remove(pending.projectId, pending);
                 }
@@ -375,6 +388,11 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
                         draft.changes().size()
                 );
             } catch (Throwable throwable) {
+                this.markDegraded(
+                        pending.layout,
+                        "Recovery draft persistence failed: " + failureDetail(throwable)
+                );
+                this.recordFailure(pending.projectId, throwable);
                 synchronized (this) {
                     this.pendingDraftFlushes.remove(pending.projectId, pending);
                 }
@@ -421,6 +439,38 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         return left.projectId().equals(right.projectId())
                 && left.variantId().equals(right.variantId())
                 && left.baseVersionId().equals(right.baseVersionId());
+    }
+
+    private void markDegraded(ProjectLayout layout, String detail) {
+        try {
+            this.historyProtectionService.markDegraded(layout, detail);
+        } catch (IOException markerFailure) {
+            LumaMod.LOGGER.error("Failed to persist degraded history state for {}", layout.root(), markerFailure);
+        }
+    }
+
+    private synchronized void recordFailure(String projectId, Throwable failure) {
+        this.persistenceFailures.putIfAbsent(projectId, failure);
+    }
+
+    private synchronized void throwRecordedFailure(String projectId, String projectName) throws IOException {
+        Throwable failure = this.persistenceFailures.get(projectId);
+        if (failure == null) {
+            return;
+        }
+        if (failure instanceof IOException ioException) {
+            throw ioException;
+        }
+        throw new IOException("Capture persistence failed for " + projectName, failure);
+    }
+
+    private static String failureDetail(Throwable throwable) {
+        if (throwable == null) {
+            return "unknown failure";
+        }
+        return throwable.getMessage() == null || throwable.getMessage().isBlank()
+                ? throwable.getClass().getSimpleName()
+                : throwable.getMessage();
     }
 
     private static int defaultBaselineWriterThreads() {

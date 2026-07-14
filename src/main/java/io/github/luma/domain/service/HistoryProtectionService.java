@@ -43,9 +43,11 @@ public final class HistoryProtectionService {
         if (operation == null || operation.terminal()) {
             return HistoryProtectionStatus.protectedStatus();
         }
+        if (!reliabilityOperation(operation.handle().label())) {
+            return HistoryProtectionStatus.protectedStatus();
+        }
         HistoryProtectionState state = savingOperation(operation.handle().label())
-                ? HistoryProtectionState.SAVING
-                : HistoryProtectionState.RESTORING;
+                ? HistoryProtectionState.SAVING : HistoryProtectionState.RESTORING;
         return HistoryProtectionStatus.active(state, operation.detail(), operation.updatedAt());
     }
 

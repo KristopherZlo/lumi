@@ -10,6 +10,7 @@ import io.github.luma.domain.model.OperationProgress;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.domain.service.HistoryProtectionService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.debug.HistoryDebugLog;
 import java.time.Instant;
@@ -52,6 +53,7 @@ public final class WorldOperationManager {
     private ExecutorService backgroundExecutor = createExecutor();
     private final WorldOperationLifecycle lifecycle = new WorldOperationLifecycle();
     private final WorldOperationMetricsReporter metricsReporter = new WorldOperationMetricsReporter();
+    private final HistoryProtectionService historyProtectionService = new HistoryProtectionService();
     private final WorldMutationBarrier mutationBarrier = new WorldMutationBarrier();
     private final WorldOperationShutdownHandler shutdownHandler = new WorldOperationShutdownHandler(
             this.lifecycle,
@@ -224,6 +226,7 @@ public final class WorldOperationManager {
         String serverKey = this.serverKey(server);
         WorldOperationLifecycle.Completion completion = this.lifecycle.complete(serverKey, operation);
         if (completion.completed()) {
+            this.recordReliabilityFailure(server, operation);
             this.mutationBarrier.release(operation);
             completion.metrics().ifPresent(metrics -> LumaLoadLog.operationMetrics(operation.handle(), metrics));
             ActiveOperation followUp = completion.followUp();
@@ -248,6 +251,26 @@ public final class WorldOperationManager {
                                 + ", projectId=" + followUp.handle().projectId()
                 );
             }
+        }
+    }
+
+    private void recordReliabilityFailure(MinecraftServer server, ActiveOperation operation) {
+        if (!operation.snapshot().failed()) {
+            return;
+        }
+        try {
+            this.historyProtectionService.recordOperationFailure(
+                    server,
+                    operation.handle(),
+                    operation.snapshot().detail()
+            );
+        } catch (Exception exception) {
+            LumaMod.LOGGER.error(
+                    "Failed to persist degraded state after operation {} for project {}",
+                    operation.handle().label(),
+                    operation.handle().projectId(),
+                    exception
+            );
         }
     }
 

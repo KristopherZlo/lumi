@@ -9,6 +9,8 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.WorldMutationSource;
+import io.github.luma.domain.model.HistoryProtectionState;
+import io.github.luma.domain.service.HistoryProtectionService;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.BaselineChunkRepository;
 import io.github.luma.storage.repository.ProjectDirtyScopeRepository;
@@ -211,6 +213,33 @@ class CapturePersistenceCoordinatorTest {
         assertEquals(8, CapturePersistenceCoordinator.baselineWriterThreads("64"));
         assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads("invalid"));
         assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads("0"));
+    }
+
+    @Test
+    void dirtyScopePersistenceFailureMarksProjectDegraded() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("degraded.mbp"));
+        java.nio.file.Files.createDirectories(layout.projectDirtyScopeFile());
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(),
+                new BaselineChunkRepository(),
+                new ProjectDirtyScopeRepository(),
+                executor,
+                executor
+        )) {
+            ProjectDirtyScope scope = ProjectDirtyScope.empty("project", "main", "v1");
+            scope.markBlockSection(new ChunkSectionPoint(1, 2, 3));
+            coordinator.enqueueDirtyScopeFlush(layout, "project", "Project", scope);
+            org.junit.jupiter.api.Assertions.assertThrows(
+                    java.io.IOException.class,
+                    () -> coordinator.drainDirtyScopeFlushes("project", "Project")
+            );
+        }
+
+        assertEquals(
+                HistoryProtectionState.DEGRADED,
+                new HistoryProtectionService().load(layout, null).state()
+        );
     }
 
     private static ChunkSnapshotPayload chunkSnapshot() {
