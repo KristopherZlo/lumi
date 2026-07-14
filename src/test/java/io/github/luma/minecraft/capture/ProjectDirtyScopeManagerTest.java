@@ -57,6 +57,26 @@ class ProjectDirtyScopeManagerTest {
     }
 
     @Test
+    void runtimeSnapshotReturnsPendingScopeWithoutWaitingForPersistence() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("runtime-snapshot.mbp"));
+        TrackedProject project = trackedProject(layout);
+        ChunkSectionPoint section = new ChunkSectionPoint(7, 8, 9);
+
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(),
+                new BaselineChunkRepository(),
+                Executors.newSingleThreadExecutor()
+        )) {
+            ProjectDirtyScopeManager manager = new ProjectDirtyScopeManager(coordinator);
+            manager.markBlockSection(project, section);
+
+            ProjectDirtyScope snapshot = manager.runtimeSnapshot(project);
+
+            assertEquals(List.of(section), snapshot.blockSections().stream().toList());
+        }
+    }
+
+    @Test
     void replacesCommittedScopeWithRebasedRemainder() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         TrackedProject project = trackedProject(layout);

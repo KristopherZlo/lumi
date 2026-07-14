@@ -905,14 +905,21 @@ public final class HistoryCaptureManager {
         return this.serverThreadExecutor.call(server, () -> this.snapshotDraftOnServerThread(server, projectId));
     }
 
-    /** Loads the durable safety scope without blocking the server thread on persistence. */
+    /**
+     * Loads the current safety scope. Server-thread callers use its coherent
+     * runtime copy; operation workers drain and reopen the durable sidecar.
+     */
     public ProjectDirtyScope loadProjectDirtyScope(MinecraftServer server, String projectId) throws IOException {
+        boolean serverThread = server.isSameThread();
         TrackedProject trackedProject = this.serverThreadExecutor.call(
                 server,
                 () -> this.findTrackedProject(server, projectId)
         );
         if (trackedProject == null) {
             throw new IllegalArgumentException("Tracked project is missing: " + projectId);
+        }
+        if (serverThread) {
+            return this.projectDirtyScopes.runtimeSnapshot(trackedProject);
         }
         this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
         return this.projectDirtyScopes.loadDurable(trackedProject);
