@@ -33,6 +33,24 @@ class WorldMutationContextTest {
     }
 
     @Test
+    void worldIncidentHasOneNonPlayerCausalAction() {
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushWorldIncident(
+                WorldMutationSource.MOB,
+                "lightning",
+                true
+        )) {
+            String actionId = WorldMutationContext.currentActionId();
+
+            assertTrue(WorldMutationContext.hasCausalAction());
+            assertFalse(actionId.isBlank());
+            assertEquals("world incident: lightning", WorldMutationContext.currentActor());
+            try (WorldMutationContext.SourceFrame secondary = WorldMutationContext.pushSource(WorldMutationSource.FIRE)) {
+                assertEquals(actionId, WorldMutationContext.currentActionId());
+            }
+        }
+    }
+
+    @Test
     void externalSourcePreservesToolActorAndActionId() {
         WorldMutationContext.pushExternalSource(WorldMutationSource.WORLDEDIT, "worldedit:builder", "action-1", true);
         try {

@@ -127,6 +127,21 @@ public final class WorldMutationContext {
         return pushPlayerSource(source, actor, accessAllowed, false);
     }
 
+    /** Opens a non-player action for one discrete world-owned incident. */
+    public static SourceFrame pushWorldIncident(
+            WorldMutationSource source,
+            String incidentType,
+            boolean accessAllowed
+    ) {
+        String type = incidentType == null || incidentType.isBlank() ? "world" : incidentType.trim();
+        return pushSource(
+                source == null ? WorldMutationSource.MOB : source,
+                "world incident: " + type,
+                UUID.randomUUID().toString(),
+                accessAllowed
+        );
+    }
+
     public static SourceFrame pushPlayerSource(
             WorldMutationSource source,
             String actor,

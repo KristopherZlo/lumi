@@ -27,6 +27,7 @@
     "LevelExplosionMixin",
     "LevelSetBlockMixin",
     "LevelTicksContextMixin",
+    "LightningBoltIncidentMixin",
     "LivingEntityEquipmentMutationMixin",
     "LecternBlockEntityMixin",
     "LivingEntityCausalContextMixin",

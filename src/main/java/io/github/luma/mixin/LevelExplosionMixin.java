@@ -42,7 +42,15 @@ abstract class LevelExplosionMixin {
         boolean explosiveContextual = !entityContextual && DeferredWorldMutationContexts.pushSource(entity);
         WorldMutationContext.SourceFrame fallbackFrame = null;
         if (!entityContextual && !explosiveContextual) {
-            fallbackFrame = WorldMutationContext.pushSource(WorldMutationSource.EXPLOSION);
+            fallbackFrame = WorldMutationContext.hasCausalAction()
+                    ? WorldMutationContext.pushSource(WorldMutationSource.EXPLOSION)
+                    : entity instanceof Creeper && (Object) this instanceof ServerLevel level
+                    ? WorldMutationContext.pushWorldIncident(
+                            WorldMutationSource.EXPLOSION,
+                            "creeper",
+                            !level.getServer().isDedicatedServer()
+                    )
+                    : WorldMutationContext.pushSource(WorldMutationSource.EXPLOSION);
         }
         String contextKind = entityContextual ? "entity-causal" : explosiveContextual ? "explosive" : "ambient";
         this.luma$logCreeperExplosion(entity, x, y, z, power, createFire, interaction, contextKind);
