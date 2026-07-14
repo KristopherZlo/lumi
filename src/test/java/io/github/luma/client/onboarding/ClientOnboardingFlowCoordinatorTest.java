@@ -42,6 +42,13 @@ class ClientOnboardingFlowCoordinatorTest {
     }
 
     @Test
+    void pendingPreviewHoldStartsOnlyAfterTheOverlayIsVisible() {
+        Assertions.assertFalse(ClientOnboardingFlowCoordinator.previewHoldActive(true, false));
+        Assertions.assertFalse(ClientOnboardingFlowCoordinator.previewHoldActive(false, true));
+        Assertions.assertTrue(ClientOnboardingFlowCoordinator.previewHoldActive(true, true));
+    }
+
+    @Test
     void worldPromptUsesShortcutGlyphAndWrappedText() throws IOException {
         String source = Files.readString(Path.of(
                 "src/client/java/io/github/luma/client/onboarding/ClientOnboardingFlowCoordinator.java"

@@ -258,6 +258,7 @@ public final class LumaClient implements ClientModInitializer {
         while (this.toggleCompareOverlayKey.consumeClick()) {
             CompareOverlayRenderer.toggleVisibility();
         }
+        this.undoRedoKeyController.tick(client);
         if (actionKeys.undoPressed()) {
             if (!LumiRegionSelectionController.getInstance().handleUndoRedo(client, true)) {
                 this.undoRedoKeyController.undo(client);

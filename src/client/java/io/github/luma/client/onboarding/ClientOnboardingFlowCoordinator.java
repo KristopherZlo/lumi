@@ -6,6 +6,7 @@ import io.github.luma.client.input.LumiClientKeyBindings;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.ui.controller.ProjectHomeScreenController;
 import io.github.luma.ui.onboarding.OnboardingTour;
+import io.github.luma.ui.overlay.PendingChangesOverlayRenderer;
 import io.github.luma.ui.overlay.RoundedHudRenderer;
 import io.github.luma.ui.screen.OnboardingScreen;
 import io.github.luma.ui.state.ProjectHomeViewState;
@@ -140,12 +141,17 @@ public final class ClientOnboardingFlowCoordinator {
                 ? Math.min(100L, now - this.lastHoldSampleMillis)
                 : 0L;
         this.lastHoldSampleMillis = held ? now : 0L;
-        if (!this.holdGate.update(held, elapsedMillis)) {
+        boolean previewVisible = PendingChangesOverlayRenderer.visible();
+        if (!this.holdGate.update(previewHoldActive(held, previewVisible), elapsedMillis)) {
             return;
         }
 
         this.tour.advanceAfterPendingPreview();
         this.returnToOnboarding(client);
+    }
+
+    static boolean previewHoldActive(boolean held, boolean overlayVisible) {
+        return held && overlayVisible;
     }
 
     private void render(GuiGraphics drawContext, net.minecraft.client.DeltaTracker tickCounter) {

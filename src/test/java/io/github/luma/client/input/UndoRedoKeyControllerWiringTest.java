@@ -30,4 +30,18 @@ class UndoRedoKeyControllerWiringTest {
         assertFalse(source.contains("AxiomUndoRedoBridge"));
         assertFalse(source.contains("ExternalUndoRedoPolicy"));
     }
+
+    @Test
+    void undoRedoStabilizesCausalFalloutBeforeSelectingTheAction() throws Exception {
+        String source = Files.readString(
+                Path.of("src/main/java/io/github/luma/domain/service/UndoRedoService.java")
+        );
+
+        int stabilization = source.indexOf("this.capture.drainUndoRedoStabilization");
+        int readiness = source.indexOf("this.capture.hasPendingUndoRedoStabilization");
+        int selection = source.indexOf("direction.select(this.history");
+        assertTrue(stabilization >= 0);
+        assertTrue(readiness > stabilization);
+        assertTrue(selection > readiness);
+    }
 }

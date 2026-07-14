@@ -1,5 +1,6 @@
 package io.github.luma.client.input;
 
+import io.github.luma.LumaMod;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.UndoRedoService;
@@ -14,19 +15,34 @@ public final class UndoRedoKeyController {
 
     private final ProjectService projects = new ProjectService();
     private final UndoRedoService undoRedo = new UndoRedoService();
+    private Intent pendingIntent;
 
     public void undo(Minecraft client) {
-        this.start(client, true);
+        this.start(client, Intent.UNDO);
     }
 
     public void redo(Minecraft client) {
-        this.start(client, false);
+        this.start(client, Intent.REDO);
     }
 
-    private void start(Minecraft client, boolean undo) {
+    public void tick(Minecraft client) {
+        if (client == null || client.player == null || client.level == null) {
+            this.pendingIntent = null;
+            return;
+        }
+        if (this.pendingIntent == null) {
+            return;
+        }
+        Intent intent = this.pendingIntent;
+        this.pendingIntent = null;
+        this.start(client, intent);
+    }
+
+    private void start(Minecraft client, Intent intent) {
         if (client == null || client.player == null || client.level == null || client.gui == null) {
             return;
         }
+        boolean undo = intent == Intent.UNDO;
         try {
             ServerLevel level = this.currentLevel(client);
             BuildProject project = this.projects.findWorldProject(level)
@@ -42,8 +58,35 @@ public final class UndoRedoKeyController {
                     undo ? "luma.status.undo_started" : "luma.status.redo_started"
             ), false);
         } catch (Exception exception) {
+            if (isStabilizationPending(exception)) {
+                this.pendingIntent = intent;
+                client.gui.setOverlayMessage(
+                        ActionBarMessagePresenter.info("luma.status.undo_redo_settling"),
+                        false
+                );
+                return;
+            }
+            if (!isExpectedFailure(exception)) {
+                LumaMod.LOGGER.error("Failed to start client {}", undo ? "undo" : "redo", exception);
+            }
             client.gui.setOverlayMessage(this.failureMessage(exception, undo), false);
         }
+    }
+
+    private static boolean isStabilizationPending(Exception exception) {
+        return exception != null
+                && exception.getMessage() != null
+                && exception.getMessage().contains("still settling");
+    }
+
+    private static boolean isExpectedFailure(Exception exception) {
+        String message = exception == null || exception.getMessage() == null ? "" : exception.getMessage();
+        return message.contains("No Lumi action")
+                || message.contains("No active Lumi workspace")
+                || message.contains("Another world operation")
+                || message.contains("admin permissions")
+                || message.contains("cheats enabled")
+                || message.contains("disabled for survival mode");
     }
 
     private ServerLevel currentLevel(Minecraft client) {
@@ -54,7 +97,7 @@ public final class UndoRedoKeyController {
 
     private Component failureMessage(Exception exception, boolean undo) {
         String message = exception.getMessage() == null ? "" : exception.getMessage();
-        if (message.contains("No Lumi action")) {
+        if (message.contains("No Lumi action") || message.contains("No active Lumi workspace")) {
             return ActionBarMessagePresenter.warning(
                     undo ? "luma.status.undo_unavailable" : "luma.status.redo_unavailable"
             );
@@ -69,5 +112,10 @@ public final class UndoRedoKeyController {
             return ActionBarMessagePresenter.error("luma.status.survival_disabled");
         }
         return ActionBarMessagePresenter.error("luma.status.operation_failed");
+    }
+
+    private enum Intent {
+        UNDO,
+        REDO
     }
 }

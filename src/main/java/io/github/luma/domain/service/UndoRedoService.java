@@ -60,6 +60,10 @@ public final class UndoRedoService {
         BuildProject project = this.projectService.loadProject(level.getServer(), projectName);
         String projectId = project.id().toString();
         EntityMutationTracker.drainPendingSpawns(level.getServer());
+        this.capture.drainUndoRedoStabilization(level.getServer(), projectId);
+        if (this.capture.hasPendingUndoRedoStabilization(level.getServer(), projectId)) {
+            throw new IllegalStateException("Block updates are still settling; try undo/redo again in a moment");
+        }
         UndoRedoActionStack.Selection selection = direction.select(this.history, projectId, actor);
         if (selection == null && !level.getServer().isDedicatedServer()) {
             selection = direction.select(this.history, projectId, null);

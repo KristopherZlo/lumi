@@ -74,6 +74,8 @@ public final class HistoryCaptureManager {
             new EntityChangeCapturePlanner(this.trackedProjectCatalog);
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
     private final SessionStabilizationService stabilizationService = new SessionStabilizationService();
+    private final UndoRedoStabilizationChunkLoader undoRedoStabilizationChunks =
+            new UndoRedoStabilizationChunkLoader();
     private final CaptureBaselineCoordinator baselineCoordinator =
             new CaptureBaselineCoordinator(this.stabilizationService, new PersistentBlockStatePolicy());
     private final LiveBlockSectionReconciliationMarker liveBlockSectionReconciliationMarker =
@@ -1227,6 +1229,38 @@ public final class HistoryCaptureManager {
                 LumaMod.LOGGER.warn("Failed to finalize idle session for {}", projectId, exception);
             }
         }
+    }
+
+    /** Reconciles deferred causal fallout before live undo/redo selects an action. */
+    public void drainUndoRedoStabilization(MinecraftServer server, String projectId) throws IOException {
+        this.serverThreadExecutor.run(server, () -> this.drainUndoRedoStabilizationOnServerThread(server, projectId));
+    }
+
+    public boolean hasPendingUndoRedoStabilization(MinecraftServer server, String projectId) throws IOException {
+        return this.serverThreadExecutor.call(server, () -> {
+            if (projectId == null || projectId.isBlank()) {
+                return false;
+            }
+            CaptureSessionState sessionState = this.workingDrafts.session(projectId);
+            return sessionState != null && sessionState.hasPendingReconciliation();
+        });
+    }
+
+    private void drainUndoRedoStabilizationOnServerThread(MinecraftServer server, String projectId) throws IOException {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+        TrackedProject trackedProject = this.findTrackedProject(server, projectId);
+        CaptureSessionState sessionState = this.workingDrafts.session(projectId);
+        if (trackedProject == null || sessionState == null || !sessionState.hasPendingReconciliation()) {
+            return;
+        }
+        this.undoRedoStabilizationChunks.load(
+                this.resolveProjectLevel(server, trackedProject.project()),
+                trackedProject.project(),
+                sessionState
+        );
+        this.reconcileSession(server, trackedProject, sessionState, false);
     }
 
     public void flushAll(MinecraftServer server) {
