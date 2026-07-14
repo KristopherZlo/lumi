@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -58,6 +59,31 @@ class DirtyScopeReconciliationServiceTest {
         assertEquals(4096, draft.changes().size());
         assertEquals("minecraft:stone", draft.changes().getFirst().oldValue().blockId());
         assertEquals("minecraft:gold_block", draft.changes().getFirst().newValue().blockId());
+    }
+
+    @Test
+    void reconstructsOneSectionAtATime() throws Exception {
+        BuildProject project = project();
+        ProjectVersion head = head(project);
+        AtomicInteger largestLookup = new AtomicInteger();
+        DirtyScopeReconciliationService service = new DirtyScopeReconciliationService(
+                (layout, ignoredProject, versions, target, positions) -> {
+                    largestLookup.accumulateAndGet(positions.size(), Math::max);
+                    return states(positions, "minecraft:stone");
+                }
+        );
+        ProjectDirtyScope scope = ProjectDirtyScope.empty(project.id().toString(), "main", head.id());
+        scope.markBlockSection(new ChunkSectionPoint(0, 0, 4));
+        scope.markBlockSection(new ChunkSectionPoint(1, 0, 4));
+
+        var draft = service.reconcileBlocks(
+                new ProjectLayout(this.tempDir), project, List.of(head), head, scope,
+                List.of(liveChunk(0, "minecraft:gold_block"), liveChunk(1, "minecraft:gold_block")),
+                null, "Lumi safety ledger", NOW
+        );
+
+        assertEquals(8192, draft.changes().size());
+        assertEquals(4096, largestLookup.get());
     }
 
     @Test
@@ -123,10 +149,14 @@ class DirtyScopeReconciliationServiceTest {
     }
 
     private static ChunkSnapshotPayload liveChunk(String blockId) {
+        return liveChunk(0, blockId);
+    }
+
+    private static ChunkSnapshotPayload liveChunk(int chunkX, String blockId) {
         CompoundTag state = new CompoundTag();
         state.putString("Name", blockId);
         return new ChunkSnapshotPayload(
-                0, 0, 0, 255,
+                chunkX, 0, 0, 255,
                 List.of(new ChunkSectionSnapshotPayload(4, List.of(state), new long[0], 0)),
                 Map.of()
         );

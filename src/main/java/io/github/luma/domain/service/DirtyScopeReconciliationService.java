@@ -69,38 +69,36 @@ final class DirtyScopeReconciliationService {
             liveByChunk.put(chunk.chunk(), chunk);
         }
 
-        LinkedHashMap<BlockPoint, StatePayload> liveStates = new LinkedHashMap<>();
-        for (ChunkSectionPoint section : dirtyScope.blockSections()) {
-            ChunkSnapshotPayload chunk = liveByChunk.get(section.chunk());
-            if (chunk == null) {
-                throw new IOException("Dirty chunk is unavailable for reconciliation: " + section.chunk());
-            }
-            this.materializeSection(section, chunk, liveStates);
-        }
-
-        Map<BlockPoint, StatePayload> headStates = this.targetStateLookup.resolve(
-                layout,
-                project,
-                versions,
-                head,
-                List.copyOf(liveStates.keySet())
-        );
-        if (headStates.size() != liveStates.size()) {
-            throw new IOException("Dirty section target state was not fully reconstructed");
-        }
-
         StoredChangeAccumulator changes = new StoredChangeAccumulator();
         if (pendingDraft != null) {
             changes.addBlockChanges(pendingDraft.changes());
             changes.addEntityChanges(pendingDraft.entityChanges());
         }
-        for (Map.Entry<BlockPoint, StatePayload> entry : liveStates.entrySet()) {
-            StatePayload oldValue = headStates.get(entry.getKey());
-            if (oldValue == null) {
-                throw new IOException("Dirty position target state was not reconstructed: " + entry.getKey());
+        for (ChunkSectionPoint section : dirtyScope.blockSections()) {
+            ChunkSnapshotPayload chunk = liveByChunk.get(section.chunk());
+            if (chunk == null) {
+                throw new IOException("Dirty chunk is unavailable for reconciliation: " + section.chunk());
             }
-            if (!oldValue.equalsState(entry.getValue())) {
-                changes.addBlockChange(new StoredBlockChange(entry.getKey(), oldValue, entry.getValue()));
+            LinkedHashMap<BlockPoint, StatePayload> liveStates = new LinkedHashMap<>();
+            this.materializeSection(section, chunk, liveStates);
+            Map<BlockPoint, StatePayload> headStates = this.targetStateLookup.resolve(
+                    layout,
+                    project,
+                    versions,
+                    head,
+                    List.copyOf(liveStates.keySet())
+            );
+            if (headStates.size() != liveStates.size()) {
+                throw new IOException("Dirty section target state was not fully reconstructed");
+            }
+            for (Map.Entry<BlockPoint, StatePayload> entry : liveStates.entrySet()) {
+                StatePayload oldValue = headStates.get(entry.getKey());
+                if (oldValue == null) {
+                    throw new IOException("Dirty position target state was not reconstructed: " + entry.getKey());
+                }
+                if (!oldValue.equalsState(entry.getValue())) {
+                    changes.addBlockChange(new StoredBlockChange(entry.getKey(), oldValue, entry.getValue()));
+                }
             }
         }
         this.reconcileEntities(layout, versions, head, dirtyScope, liveChunks, changes);
