@@ -23,6 +23,9 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -70,6 +73,41 @@ class RecoveryRepositoryTest {
         RecoveryDraft restored = this.repository.loadDraft(layout).orElseThrow();
         assertEquals(second.updatedAt(), restored.updatedAt());
         assertEquals("minecraft:gold_block", restored.changes().getFirst().newValue().blockId());
+    }
+
+    @Test
+    void concurrentSaveAndLoadNeverObserveAPartialWalEntry() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        RecoveryRepository writer = new RecoveryRepository();
+        RecoveryRepository reader = new RecoveryRepository();
+        writer.saveDraft(layout, largeDraft(0));
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            CompletableFuture<Void> writes = CompletableFuture.runAsync(() -> {
+                for (int index = 1; index <= 40; index++) {
+                    try {
+                        writer.saveDraft(layout, largeDraft(index));
+                    } catch (Exception exception) {
+                        throw new RuntimeException(exception);
+                    }
+                }
+            }, executor);
+            CompletableFuture<Void> reads = CompletableFuture.runAsync(() -> {
+                for (int index = 0; index < 80; index++) {
+                    try {
+                        assertTrue(reader.loadDraft(layout).isPresent());
+                    } catch (Exception exception) {
+                        throw new RuntimeException(exception);
+                    }
+                }
+            }, executor);
+
+            CompletableFuture.allOf(writes, reads).join();
+            assertTrue(reader.loadDraft(layout).isPresent());
+            assertFalse(hasQuarantinedWal(layout));
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test
@@ -316,6 +354,28 @@ class RecoveryRepositoryTest {
                 "message",
                 "",
                 ""
+        );
+    }
+
+    private static RecoveryDraft largeDraft(int revision) {
+        List<StoredBlockChange> changes = new ArrayList<>();
+        for (int index = 0; index < 256; index++) {
+            changes.add(new StoredBlockChange(
+                    new BlockPoint(index & 15, 64 + (index >> 8), (index >> 4) & 15),
+                    payload("minecraft:stone"),
+                    payload(revision % 2 == 0 ? "minecraft:gold_block" : "minecraft:diamond_block")
+            ));
+        }
+        Instant updatedAt = Instant.EPOCH.plusSeconds(revision + 1L);
+        return new RecoveryDraft(
+                "project",
+                "main",
+                "v0001",
+                "tester",
+                WorldMutationSource.PLAYER,
+                updatedAt.minusSeconds(1),
+                updatedAt,
+                changes
         );
     }
 

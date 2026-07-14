@@ -80,13 +80,16 @@ public final class SessionStabilizationService {
 
             Map<BlockPoint, StatePayload> baselineCorrections = session.baselineCorrections(processedChunks);
             Map<ChunkPoint, Set<Integer>> dirtySections = session.dirtySections(processedChunks);
+            Map<ChunkPoint, Set<BlockPoint>> reconciliationPositions =
+                    session.reconciliationPositions(processedChunks);
             Set<ChunkPoint> hiddenChunks = session.hiddenReconciliationChunks(processedChunks);
             List<StoredBlockChange> deltaChanges = this.deltaChanges(
                     project,
                     session,
                     capturedChunks.captured(),
                     baselineCorrections,
-                    dirtySections
+                    dirtySections,
+                    reconciliationPositions
             );
             deltaChanges = this.applyDeferredVisibility(deltaChanges, hiddenChunks);
             List<StoredBlockChange> startingChanges = session.startingChunkChanges(processedChunks);
@@ -170,7 +173,8 @@ public final class SessionStabilizationService {
             CaptureSessionState session,
             Map<ChunkPoint, ChunkSnapshotPayload> liveChunks,
             Map<BlockPoint, StatePayload> baselineCorrections,
-            Map<ChunkPoint, Set<Integer>> dirtySections
+            Map<ChunkPoint, Set<Integer>> dirtySections,
+            Map<ChunkPoint, Set<BlockPoint>> reconciliationPositions
     ) {
         List<StoredBlockChange> changes = new ArrayList<>();
         for (Map.Entry<ChunkPoint, ChunkSnapshotPayload> entry : liveChunks.entrySet()) {
@@ -183,7 +187,8 @@ public final class SessionStabilizationService {
                     entry.getValue(),
                     project == null ? null : project.bounds(),
                     baselineCorrections,
-                    dirtySections == null ? null : dirtySections.get(entry.getKey())
+                    dirtySections == null ? null : dirtySections.get(entry.getKey()),
+                    reconciliationPositions == null ? null : reconciliationPositions.get(entry.getKey())
             ));
         }
         return List.copyOf(changes);
@@ -213,6 +218,24 @@ public final class SessionStabilizationService {
             Map<BlockPoint, StatePayload> baselineCorrections,
             Set<Integer> candidateSections
     ) {
+        return this.diffChunk(
+                baseline,
+                live,
+                bounds,
+                baselineCorrections,
+                candidateSections,
+                null
+        );
+    }
+
+    List<StoredBlockChange> diffChunk(
+            ChunkSnapshotPayload baseline,
+            ChunkSnapshotPayload live,
+            Bounds3i bounds,
+            Map<BlockPoint, StatePayload> baselineCorrections,
+            Set<Integer> candidateSections,
+            Set<BlockPoint> candidatePositions
+    ) {
         List<StoredBlockChange> changes = new ArrayList<>();
         int minX = baseline.chunkX() << 4;
         int maxX = minX + 15;
@@ -240,7 +263,10 @@ public final class SessionStabilizationService {
             ChunkSectionSnapshotPayload baselineSection = baselineSections.get(sectionY);
             ChunkSectionSnapshotPayload liveSection = liveSections.get(sectionY);
             boolean hasBaselineCorrection = this.hasBaselineCorrectionInSection(baselineCorrections, sectionY, bounds);
-            boolean candidateSection = candidateSections == null || candidateSections.contains(sectionY);
+            boolean positionScoped = candidatePositions != null;
+            boolean candidateSection = positionScoped
+                    ? this.hasCandidatePositionInSection(candidatePositions, sectionY, bounds)
+                    : candidateSections == null || candidateSections.contains(sectionY);
             if (!candidateSection && !hasBaselineCorrection) {
                 continue;
             }
@@ -259,8 +285,10 @@ public final class SessionStabilizationService {
                     for (int x = minX; x <= maxX; x++) {
                         int localX = x & 15;
                         BlockPoint worldPos = new BlockPoint(x, y, z);
-                        if (!candidateSection
-                                && (baselineCorrections == null || !baselineCorrections.containsKey(worldPos))) {
+                        boolean correctedCell = baselineCorrections != null
+                                && baselineCorrections.containsKey(worldPos);
+                        if ((positionScoped && !candidatePositions.contains(worldPos) && !correctedCell)
+                                || (!positionScoped && !candidateSection && !correctedCell)) {
                             continue;
                         }
                         CompoundTag baselineState = this.readStateTag(baselineSection, localX, localY, localZ);
@@ -292,6 +320,22 @@ public final class SessionStabilizationService {
             }
         }
         return changes;
+    }
+
+    private boolean hasCandidatePositionInSection(
+            Set<BlockPoint> candidatePositions,
+            int sectionY,
+            Bounds3i bounds
+    ) {
+        if (candidatePositions == null || candidatePositions.isEmpty()) {
+            return false;
+        }
+        for (BlockPoint pos : candidatePositions) {
+            if ((pos.y() >> 4) == sectionY && (bounds == null || bounds.contains(pos))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     List<StoredBlockChange> applyDeferredVisibility(

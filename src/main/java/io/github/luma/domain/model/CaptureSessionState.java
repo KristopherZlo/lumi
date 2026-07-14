@@ -29,6 +29,8 @@ public final class CaptureSessionState {
     private final LinkedHashSet<ChunkPoint> rootChunks = new LinkedHashSet<>();
     private final LinkedHashSet<ChunkPoint> dirtyChunks = new LinkedHashSet<>();
     private final LinkedHashMap<ChunkPoint, LinkedHashSet<Integer>> dirtySections = new LinkedHashMap<>();
+    private final LinkedHashMap<ChunkPoint, LinkedHashSet<BlockPoint>> reconciliationPositions =
+            new LinkedHashMap<>();
     private final LinkedHashSet<ChunkPoint> pendingReconcileChunks = new LinkedHashSet<>();
     private final LinkedHashMap<ChunkPoint, Long> pendingReconcileGameTimes = new LinkedHashMap<>();
     private final LinkedHashSet<ChunkPoint> hiddenReconciliationChunks = new LinkedHashSet<>();
@@ -94,6 +96,18 @@ public final class CaptureSessionState {
         return chunkChanged || sectionChanged;
     }
 
+    public boolean markDirtyPosition(BlockPoint pos, boolean hidden, long gameTime) {
+        if (pos == null) {
+            return false;
+        }
+        ChunkPoint chunk = ChunkPoint.from(pos);
+        boolean positionChanged = this.reconciliationPositions
+                .computeIfAbsent(chunk, ignored -> new LinkedHashSet<>())
+                .add(pos);
+        return this.markDirtySection(new ChunkSectionPoint(chunk, pos.y() >> 4), hidden, gameTime)
+                || positionChanged;
+    }
+
     private boolean markDirtyChunk(
             ChunkPoint chunk,
             boolean hidden,
@@ -105,6 +119,7 @@ public final class CaptureSessionState {
         }
         if (!preserveSectionTracking) {
             this.dirtySections.remove(chunk);
+            this.reconciliationPositions.remove(chunk);
         }
         boolean dirtyChanged = this.dirtyChunks.add(chunk);
         boolean pendingChanged = this.pendingReconcileChunks.add(chunk);
@@ -151,6 +166,20 @@ public final class CaptureSessionState {
             }
         }
         return Map.copyOf(sections);
+    }
+
+    public Map<ChunkPoint, Set<BlockPoint>> reconciliationPositions(Collection<ChunkPoint> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return Map.of();
+        }
+        LinkedHashMap<ChunkPoint, Set<BlockPoint>> positions = new LinkedHashMap<>();
+        for (ChunkPoint chunk : chunks) {
+            LinkedHashSet<BlockPoint> dirty = this.reconciliationPositions.get(chunk);
+            if (dirty != null && !dirty.isEmpty()) {
+                positions.put(chunk, Set.copyOf(dirty));
+            }
+        }
+        return Map.copyOf(positions);
     }
 
     public List<ChunkPoint> pendingReconcileChunks() {
@@ -209,6 +238,7 @@ public final class CaptureSessionState {
         this.dirtyChunks.removeAll(reconciledChunks);
         for (ChunkPoint chunk : reconciledChunks) {
             this.dirtySections.remove(chunk);
+            this.reconciliationPositions.remove(chunk);
             this.hiddenReconciliationChunks.remove(chunk);
             this.pendingReconcileGameTimes.remove(chunk);
         }

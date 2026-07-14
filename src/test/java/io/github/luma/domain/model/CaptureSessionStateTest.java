@@ -156,6 +156,21 @@ class CaptureSessionStateTest {
         assertTrue(state.dirtyChunks().isEmpty());
     }
 
+    @Test
+    void reconciliationPositionsTrackOnlyObservedMutationCells() {
+        CaptureSessionState state = CaptureSessionState.create(buffer());
+        BlockPoint first = new BlockPoint(1, 64, 1);
+        BlockPoint second = new BlockPoint(2, 64, 1);
+        ChunkPoint chunk = ChunkPoint.from(first);
+
+        assertTrue(state.markDirtyPosition(first, false, 100L));
+        assertTrue(state.markDirtyPosition(second, false, 101L));
+        assertEquals(Map.of(chunk, Set.of(first, second)), state.reconciliationPositions(List.of(chunk)));
+
+        state.finishReconciliation(List.of(chunk));
+        assertTrue(state.reconciliationPositions(List.of(chunk)).isEmpty());
+    }
+
     private static TrackedChangeBuffer buffer() {
         return TrackedChangeBuffer.create(
                 "session",

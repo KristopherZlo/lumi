@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import net.jpountz.lz4.LZ4FrameInputStream;
 import net.jpountz.lz4.LZ4FrameOutputStream;
 
@@ -43,8 +44,15 @@ public final class RecoveryRepository {
     static final int MAX_JOURNAL_ENTRIES = 512;
     private static final byte[] EXPECTED_DRAFT_MARKER = "expected\n".getBytes(StandardCharsets.UTF_8);
     private static final Type JOURNAL_TYPE = new TypeToken<List<RecoveryJournalEntry>>() { }.getType();
+    private static final ConcurrentHashMap<Path, Object> DRAFT_LOCKS = new ConcurrentHashMap<>();
 
     public void saveDraft(ProjectLayout layout, RecoveryDraft draft) throws IOException {
+        synchronized (draftLock(layout)) {
+            this.saveDraftUnlocked(layout, draft);
+        }
+    }
+
+    private void saveDraftUnlocked(ProjectLayout layout, RecoveryDraft draft) throws IOException {
         byte[] draftBytes = this.serializeDraft(draft);
         boolean baseExists = Files.exists(layout.recoveryBaseFile());
         boolean walExists = Files.exists(layout.recoveryWalFile());
@@ -71,6 +79,12 @@ public final class RecoveryRepository {
     }
 
     public Optional<RecoveryDraft> loadDraft(ProjectLayout layout) throws IOException {
+        synchronized (draftLock(layout)) {
+            return this.loadDraftUnlocked(layout);
+        }
+    }
+
+    private Optional<RecoveryDraft> loadDraftUnlocked(ProjectLayout layout) throws IOException {
         RecoveryDraft base = this.readBaseDraft(layout.recoveryBaseFile()).orElse(null);
         if (!Files.exists(layout.recoveryWalFile())) {
             return Optional.ofNullable(base);
@@ -127,10 +141,12 @@ public final class RecoveryRepository {
     }
 
     public void deleteDraft(ProjectLayout layout) throws IOException {
-        this.clearExpectedDraft(layout);
-        Files.deleteIfExists(layout.recoveryBaseFile());
-        Files.deleteIfExists(layout.recoveryWalFile());
-        LumaMod.LOGGER.info("Deleted recovery draft storage for {}", layout.root().getFileName());
+        synchronized (draftLock(layout)) {
+            this.clearExpectedDraft(layout);
+            Files.deleteIfExists(layout.recoveryBaseFile());
+            Files.deleteIfExists(layout.recoveryWalFile());
+            LumaMod.LOGGER.info("Deleted recovery draft storage for {}", layout.root().getFileName());
+        }
     }
 
     public void markExpectedDraft(ProjectLayout layout) throws IOException {
@@ -428,6 +444,11 @@ public final class RecoveryRepository {
 
     private static String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private static Object draftLock(ProjectLayout layout) {
+        Path key = layout.root().toAbsolutePath().normalize();
+        return DRAFT_LOCKS.computeIfAbsent(key, ignored -> new Object());
     }
 
     private StatePayload normalizePayload(StatePayload payload) {

@@ -449,6 +449,33 @@ class SessionStabilizationServiceTest {
     }
 
     @Test
+    void positionScopedLiveDiffExcludesUnattributedCellsInTheSameSection() {
+        SessionStabilizationService service = new SessionStabilizationService();
+        BlockPoint capturedPos = new BlockPoint(2, 64, 1);
+        BlockPoint ambientPos = new BlockPoint(3, 64, 1);
+        ChunkSnapshotPayload baseline = uniformChunk("minecraft:air");
+        ChunkSnapshotPayload live = chunkWithStates(
+                stateTag("minecraft:air"),
+                Map.of(
+                        capturedPos, stateTag("minecraft:oak_planks"),
+                        ambientPos, stateTag("minecraft:stone")
+                )
+        );
+
+        List<StoredBlockChange> changes = service.diffChunk(
+                baseline,
+                live,
+                null,
+                Map.of(),
+                Set.of(4),
+                Set.of(capturedPos)
+        );
+
+        assertEquals(1, changes.size());
+        assertEquals(capturedPos, changes.getFirst().pos());
+    }
+
+    @Test
     void stabilizationCompositionDropsCurrentChangeWhenLiveStateReturnedToBaseline() {
         SessionStabilizationService service = new SessionStabilizationService();
         StoredBlockChange movedSource = new StoredBlockChange(

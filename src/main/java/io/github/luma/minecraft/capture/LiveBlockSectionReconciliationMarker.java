@@ -3,7 +3,7 @@ package io.github.luma.minecraft.capture;
 import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ChunkPoint;
-import io.github.luma.domain.model.ChunkSectionPoint;
+import io.github.luma.domain.model.BlockPoint;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -55,7 +55,7 @@ final class LiveBlockSectionReconciliationMarker {
                 oldBlockEntity
         );
         int sectionY = Math.floorDiv(pos.getY(), 16);
-        session.markDirtySection(new ChunkSectionPoint(chunk, sectionY), hidden, level.getGameTime());
+        session.markDirtyPosition(BlockPoint.from(pos), hidden, level.getGameTime());
         this.workingDrafts.markDirty(projectId);
         LumaDebugLog.log(
                 trackedProject.project(),
