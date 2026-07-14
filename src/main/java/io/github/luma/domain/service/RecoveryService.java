@@ -186,9 +186,7 @@ public final class RecoveryService {
             ProjectLayout layout,
             BuildProject project
     ) throws IOException {
-        boolean activeOperation = this.worldOperationManager.snapshot(server, project.id().toString())
-                .filter(snapshot -> !snapshot.terminal())
-                .isPresent();
+        boolean activeOperation = this.worldOperationManager.hasActiveOperation(server);
         if (!activeOperation) {
             this.restoreCompletionRecoveryService.completePending(layout, project, server);
             this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);

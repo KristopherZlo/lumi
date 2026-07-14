@@ -45,10 +45,7 @@ public final class ProjectCleanupService {
         BuildProject project = this.projectRepository.load(layout)
                 .orElseThrow(() -> new IllegalArgumentException("Project metadata is missing for " + projectName));
         List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
-        boolean activeOperation = WorldOperationManager.getInstance()
-                .snapshot(server, project.id().toString())
-                .filter(snapshot -> !snapshot.terminal())
-                .isPresent();
+        boolean activeOperation = WorldOperationManager.getInstance().hasActiveOperation(server);
         if (!activeOperation) {
             this.operationDraftRecoveryService.restoreInterruptedOperationDraft(layout, project);
         }

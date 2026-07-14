@@ -6,7 +6,6 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StoredChangeAccumulator;
 import io.github.luma.storage.ProjectLayout;
 import io.github.luma.storage.repository.RecoveryRepository;
-import io.github.luma.storage.repository.ProjectDirtyScopeRepository;
 import io.github.luma.storage.repository.VariantRepository;
 import java.io.IOException;
 import java.time.Instant;
@@ -19,24 +18,21 @@ import java.util.Optional;
 public final class OperationDraftRecoveryService {
 
     private final RecoveryRepository recoveryRepository;
-    private final ProjectDirtyScopeRepository dirtyScopeRepository;
     private final VariantRepository variantRepository;
 
     public OperationDraftRecoveryService() {
-        this(new RecoveryRepository(), new ProjectDirtyScopeRepository(), new VariantRepository());
+        this(new RecoveryRepository(), new VariantRepository());
     }
 
     OperationDraftRecoveryService(RecoveryRepository recoveryRepository) {
-        this(recoveryRepository, new ProjectDirtyScopeRepository(), new VariantRepository());
+        this(recoveryRepository, new VariantRepository());
     }
 
     OperationDraftRecoveryService(
             RecoveryRepository recoveryRepository,
-            ProjectDirtyScopeRepository dirtyScopeRepository,
             VariantRepository variantRepository
     ) {
         this.recoveryRepository = Objects.requireNonNull(recoveryRepository, "recoveryRepository");
-        this.dirtyScopeRepository = Objects.requireNonNull(dirtyScopeRepository, "dirtyScopeRepository");
         this.variantRepository = Objects.requireNonNull(variantRepository, "variantRepository");
     }
 
@@ -51,6 +47,13 @@ public final class OperationDraftRecoveryService {
         if (operationDraft.isEmpty()) {
             return Optional.empty();
         }
+        if (this.recoveryRepository.loadPendingRestoreCompletion(layout).isPresent()) {
+            LumaMod.LOGGER.warn(
+                    "Keeping operation draft for project {} isolated until pending restore completion is resolved",
+                    project.name()
+            );
+            return Optional.empty();
+        }
         RecoveryDraft pending = operationDraft.get();
         if (!project.id().toString().equals(pending.projectId())) {
             LumaMod.LOGGER.warn(
@@ -60,7 +63,7 @@ public final class OperationDraftRecoveryService {
             );
             return Optional.empty();
         }
-        if (this.alreadyPublished(layout, project, pending)) {
+        if (this.alreadyPublished(layout, pending)) {
             this.recoveryRepository.deleteOperationDraft(layout);
             LumaMod.LOGGER.warn(
                     "Discarded stale operation draft for project {} after its head advanced from {}",
@@ -95,16 +98,9 @@ public final class OperationDraftRecoveryService {
         return Optional.of(draft);
     }
 
-    private boolean alreadyPublished(ProjectLayout layout, BuildProject project, RecoveryDraft operationDraft) throws IOException {
-        var dirtyScope = this.dirtyScopeRepository.load(layout).orElse(null);
-        if (dirtyScope == null
-                || !dirtyScope.projectId().equals(operationDraft.projectId())
-                || !dirtyScope.variantId().equals(operationDraft.variantId())
-                || !dirtyScope.baseVersionId().equals(operationDraft.baseVersionId())) {
-            return false;
-        }
+    private boolean alreadyPublished(ProjectLayout layout, RecoveryDraft operationDraft) throws IOException {
         return this.variantRepository.loadAll(layout).stream()
-                .filter(variant -> variant.id().equals(project.activeVariantId()))
+                .filter(variant -> variant.id().equals(operationDraft.variantId()))
                 .map(io.github.luma.domain.model.ProjectVariant::headVersionId)
                 .anyMatch(head -> !head.equals(operationDraft.baseVersionId()));
     }
