@@ -33,6 +33,9 @@ final class VersionPayloadVerifier {
         try {
             PatchMetadata storedMetadata = this.patchMetadata.load(layout, expectedMetadata.id())
                     .orElseThrow(() -> new IOException("Written patch metadata is missing: " + expectedMetadata.id()));
+            if (!expectedMetadata.equals(storedMetadata)) {
+                throw new IOException("Written patch metadata does not match its prepared index");
+            }
             var storedChanges = this.patchData.loadWorldChanges(layout, storedMetadata);
             if (!blockChanges(expectedDraft).equals(blockChanges(storedChanges.blockChanges()))) {
                 throw new IOException("Written patch block payload does not match the isolated draft");

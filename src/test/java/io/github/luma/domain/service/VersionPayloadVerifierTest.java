@@ -1,6 +1,7 @@
 package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BlockPoint;
+import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
@@ -48,6 +49,24 @@ class VersionPayloadVerifierTest {
         Files.write(layout.patchDataFile(metadata.id()), new byte[] {1, 2, 3});
 
         assertThrows(IOException.class, () -> new VersionPayloadVerifier().verify(layout, metadata, draft, "", ""));
+    }
+
+    @Test
+    void rejectsMetadataThatDoesNotRoundTrip() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir);
+        RecoveryDraft draft = draft();
+        var metadata = new PatchDataRepository().writePayload(
+                layout, "p0001", "project", "v0001", draft.changes(), draft.entityChanges()
+        );
+        PatchMetadata corruptedMetadata = new PatchMetadata(
+                metadata.id(), metadata.projectId(), metadata.versionId(), metadata.dataFileName(),
+                List.of(), metadata.stats(), metadata.entityChunkIndex()
+        );
+        new PatchMetaRepository().save(layout, corruptedMetadata);
+
+        assertThrows(IOException.class, () -> new VersionPayloadVerifier().verify(
+                layout, metadata, draft, "", ""
+        ));
     }
 
     private static RecoveryDraft draft() {
