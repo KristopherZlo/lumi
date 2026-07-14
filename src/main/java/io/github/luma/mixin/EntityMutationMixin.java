@@ -6,6 +6,7 @@ import io.github.luma.minecraft.capture.EntityConstructionStateAccess;
 import io.github.luma.minecraft.capture.EntityCausalContextRegistry;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.EntityMutationTracker.PendingEntityMutation;
+import io.github.luma.minecraft.capture.WorldMutationContext;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -49,14 +50,18 @@ abstract class EntityMutationMixin implements EntityConstructionStateAccess {
     @WrapMethod(method = "snapTo(DDDFF)V")
     private void luma$wrapSnapTo(double x, double y, double z, float yRot, float xRot, Operation<Void> original) {
         PendingEntityMutation pending = this.luma$captureBefore();
-        original.call(x, y, z, yRot, xRot);
+        try (WorldMutationContext.SuppressionFrame ignored = WorldMutationContext.pushCaptureSuppression()) {
+            original.call(x, y, z, yRot, xRot);
+        }
         this.luma$captureAfter(pending);
     }
 
     @WrapMethod(method = "absSnapTo(DDDFF)V")
     private void luma$wrapAbsSnapTo(double x, double y, double z, float yRot, float xRot, Operation<Void> original) {
         PendingEntityMutation pending = this.luma$captureBefore();
-        original.call(x, y, z, yRot, xRot);
+        try (WorldMutationContext.SuppressionFrame ignored = WorldMutationContext.pushCaptureSuppression()) {
+            original.call(x, y, z, yRot, xRot);
+        }
         this.luma$captureAfter(pending);
     }
 

@@ -492,6 +492,13 @@ public final class BlockChangeApplier {
             if (existing != null && !existing.isRemoved()) {
                 if (existing.getType() == entity.getType() && !requiresRespawn(existing)) {
                     existing.restoreFrom(entity);
+                    existing.snapTo(
+                            entity.getX(),
+                            entity.getY(),
+                            entity.getZ(),
+                            entity.getYRot(),
+                            entity.getXRot()
+                    );
                     DeferredWorldMutationContexts.restore(existing, replayedEntityContext);
                     resetCreeperReplayState(existing);
                     if (existing.isRemoved()) {

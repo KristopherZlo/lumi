@@ -29,6 +29,8 @@ class BlockChangeApplierSafetyTest {
         assertTrue(mixins.contains("\"CreeperReplayStateAccess\""));
         assertTrue(normalizedApplier.contains("resetCreeperReplayState(entity);"));
         assertTrue(normalizedApplier.contains("existing.restoreFrom(entity);"));
+        assertTrue(normalizedApplier.contains("existing.snapTo(\n"
+                + "                            entity.getX(),"));
         assertTrue(normalizedApplier.contains("resetCreeperReplayState(existing);"));
         assertTrue(applier.contains("access.luma$setSwell(0);"));
         assertTrue(applier.contains("access.luma$setOldSwell(0);"));

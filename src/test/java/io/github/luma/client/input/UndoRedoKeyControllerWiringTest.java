@@ -16,8 +16,8 @@ class UndoRedoKeyControllerWiringTest {
         );
 
         assertTrue(source.contains("client.player.getName().getString()"));
-        assertTrue(source.contains("this.undoRedo.undo(level, project.name(), actor)"));
-        assertTrue(source.contains("this.undoRedo.redo(level, project.name(), actor)"));
+        assertTrue(source.contains("this.undoRedo.undo(level, projectName, actor)"));
+        assertTrue(source.contains("this.undoRedo.redo(level, projectName, actor)"));
     }
 
     @Test
@@ -29,6 +29,17 @@ class UndoRedoKeyControllerWiringTest {
         assertFalse(source.contains("performPrefixedCommand"));
         assertFalse(source.contains("AxiomUndoRedoBridge"));
         assertFalse(source.contains("ExternalUndoRedoPolicy"));
+    }
+
+    @Test
+    void shortcutStartNeverWaitsForTheIntegratedServerOnTheRenderThread() throws Exception {
+        String source = Files.readString(
+                Path.of("src/client/java/io/github/luma/client/input/UndoRedoKeyController.java")
+        );
+
+        assertTrue(source.contains("CompletableFuture.supplyAsync"));
+        assertTrue(source.contains("Util.backgroundExecutor()"));
+        assertFalse(source.contains(".join()"));
     }
 
     @Test

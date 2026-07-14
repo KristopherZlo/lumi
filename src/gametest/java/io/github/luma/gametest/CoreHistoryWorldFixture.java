@@ -3,6 +3,7 @@ package io.github.luma.gametest;
 import io.github.luma.domain.model.WorldMutationSource;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.minecraft.capture.WorldMutationContext;
+import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import java.io.IOException;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -108,6 +109,22 @@ final class CoreHistoryWorldFixture {
         this.assertStateBDetails(level, entityId);
     }
 
+    void assertLatestActionCapturedEntityMove(UUID entityId) {
+        var action = UndoRedoHistoryManager.getInstance().recentUndoActions(this.projectId, 1)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Missing core journey undo action"));
+        var change = action.redoEntityChanges().stream()
+                .filter(candidate -> entityId.toString().equals(candidate.entityId()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Missing core journey entity action"));
+        BlockPos oldPos = change.oldValue() == null ? BlockPos.ZERO : change.oldValue().blockPos();
+        BlockPos newPos = change.newValue() == null ? BlockPos.ZERO : change.newValue().blockPos();
+        if (!this.entity.equals(oldPos) || !this.entity.east().equals(newPos)) {
+            throw new AssertionError("Entity action positions did not match: " + oldPos + " -> " + newPos);
+        }
+    }
+
     String projectName() {
         return this.projectName;
     }
@@ -170,7 +187,9 @@ final class CoreHistoryWorldFixture {
                 || found.getCustomName() == null
                 || !name.equals(found.getCustomName().getString())
                 || found.isCurrentlyGlowing() != glowing) {
-            throw new AssertionError(label + " did not match");
+            throw new AssertionError(label + " did not match: pos=" + found.blockPosition()
+                    + ", name=" + (found.getCustomName() == null ? "" : found.getCustomName().getString())
+                    + ", glowing=" + found.isCurrentlyGlowing());
         }
     }
 }

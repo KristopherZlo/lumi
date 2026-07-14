@@ -4,6 +4,7 @@ import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.RecoveryService;
+import io.github.luma.client.input.UndoRedoKeyController;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.ui.controller.AsyncCompareCache;
@@ -25,6 +26,7 @@ public final class LumiCoreHistoryClientGameTests implements FabricClientGameTes
     private static final String SAVE_B = "Core journey B";
     private static final String SAVE_C = "Core journey branch";
     private static final int MAX_WAIT_TICKS = 1_200;
+    private final UndoRedoKeyController undoRedoKeys = new UndoRedoKeyController();
 
     @Override
     public void runTest(ClientGameTestContext context) {
@@ -61,6 +63,16 @@ public final class LumiCoreHistoryClientGameTests implements FabricClientGameTes
         this.assertNoDraft(singleplayer, fixture);
 
         singleplayer.getServer().runOnServer(server -> fixture.applyStateB(server.overworld(), entityId));
+        this.waitForDraft(context, singleplayer, fixture.projectId());
+        singleplayer.getServer().runOnServer(server -> fixture.assertLatestActionCapturedEntityMove(entityId));
+        this.startUndoRedo(context, true);
+        this.waitForOperation(context, singleplayer, fixture.projectId(), "undo-action");
+        singleplayer.getServer().runOnServer(server -> fixture.assertStateA(server.overworld(), entityId));
+        this.assertNoDraft(singleplayer, fixture);
+
+        this.startUndoRedo(context, false);
+        this.waitForOperation(context, singleplayer, fixture.projectId(), "redo-action");
+        singleplayer.getServer().runOnServer(server -> fixture.assertStateB(server.overworld(), entityId));
         this.waitForDraft(context, singleplayer, fixture.projectId());
         this.startSave(context, fixture, SAVE_B);
         this.waitForOperation(context, singleplayer, fixture.projectId(), "save-version");
@@ -117,6 +129,16 @@ public final class LumiCoreHistoryClientGameTests implements FabricClientGameTes
         this.assertStatus("luma.status.variant_switched", status, "branch switch");
     }
 
+    private void startUndoRedo(ClientGameTestContext context, boolean undo) {
+        context.runOnClient(client -> {
+            if (undo) {
+                this.undoRedoKeys.undo(client);
+            } else {
+                this.undoRedoKeys.redo(client);
+            }
+        });
+    }
+
     private void assertCompare(ClientGameTestContext context, String projectName, String left, String right)
             throws Exception {
         for (int tick = 0; tick < MAX_WAIT_TICKS; tick++) {
@@ -162,6 +184,7 @@ public final class LumiCoreHistoryClientGameTests implements FabricClientGameTes
         String label
     ) throws Exception {
         for (int tick = 0; tick < MAX_WAIT_TICKS; tick++) {
+            context.runOnClient(this.undoRedoKeys::tick);
             OperationState state = singleplayer.getServer().computeOnServer(server -> new OperationState(
                     WorldOperationManager.getInstance().snapshot(server, projectId).orElse(null),
                     WorldOperationManager.getInstance().hasActiveOperation(server)

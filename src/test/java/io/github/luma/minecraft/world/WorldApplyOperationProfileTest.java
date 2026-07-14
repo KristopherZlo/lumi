@@ -17,6 +17,8 @@ class WorldApplyOperationProfileTest {
         assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("restore-draft"));
         assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("quick-rollback"));
         assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("merge-variant"));
+        assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("undo-action"));
+        assertEquals(WorldOperationKind.HISTORY_APPLY, WorldOperationKind.fromLabel("redo-action"));
         assertEquals(WorldApplyProfile.HISTORY_FAST, WorldOperationKind.HISTORY_APPLY.profile());
         assertEquals(WorldApplyProfile.MAXIMUM, WorldOperationKind.LIGHT_REFRESH.profile());
     }
