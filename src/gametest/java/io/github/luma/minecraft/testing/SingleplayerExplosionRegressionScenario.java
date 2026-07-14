@@ -36,7 +36,7 @@ final class SingleplayerExplosionRegressionScenario {
         SingleplayerPlayerActionDriver actions = new SingleplayerPlayerActionDriver(level, player);
         BlockPos tnt = support.above();
         Set<BlockPos> witnesses = Set.of(tnt.north(), tnt.south(), tnt.east(), tnt.west());
-        WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
+        this.installFixture(() -> {
             level.setBlock(support, Blocks.STONE.defaultBlockState(), 3);
             for (BlockPos witness : witnesses) {
                 level.setBlock(witness, Blocks.OAK_PLANKS.defaultBlockState(), 3);
@@ -64,7 +64,7 @@ final class SingleplayerExplosionRegressionScenario {
                 tnt.east()
         );
 
-        this.trackedPlayerAction(actor, () -> {
+        this.installFixture(() -> {
             level.setBlock(support, Blocks.STONE.defaultBlockState(), 3);
             level.setBlock(trigger, Blocks.AIR.defaultBlockState(), 3);
             level.setBlock(tnt, Blocks.TNT.defaultBlockState(), 3);
@@ -115,7 +115,7 @@ final class SingleplayerExplosionRegressionScenario {
         witnesses.add(firstTnt.east(5));
         witnesses.add(firstTnt.east(5).south());
 
-        this.trackedPlayerAction(actor, () -> {
+        this.installFixture(() -> {
             level.setBlock(support, Blocks.OBSIDIAN.defaultBlockState(), 3);
             level.setBlock(trigger, Blocks.AIR.defaultBlockState(), 3);
             for (BlockPos tnt : tntBlocks) {
@@ -164,7 +164,7 @@ final class SingleplayerExplosionRegressionScenario {
                 tnt.west()
         );
 
-        this.trackedPlayerAction(actor, () -> {
+        this.installFixture(() -> {
             level.setBlock(support, Blocks.STONE.defaultBlockState(), 3);
             for (BlockPos witness : witnesses) {
                 level.setBlock(witness, Blocks.OAK_PLANKS.defaultBlockState(), 3);
@@ -176,12 +176,14 @@ final class SingleplayerExplosionRegressionScenario {
         return new ExplosionRegressionReport(placed, ignited, tnt, Set.copyOf(witnesses));
     }
 
-    private void trackedPlayerAction(String actor, Runnable runnable) {
-        WorldMutationContext.pushPlayerSource(WorldMutationSource.PLAYER, actor, true);
-        try {
+    private void installFixture(Runnable runnable) {
+        try (
+                WorldMutationContext.SourceFrame ignoredSource =
+                        WorldMutationContext.pushSource(WorldMutationSource.RESTORE);
+                WorldMutationContext.SuppressionFrame ignoredCapture =
+                        WorldMutationContext.pushCaptureSuppression()
+        ) {
             runnable.run();
-        } finally {
-            WorldMutationContext.popSource();
         }
     }
 

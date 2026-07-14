@@ -1316,7 +1316,7 @@ final class SingleplayerTestRun {
         if (actions.size() <= previousUndoCount) {
             return;
         }
-        UndoRedoAction incident = actions.getLast();
+        UndoRedoAction incident = actions.getFirst();
         this.check(("world incident: " + type).equals(incident.actor()),
                 "The " + type + " action is attributed to a world incident, not the player");
         this.check(!incident.redoChanges().isEmpty(),
@@ -1382,7 +1382,7 @@ final class SingleplayerTestRun {
         this.check(this.saveDuringFuseReport.ignited(), "Save-during-fuse TNT was primed before save isolation");
         List<UndoRedoAction> actions = UndoRedoHistoryManager.getInstance()
                 .recentUndoActions(this.project.id().toString(), 100);
-        this.saveDuringFuseActionId = actions.isEmpty() ? "" : actions.getLast().id();
+        this.saveDuringFuseActionId = actions.isEmpty() ? "" : actions.getFirst().id();
         this.check(!this.saveDuringFuseActionId.isBlank(), "Save-during-fuse action has a live action id");
 
         this.saveDuringFuseVersionId = this.nextVersionId(server);
