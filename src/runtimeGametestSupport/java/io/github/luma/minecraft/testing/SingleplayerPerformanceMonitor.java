@@ -20,7 +20,7 @@ final class SingleplayerPerformanceMonitor {
 
     private static final long MAX_SYNC_SLICE_NANOS = Duration.ofSeconds(1).toNanos();
     private static final long MAX_SYNC_TOTAL_NANOS = Duration.ofSeconds(5).toNanos();
-    private static final int MAX_QUICK_ROLLBACK_UNITS = 128;
+    private static final int MAX_QUICK_ROLLBACK_UNITS = 4_096;
     private static final int MAX_PARTIAL_RESTORE_BLOCKS = 16;
     private static final int MAX_FULL_RESTORE_BLOCKS = 512;
     private static final long MAX_HEAP_GROWTH_MIB = 1024;
@@ -180,7 +180,7 @@ final class SingleplayerPerformanceMonitor {
                         : "max=" + slowestCoreOperation.durationMillis() + " ms in " + slowestCoreOperation.label
         ));
         checks.add(new PerformanceCheck(
-                "Quick rollback remained draft-scoped instead of broad world work",
+                "Quick rollback remained dirty-section scoped instead of broad project work",
                 this.maxOperationUnits("quick-rollback") <= MAX_QUICK_ROLLBACK_UNITS,
                 "maxQuickRollbackUnits=" + this.maxOperationUnits("quick-rollback")
         ));

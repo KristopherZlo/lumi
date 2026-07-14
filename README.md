@@ -171,7 +171,7 @@ Run the integrated singleplayer player-flow regression suite:
 .\gradlew.bat runClientGameTest -Dlumi.singleplayerTest.mode=player-flow --no-daemon
 ```
 
-The player-flow TNT checks begin from an empty post-save draft, place and ignite one TNT through normal player APIs, let its fallout settle, and require one live undo to restore every witness block. The flow also places redstone beside pre-existing TNT, verifies that a complete ten-block chain settles into the durable draft, and requires quick rollback to restore every TNT block without leaving primed TNT entities.
+The player-flow TNT checks begin from an empty post-save draft, place and ignite one TNT through normal player APIs, let its fallout settle, and require one live undo to restore every witness block. Fuse-time, powered, and ten-block chain scenarios also use live undo, which invalidates their deferred causal contexts and prevents later scheduled fallout from reopening an already-undone action. The same flow strikes deterministic fixtures with an unowned creeper and lightning, verifies one `world incident` action for each, and restores each fixture with one undo. Quick-rollback load checks are bounded by reconciled dirty sections because safety history can intentionally cover persistent changes that are absent from the player draft.
 
 The same runtime flow creates fluid without a player context, verifies that it adds neither a player draft nor an undo action, rolls it back through the dirty scope, then repeats the mutation and verifies that a normal save publishes it.
 

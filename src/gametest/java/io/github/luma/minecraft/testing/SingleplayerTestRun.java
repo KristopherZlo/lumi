@@ -15,6 +15,7 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RestorePlanMode;
 import io.github.luma.domain.model.SectionFingerprint;
 import io.github.luma.domain.model.SnapshotMetadata;
+import io.github.luma.domain.model.UndoRedoAction;
 import io.github.luma.domain.model.VersionDiff;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.domain.model.WorkZone;
@@ -123,6 +124,8 @@ final class SingleplayerTestRun {
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport poweredTntUndoReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport chainedTntReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport explosionReport;
+    private SingleplayerWorldIncidentScenario.CreeperIncident creeperIncident;
+    private SingleplayerWorldIncidentScenario.LightningIncident lightningIncident;
     private Set<BlockPoint> explosionDestroyedWitnessBlocks = Set.of();
     private SingleplayerBulkApplyDiagnostics bulkApplyDiagnostics;
     private SingleplayerLargeHistoryScenario largeHistoryScenario;
@@ -267,6 +270,12 @@ final class SingleplayerTestRun {
                 case CHECK_ACTIONLESS_ROLLBACK -> this.checkActionlessRollback(server);
                 case START_ACTIONLESS_SAVE -> this.startActionlessSave(server);
                 case CHECK_ACTIONLESS_SAVE -> this.checkActionlessSave(server);
+                case START_CREEPER_INCIDENT -> this.startCreeperIncident(server);
+                case START_CREEPER_INCIDENT_UNDO -> this.startCreeperIncidentUndo();
+                case CHECK_CREEPER_INCIDENT_UNDO -> this.checkCreeperIncidentUndo(server);
+                case START_LIGHTNING_INCIDENT -> this.startLightningIncident(server);
+                case START_LIGHTNING_INCIDENT_UNDO -> this.startLightningIncidentUndo();
+                case CHECK_LIGHTNING_INCIDENT_UNDO -> this.checkLightningIncidentUndo(server);
                 case START_EXPLOSION_INTERACTION -> this.startExplosionInteraction(server);
                 case CHECK_EXPLOSION_CAPTURE -> this.checkExplosionCapture(server);
                 case START_EXPLOSION_UNDO -> this.startExplosionUndo();
@@ -1088,8 +1097,8 @@ final class SingleplayerTestRun {
     private void startPrimedTntUndo() throws Exception {
         this.check(this.primedTntUndoReport != null && this.primedTntUndoReport.primedTntPresent(this.level),
                 "Primed TNT entity exists before fuse-time undo");
-        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
-        this.log.info("Queued primed TNT quick rollback " + this.pendingOperation.id());
+        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
+        this.log.info("Queued primed TNT live undo " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_PRIMED_TNT_UNDO);
     }
 
@@ -1116,8 +1125,8 @@ final class SingleplayerTestRun {
     private void startPoweredTntUndo() throws Exception {
         this.check(this.poweredTntUndoReport != null && this.poweredTntUndoReport.primedTntPresent(this.level),
                 "Powered primed TNT entity exists before undo");
-        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
-        this.log.info("Queued powered TNT quick rollback " + this.pendingOperation.id());
+        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
+        this.log.info("Queued powered TNT live undo " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_POWERED_TNT_UNDO);
     }
 
@@ -1241,7 +1250,70 @@ final class SingleplayerTestRun {
         }
         this.check(this.recoveryService.loadDraft(server, this.project.name()).isEmpty(),
                 "Actionless safety save still exposes no player draft");
+        this.completePhase(server, Phase.START_CREEPER_INCIDENT);
+    }
+
+    private void startCreeperIncident(MinecraftServer server) {
+        int undoCount = this.undoActionCount();
+        this.creeperIncident = new SingleplayerWorldIncidentScenario().startCreeper(this.level, this.volume);
+        this.check(this.creeperIncident.changed(this.level),
+                "Unowned creeper explosion changed its deterministic witness fixture");
+        this.checkWorldIncidentAction("creeper", undoCount);
+        this.completePhase(server, Phase.START_CREEPER_INCIDENT_UNDO);
+    }
+
+    private void startCreeperIncidentUndo() throws Exception {
+        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
+        this.log.info("Queued creeper world-incident undo " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_CREEPER_INCIDENT_UNDO);
+    }
+
+    private void checkCreeperIncidentUndo(MinecraftServer server) {
+        this.check(this.creeperIncident != null && this.creeperIncident.restored(this.level),
+                "One undo restored every creeper world-incident witness block");
+        this.completePhase(server, Phase.START_LIGHTNING_INCIDENT);
+    }
+
+    private void startLightningIncident(MinecraftServer server) {
+        int undoCount = this.undoActionCount();
+        this.lightningIncident = new SingleplayerWorldIncidentScenario().startLightning(this.level, this.volume);
+        this.check(this.lightningIncident.changed(this.level),
+                "Unowned lightning changed weathered copper at its strike position");
+        this.checkWorldIncidentAction("lightning", undoCount);
+        this.completePhase(server, Phase.START_LIGHTNING_INCIDENT_UNDO);
+    }
+
+    private void startLightningIncidentUndo() throws Exception {
+        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
+        this.log.info("Queued lightning world-incident undo " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_LIGHTNING_INCIDENT_UNDO);
+    }
+
+    private void checkLightningIncidentUndo(MinecraftServer server) {
+        this.check(this.lightningIncident != null && this.lightningIncident.restored(this.level),
+                "One undo restored the lightning world-incident witness block");
         this.completePhase(server, Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
+    }
+
+    private int undoActionCount() {
+        return UndoRedoHistoryManager.getInstance()
+                .recentUndoActions(this.project.id().toString(), 100)
+                .size();
+    }
+
+    private void checkWorldIncidentAction(String type, int previousUndoCount) {
+        List<UndoRedoAction> actions = UndoRedoHistoryManager.getInstance()
+                .recentUndoActions(this.project.id().toString(), 100);
+        this.check(actions.size() == previousUndoCount + 1,
+                "One " + type + " world incident creates one undo action");
+        if (actions.size() <= previousUndoCount) {
+            return;
+        }
+        UndoRedoAction incident = actions.getLast();
+        this.check(("world incident: " + type).equals(incident.actor()),
+                "The " + type + " action is attributed to a world incident, not the player");
+        this.check(!incident.redoChanges().isEmpty(),
+                "The " + type + " world incident owns its supported block consequences");
     }
 
     private void startExplosionInteraction(MinecraftServer server) throws Exception {
@@ -1886,6 +1958,12 @@ final class SingleplayerTestRun {
         CHECK_ACTIONLESS_ROLLBACK("Verify actionless rollback", "check the authoritative head removed ambient fluid"),
         START_ACTIONLESS_SAVE("Queue actionless save", "save ambient fluid from dirty safety history"),
         CHECK_ACTIONLESS_SAVE("Verify actionless save", "check the published patch includes ambient fluid"),
+        START_CREEPER_INCIDENT("Creeper world incident", "explode an unowned creeper against deterministic witnesses"),
+        START_CREEPER_INCIDENT_UNDO("Queue creeper incident undo", "undo the project-owned creeper incident"),
+        CHECK_CREEPER_INCIDENT_UNDO("Verify creeper incident undo", "check one incident action restored its witnesses"),
+        START_LIGHTNING_INCIDENT("Lightning world incident", "strike deterministic weathered copper without a player action"),
+        START_LIGHTNING_INCIDENT_UNDO("Queue lightning incident undo", "undo the project-owned lightning incident"),
+        CHECK_LIGHTNING_INCIDENT_UNDO("Verify lightning incident undo", "check one incident action restored the strike state"),
         START_EXPLOSION_INTERACTION("TNT interaction", "place and ignite TNT through player game-mode actions"),
         CHECK_EXPLOSION_CAPTURE("Verify TNT capture", "wait for the controlled explosion and inspect its draft"),
         START_EXPLOSION_UNDO("Queue TNT undo", "undo the controlled explosion through the operation model"),
@@ -1977,6 +2055,8 @@ final class SingleplayerTestRun {
                      START_ACTIONLESS_FLUID, CHECK_ACTIONLESS_FLUID,
                      START_ACTIONLESS_ROLLBACK, CHECK_ACTIONLESS_ROLLBACK,
                      START_ACTIONLESS_SAVE, CHECK_ACTIONLESS_SAVE,
+                     START_CREEPER_INCIDENT, START_CREEPER_INCIDENT_UNDO, CHECK_CREEPER_INCIDENT_UNDO,
+                     START_LIGHTNING_INCIDENT, START_LIGHTNING_INCIDENT_UNDO, CHECK_LIGHTNING_INCIDENT_UNDO,
                      START_EXPLOSION_INTERACTION,
                      CHECK_EXPLOSION_CAPTURE, START_EXPLOSION_UNDO, CHECK_EXPLOSION_UNDO,
                      START_EXPLOSION_REDO, CHECK_EXPLOSION_REDO,

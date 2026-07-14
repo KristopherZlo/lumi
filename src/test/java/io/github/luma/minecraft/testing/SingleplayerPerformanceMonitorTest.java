@@ -28,15 +28,15 @@ class SingleplayerPerformanceMonitorTest {
     }
 
     @Test
-    void keepsQuickRollbackDraftsBounded() {
+    void keepsQuickRollbackDirtySectionsBounded() {
         SingleplayerPerformanceMonitor accepted = new SingleplayerPerformanceMonitor();
-        accepted.recordOperationSnapshot(snapshot("quick-rollback", 128));
+        accepted.recordOperationSnapshot(snapshot("quick-rollback", 4_096));
 
         SingleplayerPerformanceMonitor rejected = new SingleplayerPerformanceMonitor();
-        rejected.recordOperationSnapshot(snapshot("quick-rollback", 129));
+        rejected.recordOperationSnapshot(snapshot("quick-rollback", 4_097));
 
-        assertTrue(checkContaining(accepted, "remained draft-scoped").passed());
-        assertFalse(checkContaining(rejected, "remained draft-scoped").passed());
+        assertTrue(checkContaining(accepted, "remained dirty-section scoped").passed());
+        assertFalse(checkContaining(rejected, "remained dirty-section scoped").passed());
     }
 
     @Test
