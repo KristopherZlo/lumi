@@ -124,6 +124,7 @@ final class SingleplayerTestRun {
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport poweredTntUndoReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport chainedTntReport;
     private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport explosionReport;
+    private SingleplayerExplosionRegressionScenario.ExplosionRegressionReport saveDuringFuseReport;
     private SingleplayerWorldIncidentScenario.CreeperIncident creeperIncident;
     private SingleplayerWorldIncidentScenario.LightningIncident lightningIncident;
     private Set<BlockPoint> explosionDestroyedWitnessBlocks = Set.of();
@@ -139,6 +140,8 @@ final class SingleplayerTestRun {
     private String workZoneAmendVersionId = "";
     private String concurrentSaveVersionId = "";
     private String actionlessSaveVersionId = "";
+    private String saveDuringFuseActionId = "";
+    private String saveDuringFuseVersionId = "";
     private BlockPos actionlessFluidPos;
     private int actionlessWaitTicks;
     private int actionlessUndoCount;
@@ -280,6 +283,10 @@ final class SingleplayerTestRun {
                 case CHECK_EXPLOSION_CAPTURE -> this.checkExplosionCapture(server);
                 case START_EXPLOSION_UNDO -> this.startExplosionUndo();
                 case CHECK_EXPLOSION_UNDO -> this.checkExplosionUndo();
+                case START_SAVE_DURING_TNT_FUSE -> this.startSaveDuringTntFuse(server);
+                case CHECK_SAVE_DURING_TNT_FUSE -> this.checkSaveDuringTntFuse(server);
+                case START_SAVE_DURING_TNT_ROLLBACK -> this.startSaveDuringTntRollback();
+                case CHECK_SAVE_DURING_TNT_ROLLBACK -> this.checkSaveDuringTntRollback(server);
                 case START_EXPLOSION_REDO -> this.startExplosionRedo();
                 case CHECK_EXPLOSION_REDO -> this.checkExplosionRedo();
                 case START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS -> this.startRestoreInitialAfterPlayerInteractions();
@@ -1359,7 +1366,71 @@ final class SingleplayerTestRun {
     private void checkExplosionUndo() {
         this.check(this.explosionReport != null && this.explosionReport.restoredAfterUndo(this.level),
                 "One undo restored the first post-save TNT action and every blast witness block");
-        this.completePhase(this.level.getServer(), Phase.START_PRIMED_TNT_UNDO_INTERACTION);
+        this.completePhase(this.level.getServer(), Phase.START_SAVE_DURING_TNT_FUSE);
+    }
+
+    private void startSaveDuringTntFuse(MinecraftServer server) throws Exception {
+        this.explosionWaitTicks = 0;
+        this.saveDuringFuseReport = new SingleplayerExplosionRegressionScenario().startPowered(
+                this.level,
+                this.player,
+                this.volume,
+                ACTOR,
+                this.volume.min().offset(3, 8, 2)
+        );
+        this.check(this.saveDuringFuseReport.placed(), "Player placed the save-during-fuse redstone trigger");
+        this.check(this.saveDuringFuseReport.ignited(), "Save-during-fuse TNT was primed before save isolation");
+        List<UndoRedoAction> actions = UndoRedoHistoryManager.getInstance()
+                .recentUndoActions(this.project.id().toString(), 100);
+        this.saveDuringFuseActionId = actions.isEmpty() ? "" : actions.getLast().id();
+        this.check(!this.saveDuringFuseActionId.isBlank(), "Save-during-fuse action has a live action id");
+
+        this.saveDuringFuseVersionId = this.nextVersionId(server);
+        this.pendingOperation = this.versionService.startSaveVersion(
+                this.level,
+                this.project.name(),
+                "Stable state during TNT fuse",
+                ACTOR
+        );
+        this.log.info("Queued save during TNT fuse " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_SAVE_DURING_TNT_FUSE);
+    }
+
+    private void checkSaveDuringTntFuse(MinecraftServer server) throws Exception {
+        if (this.saveDuringFuseReport != null && !this.saveDuringFuseReport.exploded(this.level)) {
+            if (++this.explosionWaitTicks < EXPLOSION_WAIT_TIMEOUT_TICKS) {
+                return;
+            }
+        }
+        this.check(this.saveDuringFuseReport != null && this.saveDuringFuseReport.exploded(this.level),
+                "TNT fallout completed after the fuse-time save was isolated");
+        List<UndoRedoAction> actions = UndoRedoHistoryManager.getInstance()
+                .recentUndoActions(this.project.id().toString(), 100);
+        this.check(actions.stream().anyMatch(action -> this.saveDuringFuseActionId.equals(action.id())),
+                "Fuse-time save kept explosion fallout on the originating action id");
+
+        RecoveryDraft draft = this.recoveryService.loadDraft(server, this.project.name()).orElse(null);
+        this.check(draft != null && this.saveDuringFuseVersionId.equals(draft.baseVersionId()),
+                "Post-save TNT fallout draft was rebased to the published fuse-time save");
+        Set<BlockPoint> destroyed = this.saveDuringFuseReport == null
+                ? Set.of()
+                : this.saveDuringFuseReport.destroyedWitnessBlocks(this.level);
+        this.check(draft != null && !destroyed.isEmpty() && draft.changes().stream()
+                        .anyMatch(change -> destroyed.contains(change.pos())),
+                "Rebased draft contains post-save TNT witness damage");
+        this.completePhase(server, Phase.START_SAVE_DURING_TNT_ROLLBACK);
+    }
+
+    private void startSaveDuringTntRollback() throws Exception {
+        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
+        this.log.info("Queued rollback to fuse-time save " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_SAVE_DURING_TNT_ROLLBACK);
+    }
+
+    private void checkSaveDuringTntRollback(MinecraftServer server) throws Exception {
+        this.check(this.recoveryService.loadDraft(server, this.project.name()).isEmpty(),
+                "Rollback to the fuse-time save cleared only its rebased fallout draft");
+        this.completePhase(server, Phase.START_PRIMED_TNT_UNDO_INTERACTION);
     }
 
     private void startExplosionRedo() throws Exception {
@@ -1968,6 +2039,10 @@ final class SingleplayerTestRun {
         CHECK_EXPLOSION_CAPTURE("Verify TNT capture", "wait for the controlled explosion and inspect its draft"),
         START_EXPLOSION_UNDO("Queue TNT undo", "undo the controlled explosion through the operation model"),
         CHECK_EXPLOSION_UNDO("Verify TNT undo", "check that the controlled explosion was restored"),
+        START_SAVE_DURING_TNT_FUSE("Save during TNT fuse", "publish a stable state while powered TNT is primed"),
+        CHECK_SAVE_DURING_TNT_FUSE("Verify fuse-time save", "check action ownership and post-save draft rebase"),
+        START_SAVE_DURING_TNT_ROLLBACK("Queue fuse-time rollback", "return post-save fallout to the fuse-time save"),
+        CHECK_SAVE_DURING_TNT_ROLLBACK("Verify fuse-time rollback", "check the rebased fallout draft was consumed"),
         START_EXPLOSION_REDO("Queue TNT redo", "redo the controlled explosion through the operation model"),
         CHECK_EXPLOSION_REDO("Verify TNT redo", "check that the controlled explosion was replayed"),
         START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS(
@@ -2059,6 +2134,8 @@ final class SingleplayerTestRun {
                      START_LIGHTNING_INCIDENT, START_LIGHTNING_INCIDENT_UNDO, CHECK_LIGHTNING_INCIDENT_UNDO,
                      START_EXPLOSION_INTERACTION,
                      CHECK_EXPLOSION_CAPTURE, START_EXPLOSION_UNDO, CHECK_EXPLOSION_UNDO,
+                     START_SAVE_DURING_TNT_FUSE, CHECK_SAVE_DURING_TNT_FUSE,
+                     START_SAVE_DURING_TNT_ROLLBACK, CHECK_SAVE_DURING_TNT_ROLLBACK,
                      START_EXPLOSION_REDO, CHECK_EXPLOSION_REDO,
                      START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS, CHECK_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS,
                      CHECK_PERFORMANCE, START_LARGE_HISTORY_DIAGNOSTICS, RUN_LARGE_HISTORY_DIAGNOSTICS,
