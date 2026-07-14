@@ -329,11 +329,23 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
                 pending.dirty = false;
             }
             try {
+                ProjectDirtyScope stored = this.dirtyScopeRepository.load(pending.layout).orElse(null);
+                if (stored != null) {
+                    if (!sameDirtyScopeBase(stored, scope)) {
+                        throw new IOException("Dirty scope base does not match active project head");
+                    }
+                    stored.markBlockSections(scope.blockSections());
+                    for (ChunkPoint chunk : scope.entityChunks()) {
+                        stored.markEntityChunk(chunk);
+                    }
+                    scope = stored;
+                }
                 this.dirtyScopeRepository.save(pending.layout, scope);
             } catch (Throwable throwable) {
                 synchronized (this) {
                     this.pendingDirtyScopeFlushes.remove(pending.projectId, pending);
                 }
+                LumaMod.LOGGER.warn("Failed to persist dirty scope for project {}", pending.projectName, throwable);
                 pending.future.completeExceptionally(throwable);
                 return;
             }
@@ -403,6 +415,12 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
 
     private static String baselineKey(String projectId, ChunkPoint chunk) {
         return projectId + "::" + chunk.x() + ":" + chunk.z();
+    }
+
+    private static boolean sameDirtyScopeBase(ProjectDirtyScope left, ProjectDirtyScope right) {
+        return left.projectId().equals(right.projectId())
+                && left.variantId().equals(right.variantId())
+                && left.baseVersionId().equals(right.baseVersionId());
     }
 
     private static int defaultBaselineWriterThreads() {

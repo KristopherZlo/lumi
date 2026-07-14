@@ -297,6 +297,9 @@ class CapturePersistenceCoordinatorTest {
     void coalescesDirtyScopeFlushesOffThread() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         ProjectDirtyScope scope = ProjectDirtyScope.empty("project", "main", "v0001");
+        ProjectDirtyScope stored = ProjectDirtyScope.empty("project", "main", "v0001");
+        stored.markBlockSection(new ChunkSectionPoint(-1, -2, -3));
+        new ProjectDirtyScopeRepository().save(layout, stored);
         try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
                 new RecoveryRepository(),
                 new BaselineChunkRepository(),
@@ -310,7 +313,8 @@ class CapturePersistenceCoordinatorTest {
             coordinator.drainDirtyScopeFlushes("project", "Project");
 
             ProjectDirtyScope restored = new ProjectDirtyScopeRepository().load(layout).orElseThrow();
-            assertEquals(scope.blockSections(), restored.blockSections());
+            assertTrue(restored.blockSections().containsAll(scope.blockSections()));
+            assertTrue(restored.blockSections().containsAll(stored.blockSections()));
             assertFalse(coordinator.hasPendingDirtyScopeFlush("project"));
         }
     }
