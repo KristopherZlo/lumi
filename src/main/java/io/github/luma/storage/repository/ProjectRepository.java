@@ -94,6 +94,22 @@ public final class ProjectRepository {
         return Optional.empty();
     }
 
+    public Optional<ProjectLayout> findLayoutByProjectId(Path projectsRoot, String projectId) throws IOException {
+        if (projectId == null || projectId.isBlank() || !Files.exists(projectsRoot)) {
+            return Optional.empty();
+        }
+        try (var stream = Files.list(projectsRoot)) {
+            for (Path path : stream.filter(Files::isDirectory).toList()) {
+                ProjectLayout layout = new ProjectLayout(path);
+                Optional<BuildProject> project = this.load(layout);
+                if (project.isPresent() && project.get().id().toString().equals(projectId)) {
+                    return Optional.of(layout);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
     private BuildProject normalize(BuildProject project) {
         return new BuildProject(
                 project.schemaVersion(),

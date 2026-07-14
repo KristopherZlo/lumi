@@ -154,4 +154,8 @@ public record ProjectLayout(Path root) {
     public Path projectDirtyScopeFile() {
         return this.recoveryDir().resolve("dirty-scope.bin");
     }
+
+    public Path historyProtectionFile() {
+        return this.recoveryDir().resolve("history-protection.json");
+    }
 }

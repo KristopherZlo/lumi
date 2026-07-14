@@ -96,6 +96,8 @@ Save, restore, branch, zone, recovery, and quick-rollback operations are measure
 
 Restore, quick rollback, undo, and redo read the final live world state, perform at most one repair pass, then read it again and fail if any requested state still differs. Undo respawns living entities from the first dying tick onward so the client returns them to a normal living state. Current causal fallout becomes the next undo target by action order rather than wall-clock time, so a completed TNT chain is restored before later placements that the chain already consumed. Authorized causal fallout can reopen capture after its direct draft becomes empty and extend tracking beyond the old active region, but its secondary source cannot create a project and an already-undone action cannot reopen history. Replayed live actions preserve causal ownership for restored primed TNT, so fallout that continues after redo remains part of the same undoable action. Live undo/redo is an in-memory convenience layer; a full restore or branch switch clears its project-local stack, while durable save, restore, branch, zone, and recovery history remains the source of truth across restarts.
 
+Each project exposes a history protection state: `Protected` while its guarantees are intact, `Saving` or `Restoring` during an active operation, and durable `Degraded` after a reliability failure. The degraded marker records the first-class reason instead of allowing a baseline, dirty-ledger, payload, reconciliation, or restore-verification failure to look like a successful history operation.
+
 ### Privacy and Diagnostics
 
 Lumi has diagnostic telemetry for crashes, failed operations, rejected actions, and severe performance problems. It is technical-only and can be turned off in Lumi settings.
@@ -257,6 +259,7 @@ Important records:
 - `recovery/expected-draft.marker`: clean pending-work marker
 - `recovery/operation-draft.bin.lz4`: isolated in-progress save/amend draft
 - `recovery/dirty-scope.bin`: compact durable block-section and entity-chunk safety ledger
+- `recovery/history-protection.json`: durable degraded-history reason
 - `payloads/baseline-chunks/`: durable first-touch baseline chunks
 - `cache/`: disposable UI and diagnostic cache
 
