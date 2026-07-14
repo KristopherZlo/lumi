@@ -5,10 +5,13 @@ import io.github.luma.debug.LumaDebugLog;
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationStage;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.RestoreReturnPoint;
@@ -59,6 +62,8 @@ public final class QuickRollbackService {
             new RestoreMechanismReconciliationPlanner();
     private final WorldChangeBatchPreparer batchPreparer = new WorldChangeBatchPreparer();
     private final BlockTargetStateResolver blockTargetStateResolver = new BlockTargetStateResolver();
+    private final DirtyScopeReconciliationService dirtyScopeReconciliationService =
+            new DirtyScopeReconciliationService();
     private final PreparedChunkBatchCollapser batchCollapser = new PreparedChunkBatchCollapser();
     private final RestoreEntityStateResolver entityStateResolver = new RestoreEntityStateResolver(
             new RestoreChunkCollector(new PatchMetaRepository()),
@@ -84,23 +89,107 @@ public final class QuickRollbackService {
             throw new IllegalArgumentException("Current branch has no committed head yet");
         }
 
+        return this.worldOperationManager.startPreparedApplyOperation(
+                level,
+                project.id().toString(),
+                "quick-rollback",
+                "blocks",
+                LumaDebugLog.enabled(project),
+                progressSink -> this.prepareQuickRollback(
+                        level, layout, project, projectName, activeVariant, selectedBounds, progressSink
+                )
+        );
+    }
+
+    private PreparedApplyOperation prepareQuickRollback(
+            ServerLevel level,
+            ProjectLayout layout,
+            BuildProject project,
+            String projectName,
+            ProjectVariant activeVariant,
+            Bounds3i selectedBounds,
+            WorldOperationManager.ProgressSink progressSink
+    ) throws IOException {
         Optional<RecoveryDraft> persistedDraft = this.recoveryRepository.loadDraft(layout)
                 .filter(draft -> !draft.isEmpty());
-        Optional<TrackedChangeBuffer> frozenSession = this.captureManager
-                .freezeWorkingDraftForRecovery(level.getServer(), project.id().toString());
-        Optional<RecoveryDraft> frozenDraft = frozenSession
+        Optional<RecoveryDraft> frozenDraft = this.captureManager
+                .freezeWorkingDraftForRecovery(level.getServer(), project.id().toString())
                 .map(TrackedChangeBuffer::toDraft)
                 .filter(draft -> !draft.isEmpty());
-        RecoveryDraft pendingDraft = frozenDraft
-                .or(() -> persistedDraft)
-                .orElseThrow(() -> new IllegalArgumentException("No pending tracked changes for " + projectName));
+        RecoveryDraft capturedDraft = frozenDraft.or(() -> persistedDraft).orElse(null);
+        List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
+        ProjectVersion activeHead = versions.stream()
+                .filter(version -> version.id().equals(activeVariant.headVersionId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Active head version is missing: " + activeVariant.headVersionId()
+                ));
+        ProjectDirtyScope dirtyScope = this.captureManager.loadProjectDirtyScope(
+                level.getServer(), project.id().toString()
+        );
+        ProjectDirtyScope.Split dirtySplit = splitDirtyScopeForBounds(dirtyScope, selectedBounds);
+        RecoveryDraft pendingDraft = capturedDraft;
+        if (!dirtySplit.selected().isEmpty()) {
+            pendingDraft = this.dirtyScopeReconciliationService.reconcileBlocks(
+                    layout,
+                    project,
+                    versions,
+                    activeHead,
+                    dirtySplit.selected(),
+                    this.captureManager.captureProjectDirtyScope(
+                            level.getServer(), project.id().toString(), dirtySplit.selected()
+                    ),
+                    capturedDraft,
+                    "Lumi safety ledger",
+                    Instant.now()
+            );
+        }
+        if (pendingDraft == null) {
+            throw new IllegalArgumentException("No pending tracked changes for " + projectName);
+        }
         this.requireCurrentHeadDraft(pendingDraft, activeVariant, projectName);
-
         QuickRollbackDraftPlan plan = QuickRollbackDraftPlan.fromDraft(pendingDraft, selectedBounds);
         if (plan.isEmpty()) {
             throw new IllegalArgumentException("No pending tracked changes for " + projectName);
         }
+        this.logQuickRollbackStart(layout, project, activeVariant, frozenDraft.isPresent(), plan);
+        progressSink.update(OperationStage.PREPARING, 0, plan.totalChangeCount(), "Preparing quick rollback");
+        PreparedWorldChangeBatches analyzed = this.batchPreparer.prepareDiffAnalyzed(
+                level,
+                plan.blockChanges(),
+                plan.entityChanges(),
+                true,
+                (completed, total) -> progressSink.update(
+                        OperationStage.PREPARING, completed, total, "Decoded quick rollback"
+                ),
+                EntityApplyMode.DELTA
+        );
+        List<PreparedChunkBatch> batches = this.withMechanismReconciliation(
+                level, layout, project, versions, activeHead, analyzed.batches(),
+                analyzed.mechanismReplayScope(), selectedBounds
+        );
+        if (selectedBounds == null) {
+            batches = this.entityStateResolver.withAuthoritativeEntityReplacementBatchesInBatchScope(
+                    layout, versions, activeVariant.headVersionId(), batches
+            );
+        }
+        List<PreparedChunkBatch> finalBatches = batches;
+        return new PreparedApplyOperation(
+                finalBatches,
+                () -> this.completeQuickRollback(
+                        level, layout, project, activeVariant, plan, finalBatches.size(),
+                        dirtyScope, dirtySplit.remainder()
+                )
+        );
+    }
 
+    private void logQuickRollbackStart(
+            ProjectLayout layout,
+            BuildProject project,
+            ProjectVariant activeVariant,
+            boolean usedFrozenDraft,
+            QuickRollbackDraftPlan plan
+    ) throws IOException {
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
                 "quick-rollback-started",
@@ -110,75 +199,65 @@ public final class QuickRollbackService {
         ));
         LumaMod.LOGGER.info(
                 "Starting quick rollback for project {} to active head {} with {} changes",
-                project.name(),
-                activeVariant.headVersionId(),
-                plan.totalChangeCount()
+                project.name(), activeVariant.headVersionId(), plan.totalChangeCount()
         );
         LumaDebugLog.log(
                 project,
                 "restore",
                 "Starting quick rollback for project {} from {} with {} pending changes",
                 project.name(),
-                frozenDraft.isPresent() ? "frozen live buffer" : "persisted draft",
+                usedFrozenDraft ? "frozen live buffer" : "persisted draft or safety ledger",
                 plan.totalChangeCount()
         );
+    }
 
-        return this.worldOperationManager.startPreparedApplyOperation(
-                level,
-                project.id().toString(),
-                "quick-rollback",
-                "blocks",
-                LumaDebugLog.enabled(project),
-                progressSink -> {
-                    progressSink.update(
-                            OperationStage.PREPARING,
-                            0,
-                            plan.totalChangeCount(),
-                            "Preparing quick rollback"
-                    );
-                    PreparedWorldChangeBatches analyzed = this.batchPreparer.prepareDiffAnalyzed(
-                            level,
-                            plan.blockChanges(),
-                            plan.entityChanges(),
-                            true,
-                            (completed, total) -> progressSink.update(
-                                    OperationStage.PREPARING,
-                                    completed,
-                                    total,
-                                    "Decoded quick rollback"
-                            ),
-                            EntityApplyMode.DELTA
-                    );
-                    List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
-                    ProjectVersion activeHead = versions.stream()
-                            .filter(version -> version.id().equals(activeVariant.headVersionId()))
-                            .findFirst()
-                            .orElseThrow(() -> new IllegalArgumentException("Active head version is missing: " + activeVariant.headVersionId()));
-                    List<PreparedChunkBatch> batches = this.withMechanismReconciliation(
-                            level,
-                            layout,
-                            project,
-                            versions,
-                            activeHead,
-                            analyzed.batches(),
-                            analyzed.mechanismReplayScope(),
-                            selectedBounds
-                    );
-                    if (selectedBounds == null) {
-                        batches = this.entityStateResolver.withAuthoritativeEntityReplacementBatchesInBatchScope(
-                                layout,
-                                versions,
-                                activeVariant.headVersionId(),
-                                batches
-                        );
-                    }
-                    List<PreparedChunkBatch> finalBatches = batches;
-                    return new PreparedApplyOperation(
-                            finalBatches,
-                            () -> this.completeQuickRollback(level, layout, project, activeVariant, plan, finalBatches.size())
-                    );
-                }
+    static ProjectDirtyScope.Split splitDirtyScopeForBounds(
+            ProjectDirtyScope dirtyScope,
+            Bounds3i selectedBounds
+    ) {
+        if (selectedBounds == null) {
+            return dirtyScope.split(section -> true, chunk -> true);
+        }
+        ProjectDirtyScope.Split selected = dirtyScope.split(
+                section -> intersects(selectedBounds, section),
+                chunk -> intersects(selectedBounds, chunk)
         );
+        ProjectDirtyScope remainder = ProjectDirtyScope.empty(
+                dirtyScope.projectId(), dirtyScope.variantId(), dirtyScope.baseVersionId()
+        );
+        for (ChunkSectionPoint section : dirtyScope.blockSections()) {
+            if (!contains(selectedBounds, section)) {
+                remainder.markBlockSection(section);
+            }
+        }
+        for (ChunkPoint chunk : dirtyScope.entityChunks()) {
+            remainder.markEntityChunk(chunk);
+        }
+        return new ProjectDirtyScope.Split(selected.selected(), remainder);
+    }
+
+    private static boolean intersects(Bounds3i bounds, ChunkSectionPoint section) {
+        return rangesIntersect(bounds.min().x(), bounds.max().x(), section.chunkX() << 4, (section.chunkX() << 4) + 15)
+                && rangesIntersect(bounds.min().y(), bounds.max().y(), section.sectionY() << 4, (section.sectionY() << 4) + 15)
+                && rangesIntersect(bounds.min().z(), bounds.max().z(), section.chunkZ() << 4, (section.chunkZ() << 4) + 15);
+    }
+
+    private static boolean intersects(Bounds3i bounds, ChunkPoint chunk) {
+        return rangesIntersect(bounds.min().x(), bounds.max().x(), chunk.x() << 4, (chunk.x() << 4) + 15)
+                && rangesIntersect(bounds.min().z(), bounds.max().z(), chunk.z() << 4, (chunk.z() << 4) + 15);
+    }
+
+    private static boolean contains(Bounds3i bounds, ChunkSectionPoint section) {
+        return bounds.contains(new BlockPoint(section.chunkX() << 4, section.sectionY() << 4, section.chunkZ() << 4))
+                && bounds.contains(new BlockPoint(
+                        (section.chunkX() << 4) + 15,
+                        (section.sectionY() << 4) + 15,
+                        (section.chunkZ() << 4) + 15
+                ));
+    }
+
+    private static boolean rangesIntersect(int firstMin, int firstMax, int secondMin, int secondMax) {
+        return firstMin <= secondMax && firstMax >= secondMin;
     }
 
     public OperationHandle returnBeforeLastRestore(ServerLevel level, String projectName) throws IOException {
@@ -209,7 +288,9 @@ public final class QuickRollbackService {
             BuildProject project,
             ProjectVariant activeVariant,
             QuickRollbackDraftPlan plan,
-            int batchCount
+            int batchCount,
+            ProjectDirtyScope expectedDirtyScope,
+            ProjectDirtyScope dirtyRemainder
     ) throws IOException {
         Instant now = Instant.now();
         this.undoRedoHistoryManager.recordAction(
@@ -223,6 +304,15 @@ public final class QuickRollbackService {
         );
         this.captureManager.discardSession(level.getServer(), project.id().toString());
         this.saveRemainingDraft(layout, plan.remainingDraft());
+        if (!expectedDirtyScope.isEmpty()) {
+            this.captureManager.completeProjectDirtyScopeSave(
+                    level.getServer(),
+                    project.id().toString(),
+                    expectedDirtyScope,
+                    dirtyRemainder,
+                    activeVariant.headVersionId()
+            );
+        }
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 now,
                 "quick-rollback-completed",

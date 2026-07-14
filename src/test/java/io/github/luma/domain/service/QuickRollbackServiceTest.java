@@ -5,9 +5,11 @@ import io.github.luma.domain.model.Bounds3i;
 import io.github.luma.domain.model.BuildProject;
 import io.github.luma.domain.model.ChangeStats;
 import io.github.luma.domain.model.ChunkPoint;
+import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.ExternalSourceInfo;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.domain.model.VersionKind;
 import io.github.luma.minecraft.world.MechanismReplayScope;
 import io.github.luma.minecraft.world.PreparedChunkBatch;
@@ -81,6 +83,29 @@ class QuickRollbackServiceTest {
         List<BlockPoint> positions = service.mechanismReconciliationPositions(project, scope, null, null);
 
         assertEquals(List.of(new BlockPoint(1, 64, 1)), positions);
+    }
+
+    @Test
+    void selectedRollbackConsumesOnlyFullyCoveredDirtySections() {
+        ProjectDirtyScope scope = ProjectDirtyScope.empty("project", "main", "head");
+        ChunkSectionPoint inside = new ChunkSectionPoint(0, 0, 4);
+        ChunkSectionPoint outside = new ChunkSectionPoint(1, 0, 4);
+        scope.markBlockSections(List.of(inside, outside));
+        scope.markEntityChunk(new ChunkPoint(0, 0));
+
+        ProjectDirtyScope.Split fullCell = QuickRollbackService.splitDirtyScopeForBounds(
+                scope,
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(15, 79, 15))
+        );
+        ProjectDirtyScope.Split partialCell = QuickRollbackService.splitDirtyScopeForBounds(
+                scope,
+                new Bounds3i(new BlockPoint(0, 64, 0), new BlockPoint(5, 70, 5))
+        );
+
+        assertEquals(List.of(inside), fullCell.selected().blockSections().stream().toList());
+        assertEquals(List.of(outside), fullCell.remainder().blockSections().stream().toList());
+        assertTrue(partialCell.remainder().blockSections().contains(inside));
+        assertTrue(fullCell.remainder().entityChunks().contains(new ChunkPoint(0, 0)));
     }
 
     @Test
