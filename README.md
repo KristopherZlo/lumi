@@ -171,7 +171,7 @@ Run the integrated singleplayer player-flow regression suite:
 .\gradlew.bat runClientGameTest -Dlumi.singleplayerTest.mode=player-flow --no-daemon
 ```
 
-The player-flow TNT checks place redstone beside pre-existing TNT, verify that the complete ten-block explosion chain settles into the durable draft, and require quick rollback to restore every TNT block without leaving primed TNT entities. The same flow verifies entity-only quick rollback and a final full restore after the explosion scenarios.
+The player-flow TNT checks begin from an empty post-save draft, place and ignite one TNT through normal player APIs, let its fallout settle, and require one live undo to restore every witness block. The flow also places redstone beside pre-existing TNT, verifies that a complete ten-block chain settles into the durable draft, and requires quick rollback to restore every TNT block without leaving primed TNT entities.
 
 Compare vanilla and Lumi world startup against the same normal-world seed:
 

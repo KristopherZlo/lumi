@@ -35,6 +35,7 @@ import io.github.luma.domain.service.RestoreService;
 import io.github.luma.domain.service.VariantService;
 import io.github.luma.domain.service.VariantMergeService;
 import io.github.luma.domain.service.VersionService;
+import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
@@ -86,6 +87,7 @@ final class SingleplayerTestRun {
     private final ProjectService projectService = new ProjectService();
     private final VersionService versionService = new VersionService();
     private final QuickRollbackService quickRollbackService = new QuickRollbackService();
+    private final UndoRedoService undoRedoService = new UndoRedoService();
     private final RestoreService restoreService = new RestoreService();
     private final VariantService variantService = new VariantService();
     private final VariantMergeService variantMergeService = new VariantMergeService();
@@ -984,7 +986,7 @@ final class SingleplayerTestRun {
         Entity entity = this.gameplayEntity();
         if (entity == null) {
             this.recordFailure("Gameplay saved entity is available for quick rollback");
-            this.completePhase(server, Phase.START_PRIMED_TNT_UNDO_INTERACTION);
+            this.completePhase(server, Phase.START_EXPLOSION_INTERACTION);
             return;
         }
 
@@ -1022,7 +1024,7 @@ final class SingleplayerTestRun {
         Entity entity = this.entityById(this.savedGameplayEntityId);
         if (entity == null) {
             this.recordFailure("Gameplay saved entity is available for update save");
-            this.completePhase(server, Phase.START_PRIMED_TNT_UNDO_INTERACTION);
+            this.completePhase(server, Phase.START_EXPLOSION_INTERACTION);
             return;
         }
 
@@ -1055,7 +1057,7 @@ final class SingleplayerTestRun {
             this.check("Gameplay entity update save consumed the recovery draft", () -> this.recoveryService.loadDraft(server, this.project.name()).isEmpty());
             this.gameplayEntityUpdateSaveValidated = true;
         }
-        this.completePhase(server, Phase.START_PRIMED_TNT_UNDO_INTERACTION);
+        this.completePhase(server, Phase.START_EXPLOSION_INTERACTION);
     }
 
     private void startPrimedTntUndoInteraction(MinecraftServer server) {
@@ -1157,19 +1159,21 @@ final class SingleplayerTestRun {
                         + (this.chainedTntReport == null
                         ? "missing report"
                         : this.chainedTntReport.restorationMismatches(this.level)));
-        this.completePhase(this.level.getServer(), Phase.START_EXPLOSION_INTERACTION);
+        this.completePhase(this.level.getServer(), Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
     }
 
-    private void startExplosionInteraction(MinecraftServer server) {
+    private void startExplosionInteraction(MinecraftServer server) throws Exception {
+        this.check(this.recoveryService.loadDraft(server, this.project.name()).isEmpty(),
+                "First post-save TNT starts with an empty durable draft");
         this.explosionWaitTicks = 0;
-        this.explosionReport = new SingleplayerExplosionRegressionScenario().start(
+        this.explosionReport = new SingleplayerExplosionRegressionScenario().startWithCleanFixture(
                 this.level,
                 this.player,
                 this.volume,
-                ACTOR
+                this.volume.min().offset(13, 8, 13)
         );
-        this.check(this.explosionReport.placed(), "Player placed TNT through gameMode useItemOn");
-        this.check(this.explosionReport.ignited(), "Player ignited TNT through gameMode useItemOn");
+        this.check(this.explosionReport.placed(), "Player placed the first TNT after a clean save");
+        this.check(this.explosionReport.ignited(), "Player ignited the first TNT after a clean save");
         this.completePhase(server, Phase.CHECK_EXPLOSION_CAPTURE);
     }
 
@@ -1193,15 +1197,15 @@ final class SingleplayerTestRun {
     }
 
     private void startExplosionUndo() throws Exception {
-        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
-        this.log.info("Queued explosion quick rollback " + this.pendingOperation.id());
+        this.pendingOperation = this.undoRedoService.undo(this.level, this.project.name());
+        this.log.info("Queued one-action explosion undo " + this.pendingOperation.id());
         this.completePhase(this.level.getServer(), Phase.CHECK_EXPLOSION_UNDO);
     }
 
     private void checkExplosionUndo() {
         this.check(this.explosionReport != null && this.explosionReport.restoredAfterUndo(this.level),
-                "Explosion undo restored TNT and blast witness blocks");
-        this.completePhase(this.level.getServer(), Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
+                "One undo restored the first post-save TNT action and every blast witness block");
+        this.completePhase(this.level.getServer(), Phase.START_PRIMED_TNT_UNDO_INTERACTION);
     }
 
     private void startExplosionRedo() throws Exception {

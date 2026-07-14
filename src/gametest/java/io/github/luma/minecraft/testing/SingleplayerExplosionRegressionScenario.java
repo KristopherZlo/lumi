@@ -27,6 +27,27 @@ final class SingleplayerExplosionRegressionScenario {
         return this.start(level, player, volume, actor, volume.min().offset(13, 8, 13));
     }
 
+    ExplosionRegressionReport startWithCleanFixture(
+            ServerLevel level,
+            ServerPlayer player,
+            SingleplayerTestVolume volume,
+            BlockPos support
+    ) {
+        SingleplayerPlayerActionDriver actions = new SingleplayerPlayerActionDriver(level, player);
+        BlockPos tnt = support.above();
+        Set<BlockPos> witnesses = Set.of(tnt.north(), tnt.south(), tnt.east(), tnt.west());
+        WorldMutationContext.runWithSource(WorldMutationSource.RESTORE, () -> {
+            level.setBlock(support, Blocks.STONE.defaultBlockState(), 3);
+            for (BlockPos witness : witnesses) {
+                level.setBlock(witness, Blocks.OAK_PLANKS.defaultBlockState(), 3);
+            }
+        });
+
+        boolean placed = actions.placeAgainst(support, Direction.UP, Blocks.TNT, tnt);
+        boolean ignited = actions.useItemOn(tnt, Direction.UP, new ItemStack(Items.FLINT_AND_STEEL, 1));
+        return new ExplosionRegressionReport(placed, ignited, tnt, Set.copyOf(witnesses));
+    }
+
     ExplosionRegressionReport startPowered(
             ServerLevel level,
             ServerPlayer player,
