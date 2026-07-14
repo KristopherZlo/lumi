@@ -96,6 +96,18 @@ class ProjectHomeScreenControllerTest {
     }
 
     @Test
+    void safetyOnlyChangesEnableSaveWithoutCreatingPlayerPendingStats() {
+        FakeQuery query = new FakeQuery();
+        query.safetyChanges = true;
+        ProjectHomeScreenController controller = new ProjectHomeScreenController(query);
+
+        var state = controller.loadState("Tower", "luma.status.project_ready", false);
+
+        assertTrue(state.hasUnsavedChanges());
+        assertTrue(state.pendingChanges().isEmpty());
+    }
+
+    @Test
     void loadStateHidesActiveZoneCommitsFromGlobalHistoryByDefault() {
         FakeQuery query = new FakeQuery();
         query.versions = List.of(
@@ -167,6 +179,7 @@ class ProjectHomeScreenControllerTest {
         private int totalIntegrationLoads;
         private RecoveryDraft draft;
         private boolean interruptedDraft;
+        private boolean safetyChanges;
         private ProjectSettings settings = ProjectSettings.defaults();
         private List<ProjectVersion> versions = List.of(version("v0001", 0), version("v0002", 60));
         private WorkZoneState workZones = WorkZoneState.empty();
@@ -243,6 +256,11 @@ class ProjectHomeScreenControllerTest {
         @Override
         public boolean hasRestoreReturnPoint(String projectName) {
             return false;
+        }
+
+        @Override
+        public boolean hasSafetyChanges(String projectName) {
+            return this.safetyChanges;
         }
     }
 

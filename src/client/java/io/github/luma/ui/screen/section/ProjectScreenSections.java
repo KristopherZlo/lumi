@@ -1,6 +1,7 @@
 package io.github.luma.ui.screen.section;
 
 import io.github.luma.domain.model.Bounds3i;
+import io.github.luma.domain.model.HistoryProtectionState;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
@@ -77,6 +78,7 @@ public final class ProjectScreenSections {
                 model.state().project().activeVariantId()
         );
         boolean operationActive = this.operationActive(model);
+        boolean unsavedChanges = model.state().hasUnsavedChanges();
 
         FlowLayout section = LumaUi.panel(Sizing.fill(100), Sizing.content());
         FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
@@ -87,7 +89,7 @@ public final class ProjectScreenSections {
         copy.gap(2);
         copy.child(LumaUi.value(Component.translatable("luma.build.status_title")));
         copy.child(LumaUi.caption(Component.translatable(
-                pending.isEmpty() ? "luma.build.status_clean" : "luma.build.status_dirty"
+                unsavedChanges ? "luma.build.status_dirty" : "luma.build.status_clean"
         )));
         header.child(copy);
 
@@ -101,6 +103,7 @@ public final class ProjectScreenSections {
                 "luma.build.current_place",
                 ProjectUiSupport.dimensionLabel(model.state().project().dimensionId())
         )));
+        context.child(LumaUi.chip(Component.translatable(this.protectionKey(model))));
         header.child(context);
         section.child(header);
 
@@ -110,7 +113,7 @@ public final class ProjectScreenSections {
         );
         saveButton.tooltip(Component.translatable("luma.action.save_build.tooltip"));
         this.onboardingSaveButton = saveButton;
-        saveButton.active((!pending.isEmpty() && !operationActive)
+        saveButton.active((unsavedChanges && !operationActive)
                 || this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.SAVE_BUILD);
         if (!pending.isEmpty()) {
             FlowLayout stats = LumaUi.actionRow();
@@ -126,7 +129,7 @@ public final class ProjectScreenSections {
                 button -> this.actions.openAmend(activeHead)
         );
         amendButton.tooltip(Component.translatable("luma.action.amend_version.tooltip"));
-        amendButton.active(activeHead != null && !pending.isEmpty() && !operationActive);
+        amendButton.active(activeHead != null && unsavedChanges && !operationActive);
         actions.child(amendButton);
 
         ButtonComponent changesButton = LumaUi.iconButton("see-changes", Component.translatable("luma.action.see_changes"), button -> this.actions.openCompare(
@@ -140,6 +143,10 @@ public final class ProjectScreenSections {
                 || this.onboardingSpotlightTarget == OnboardingTour.SpotlightTarget.SEE_CHANGES);
         actions.child(changesButton);
         section.child(actions);
+
+        if (model.state().historyProtection().state() == HistoryProtectionState.DEGRADED) {
+            section.child(LumaUi.caption(Component.literal(model.state().historyProtection().detail())));
+        }
 
         if (model.state().hasRecoveryDraft()) {
             FlowLayout recovery = LumaUi.insetSection(
@@ -190,7 +197,7 @@ public final class ProjectScreenSections {
                     Component.translatable("luma.action.save_build"),
                     button -> this.actions.openSave()
             );
-            saveButton.active(!model.state().pendingChanges().isEmpty() && !this.operationActive(model));
+            saveButton.active(model.state().hasUnsavedChanges() && !this.operationActive(model));
             emptyActions.child(saveButton);
             empty.child(emptyActions);
             section.child(empty);
@@ -250,6 +257,15 @@ public final class ProjectScreenSections {
         viewToggle.child(graph);
         row.child(viewToggle);
         return row;
+    }
+
+    private String protectionKey(Model model) {
+        return switch (model.state().historyProtection().state()) {
+            case PROTECTED -> "luma.history.protection.protected";
+            case SAVING -> "luma.history.protection.saving";
+            case RESTORING -> "luma.history.protection.restoring";
+            case DEGRADED -> "luma.history.protection.degraded";
+        };
     }
 
     private FlowLayout historyBranchStrip(Model model) {

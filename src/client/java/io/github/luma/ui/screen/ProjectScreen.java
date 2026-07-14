@@ -225,7 +225,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
             if (!hintAdded) {
                 hintAdded = contextualHelp.addHint(body, ClientContextualHelpHint.SHORTCUTS);
             }
-            if (!hintAdded && this.state.pendingChanges().isEmpty()) {
+            if (!hintAdded && !this.state.hasUnsavedChanges()) {
                 contextualHelp.addHint(body, ClientContextualHelpHint.CLEAN_STATE);
             } else if (!hintAdded) {
                 hintAdded = contextualHelp.addHint(body, ClientContextualHelpHint.SAVE);
@@ -428,7 +428,7 @@ public final class ProjectScreen extends LumaScreen implements LumiShortcutSuppr
                 model.state().versions()
         );
         boolean operationActive = ScreenOperationStateSupport.blocksMutationActions(model.state().operationSnapshot());
-        boolean canSave = !model.state().pendingChanges().isEmpty() && !operationActive;
+        boolean canSave = model.state().hasUnsavedChanges() && !operationActive;
 
         FlowLayout actions = LumaUi.actionRow();
         ButtonComponent save = LumaUi.primaryButton(Component.translatable("luma.action.save"), button -> this.startDialogSave(false));

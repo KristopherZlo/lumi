@@ -1,6 +1,7 @@
 package io.github.luma.ui.controller;
 
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.HistoryProtectionStatus;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectIntegrityReport;
@@ -10,6 +11,7 @@ import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.RecoveryJournalEntry;
 import io.github.luma.domain.model.WorkZoneState;
 import io.github.luma.domain.service.ChangeStatsFactory;
+import io.github.luma.domain.service.HistoryProtectionService;
 import io.github.luma.domain.service.ProjectIntegrityService;
 import io.github.luma.domain.service.ProjectService;
 import io.github.luma.domain.service.ProjectVersionVisibility;
@@ -68,6 +70,7 @@ public final class ProjectHomeScreenController {
             loadedVersions.sort(Comparator.comparing(io.github.luma.domain.model.ProjectVersion::createdAt).reversed());
             RecoveryDraft draft = this.query.loadDraft(projectName);
             boolean interruptedDraft = this.query.hasInterruptedDraft(projectName);
+            OperationSnapshot operation = this.query.loadOperationSnapshot(project);
             ProjectAdvancedViewState advanced = includeAdvanced
                     ? new ProjectAdvancedViewState(
                             this.query.loadIntegrity(projectName),
@@ -85,11 +88,13 @@ public final class ProjectHomeScreenController {
                             ? PendingChangeSummary.empty()
                             : ChangeStatsFactory.summarizePending(draft.changes(), draft.entityChanges()),
                     interruptedDraft,
-                    this.query.loadOperationSnapshot(project),
+                    operation,
                     advanced,
                     status == null || status.isBlank() ? "luma.status.project_ready" : status,
                     this.query.hasRestoreReturnPoint(projectName),
-                    zoneColorByVersionId
+                    zoneColorByVersionId,
+                    this.query.loadHistoryProtection(projectName, operation),
+                    this.query.hasSafetyChanges(projectName)
             );
         } catch (Exception exception) {
             return new ProjectHomeViewState(
@@ -160,6 +165,14 @@ public final class ProjectHomeScreenController {
         OperationSnapshot loadOperationSnapshot(BuildProject project) throws Exception;
 
         boolean hasRestoreReturnPoint(String projectName) throws Exception;
+
+        default HistoryProtectionStatus loadHistoryProtection(String projectName, OperationSnapshot operation) throws Exception {
+            return HistoryProtectionStatus.protectedStatus();
+        }
+
+        default boolean hasSafetyChanges(String projectName) throws Exception {
+            return false;
+        }
     }
 
     private static final class ServiceQuery implements Query {
@@ -171,6 +184,7 @@ public final class ProjectHomeScreenController {
         private final WorkZoneService workZoneService = new WorkZoneService();
         private final ExternalToolIntegrationRegistry integrationRegistry = new ExternalToolIntegrationRegistry();
         private final OperationSnapshotViewService operationSnapshotViewService = new OperationSnapshotViewService();
+        private final HistoryProtectionService historyProtectionService = new HistoryProtectionService();
 
         @Override
         public boolean hasSingleplayerServer() {
@@ -235,6 +249,21 @@ public final class ProjectHomeScreenController {
         @Override
         public boolean hasRestoreReturnPoint(String projectName) throws Exception {
             return this.recoveryService.loadRestoreReturnPoint(this.server(), projectName).isPresent();
+        }
+
+        @Override
+        public HistoryProtectionStatus loadHistoryProtection(String projectName, OperationSnapshot operation) throws Exception {
+            return this.historyProtectionService.load(
+                    this.projectService.resolveLayout(this.server(), projectName),
+                    operation
+            );
+        }
+
+        @Override
+        public boolean hasSafetyChanges(String projectName) throws Exception {
+            return this.historyProtectionService.hasSafetyChanges(
+                    this.projectService.resolveLayout(this.server(), projectName)
+            );
         }
 
         private MinecraftServer server() {
