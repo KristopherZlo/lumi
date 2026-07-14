@@ -11,6 +11,8 @@ import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.ProjectSettings;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.ProjectVersion;
+import io.github.luma.domain.model.ProjectDirtyScope;
+import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StatePayload;
@@ -201,6 +203,26 @@ class VersionServiceTest {
         assertEquals(outsideEntityId, split.remainder().entityChanges().getFirst().entityId());
         assertEquals(32.0D, x(split.remainder().entityChanges().getFirst().oldValue()));
         assertEquals(33.0D, x(split.remainder().entityChanges().getFirst().newValue()));
+    }
+
+    @Test
+    void splitDirtyScopeForZoneKeepsOtherSectionsAndEntityColumnPending() {
+        ProjectDirtyScope scope = ProjectDirtyScope.empty("project", "main", "v0001");
+        ChunkSectionPoint selected = new ChunkSectionPoint(0, 0, 4);
+        ChunkSectionPoint outside = new ChunkSectionPoint(2, 0, 4);
+        scope.markBlockSections(List.of(selected, outside));
+        scope.markEntityChunk(new ChunkPoint(0, 0));
+        WorkZone zone = new WorkZone(
+                "zone", "project", "Tower", 0xFFFFFF,
+                List.of(new WorkZoneCell(0, 4, 0)), "tester", instant(0), instant(0)
+        );
+
+        ProjectDirtyScope.Split split = VersionService.splitDirtyScopeForZone(scope, zone);
+
+        assertEquals(List.of(selected), split.selected().blockSections().stream().toList());
+        assertEquals(List.of(outside), split.remainder().blockSections().stream().toList());
+        assertTrue(split.selected().entityChunks().contains(new ChunkPoint(0, 0)));
+        assertTrue(split.remainder().entityChunks().contains(new ChunkPoint(0, 0)));
     }
 
     @Test

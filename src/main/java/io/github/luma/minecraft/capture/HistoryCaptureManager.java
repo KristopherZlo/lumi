@@ -913,6 +913,7 @@ public final class HistoryCaptureManager {
         if (trackedProject == null) {
             throw new IllegalArgumentException("Tracked project is missing: " + projectId);
         }
+        this.persistenceCoordinator.drainProject(projectId, trackedProject.project().name());
         return this.projectDirtyScopes.loadDurable(trackedProject);
     }
 

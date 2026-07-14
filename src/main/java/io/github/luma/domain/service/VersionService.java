@@ -14,6 +14,7 @@ import io.github.luma.domain.model.PatchMetadata;
 import io.github.luma.domain.model.PreviewInfo;
 import io.github.luma.domain.model.PendingChangeSummary;
 import io.github.luma.domain.model.ProjectVariant;
+import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.domain.model.ProjectVersion;
 import io.github.luma.domain.model.ProjectVersionTags;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -74,6 +75,8 @@ public final class VersionService {
     private final RecoveryRepository recoveryRepository = new RecoveryRepository();
     private final OperationDraftRecoveryService operationDraftRecoveryService = new OperationDraftRecoveryService();
     private final SaveDraftIsolationService draftIsolationService = new SaveDraftIsolationService();
+    private final DirtyScopeReconciliationService dirtyScopeReconciliationService =
+            new DirtyScopeReconciliationService();
     private final PreviewCaptureRequestService previewCaptureRequestService = new PreviewCaptureRequestService();
     private final PreviewBoundsResolver previewBoundsResolver = new PreviewBoundsResolver();
     private final BaselineChunkRepository baselineChunkRepository = new BaselineChunkRepository();
@@ -219,7 +222,7 @@ public final class VersionService {
     ) throws IOException {
         IsolatedDraft isolatedDraft = this.isolateVersionDraft(level, layout, project, author, progressSink, timing);
         RecoveryDraft draft = isolatedDraft.draft();
-        this.writeVersionFromOperationDraft(
+        ProjectVersion version = this.writeVersionFromOperationDraft(
                 level,
                 layout,
                 project,
@@ -235,6 +238,7 @@ public final class VersionService {
                 tags,
                 timing
         );
+        this.completeDirtyScopeSave(level, project, isolatedDraft, version);
     }
 
     private void runAmendVersionOperation(
@@ -290,6 +294,7 @@ public final class VersionService {
                 tags,
                 null
         );
+        this.completeDirtyScopeSave(level, project, isolatedDraft, amendedVersion);
         this.recoveryRepository.appendJournalEntry(layout, new RecoveryJournalEntry(
                 Instant.now(),
                 "version-amended",
@@ -325,9 +330,47 @@ public final class VersionService {
                 ? Optional.empty()
                 : this.recoveryRepository.loadDraft(layout);
         recordTiming(timing, VersionSaveTiming.LOAD_PERSISTED_DRAFT, sectionStartedAt);
-        RecoveryDraft draft = liveDraft
-                .or(() -> persistedDraft)
-                .orElseThrow(() -> new IllegalArgumentException("No pending tracked changes for " + project.name()));
+        Optional<RecoveryDraft> pendingDraft = liveDraft.or(() -> persistedDraft);
+
+        HistoryCaptureManager captureManager = HistoryCaptureManager.getInstance();
+        ProjectDirtyScope dirtyScope = captureManager.loadProjectDirtyScope(
+                level.getServer(),
+                project.id().toString()
+        );
+        Optional<WorkZone> activeZone = this.draftIsolationService.activeZone(layout, author);
+        ProjectDirtyScope.Split dirtySplit = this.draftIsolationService.splitDirtyScope(
+                dirtyScope,
+                activeZone.orElse(null)
+        );
+        RecoveryDraft draft = pendingDraft.orElse(null);
+        if (!dirtySplit.selected().isEmpty()) {
+            progressSink.update(OperationStage.PREPARING, 0, 0, "Reconciling dirty sections against saved head");
+            List<ProjectVersion> versions = this.versionRepository.loadAll(layout);
+            ProjectVersion head = versions.stream()
+                    .filter(version -> version.id().equals(dirtySplit.selected().baseVersionId()))
+                    .findFirst()
+                    .orElseThrow(() -> new IOException(
+                            "Dirty scope baseline version is missing: " + dirtySplit.selected().baseVersionId()
+                    ));
+            draft = this.dirtyScopeReconciliationService.reconcileBlocks(
+                    layout,
+                    project,
+                    versions,
+                    head,
+                    dirtySplit.selected(),
+                    captureManager.captureProjectDirtyScope(
+                            level.getServer(),
+                            project.id().toString(),
+                            dirtySplit.selected()
+                    ),
+                    draft,
+                    author,
+                    Instant.now()
+            );
+        }
+        if (draft == null) {
+            throw new IllegalArgumentException("No pending tracked changes for " + project.name());
+        }
         if (draft.isEmpty()) {
             throw new IllegalArgumentException("No pending tracked changes for " + project.name());
         }
@@ -371,11 +414,38 @@ public final class VersionService {
             this.recoveryRepository.saveDraft(layout, split.remainder());
         }
         recordTiming(timing, VersionSaveTiming.RECOVERY_DRAFT_DELETE, sectionStartedAt);
-        return new IsolatedDraft(split.selected(), scoped.workZone());
+        return new IsolatedDraft(
+                split.selected(),
+                scoped.workZone(),
+                dirtyScope.isEmpty() ? null : dirtyScope,
+                dirtySplit.remainder()
+        );
+    }
+
+    private void completeDirtyScopeSave(
+            ServerLevel level,
+            BuildProject project,
+            IsolatedDraft isolatedDraft,
+            ProjectVersion version
+    ) throws IOException {
+        if (isolatedDraft.expectedDirtyScope() == null) {
+            return;
+        }
+        HistoryCaptureManager.getInstance().completeProjectDirtyScopeSave(
+                level.getServer(),
+                project.id().toString(),
+                isolatedDraft.expectedDirtyScope(),
+                isolatedDraft.dirtyRemainder(),
+                version.id()
+        );
     }
 
     static DraftSplit splitDraftForZone(RecoveryDraft draft, WorkZone zone) {
         return new SaveDraftIsolationService().splitForZone(draft, zone);
+    }
+
+    static ProjectDirtyScope.Split splitDirtyScopeForZone(ProjectDirtyScope dirtyScope, WorkZone zone) {
+        return new SaveDraftIsolationService().splitDirtyScope(dirtyScope, zone);
     }
 
     public static PendingChangeSummary summarizePendingForZone(RecoveryDraft draft, WorkZone zone) {
@@ -1065,7 +1135,12 @@ public final class VersionService {
 
     }
 
-    private record IsolatedDraft(RecoveryDraft draft, WorkZone workZone) {
+    private record IsolatedDraft(
+            RecoveryDraft draft,
+            WorkZone workZone,
+            ProjectDirtyScope expectedDirtyScope,
+            ProjectDirtyScope dirtyRemainder
+    ) {
     }
 
 }

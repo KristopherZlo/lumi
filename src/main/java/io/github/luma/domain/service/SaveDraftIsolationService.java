@@ -2,6 +2,7 @@ package io.github.luma.domain.service;
 
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.PendingChangeSummary;
+import io.github.luma.domain.model.ProjectDirtyScope;
 import io.github.luma.domain.model.RecoveryDraft;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.domain.model.StoredEntityChange;
@@ -23,12 +24,37 @@ final class SaveDraftIsolationService {
             RecoveryDraft draft,
             String author
     ) throws IOException {
-        Optional<WorkZone> zone = this.workZoneService.activeZone(layout, author)
-                .filter(candidate -> !candidate.cells().isEmpty());
+        Optional<WorkZone> zone = this.activeZone(layout, author);
         if (zone.isEmpty()) {
             return new ScopedDraftSplit(this.unscoped(draft), null);
         }
         return new ScopedDraftSplit(this.splitForZone(draft, zone.get()), zone.get());
+    }
+
+    Optional<WorkZone> activeZone(ProjectLayout layout, String author) throws IOException {
+        return this.workZoneService.activeZone(layout, author)
+                .filter(candidate -> !candidate.cells().isEmpty());
+    }
+
+    ProjectDirtyScope.Split splitDirtyScope(ProjectDirtyScope dirtyScope, WorkZone zone) {
+        if (dirtyScope == null) {
+            throw new IllegalArgumentException("Dirty scope is required");
+        }
+        if (zone == null || zone.cells().isEmpty()) {
+            return dirtyScope.split(section -> true, chunk -> true);
+        }
+        ProjectDirtyScope.Split split = dirtyScope.split(
+                section -> zone.contains(new WorkZoneCell(
+                        section.chunkX(),
+                        section.sectionY(),
+                        section.chunkZ()
+                )),
+                chunk -> zone.cells().stream().anyMatch(cell -> cell.x() == chunk.x() && cell.z() == chunk.z())
+        );
+        for (var chunk : split.selected().entityChunks()) {
+            split.remainder().markEntityChunk(chunk);
+        }
+        return split;
     }
 
     VersionService.DraftSplit splitForZone(RecoveryDraft draft, WorkZone zone) {
