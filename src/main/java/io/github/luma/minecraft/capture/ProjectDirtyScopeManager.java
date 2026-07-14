@@ -74,12 +74,16 @@ final class ProjectDirtyScopeManager {
             this.repository.save(project.layout(), durable);
         }
         synchronized (this) {
-            this.scopes.put(projectId, new ScopeEntry(
-                    projectId,
-                    project.project().name(),
-                    project.layout(),
-                    durable.copy()
-            ));
+            if (durable.isEmpty()) {
+                this.scopes.remove(projectId);
+            } else {
+                this.scopes.put(projectId, new ScopeEntry(
+                        projectId,
+                        project.project().name(),
+                        project.layout(),
+                        durable.copy()
+                ));
+            }
         }
         return durable;
     }

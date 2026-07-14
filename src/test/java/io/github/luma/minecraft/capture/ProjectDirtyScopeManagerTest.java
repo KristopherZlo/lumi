@@ -161,6 +161,32 @@ class ProjectDirtyScopeManagerTest {
         }
     }
 
+    @Test
+    void emptyLoadedScopeDoesNotBlockFirstMutationAfterHeadAdvances() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("empty-head-advance.mbp"));
+        TrackedProject oldHead = trackedProject(layout);
+        TrackedProject publishedHead = new TrackedProject(
+                layout,
+                oldHead.project(),
+                List.of(ProjectVariant.main("v0002", Instant.parse("2026-07-14T10:01:00Z")))
+        );
+        ChunkSectionPoint section = new ChunkSectionPoint(7, 8, 9);
+
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(), new BaselineChunkRepository(),
+                Executors.newSingleThreadExecutor()
+        )) {
+            ProjectDirtyScopeManager manager = new ProjectDirtyScopeManager(coordinator);
+            assertTrue(manager.loadDurable(oldHead).isEmpty());
+
+            assertTrue(manager.markBlockSection(publishedHead, section));
+
+            ProjectDirtyScope scope = manager.runtimeSnapshot(publishedHead);
+            assertEquals("v0002", scope.baseVersionId());
+            assertEquals(List.of(section), scope.blockSections().stream().toList());
+        }
+    }
+
     private static TrackedProject trackedProject(ProjectLayout layout) {
         Instant now = Instant.parse("2026-07-14T10:00:00Z");
         BuildProject project = BuildProject.createWorldWorkspace("World", "minecraft:overworld", now);
