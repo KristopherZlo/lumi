@@ -2,6 +2,7 @@ package io.github.luma.minecraft.testing;
 
 import io.github.luma.domain.model.BlockPoint;
 import io.github.luma.domain.model.BuildProject;
+import io.github.luma.domain.model.ChunkSectionPoint;
 import io.github.luma.domain.model.OperationHandle;
 import io.github.luma.domain.model.OperationSnapshot;
 import io.github.luma.domain.model.PartialRestoreRegionSource;
@@ -39,6 +40,7 @@ import io.github.luma.domain.service.UndoRedoService;
 import io.github.luma.domain.service.WorkZoneService;
 import io.github.luma.minecraft.capture.EntityMutationTracker;
 import io.github.luma.minecraft.capture.HistoryCaptureManager;
+import io.github.luma.minecraft.capture.UndoRedoHistoryManager;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import io.github.luma.minecraft.world.WorldOperationManager;
 import io.github.luma.storage.ProjectLayout;
@@ -133,6 +135,10 @@ final class SingleplayerTestRun {
     private String workZoneSaveVersionId = "";
     private String workZoneAmendVersionId = "";
     private String concurrentSaveVersionId = "";
+    private String actionlessSaveVersionId = "";
+    private BlockPos actionlessFluidPos;
+    private int actionlessWaitTicks;
+    private int actionlessUndoCount;
     private int workZoneEditCount;
     private int concurrentSaveStoredVersionCount;
     private BlockPoint savedGameplayEntityPosition;
@@ -255,6 +261,12 @@ final class SingleplayerTestRun {
                 case CHECK_CHAINED_TNT_CAPTURE -> this.checkChainedTntCapture(server);
                 case START_CHAINED_TNT_UNDO -> this.startChainedTntUndo();
                 case CHECK_CHAINED_TNT_UNDO -> this.checkChainedTntUndo();
+                case START_ACTIONLESS_FLUID -> this.startActionlessFluid(server);
+                case CHECK_ACTIONLESS_FLUID -> this.checkActionlessFluid(server);
+                case START_ACTIONLESS_ROLLBACK -> this.startActionlessRollback();
+                case CHECK_ACTIONLESS_ROLLBACK -> this.checkActionlessRollback(server);
+                case START_ACTIONLESS_SAVE -> this.startActionlessSave(server);
+                case CHECK_ACTIONLESS_SAVE -> this.checkActionlessSave(server);
                 case START_EXPLOSION_INTERACTION -> this.startExplosionInteraction(server);
                 case CHECK_EXPLOSION_CAPTURE -> this.checkExplosionCapture(server);
                 case START_EXPLOSION_UNDO -> this.startExplosionUndo();
@@ -1159,7 +1171,75 @@ final class SingleplayerTestRun {
                         + (this.chainedTntReport == null
                         ? "missing report"
                         : this.chainedTntReport.restorationMismatches(this.level)));
-        this.completePhase(this.level.getServer(), Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
+        this.completePhase(this.level.getServer(), Phase.START_ACTIONLESS_FLUID);
+    }
+
+    private void startActionlessFluid(MinecraftServer server) {
+        this.actionlessFluidPos = this.volume.min().offset(2, 8, 12);
+        this.actionlessWaitTicks = 0;
+        this.actionlessUndoCount = UndoRedoHistoryManager.getInstance()
+                .recentUndoActions(this.project.id().toString(), 100).size();
+        this.level.setBlock(this.actionlessFluidPos, Blocks.WATER.defaultBlockState(), 3);
+        this.completePhase(server, Phase.CHECK_ACTIONLESS_FLUID);
+    }
+
+    private void checkActionlessFluid(MinecraftServer server) throws Exception {
+        if (++this.actionlessWaitTicks < 20) {
+            return;
+        }
+        this.check(this.recoveryService.loadDraft(server, this.project.name()).isEmpty(),
+                "Actionless fluid does not create a player recovery draft");
+        this.check(
+                UndoRedoHistoryManager.getInstance().recentUndoActions(this.project.id().toString(), 100).size()
+                        == this.actionlessUndoCount,
+                "Actionless fluid does not create a player undo action"
+        );
+        var dirtyScope = HistoryCaptureManager.getInstance()
+                .loadProjectDirtyScope(server, this.project.id().toString());
+        this.check(dirtyScope.blockSections().contains(ChunkSectionPoint.from(BlockPoint.from(this.actionlessFluidPos))),
+                "Actionless fluid marks its durable dirty section");
+        this.completePhase(server, Phase.START_ACTIONLESS_ROLLBACK);
+    }
+
+    private void startActionlessRollback() throws Exception {
+        this.pendingOperation = this.quickRollbackService.quickRollback(this.level, this.project.name());
+        this.log.info("Queued actionless fluid rollback " + this.pendingOperation.id());
+        this.completePhase(this.level.getServer(), Phase.CHECK_ACTIONLESS_ROLLBACK);
+    }
+
+    private void checkActionlessRollback(MinecraftServer server) throws Exception {
+        this.check(this.level.getFluidState(this.actionlessFluidPos).isEmpty(),
+                "Rollback to HEAD removes actionless fluid");
+        this.check(HistoryCaptureManager.getInstance()
+                        .loadProjectDirtyScope(server, this.project.id().toString()).isEmpty(),
+                "Verified rollback clears the actionless dirty scope");
+        this.completePhase(server, Phase.START_ACTIONLESS_SAVE);
+    }
+
+    private void startActionlessSave(MinecraftServer server) throws Exception {
+        this.level.setBlock(this.actionlessFluidPos, Blocks.WATER.defaultBlockState(), 3);
+        this.actionlessSaveVersionId = this.nextVersionId(server);
+        this.pendingOperation = this.versionService.startSaveVersion(
+                this.level,
+                this.project.name(),
+                "Actionless fluid safety save",
+                ACTOR
+        );
+        this.log.info("Queued actionless fluid safety save " + this.pendingOperation.id());
+        this.completePhase(server, Phase.CHECK_ACTIONLESS_SAVE);
+    }
+
+    private void checkActionlessSave(MinecraftServer server) throws Exception {
+        VersionDiff diff = this.value("Actionless fluid save diff can be built", () ->
+                this.diffService.compareVersionToParent(server, this.project.name(), this.actionlessSaveVersionId));
+        if (diff != null) {
+            this.check(diff.changedBlocks().stream()
+                            .anyMatch(entry -> entry.pos().equals(BlockPoint.from(this.actionlessFluidPos))),
+                    "Save includes the actionless fluid from the dirty scope");
+        }
+        this.check(this.recoveryService.loadDraft(server, this.project.name()).isEmpty(),
+                "Actionless safety save still exposes no player draft");
+        this.completePhase(server, Phase.START_RESTORE_INITIAL_AFTER_PLAYER_INTERACTIONS);
     }
 
     private void startExplosionInteraction(MinecraftServer server) throws Exception {
@@ -1798,6 +1878,12 @@ final class SingleplayerTestRun {
         CHECK_CHAINED_TNT_CAPTURE("Verify TNT chain capture", "check that one live undo action owns the full chain"),
         START_CHAINED_TNT_UNDO("Queue TNT chain undo", "undo the redstone TNT chain through the operation model"),
         CHECK_CHAINED_TNT_UNDO("Verify TNT chain undo", "check that persistent TNT chain blocks and witnesses were restored"),
+        START_ACTIONLESS_FLUID("Actionless fluid", "mutate fluid without a player action and wait for ambient fallout"),
+        CHECK_ACTIONLESS_FLUID("Verify actionless safety capture", "check dirty scope without player draft or undo"),
+        START_ACTIONLESS_ROLLBACK("Queue actionless rollback", "restore actionless fluid to the active head"),
+        CHECK_ACTIONLESS_ROLLBACK("Verify actionless rollback", "check the authoritative head removed ambient fluid"),
+        START_ACTIONLESS_SAVE("Queue actionless save", "save ambient fluid from dirty safety history"),
+        CHECK_ACTIONLESS_SAVE("Verify actionless save", "check the published patch includes ambient fluid"),
         START_EXPLOSION_INTERACTION("TNT interaction", "place and ignite TNT through player game-mode actions"),
         CHECK_EXPLOSION_CAPTURE("Verify TNT capture", "wait for the controlled explosion and inspect its draft"),
         START_EXPLOSION_UNDO("Queue TNT undo", "undo the controlled explosion through the operation model"),
@@ -1886,6 +1972,9 @@ final class SingleplayerTestRun {
                      START_POWERED_TNT_UNDO_INTERACTION, START_POWERED_TNT_UNDO, CHECK_POWERED_TNT_UNDO,
                      START_CHAINED_TNT_INTERACTION, CHECK_CHAINED_TNT_CAPTURE,
                      START_CHAINED_TNT_UNDO, CHECK_CHAINED_TNT_UNDO,
+                     START_ACTIONLESS_FLUID, CHECK_ACTIONLESS_FLUID,
+                     START_ACTIONLESS_ROLLBACK, CHECK_ACTIONLESS_ROLLBACK,
+                     START_ACTIONLESS_SAVE, CHECK_ACTIONLESS_SAVE,
                      START_EXPLOSION_INTERACTION,
                      CHECK_EXPLOSION_CAPTURE, START_EXPLOSION_UNDO, CHECK_EXPLOSION_UNDO,
                      START_EXPLOSION_REDO, CHECK_EXPLOSION_REDO,

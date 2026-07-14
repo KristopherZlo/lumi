@@ -173,6 +173,8 @@ Run the integrated singleplayer player-flow regression suite:
 
 The player-flow TNT checks begin from an empty post-save draft, place and ignite one TNT through normal player APIs, let its fallout settle, and require one live undo to restore every witness block. The flow also places redstone beside pre-existing TNT, verifies that a complete ten-block chain settles into the durable draft, and requires quick rollback to restore every TNT block without leaving primed TNT entities.
 
+The same runtime flow creates fluid without a player context, verifies that it adds neither a player draft nor an undo action, rolls it back through the dirty scope, then repeats the mutation and verifies that a normal save publishes it.
+
 Compare vanilla and Lumi world startup against the same normal-world seed:
 
 ```powershell
