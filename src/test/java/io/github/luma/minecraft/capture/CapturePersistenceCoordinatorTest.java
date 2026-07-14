@@ -255,12 +255,12 @@ class CapturePersistenceCoordinatorTest {
 
     @Test
     void baselineWriterThreadCountUsesBoundedDefaultAndClampedOverride() {
-        assertEquals(4, CapturePersistenceCoordinator.baselineWriterThreads(null));
-        assertEquals(4, CapturePersistenceCoordinator.baselineWriterThreads(""));
+        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads(null));
+        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads(""));
         assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads("1"));
         assertEquals(8, CapturePersistenceCoordinator.baselineWriterThreads("64"));
-        assertEquals(4, CapturePersistenceCoordinator.baselineWriterThreads("invalid"));
-        assertEquals(4, CapturePersistenceCoordinator.baselineWriterThreads("0"));
+        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads("invalid"));
+        assertEquals(1, CapturePersistenceCoordinator.baselineWriterThreads("0"));
     }
 
     @Test
