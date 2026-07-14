@@ -47,6 +47,10 @@ final class WorkingDraftSessionManager {
         return this.sessionRegistry.ensureSession(projectId, buffer);
     }
 
+    void resetStabilizationSession(String projectId, TrackedChangeBuffer buffer) {
+        this.sessionRegistry.resetSession(projectId, buffer);
+    }
+
     boolean hasBuffer(String projectId) {
         return this.sessionRegistry.hasBuffer(projectId);
     }

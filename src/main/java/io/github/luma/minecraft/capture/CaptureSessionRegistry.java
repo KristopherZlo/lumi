@@ -30,6 +30,12 @@ final class CaptureSessionRegistry {
         return this.activeSessions.computeIfAbsent(projectId, ignored -> CaptureSessionState.create(buffer));
     }
 
+    CaptureSessionState resetSession(String projectId, TrackedChangeBuffer buffer) {
+        CaptureSessionState session = CaptureSessionState.resume(buffer);
+        this.activeSessions.put(projectId, session);
+        return session;
+    }
+
     void open(String projectId, TrackedChangeBuffer buffer, CaptureSessionState session) {
         this.activeBuffers.put(projectId, buffer);
         this.activeSessions.put(projectId, session);

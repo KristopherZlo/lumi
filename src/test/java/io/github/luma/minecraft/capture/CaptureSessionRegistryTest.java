@@ -59,6 +59,22 @@ class CaptureSessionRegistryTest {
         assertFalse(registry.matchesPersistedDraft("project-a", buffer));
     }
 
+    @Test
+    void resetSessionDropsStaleReconciliationAndKeepsCurrentDraft() {
+        CaptureSessionRegistry registry = new CaptureSessionRegistry();
+        TrackedChangeBuffer buffer = buffer("project-a");
+        buffer.addChange(change(), Instant.EPOCH.plusSeconds(1));
+        CaptureSessionState staleSession = CaptureSessionState.create(buffer);
+        staleSession.markDirtyPosition(new BlockPoint(2, 64, 2), false, 12L);
+        registry.open("project-a", buffer, staleSession);
+
+        CaptureSessionState resetSession = registry.resetSession("project-a", buffer);
+
+        assertSame(buffer, resetSession.buffer());
+        assertFalse(resetSession.hasPendingReconciliation());
+        assertEquals(buffer.touchedChunks(), resetSession.rootChunks());
+    }
+
     private static TrackedChangeBuffer buffer(String projectId) {
         return TrackedChangeBuffer.create(
                 "buffer-" + projectId,

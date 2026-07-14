@@ -886,6 +886,7 @@ public final class HistoryCaptureManager {
                 this.workingDrafts.discardIfEmpty(project, "after undo/redo");
                 return;
             }
+            this.workingDrafts.resetStabilizationSession(projectId, buffer);
             this.workingDrafts.markDirty(projectId);
             LumaMod.LOGGER.info(
                     "Adjusted working draft for project {} after undo/redo by {}; pending={}",
