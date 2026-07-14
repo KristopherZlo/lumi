@@ -130,6 +130,54 @@ class CapturePersistenceCoordinatorTest {
     }
 
     @Test
+    void projectDrainPromotesItsQueuedBaselinePastUnrelatedBacklog() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("priority-baseline.mbp"));
+        BaselineChunkRepository baselines = new BaselineChunkRepository();
+        ExecutorService draftExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService baselineExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService priorityExecutor = Executors.newSingleThreadExecutor();
+        CountDownLatch baselineStarted = new CountDownLatch(1);
+        CountDownLatch releaseBaseline = new CountDownLatch(1);
+        baselineExecutor.submit(() -> {
+            baselineStarted.countDown();
+            releaseBaseline.await(5, TimeUnit.SECONDS);
+            return null;
+        });
+        assertTrue(baselineStarted.await(1, TimeUnit.SECONDS));
+
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(),
+                baselines,
+                new ProjectDirtyScopeRepository(),
+                draftExecutor,
+                baselineExecutor,
+                priorityExecutor
+        )) {
+            ChunkSnapshotPayload snapshot = chunkSnapshot();
+            coordinator.enqueueBaselineWrite(
+                    layout,
+                    "priority-project",
+                    "Priority Project",
+                    snapshot,
+                    Instant.parse("2026-04-21T09:00:00Z")
+            );
+
+            CompletableFuture.runAsync(() -> {
+                try {
+                    coordinator.drainProject("priority-project", "Priority Project");
+                } catch (Exception exception) {
+                    throw new RuntimeException(exception);
+                }
+            }).get(2, TimeUnit.SECONDS);
+
+            assertEquals(List.of(snapshot.chunk()), baselines.listChunks(layout));
+        } finally {
+            releaseBaseline.countDown();
+            stopExecutors(draftExecutor, baselineExecutor, priorityExecutor);
+        }
+    }
+
+    @Test
     void draftOnlyDrainDoesNotWaitForBlockedBaselineWrites() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         RecoveryRepository recoveryRepository = new RecoveryRepository();

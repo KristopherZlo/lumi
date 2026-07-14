@@ -22,6 +22,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -43,7 +44,8 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
     private final HistoryProtectionService historyProtectionService = new HistoryProtectionService();
     private final ExecutorService draftFlushExecutor;
     private final ExecutorService baselineExecutor;
-    private final Map<String, CompletableFuture<Void>> pendingBaselineWrites = new HashMap<>();
+    private final ExecutorService priorityBaselineExecutor;
+    private final Map<String, PendingBaselineWrite> pendingBaselineWrites = new HashMap<>();
     private final Map<String, PendingDraftFlush> pendingDraftFlushes = new HashMap<>();
     private final Map<String, PendingDirtyScopeFlush> pendingDirtyScopeFlushes = new HashMap<>();
     private final Map<String, Throwable> persistenceFailures = new HashMap<>();
@@ -57,7 +59,8 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
                 Executors.newFixedThreadPool(
                         defaultBaselineWriterThreads(),
                         maintenanceThreadFactory("baseline")
-                )
+                ),
+                Executors.newSingleThreadExecutor(maintenanceThreadFactory("baseline-priority"))
         );
     }
 
@@ -66,7 +69,14 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
             BaselineChunkRepository baselineChunkRepository,
             ExecutorService maintenanceExecutor
     ) {
-        this(recoveryRepository, baselineChunkRepository, new ProjectDirtyScopeRepository(), maintenanceExecutor, maintenanceExecutor);
+        this(
+                recoveryRepository,
+                baselineChunkRepository,
+                new ProjectDirtyScopeRepository(),
+                maintenanceExecutor,
+                maintenanceExecutor,
+                maintenanceExecutor
+        );
     }
 
     CapturePersistenceCoordinator(
@@ -75,7 +85,14 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
             ExecutorService draftFlushExecutor,
             ExecutorService baselineExecutor
     ) {
-        this(recoveryRepository, baselineChunkRepository, new ProjectDirtyScopeRepository(), draftFlushExecutor, baselineExecutor);
+        this(
+                recoveryRepository,
+                baselineChunkRepository,
+                new ProjectDirtyScopeRepository(),
+                draftFlushExecutor,
+                baselineExecutor,
+                baselineExecutor
+        );
     }
 
     CapturePersistenceCoordinator(
@@ -85,11 +102,30 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
             ExecutorService draftFlushExecutor,
             ExecutorService baselineExecutor
     ) {
+        this(
+                recoveryRepository,
+                baselineChunkRepository,
+                dirtyScopeRepository,
+                draftFlushExecutor,
+                baselineExecutor,
+                baselineExecutor
+        );
+    }
+
+    CapturePersistenceCoordinator(
+            RecoveryRepository recoveryRepository,
+            BaselineChunkRepository baselineChunkRepository,
+            ProjectDirtyScopeRepository dirtyScopeRepository,
+            ExecutorService draftFlushExecutor,
+            ExecutorService baselineExecutor,
+            ExecutorService priorityBaselineExecutor
+    ) {
         this.recoveryRepository = Objects.requireNonNull(recoveryRepository, "recoveryRepository");
         this.baselineChunkRepository = Objects.requireNonNull(baselineChunkRepository, "baselineChunkRepository");
         this.dirtyScopeRepository = Objects.requireNonNull(dirtyScopeRepository, "dirtyScopeRepository");
         this.draftFlushExecutor = Objects.requireNonNull(draftFlushExecutor, "draftFlushExecutor");
         this.baselineExecutor = Objects.requireNonNull(baselineExecutor, "baselineExecutor");
+        this.priorityBaselineExecutor = Objects.requireNonNull(priorityBaselineExecutor, "priorityBaselineExecutor");
     }
 
     public boolean enqueueBaselineWrite(
@@ -104,8 +140,15 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
             if (this.pendingBaselineWrites.containsKey(key)) {
                 return false;
             }
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            this.pendingBaselineWrites.put(key, future);
+            PendingBaselineWrite pending = new PendingBaselineWrite(
+                    layout,
+                    projectId,
+                    projectName,
+                    chunkSnapshot,
+                    now,
+                    key
+            );
+            this.pendingBaselineWrites.put(key, pending);
             LumaDebugLog.log(
                     BASELINE_LOG_CATEGORY,
                     "Queued async baseline write for project {} chunk {}:{}",
@@ -113,7 +156,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
                     chunkSnapshot.chunkX(),
                     chunkSnapshot.chunkZ()
             );
-            this.baselineExecutor.execute(() -> this.writeBaseline(layout, projectId, projectName, chunkSnapshot, now, key, future));
+            this.baselineExecutor.execute(() -> this.writeBaseline(pending));
             return true;
         }
     }
@@ -187,6 +230,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         long startedAt = System.nanoTime();
         boolean waited = false;
         int peakPendingTasks = 0;
+        this.promoteProjectBaselines(projectId);
         while (true) {
             this.throwRecordedFailure(projectId, projectName);
             List<CompletableFuture<Void>> futures = this.projectFutures(projectId);
@@ -286,37 +330,54 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
         if (this.baselineExecutor != this.draftFlushExecutor) {
             this.baselineExecutor.shutdown();
         }
+        if (this.priorityBaselineExecutor != this.baselineExecutor
+                && this.priorityBaselineExecutor != this.draftFlushExecutor) {
+            this.priorityBaselineExecutor.shutdown();
+        }
     }
 
-    private void writeBaseline(
-            ProjectLayout layout,
-            String projectId,
-            String projectName,
-            ChunkSnapshotPayload chunkSnapshot,
-            java.time.Instant now,
-            String key,
-            CompletableFuture<Void> future
-    ) {
+    private void writeBaseline(PendingBaselineWrite pending) {
+        if (!pending.claim()) {
+            return;
+        }
         try {
-            boolean written = this.baselineChunkRepository.writeIfMissing(layout, projectId, chunkSnapshot, now);
+            boolean written = this.baselineChunkRepository.writeIfMissing(
+                    pending.layout,
+                    pending.projectId,
+                    pending.chunkSnapshot,
+                    pending.now
+            );
             if (written) {
                 LumaDebugLog.log(
                         BASELINE_LOG_CATEGORY,
                         "Completed async baseline write for project {} chunk {}:{}",
-                        projectName,
-                        chunkSnapshot.chunkX(),
-                        chunkSnapshot.chunkZ()
+                        pending.projectName,
+                        pending.chunkSnapshot.chunkX(),
+                        pending.chunkSnapshot.chunkZ()
                 );
             }
-            future.complete(null);
+            pending.future.complete(null);
         } catch (Throwable throwable) {
-            this.markDegraded(layout, "Baseline persistence failed: " + failureDetail(throwable));
-            this.recordFailure(projectId, throwable);
-            future.completeExceptionally(throwable);
+            this.markDegraded(pending.layout, "Baseline persistence failed: " + failureDetail(throwable));
+            this.recordFailure(pending.projectId, throwable);
+            pending.future.completeExceptionally(throwable);
         } finally {
             synchronized (this) {
-                this.pendingBaselineWrites.remove(key);
+                this.pendingBaselineWrites.remove(pending.key, pending);
             }
+        }
+    }
+
+    private void promoteProjectBaselines(String projectId) {
+        List<PendingBaselineWrite> projectWrites;
+        synchronized (this) {
+            projectWrites = this.pendingBaselineWrites.entrySet().stream()
+                    .filter(entry -> entry.getKey().startsWith(projectId + "::"))
+                    .map(Map.Entry::getValue)
+                    .toList();
+        }
+        for (PendingBaselineWrite pending : projectWrites) {
+            this.priorityBaselineExecutor.execute(() -> this.writeBaseline(pending));
         }
     }
 
@@ -414,9 +475,9 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
     private List<CompletableFuture<Void>> projectFutures(String projectId) {
         synchronized (this) {
             List<CompletableFuture<Void>> futures = new ArrayList<>();
-            for (Map.Entry<String, CompletableFuture<Void>> entry : this.pendingBaselineWrites.entrySet()) {
+            for (Map.Entry<String, PendingBaselineWrite> entry : this.pendingBaselineWrites.entrySet()) {
                 if (entry.getKey().startsWith(projectId + "::")) {
-                    futures.add(entry.getValue());
+                    futures.add(entry.getValue().future);
                 }
             }
             PendingDraftFlush pendingDraftFlush = this.pendingDraftFlushes.get(projectId);
@@ -504,6 +565,38 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
             thread.setPriority(Thread.MIN_PRIORITY);
             return thread;
         };
+    }
+
+    private static final class PendingBaselineWrite {
+
+        private final ProjectLayout layout;
+        private final String projectId;
+        private final String projectName;
+        private final ChunkSnapshotPayload chunkSnapshot;
+        private final java.time.Instant now;
+        private final String key;
+        private final CompletableFuture<Void> future = new CompletableFuture<>();
+        private final AtomicBoolean claimed = new AtomicBoolean();
+
+        private PendingBaselineWrite(
+                ProjectLayout layout,
+                String projectId,
+                String projectName,
+                ChunkSnapshotPayload chunkSnapshot,
+                java.time.Instant now,
+                String key
+        ) {
+            this.layout = layout;
+            this.projectId = projectId;
+            this.projectName = projectName;
+            this.chunkSnapshot = chunkSnapshot;
+            this.now = now;
+            this.key = key;
+        }
+
+        private boolean claim() {
+            return this.claimed.compareAndSet(false, true);
+        }
     }
 
     private static final class PendingDraftFlush {

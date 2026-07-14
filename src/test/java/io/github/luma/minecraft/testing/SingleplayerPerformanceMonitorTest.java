@@ -70,7 +70,24 @@ class SingleplayerPerformanceMonitorTest {
         );
 
         assertFalse(totalCheck.passed());
-        assertTrue(totalCheck.detail().contains("5400"));
+        assertTrue(totalCheck.detail().contains("budgetedTotal=5400"));
+    }
+
+    @Test
+    void excludesExplicitFixtureInitializationFromRuntimeSyncBudgets() {
+        SingleplayerPerformanceMonitor monitor = new SingleplayerPerformanceMonitor();
+        monitor.recordSyncSlice("Project setup", Duration.ofSeconds(3).toNanos());
+        monitor.recordSyncSlice("Actionless safety fixture", Duration.ofSeconds(3).toNanos());
+        monitor.recordSyncSlice("Verify save", Duration.ofMillis(100).toNanos());
+
+        assertTrue(checkContaining(monitor, "Largest post-project Lumi test tick slice").passed());
+        SingleplayerPerformanceMonitor.PerformanceCheck totalCheck = checkContaining(
+                monitor,
+                "Total synchronous Lumi test overhead"
+        );
+        assertTrue(totalCheck.passed());
+        assertTrue(totalCheck.detail().contains("budgetedTotal=100"));
+        assertTrue(totalCheck.detail().contains("observedTotal=6100"));
     }
 
     @Test
