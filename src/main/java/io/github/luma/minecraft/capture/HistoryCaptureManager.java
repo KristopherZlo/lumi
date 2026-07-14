@@ -1746,7 +1746,11 @@ public final class HistoryCaptureManager {
 
     static boolean shouldTrackPersistentMutation(io.github.luma.domain.model.WorldMutationSource source) {
         return !WorldMutationContext.captureSuppressed()
-                && ELIGIBILITY.shouldTrackPersistentMutation(source, true);
+                && ELIGIBILITY.shouldTrackPersistentMutation(
+                        source,
+                        source != io.github.luma.domain.model.WorldMutationSource.SYSTEM
+                                || WorldMutationContext.hasCausalAction()
+                );
     }
 
     public static boolean shouldTrackPersistentMutation(
@@ -1758,7 +1762,8 @@ public final class HistoryCaptureManager {
             return false;
         }
         boolean activeGameplayChunk = source != io.github.luma.domain.model.WorldMutationSource.SYSTEM
-                || (level.getServer().isSameThread()
+                || (WorldMutationContext.hasCausalAction()
+                    && level.getServer().isSameThread()
                     && level.getChunkSource().isPositionTicking(ChunkPos.asLong(pos)));
         return ELIGIBILITY.shouldTrackPersistentMutation(source, activeGameplayChunk);
     }

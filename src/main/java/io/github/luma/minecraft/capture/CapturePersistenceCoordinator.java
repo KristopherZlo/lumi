@@ -398,6 +398,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
                 pending.dirty = false;
             }
             try {
+                this.drainBaselineWrites(pending.projectId, pending.projectName);
                 ProjectDirtyScope stored = this.dirtyScopeRepository.load(pending.layout).orElse(null);
                 if (stored != null) {
                     if (!sameDirtyScopeBase(stored, scope)) {
@@ -429,6 +430,32 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
                     pending.future.complete(null);
                     return;
                 }
+            }
+        }
+    }
+
+    private void drainBaselineWrites(String projectId, String projectName) throws IOException {
+        this.promoteProjectBaselines(projectId);
+        while (true) {
+            this.throwRecordedFailure(projectId, projectName);
+            List<CompletableFuture<Void>> futures;
+            synchronized (this) {
+                futures = this.pendingBaselineWrites.entrySet().stream()
+                        .filter(entry -> entry.getKey().startsWith(projectId + "::"))
+                        .map(entry -> entry.getValue().future)
+                        .toList();
+            }
+            if (futures.isEmpty()) {
+                return;
+            }
+            try {
+                CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+            } catch (CompletionException exception) {
+                Throwable cause = exception.getCause() == null ? exception : exception.getCause();
+                if (cause instanceof IOException ioException) {
+                    throw ioException;
+                }
+                throw new IOException("Failed to persist baseline chunks for " + projectName, cause);
             }
         }
     }

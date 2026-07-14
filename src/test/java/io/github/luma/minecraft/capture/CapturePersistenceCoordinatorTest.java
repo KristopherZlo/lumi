@@ -290,6 +290,43 @@ class CapturePersistenceCoordinatorTest {
         );
     }
 
+    @Test
+    void dirtyScopeWaitsForItsBaseline() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("ordered-durability.mbp"));
+        BaselineChunkRepository baselines = new BaselineChunkRepository();
+        ExecutorService draftExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService baselineExecutor = Executors.newSingleThreadExecutor();
+        CountDownLatch baselineStarted = new CountDownLatch(1);
+        CountDownLatch releaseBaseline = new CountDownLatch(1);
+        baselineExecutor.submit(() -> {
+            baselineStarted.countDown();
+            releaseBaseline.await(5, TimeUnit.SECONDS);
+            return null;
+        });
+        assertTrue(baselineStarted.await(1, TimeUnit.SECONDS));
+
+        try (CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(), baselines, draftExecutor, baselineExecutor
+        )) {
+            ChunkSnapshotPayload snapshot = chunkSnapshot();
+            coordinator.enqueueBaselineWrite(layout, "project", "Project", snapshot, Instant.now());
+            ProjectDirtyScope scope = ProjectDirtyScope.empty("project", "main", "v0001");
+            scope.markBlockSection(new ChunkSectionPoint(snapshot.chunkX(), snapshot.chunkZ(), 0));
+            coordinator.enqueueDirtyScopeFlush(layout, "project", "Project", scope);
+
+            TimeUnit.MILLISECONDS.sleep(100);
+            assertFalse(java.nio.file.Files.exists(layout.projectDirtyScopeFile()));
+
+            releaseBaseline.countDown();
+            coordinator.drainDirtyScopeFlushes("project", "Project");
+            assertTrue(baselines.contains(layout, snapshot.chunk()));
+            assertTrue(java.nio.file.Files.exists(layout.projectDirtyScopeFile()));
+        } finally {
+            releaseBaseline.countDown();
+            stopExecutors(draftExecutor, baselineExecutor);
+        }
+    }
+
     private static ChunkSnapshotPayload chunkSnapshot() {
         short[] indexes = new short[4096];
         indexes[0] = 1;

@@ -47,7 +47,15 @@ public final class EntitySnapshotService {
         if (!tag.contains("UUID")) {
             tag.putString("UUID", entity.getUUID().toString());
         }
+        if (!isReplayablePayload(tag)) {
+            return null;
+        }
         return new EntityPayload(tag);
+    }
+
+    public static boolean isReplayablePayload(CompoundTag tag) {
+        return tag != null
+                && !("minecraft:item".equals(tag.getString("id").orElse("")) && !tag.contains("Item"));
     }
 
     public static CompoundTag normalizeForHistory(CompoundTag source) {

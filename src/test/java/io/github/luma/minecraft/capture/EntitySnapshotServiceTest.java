@@ -80,4 +80,15 @@ class EntitySnapshotServiceTest {
         assertTrue(sanitized);
         assertEquals(AbstractArrow.Pickup.DISALLOWED, arrow.pickup);
     }
+
+    @Test
+    void itemPayloadRequiresItsStack() {
+        CompoundTag emptyItem = new CompoundTag();
+        emptyItem.putString("id", "minecraft:item");
+        CompoundTag validItem = emptyItem.copy();
+        validItem.put("Item", new CompoundTag());
+
+        assertEquals(false, EntitySnapshotService.isReplayablePayload(emptyItem));
+        assertTrue(EntitySnapshotService.isReplayablePayload(validItem));
+    }
 }

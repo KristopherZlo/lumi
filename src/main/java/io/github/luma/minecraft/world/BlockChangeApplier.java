@@ -8,6 +8,7 @@ import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.minecraft.capture.DeferredWorldMutationContext;
 import io.github.luma.minecraft.capture.DeferredWorldMutationContexts;
 import io.github.luma.minecraft.capture.EntitySnapshotService;
+import io.github.luma.minecraft.capture.EntitySnapshotService;
 import io.github.luma.mixin.CreeperReplayStateAccess;
 import io.github.luma.minecraft.capture.WorldMutationContext;
 import java.io.IOException;
@@ -464,6 +465,9 @@ public final class BlockChangeApplier {
             DeferredWorldMutationContext replayedEntityContext
     ) {
         if (entityTag == null || entityTag.isEmpty()) {
+            return;
+        }
+        if (!EntitySnapshotService.isReplayablePayload(entityTag)) {
             return;
         }
         Entity entity = EntityType.loadEntityRecursive(

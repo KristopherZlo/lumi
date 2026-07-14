@@ -77,8 +77,16 @@ class HistoryCaptureManagerTest {
     }
 
     @Test
-    void persistentTrackingIncludesUnattributedWorldChangesButNotRestoreReplay() {
-        assertTrue(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.SYSTEM));
+    void persistentTrackingRequiresCausalContextForSystemChanges() {
+        assertFalse(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.SYSTEM));
+        try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(
+                WorldMutationSource.SYSTEM,
+                "builder",
+                "action-1",
+                true
+        )) {
+            assertTrue(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.SYSTEM));
+        }
         assertTrue(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.BLOCK_UPDATE));
         assertFalse(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.RESTORE));
         assertFalse(HistoryCaptureManager.shouldTrackPersistentMutation(null));
