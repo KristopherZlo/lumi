@@ -1,6 +1,12 @@
 package io.github.lumi.minecraft.runtime;
 
 import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
+import io.github.lumi.minecraft.operation.SaveCaptureOperation;
+import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.service.DimensionHistoryInitializer;
+import io.github.lumi.domain.service.SaveRequest;
+import io.github.lumi.domain.service.SaveService;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.BatchedWorldStateCapture;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
@@ -13,12 +19,17 @@ import io.github.lumi.minecraft.world.MutationDurabilityTracker;
 import io.github.lumi.minecraft.world.SavePreparation;
 import io.github.lumi.minecraft.world.WorldStateCapture;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
+import io.github.lumi.storage.repository.BranchRefRepository;
+import io.github.lumi.storage.repository.CommitRepository;
+import io.github.lumi.storage.repository.MerkleTreeEditor;
+import io.github.lumi.storage.repository.OperationJournalRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
@@ -37,6 +48,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final EntityChunkDurabilityGate entityDurability;
     private final SavePreparation savePreparation;
     private final WorldStateCapture worldCapture;
+    private final SaveService saves;
+    private final Executor background;
+    private final BranchRefRepository refs;
+    private final UUID defaultWorkspaceId;
     private final BlockEntityBaselineStore blockEntityBaselines = new BlockEntityBaselineStore();
     private final MinecraftBlockEntityBaselineCapture baselineCapture =
             new MinecraftBlockEntityBaselineCapture();
@@ -47,12 +62,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             Path repository,
             DimensionFreezeState freeze,
             DimensionOperationCoordinator operations,
-            MutationDurabilityTracker mutations) {
+            MutationDurabilityTracker mutations,
+            SaveService saves,
+            Executor background,
+            BranchRefRepository refs,
+            UUID defaultWorkspaceId) {
         this.level = level;
         this.repository = repository;
         this.freeze = freeze;
         this.operations = operations;
         this.mutations = mutations;
+        this.saves = saves;
+        this.background = background;
+        this.refs = refs;
+        this.defaultWorkspaceId = defaultWorkspaceId;
         entityDurability = new EntityChunkDurabilityGate(mutations);
         var worldReader = new MinecraftWorldStateReader(level);
         savePreparation = new DurableSavePreparation(worldReader, entityDurability, mutations);
@@ -66,11 +89,21 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(background, "background");
         Path repository = layout.resolve(level.dimension().identifier().toString());
         DimensionFreezeState freeze = new DimensionFreezeState();
+        var objects = new WorldObjectRepository(repository);
+        var commits = new CommitRepository(repository);
+        var refs = new BranchRefRepository(repository);
+        var journals = new OperationJournalRepository(repository);
+        BranchRef main = new DimensionHistoryInitializer(objects, commits, refs)
+                .initialize(UUID.randomUUID());
+        UUID workspaceId = commits.read(main.commit()).workspaceId();
+        MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
+                objects, new OriginStore(repository),
+                new WorkingIndexRepository(repository), background);
         return new FabricDimensionRuntime(
                 level, repository, freeze, new DimensionOperationCoordinator(freeze),
-                MutationDurabilityTracker.open(
-                        new WorldObjectRepository(repository), new OriginStore(repository),
-                        new WorkingIndexRepository(repository), background));
+                mutations,
+                new SaveService(objects, new MerkleTreeEditor(objects), commits, refs, journals),
+                background, refs, workspaceId);
     }
 
     public void tick() throws IOException {
@@ -102,6 +135,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         entityDurability.discard(MinecraftEntityChunkCapture.key(position));
     }
 
+    public SaveCaptureOperation startSave(SaveRequest request) {
+        SaveCaptureOperation operation = new SaveCaptureOperation(
+                Objects.requireNonNull(request, "request"), savePreparation, worldCapture,
+                saves, mutations, background);
+        operations.start(operation);
+        return operation;
+    }
+
     public ServerLevel level() { return level; }
     public Path repository() { return repository; }
     public DimensionFreezeState freeze() { return freeze; }
@@ -109,6 +150,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public MutationDurabilityTracker mutations() { return mutations; }
     public SavePreparation savePreparation() { return savePreparation; }
     public WorldStateCapture worldCapture() { return worldCapture; }
+    public BranchRef mainRef() throws IOException {
+        return refs.read(new BranchName("main")).orElseThrow(
+                () -> new IOException("Lumi main branch is missing"));
+    }
+    public UUID defaultWorkspaceId() { return defaultWorkspaceId; }
     public BlockEntityBaselineStore blockEntityBaselines() { return blockEntityBaselines; }
 
     @Override

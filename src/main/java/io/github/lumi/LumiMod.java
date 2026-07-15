@@ -1,6 +1,7 @@
 package io.github.lumi;
 
 import io.github.lumi.minecraft.runtime.LumiServerRuntime;
+import io.github.lumi.minecraft.runtime.LumiCommands;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,7 @@ public final class LumiMod implements ModInitializer {
     @Override
     public void onInitialize() {
         SERVER_RUNTIME.registerEvents();
+        LumiCommands.register();
         LOGGER.info("Lumi V2 initialized");
     }
 
