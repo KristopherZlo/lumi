@@ -41,6 +41,8 @@ public final class RestoreService {
         DimensionTree target = objects.readDimension(commits.read(targetCommit).tree());
         Map<SectionKey, SectionBlob> sections = new HashMap<>();
         Map<EntityChunkKey, EntityChunkBlob> entities = new HashMap<>();
+        Map<SectionKey, SectionBlob> returnSections = new HashMap<>();
+        Map<EntityChunkKey, EntityChunkBlob> returnEntities = new HashMap<>();
         for (RegionCoordinate regionCoordinate : union(current.regions().keySet(), target.regions().keySet())) {
             Optional<ObjectId> currentRegionId = Optional.ofNullable(current.regions().get(regionCoordinate));
             Optional<ObjectId> targetRegionId = Optional.ofNullable(target.regions().get(regionCoordinate));
@@ -51,9 +53,11 @@ public final class RestoreService {
                     ? objects.readRegion(currentRegionId.orElseThrow()) : new RegionTree(Map.of());
             RegionTree targetRegion = targetRegionId.isPresent()
                     ? objects.readRegion(targetRegionId.orElseThrow()) : new RegionTree(Map.of());
-            prepareRegion(regionCoordinate, currentRegion, targetRegion, sections, entities);
+            prepareRegion(regionCoordinate, currentRegion, targetRegion,
+                    sections, entities, returnSections, returnEntities);
         }
-        return new PreparedRestore(currentRef, targetCommit, sections, entities);
+        return new PreparedRestore(currentRef, targetCommit,
+                sections, entities, returnSections, returnEntities);
     }
 
     private void prepareRegion(
@@ -61,7 +65,9 @@ public final class RestoreService {
             RegionTree currentRegion,
             RegionTree targetRegion,
             Map<SectionKey, SectionBlob> sections,
-            Map<EntityChunkKey, EntityChunkBlob> entities) throws IOException {
+            Map<EntityChunkKey, EntityChunkBlob> entities,
+            Map<SectionKey, SectionBlob> returnSections,
+            Map<EntityChunkKey, EntityChunkBlob> returnEntities) throws IOException {
         for (ChunkInRegion local : union(currentRegion.chunks().keySet(), targetRegion.chunks().keySet())) {
             Optional<ObjectId> currentId = Optional.ofNullable(currentRegion.chunks().get(local));
             Optional<ObjectId> targetId = Optional.ofNullable(targetRegion.chunks().get(local));
@@ -74,7 +80,8 @@ public final class RestoreService {
                     ? objects.readChunk(targetId.orElseThrow()) : new ChunkTree(Map.of(), Optional.empty());
             int chunkX = regionCoordinate.x() * REGION_SIZE + local.x();
             int chunkZ = regionCoordinate.z() * REGION_SIZE + local.z();
-            prepareChunk(chunkX, chunkZ, current, target, sections, entities);
+            prepareChunk(chunkX, chunkZ, current, target,
+                    sections, entities, returnSections, returnEntities);
         }
     }
 
@@ -84,7 +91,9 @@ public final class RestoreService {
             ChunkTree current,
             ChunkTree target,
             Map<SectionKey, SectionBlob> sections,
-            Map<EntityChunkKey, EntityChunkBlob> entities) throws IOException {
+            Map<EntityChunkKey, EntityChunkBlob> entities,
+            Map<SectionKey, SectionBlob> returnSections,
+            Map<EntityChunkKey, EntityChunkBlob> returnEntities) throws IOException {
         for (int sectionY : union(current.sections().keySet(), target.sections().keySet())) {
             Optional<ObjectId> currentId = Optional.ofNullable(current.sections().get(sectionY));
             Optional<ObjectId> targetId = Optional.ofNullable(target.sections().get(sectionY));
@@ -92,6 +101,8 @@ public final class RestoreService {
                 SectionKey key = new SectionKey(chunkX, sectionY, chunkZ);
                 ObjectId resolved = targetId.isPresent() ? targetId.orElseThrow() : origin(key);
                 sections.put(key, objects.readSection(resolved));
+                ObjectId returnId = currentId.isPresent() ? currentId.orElseThrow() : origin(key);
+                returnSections.put(key, objects.readSection(returnId));
             }
         }
         if (!current.entities().equals(target.entities())) {
@@ -100,6 +111,10 @@ public final class RestoreService {
                     ? target.entities().orElseThrow()
                     : origin(key);
             entities.put(key, objects.readEntities(resolved));
+            ObjectId returnId = current.entities().isPresent()
+                    ? current.entities().orElseThrow()
+                    : origin(key);
+            returnEntities.put(key, objects.readEntities(returnId));
         }
     }
 

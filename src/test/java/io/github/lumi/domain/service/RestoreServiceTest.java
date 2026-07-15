@@ -54,6 +54,7 @@ class RestoreServiceTest {
                 .prepare(currentRef, target);
 
         assertEquals(Map.of(key, section("minecraft:air")), prepared.sections());
+        assertEquals(Map.of(key, section("minecraft:stone")), prepared.returnSections());
         assertEquals(target, prepared.targetCommit());
     }
 
