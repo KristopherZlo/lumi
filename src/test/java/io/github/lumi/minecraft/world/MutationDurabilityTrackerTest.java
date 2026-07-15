@@ -35,6 +35,7 @@ class MutationDurabilityTrackerTest {
         SectionKey key = new SectionKey(3, 4, 5);
         AtomicInteger captures = new AtomicInteger();
 
+        assertTrue(tracker.needsOrigin(key));
         assertEquals(1L, tracker.registerSectionMutation(key, () -> {
             captures.incrementAndGet();
             return airSection();
@@ -45,6 +46,7 @@ class MutationDurabilityTrackerTest {
         }));
 
         assertEquals(1, captures.get());
+        assertFalse(tracker.needsOrigin(key));
         assertEquals(2, background.size());
         assertFalse(tracker.canPublishChunk(3, 5));
 
