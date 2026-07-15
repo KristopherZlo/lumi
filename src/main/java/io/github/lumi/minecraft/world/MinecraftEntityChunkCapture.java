@@ -7,6 +7,7 @@ import io.github.lumi.domain.model.EntityState;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Stream;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -36,21 +37,30 @@ public final class MinecraftEntityChunkCapture {
         var captured = new ArrayList<EntityState>();
         try (entityStream) {
             for (EntityAccess access : entityStream.toList()) {
-                if (!(access instanceof Entity entity)
-                        || entity instanceof Player || !entity.shouldBeSaved()) {
-                    continue;
-                }
-                TagValueOutput output = TagValueOutput.createWithContext(
-                        ProblemReporter.DISCARDING, level.registryAccess());
-                if (!entity.save(output)) {
-                    continue;
-                }
-                captured.add(new EntityState(
-                        entity.getUUID(), EntityType.getKey(entity.getType()).toString(),
-                        canonicalEntityNbt(output.buildResult())));
+                captureEntity(level, access).ifPresent(entity -> captured.add(entity.state()));
             }
         }
         return new EntityChunkBlob(captured);
+    }
+
+    public Optional<CapturedEntity> captureEntity(
+            ServerLevel level, EntityAccess access) throws IOException {
+        Objects.requireNonNull(level, "level");
+        if (!(Objects.requireNonNull(access, "access") instanceof Entity entity)
+                || entity instanceof Player || !entity.shouldBeSaved()) {
+            return Optional.empty();
+        }
+        TagValueOutput output = TagValueOutput.createWithContext(
+                ProblemReporter.DISCARDING, level.registryAccess());
+        if (!entity.save(output)) {
+            return Optional.empty();
+        }
+        CompoundTag full = output.buildResult();
+        EntityState state = new EntityState(
+                entity.getUUID(), EntityType.getKey(entity.getType()).toString(),
+                canonicalEntityNbt(full));
+        return Optional.of(new CapturedEntity(
+                state, new DecodedEntity(state.id(), entity.getType(), full)));
     }
 
     static CanonicalNbt canonicalEntityNbt(CompoundTag saved) throws IOException {
@@ -58,5 +68,12 @@ public final class MinecraftEntityChunkCapture {
         payload.remove("id");
         payload.remove("UUID");
         return MinecraftNbtCodec.encode(payload);
+    }
+
+    public record CapturedEntity(EntityState state, DecodedEntity decoded) {
+        public CapturedEntity {
+            Objects.requireNonNull(state, "state");
+            Objects.requireNonNull(decoded, "decoded");
+        }
     }
 }
