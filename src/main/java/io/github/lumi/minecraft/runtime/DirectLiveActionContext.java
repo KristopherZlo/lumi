@@ -18,11 +18,29 @@ public final class DirectLiveActionContext {
         Objects.requireNonNull(player, "player");
         Active active = CURRENT.get();
         if (active == null) {
-            active = new Active(journal, player, journal.begin(player));
+            active = new Active(journal, player, journal.begin(player), true);
             CURRENT.set(active);
-        } else if (active.journal != journal || !active.player.equals(player)) {
+        } else if (active.journal != journal || active.player == null
+                || !active.player.equals(player)) {
             throw new IllegalStateException("Cannot nest different live action roots on one thread");
         }
+        return addScope(active);
+    }
+
+    public static Scope resume(LiveActionJournal journal, UUID action) {
+        Objects.requireNonNull(journal, "journal");
+        Objects.requireNonNull(action, "action");
+        Active active = CURRENT.get();
+        if (active == null) {
+            active = new Active(journal, null, action, false);
+            CURRENT.set(active);
+        } else if (active.journal != journal || !active.action.equals(action)) {
+            throw new IllegalStateException("Cannot nest different causal action roots on one thread");
+        }
+        return addScope(active);
+    }
+
+    private static Scope addScope(Active active) {
         long scopeId = ++active.nextScopeId;
         active.scopes.addLast(scopeId);
         return new Scope(active, scopeId);
@@ -57,7 +75,9 @@ public final class DirectLiveActionContext {
             active.scopes.removeLast();
             if (active.scopes.isEmpty()) {
                 try {
-                    active.journal.close(active.action);
+                    if (active.closeAction) {
+                        active.journal.close(active.action);
+                    }
                 } finally {
                     CURRENT.remove();
                 }
@@ -69,13 +89,16 @@ public final class DirectLiveActionContext {
         private final LiveActionJournal journal;
         private final UUID player;
         private final UUID action;
+        private final boolean closeAction;
         private final Deque<Long> scopes = new ArrayDeque<>();
         private long nextScopeId;
 
-        private Active(LiveActionJournal journal, UUID player, UUID action) {
+        private Active(
+                LiveActionJournal journal, UUID player, UUID action, boolean closeAction) {
             this.journal = journal;
             this.player = player;
             this.action = action;
+            this.closeAction = closeAction;
         }
     }
 }

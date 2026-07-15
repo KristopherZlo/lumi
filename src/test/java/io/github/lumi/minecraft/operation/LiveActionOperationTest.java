@@ -10,6 +10,7 @@ import io.github.lumi.minecraft.world.LiveBlockWorldAccess;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -37,12 +38,15 @@ class LiveActionOperationTest {
     void refusesAtomicallyWhenVisibleStateConflicts() throws IOException {
         LiveActionJournal journal = action(block("stone"), block("gold_block"));
         FakeWorld world = new FakeWorld(block("diamond_block"));
+        var cancelled = new ArrayList<UUID>();
         LiveActionOperation operation = new LiveActionOperation(
-                journal, PLAYER, LiveActionJournal.Direction.UNDO, world, () -> 0L);
+                journal, PLAYER, LiveActionJournal.Direction.UNDO, world,
+                () -> 0L, cancelled::add);
 
         operation.advance(Long.MAX_VALUE);
 
         assertEquals(0, world.writes);
+        assertEquals(1, cancelled.size());
         assertEquals(MutationTerminalState.FAILED, operation.terminalState());
         assertTrue(journal.prepareUndo(PLAYER).isPresent());
     }

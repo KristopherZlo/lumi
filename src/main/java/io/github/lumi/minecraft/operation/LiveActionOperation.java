@@ -13,6 +13,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.LongSupplier;
+import java.util.function.Consumer;
 
 /** Frozen, deadline-bounded and exactly verified live Undo/Redo operation. */
 public final class LiveActionOperation implements DimensionMutation {
@@ -21,6 +22,7 @@ public final class LiveActionOperation implements DimensionMutation {
     private final LiveActionJournal.Direction direction;
     private final LiveBlockWorldAccess world;
     private final LongSupplier nanoTime;
+    private final Consumer<UUID> cancelPending;
     private final List<BlockPosition> mismatches = new ArrayList<>();
     private Phase phase = Phase.SELECTING;
     private LiveActionJournal.Plan plan;
@@ -35,17 +37,37 @@ public final class LiveActionOperation implements DimensionMutation {
         this(journal, player, direction, world, System::nanoTime);
     }
 
+    public LiveActionOperation(
+            LiveActionJournal journal,
+            UUID player,
+            LiveActionJournal.Direction direction,
+            LiveBlockWorldAccess world,
+            Consumer<UUID> cancelPending) {
+        this(journal, player, direction, world, System::nanoTime, cancelPending);
+    }
+
     LiveActionOperation(
             LiveActionJournal journal,
             UUID player,
             LiveActionJournal.Direction direction,
             LiveBlockWorldAccess world,
             LongSupplier nanoTime) {
+        this(journal, player, direction, world, nanoTime, ignored -> { });
+    }
+
+    LiveActionOperation(
+            LiveActionJournal journal,
+            UUID player,
+            LiveActionJournal.Direction direction,
+            LiveBlockWorldAccess world,
+            LongSupplier nanoTime,
+            Consumer<UUID> cancelPending) {
         this.journal = Objects.requireNonNull(journal, "journal");
         this.player = Objects.requireNonNull(player, "player");
         this.direction = Objects.requireNonNull(direction, "direction");
         this.world = Objects.requireNonNull(world, "world");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
+        this.cancelPending = Objects.requireNonNull(cancelPending, "cancelPending");
     }
 
     @Override
@@ -65,6 +87,7 @@ public final class LiveActionOperation implements DimensionMutation {
     private void step() throws IOException {
         switch (phase) {
             case SELECTING -> select();
+            case CANCELLING -> cancelPending();
             case VALIDATING -> validateOne();
             case APPLYING -> applyOne();
             case VERIFYING -> verifyOne(false);
@@ -82,6 +105,13 @@ public final class LiveActionOperation implements DimensionMutation {
             return;
         }
         plan = selected.orElseThrow();
+        phase = Phase.CANCELLING;
+    }
+
+    private void cancelPending() {
+        if (direction == LiveActionJournal.Direction.UNDO) {
+            cancelPending.accept(plan.actionId());
+        }
         cursor = plan.expected().entrySet().iterator();
         phase = Phase.VALIDATING;
     }
@@ -170,6 +200,7 @@ public final class LiveActionOperation implements DimensionMutation {
 
     private enum Phase {
         SELECTING,
+        CANCELLING,
         VALIDATING,
         APPLYING,
         VERIFYING,
