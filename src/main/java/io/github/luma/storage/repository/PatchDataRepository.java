@@ -15,6 +15,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.IntConsumer;
 
 public final class PatchDataRepository {
 
@@ -44,7 +45,20 @@ public final class PatchDataRepository {
             List<StoredBlockChange> changes,
             List<StoredEntityChange> entityChanges
     ) throws IOException {
-        return this.payloadWriter.writePayload(layout, patchId, projectId, versionId, changes, entityChanges);
+        return this.writePayload(layout, patchId, projectId, versionId, changes, entityChanges, ignored -> {
+        });
+    }
+
+    public PatchMetadata writePayload(
+            ProjectLayout layout,
+            String patchId,
+            String projectId,
+            String versionId,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            IntConsumer progress
+    ) throws IOException {
+        return this.payloadWriter.writePayload(layout, patchId, projectId, versionId, changes, entityChanges, progress);
     }
 
     public List<StoredBlockChange> loadChanges(ProjectLayout layout, PatchMetadata metadata) throws IOException {

@@ -20,6 +20,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntConsumer;
 
 /**
  * Writes current chunk-addressable patch payloads and their lightweight metadata.
@@ -38,6 +39,19 @@ final class PatchPayloadWriter {
             String versionId,
             List<StoredBlockChange> changes,
             List<StoredEntityChange> entityChanges
+    ) throws IOException {
+        return this.writePayload(layout, patchId, projectId, versionId, changes, entityChanges, ignored -> {
+        });
+    }
+
+    PatchMetadata writePayload(
+            ProjectLayout layout,
+            String patchId,
+            String projectId,
+            String versionId,
+            List<StoredBlockChange> changes,
+            List<StoredEntityChange> entityChanges,
+            IntConsumer progress
     ) throws IOException {
         changes = changes == null ? List.of() : changes;
         entityChanges = entityChanges == null ? List.of() : entityChanges;
@@ -61,33 +75,11 @@ final class PatchPayloadWriter {
                 sortedChunks.size()
         );
 
-        List<ChunkFrame> frames = new ArrayList<>();
-        for (Map.Entry<String, ChunkPayload> entry : sortedChunks) {
-            String[] split = entry.getKey().split(":", 2);
-            int chunkX = Integer.parseInt(split[0]);
-            int chunkZ = Integer.parseInt(split[1]);
-
-            List<StoredBlockChange> chunkChanges = new ArrayList<>(entry.getValue().blockChanges);
-            chunkChanges.sort(Comparator.comparingInt(change -> packLocalPosition(change.pos())));
-            List<StoredEntityChange> chunkEntityChanges = new ArrayList<>(entry.getValue().entityChanges);
-            chunkEntityChanges.sort(Comparator.comparing(StoredEntityChange::entityId));
-
-            byte[] chunkBytes = this.writeChunk(chunkX, chunkZ, chunkChanges, chunkEntityChanges);
-            frames.add(new ChunkFrame(
-                    chunkX,
-                    chunkZ,
-                    chunkChanges.size(),
-                    chunkBytes.length,
-                    this.frameCompression.compress(chunkBytes),
-                    this.metadataBuilder.sectionFingerprints(chunkX, chunkZ, chunkChanges),
-                    this.metadataBuilder.visibleChangeCount(chunkChanges),
-                    this.metadataBuilder.visibleSectionFingerprints(chunkX, chunkZ, chunkChanges),
-                    chunkEntityChanges.size()
-            ));
-        }
-
         List<PatchChunkSlice> slices = new ArrayList<>();
-        StorageIo.writeAtomically(layout.patchDataFile(patchId), output -> this.writeChunkAddressablePayload(output, frames, slices));
+        StorageIo.writeAtomically(
+                layout.patchDataFile(patchId),
+                output -> this.writeChunkAddressablePayload(output, sortedChunks, slices, progress)
+        );
         List<PatchEntityChunkIndex> entityChunkIndex = this.entityIndexLookup.build(entityChanges);
         return new PatchMetadata(
                 patchId,
@@ -129,15 +121,18 @@ final class PatchPayloadWriter {
 
     private void writeChunkAddressablePayload(
             OutputStream output,
-            List<ChunkFrame> frames,
-            List<PatchChunkSlice> slices
+            List<Map.Entry<String, ChunkPayload>> chunks,
+            List<PatchChunkSlice> slices,
+            IntConsumer progress
     ) throws IOException {
         try (DataOutputStream data = new DataOutputStream(new BufferedOutputStream(output))) {
             data.writeInt(PatchDataRepository.PAYLOAD_MAGIC);
             data.writeInt(PatchDataRepository.CURRENT_PAYLOAD_VERSION);
-            data.writeInt(frames.size());
+            data.writeInt(chunks.size());
             long offset = 12L;
-            for (ChunkFrame frame : frames) {
+            int completedChanges = 0;
+            for (Map.Entry<String, ChunkPayload> entry : chunks) {
+                ChunkFrame frame = this.createFrame(entry);
                 byte[] frameHeader = this.writeFrameHeader(frame);
                 slices.add(new PatchChunkSlice(
                         frame.chunkX(),
@@ -154,8 +149,32 @@ final class PatchPayloadWriter {
                 data.write(frameHeader);
                 data.write(frame.compressedBytes());
                 offset += frameHeader.length + frame.compressedBytes().length;
+                completedChanges += frame.changeCount() + frame.entityCount();
+                progress.accept(completedChanges);
             }
         }
+    }
+
+    private ChunkFrame createFrame(Map.Entry<String, ChunkPayload> entry) throws IOException {
+        String[] split = entry.getKey().split(":", 2);
+        int chunkX = Integer.parseInt(split[0]);
+        int chunkZ = Integer.parseInt(split[1]);
+        List<StoredBlockChange> chunkChanges = new ArrayList<>(entry.getValue().blockChanges);
+        chunkChanges.sort(Comparator.comparingInt(change -> packLocalPosition(change.pos())));
+        List<StoredEntityChange> chunkEntityChanges = new ArrayList<>(entry.getValue().entityChanges);
+        chunkEntityChanges.sort(Comparator.comparing(StoredEntityChange::entityId));
+        byte[] chunkBytes = this.writeChunk(chunkX, chunkZ, chunkChanges, chunkEntityChanges);
+        return new ChunkFrame(
+                chunkX,
+                chunkZ,
+                chunkChanges.size(),
+                chunkBytes.length,
+                this.frameCompression.compress(chunkBytes),
+                this.metadataBuilder.sectionFingerprints(chunkX, chunkZ, chunkChanges),
+                this.metadataBuilder.visibleChangeCount(chunkChanges),
+                this.metadataBuilder.visibleSectionFingerprints(chunkX, chunkZ, chunkChanges),
+                chunkEntityChanges.size()
+        );
     }
 
     private byte[] writeFrameHeader(ChunkFrame frame) throws IOException {

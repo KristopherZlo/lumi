@@ -6,6 +6,7 @@ import io.github.luma.domain.model.StatePayload;
 import io.github.luma.domain.model.StoredBlockChange;
 import io.github.luma.storage.ProjectLayout;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
@@ -29,13 +30,17 @@ class PatchPayloadWriterTest {
                 change(1, 64, "minecraft:stone", "minecraft:gold_block", false),
                 change(17, 80, "minecraft:dirt", "minecraft:diamond_block", true)
         );
+        List<Integer> progress = new ArrayList<>();
 
-        PatchMetadata metadata = this.writer.writePayload(layout, "patch-writer", "project", "version", changes, List.of());
+        PatchMetadata metadata = this.writer.writePayload(
+                layout, "patch-writer", "project", "version", changes, List.of(), progress::add
+        );
 
         assertEquals(2, metadata.stats().changedBlocks());
         assertEquals(2, metadata.chunks().size());
         assertTrue(metadata.chunks().stream().allMatch(slice -> slice.dataOffsetBytes() >= 12L));
         assertEquals(1, metadata.chunks().stream().mapToInt(slice -> slice.visibleChangeCount()).sum());
+        assertEquals(List.of(1, 2), progress);
         assertEquals(changes, this.repository.loadChanges(layout, metadata));
     }
 

@@ -750,7 +750,13 @@ public final class VersionService {
                     project.id().toString(),
                     versionId,
                     draft.changes(),
-                    draft.entityChanges()
+                    draft.entityChanges(),
+                    completed -> progressSink.update(
+                            OperationStage.WRITING,
+                            completed,
+                            draft.totalChangeCount(),
+                            "Writing patch payload"
+                    )
             );
         } finally {
             recordTiming(timing, VersionSaveTiming.PATCH_PAYLOAD_WRITE, sectionStartedAt);
