@@ -28,6 +28,29 @@ repositories {
     }
 }
 
+configurations {
+    axiomDistribution
+}
+
+def axiomRuntimeDirectory = layout.buildDirectory.dir('axiom-runtime')
+def unpackAxiomRuntime = tasks.register('unpackAxiomRuntime', Copy) {
+    from({ zipTree(configurations.axiomDistribution.singleFile) }) {
+        include 'META-INF/jars/*.jar'
+        eachFile { file -> file.path = file.name }
+        includeEmptyDirs = false
+    }
+    into axiomRuntimeDirectory
+}
+
+def axiomRuntimeJars = files(
+        axiomRuntimeDirectory.map { directory -> [
+                directory.file('axiomclientapi.jar').asFile,
+                directory.file('lattice-1.3.0.jar').asFile,
+                directory.file('mixinconstraints-1.0.9.jar').asFile,
+                directory.file('mixinextras-fabric-0.3.5.jar').asFile
+        ] }
+).builtBy(unpackAxiomRuntime)
+
 fabricApi {
     configureTests {
         createSourceSet = true
@@ -39,13 +62,17 @@ fabricApi {
 }
 
 dependencies {
+    axiomDistribution "maven.modrinth:N6n5dqoA:${project.axiom_version_id}"
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
     modCompileOnly "maven.modrinth:1u6JkXh5:${project.worldedit_version_id}"
     modCompileOnly "maven.modrinth:N6n5dqoA:${project.axiom_version_id}"
+    modCompileOnly axiomRuntimeJars
     modRuntimeOnly "maven.modrinth:1u6JkXh5:${project.worldedit_version_id}"
+    modRuntimeOnly "maven.modrinth:N6n5dqoA:${project.axiom_version_id}"
+    modRuntimeOnly axiomRuntimeJars
     modRuntimeOnly "org.enginehub.worldeditcui-protocol:" +
             "worldeditcui-protocol-fabric-mc1.21.11:4.0.2"
 
