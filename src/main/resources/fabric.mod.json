@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "lumi",
+  "version": "${version}",
+  "name": "Lumi",
+  "description": "Fast, durable world history for Minecraft builders.",
+  "authors": ["Zlo"],
+  "license": "GPL-3.0-only",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["io.github.lumi.LumiMod"]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "${minecraft_version}",
+    "java": ">=21",
+    "fabric-api": ">=${fabric_api_version}"
+  }
+}
