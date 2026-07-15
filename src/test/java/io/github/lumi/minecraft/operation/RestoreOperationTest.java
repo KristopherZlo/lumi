@@ -15,12 +15,38 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class RestoreOperationTest {
     @TempDir
     Path repositoryRoot;
+
+    @Test
+    void delegatesPublicationAfterExactVerification() throws IOException {
+        CommitId current = id('b');
+        CommitId target = id('c');
+        var expectedRef = new io.github.lumi.domain.model.BranchRef(
+                new BranchName("main"), current, 3);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        AtomicInteger publications = new AtomicInteger();
+        RestorePublication publication = restore -> {
+            assertEquals(target, restore.targetCommit());
+            publications.incrementAndGet();
+        };
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expectedRef, target, Map.of(), Map.of(), Map.of(), Map.of()),
+                new RepairThenVerify(), publication, journals, UUID.randomUUID());
+
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+
+        assertEquals(RestoreStatus.COMPLETE, operation.status());
+        assertEquals(1, publications.get());
+    }
 
     @Test
     void publishesRefOnlyAfterIncrementalApplyAndVerification() throws IOException {

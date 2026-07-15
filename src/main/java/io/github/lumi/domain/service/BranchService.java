@@ -59,17 +59,26 @@ public final class BranchService {
         ensureClean();
         var expectedActive = active.read().orElseThrow(
                 () -> new IOException("Active Lumi branch is missing"));
+        BranchRef sourceRef = refs.read(expectedActive.name()).orElseThrow(
+                () -> new IOException("Active Lumi branch ref is missing: "
+                        + expectedActive.name()));
         BranchRef targetRef = refs.read(target).orElseThrow(
                 () -> new IOException("Target Lumi branch is missing: " + target));
+        commits.read(sourceRef.commit());
         commits.read(targetRef.commit());
-        return new BranchSwitchPlan(expectedActive, targetRef);
+        return new BranchSwitchPlan(expectedActive, sourceRef, targetRef);
     }
 
     public void completeSwitch(BranchSwitchPlan plan) throws IOException {
         Objects.requireNonNull(plan, "plan");
         ensureClean();
+        BranchRef source = refs.read(plan.source().name()).orElseThrow(
+                () -> new RefConflictException("Source branch no longer exists"));
         BranchRef target = refs.read(plan.target().name()).orElseThrow(
                 () -> new RefConflictException("Target branch no longer exists"));
+        if (!source.equals(plan.source())) {
+            throw new RefConflictException("Source branch changed during switch");
+        }
         if (!target.equals(plan.target())) {
             throw new RefConflictException("Target branch changed during switch");
         }
