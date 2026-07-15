@@ -1,0 +1,111 @@
+package io.github.lumi.minecraft.operation;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.CommitAuthor;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.CommitStatistics;
+import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.WorkingIndex;
+import io.github.lumi.domain.service.CapturedWorldState;
+import io.github.lumi.domain.service.SaveRequest;
+import io.github.lumi.domain.service.SaveResult;
+import io.github.lumi.minecraft.world.WorldStateCapture;
+import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Queue;
+import java.util.UUID;
+import java.util.concurrent.Executor;
+import org.junit.jupiter.api.Test;
+
+class SaveCaptureOperationTest {
+    @Test
+    void releasesAfterCaptureAndClearsOnlySavedGenerationInBackground() throws Exception {
+        SectionKey key = new SectionKey(0, 0, 0);
+        WorkingIndex working = new WorkingIndex();
+        working.markDirty(key);
+        var dirty = working.snapshot();
+        CapturedWorldState captured = new CapturedWorldState(
+                Map.of(key, airSection()), Map.of(), dirty,
+                new CommitStatistics(1, 0, 1, 0));
+        TwoStepCapture world = new TwoStepCapture(captured);
+        ManualExecutor background = new ManualExecutor();
+        CommitId savedId = id('2');
+        BranchRef published = new BranchRef(new BranchName("main"), savedId, 1);
+        SaveCaptureOperation operation = new SaveCaptureOperation(
+                request(), dirty, world,
+                (request, state) -> new SaveResult(savedId, published, state.generations()),
+                generations -> working.clearCaptured(generations), background);
+
+        operation.advance(50L);
+        assertEquals(SaveOperationStatus.CAPTURING, operation.status());
+        assertTrue(!operation.isSafeToRelease());
+
+        operation.advance(100L);
+        assertEquals(SaveOperationStatus.WRITING, operation.status());
+        assertTrue(operation.isSafeToRelease());
+        assertTrue(!operation.isTerminal());
+
+        working.markDirty(key);
+        background.runNext();
+        operation.advance(150L);
+
+        assertEquals(SaveOperationStatus.COMPLETE, operation.status());
+        assertEquals(2L, working.snapshot().generations().get(key));
+        assertEquals(savedId, operation.result().orElseThrow().commitId());
+        assertEquals(2, world.session.captureCalls);
+    }
+
+    private static SaveRequest request() {
+        return new SaveRequest(
+                new BranchRef(new BranchName("main"), id('1'), 0),
+                new CommitAuthor(UUID.randomUUID(), "Builder"), "Save", Instant.EPOCH,
+                UUID.randomUUID(), Optional.empty(), CommitKind.MANUAL);
+    }
+
+    private static CommitId id(char digit) {
+        return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
+    }
+
+    private static SectionBlob airSection() {
+        return new SectionBlob(
+                new ArrayList<>(Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:air")), Map.of());
+    }
+
+    private static final class TwoStepCapture implements WorldStateCapture {
+        private final Session session;
+
+        private TwoStepCapture(CapturedWorldState captured) {
+            session = new Session(captured);
+        }
+
+        @Override public CaptureSession begin(io.github.lumi.domain.model.WorkingIndexSnapshot dirty) {
+            return session;
+        }
+
+        private static final class Session implements CaptureSession {
+            private final CapturedWorldState captured;
+            private int captureCalls;
+
+            private Session(CapturedWorldState captured) { this.captured = captured; }
+            @Override public boolean captureUntil(long deadlineNanos) { return ++captureCalls == 2; }
+            @Override public CapturedWorldState finish() { return captured; }
+        }
+    }
+
+    private static final class ManualExecutor implements Executor {
+        private final Queue<Runnable> tasks = new ArrayDeque<>();
+        @Override public void execute(Runnable command) { tasks.add(command); }
+        private void runNext() { tasks.remove().run(); }
+    }
+}

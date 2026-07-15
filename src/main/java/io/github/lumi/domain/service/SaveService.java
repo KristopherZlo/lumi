@@ -20,7 +20,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-public final class SaveService {
+public final class SaveService implements SavePublisher {
     private final WorldObjectRepository objects;
     private final MerkleTreeEditor trees;
     private final CommitRepository commits;
@@ -40,6 +40,7 @@ public final class SaveService {
         this.journals = Objects.requireNonNull(journals, "journals");
     }
 
+    @Override
     public SaveResult save(SaveRequest request, CapturedWorldState captured) throws IOException {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(captured, "captured");
