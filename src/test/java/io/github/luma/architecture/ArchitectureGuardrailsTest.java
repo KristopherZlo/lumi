@@ -347,6 +347,10 @@ class ArchitectureGuardrailsTest {
                 buildScript.contains("jvmArgs('-Dlumi.testing.enabled=true')"),
                 "Client GameTest run must enable runtime testing explicitly"
         );
+        assertTrue(
+                buildScript.contains("jvmArgs('-Dfabric.client.gametest.disableNetworkSynchronizer=true')"),
+                "Client GameTest must disable synchronization before exercising low-level packet integrations"
+        );
     }
 
     @Test

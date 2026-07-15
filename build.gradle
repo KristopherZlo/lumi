@@ -363,6 +363,7 @@ def writeQuietClientRuntimeOptions = { String runDirPath ->
 tasks.named('runClientGameTest').configure {
     jvmArgs('-Dlumi.testing.enabled=true')
     jvmArgs('-Dlumi.clientLoadLog=true')
+    jvmArgs('-Dfabric.client.gametest.disableNetworkSynchronizer=true')
     def selectedSuite = providers.gradleProperty('lumiClientGameTestSuite').orElse('all').get()
     dependsOn(selectedSuite == 'tools'
             ? installBuilderToolsClientGameTestMods
