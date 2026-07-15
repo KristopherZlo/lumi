@@ -5,6 +5,7 @@
   "mixins": [
     "BlockEntityMixin",
     "ChunkMapMixin",
+    "CommandsMixin",
     "EntityMixin",
     "EntityStorageMixin",
     "LevelChunkMixin",

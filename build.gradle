@@ -12,6 +12,20 @@ base {
 
 repositories {
     mavenCentral()
+    maven {
+        name = 'EngineHub'
+        url = 'https://maven.enginehub.org/repo/'
+        content { includeGroup 'org.enginehub.worldeditcui-protocol' }
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Modrinth'
+                url = 'https://api.modrinth.com/maven'
+            }
+        }
+        filter { includeGroup 'maven.modrinth' }
+    }
 }
 
 fabricApi {
@@ -29,6 +43,11 @@ dependencies {
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    modCompileOnly "maven.modrinth:1u6JkXh5:${project.worldedit_version_id}"
+    modCompileOnly "maven.modrinth:N6n5dqoA:${project.axiom_version_id}"
+    modRuntimeOnly "maven.modrinth:1u6JkXh5:${project.worldedit_version_id}"
+    modRuntimeOnly "org.enginehub.worldeditcui-protocol:" +
+            "worldeditcui-protocol-fabric-mc1.21.11:4.0.2"
 
     implementation "org.lz4:lz4-java:${project.lz4_version}"
     include "org.lz4:lz4-java:${project.lz4_version}"
