@@ -2,6 +2,7 @@ package io.github.lumi.domain.service;
 
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
+import io.github.lumi.domain.model.EntityState;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -18,6 +19,7 @@ public final class LiveActionJournal {
     private final Map<UUID, UUID> openActions = new HashMap<>();
     private final Map<UUID, PlayerStacks> playerStacks = new HashMap<>();
     private final Map<BlockPosition, Ownership> latestOwners = new HashMap<>();
+    private final Map<UUID, Ownership> latestEntityOwners = new HashMap<>();
     private final Map<UUID, Long> playerBytes = new HashMap<>();
     private final Map<UUID, String> unavailableReasons = new HashMap<>();
     private final Limits limits;
@@ -55,10 +57,7 @@ public final class LiveActionJournal {
         if (!action.available) {
             return;
         }
-        if (!action.started) {
-            action.started = true;
-            clearRedo(action.player);
-        }
+        startRecording(action);
         Objects.requireNonNull(position, "position");
         Objects.requireNonNull(before, "before");
         Objects.requireNonNull(after, "after");
@@ -67,13 +66,9 @@ public final class LiveActionJournal {
         long previousBytes = previous == null ? 0 : estimatedBytes(previous);
         long updatedBytes = updated.before.equals(updated.after) ? 0 : estimatedBytes(updated);
         long delta = updatedBytes - previousBytes;
-        if (action.bytes + delta > limits.maxActionBytes
-                || (delta > 0 && !makeRoom(action, delta))) {
-            makeUnavailable(action, "Live action exceeded its memory limit");
+        if (!resize(action, delta)) {
             return;
         }
-        action.bytes += delta;
-        adjustBytes(action.player, delta);
         if (updatedBytes == 0) {
             action.changes.remove(position);
         } else {
@@ -85,14 +80,45 @@ public final class LiveActionJournal {
                         : current);
     }
 
+    public synchronized void recordEntity(
+            UUID actionId,
+            UUID entityId,
+            Optional<EntityState> before,
+            Optional<EntityState> after) {
+        MutableAction action = requireAction(actionId);
+        if (!action.available) {
+            return;
+        }
+        startRecording(action);
+        Objects.requireNonNull(entityId, "entityId");
+        validateEntityId(entityId, before);
+        validateEntityId(entityId, after);
+        EntityChange previous = action.entities.get(entityId);
+        EntityChange updated = new EntityChange(
+                previous == null ? before : previous.before, after);
+        long previousBytes = previous == null ? 0 : estimatedBytes(previous);
+        long updatedBytes = updated.before.equals(updated.after) ? 0 : estimatedBytes(updated);
+        if (!resize(action, updatedBytes - previousBytes)) {
+            return;
+        }
+        if (updatedBytes == 0) {
+            action.entities.remove(entityId);
+        } else {
+            action.entities.put(entityId, updated);
+        }
+        latestEntityOwners.compute(entityId, (ignored, current) ->
+                current == null || current.sequence <= action.sequence
+                        ? new Ownership(action.id, action.sequence) : current);
+    }
+
     public synchronized boolean close(UUID actionId) {
         MutableAction action = requireAction(actionId);
         if (action.closed) {
-            return action.available && (!action.changes.isEmpty() || action.causalReferences > 0);
+            return action.available && (!isEmpty(action) || action.causalReferences > 0);
         }
         action.closed = true;
         openActions.remove(action.player, action.id);
-        if (!action.available || (action.changes.isEmpty() && action.causalReferences == 0)) {
+        if (!action.available || (isEmpty(action) && action.causalReferences == 0)) {
             evict(action);
             return false;
         }
@@ -116,7 +142,7 @@ public final class LiveActionJournal {
             throw new IllegalStateException("Live action has no causal reference to release");
         }
         action.causalReferences--;
-        if (action.closed && action.causalReferences == 0 && action.changes.isEmpty()) {
+        if (action.closed && action.causalReferences == 0 && isEmpty(action)) {
             evict(action, false);
         }
     }
@@ -146,6 +172,7 @@ public final class LiveActionJournal {
         openActions.clear();
         playerStacks.clear();
         latestOwners.clear();
+        latestEntityOwners.clear();
         playerBytes.clear();
         unavailableReasons.clear();
         retainedBytes = 0;
@@ -172,13 +199,27 @@ public final class LiveActionJournal {
                 throw new IllegalStateException("A newer action overlaps the selected live action");
             }
         }
+        for (UUID entity : action.entities.keySet()) {
+            Ownership owner = latestEntityOwners.get(entity);
+            if (owner == null || !owner.actionId.equals(actionId)) {
+                throw new IllegalStateException("A newer action overlaps the selected live action");
+            }
+        }
         Map<BlockPosition, BlockSnapshot> expected = new LinkedHashMap<>();
         Map<BlockPosition, BlockSnapshot> replacement = new LinkedHashMap<>();
+        Map<UUID, Optional<EntityState>> expectedEntities = new LinkedHashMap<>();
+        Map<UUID, Optional<EntityState>> replacementEntities = new LinkedHashMap<>();
         action.changes.forEach((position, change) -> {
             expected.put(position, direction == Direction.UNDO ? change.after : change.before);
             replacement.put(position, direction == Direction.UNDO ? change.before : change.after);
         });
-        return Optional.of(new Plan(player, actionId, direction, expected, replacement));
+        action.entities.forEach((id, change) -> {
+            expectedEntities.put(id, direction == Direction.UNDO ? change.after : change.before);
+            replacementEntities.put(id, direction == Direction.UNDO ? change.before : change.after);
+        });
+        return Optional.of(new Plan(
+                player, actionId, direction, expected, replacement,
+                expectedEntities, replacementEntities));
     }
 
     private MutableAction requireAction(UUID id) {
@@ -187,6 +228,36 @@ public final class LiveActionJournal {
             throw new IllegalArgumentException("Unknown live action: " + id);
         }
         return action;
+    }
+
+    private void startRecording(MutableAction action) {
+        if (!action.started) {
+            action.started = true;
+            clearRedo(action.player);
+        }
+    }
+
+    private boolean resize(MutableAction action, long delta) {
+        if (action.bytes + delta > limits.maxActionBytes
+                || (delta > 0 && !makeRoom(action, delta))) {
+            makeUnavailable(action, "Live action exceeded its memory limit");
+            return false;
+        }
+        action.bytes += delta;
+        adjustBytes(action.player, delta);
+        return true;
+    }
+
+    private static void validateEntityId(UUID id, Optional<EntityState> snapshot) {
+        Objects.requireNonNull(snapshot, "entity snapshot").ifPresent(state -> {
+            if (!state.id().equals(id)) {
+                throw new IllegalArgumentException("Entity snapshot UUID does not match its key");
+            }
+        });
+    }
+
+    private static boolean isEmpty(MutableAction action) {
+        return action.changes.isEmpty() && action.entities.isEmpty();
     }
 
     private PlayerStacks stacks(UUID player) {
@@ -262,6 +333,7 @@ public final class LiveActionJournal {
         adjustBytes(action.player, -action.bytes);
         action.bytes = 0;
         action.changes.clear();
+        action.entities.clear();
         PlayerStacks stacks = stacks(action.player);
         stacks.undo.remove(action.id);
         stacks.redo.remove(action.id);
@@ -269,6 +341,7 @@ public final class LiveActionJournal {
             unsafeBeforeSequence = Math.max(unsafeBeforeSequence, action.sequence);
         }
         latestOwners.entrySet().removeIf(entry -> entry.getValue().actionId.equals(action.id));
+        latestEntityOwners.entrySet().removeIf(entry -> entry.getValue().actionId.equals(action.id));
     }
 
     private void adjustBytes(UUID player, long delta) {
@@ -288,6 +361,15 @@ public final class LiveActionJournal {
     private static long estimatedBytes(BlockSnapshot snapshot) {
         return snapshot.blockState().getBytes(StandardCharsets.UTF_8).length
                 + snapshot.blockEntity().map(nbt -> nbt.bytes().length).orElse(0);
+    }
+
+    private static long estimatedBytes(EntityChange change) {
+        return 24L + change.before.map(LiveActionJournal::estimatedBytes).orElse(0L)
+                + change.after.map(LiveActionJournal::estimatedBytes).orElse(0L);
+    }
+
+    private static long estimatedBytes(EntityState state) {
+        return 24L + state.type().getBytes(StandardCharsets.UTF_8).length + state.nbt().bytes().length;
     }
 
     public enum Direction {
@@ -316,13 +398,17 @@ public final class LiveActionJournal {
             UUID actionId,
             Direction direction,
             Map<BlockPosition, BlockSnapshot> expected,
-            Map<BlockPosition, BlockSnapshot> replacement) {
+            Map<BlockPosition, BlockSnapshot> replacement,
+            Map<UUID, Optional<EntityState>> expectedEntities,
+            Map<UUID, Optional<EntityState>> replacementEntities) {
         public Plan {
             Objects.requireNonNull(player, "player");
             Objects.requireNonNull(actionId, "actionId");
             Objects.requireNonNull(direction, "direction");
             expected = Map.copyOf(expected);
             replacement = Map.copyOf(replacement);
+            expectedEntities = Map.copyOf(expectedEntities);
+            replacementEntities = Map.copyOf(replacementEntities);
         }
     }
 
@@ -331,6 +417,7 @@ public final class LiveActionJournal {
         private final UUID player;
         private final long sequence;
         private final Map<BlockPosition, Change> changes = new LinkedHashMap<>();
+        private final Map<UUID, EntityChange> entities = new LinkedHashMap<>();
         private boolean closed;
         private boolean started;
         private boolean available = true;
@@ -345,6 +432,8 @@ public final class LiveActionJournal {
     }
 
     private record Change(BlockSnapshot before, BlockSnapshot after) {}
+
+    private record EntityChange(Optional<EntityState> before, Optional<EntityState> after) {}
 
     private record Ownership(UUID actionId, long sequence) {}
 

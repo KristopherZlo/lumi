@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
+import io.github.lumi.domain.model.CanonicalNbt;
+import io.github.lumi.domain.model.EntityState;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,7 @@ import org.junit.jupiter.api.Test;
 class LiveActionJournalTest {
     private static final UUID PLAYER_A = new UUID(0, 1);
     private static final UUID PLAYER_B = new UUID(0, 2);
+    private static final UUID ENTITY = new UUID(0, 3);
     private static final BlockPosition POSITION = new BlockPosition(3, 4, 5);
 
     @Test
@@ -141,6 +144,39 @@ class LiveActionJournalTest {
                 journal.prepareUndo(PLAYER_A).orElseThrow().expected().get(POSITION));
     }
 
+    @Test
+    void keepsFirstOldAndLatestFinalEntityForExactUndoRedo() {
+        LiveActionJournal journal = new LiveActionJournal();
+        EntityState first = entity(1);
+        EntityState latest = entity(2);
+        UUID action = journal.begin(PLAYER_A);
+        journal.recordEntity(action, ENTITY, Optional.empty(), Optional.of(first));
+        journal.recordEntity(action, ENTITY, Optional.of(first), Optional.of(latest));
+        assertTrue(journal.close(action));
+
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(Optional.of(latest), undo.expectedEntities().get(ENTITY));
+        assertEquals(Optional.empty(), undo.replacementEntities().get(ENTITY));
+        journal.complete(undo);
+
+        var redo = journal.prepareRedo(PLAYER_A).orElseThrow();
+        assertEquals(Optional.empty(), redo.expectedEntities().get(ENTITY));
+        assertEquals(Optional.of(latest), redo.replacementEntities().get(ENTITY));
+    }
+
+    @Test
+    void refusesWholeUndoAfterNewerPlayerOverlapsEntity() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID first = journal.begin(PLAYER_A);
+        journal.recordEntity(first, ENTITY, Optional.empty(), Optional.of(entity(1)));
+        journal.close(first);
+        UUID newer = journal.begin(PLAYER_B);
+        journal.recordEntity(newer, ENTITY, Optional.of(entity(1)), Optional.of(entity(2)));
+        journal.close(newer);
+
+        assertThrows(IllegalStateException.class, () -> journal.prepareUndo(PLAYER_A));
+    }
+
     private static UUID add(LiveActionJournal journal, int x) {
         UUID action = journal.begin(PLAYER_A);
         journal.record(action, new BlockPosition(x, 0, 0), block("air"), block("stone"));
@@ -150,5 +186,11 @@ class LiveActionJournalTest {
 
     private static BlockSnapshot block(String id) {
         return new BlockSnapshot("minecraft:" + id, Optional.empty());
+    }
+
+    private static EntityState entity(int state) {
+        return new EntityState(
+                ENTITY, "minecraft:armor_stand",
+                new CanonicalNbt(new byte[] {(byte) state}));
     }
 }
