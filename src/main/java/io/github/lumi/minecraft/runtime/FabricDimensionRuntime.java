@@ -272,7 +272,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             Consumer<DimensionMutation> terminalObserver) {
         var operation = new LiveActionOperation(
                 liveActions, player, direction, liveWorld,
-                liveEntityWorld, causalTicks::cancel);
+                liveEntityWorld, this::cancelLiveAction);
         operations.start(operation, terminalObserver);
         return operation;
     }
@@ -286,6 +286,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             Consumer<DimensionMutation> observer) {
         return operation -> {
             if (operation.terminalState() == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
+                liveEntities.clear();
                 liveActions.clear();
                 liveWorld.clear();
                 liveEntityWorld.clear();
@@ -293,6 +294,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             }
             observer.accept(operation);
         };
+    }
+
+    private void cancelLiveAction(UUID action) {
+        causalTicks.cancel(action);
+        try {
+            liveEntities.finalizeOwned(action);
+        } catch (IOException failed) {
+            throw new java.io.UncheckedIOException(
+                    "Cannot finalize owned live entities", failed);
+        }
     }
 
     public synchronized BackgroundPreparedMutation<RestoreOperation> startBranchSwitch(

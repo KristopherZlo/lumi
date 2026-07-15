@@ -273,7 +273,6 @@ public final class LumiCommands {
             source.sendFailure(Component.literal("Lumi debug entity could not be created"));
             return 0;
         }
-        entity.setNoGravity(true);
         entity.setPos(position.getX() + 0.5, position.getY(), position.getZ() + 0.5);
         boolean added;
         try (var ignored = DirectLiveActionContext.open(

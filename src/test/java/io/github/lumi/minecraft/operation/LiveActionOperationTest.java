@@ -131,6 +131,27 @@ class LiveActionOperationTest {
         assertEquals(MutationTerminalState.FAILED, operation.terminalState());
     }
 
+    @Test
+    void reselectsSettledEntityBeforeConflictValidation() throws IOException {
+        EntityState initial = entity(1);
+        EntityState settled = entity(2);
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER);
+        journal.recordEntity(action, ENTITY, Optional.empty(), Optional.of(initial));
+        journal.close(action);
+        FakeEntityWorld entities = new FakeEntityWorld(Optional.of(settled));
+        LiveActionOperation operation = new LiveActionOperation(
+                journal, PLAYER, LiveActionJournal.Direction.UNDO,
+                new FakeWorld(block("air")), entities,
+                ignored -> journal.recordEntity(
+                        action, ENTITY, Optional.empty(), Optional.of(settled)));
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(Optional.empty(), entities.state);
+        assertEquals(MutationTerminalState.SUCCEEDED, operation.terminalState());
+    }
+
     private static LiveActionJournal action(BlockSnapshot before, BlockSnapshot after) {
         LiveActionJournal journal = new LiveActionJournal();
         UUID action = journal.begin(PLAYER);
