@@ -1,4 +1,4 @@
-package io.github.lumi.mixin;
+package io.github.lumi.minecraft.runtime;
 
 import net.minecraft.server.level.ServerLevel;
 

@@ -1,6 +1,7 @@
 package io.github.lumi.mixin;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.minecraft.runtime.EntityStorageLevelAccess;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.function.Consumer;
