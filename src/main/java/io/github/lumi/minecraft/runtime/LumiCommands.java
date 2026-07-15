@@ -19,6 +19,7 @@ import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.service.SaveRequest;
+import io.github.lumi.domain.service.LiveActionJournal;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
@@ -45,6 +46,10 @@ public final class LumiCommands {
             var rollback = literal("rollback")
                     .requires(LumiCommands::mayUse)
                     .executes(command -> quickRollback(command.getSource()));
+            var undo = literal("undo").requires(LumiCommands::mayUse)
+                    .executes(command -> liveAction(command.getSource(), LiveActionJournal.Direction.UNDO));
+            var redo = literal("redo").requires(LumiCommands::mayUse)
+                    .executes(command -> liveAction(command.getSource(), LiveActionJournal.Direction.REDO));
             var branch = literal("branch")
                     .requires(LumiCommands::mayUse)
                     .then(literal("create")
@@ -70,7 +75,7 @@ public final class LumiCommands {
                     .requires(LumiCommands::mayUse)
                     .then(argument("commit", word()).then(x1Arg));
             dispatcher.register(literal("lumi").then(save).then(restore)
-                    .then(restoreArea).then(rollback).then(branch));
+                    .then(restoreArea).then(rollback).then(undo).then(redo).then(branch));
         });
     }
 
@@ -180,6 +185,25 @@ public final class LumiCommands {
             return 1;
         } catch (IOException | IllegalStateException failed) {
             source.sendFailure(Component.literal("Lumi Quick Rollback could not start: "
+                    + failed.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int liveAction(
+            CommandSourceStack source, LiveActionJournal.Direction direction) {
+        var player = source.getPlayer();
+        var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
+        if (player == null || runtime == null) {
+            source.sendFailure(Component.literal("Lumi live action requires a ready player dimension"));
+            return 0;
+        }
+        try {
+            runtime.startLiveAction(player.getUUID(), direction, ignored -> { });
+            source.sendSuccess(() -> Component.literal("Lumi " + direction + " started"), false);
+            return 1;
+        } catch (IllegalStateException failed) {
+            source.sendFailure(Component.literal("Lumi " + direction + " could not start: "
                     + failed.getMessage()));
             return 0;
         }

@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.runtime;
 import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
 import io.github.lumi.minecraft.operation.DimensionMutation;
+import io.github.lumi.minecraft.operation.LiveActionOperation;
 import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
 import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
 import io.github.lumi.minecraft.operation.PendingRestorePublication;
@@ -18,6 +19,7 @@ import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
+import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.BranchService;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveService;
@@ -29,6 +31,7 @@ import io.github.lumi.minecraft.world.DurableSavePreparation;
 import io.github.lumi.minecraft.world.EntityChunkDurabilityGate;
 import io.github.lumi.minecraft.world.MinecraftBlockEntityBaselineCapture;
 import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
+import io.github.lumi.minecraft.world.MinecraftLiveBlockWorldAccess;
 import io.github.lumi.minecraft.world.MinecraftWorldStateReader;
 import io.github.lumi.minecraft.world.MinecraftWorldStateApply;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
@@ -81,6 +84,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final BranchRefRepository refs;
     private final ActiveBranchRepository active;
     private final UUID defaultWorkspaceId;
+    private final LiveActionJournal liveActions = new LiveActionJournal();
+    private final MinecraftLiveBlockWorldAccess liveWorld;
     private final io.github.lumi.minecraft.operation.RestoreStateListener restoreStateListener;
     private final BlockEntityBaselineStore blockEntityBaselines = new BlockEntityBaselineStore();
     private final MinecraftBlockEntityBaselineCapture baselineCapture =
@@ -116,6 +121,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.refs = refs;
         this.active = active;
         this.defaultWorkspaceId = defaultWorkspaceId;
+        liveWorld = new MinecraftLiveBlockWorldAccess(level, freeze);
         entityDurability = new EntityChunkDurabilityGate(mutations);
         restoreStateListener = new RestoreBaselineReconciler(
                 entityDurability, blockEntityBaselines);
@@ -243,8 +249,31 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var operation = new ReturnPointRestoreOperation(
                 createSave(returnPoint), saved -> returnPointRestores.prepare(
                         saved, target, hiddenRef, operationId));
+        operations.start(operation, clearingLiveHistory(terminalObserver));
+        return operation;
+    }
+
+    public synchronized LiveActionOperation startLiveAction(
+            UUID player,
+            LiveActionJournal.Direction direction,
+            Consumer<DimensionMutation> terminalObserver) {
+        var operation = new LiveActionOperation(liveActions, player, direction, liveWorld);
         operations.start(operation, terminalObserver);
         return operation;
+    }
+
+    public LiveActionJournal liveActions() { return liveActions; }
+    public MinecraftLiveBlockWorldAccess liveWorld() { return liveWorld; }
+
+    private Consumer<DimensionMutation> clearingLiveHistory(
+            Consumer<DimensionMutation> observer) {
+        return operation -> {
+            if (operation.terminalState() == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
+                liveActions.clear();
+                liveWorld.clear();
+            }
+            observer.accept(operation);
+        };
     }
 
     public synchronized BackgroundPreparedMutation<RestoreOperation> startBranchSwitch(
@@ -274,7 +303,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var operation = new BackgroundPreparedMutation<>(
                 preparation, () -> branches.validateSwitch(plan),
                 RestoreOperation::cancelBeforeApply, true);
-        operations.start(operation, terminalObserver);
+        operations.start(operation, clearingLiveHistory(terminalObserver));
         return operation;
     }
 
