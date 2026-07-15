@@ -62,6 +62,29 @@ class ReturnPointRestoreOperationTest {
         assertTrue(!coordinator.hasActiveOperation());
     }
 
+    @Test
+    void reportsFailedRestorePreparation() throws Exception {
+        WorkingIndexSnapshot clean = new WorkingIndexSnapshot(Map.of());
+        SaveResult returnPoint = new SaveResult(
+                id('2'), new BranchRef(new BranchName("main"), id('2'), 1), clean);
+        SaveCaptureOperation save = new SaveCaptureOperation(
+                request(), clean,
+                dirty -> immediateCapture(new CapturedWorldState(
+                        Map.of(), Map.of(), clean,
+                        new io.github.lumi.domain.model.CommitStatistics(0, 0, 0, 0))),
+                (request, captured) -> returnPoint, ignored -> { }, Runnable::run);
+        ReturnPointRestoreOperation operation = new ReturnPointRestoreOperation(
+                save, ignored -> CompletableFuture.failedFuture(
+                        new java.io.IOException("broken target")));
+
+        operation.advance(Long.MAX_VALUE);
+        operation.advance(Long.MAX_VALUE);
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(MutationTerminalState.FAILED, operation.terminalState());
+        assertEquals("broken target", operation.failure().orElseThrow().getMessage());
+    }
+
     private static io.github.lumi.minecraft.world.WorldStateCapture.CaptureSession immediateCapture(
             CapturedWorldState captured) {
         return new io.github.lumi.minecraft.world.WorldStateCapture.CaptureSession() {

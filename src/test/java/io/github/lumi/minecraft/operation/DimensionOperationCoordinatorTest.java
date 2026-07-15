@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.minecraft.world.DimensionFreeze;
 import java.io.IOException;
+import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 
 class DimensionOperationCoordinatorTest {
@@ -85,6 +86,24 @@ class DimensionOperationCoordinatorTest {
                 () -> new DimensionOperationCoordinator(new RecordingFreeze(), () -> 0L, 50_000_001L));
     }
 
+    @Test
+    void reportsRetainedDegradedOutcomeExactlyOnce() throws IOException {
+        RecordingFreeze freeze = new RecordingFreeze();
+        var outcomes = new ArrayList<MutationTerminalState>();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L,
+                mutation -> outcomes.add(mutation.terminalState()));
+        coordinator.start(new TwoTickMutation(true));
+
+        coordinator.tick();
+        coordinator.tick();
+        coordinator.tick();
+
+        assertEquals(java.util.List.of(MutationTerminalState.DEGRADED), outcomes);
+        assertTrue(coordinator.hasActiveOperation());
+        assertEquals(0, freeze.releaseCalls);
+    }
+
     private static final class TwoTickMutation implements DimensionMutation {
         private final boolean degraded;
         private int ticks;
@@ -100,7 +119,7 @@ class DimensionOperationCoordinatorTest {
             lastDeadline = deadlineNanos;
         }
 
-        @Override public boolean isTerminal() { return ticks == 2; }
+        @Override public boolean isTerminal() { return ticks >= 2; }
         @Override public boolean isSafeToRelease() { return !degraded; }
     }
 

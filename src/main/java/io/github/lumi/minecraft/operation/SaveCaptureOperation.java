@@ -125,8 +125,18 @@ public final class SaveCaptureOperation implements DimensionMutation {
         return Optional.ofNullable(result);
     }
 
+    @Override
     public Optional<Throwable> failure() {
         return Optional.ofNullable(failure);
+    }
+
+    @Override
+    public MutationTerminalState terminalState() {
+        if (!isTerminal()) {
+            throw new IllegalStateException("Save is not terminal");
+        }
+        return status == SaveOperationStatus.COMPLETE
+                ? MutationTerminalState.SUCCEEDED : MutationTerminalState.FAILED;
     }
 
     @Override public boolean isTerminal() {

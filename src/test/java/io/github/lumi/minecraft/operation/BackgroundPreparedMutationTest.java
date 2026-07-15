@@ -54,6 +54,7 @@ class BackgroundPreparedMutationTest {
 
         assertEquals(1, discards.get());
         assertTrue(prepared.failure().isPresent());
+        assertEquals(MutationTerminalState.FAILED, prepared.terminalState());
         assertEquals(0, delegate.advances);
         assertEquals(1, freeze.releaseCalls);
         assertTrue(!coordinator.hasActiveOperation());

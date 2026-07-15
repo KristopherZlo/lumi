@@ -73,8 +73,20 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
         return Optional.ofNullable(returnPoint);
     }
 
+    @Override
     public Optional<Throwable> failure() {
         return Optional.ofNullable(failure);
+    }
+
+    @Override
+    public MutationTerminalState terminalState() {
+        if (failure != null) {
+            return MutationTerminalState.FAILED;
+        }
+        if (phase != Phase.RESTORING || !restore.isTerminal()) {
+            throw new IllegalStateException("Return-point Restore is not terminal");
+        }
+        return restore.terminalState();
     }
 
     @Override

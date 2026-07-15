@@ -159,6 +159,17 @@ public final class RestoreOperation implements DimensionMutation {
         return status;
     }
 
+    @Override
+    public MutationTerminalState terminalState() {
+        return switch (status) {
+            case COMPLETE -> MutationTerminalState.SUCCEEDED;
+            case RETURNED -> MutationTerminalState.RETURNED;
+            case CANCELLED -> MutationTerminalState.CANCELLED;
+            case DEGRADED -> MutationTerminalState.DEGRADED;
+            default -> throw new IllegalStateException("Restore is not terminal");
+        };
+    }
+
     public void cancelBeforeApply() throws IOException {
         if (status != RestoreStatus.APPLYING || journal.phase() != OperationPhase.PREPARED) {
             throw new IllegalStateException("Restore has already started mutating the world");

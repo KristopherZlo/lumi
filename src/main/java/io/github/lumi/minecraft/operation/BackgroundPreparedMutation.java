@@ -62,8 +62,20 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
         }
     }
 
+    @Override
     public Optional<Throwable> failure() {
         return Optional.ofNullable(failure);
+    }
+
+    @Override
+    public MutationTerminalState terminalState() {
+        if (failure != null) {
+            return MutationTerminalState.FAILED;
+        }
+        if (delegate == null || !delegate.isTerminal()) {
+            throw new IllegalStateException("Prepared mutation is not terminal");
+        }
+        return delegate.terminalState();
     }
 
     @Override

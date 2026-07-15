@@ -1,6 +1,8 @@
 package io.github.lumi.minecraft.runtime;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
+import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestoreOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestorePreparation;
@@ -116,12 +118,29 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 objects, origins,
                 new WorkingIndexRepository(repository), background);
         return new FabricDimensionRuntime(
-                level, repository, freeze, new DimensionOperationCoordinator(freeze),
+                level, repository, freeze, new DimensionOperationCoordinator(
+                        freeze, operation -> logTerminal(level, operation)),
                 mutations,
                 new SaveService(objects, new MerkleTreeEditor(objects), commits, refs, journals),
                 new RestoreService(objects, commits, origins),
                 new MinecraftWorldStateApply(level, freeze), journals,
                 background, refs, workspaceId);
+    }
+
+    private static void logTerminal(ServerLevel level, DimensionMutation operation) {
+        String description = operation.getClass().getSimpleName()
+                + " in " + level.dimension().identifier();
+        switch (operation.terminalState()) {
+            case SUCCEEDED -> LumiMod.LOGGER.info("Lumi operation completed: {}", description);
+            case CANCELLED -> LumiMod.LOGGER.warn("Lumi operation cancelled: {}", description);
+            case RETURNED -> LumiMod.LOGGER.warn(
+                    "Lumi operation could not verify its target and returned safely: {}", description);
+            case DEGRADED -> LumiMod.LOGGER.error(
+                    "Lumi operation degraded its dimension and retained the freeze: {}", description);
+            case FAILED -> operation.failure().ifPresentOrElse(
+                    failure -> LumiMod.LOGGER.error("Lumi operation failed: " + description, failure),
+                    () -> LumiMod.LOGGER.error("Lumi operation failed: {}", description));
+        }
     }
 
     public void tick() throws IOException {

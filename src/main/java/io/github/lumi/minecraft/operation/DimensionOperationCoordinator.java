@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.operation;
 import io.github.lumi.minecraft.world.DimensionFreeze;
 import java.io.IOException;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
 /** Serializes mutation and enforces the global 50 ms server-tick work limit. */
@@ -12,18 +13,34 @@ public final class DimensionOperationCoordinator {
     private final DimensionFreeze freeze;
     private final LongSupplier nanoTime;
     private final long tickBudgetNanos;
+    private final Consumer<DimensionMutation> terminalObserver;
     private DimensionMutation active;
     private DimensionFreeze.Lease lease;
     private boolean freezeReleased;
+    private boolean terminalReported;
 
     public DimensionOperationCoordinator(DimensionFreeze freeze) {
-        this(freeze, System::nanoTime, MAX_TICK_WORK_NANOS);
+        this(freeze, ignored -> { });
+    }
+
+    public DimensionOperationCoordinator(
+            DimensionFreeze freeze, Consumer<DimensionMutation> terminalObserver) {
+        this(freeze, System::nanoTime, MAX_TICK_WORK_NANOS, terminalObserver);
     }
 
     DimensionOperationCoordinator(
             DimensionFreeze freeze, LongSupplier nanoTime, long tickBudgetNanos) {
+        this(freeze, nanoTime, tickBudgetNanos, ignored -> { });
+    }
+
+    DimensionOperationCoordinator(
+            DimensionFreeze freeze,
+            LongSupplier nanoTime,
+            long tickBudgetNanos,
+            Consumer<DimensionMutation> terminalObserver) {
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
+        this.terminalObserver = Objects.requireNonNull(terminalObserver, "terminalObserver");
         if (tickBudgetNanos < 1 || tickBudgetNanos > MAX_TICK_WORK_NANOS) {
             throw new IllegalArgumentException("Tick budget must be between 1 ns and 50 ms");
         }
@@ -37,6 +54,7 @@ public final class DimensionOperationCoordinator {
         }
         active = operation;
         freezeReleased = false;
+        terminalReported = false;
     }
 
     public synchronized void tick() throws IOException {
@@ -46,10 +64,15 @@ public final class DimensionOperationCoordinator {
         if (lease == null && !freezeReleased && active.requiresFreeze()) {
             lease = Objects.requireNonNull(freeze.acquire(), "freeze lease");
         }
+        if (active.isTerminal()) {
+            reportTerminal();
+            return;
+        }
         long start = nanoTime.getAsLong();
         long deadline = start > Long.MAX_VALUE - tickBudgetNanos
                 ? Long.MAX_VALUE : start + tickBudgetNanos;
         active.advance(deadline);
+        reportTerminal();
         if (lease != null && active.isSafeToRelease()) {
             lease.release();
             lease = null;
@@ -58,6 +81,14 @@ public final class DimensionOperationCoordinator {
         if (active.isTerminal() && active.isSafeToRelease()) {
             active = null;
             freezeReleased = false;
+            terminalReported = false;
+        }
+    }
+
+    private void reportTerminal() {
+        if (active.isTerminal() && !terminalReported) {
+            terminalObserver.accept(active);
+            terminalReported = true;
         }
     }
 

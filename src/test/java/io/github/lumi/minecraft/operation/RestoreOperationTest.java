@@ -90,6 +90,7 @@ class RestoreOperationTest {
         assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.RETURNED, operation.tick(Long.MAX_VALUE));
+        assertEquals(MutationTerminalState.RETURNED, operation.terminalState());
         assertEquals(2, world.beginCalls);
         assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
         assertTrue(journals.read().isEmpty());
@@ -114,6 +115,7 @@ class RestoreOperationTest {
         assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.DEGRADED, operation.tick(Long.MAX_VALUE));
+        assertEquals(MutationTerminalState.DEGRADED, operation.terminalState());
         assertEquals(OperationPhase.DEGRADED, journals.read().orElseThrow().phase());
         assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
     }
@@ -131,6 +133,7 @@ class RestoreOperationTest {
         operation.cancelBeforeApply();
 
         assertTrue(journals.read().isEmpty());
+        assertEquals(MutationTerminalState.CANCELLED, operation.terminalState());
         assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
     }
 

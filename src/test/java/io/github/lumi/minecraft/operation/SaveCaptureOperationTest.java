@@ -13,6 +13,7 @@ import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndex;
+import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.CapturedWorldState;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveResult;
@@ -92,6 +93,27 @@ class SaveCaptureOperationTest {
         assertEquals(2L, working.snapshot().generations().get(key));
         assertEquals(savedId, operation.result().orElseThrow().commitId());
         assertEquals(2, world.session.captureCalls);
+    }
+
+    @Test
+    void reportsFailedBackgroundPublication() throws Exception {
+        WorkingIndexSnapshot clean = new WorkingIndexSnapshot(Map.of());
+        CapturedWorldState captured = new CapturedWorldState(
+                Map.of(), Map.of(), clean, new CommitStatistics(0, 0, 0, 0));
+        SaveCaptureOperation operation = new SaveCaptureOperation(
+                request(), clean, dirty -> new WorldStateCapture.CaptureSession() {
+                    @Override public boolean captureUntil(long deadlineNanos) { return true; }
+                    @Override public CapturedWorldState finish() { return captured; }
+                },
+                (request, state) -> { throw new java.io.IOException("disk full"); },
+                ignored -> { }, Runnable::run);
+
+        operation.advance(Long.MAX_VALUE);
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(SaveOperationStatus.FAILED, operation.status());
+        assertEquals(MutationTerminalState.FAILED, operation.terminalState());
+        assertEquals("disk full", operation.failure().orElseThrow().getMessage());
     }
 
     private static SaveRequest request() {
