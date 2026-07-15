@@ -11,6 +11,7 @@ import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -41,6 +42,8 @@ class OriginStoreTest {
 
         assertEquals(id("section"), store.read(section).orElseThrow());
         assertEquals(id("entities"), store.read(entities).orElseThrow());
+        assertEquals(Map.of(section, id("section"), entities, id("entities")),
+                new OriginStore(repositoryRoot).entries());
     }
 
     private static ObjectId id(String value) {

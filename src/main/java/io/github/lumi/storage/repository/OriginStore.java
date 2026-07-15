@@ -14,7 +14,8 @@ import java.nio.file.Path;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 public final class OriginStore {
@@ -48,25 +49,24 @@ public final class OriginStore {
     }
 
     public synchronized Set<ObjectId> allOrigins() throws IOException {
+        return Set.copyOf(entries().values());
+    }
+
+    public synchronized Map<HistoryKey, ObjectId> entries() throws IOException {
         if (!Files.exists(originsDirectory)) {
-            return Set.of();
+            return Map.of();
         }
-        Set<ObjectId> origins = new HashSet<>();
+        Map<HistoryKey, ObjectId> origins = new HashMap<>();
         try (var files = Files.walk(originsDirectory)) {
             for (Path file : files.filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".origin")).toList()) {
-                byte[] payload = Files.readAllBytes(file);
-                int kind = payload.length > 4 ? payload[4] & 0xff : -1;
-                int expectedLength = kind == 1 ? 49 : kind == 2 ? 45 : -1;
-                if (payload.length != expectedLength
-                        || java.nio.ByteBuffer.wrap(payload).getInt() != MAGIC) {
-                    throw new IOException("Invalid origin entry: " + file);
+                OriginEntry entry = decode(Files.readAllBytes(file));
+                if (origins.put(entry.key(), entry.id()) != null) {
+                    throw new IOException("Duplicate origin entry for " + entry.key());
                 }
-                byte[] id = java.util.Arrays.copyOfRange(payload, payload.length - 32, payload.length);
-                origins.add(new ObjectId(HexFormat.of().formatHex(id)));
             }
         }
-        return Set.copyOf(origins);
+        return Map.copyOf(origins);
     }
 
     private byte[] encode(HistoryKey key, ObjectId origin) throws IOException {
@@ -89,6 +89,14 @@ public final class OriginStore {
     }
 
     private ObjectId decode(HistoryKey expected, byte[] payload) throws IOException {
+        OriginEntry entry = decode(payload);
+        if (!entry.key().equals(expected)) {
+            throw new IOException("Invalid origin entry for " + expected);
+        }
+        return entry.id();
+    }
+
+    private OriginEntry decode(byte[] payload) throws IOException {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(payload))) {
             if (input.readInt() != MAGIC) {
                 throw new IOException("Not a Lumi V2 origin entry");
@@ -100,10 +108,10 @@ public final class OriginStore {
                 default -> throw new IOException("Invalid origin key kind");
             };
             byte[] id = input.readNBytes(32);
-            if (!stored.equals(expected) || id.length != 32 || input.available() != 0) {
-                throw new IOException("Invalid origin entry for " + expected);
+            if (id.length != 32 || input.available() != 0) {
+                throw new IOException("Invalid origin entry for " + stored);
             }
-            return new ObjectId(HexFormat.of().formatHex(id));
+            return new OriginEntry(stored, new ObjectId(HexFormat.of().formatHex(id)));
         }
     }
 
@@ -119,4 +127,6 @@ public final class OriginStore {
                 .resolve(Integer.toString(entities.chunkX()))
                 .resolve(entities.chunkZ() + ".origin");
     }
+
+    private record OriginEntry(HistoryKey key, ObjectId id) { }
 }
