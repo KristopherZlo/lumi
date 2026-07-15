@@ -24,6 +24,7 @@ public final class PatchDataRepository {
     static final int CURRENT_PAYLOAD_VERSION = VERSION;
     private final PatchEntityChunkIndexLookup entityIndexLookup = new PatchEntityChunkIndexLookup();
     private final PatchSectionFrameCodec sectionFrameCodec = new PatchSectionFrameCodec();
+    private final PatchSectionSelector sectionSelector = new PatchSectionSelector();
     private final PatchPayloadWriter payloadWriter = new PatchPayloadWriter();
     private final PatchPayloadReader payloadReader = new PatchPayloadReader();
 
@@ -100,27 +101,14 @@ public final class PatchDataRepository {
         if (metadata == null || sections == null || sections.isEmpty()) {
             return new PatchSectionWorldChanges(List.of(), List.of());
         }
-        Set<String> requestedSections = new HashSet<>();
-        Set<ChunkPoint> requestedChunks = new HashSet<>();
-        for (SectionFingerprint section : sections) {
-            if (section == null) {
-                continue;
-            }
-            requestedSections.add(sectionKey(section.chunkX(), section.chunkZ(), section.sectionY()));
-            requestedChunks.add(section.chunk());
-        }
-        if (requestedSections.isEmpty()) {
+        PatchSectionSelector.Selection selection = this.sectionSelector.selection(sections);
+        if (selection.isEmpty()) {
             return new PatchSectionWorldChanges(List.of(), List.of());
         }
         PatchSectionWorldChanges selectedChunks = this.sectionFrameCodec.toSectionWorldChanges(
-                this.loadWorldChanges(layout, metadata, requestedChunks)
+                this.loadWorldChanges(layout, metadata, selection.chunks())
         );
-        return new PatchSectionWorldChanges(
-                selectedChunks.sectionFrames().stream()
-                        .filter(frame -> requestedSections.contains(sectionKey(frame.chunkX(), frame.chunkZ(), frame.sectionY())))
-                        .toList(),
-                selectedChunks.entityChanges()
-        );
+        return selection.filter(selectedChunks);
     }
 
     public PatchWorldChanges loadWorldChangesForSections(
@@ -183,7 +171,4 @@ public final class PatchDataRepository {
                 .toList();
     }
 
-    private static String sectionKey(int chunkX, int chunkZ, int sectionY) {
-        return chunkX + ":" + chunkZ + ":" + sectionY;
-    }
 }
