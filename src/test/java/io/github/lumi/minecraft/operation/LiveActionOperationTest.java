@@ -152,6 +152,23 @@ class LiveActionOperationTest {
         assertEquals(MutationTerminalState.SUCCEEDED, operation.terminalState());
     }
 
+    @Test
+    void retainsFreezeWhenDirtyPublicationFails() throws IOException {
+        LiveActionJournal journal = action(block("stone"), block("gold_block"));
+        LiveActionOperation operation = new LiveActionOperation(
+                journal, PLAYER, LiveActionJournal.Direction.UNDO,
+                new FakeWorld(block("gold_block")),
+                new FakeEntityWorld(Optional.empty()), ignored -> { }, ignored -> {
+                    throw new IllegalStateException("working index unavailable");
+                });
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(MutationTerminalState.DEGRADED, operation.terminalState());
+        assertTrue(!operation.isSafeToRelease());
+        assertTrue(journal.prepareUndo(PLAYER).isPresent());
+    }
+
     private static LiveActionJournal action(BlockSnapshot before, BlockSnapshot after) {
         LiveActionJournal journal = new LiveActionJournal();
         UUID action = journal.begin(PLAYER);

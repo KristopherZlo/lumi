@@ -18,6 +18,9 @@ import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.BranchService;
@@ -75,6 +78,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final EntityChunkDurabilityGate entityDurability;
     private final SavePreparation savePreparation;
     private final WorldStateCapture worldCapture;
+    private final MinecraftWorldStateReader worldReader;
     private final SaveService saves;
     private final RestoreService restores;
     private final MinecraftWorldStateApply worldApply;
@@ -136,7 +140,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         returnPointRestores = new ReturnPointRestorePreparation(
                 restores, worldApply, refs, journals,
                 restoreStateListener, background);
-        var worldReader = new MinecraftWorldStateReader(level);
+        worldReader = new MinecraftWorldStateReader(level);
         savePreparation = new DurableSavePreparation(worldReader, entityDurability, mutations);
         worldCapture = new BatchedWorldStateCapture(worldReader);
     }
@@ -272,7 +276,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             Consumer<DimensionMutation> terminalObserver) {
         var operation = new LiveActionOperation(
                 liveActions, player, direction, liveWorld,
-                liveEntityWorld, this::cancelLiveAction);
+                liveEntityWorld, this::cancelLiveAction, this::publishLiveAction);
         operations.start(operation, terminalObserver);
         return operation;
     }
@@ -303,6 +307,39 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         } catch (IOException failed) {
             throw new java.io.UncheckedIOException(
                     "Cannot finalize owned live entities", failed);
+        }
+    }
+
+    private void publishLiveAction(LiveActionJournal.Plan plan) {
+        plan.expected().keySet().stream()
+                .map(position -> new SectionKey(
+                        Math.floorDiv(position.x(), 16),
+                        Math.floorDiv(position.y(), 16),
+                        Math.floorDiv(position.z(), 16)))
+                .distinct()
+                .forEach(mutations::markTrackedSection);
+        Stream.concat(
+                        plan.expectedEntities().values().stream(),
+                        plan.replacementEntities().values().stream())
+                .flatMap(Optional::stream)
+                .map(this::liveEntityChunk)
+                .distinct()
+                .forEach(this::publishLiveEntityChunk);
+    }
+
+    private EntityChunkKey liveEntityChunk(EntityState state) {
+        try {
+            return liveEntityWorld.chunk(state);
+        } catch (IOException failed) {
+            throw new java.io.UncheckedIOException(failed);
+        }
+    }
+
+    private void publishLiveEntityChunk(EntityChunkKey key) {
+        try {
+            entityDurability.observeCurrent(key, worldReader.read(key));
+        } catch (IOException failed) {
+            throw new java.io.UncheckedIOException(failed);
         }
     }
 
@@ -414,7 +451,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         throw new CompletionException(failed);
                     }
                 }, background));
-        operations.start(operation, terminalObserver);
+        operations.start(new LiveRecordedMutation(
+                liveActions, author.id(), operation), terminalObserver);
         return operation;
     }
 

@@ -41,7 +41,8 @@ public final class EntityChunkDurabilityGate {
             baselines.put(key, current);
             return;
         }
-        if (!current.equals(baseline) && !current.equals(pending.get(key))) {
+        EntityChunkBlob lastObserved = pending.getOrDefault(key, baseline);
+        if (!current.equals(lastObserved)) {
             pending.put(key, current);
             mutations.registerEntityMutation(key, () -> baseline);
         }

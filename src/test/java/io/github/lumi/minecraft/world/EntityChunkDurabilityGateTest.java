@@ -83,6 +83,25 @@ class EntityChunkDurabilityGateTest {
         assertTrue(mutations.isDurable(mutations.snapshot()));
     }
 
+    @Test
+    void observesReturnToBaselineAfterIntermediateStateWasSaved() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        EntityChunkDurabilityGate gate = new EntityChunkDurabilityGate(mutations);
+        EntityChunkKey key = new EntityChunkKey(0, 0);
+        EntityChunkBlob original = entities(1);
+
+        gate.rememberLoaded(key, original);
+        gate.observeCurrent(key, entities(2));
+        mutations.clear(mutations.snapshot());
+
+        gate.observeCurrent(key, original);
+
+        assertEquals(1L, mutations.snapshot().generations().get(key));
+    }
+
     private static EntityChunkBlob entities(int marker) {
         return new EntityChunkBlob(List.of(new EntityState(
                 new UUID(0, 1), "minecraft:armor_stand",

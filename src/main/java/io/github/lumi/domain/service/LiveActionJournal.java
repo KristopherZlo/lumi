@@ -118,8 +118,12 @@ public final class LiveActionJournal {
         }
         action.closed = true;
         openActions.remove(action.player, action.id);
-        if (!action.available || (isEmpty(action) && action.causalReferences == 0)) {
+        if (!action.available) {
             evict(action);
+            return false;
+        }
+        if (isEmpty(action) && action.causalReferences == 0) {
+            evict(action, false);
             return false;
         }
         stacks(action.player).undo.addLast(action.id);

@@ -25,6 +25,7 @@ public final class LiveActionOperation implements DimensionMutation {
     private final LiveEntityWorldAccess entities;
     private final LongSupplier nanoTime;
     private final Consumer<UUID> cancelPending;
+    private final Consumer<LiveActionJournal.Plan> publication;
     private final List<WorldChange<?>> mismatches = new ArrayList<>();
     private List<WorldChange<?>> changes = List.of();
     private Phase phase = Phase.SELECTING;
@@ -39,7 +40,7 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveActionJournal.Direction direction,
             LiveBlockWorldAccess world) {
         this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
-                System::nanoTime, ignored -> { });
+                System::nanoTime, ignored -> { }, ignored -> { });
     }
 
     public LiveActionOperation(
@@ -49,7 +50,7 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveBlockWorldAccess world,
             Consumer<UUID> cancelPending) {
         this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
-                System::nanoTime, cancelPending);
+                System::nanoTime, cancelPending, ignored -> { });
     }
 
     public LiveActionOperation(
@@ -59,7 +60,20 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveBlockWorldAccess world,
             LiveEntityWorldAccess entities,
             Consumer<UUID> cancelPending) {
-        this(journal, player, direction, world, entities, System::nanoTime, cancelPending);
+        this(journal, player, direction, world, entities,
+                System::nanoTime, cancelPending, ignored -> { });
+    }
+
+    public LiveActionOperation(
+            LiveActionJournal journal,
+            UUID player,
+            LiveActionJournal.Direction direction,
+            LiveBlockWorldAccess world,
+            LiveEntityWorldAccess entities,
+            Consumer<UUID> cancelPending,
+            Consumer<LiveActionJournal.Plan> publication) {
+        this(journal, player, direction, world, entities,
+                System::nanoTime, cancelPending, publication);
     }
 
     LiveActionOperation(
@@ -69,7 +83,7 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveBlockWorldAccess world,
             LongSupplier nanoTime) {
         this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
-                nanoTime, ignored -> { });
+                nanoTime, ignored -> { }, ignored -> { });
     }
 
     LiveActionOperation(
@@ -80,7 +94,7 @@ public final class LiveActionOperation implements DimensionMutation {
             LongSupplier nanoTime,
             Consumer<UUID> cancelPending) {
         this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
-                nanoTime, cancelPending);
+                nanoTime, cancelPending, ignored -> { });
     }
 
     private LiveActionOperation(
@@ -90,7 +104,8 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveBlockWorldAccess world,
             LiveEntityWorldAccess entities,
             LongSupplier nanoTime,
-            Consumer<UUID> cancelPending) {
+            Consumer<UUID> cancelPending,
+            Consumer<LiveActionJournal.Plan> publication) {
         this.journal = Objects.requireNonNull(journal, "journal");
         this.player = Objects.requireNonNull(player, "player");
         this.direction = Objects.requireNonNull(direction, "direction");
@@ -98,6 +113,7 @@ public final class LiveActionOperation implements DimensionMutation {
         this.entities = Objects.requireNonNull(entities, "entities");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         this.cancelPending = Objects.requireNonNull(cancelPending, "cancelPending");
+        this.publication = Objects.requireNonNull(publication, "publication");
     }
 
     @Override
@@ -196,6 +212,7 @@ public final class LiveActionOperation implements DimensionMutation {
     private void verifyOne(boolean finalPass) throws IOException {
         if (!cursor.hasNext()) {
             if (mismatches.isEmpty()) {
+                publication.accept(plan);
                 journal.complete(plan);
                 phase = Phase.SUCCEEDED;
             } else if (finalPass) {

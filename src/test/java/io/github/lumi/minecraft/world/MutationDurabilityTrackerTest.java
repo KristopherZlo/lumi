@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.SectionBlob;
@@ -104,6 +105,22 @@ class MutationDurabilityTrackerTest {
         background.runNext();
         assertTrue(tracker.canPublishChunk(0, 0));
         assertTrue(tracker.canPublishChunk(1, 0));
+    }
+
+    @Test
+    void marksOnlyCoordinatesWhoseOriginWasAlreadyCaptured() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        SectionKey key = new SectionKey(2, 3, 4);
+
+        assertThrows(IllegalStateException.class, () -> tracker.markTrackedSection(key));
+        tracker.registerSectionMutation(key, MutationDurabilityTrackerTest::airSection);
+        tracker.clear(tracker.snapshot());
+
+        assertEquals(1L, tracker.markTrackedSection(key));
+        assertEquals(1L, tracker.snapshot().generations().get(key));
     }
 
     private static SectionBlob airSection() {

@@ -77,6 +77,16 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void emptyNewerActionDoesNotInvalidateOlderUndo() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID older = add(journal, 1);
+        UUID empty = journal.begin(PLAYER_A);
+
+        assertTrue(!journal.close(empty));
+        assertEquals(older, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+    }
+
+    @Test
     void oversizedActionIsUnavailableWithAReason() {
         LiveActionJournal journal = new LiveActionJournal(
                 new LiveActionJournal.Limits(64, 32, 128, 256));

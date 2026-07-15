@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.EntityChunkKey;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -21,6 +22,7 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     private final DimensionFreezeState freeze;
     private final MinecraftEntityChunkCapture capture = new MinecraftEntityChunkCapture();
     private final Map<EntityState, DecodedEntity> prepared = new HashMap<>();
+    private final Map<EntityState, EntityChunkKey> chunks = new HashMap<>();
 
     public MinecraftLiveEntityWorldAccess(ServerLevel level, DimensionFreezeState freeze) {
         this.level = Objects.requireNonNull(level, "level");
@@ -33,7 +35,11 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
         }
         Optional<MinecraftEntityChunkCapture.CapturedEntity> captured =
                 capture.captureEntity(level, entity);
-        captured.ifPresent(value -> prepared.put(value.state(), value.decoded()));
+        captured.ifPresent(value -> {
+            prepared.put(value.state(), value.decoded());
+            chunks.put(value.state(), MinecraftEntityChunkCapture.key(
+                    entity.chunkPosition().x, entity.chunkPosition().z));
+        });
         return captured.map(MinecraftEntityChunkCapture.CapturedEntity::state);
     }
 
@@ -71,6 +77,15 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
 
     public void clear() {
         prepared.clear();
+        chunks.clear();
+    }
+
+    public EntityChunkKey chunk(EntityState state) throws IOException {
+        EntityChunkKey key = chunks.get(Objects.requireNonNull(state, "state"));
+        if (key == null) {
+            throw new IOException("Live entity chunk was not prepared: " + state.id());
+        }
+        return key;
     }
 
     private Optional<Entity> find(UUID entityId) {

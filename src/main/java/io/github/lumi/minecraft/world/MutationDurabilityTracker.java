@@ -83,6 +83,20 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         return register(key, preMutationCapture, objects::write);
     }
 
+    public long markTrackedSection(SectionKey key) {
+        requireTracked(key);
+        return registerSectionMutation(key, () -> {
+            throw new IllegalStateException("Tracked section unexpectedly needs an origin");
+        });
+    }
+
+    private synchronized void requireTracked(HistoryKey key) {
+        Objects.requireNonNull(key, "key");
+        if (!durableOrigins.contains(key) && !pendingOrigins.contains(key)) {
+            throw new IllegalStateException("Lumi origin is missing for live mutation " + key);
+        }
+    }
+
     private <T> long register(HistoryKey key, Supplier<T> capture, OriginWriter<T> writer) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(capture, "preMutationCapture");
