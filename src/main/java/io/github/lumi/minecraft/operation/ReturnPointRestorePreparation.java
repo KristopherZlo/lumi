@@ -20,6 +20,7 @@ public final class ReturnPointRestorePreparation {
     private final WorldStateApply world;
     private final BranchRefRepository refs;
     private final OperationJournalRepository journals;
+    private final RestoreStateListener stateListener;
     private final Executor background;
 
     public ReturnPointRestorePreparation(
@@ -28,10 +29,21 @@ public final class ReturnPointRestorePreparation {
             BranchRefRepository refs,
             OperationJournalRepository journals,
             Executor background) {
+        this(restores, world, refs, journals, RestoreStateListener.NONE, background);
+    }
+
+    public ReturnPointRestorePreparation(
+            RestoreService restores,
+            WorldStateApply world,
+            BranchRefRepository refs,
+            OperationJournalRepository journals,
+            RestoreStateListener stateListener,
+            Executor background) {
         this.restores = Objects.requireNonNull(restores, "restores");
         this.world = Objects.requireNonNull(world, "world");
         this.refs = Objects.requireNonNull(refs, "refs");
         this.journals = Objects.requireNonNull(journals, "journals");
+        this.stateListener = Objects.requireNonNull(stateListener, "stateListener");
         this.background = Objects.requireNonNull(background, "background");
     }
 
@@ -49,7 +61,7 @@ public final class ReturnPointRestorePreparation {
                 refs.create(hiddenRef, returnPoint.commitId());
                 return RestoreOperation.start(
                         restores.prepare(returnPoint.branchRef(), target),
-                        world, refs, journals, operationId);
+                        world, refs, journals, operationId, stateListener);
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }

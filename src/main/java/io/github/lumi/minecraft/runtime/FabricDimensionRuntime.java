@@ -25,6 +25,7 @@ import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
 import io.github.lumi.minecraft.world.MinecraftWorldStateReader;
 import io.github.lumi.minecraft.world.MinecraftWorldStateApply;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
+import io.github.lumi.minecraft.world.RestoreBaselineReconciler;
 import io.github.lumi.minecraft.world.SavePreparation;
 import io.github.lumi.minecraft.world.WorldStateCapture;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
@@ -91,9 +92,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.background = background;
         this.refs = refs;
         this.defaultWorkspaceId = defaultWorkspaceId;
-        returnPointRestores = new ReturnPointRestorePreparation(
-                restores, worldApply, refs, journals, background);
         entityDurability = new EntityChunkDurabilityGate(mutations);
+        returnPointRestores = new ReturnPointRestorePreparation(
+                restores, worldApply, refs, journals,
+                new RestoreBaselineReconciler(entityDurability, blockEntityBaselines), background);
         var worldReader = new MinecraftWorldStateReader(level);
         savePreparation = new DurableSavePreparation(worldReader, entityDurability, mutations);
         worldCapture = new BatchedWorldStateCapture(worldReader);

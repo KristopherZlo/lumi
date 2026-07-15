@@ -30,11 +30,12 @@ class RestoreOperationTest {
         var expectedRef = refs.create(new BranchName("main"), current);
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
         TwoStepApply world = new TwoStepApply();
+        RecordingRestoreStateListener listener = new RecordingRestoreStateListener();
 
         RestoreOperation operation = RestoreOperation.start(
                 new PreparedRestore(expectedRef, target, Map.of(), Map.of(), Map.of(), Map.of()),
                 world, refs, journals,
-                UUID.fromString("10000000-0000-0000-0000-000000000001"));
+                UUID.fromString("10000000-0000-0000-0000-000000000001"), listener);
 
         assertEquals(2, world.prepareCalls);
         assertEquals(OperationPhase.PREPARED, journals.read().orElseThrow().phase());
@@ -50,6 +51,8 @@ class RestoreOperationTest {
         assertTrue(journals.read().isEmpty());
         assertEquals(2, world.session.applyCalls);
         assertEquals(1, world.session.verifyCalls);
+        assertEquals(1, listener.restored);
+        assertEquals(0, listener.returned);
     }
 
     @Test
@@ -80,9 +83,10 @@ class RestoreOperationTest {
         var expectedRef = refs.create(new BranchName("main"), current);
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
         ReturnAfterMismatch world = new ReturnAfterMismatch(true);
+        RecordingRestoreStateListener listener = new RecordingRestoreStateListener();
         RestoreOperation operation = RestoreOperation.start(
                 new PreparedRestore(expectedRef, target, Map.of(), Map.of(), Map.of(), Map.of()),
-                world, refs, journals, UUID.randomUUID());
+                world, refs, journals, UUID.randomUUID(), listener);
 
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.REPAIRING, operation.tick(Long.MAX_VALUE));
@@ -92,6 +96,8 @@ class RestoreOperationTest {
         assertEquals(RestoreStatus.RETURNED, operation.tick(Long.MAX_VALUE));
         assertEquals(MutationTerminalState.RETURNED, operation.terminalState());
         assertEquals(2, world.beginCalls);
+        assertEquals(0, listener.restored);
+        assertEquals(1, listener.returned);
         assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
         assertTrue(journals.read().isEmpty());
     }
@@ -139,6 +145,13 @@ class RestoreOperationTest {
 
     private static CommitId id(char digit) {
         return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
+    }
+
+    private static final class RecordingRestoreStateListener implements RestoreStateListener {
+        private int restored;
+        private int returned;
+        @Override public void restored(PreparedRestore restore) { restored++; }
+        @Override public void returned(PreparedRestore restore) { returned++; }
     }
 
     private static final class TwoStepApply implements TestWorldApply {

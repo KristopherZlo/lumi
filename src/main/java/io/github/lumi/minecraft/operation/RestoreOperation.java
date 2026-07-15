@@ -21,6 +21,7 @@ public final class RestoreOperation implements DimensionMutation {
     private final OperationJournalRepository journals;
     private final WorldStateApply.ApplySession targetSession;
     private final WorldStateApply.PreparedState preparedReturn;
+    private final RestoreStateListener stateListener;
     private WorldStateApply.ApplySession returnSession;
     private OperationJournal journal;
     private RestoreStatus status = RestoreStatus.APPLYING;
@@ -35,13 +36,15 @@ public final class RestoreOperation implements DimensionMutation {
             OperationJournalRepository journals,
             OperationJournal journal,
             WorldStateApply.PreparedState preparedTarget,
-            WorldStateApply.PreparedState preparedReturn) {
+            WorldStateApply.PreparedState preparedReturn,
+            RestoreStateListener stateListener) {
         this.restore = restore;
         this.world = world;
         this.refs = refs;
         this.journals = journals;
         this.journal = journal;
         this.preparedReturn = preparedReturn;
+        this.stateListener = stateListener;
         targetSession = world.begin(preparedTarget);
     }
 
@@ -51,10 +54,21 @@ public final class RestoreOperation implements DimensionMutation {
             BranchRefRepository refs,
             OperationJournalRepository journals,
             UUID operationId) throws IOException {
+        return start(restore, world, refs, journals, operationId, RestoreStateListener.NONE);
+    }
+
+    public static RestoreOperation start(
+            PreparedRestore restore,
+            WorldStateApply world,
+            BranchRefRepository refs,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener) throws IOException {
         Objects.requireNonNull(restore, "restore");
         Objects.requireNonNull(world, "world");
         Objects.requireNonNull(refs, "refs");
         Objects.requireNonNull(journals, "journals");
+        Objects.requireNonNull(stateListener, "stateListener");
         WorldStateApply.PreparedState preparedTarget = world.prepare(
                 new WorldStateApply.State(restore.sections(), restore.entities()));
         WorldStateApply.PreparedState preparedReturn = world.prepare(
@@ -69,7 +83,8 @@ public final class RestoreOperation implements DimensionMutation {
                 Objects.requireNonNull(operationId, "operationId"),
                 OperationKind.RESTORE, OperationPhase.PREPARED, target));
         return new RestoreOperation(
-                restore, world, refs, journals, journal, preparedTarget, preparedReturn);
+                restore, world, refs, journals, journal,
+                preparedTarget, preparedReturn, stateListener);
     }
 
     public RestoreStatus tick(long deadlineNanos) throws IOException {
@@ -121,6 +136,7 @@ public final class RestoreOperation implements DimensionMutation {
         journal = journals.advance(journal, OperationPhase.COMPLETE);
         journals.clear(journal);
         status = RestoreStatus.COMPLETE;
+        stateListener.restored(restore);
     }
 
     private void beginReturn() throws IOException {
@@ -139,6 +155,7 @@ public final class RestoreOperation implements DimensionMutation {
                 journal = journals.advance(journal, OperationPhase.COMPLETE);
                 journals.clear(journal);
                 status = RestoreStatus.RETURNED;
+                stateListener.returned(restore);
             } else if (verification == WorldStateApply.Verification.MISMATCH) {
                 if (returnRepairAttempted) {
                     journal = journals.advance(journal, OperationPhase.DEGRADED);
