@@ -29,6 +29,7 @@ import io.github.lumi.minecraft.world.RestoreBaselineReconciler;
 import io.github.lumi.minecraft.world.SavePreparation;
 import io.github.lumi.minecraft.world.WorldStateCapture;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
+import io.github.lumi.storage.repository.ActiveBranchRepository;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.MerkleTreeEditor;
@@ -65,6 +66,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final ReturnPointRestorePreparation returnPointRestores;
     private final Executor background;
     private final BranchRefRepository refs;
+    private final ActiveBranchRepository active;
     private final UUID defaultWorkspaceId;
     private final BlockEntityBaselineStore blockEntityBaselines = new BlockEntityBaselineStore();
     private final MinecraftBlockEntityBaselineCapture baselineCapture =
@@ -83,6 +85,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             OperationJournalRepository journals,
             Executor background,
             BranchRefRepository refs,
+            ActiveBranchRepository active,
             UUID defaultWorkspaceId) {
         this.level = level;
         this.repository = repository;
@@ -92,6 +95,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.saves = saves;
         this.background = background;
         this.refs = refs;
+        this.active = active;
         this.defaultWorkspaceId = defaultWorkspaceId;
         entityDurability = new EntityChunkDurabilityGate(mutations);
         returnPointRestores = new ReturnPointRestorePreparation(
@@ -112,11 +116,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var objects = new WorldObjectRepository(repository);
         var commits = new CommitRepository(repository);
         var refs = new BranchRefRepository(repository);
+        var active = new ActiveBranchRepository(repository);
         var journals = new OperationJournalRepository(repository);
         var origins = new OriginStore(repository);
-        BranchRef main = new DimensionHistoryInitializer(objects, commits, refs)
+        new DimensionHistoryInitializer(objects, commits, refs, active)
                 .initialize(UUID.randomUUID());
-        UUID workspaceId = commits.read(main.commit()).workspaceId();
+        BranchRef selected = refs.read(active.read().orElseThrow().name()).orElseThrow();
+        UUID workspaceId = commits.read(selected.commit()).workspaceId();
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
                 objects, origins,
                 new WorkingIndexRepository(repository), background);
@@ -127,7 +133,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 new SaveService(objects, new MerkleTreeEditor(objects), commits, refs, journals),
                 new RestoreService(objects, commits, origins),
                 new MinecraftWorldStateApply(level, freeze), journals,
-                background, refs, workspaceId);
+                background, refs, active, workspaceId);
     }
 
     private static void logTerminal(ServerLevel level, DimensionMutation operation) {
@@ -206,7 +212,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         if (operations.hasActiveOperation()) {
             throw new IllegalStateException("A dimension operation is already active");
         }
-        BranchRef expected = mainRef();
+        BranchRef expected = activeRef();
         UUID operationId = UUID.randomUUID();
         SaveRequest returnPoint = new SaveRequest(
                 expected, author, "Return point before Restore", Instant.now(),
@@ -226,9 +232,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public MutationDurabilityTracker mutations() { return mutations; }
     public SavePreparation savePreparation() { return savePreparation; }
     public WorldStateCapture worldCapture() { return worldCapture; }
-    public BranchRef mainRef() throws IOException {
-        return refs.read(new BranchName("main")).orElseThrow(
-                () -> new IOException("Lumi main branch is missing"));
+    public BranchRef activeRef() throws IOException {
+        BranchName name = active.read().orElseThrow(
+                () -> new IOException("Active Lumi branch is missing")).name();
+        return refs.read(name).orElseThrow(
+                () -> new IOException("Active Lumi branch ref is missing: " + name));
     }
     public UUID defaultWorkspaceId() { return defaultWorkspaceId; }
     public BlockEntityBaselineStore blockEntityBaselines() { return blockEntityBaselines; }

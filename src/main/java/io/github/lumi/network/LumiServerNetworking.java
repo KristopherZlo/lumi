@@ -50,7 +50,7 @@ public final class LumiServerNetworking {
             return;
         }
         try {
-            BranchRef actual = runtime.mainRef();
+            BranchRef actual = runtime.activeRef();
             if (!actual.commit().equals(payload.expectedCommit())
                     || actual.revision() != payload.expectedRevision()) {
                 reject(player, payload, runtime, "History changed; refresh and try again");
@@ -135,7 +135,7 @@ public final class LumiServerNetworking {
             OperationEventPayload.State state,
             String message) {
         try {
-            BranchRef head = runtime.mainRef();
+            BranchRef head = runtime.activeRef();
             send(player, new OperationEventPayload(
                     request.requestId(), dimension(runtime), state,
                     message == null ? "Operation failed" : message,
@@ -147,7 +147,7 @@ public final class LumiServerNetworking {
 
     private static void sendSnapshot(ServerPlayer player, FabricDimensionRuntime runtime) {
         try {
-            BranchRef head = runtime.mainRef();
+            BranchRef head = runtime.activeRef();
             send(player, new HistorySnapshotPayload(
                     dimension(runtime), head.commit(), head.revision(),
                     runtime.mutations().snapshot().generations().size(),
