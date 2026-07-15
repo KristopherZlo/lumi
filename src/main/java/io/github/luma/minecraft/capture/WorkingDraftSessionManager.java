@@ -382,12 +382,32 @@ final class WorkingDraftSessionManager {
     }
 
     Optional<TrackedChangeBuffer> consumeAfterReconciliation(String projectId, TrackedProject trackedProject) throws IOException {
+        return this.completePreparedConsume(this.prepareConsumeAfterReconciliation(projectId, trackedProject));
+    }
+
+    PreparedDraftConsume prepareConsumeAfterReconciliation(String projectId, TrackedProject trackedProject) {
+        TrackedChangeBuffer session = this.sessionRegistry.removeBuffer(projectId);
+        boolean persistedDraftIsCurrent = this.sessionRegistry.matchesPersistedDraft(projectId, session);
+        if (trackedProject != null && session != null && !session.isEmpty() && !persistedDraftIsCurrent) {
+            this.persistenceCoordinator.enqueueDraftFlush(
+                    trackedProject.layout(),
+                    projectId,
+                    trackedProject.project().name(),
+                    session.toDraft()
+            );
+        }
+        this.sessionRegistry.close(projectId);
+        this.clearSessionDiagnostics(projectId);
+        return new PreparedDraftConsume(projectId, trackedProject, session);
+    }
+
+    Optional<TrackedChangeBuffer> completePreparedConsume(PreparedDraftConsume prepared) throws IOException {
+        String projectId = prepared.projectId();
+        TrackedProject trackedProject = prepared.trackedProject();
         if (trackedProject != null) {
             this.persistenceCoordinator.drainDraftFlushes(projectId, trackedProject.project().name());
         }
-        TrackedChangeBuffer session = this.sessionRegistry.removeBuffer(projectId);
-        this.sessionRegistry.close(projectId);
-        this.clearSessionDiagnostics(projectId);
+        TrackedChangeBuffer session = prepared.session();
         if (session != null) {
             this.clearCurrentRunDraft(projectId, trackedProject);
             LumaMod.LOGGER.info("Consumed in-memory working draft for project {} with {} pending changes", projectId, session.size());
@@ -420,6 +440,13 @@ final class WorkingDraftSessionManager {
             this.clearCurrentRunDraft(projectId, trackedProject);
         }
         return persistedDraft;
+    }
+
+    record PreparedDraftConsume(
+            String projectId,
+            TrackedProject trackedProject,
+            TrackedChangeBuffer session
+    ) {
     }
 
     void discard(String projectId, TrackedProject trackedProject) throws IOException {

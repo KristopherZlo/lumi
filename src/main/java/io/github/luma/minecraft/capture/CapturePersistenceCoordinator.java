@@ -45,6 +45,8 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
     private final ExecutorService draftFlushExecutor;
     private final ExecutorService baselineExecutor;
     private final ExecutorService priorityBaselineExecutor;
+    private final ExecutorService dirtyScopeExecutor =
+            Executors.newSingleThreadExecutor(maintenanceThreadFactory("dirty-scope"));
     private final Map<String, PendingBaselineWrite> pendingBaselineWrites = new HashMap<>();
     private final Map<String, PendingDraftFlush> pendingDraftFlushes = new HashMap<>();
     private final Map<String, PendingDirtyScopeFlush> pendingDirtyScopeFlushes = new HashMap<>();
@@ -326,6 +328,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
 
     @Override
     public void close() {
+        this.dirtyScopeExecutor.shutdown();
         this.draftFlushExecutor.shutdown();
         if (this.baselineExecutor != this.draftFlushExecutor) {
             this.baselineExecutor.shutdown();
@@ -387,7 +390,7 @@ public final class CapturePersistenceCoordinator implements AutoCloseable {
     }
 
     private void scheduleDirtyScopeFlush(PendingDirtyScopeFlush pending) {
-        this.draftFlushExecutor.execute(() -> this.flushDirtyScopeLoop(pending));
+        this.dirtyScopeExecutor.execute(() -> this.flushDirtyScopeLoop(pending));
     }
 
     private void flushDirtyScopeLoop(PendingDirtyScopeFlush pending) {

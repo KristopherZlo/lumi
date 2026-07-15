@@ -280,6 +280,45 @@ class WorkingDraftSessionManagerTest {
     }
 
     @Test
+    void consumePreparationDoesNotWaitForDraftPersistence() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("prepared-consume.mbp"));
+        BuildProject project = project();
+        TrackedProject trackedProject = trackedProject(layout, project);
+        ExecutorService draftExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService baselineExecutor = Executors.newSingleThreadExecutor();
+        CountDownLatch releaseDraft = blockExecutor(draftExecutor);
+        CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                new RecoveryRepository(),
+                new BaselineChunkRepository(),
+                draftExecutor,
+                baselineExecutor
+        );
+        try (coordinator) {
+            WorkingDraftSessionManager manager = new WorkingDraftSessionManager(coordinator);
+            TrackedChangeBuffer buffer = manager.getOrCreate(trackedProject, WorldMutationSource.PLAYER, NOW);
+            buffer.addChange(change("minecraft:stone", "minecraft:gold_block"), NOW.plusSeconds(1));
+
+            WorkingDraftSessionManager.PreparedDraftConsume prepared =
+                    manager.prepareConsumeAfterReconciliation(project.id().toString(), trackedProject);
+
+            assertEquals(buffer, prepared.session());
+            CompletableFuture<Optional<TrackedChangeBuffer>> consumed = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return manager.completePreparedConsume(prepared);
+                } catch (Exception exception) {
+                    throw new CompletionException(exception);
+                }
+            });
+            assertFalse(consumed.isDone());
+            releaseDraft.countDown();
+            assertEquals(buffer, consumed.get(1, TimeUnit.SECONDS).orElseThrow());
+        } finally {
+            releaseDraft.countDown();
+            stopExecutors(draftExecutor, baselineExecutor);
+        }
+    }
+
+    @Test
     void idleFreezeDoesNotWaitForPendingBaselineWrites() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("idle-freeze.mbp"));
         BuildProject project = project();
@@ -418,6 +457,10 @@ class WorkingDraftSessionManagerTest {
     }
 
     private static CountDownLatch blockBaselineExecutor(ExecutorService baselineExecutor) throws InterruptedException {
+        return blockExecutor(baselineExecutor);
+    }
+
+    private static CountDownLatch blockExecutor(ExecutorService baselineExecutor) throws InterruptedException {
         CountDownLatch baselineStarted = new CountDownLatch(1);
         CountDownLatch releaseBaseline = new CountDownLatch(1);
         baselineExecutor.submit(() -> {

@@ -77,17 +77,20 @@ class HistoryCaptureManagerTest {
     }
 
     @Test
-    void persistentTrackingRequiresCausalContextForSystemChanges() {
+    void persistentTrackingRejectsPassiveWorldTicksWithoutCausalContext() {
         assertFalse(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.SYSTEM));
+        assertFalse(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.GROWTH));
+        assertFalse(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.BLOCK_UPDATE));
+        assertFalse(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.MOB));
         try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushSource(
-                WorldMutationSource.SYSTEM,
+                WorldMutationSource.GROWTH,
                 "builder",
                 "action-1",
                 true
         )) {
-            assertTrue(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.SYSTEM));
+            assertTrue(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.GROWTH));
         }
-        assertTrue(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.BLOCK_UPDATE));
+        assertTrue(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.PLAYER));
         assertFalse(HistoryCaptureManager.shouldTrackPersistentMutation(WorldMutationSource.RESTORE));
         assertFalse(HistoryCaptureManager.shouldTrackPersistentMutation(null));
     }

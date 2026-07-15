@@ -213,6 +213,55 @@ class CapturePersistenceCoordinatorTest {
     }
 
     @Test
+    void draftFlushCompletesWhileDirtyScopeWaitsForBaselines() throws Exception {
+        ProjectLayout layout = new ProjectLayout(this.tempDir.resolve("draft-priority.mbp"));
+        RecoveryRepository recoveryRepository = new RecoveryRepository();
+        ExecutorService draftExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService baselineExecutor = Executors.newSingleThreadExecutor();
+        ExecutorService priorityExecutor = Executors.newSingleThreadExecutor();
+        CountDownLatch releaseBaselines = new CountDownLatch(1);
+        baselineExecutor.submit(() -> {
+            releaseBaselines.await(5, TimeUnit.SECONDS);
+            return null;
+        });
+        priorityExecutor.submit(() -> {
+            releaseBaselines.await(5, TimeUnit.SECONDS);
+            return null;
+        });
+
+        CapturePersistenceCoordinator coordinator = new CapturePersistenceCoordinator(
+                recoveryRepository,
+                new BaselineChunkRepository(),
+                new ProjectDirtyScopeRepository(),
+                draftExecutor,
+                baselineExecutor,
+                priorityExecutor
+        );
+        try {
+            ChunkSnapshotPayload snapshot = chunkSnapshot();
+            coordinator.enqueueBaselineWrite(layout, "project", "Project", snapshot, Instant.now());
+            ProjectDirtyScope scope = ProjectDirtyScope.empty("project", "main", "v0001");
+            scope.markBlockSection(new ChunkSectionPoint(snapshot.chunkX(), snapshot.chunkZ(), 0));
+            coordinator.enqueueDirtyScopeFlush(layout, "project", "Project", scope);
+            coordinator.enqueueDraftFlush(
+                    layout,
+                    "project",
+                    "Project",
+                    draft("minecraft:gold_block", Instant.now())
+            );
+
+            RecoveryDraft flushed = waitForDraft(recoveryRepository, layout);
+            assertEquals("minecraft:gold_block", flushed.changes().getFirst().newValue().blockId());
+            assertFalse(java.nio.file.Files.exists(layout.projectDirtyScopeFile()));
+        } finally {
+            releaseBaselines.countDown();
+            coordinator.drainProject("project", "Project");
+            coordinator.close();
+            stopExecutors(draftExecutor, baselineExecutor, priorityExecutor);
+        }
+    }
+
+    @Test
     void deleteDraftDoesNotWaitForBlockedBaselineWrites() throws Exception {
         ProjectLayout layout = new ProjectLayout(this.tempDir);
         RecoveryRepository recoveryRepository = new RecoveryRepository();

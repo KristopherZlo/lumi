@@ -1099,16 +1099,23 @@ public final class HistoryCaptureManager {
      * already flushed out of memory.
      */
     public Optional<TrackedChangeBuffer> consumeWorkingDraft(MinecraftServer server, String projectId) throws IOException {
-        return this.serverThreadExecutor.call(server, () -> this.consumeWorkingDraftOnServerThread(server, projectId));
+        WorkingDraftSessionManager.PreparedDraftConsume prepared = this.serverThreadExecutor.call(
+                server,
+                () -> this.prepareWorkingDraftConsumeOnServerThread(server, projectId)
+        );
+        return this.workingDrafts.completePreparedConsume(prepared);
     }
 
-    private Optional<TrackedChangeBuffer> consumeWorkingDraftOnServerThread(MinecraftServer server, String projectId) throws IOException {
+    private WorkingDraftSessionManager.PreparedDraftConsume prepareWorkingDraftConsumeOnServerThread(
+            MinecraftServer server,
+            String projectId
+    ) throws IOException {
         TrackedProject trackedProject = this.findTrackedProject(server, projectId);
         CaptureSessionState sessionState = this.workingDrafts.session(projectId);
         if (trackedProject != null && sessionState != null) {
             this.reconcileSession(server, trackedProject, sessionState, true);
         }
-        return this.workingDrafts.consumeAfterReconciliation(projectId, trackedProject);
+        return this.workingDrafts.prepareConsumeAfterReconciliation(projectId, trackedProject);
     }
 
     public void discardSession(MinecraftServer server, String projectId) throws IOException {
@@ -1748,8 +1755,8 @@ public final class HistoryCaptureManager {
         return !WorldMutationContext.captureSuppressed()
                 && ELIGIBILITY.shouldTrackPersistentMutation(
                         source,
-                        source != io.github.luma.domain.model.WorldMutationSource.SYSTEM
-                                || WorldMutationContext.hasCausalAction()
+                        true,
+                        WorldMutationContext.hasCausalAction()
                 );
     }
 
@@ -1762,10 +1769,13 @@ public final class HistoryCaptureManager {
             return false;
         }
         boolean activeGameplayChunk = source != io.github.luma.domain.model.WorldMutationSource.SYSTEM
-                || (WorldMutationContext.hasCausalAction()
-                    && level.getServer().isSameThread()
+                || (level.getServer().isSameThread()
                     && level.getChunkSource().isPositionTicking(ChunkPos.asLong(pos)));
-        return ELIGIBILITY.shouldTrackPersistentMutation(source, activeGameplayChunk);
+        return ELIGIBILITY.shouldTrackPersistentMutation(
+                source,
+                activeGameplayChunk,
+                WorldMutationContext.hasCausalAction()
+        );
     }
 
     public static boolean allowsAutomaticProjectCreation(io.github.luma.domain.model.WorldMutationSource source) {
