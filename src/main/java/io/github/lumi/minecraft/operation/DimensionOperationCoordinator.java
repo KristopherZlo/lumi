@@ -15,6 +15,7 @@ public final class DimensionOperationCoordinator {
     private final long tickBudgetNanos;
     private final Consumer<DimensionMutation> terminalObserver;
     private DimensionMutation active;
+    private Consumer<DimensionMutation> activeObserver = ignored -> { };
     private DimensionFreeze.Lease lease;
     private boolean freezeReleased;
     private boolean terminalReported;
@@ -48,11 +49,18 @@ public final class DimensionOperationCoordinator {
     }
 
     public synchronized void start(DimensionMutation operation) {
+        start(operation, ignored -> { });
+    }
+
+    public synchronized void start(
+            DimensionMutation operation, Consumer<DimensionMutation> operationObserver) {
         Objects.requireNonNull(operation, "operation");
+        Objects.requireNonNull(operationObserver, "operationObserver");
         if (active != null) {
             throw new IllegalStateException("A dimension mutation is already active");
         }
         active = operation;
+        activeObserver = operationObserver;
         freezeReleased = false;
         terminalReported = false;
     }
@@ -80,6 +88,7 @@ public final class DimensionOperationCoordinator {
         }
         if (active.isTerminal() && active.isSafeToRelease()) {
             active = null;
+            activeObserver = ignored -> { };
             freezeReleased = false;
             terminalReported = false;
         }
@@ -88,6 +97,7 @@ public final class DimensionOperationCoordinator {
     private void reportTerminal() {
         if (active.isTerminal() && !terminalReported) {
             terminalObserver.accept(active);
+            activeObserver.accept(active);
             terminalReported = true;
         }
     }

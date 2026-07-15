@@ -104,6 +104,22 @@ class DimensionOperationCoordinatorTest {
         assertEquals(0, freeze.releaseCalls);
     }
 
+    @Test
+    void reportsTerminalOutcomeToGlobalAndRequestObserver() throws IOException {
+        var global = new ArrayList<DimensionMutation>();
+        var request = new ArrayList<DimensionMutation>();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                new RecordingFreeze(), () -> 0L, 1L, global::add);
+        TwoTickMutation mutation = new TwoTickMutation(false);
+
+        coordinator.start(mutation, request::add);
+        coordinator.tick();
+        coordinator.tick();
+
+        assertEquals(java.util.List.of(mutation), global);
+        assertEquals(java.util.List.of(mutation), request);
+    }
+
     private static final class TwoTickMutation implements DimensionMutation {
         private final boolean degraded;
         private int ticks;

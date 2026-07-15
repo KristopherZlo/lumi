@@ -43,6 +43,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -175,8 +176,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public synchronized SaveCaptureOperation startSave(SaveRequest request) {
+        return startSave(request, ignored -> { });
+    }
+
+    public synchronized SaveCaptureOperation startSave(
+            SaveRequest request, Consumer<DimensionMutation> terminalObserver) {
         SaveCaptureOperation operation = createSave(request);
-        operations.start(operation);
+        operations.start(operation, terminalObserver);
         return operation;
     }
 
@@ -188,6 +194,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public synchronized ReturnPointRestoreOperation startRestore(
             CommitId target, CommitAuthor author) throws IOException {
+        return startRestore(target, author, ignored -> { });
+    }
+
+    public synchronized ReturnPointRestoreOperation startRestore(
+            CommitId target,
+            CommitAuthor author,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(author, "author");
         if (operations.hasActiveOperation()) {
@@ -202,7 +215,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var operation = new ReturnPointRestoreOperation(
                 createSave(returnPoint), saved -> returnPointRestores.prepare(
                         saved, target, hiddenRef, operationId));
-        operations.start(operation);
+        operations.start(operation, terminalObserver);
         return operation;
     }
 
