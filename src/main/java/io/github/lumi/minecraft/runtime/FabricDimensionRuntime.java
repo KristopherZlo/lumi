@@ -2,11 +2,15 @@ package io.github.lumi.minecraft.runtime;
 
 import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
+import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
+import io.github.lumi.minecraft.operation.RestoreOperation;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveService;
+import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.BatchedWorldStateCapture;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
@@ -15,6 +19,7 @@ import io.github.lumi.minecraft.world.EntityChunkDurabilityGate;
 import io.github.lumi.minecraft.world.MinecraftBlockEntityBaselineCapture;
 import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
 import io.github.lumi.minecraft.world.MinecraftWorldStateReader;
+import io.github.lumi.minecraft.world.MinecraftWorldStateApply;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
 import io.github.lumi.minecraft.world.SavePreparation;
 import io.github.lumi.minecraft.world.WorldStateCapture;
@@ -31,6 +36,8 @@ import java.nio.file.Path;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -49,6 +56,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final SavePreparation savePreparation;
     private final WorldStateCapture worldCapture;
     private final SaveService saves;
+    private final RestoreService restores;
+    private final MinecraftWorldStateApply worldApply;
+    private final OperationJournalRepository journals;
     private final Executor background;
     private final BranchRefRepository refs;
     private final UUID defaultWorkspaceId;
@@ -64,6 +74,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             DimensionOperationCoordinator operations,
             MutationDurabilityTracker mutations,
             SaveService saves,
+            RestoreService restores,
+            MinecraftWorldStateApply worldApply,
+            OperationJournalRepository journals,
             Executor background,
             BranchRefRepository refs,
             UUID defaultWorkspaceId) {
@@ -73,6 +86,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.operations = operations;
         this.mutations = mutations;
         this.saves = saves;
+        this.restores = restores;
+        this.worldApply = worldApply;
+        this.journals = journals;
         this.background = background;
         this.refs = refs;
         this.defaultWorkspaceId = defaultWorkspaceId;
@@ -93,16 +109,19 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var commits = new CommitRepository(repository);
         var refs = new BranchRefRepository(repository);
         var journals = new OperationJournalRepository(repository);
+        var origins = new OriginStore(repository);
         BranchRef main = new DimensionHistoryInitializer(objects, commits, refs)
                 .initialize(UUID.randomUUID());
         UUID workspaceId = commits.read(main.commit()).workspaceId();
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
-                objects, new OriginStore(repository),
+                objects, origins,
                 new WorkingIndexRepository(repository), background);
         return new FabricDimensionRuntime(
                 level, repository, freeze, new DimensionOperationCoordinator(freeze),
                 mutations,
                 new SaveService(objects, new MerkleTreeEditor(objects), commits, refs, journals),
+                new RestoreService(objects, commits, origins),
+                new MinecraftWorldStateApply(level, freeze), journals,
                 background, refs, workspaceId);
     }
 
@@ -135,12 +154,47 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         entityDurability.discard(MinecraftEntityChunkCapture.key(position));
     }
 
-    public SaveCaptureOperation startSave(SaveRequest request) {
+    public synchronized SaveCaptureOperation startSave(SaveRequest request) {
         SaveCaptureOperation operation = new SaveCaptureOperation(
                 Objects.requireNonNull(request, "request"), savePreparation, worldCapture,
                 saves, mutations, background);
         operations.start(operation);
         return operation;
+    }
+
+    public synchronized BackgroundPreparedMutation<RestoreOperation> startRestore(
+            CommitId target) throws IOException {
+        Objects.requireNonNull(target, "target");
+        if (operations.hasActiveOperation()) {
+            throw new IllegalStateException("A dimension operation is already active");
+        }
+        if (!mutations.snapshot().generations().isEmpty()) {
+            throw new IllegalStateException("Save or discard pending work before full Restore");
+        }
+        BranchRef expected = mainRef();
+        CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
+            try {
+                return RestoreOperation.start(
+                        restores.prepare(expected, target), worldApply, refs, journals, UUID.randomUUID());
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+        var operation = new BackgroundPreparedMutation<>(
+                preparation,
+                () -> validateRestoreBoundary(expected),
+                RestoreOperation::cancelBeforeApply);
+        operations.start(operation);
+        return operation;
+    }
+
+    private void validateRestoreBoundary(BranchRef expected) throws IOException {
+        if (!mutations.snapshot().generations().isEmpty()) {
+            throw new IOException("World changed while Restore was preparing");
+        }
+        if (!mainRef().equals(expected)) {
+            throw new IOException("Branch changed while Restore was preparing");
+        }
     }
 
     public ServerLevel level() { return level; }

@@ -2,12 +2,15 @@ package io.github.lumi.minecraft.runtime;
 
 import static com.mojang.brigadier.arguments.StringArgumentType.getString;
 import static com.mojang.brigadier.arguments.StringArgumentType.greedyString;
+import static com.mojang.brigadier.arguments.StringArgumentType.word;
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.service.SaveRequest;
 import java.io.IOException;
 import java.time.Instant;
@@ -22,13 +25,18 @@ public final class LumiCommands {
     private LumiCommands() { }
 
     public static void register() {
-        CommandRegistrationCallback.EVENT.register((dispatcher, context, selection) ->
-                dispatcher.register(literal("lumi")
-                        .then(literal("save")
-                                .requires(LumiCommands::mayUse)
-                                .executes(command -> save(command.getSource(), "Save"))
-                                .then(argument("message", greedyString()).executes(command ->
-                                        save(command.getSource(), getString(command, "message")))))));
+        CommandRegistrationCallback.EVENT.register((dispatcher, context, selection) -> {
+            var save = literal("save")
+                    .requires(LumiCommands::mayUse)
+                    .executes(command -> save(command.getSource(), "Save"))
+                    .then(argument("message", greedyString()).executes(command ->
+                            save(command.getSource(), getString(command, "message"))));
+            var restore = literal("restore")
+                    .requires(LumiCommands::mayUse)
+                    .then(argument("commit", word()).executes(command ->
+                            restore(command.getSource(), getString(command, "commit"))));
+            dispatcher.register(literal("lumi").then(save).then(restore));
+        });
     }
 
     private static boolean mayUse(CommandSourceStack source) {
@@ -54,6 +62,22 @@ public final class LumiCommands {
             return 1;
         } catch (IOException | IllegalStateException failed) {
             source.sendFailure(Component.literal("Lumi save could not start: " + failed.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int restore(CommandSourceStack source, String commitHex) {
+        var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
+        if (runtime == null) {
+            source.sendFailure(Component.literal("Lumi is not ready for this dimension"));
+            return 0;
+        }
+        try {
+            runtime.startRestore(new CommitId(new ObjectId(commitHex)));
+            source.sendSuccess(() -> Component.literal("Lumi restore preparation started"), false);
+            return 1;
+        } catch (IOException | IllegalStateException | IllegalArgumentException failed) {
+            source.sendFailure(Component.literal("Lumi restore could not start: " + failed.getMessage()));
             return 0;
         }
     }
