@@ -392,6 +392,8 @@ the measurement does not include trace I/O.
 
 Run `powershell -ExecutionPolicy Bypass -File scripts/run-history-load-gate.ps1`
 for the blocking 50k/100k exactness, tick-time, progress, and bounded-heap gate.
+The load client runs with a hard 2304 MiB heap cap by default, so the result is
+independent of garbage-collector timing in an otherwise larger test heap.
 Raw server-backlog regressions remain owned by the paired vanilla/Lumi runtime
 load gate; the controlled client GameTest load journey gates its measured
 mutation and Lumi tick work because test-thread tasks also add wall time between

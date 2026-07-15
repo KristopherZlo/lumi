@@ -51,7 +51,11 @@ Push-Location $repositoryRoot
 try {
     if (-not $SkipRun) {
         $arguments = @{
-            GradleTasks = @('runClientGameTest', '-PlumiClientGameTestSuite=load')
+            GradleTasks = @(
+                'runClientGameTest',
+                '-PlumiClientGameTestSuite=load',
+                "-PlumiLoadGateMaxHeapMiB=$MaxHeapUsedMiB"
+            )
         }
         if ($JavaHome) {
             $arguments.JavaHome = $JavaHome
@@ -104,14 +108,19 @@ try {
 
     $heapValues = [regex]::Matches($clientLoadText, 'heapUsedMiB=(\d+)') |
         ForEach-Object { [int]$_.Groups[1].Value }
+    $heapMaxValues = [regex]::Matches($clientLoadText, 'heapMaxMiB=(\d+)') |
+        ForEach-Object { [int]$_.Groups[1].Value }
     Require ($heapValues.Count -gt 0) 'missing client heap samples'
+    Require ($heapMaxValues.Count -gt 0) 'missing client heap limit samples'
     $heapMax = ($heapValues | Measure-Object -Maximum).Maximum
+    $configuredHeapMax = ($heapMaxValues | Measure-Object -Maximum).Maximum
+    Require ($configuredHeapMax -le $MaxHeapUsedMiB) "test JVM heap limit was ${configuredHeapMax} MiB"
     Require ($heapMax -le $MaxHeapUsedMiB) "heap usage reached ${heapMax} MiB"
 
     Require (Has-IntermediateProgress $latestText 'save-version' 'WRITING') 'save progress was not observable'
     Require (Has-IntermediateProgress $latestText 'restore-version' 'APPLYING') 'restore progress was not observable'
 
-    Write-Host "History load gate passed: exact=50k/100k, maxTick=${managerTickMax}ms, maxLumiEndTick=${lumiEndTickMax}ms, maxHeap=${heapMax}MiB"
+    Write-Host "History load gate passed: exact=50k/100k, maxTick=${managerTickMax}ms, maxLumiEndTick=${lumiEndTickMax}ms, maxHeap=${heapMax}MiB, heapLimit=${configuredHeapMax}MiB"
 } finally {
     Pop-Location
 }

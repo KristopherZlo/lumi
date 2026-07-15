@@ -371,6 +371,14 @@ tasks.named('runClientGameTest').configure {
         def suite = selectedSuite
         jvmArgs("-Dlumi.client.gametest.suite=${suite}")
         if (suite == 'load') {
+            def maxHeapMiB = providers.gradleProperty('lumiLoadGateMaxHeapMiB')
+                    .map { Integer.parseInt(it) }
+                    .orElse(2304)
+                    .get()
+            if (maxHeapMiB < 512) {
+                throw new GradleException('lumiLoadGateMaxHeapMiB must be at least 512')
+            }
+            jvmArgs("-Xmx${maxHeapMiB}m")
             jvmArgs('-Dlumi.loadLog=true')
             jvmArgs('-Dlumi.loadLog.slowMs=10')
             jvmArgs('-Dlumi.clientLoadLog.sampleTicks=5')
