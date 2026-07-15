@@ -96,6 +96,21 @@ public final class RestoreOperation implements DimensionMutation {
                 stateListener, OperationKind.BRANCH_SWITCH, target);
     }
 
+    public static RestoreOperation startMerge(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener) throws IOException {
+        OperationTarget target = new OperationTarget(
+                restore.expectedRef().name(), restore.expectedRef().commit(),
+                restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
+                Optional.of(restore.expectedRef().commit()));
+        return start(restore, world, publication, journals, operationId,
+                stateListener, OperationKind.MERGE, target);
+    }
+
     public static RestoreOperation startPartial(
             PreparedRestore restore,
             WorldStateApply world,

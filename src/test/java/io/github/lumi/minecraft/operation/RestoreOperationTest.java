@@ -75,6 +75,25 @@ class RestoreOperationTest {
     }
 
     @Test
+    void createsMergeJournalBeforeApply() throws IOException {
+        BranchRef current = new BranchRef(new BranchName("main"), id('4'), 3);
+        CommitId merge = id('5');
+        var restore = new PreparedRestore(
+                current, merge, Map.of(), Map.of(), Map.of(), Map.of());
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+
+        RestoreOperation.startMerge(
+                restore, new RepairThenVerify(), ignored -> { }, journals,
+                UUID.randomUUID(), RestoreStateListener.NONE);
+
+        var journal = journals.read().orElseThrow();
+        assertEquals(io.github.lumi.domain.model.OperationKind.MERGE, journal.kind());
+        assertEquals(Optional.of(merge), journal.target().target());
+        assertEquals(Optional.of(current.commit()), journal.target().returnPoint());
+        assertEquals(OperationPhase.PREPARED, journal.phase());
+    }
+
+    @Test
     void createsPartialRestoreJournalWithoutChangingItsTarget() throws IOException {
         BranchRef source = new BranchRef(new BranchName("main"), id('f'), 2);
         var restore = new PreparedRestore(
