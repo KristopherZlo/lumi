@@ -92,6 +92,24 @@ class RestoreOperationTest {
     }
 
     @Test
+    void createsQuickRollbackJournalToActiveHead() throws IOException {
+        BranchRef source = new BranchRef(new BranchName("main"), id('1'), 2);
+        CommitId checkpoint = id('2');
+        var restore = new PreparedRestore(
+                source, source.commit(), Map.of(), Map.of(), Map.of(), Map.of());
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+
+        RestoreOperation.startQuickRollback(
+                restore, new RepairThenVerify(), ignored -> { }, journals,
+                UUID.randomUUID(), RestoreStateListener.NONE, checkpoint);
+
+        var journal = journals.read().orElseThrow();
+        assertEquals(io.github.lumi.domain.model.OperationKind.QUICK_ROLLBACK, journal.kind());
+        assertEquals(Optional.of(source.commit()), journal.target().target());
+        assertEquals(Optional.of(checkpoint), journal.target().returnPoint());
+    }
+
+    @Test
     void publishesRefOnlyAfterIncrementalApplyAndVerification() throws IOException {
         CommitId current = id('1');
         CommitId target = id('2');

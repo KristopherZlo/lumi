@@ -321,6 +321,44 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return operation;
     }
 
+    public synchronized ReturnPointRestoreOperation startQuickRollback(
+            CommitAuthor author,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        if (operations.hasActiveOperation()) {
+            throw new IllegalStateException("A dimension operation is already active");
+        }
+        BranchRef expected = activeRef();
+        UUID operationId = UUID.randomUUID();
+        BranchName hidden = new BranchName("hidden/rollback/" + operationId);
+        SaveRequest checkpointRequest = new SaveRequest(
+                expected, Objects.requireNonNull(author, "author"),
+                "Checkpoint before Quick Rollback", Instant.now(), defaultWorkspaceId,
+                Optional.empty(), CommitKind.HIDDEN_RETURN);
+        SaveCaptureOperation checkpoint = new SaveCaptureOperation(
+                checkpointRequest, savePreparation, worldCapture,
+                (request, captured) -> saves.checkpoint(request, captured, hidden),
+                ignored -> { }, background);
+        var operation = new ReturnPointRestoreOperation(checkpoint, saved ->
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        if (!activeRef().equals(expected)) {
+                            throw new IOException("Active branch changed during Quick Rollback");
+                        }
+                        var prepared = restores.prepare(
+                                expected, saved.commitId(), expected.commit());
+                        return RestoreOperation.startQuickRollback(
+                                prepared, worldApply,
+                                ignored -> mutations.clear(saved.capturedGenerations()),
+                                journals, operationId, restoreStateListener,
+                                saved.commitId());
+                    } catch (IOException failed) {
+                        throw new CompletionException(failed);
+                    }
+                }, background));
+        operations.start(operation, terminalObserver);
+        return operation;
+    }
+
     public ServerLevel level() { return level; }
     public Path repository() { return repository; }
     public DimensionFreezeState freeze() { return freeze; }

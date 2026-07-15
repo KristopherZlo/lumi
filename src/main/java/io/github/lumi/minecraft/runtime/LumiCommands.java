@@ -42,6 +42,9 @@ public final class LumiCommands {
                     .requires(LumiCommands::mayUse)
                     .then(argument("commit", word()).executes(command ->
                             restore(command.getSource(), getString(command, "commit"))));
+            var rollback = literal("rollback")
+                    .requires(LumiCommands::mayUse)
+                    .executes(command -> quickRollback(command.getSource()));
             var branch = literal("branch")
                     .requires(LumiCommands::mayUse)
                     .then(literal("create")
@@ -67,7 +70,7 @@ public final class LumiCommands {
                     .requires(LumiCommands::mayUse)
                     .then(argument("commit", word()).then(x1Arg));
             dispatcher.register(literal("lumi").then(save).then(restore)
-                    .then(restoreArea).then(branch));
+                    .then(restoreArea).then(rollback).then(branch));
         });
     }
 
@@ -160,6 +163,23 @@ public final class LumiCommands {
             return 1;
         } catch (IOException | IllegalStateException | IllegalArgumentException failed) {
             source.sendFailure(Component.literal("Lumi block-area Restore could not start: "
+                    + failed.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int quickRollback(CommandSourceStack source) {
+        var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
+        if (runtime == null) {
+            source.sendFailure(Component.literal("Lumi is not ready for this dimension"));
+            return 0;
+        }
+        try {
+            runtime.startQuickRollback(author(source), ignored -> { });
+            source.sendSuccess(() -> Component.literal("Lumi Quick Rollback started"), false);
+            return 1;
+        } catch (IOException | IllegalStateException failed) {
+            source.sendFailure(Component.literal("Lumi Quick Rollback could not start: "
                     + failed.getMessage()));
             return 0;
         }

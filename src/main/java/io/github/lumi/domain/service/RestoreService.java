@@ -42,6 +42,13 @@ public final class RestoreService {
         return prepare(currentRef, currentRef.commit(), targetCommit, null, false);
     }
 
+    public PreparedRestore prepare(
+            BranchRef expectedRef, CommitId sourceCommit, CommitId targetCommit)
+            throws IOException {
+        return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
+                targetCommit, null, false);
+    }
+
     public PreparedRestore preparePartial(
             BranchRef currentRef, CommitId targetCommit, BlockBox area, boolean outside)
             throws IOException {

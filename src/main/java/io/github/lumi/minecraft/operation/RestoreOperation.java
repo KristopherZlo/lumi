@@ -116,6 +116,26 @@ public final class RestoreOperation implements DimensionMutation {
                 stateListener, OperationKind.RESTORE, target);
     }
 
+    public static RestoreOperation startQuickRollback(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            CommitId returnPoint) throws IOException {
+        Objects.requireNonNull(returnPoint, "returnPoint");
+        if (!restore.targetCommit().equals(restore.expectedRef().commit())) {
+            throw new IOException("Quick Rollback target must be the active HEAD");
+        }
+        OperationTarget target = new OperationTarget(
+                restore.expectedRef().name(), restore.expectedRef().commit(),
+                restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
+                Optional.of(returnPoint));
+        return start(restore, world, publication, journals, operationId,
+                stateListener, OperationKind.QUICK_ROLLBACK, target);
+    }
+
     public static RestoreOperation start(
             PreparedRestore restore,
             WorldStateApply world,

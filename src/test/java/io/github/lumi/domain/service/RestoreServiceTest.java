@@ -104,6 +104,12 @@ class RestoreServiceTest {
         assertEquals("minecraft:gold_block", fromCheckpoint.returnSections()
                 .get(new SectionKey(0, 0, 0)).blockStates().get(0));
         assertEquals(currentRef, fromCheckpoint.expectedRef());
+
+        PreparedRestore fullFromCheckpoint = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot)).prepare(
+                        currentRef, checkpoint, target);
+        assertEquals("minecraft:gold_block", fullFromCheckpoint.returnSections()
+                .get(new SectionKey(0, 0, 0)).blockStates().get(0));
     }
 
     private static io.github.lumi.domain.model.ObjectId tree(
