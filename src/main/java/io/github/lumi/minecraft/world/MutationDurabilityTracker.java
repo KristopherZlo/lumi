@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndex;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
+import io.github.lumi.minecraft.operation.CapturedGenerationCompletion;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -23,7 +24,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /** Coalesces dirty persistence and gates vanilla chunk publication until it is durable. */
-public final class MutationDurabilityTracker {
+public final class MutationDurabilityTracker implements CapturedGenerationCompletion {
     private static final Logger LOGGER = Logger.getLogger(MutationDurabilityTracker.class.getName());
 
     private final WorldObjectRepository objects;
@@ -33,6 +34,7 @@ public final class MutationDurabilityTracker {
     private final WorkingIndex working;
     private final Set<HistoryKey> durableOrigins;
     private final Map<HistoryKey, Long> durableGenerations;
+    private final Map<HistoryKey, Long> committedGenerations = new HashMap<>();
     private final Map<HistoryKey, Long> publicationRequirements = new HashMap<>();
     private final Map<ChunkCoordinate, Integer> blockedChunks = new HashMap<>();
     private final Set<HistoryKey> pendingOrigins = new HashSet<>();
@@ -90,6 +92,9 @@ public final class MutationDurabilityTracker {
                 originWrite = () -> persistOrigin(key, origin, writer);
             }
             generation = working.markDirty(key);
+            if (generation == 1) {
+                committedGenerations.remove(key);
+            }
             if (publicationRequirements.put(key, generation) == null) {
                 blockedChunks.merge(chunk(key), 1, Integer::sum);
             }
@@ -112,6 +117,29 @@ public final class MutationDurabilityTracker {
 
     public synchronized WorkingIndexSnapshot snapshot() {
         return working.snapshot();
+    }
+
+    @Override
+    public void clear(WorkingIndexSnapshot captured) {
+        boolean scheduleIndex;
+        synchronized (this) {
+            WorkingIndexSnapshot before = working.snapshot();
+            working.clearCaptured(captured);
+            WorkingIndexSnapshot after = working.snapshot();
+            captured.generations().forEach((key, generation) -> {
+                if (Objects.equals(before.generations().get(key), generation)
+                        && !after.generations().containsKey(key)) {
+                    committedGenerations.put(key, generation);
+                    releaseSatisfied(key);
+                }
+            });
+            indexRevision++;
+            scheduleIndex = !indexWriterScheduled;
+            indexWriterScheduled = true;
+        }
+        if (scheduleIndex) {
+            background.execute(this::writeIndexUntilCurrent);
+        }
     }
 
     private <T> void persistOrigin(HistoryKey key, T origin, OriginWriter<T> writer) {
@@ -159,8 +187,11 @@ public final class MutationDurabilityTracker {
 
     private void releaseSatisfied(HistoryKey key) {
         Long required = publicationRequirements.get(key);
+        long durable = Math.max(
+                durableGenerations.getOrDefault(key, 0L),
+                committedGenerations.getOrDefault(key, 0L));
         if (required == null || !durableOrigins.contains(key)
-                || durableGenerations.getOrDefault(key, 0L) < required) {
+                || durable < required) {
             return;
         }
         publicationRequirements.remove(key);

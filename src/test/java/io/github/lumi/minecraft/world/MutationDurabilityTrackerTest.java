@@ -66,6 +66,26 @@ class MutationDurabilityTrackerTest {
         assertTrue(tracker.canPublishChunk(3, 5));
     }
 
+    @Test
+    void publishedCommitCanSatisfyDirtyGenerationButNeverMissingOrigin() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        SectionKey key = new SectionKey(7, 8, 9);
+
+        tracker.registerSectionMutation(key, MutationDurabilityTrackerTest::airSection);
+        tracker.clear(tracker.snapshot());
+
+        assertFalse(tracker.canPublishChunk(7, 9));
+        background.runNext();
+        assertTrue(tracker.canPublishChunk(7, 9));
+        background.runNext();
+
+        assertTrue(tracker.canPublishChunk(7, 9));
+        assertTrue(new WorkingIndexRepository(repositoryRoot).read().generations().isEmpty());
+    }
+
     private static SectionBlob airSection() {
         return new SectionBlob(
                 new ArrayList<>(Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:air")), Map.of());
