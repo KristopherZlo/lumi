@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchSwitchTarget;
+import io.github.lumi.domain.model.BlockAreaTarget;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
@@ -62,6 +64,23 @@ class OperationJournalRepositoryTest {
 
         var created = repository.create(new OperationJournal(
                 UUID.randomUUID(), OperationKind.BRANCH_SWITCH,
+                OperationPhase.PREPARED, target));
+
+        assertEquals(created, new OperationJournalRepository(repositoryRoot)
+                .read().orElseThrow());
+    }
+
+    @Test
+    void persistsPartialRestoreArea() throws IOException {
+        OperationJournalRepository repository = new OperationJournalRepository(repositoryRoot);
+        var area = new BlockAreaTarget(new BlockBox(-3, 4, 5, 7, 8, 9), true);
+        OperationTarget target = new OperationTarget(
+                new BranchName("main"), id("expected"), 7,
+                Optional.of(id("target")), Optional.of(id("return")),
+                Optional.empty(), Optional.of(area));
+
+        var created = repository.create(new OperationJournal(
+                UUID.randomUUID(), OperationKind.RESTORE,
                 OperationPhase.PREPARED, target));
 
         assertEquals(created, new OperationJournalRepository(repositoryRoot)

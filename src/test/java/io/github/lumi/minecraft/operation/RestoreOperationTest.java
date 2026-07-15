@@ -8,6 +8,8 @@ import io.github.lumi.domain.model.ActiveBranch;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.BranchSwitchTarget;
+import io.github.lumi.domain.model.BlockAreaTarget;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.OperationPhase;
@@ -70,6 +72,21 @@ class RestoreOperationTest {
         assertEquals(io.github.lumi.domain.model.OperationKind.BRANCH_SWITCH, journal.kind());
         assertEquals(Optional.of(new BranchSwitchTarget(target.name(), 4, 6)),
                 journal.target().branchSwitch());
+    }
+
+    @Test
+    void createsPartialRestoreJournalWithoutChangingItsTarget() throws IOException {
+        BranchRef source = new BranchRef(new BranchName("main"), id('f'), 2);
+        var restore = new PreparedRestore(
+                source, id('0'), Map.of(), Map.of(), Map.of(), Map.of());
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        var area = new BlockAreaTarget(new BlockBox(1, 2, 3, 4, 5, 6), false);
+
+        RestoreOperation.startPartial(
+                restore, new RepairThenVerify(), ignored -> { }, journals,
+                UUID.randomUUID(), RestoreStateListener.NONE, area);
+
+        assertEquals(Optional.of(area), journals.read().orElseThrow().target().blockArea());
     }
 
     @Test

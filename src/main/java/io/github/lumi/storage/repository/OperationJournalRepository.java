@@ -2,6 +2,8 @@ package io.github.lumi.storage.repository;
 
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchSwitchTarget;
+import io.github.lumi.domain.model.BlockAreaTarget;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.OperationJournal;
@@ -81,6 +83,7 @@ public final class OperationJournalRepository {
             writeOptionalId(output, journal.target().target());
             writeOptionalId(output, journal.target().returnPoint());
             writeBranchSwitch(output, journal.target().branchSwitch());
+            writeBlockArea(output, journal.target().blockArea());
         }
         return bytes.toByteArray();
     }
@@ -104,7 +107,7 @@ public final class OperationJournalRepository {
             OperationTarget target = new OperationTarget(
                     new BranchName(new String(branch, StandardCharsets.UTF_8)),
                     readId(input), input.readLong(), readOptionalId(input), readOptionalId(input),
-                    readBranchSwitch(input));
+                    readBranchSwitch(input), readBlockArea(input));
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in operation journal");
             }
@@ -162,6 +165,37 @@ public final class OperationJournalRepository {
         return Optional.of(new BranchSwitchTarget(
                 new BranchName(new String(name, StandardCharsets.UTF_8)),
                 input.readLong(), input.readLong()));
+    }
+
+    private static void writeBlockArea(
+            DataOutputStream output, Optional<BlockAreaTarget> blockArea) throws IOException {
+        output.writeBoolean(blockArea.isPresent());
+        if (blockArea.isEmpty()) return;
+        BlockAreaTarget target = blockArea.orElseThrow();
+        BlockBox area = target.area();
+        output.writeInt(area.minX());
+        output.writeInt(area.minY());
+        output.writeInt(area.minZ());
+        output.writeInt(area.maxX());
+        output.writeInt(area.maxY());
+        output.writeInt(area.maxZ());
+        output.writeBoolean(target.outside());
+    }
+
+    private static Optional<BlockAreaTarget> readBlockArea(DataInputStream input) throws IOException {
+        int present = input.readUnsignedByte();
+        if (present > 1) {
+            throw new IOException("Invalid partial Restore area flag");
+        }
+        if (present == 0) return Optional.empty();
+        BlockBox area = new BlockBox(
+                input.readInt(), input.readInt(), input.readInt(),
+                input.readInt(), input.readInt(), input.readInt());
+        int outside = input.readUnsignedByte();
+        if (outside > 1) {
+            throw new IOException("Invalid outside Restore flag");
+        }
+        return Optional.of(new BlockAreaTarget(area, outside == 1));
     }
 
     private static void writeId(DataOutputStream output, CommitId id) throws IOException {

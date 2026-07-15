@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.operation;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.BranchSwitchTarget;
+import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
@@ -92,6 +93,24 @@ public final class RestoreOperation implements DimensionMutation {
                         plan.expectedActive().revision())));
         return start(restore, world, publication, journals, operationId,
                 stateListener, OperationKind.BRANCH_SWITCH, target);
+    }
+
+    public static RestoreOperation startPartial(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            BlockAreaTarget area) throws IOException {
+        Objects.requireNonNull(area, "area");
+        OperationTarget target = new OperationTarget(
+                restore.expectedRef().name(), restore.expectedRef().commit(),
+                restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
+                Optional.of(restore.expectedRef().commit()), Optional.empty(),
+                Optional.of(area));
+        return start(restore, world, publication, journals, operationId,
+                stateListener, OperationKind.RESTORE, target);
     }
 
     public static RestoreOperation start(
