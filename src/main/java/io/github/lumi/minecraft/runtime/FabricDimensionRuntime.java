@@ -32,6 +32,7 @@ import io.github.lumi.minecraft.world.EntityChunkDurabilityGate;
 import io.github.lumi.minecraft.world.MinecraftBlockEntityBaselineCapture;
 import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
 import io.github.lumi.minecraft.world.MinecraftLiveBlockWorldAccess;
+import io.github.lumi.minecraft.world.MinecraftLiveEntityWorldAccess;
 import io.github.lumi.minecraft.world.MinecraftWorldStateReader;
 import io.github.lumi.minecraft.world.MinecraftWorldStateApply;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
@@ -86,6 +87,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final UUID defaultWorkspaceId;
     private final LiveActionJournal liveActions = new LiveActionJournal();
     private final MinecraftLiveBlockWorldAccess liveWorld;
+    private final MinecraftLiveEntityWorldAccess liveEntityWorld;
+    private final MinecraftLiveEntityTracker liveEntities;
     private final MinecraftCausalTickTracker causalTicks;
     private final io.github.lumi.minecraft.operation.RestoreStateListener restoreStateListener;
     private final BlockEntityBaselineStore blockEntityBaselines = new BlockEntityBaselineStore();
@@ -123,6 +126,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.active = active;
         this.defaultWorkspaceId = defaultWorkspaceId;
         liveWorld = new MinecraftLiveBlockWorldAccess(level, freeze);
+        liveEntityWorld = new MinecraftLiveEntityWorldAccess(level, freeze);
+        liveEntities = new MinecraftLiveEntityTracker(liveActions, liveEntityWorld);
         causalTicks = new MinecraftCausalTickTracker(
                 liveActions, level, freeze, level.getBlockTicks(), level.getFluidTicks());
         entityDurability = new EntityChunkDurabilityGate(mutations);
@@ -266,13 +271,15 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             LiveActionJournal.Direction direction,
             Consumer<DimensionMutation> terminalObserver) {
         var operation = new LiveActionOperation(
-                liveActions, player, direction, liveWorld, causalTicks::cancel);
+                liveActions, player, direction, liveWorld,
+                liveEntityWorld, causalTicks::cancel);
         operations.start(operation, terminalObserver);
         return operation;
     }
 
     public LiveActionJournal liveActions() { return liveActions; }
     public MinecraftLiveBlockWorldAccess liveWorld() { return liveWorld; }
+    public MinecraftLiveEntityTracker liveEntities() { return liveEntities; }
     public MinecraftCausalTickTracker causalTicks() { return causalTicks; }
 
     private Consumer<DimensionMutation> clearingLiveHistory(
@@ -281,6 +288,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             if (operation.terminalState() == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
                 liveActions.clear();
                 liveWorld.clear();
+                liveEntityWorld.clear();
                 causalTicks.cancelAll();
             }
             observer.accept(operation);

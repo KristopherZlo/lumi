@@ -5,6 +5,7 @@
   "mixins": [
     "BlockEntityMixin",
     "ChunkMapMixin",
+    "EntityMixin",
     "EntityStorageMixin",
     "LevelChunkMixin",
     "LevelTicksMixin",
@@ -12,6 +13,7 @@
     "PistonMovingBlockEntityMixin",
     "ServerPlayerGameModeMixin",
     "ServerLevelMixin",
+    "ServerGamePacketListenerImplMixin",
     "TransientCarrierEntityMixin"
   ],
   "injectors": {

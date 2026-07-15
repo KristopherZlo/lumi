@@ -178,7 +178,7 @@ public final class LiveActionOperation implements DimensionMutation {
         WorldChange<?> change = cursor.next();
         if (!change.matchesExpected()) {
             failure = new IllegalStateException(
-                    "Visible world conflicts with live action at " + change.target());
+                    "Visible world conflicts with live action at " + change.conflict());
             phase = Phase.FAILED;
         }
     }
@@ -261,7 +261,8 @@ public final class LiveActionOperation implements DimensionMutation {
         }
 
         private boolean matchesExpected() throws IOException {
-            return expected.equals(read());
+            actual = read();
+            return expected.equals(actual);
         }
 
         private boolean matchesReplacement() throws IOException {
@@ -275,6 +276,10 @@ public final class LiveActionOperation implements DimensionMutation {
 
         private String mismatch() {
             return target() + "; expected=" + replacement + "; actual=" + actual;
+        }
+
+        private String conflict() {
+            return target() + "; expected=" + expected + "; actual=" + actual;
         }
 
         protected abstract S read() throws IOException;

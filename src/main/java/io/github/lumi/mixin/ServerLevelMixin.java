@@ -2,6 +2,7 @@ package io.github.lumi.mixin;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.runtime.MinecraftCausalTickTracker;
+import java.io.IOException;
 import io.github.lumi.minecraft.world.OwnedBlockEventAccess;
 import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
 import java.util.ArrayDeque;
@@ -95,8 +96,15 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
             org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> callback) {
         if (callback.getReturnValue()) {
             ServerLevel level = (ServerLevel) (Object) this;
-            LumiMod.serverRuntime().find(level).ifPresent(runtime ->
-                    runtime.causalTicks().rememberCarrier(entity));
+            LumiMod.serverRuntime().find(level).ifPresent(runtime -> {
+                runtime.causalTicks().rememberCarrier(entity);
+                try {
+                    runtime.liveEntities().added(entity);
+                } catch (IOException failed) {
+                    LumiMod.LOGGER.warn("Cannot capture added live entity {}",
+                            entity.getUUID(), failed);
+                }
+            });
         }
     }
 

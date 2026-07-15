@@ -30,6 +30,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Block;
 
 /** Temporary server-authoritative command surface for exercising V2 vertical slices. */
@@ -65,6 +68,17 @@ public final class LumiCommands {
                                                     getInteger(command, "y"),
                                                     getInteger(command, "z")),
                                             getString(command, "block")))))));
+            var debugActionSummon = literal("debug-action-summon")
+                    .requires(LumiCommands::mayUse)
+                    .then(argument("x", integer()).then(argument("y", integer())
+                            .then(argument("z", integer()).then(argument("entity", greedyString())
+                                    .executes(command -> debugActionSummon(
+                                            command.getSource(),
+                                            new BlockPos(
+                                                    getInteger(command, "x"),
+                                                    getInteger(command, "y"),
+                                                    getInteger(command, "z")),
+                                            getString(command, "entity")))))));
             var branch = literal("branch")
                     .requires(LumiCommands::mayUse)
                     .then(literal("create")
@@ -91,7 +105,7 @@ public final class LumiCommands {
                     .then(argument("commit", word()).then(x1Arg));
             dispatcher.register(literal("lumi").then(save).then(restore)
                     .then(restoreArea).then(rollback).then(undo).then(redo)
-                    .then(debugActionSet).then(branch));
+                    .then(debugActionSet).then(debugActionSummon).then(branch));
         });
     }
 
@@ -240,6 +254,38 @@ public final class LumiCommands {
             return 0;
         }
         source.sendSuccess(() -> Component.literal("Lumi debug block action captured"), false);
+        return 1;
+    }
+
+    private static int debugActionSummon(
+            CommandSourceStack source, BlockPos position, String entityName) {
+        var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
+        Identifier id = Identifier.tryParse(entityName);
+        Optional<EntityType<?>> type = id == null
+                ? Optional.empty() : BuiltInRegistries.ENTITY_TYPE.getOptional(id);
+        if (runtime == null || type.isEmpty()) {
+            source.sendFailure(Component.literal(
+                    "Lumi debug action requires a ready dimension and entity type"));
+            return 0;
+        }
+        Entity entity = type.orElseThrow().create(source.getLevel(), EntitySpawnReason.COMMAND);
+        if (entity == null) {
+            source.sendFailure(Component.literal("Lumi debug entity could not be created"));
+            return 0;
+        }
+        entity.setNoGravity(true);
+        entity.setPos(position.getX() + 0.5, position.getY(), position.getZ() + 0.5);
+        boolean added;
+        try (var ignored = DirectLiveActionContext.open(
+                runtime.liveActions(), author(source).id())) {
+            added = source.getLevel().addFreshEntity(entity);
+        }
+        if (!added) {
+            source.sendFailure(Component.literal("Lumi debug entity could not be added"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal(
+                "Lumi debug entity action captured: " + entity.getUUID()), false);
         return 1;
     }
 
