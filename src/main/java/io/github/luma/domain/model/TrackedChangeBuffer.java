@@ -34,8 +34,7 @@ public final class TrackedChangeBuffer {
     private final LinkedHashMap<ChunkPoint, LinkedHashSet<BlockPoint>> blockPositionsByChunk =
             new LinkedHashMap<>();
     private final LinkedHashMap<String, StoredEntityChange> entityChanges = new LinkedHashMap<>();
-    private int contentFingerprint;
-    private boolean contentFingerprintDirty = true;
+    private int contentFingerprint = 1;
 
     public TrackedChangeBuffer(
             String id,
@@ -109,8 +108,10 @@ public final class TrackedChangeBuffer {
 
     public void addChange(StoredBlockChange change, Instant now) {
         BlockPoint pos = change.pos();
+        StoredBlockChange previous = this.changes.get(pos);
         boolean existed = this.changes.containsKey(pos);
         StoredChangeAccumulator.mergeBlockChange(this.changes, change);
+        StoredBlockChange current = this.changes.get(pos);
         boolean exists = this.changes.containsKey(pos);
         if (!existed && exists) {
             this.blockPositionsByChunk
@@ -119,13 +120,16 @@ public final class TrackedChangeBuffer {
         } else if (existed && !exists) {
             this.removeIndexedPosition(pos);
         }
-        this.contentFingerprintDirty = true;
+        this.contentFingerprint ^= blockFingerprint(previous) ^ blockFingerprint(current);
         this.updatedAt = now;
     }
 
     public void addEntityChange(StoredEntityChange change, Instant now) {
+        String entityId = change == null ? null : change.entityId();
+        StoredEntityChange previous = entityId == null ? null : this.entityChanges.get(entityId);
         StoredChangeAccumulator.mergeUndoableEntityChange(this.entityChanges, change);
-        this.contentFingerprintDirty = true;
+        StoredEntityChange current = entityId == null ? null : this.entityChanges.get(entityId);
+        this.contentFingerprint ^= entityFingerprint(previous) ^ entityFingerprint(current);
         this.updatedAt = now;
     }
 
@@ -219,20 +223,6 @@ public final class TrackedChangeBuffer {
     }
 
     public int contentFingerprint() {
-        if (!this.contentFingerprintDirty) {
-            return this.contentFingerprint;
-        }
-        int result = 1;
-        for (Map.Entry<BlockPoint, StoredBlockChange> entry : this.changes.entrySet()) {
-            result = (31 * result) + entry.getKey().hashCode();
-            result = (31 * result) + entry.getValue().hashCode();
-        }
-        for (Map.Entry<String, StoredEntityChange> entry : this.entityChanges.entrySet()) {
-            result = (31 * result) + entry.getKey().hashCode();
-            result = (31 * result) + entry.getValue().hashCode();
-        }
-        this.contentFingerprint = result;
-        this.contentFingerprintDirty = false;
         return this.contentFingerprint;
     }
 
@@ -320,8 +310,10 @@ public final class TrackedChangeBuffer {
         if (positions == null || positions.isEmpty()) {
             return;
         }
-        positions.forEach(this.changes::remove);
-        this.contentFingerprintDirty = true;
+        for (BlockPoint pos : positions) {
+            StoredBlockChange removed = this.changes.remove(pos);
+            this.contentFingerprint ^= blockFingerprint(removed);
+        }
     }
 
     private void removeIndexedPosition(BlockPoint pos) {
@@ -334,5 +326,13 @@ public final class TrackedChangeBuffer {
         if (positions.isEmpty()) {
             this.blockPositionsByChunk.remove(chunk);
         }
+    }
+
+    private static int blockFingerprint(StoredBlockChange change) {
+        return change == null ? 0 : (31 * change.pos().hashCode()) + change.hashCode();
+    }
+
+    private static int entityFingerprint(StoredEntityChange change) {
+        return change == null ? 0 : (31 * change.entityId().hashCode()) + change.hashCode();
     }
 }
