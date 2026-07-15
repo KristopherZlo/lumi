@@ -41,8 +41,25 @@ final class FabricServerSession implements AutoCloseable {
         dimensions.load(level, FabricDimensionRuntime.open(level, layout, background));
     }
 
-    void tick(ServerLevel level) throws IOException {
-        dimensions.require(level).tick();
+    void tick(MinecraftServer tickingServer) throws IOException {
+        if (tickingServer != server) {
+            throw new IllegalArgumentException("Tick belongs to another Minecraft server");
+        }
+        IOException failure = null;
+        for (FabricDimensionRuntime runtime : dimensions.loadedValues()) {
+            try {
+                runtime.tick();
+            } catch (IOException dimensionFailure) {
+                if (failure == null) {
+                    failure = dimensionFailure;
+                } else {
+                    failure.addSuppressed(dimensionFailure);
+                }
+            }
+        }
+        if (failure != null) {
+            throw failure;
+        }
     }
 
     void unload(ServerLevel level) throws Exception {

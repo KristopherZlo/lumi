@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.runtime;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -40,6 +41,11 @@ public final class LoadedDimensionRegistry<K, V extends AutoCloseable> implement
 
     public synchronized boolean isEmpty() {
         return runtimes.isEmpty();
+    }
+
+    /** Returns a stable view so callers never hold the registry lock while doing runtime work. */
+    public synchronized List<V> loadedValues() {
+        return List.copyOf(runtimes.values());
     }
 
     @Override

@@ -19,7 +19,7 @@ public final class LumiServerRuntime {
         ServerLifecycleEvents.SERVER_STARTING.register(this::starting);
         ServerWorldEvents.LOAD.register(this::load);
         ServerChunkEvents.CHUNK_LOAD.register(this::chunkLoaded);
-        ServerTickEvents.START_WORLD_TICK.register(this::tick);
+        ServerTickEvents.START_SERVER_TICK.register(this::tick);
         ServerChunkEvents.CHUNK_UNLOAD.register(this::chunkUnloaded);
         ServerWorldEvents.UNLOAD.register(this::unload);
         ServerLifecycleEvents.SERVER_STOPPED.register(this::stopped);
@@ -44,9 +44,9 @@ public final class LumiServerRuntime {
         }
     }
 
-    private void tick(ServerLevel level) {
+    private void tick(MinecraftServer server) {
         try {
-            requireSession().tick(level);
+            requireSession().tick(server);
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Lumi dimension operation failed; its freeze and journal are retained", failed);
         }
