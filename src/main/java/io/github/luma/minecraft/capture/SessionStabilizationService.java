@@ -35,7 +35,7 @@ import net.minecraft.server.level.ServerLevel;
 public final class SessionStabilizationService {
 
     private static final int DEFERRED_SETTLE_TICKS = 4;
-    private static final int MAX_CHUNKS_PER_TICK = 4;
+    private static final int MAX_CHUNKS_PER_TICK = 1;
     private static final CompoundTag AIR_STATE = airState();
     private final ChunkSnapshotCaptureService chunkSnapshotCaptureService = new ChunkSnapshotCaptureService();
 

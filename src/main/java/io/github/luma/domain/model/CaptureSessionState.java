@@ -320,22 +320,7 @@ public final class CaptureSessionState {
         if (chunks == null || chunks.isEmpty()) {
             return List.of();
         }
-        LinkedHashSet<ChunkPoint> requestedChunks = new LinkedHashSet<>();
-        for (ChunkPoint chunk : chunks) {
-            if (chunk != null) {
-                requestedChunks.add(chunk);
-            }
-        }
-        if (requestedChunks.isEmpty()) {
-            return List.of();
-        }
-        List<StoredBlockChange> changes = new ArrayList<>();
-        for (StoredBlockChange change : this.buffer.orderedChanges()) {
-            if (requestedChunks.contains(ChunkPoint.from(change.pos()))) {
-                changes.add(change);
-            }
-        }
-        return List.copyOf(changes);
+        return this.buffer.blockChangesInChunks(chunks);
     }
 
     public Set<ChunkPoint> hiddenReconciliationChunks(Collection<ChunkPoint> chunks) {

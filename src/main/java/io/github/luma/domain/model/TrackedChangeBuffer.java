@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.core.BlockPos;
@@ -30,6 +31,8 @@ public final class TrackedChangeBuffer {
     private final Instant startedAt;
     private Instant updatedAt;
     private final LinkedHashMap<BlockPoint, StoredBlockChange> changes = new LinkedHashMap<>();
+    private final LinkedHashMap<ChunkPoint, LinkedHashSet<BlockPoint>> blockPositionsByChunk =
+            new LinkedHashMap<>();
     private final LinkedHashMap<String, StoredEntityChange> entityChanges = new LinkedHashMap<>();
     private int contentFingerprint;
     private boolean contentFingerprintDirty = true;
@@ -105,7 +108,17 @@ public final class TrackedChangeBuffer {
     }
 
     public void addChange(StoredBlockChange change, Instant now) {
+        BlockPoint pos = change.pos();
+        boolean existed = this.changes.containsKey(pos);
         StoredChangeAccumulator.mergeBlockChange(this.changes, change);
+        boolean exists = this.changes.containsKey(pos);
+        if (!existed && exists) {
+            this.blockPositionsByChunk
+                    .computeIfAbsent(ChunkPoint.from(pos), ignored -> new LinkedHashSet<>())
+                    .add(pos);
+        } else if (existed && !exists) {
+            this.removeIndexedPosition(pos);
+        }
         this.contentFingerprintDirty = true;
         this.updatedAt = now;
     }
@@ -150,10 +163,8 @@ public final class TrackedChangeBuffer {
         if (chunk == null) {
             return false;
         }
-        for (StoredBlockChange change : this.changes.values()) {
-            if (ChunkPoint.from(change.pos()).equals(chunk)) {
-                return true;
-            }
+        if (this.blockPositionsByChunk.containsKey(chunk)) {
+            return true;
         }
         for (StoredEntityChange change : this.entityChanges.values()) {
             if (change.chunk().equals(chunk)) {
@@ -165,8 +176,7 @@ public final class TrackedChangeBuffer {
 
     public List<ChunkPoint> touchedChunks() {
         LinkedHashMap<String, ChunkPoint> chunks = new LinkedHashMap<>();
-        for (StoredBlockChange change : this.changes.values()) {
-            ChunkPoint chunk = ChunkPoint.from(change.pos());
+        for (ChunkPoint chunk : this.blockPositionsByChunk.keySet()) {
             chunks.putIfAbsent(chunk.x() + ":" + chunk.z(), chunk);
         }
         for (StoredEntityChange change : this.entityChanges.values()) {
@@ -230,6 +240,27 @@ public final class TrackedChangeBuffer {
         return List.copyOf(this.changes.values());
     }
 
+    public List<StoredBlockChange> blockChangesInChunks(Collection<ChunkPoint> chunks) {
+        if (chunks == null || chunks.isEmpty()) {
+            return List.of();
+        }
+        List<StoredBlockChange> selected = new ArrayList<>();
+        LinkedHashSet<ChunkPoint> uniqueChunks = new LinkedHashSet<>(chunks);
+        for (ChunkPoint chunk : uniqueChunks) {
+            LinkedHashSet<BlockPoint> positions = this.blockPositionsByChunk.get(chunk);
+            if (positions == null) {
+                continue;
+            }
+            for (BlockPoint pos : positions) {
+                StoredBlockChange change = this.changes.get(pos);
+                if (change != null) {
+                    selected.add(change);
+                }
+            }
+        }
+        return List.copyOf(selected);
+    }
+
     public Map<BlockPoint, StoredBlockChange> rawChanges() {
         return Map.copyOf(this.changes);
     }
@@ -285,11 +316,23 @@ public final class TrackedChangeBuffer {
     }
 
     private void removeChunk(ChunkPoint chunk) {
-        boolean removed = this.changes.entrySet().removeIf(entry -> {
-            StoredBlockChange change = entry.getValue();
-            return (change.pos().x() >> 4) == chunk.x()
-                    && (change.pos().z() >> 4) == chunk.z();
-        });
-        this.contentFingerprintDirty |= removed;
+        LinkedHashSet<BlockPoint> positions = this.blockPositionsByChunk.remove(chunk);
+        if (positions == null || positions.isEmpty()) {
+            return;
+        }
+        positions.forEach(this.changes::remove);
+        this.contentFingerprintDirty = true;
+    }
+
+    private void removeIndexedPosition(BlockPoint pos) {
+        ChunkPoint chunk = ChunkPoint.from(pos);
+        LinkedHashSet<BlockPoint> positions = this.blockPositionsByChunk.get(chunk);
+        if (positions == null) {
+            return;
+        }
+        positions.remove(pos);
+        if (positions.isEmpty()) {
+            this.blockPositionsByChunk.remove(chunk);
+        }
     }
 }

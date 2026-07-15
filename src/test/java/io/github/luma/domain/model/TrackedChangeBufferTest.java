@@ -114,6 +114,31 @@ class TrackedChangeBufferTest {
         assertEquals(Set.of("minecraft:diamond_block", "minecraft:gold_block"), buffer.orderedChanges().stream()
                 .map(change -> change.newValue().blockId())
                 .collect(java.util.stream.Collectors.toSet()));
+        assertEquals(
+                List.of("minecraft:diamond_block"),
+                buffer.blockChangesInChunks(List.of(new ChunkPoint(0, 0))).stream()
+                        .map(change -> change.newValue().blockId())
+                        .toList()
+        );
+    }
+
+    @Test
+    void noOpRevertRemovesPositionFromChunkIndex() {
+        Instant now = Instant.parse("2026-04-20T10:15:30Z");
+        TrackedChangeBuffer buffer = TrackedChangeBuffer.create(
+                "session", "project", "main", "v0001", "tester", WorldMutationSource.PLAYER, now
+        );
+        BlockPoint pos = new BlockPoint(18, 70, 1);
+        buffer.addChange(new StoredBlockChange(
+                pos, payload("minecraft:stone"), payload("minecraft:dirt")
+        ), now);
+        buffer.addChange(new StoredBlockChange(
+                pos, payload("minecraft:dirt"), payload("minecraft:stone")
+        ), now.plusSeconds(1));
+
+        assertFalse(buffer.touchesChunk(new ChunkPoint(1, 0)));
+        assertTrue(buffer.blockChangesInChunks(List.of(new ChunkPoint(1, 0))).isEmpty());
+        assertTrue(buffer.touchedChunks().isEmpty());
     }
 
     @Test
