@@ -1,5 +1,7 @@
 package io.github.luma.client.onboarding;
 
+import java.util.List;
+
 import io.github.luma.LumaMod;
 import io.github.luma.client.input.KeyBindingState;
 import io.github.luma.client.input.LumiClientKeyBindings;
@@ -9,9 +11,8 @@ import io.github.luma.ui.onboarding.OnboardingTour;
 import io.github.luma.ui.overlay.PendingChangesOverlayRenderer;
 import io.github.luma.ui.overlay.RoundedHudRenderer;
 import io.github.luma.ui.screen.OnboardingScreen;
-import io.github.luma.ui.state.ProjectHomeViewState;
 import io.github.luma.ui.state.OnboardingHoldGate;
-import java.util.List;
+import io.github.luma.ui.state.ProjectHomeViewState;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.KeyMapping;
@@ -20,8 +21,8 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.Util;
 import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.Util;
 
 /**
  * Owns the no-screen part of onboarding where the player must interact with the
