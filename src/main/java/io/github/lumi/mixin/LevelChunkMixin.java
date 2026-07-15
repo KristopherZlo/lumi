@@ -76,9 +76,12 @@ abstract class LevelChunkMixin {
 
     @Inject(method = "setBlockEntity", at = @At("HEAD"), cancellable = true)
     private void lumi$trackBlockEntityAdd(BlockEntity blockEntity, CallbackInfo callback) {
-        if (level instanceof ServerLevel serverLevel
-                && !lumi$trackSectionBeforeMutation(serverLevel, blockEntity.getBlockPos())) {
-            callback.cancel();
+        if (level instanceof ServerLevel serverLevel) {
+            LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime ->
+                    runtime.causalTicks().rememberCarrier(blockEntity));
+            if (!lumi$trackSectionBeforeMutation(serverLevel, blockEntity.getBlockPos())) {
+                callback.cancel();
+            }
         }
     }
 

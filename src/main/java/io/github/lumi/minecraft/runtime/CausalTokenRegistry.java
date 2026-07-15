@@ -21,6 +21,14 @@ public final class CausalTokenRegistry<K> {
         return Optional.ofNullable(owners.remove(Objects.requireNonNull(work, "work")));
     }
 
+    public synchronized Optional<UUID> owner(K work) {
+        return Optional.ofNullable(owners.get(Objects.requireNonNull(work, "work")));
+    }
+
+    public synchronized void forget(K work) {
+        owners.remove(Objects.requireNonNull(work, "work"));
+    }
+
     public synchronized Set<K> cancel(UUID action) {
         Objects.requireNonNull(action, "action");
         Set<K> cancelled = new HashSet<>();

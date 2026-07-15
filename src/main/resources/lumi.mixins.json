@@ -9,6 +9,7 @@
     "LevelChunkMixin",
     "LevelTicksMixin",
     "PersistentEntitySectionManagerMixin",
+    "PistonMovingBlockEntityMixin",
     "ServerPlayerGameModeMixin",
     "ServerLevelMixin"
   ],

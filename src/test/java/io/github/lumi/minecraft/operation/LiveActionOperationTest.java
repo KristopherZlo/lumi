@@ -66,6 +66,22 @@ class LiveActionOperationTest {
         assertTrue(!operation.isSafeToRelease());
     }
 
+    @Test
+    void reselectsFinalStateAfterCancellingOwnedCarrier() throws IOException {
+        LiveActionJournal journal = action(block("stone"), block("moving_piston"));
+        FakeWorld world = new FakeWorld(block("piston_head"));
+        UUID action = journal.prepareUndo(PLAYER).orElseThrow().actionId();
+        LiveActionOperation operation = new LiveActionOperation(
+                journal, PLAYER, LiveActionJournal.Direction.UNDO, world, () -> 0L,
+                ignored -> journal.record(
+                        action, POSITION, block("moving_piston"), block("piston_head")));
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(block("stone"), world.states.get(POSITION));
+        assertEquals(MutationTerminalState.SUCCEEDED, operation.terminalState());
+    }
+
     private static LiveActionJournal action(BlockSnapshot before, BlockSnapshot after) {
         LiveActionJournal journal = new LiveActionJournal();
         UUID action = journal.begin(PLAYER);

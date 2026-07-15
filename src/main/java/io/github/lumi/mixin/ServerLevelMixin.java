@@ -2,22 +2,30 @@ package io.github.lumi.mixin;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
+import io.github.lumi.minecraft.world.OwnedBlockEventAccess;
+import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Optional;
+import java.util.List;
 import java.util.function.BooleanSupplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.BlockEventData;
 import net.minecraft.world.level.material.Fluid;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ServerLevel.class)
-abstract class ServerLevelMixin {
+abstract class ServerLevelMixin implements OwnedBlockEventAccess {
+    @Shadow @Final private ObjectLinkedOpenHashSet<BlockEventData> blockEvents;
+    @Shadow @Final private List<BlockEventData> blockEventsToReschedule;
     @Unique private final Deque<Optional<DirectLiveActionContext.Scope>> lumi$causalTicks =
             new ArrayDeque<>();
 
@@ -53,6 +61,42 @@ abstract class ServerLevelMixin {
     @Inject(method = "tickFluid", at = @At("RETURN"))
     private void lumi$endFluidTick(BlockPos position, Fluid fluid, CallbackInfo callback) {
         lumi$endCausalTick();
+    }
+
+    @Inject(method = "blockEvent", at = @At("HEAD"))
+    private void lumi$captureBlockEvent(
+            BlockPos position, Block block, int paramA, int paramB, CallbackInfo callback) {
+        ServerLevel level = (ServerLevel) (Object) this;
+        LumiMod.serverRuntime().find(level).ifPresent(runtime ->
+                runtime.causalTicks().scheduledBlockEvent(
+                        new BlockEventData(position, block, paramA, paramB)));
+    }
+
+    @Inject(method = "doBlockEvent", at = @At("HEAD"))
+    private void lumi$beginBlockEvent(
+            BlockEventData event,
+            org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> callback) {
+        ServerLevel level = (ServerLevel) (Object) this;
+        lumi$causalTicks.addLast(LumiMod.serverRuntime().find(level)
+                .flatMap(runtime -> runtime.causalTicks().resumeBlockEvent(event)));
+    }
+
+    @Inject(method = "doBlockEvent", at = @At("RETURN"))
+    private void lumi$endBlockEvent(
+            BlockEventData event,
+            org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> callback) {
+        lumi$endCausalTick();
+    }
+
+    @Override
+    public boolean lumi$hasBlockEvent(BlockEventData event) {
+        return blockEvents.contains(event) || blockEventsToReschedule.contains(event);
+    }
+
+    @Override
+    public void lumi$removeBlockEvent(BlockEventData event) {
+        blockEvents.remove(event);
+        blockEventsToReschedule.remove(event);
     }
 
     @Unique

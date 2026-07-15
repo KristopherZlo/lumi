@@ -98,8 +98,7 @@ public final class LiveActionOperation implements DimensionMutation {
     }
 
     private void select() {
-        Optional<LiveActionJournal.Plan> selected = direction == LiveActionJournal.Direction.UNDO
-                ? journal.prepareUndo(player) : journal.prepareRedo(player);
+        Optional<LiveActionJournal.Plan> selected = selectPlan();
         if (selected.isEmpty()) {
             phase = Phase.FAILED;
             return;
@@ -111,9 +110,16 @@ public final class LiveActionOperation implements DimensionMutation {
     private void cancelPending() {
         if (direction == LiveActionJournal.Direction.UNDO) {
             cancelPending.accept(plan.actionId());
+            plan = selectPlan().orElseThrow(
+                    () -> new IllegalStateException("Live action disappeared during finalization"));
         }
         cursor = plan.expected().entrySet().iterator();
         phase = Phase.VALIDATING;
+    }
+
+    private Optional<LiveActionJournal.Plan> selectPlan() {
+        return direction == LiveActionJournal.Direction.UNDO
+                ? journal.prepareUndo(player) : journal.prepareRedo(player);
     }
 
     private void validateOne() throws IOException {

@@ -124,7 +124,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.defaultWorkspaceId = defaultWorkspaceId;
         liveWorld = new MinecraftLiveBlockWorldAccess(level, freeze);
         causalTicks = new MinecraftCausalTickTracker(
-                liveActions, level.getBlockTicks(), level.getFluidTicks());
+                liveActions, level, freeze, level.getBlockTicks(), level.getFluidTicks());
         entityDurability = new EntityChunkDurabilityGate(mutations);
         restoreStateListener = new RestoreBaselineReconciler(
                 entityDurability, blockEntityBaselines);
