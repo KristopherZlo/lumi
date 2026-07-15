@@ -5,6 +5,7 @@ import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
 import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
+import io.github.lumi.minecraft.operation.PendingRestorePublication;
 import io.github.lumi.minecraft.operation.RestoreOperation;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestoreOperation;
@@ -12,6 +13,7 @@ import io.github.lumi.minecraft.operation.ReturnPointRestorePreparation;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.BranchSwitchPlan;
+import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
@@ -278,6 +280,48 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public BranchRef createBranch(BranchName name) throws IOException {
         return branches.create(name, activeRef().commit());
+    }
+
+    public synchronized BackgroundPreparedMutation<RestoreOperation> startPartialRestore(
+            CommitId target,
+            BlockAreaTarget area,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        if (operations.hasActiveOperation()) {
+            throw new IllegalStateException("A dimension operation is already active");
+        }
+        requireCleanWorkingIndex();
+        BranchRef expected = activeRef();
+        UUID operationId = UUID.randomUUID();
+        CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
+            try {
+                var prepared = restores.preparePartial(
+                        expected, target, area.area(), area.outside());
+                return RestoreOperation.startPartial(
+                        prepared, worldApply, new PendingRestorePublication(mutations),
+                        journals, operationId, restoreStateListener, area);
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+        var operation = new BackgroundPreparedMutation<>(
+                preparation,
+                () -> {
+                    requireCleanWorkingIndex();
+                    if (!activeRef().equals(expected)) {
+                        throw new IOException("Active branch changed during partial Restore");
+                    }
+                },
+                RestoreOperation::cancelBeforeApply,
+                true);
+        operations.start(operation, terminalObserver);
+        return operation;
+    }
+
+    private void requireCleanWorkingIndex() {
+        // ponytail: clean-only until hidden checkpoint capture preserves existing pending work.
+        if (!mutations.snapshot().generations().isEmpty()) {
+            throw new IllegalStateException("Partial Restore currently requires no pending work");
+        }
     }
 
     public ServerLevel level() { return level; }

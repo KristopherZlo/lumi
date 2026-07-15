@@ -3,12 +3,18 @@ package io.github.lumi.minecraft.runtime;
 import static com.mojang.brigadier.arguments.StringArgumentType.getString;
 import static com.mojang.brigadier.arguments.StringArgumentType.greedyString;
 import static com.mojang.brigadier.arguments.StringArgumentType.word;
+import static com.mojang.brigadier.arguments.BoolArgumentType.bool;
+import static com.mojang.brigadier.arguments.BoolArgumentType.getBool;
+import static com.mojang.brigadier.arguments.IntegerArgumentType.getInteger;
+import static com.mojang.brigadier.arguments.IntegerArgumentType.integer;
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.BlockAreaTarget;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
@@ -44,7 +50,24 @@ public final class LumiCommands {
                     .then(literal("switch")
                             .then(argument("name", greedyString()).executes(command ->
                                     switchBranch(command.getSource(), getString(command, "name")))));
-            dispatcher.register(literal("lumi").then(save).then(restore).then(branch));
+            var outsideArg = argument("outside", bool()).executes(command ->
+                    restoreArea(command.getSource(), getString(command, "commit"),
+                            new BlockBox(
+                                    getInteger(command, "x1"), getInteger(command, "y1"),
+                                    getInteger(command, "z1"), getInteger(command, "x2"),
+                                    getInteger(command, "y2"), getInteger(command, "z2")),
+                            getBool(command, "outside")));
+            var z2Arg = argument("z2", integer()).then(outsideArg);
+            var y2Arg = argument("y2", integer()).then(z2Arg);
+            var x2Arg = argument("x2", integer()).then(y2Arg);
+            var z1Arg = argument("z1", integer()).then(x2Arg);
+            var y1Arg = argument("y1", integer()).then(z1Arg);
+            var x1Arg = argument("x1", integer()).then(y1Arg);
+            var restoreArea = literal("restore-area")
+                    .requires(LumiCommands::mayUse)
+                    .then(argument("commit", word()).then(x1Arg));
+            dispatcher.register(literal("lumi").then(save).then(restore)
+                    .then(restoreArea).then(branch));
         });
     }
 
@@ -116,6 +139,27 @@ public final class LumiCommands {
             return 1;
         } catch (IOException | IllegalStateException | IllegalArgumentException failed) {
             source.sendFailure(Component.literal("Lumi branch switch could not start: "
+                    + failed.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int restoreArea(
+            CommandSourceStack source, String commitHex, BlockBox area, boolean outside) {
+        var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
+        if (runtime == null) {
+            source.sendFailure(Component.literal("Lumi is not ready for this dimension"));
+            return 0;
+        }
+        try {
+            runtime.startPartialRestore(
+                    new CommitId(new ObjectId(commitHex)),
+                    new BlockAreaTarget(area, outside), ignored -> { });
+            source.sendSuccess(() -> Component.literal(
+                    "Lumi block-area Restore started"), false);
+            return 1;
+        } catch (IOException | IllegalStateException | IllegalArgumentException failed) {
+            source.sendFailure(Component.literal("Lumi block-area Restore could not start: "
                     + failed.getMessage()));
             return 0;
         }
