@@ -8,7 +8,8 @@
   "license": "GPL-3.0-only",
   "environment": "*",
   "entrypoints": {
-    "main": ["io.github.lumi.LumiMod"]
+    "main": ["io.github.lumi.LumiMod"],
+    "client": ["io.github.lumi.client.LumiClient"]
   },
   "mixins": ["lumi.mixins.json"],
   "depends": {

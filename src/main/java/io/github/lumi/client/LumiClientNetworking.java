@@ -1,0 +1,52 @@
+package io.github.lumi.client;
+
+import io.github.lumi.client.state.ClientHistoryStore;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.network.HistoryCommandPayload;
+import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.OperationEventPayload;
+import java.util.Objects;
+import java.util.UUID;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+
+/** Thin client sender/receiver; all history decisions stay on the server. */
+public final class LumiClientNetworking {
+    private final ClientHistoryStore history;
+
+    public LumiClientNetworking(ClientHistoryStore history) {
+        this.history = Objects.requireNonNull(history, "history");
+    }
+
+    public void register() {
+        ClientPlayNetworking.registerGlobalReceiver(
+                HistorySnapshotPayload.TYPE, (payload, context) ->
+                        context.client().execute(() -> history.accept(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(
+                OperationEventPayload.TYPE, (payload, context) ->
+                        context.client().execute(() -> history.accept(payload)));
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> history.clear());
+    }
+
+    public UUID save(String message) {
+        return send(HistoryCommandPayload.Kind.SAVE,
+                Objects.requireNonNull(message, "message"));
+    }
+
+    public UUID restore(CommitId target) {
+        return send(HistoryCommandPayload.Kind.RESTORE,
+                Objects.requireNonNull(target, "target").hex());
+    }
+
+    private UUID send(HistoryCommandPayload.Kind kind, String argument) {
+        var snapshot = history.state().snapshot().orElseThrow(
+                () -> new IllegalStateException("Lumi history has not synchronized yet"));
+        if (!ClientPlayNetworking.canSend(HistoryCommandPayload.TYPE)) {
+            throw new IllegalStateException("The connected server does not support Lumi history");
+        }
+        UUID requestId = UUID.randomUUID();
+        ClientPlayNetworking.send(new HistoryCommandPayload(
+                requestId, kind, argument, snapshot.head(), snapshot.revision()));
+        return requestId;
+    }
+}
