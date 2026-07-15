@@ -23,9 +23,8 @@ public final class ObjectStore {
     private final Path objectsDirectory;
     private final LZ4Factory lz4 = LZ4Factory.fastestInstance();
 
-    public ObjectStore(Path dimensionRepository) {
-        this.objectsDirectory = Objects.requireNonNull(dimensionRepository, "dimensionRepository")
-                .resolve("objects");
+    public ObjectStore(Path objectsDirectory) {
+        this.objectsDirectory = Objects.requireNonNull(objectsDirectory, "objectsDirectory");
     }
 
     public ObjectId write(byte[] canonicalPayload) throws IOException {
