@@ -120,6 +120,10 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         return !blockedChunks.containsKey(new ChunkCoordinate(chunkX, chunkZ));
     }
 
+    public synchronized boolean canPublish(HistoryKey key) {
+        return !publicationRequirements.containsKey(Objects.requireNonNull(key, "key"));
+    }
+
     public synchronized boolean needsOrigin(HistoryKey key) {
         Objects.requireNonNull(key, "key");
         return !durableOrigins.contains(key) && !pendingOrigins.contains(key);
