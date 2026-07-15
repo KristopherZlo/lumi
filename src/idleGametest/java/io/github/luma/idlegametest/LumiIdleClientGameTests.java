@@ -1,6 +1,8 @@
 package io.github.luma.idlegametest;
 
 import io.github.luma.minecraft.capture.ChunkSectionOwnershipRegistry;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.util.List;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -13,6 +15,7 @@ import net.minecraft.server.level.ServerPlayer;
 public final class LumiIdleClientGameTests implements FabricClientGameTest {
 
     private static final int IDLE_TICKS = 20;
+    private static final int IDLE_SAMPLE_TICKS = 100;
     private static final long WORLD_SEED = 6840143426479848331L;
     private static final List<BlockPos> TELEPORT_TARGETS = List.of(
             new BlockPos(2048, 300, 0),
@@ -27,17 +30,43 @@ public final class LumiIdleClientGameTests implements FabricClientGameTest {
                 .adjustSettings(settings -> settings.setSeed(Long.toString(WORLD_SEED)))
                 .create()) {
             singleplayer.getClientWorld().waitForChunksRender();
-            context.waitTicks(IDLE_TICKS);
+            IdleSample idleSample = this.measureIdle(context, singleplayer);
             int completedTeleports = this.runTeleportLoads(context, singleplayer);
             ChunkSectionOwnershipRegistry.getInstance().logStartupProfile("idle-client-ready");
             long actualSeed = singleplayer.getServer().computeOnServer(server -> server.overworld().getSeed());
             this.report(actualSeed, completedTeleports);
+            System.out.println("Lumi idle tick sample: ticks=" + IDLE_SAMPLE_TICKS
+                    + ", wallMs=" + idleSample.wallMs()
+                    + ", serverCpuMs=" + idleSample.serverCpuMs());
             context.takeScreenshot("lumi-idle-client-smoke");
         } catch (RuntimeException | Error exception) {
             throw exception;
         } catch (Exception exception) {
             throw new RuntimeException("Lumi idle client gametest failed", exception);
         }
+    }
+
+    private IdleSample measureIdle(ClientGameTestContext context, TestSingleplayerContext singleplayer)
+            throws Exception {
+        ThreadMXBean threads = ManagementFactory.getThreadMXBean();
+        if (!threads.isThreadCpuTimeSupported()) {
+            throw new AssertionError("Server thread CPU timing is unavailable");
+        }
+        if (!threads.isThreadCpuTimeEnabled()) {
+            threads.setThreadCpuTimeEnabled(true);
+        }
+        long serverThreadId = singleplayer.getServer().computeOnServer(
+                server -> Thread.currentThread().threadId()
+        );
+        long cpuStarted = threads.getThreadCpuTime(serverThreadId);
+        long wallStarted = System.nanoTime();
+        context.waitTicks(IDLE_SAMPLE_TICKS);
+        long wallNanos = System.nanoTime() - wallStarted;
+        long cpuNanos = threads.getThreadCpuTime(serverThreadId) - cpuStarted;
+        if (cpuStarted < 0L || cpuNanos < 0L) {
+            throw new AssertionError("Server thread CPU timing failed");
+        }
+        return new IdleSample(wallNanos / 1_000_000L, cpuNanos / 1_000_000L);
     }
 
     private int runTeleportLoads(ClientGameTestContext context, TestSingleplayerContext singleplayer) throws Exception {
@@ -91,5 +120,8 @@ public final class LumiIdleClientGameTests implements FabricClientGameTest {
             throw new AssertionError("Lumi idle startup completed " + completedTeleports
                     + "/" + TELEPORT_TARGETS.size() + " teleports");
         }
+    }
+
+    private record IdleSample(long wallMs, long serverCpuMs) {
     }
 }

@@ -1,6 +1,6 @@
 param(
     [ValidateRange(1, 20)]
-    [int]$Runs = 1,
+    [int]$Runs = 3,
 
     [int]$KeepUpRegressionMs = 250,
 
@@ -32,6 +32,9 @@ if ($StartupProfile) {
     -OutputRoot $OutputRoot `
     -BaselineExtraLogs @("build\run\baselineIdleClientGameTest\logs\latest.log") `
     -LumiExtraLogs @("build\run\idleClientGameTest\logs\latest.log") `
+    -SampleStallTimeoutSeconds 120 `
+    -SampleRetries 1 `
+    -RequireIdleSamples `
     -RequireBaselineActionRun `
     -RequireLumiActionRun `
     -FailOnRegression:$FailOnRegression

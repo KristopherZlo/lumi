@@ -191,9 +191,9 @@ Compare vanilla and Lumi world startup against the same normal-world seed:
 .\scripts\compare-idle-startup-load.ps1 -Runs 3
 ```
 
-Both client GameTests verify the integrated server seed, then teleport the player to three distant locations and wait for each new chunk area to render. The comparison summary reports average and maximum teleport load time and render-wait ticks.
+The gate alternates three baseline/Lumi process pairs to reduce launch-order bias. Both client GameTests verify the integrated server seed, sample 100 steady idle ticks with server-thread CPU time, then teleport the player to three distant locations and wait for each new chunk area to render. The blocking comparison uses paired median wall, idle CPU/wall, and teleport deltas, while still rejecting failed runs, long-tick regressions, and render failures. A known Fabric Client GameTest startup stall is retried once only when the integrated server never started; a started test is never retried or hidden.
 
-Axiom custom payloads open one version-independent `AXIOM` source scope by namespace. Ordinary world generation bypasses direct-section capture, while direct section capture stays enabled under an `AXIOM` scope, an active world-operation barrier, or explicitly enabled external-tool stack detection. Loaded section ownership is stored directly on each section, so bulk capture remains an optimization rather than the only record of an edit.
+Axiom custom payloads open one version-independent `AXIOM` source scope by namespace. Ordinary world generation bypasses direct-section capture, while direct section capture stays enabled under an `AXIOM` scope, an active world-operation barrier, or explicitly enabled external-tool stack detection. Loaded section ownership is stored directly on each section, so bulk capture remains an optimization rather than the only record of an edit. Each stable chunk section array is registered once; individual section access still validates replacements without rescanning the array on every `getSections()` call.
 
 Run the alpha gate:
 

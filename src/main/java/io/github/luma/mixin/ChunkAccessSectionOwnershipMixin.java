@@ -16,9 +16,17 @@ abstract class ChunkAccessSectionOwnershipMixin {
     private static final ChunkSectionOwnershipRegistry LUMA_SECTION_OWNERSHIP =
             ChunkSectionOwnershipRegistry.getInstance();
 
+    @Unique
+    private volatile LevelChunkSection[] luma$registeredSections;
+
     @Inject(method = "getSections", at = @At("RETURN"))
     private void luma$registerReturnedSections(CallbackInfoReturnable<LevelChunkSection[]> cir) {
-        LUMA_SECTION_OWNERSHIP.register((ChunkAccess) (Object) this, cir.getReturnValue());
+        LevelChunkSection[] sections = cir.getReturnValue();
+        if (sections == this.luma$registeredSections) {
+            return;
+        }
+        LUMA_SECTION_OWNERSHIP.register((ChunkAccess) (Object) this, sections);
+        this.luma$registeredSections = sections;
     }
 
     @Inject(method = "getSection", at = @At("RETURN"))

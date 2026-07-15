@@ -508,7 +508,7 @@ function New-Summary {
     $totalTeleportRenderTicks = [int](($Samples | Measure-Object -Property TotalTeleportRenderTicks -Sum).Sum)
     return [PSCustomObject]@{
         Runs = $Samples.Count
-        FailedRuns = ($Samples | Where-Object { $_.ExitCode -ne 0 }).Count
+        FailedRuns = @($Samples | Where-Object { $_.ExitCode -ne 0 }).Count
         AverageWallClockMs = [int64]$wall.Average
         MedianWallClockMs = [int64](Get-Median -Values @($Samples | ForEach-Object { [double]$_.WallClockMs }))
         MaxWallClockMs = [int64]$wall.Maximum

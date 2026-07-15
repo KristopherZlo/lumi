@@ -65,6 +65,7 @@ loom {
             runDir = 'build/run/idleClientGameTest'
             source sourceSets.idleGametest
             vmArg '-Dfabric.client.gametest'
+            vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
             if (lumiStartupProfileEnabled.get()) {
                 vmArg '-Dlumi.startupProfile=true'
             }
@@ -76,6 +77,7 @@ loom {
             runDir = 'build/run/baselineIdleClientGameTest'
             source sourceSets.baselineIdleGametest
             vmArg '-Dfabric.client.gametest'
+            vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
         }
 
     }

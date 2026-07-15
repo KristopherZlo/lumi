@@ -1,8 +1,8 @@
 param(
     [string]$JavaHome,
     [switch]$SkipRuntimeLoad,
-    [ValidateRange(1, 20)]
-    [int]$RuntimeLoadRuns = 1
+    [ValidateRange(3, 20)]
+    [int]$RuntimeLoadRuns = 3
 )
 
 $ErrorActionPreference = "Stop"
