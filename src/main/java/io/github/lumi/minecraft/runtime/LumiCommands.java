@@ -50,13 +50,9 @@ public final class LumiCommands {
             source.sendFailure(Component.literal("Lumi is not ready for this dimension"));
             return 0;
         }
-        var player = source.getPlayer();
-        CommitAuthor author = player == null
-                ? new CommitAuthor(new UUID(0, 0), source.getTextName())
-                : new CommitAuthor(player.getUUID(), source.getTextName());
         try {
             runtime.startSave(new SaveRequest(
-                    runtime.mainRef(), author, message, Instant.now(),
+                    runtime.mainRef(), author(source), message, Instant.now(),
                     runtime.defaultWorkspaceId(), Optional.empty(), CommitKind.MANUAL));
             source.sendSuccess(() -> Component.literal("Lumi save started"), false);
             return 1;
@@ -73,12 +69,19 @@ public final class LumiCommands {
             return 0;
         }
         try {
-            runtime.startRestore(new CommitId(new ObjectId(commitHex)));
-            source.sendSuccess(() -> Component.literal("Lumi restore preparation started"), false);
+            runtime.startRestore(new CommitId(new ObjectId(commitHex)), author(source));
+            source.sendSuccess(() -> Component.literal("Lumi restore started"), false);
             return 1;
         } catch (IOException | IllegalStateException | IllegalArgumentException failed) {
             source.sendFailure(Component.literal("Lumi restore could not start: " + failed.getMessage()));
             return 0;
         }
+    }
+
+    private static CommitAuthor author(CommandSourceStack source) {
+        var player = source.getPlayer();
+        return player == null
+                ? new CommitAuthor(new UUID(0, 0), source.getTextName())
+                : new CommitAuthor(player.getUUID(), source.getTextName());
     }
 }

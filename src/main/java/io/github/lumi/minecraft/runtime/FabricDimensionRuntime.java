@@ -2,11 +2,13 @@ package io.github.lumi.minecraft.runtime;
 
 import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
-import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
-import io.github.lumi.minecraft.operation.RestoreOperation;
-import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.minecraft.operation.ReturnPointRestoreOperation;
+import io.github.lumi.minecraft.operation.ReturnPointRestorePreparation;
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveService;
@@ -33,11 +35,11 @@ import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -56,9 +58,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final SavePreparation savePreparation;
     private final WorldStateCapture worldCapture;
     private final SaveService saves;
-    private final RestoreService restores;
-    private final MinecraftWorldStateApply worldApply;
-    private final OperationJournalRepository journals;
+    private final ReturnPointRestorePreparation returnPointRestores;
     private final Executor background;
     private final BranchRefRepository refs;
     private final UUID defaultWorkspaceId;
@@ -86,12 +86,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.operations = operations;
         this.mutations = mutations;
         this.saves = saves;
-        this.restores = restores;
-        this.worldApply = worldApply;
-        this.journals = journals;
         this.background = background;
         this.refs = refs;
         this.defaultWorkspaceId = defaultWorkspaceId;
+        returnPointRestores = new ReturnPointRestorePreparation(
+                restores, worldApply, refs, journals, background);
         entityDurability = new EntityChunkDurabilityGate(mutations);
         var worldReader = new MinecraftWorldStateReader(level);
         savePreparation = new DurableSavePreparation(worldReader, entityDurability, mutations);
@@ -155,46 +154,35 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public synchronized SaveCaptureOperation startSave(SaveRequest request) {
-        SaveCaptureOperation operation = new SaveCaptureOperation(
-                Objects.requireNonNull(request, "request"), savePreparation, worldCapture,
-                saves, mutations, background);
+        SaveCaptureOperation operation = createSave(request);
         operations.start(operation);
         return operation;
     }
 
-    public synchronized BackgroundPreparedMutation<RestoreOperation> startRestore(
-            CommitId target) throws IOException {
+    private SaveCaptureOperation createSave(SaveRequest request) {
+        return new SaveCaptureOperation(
+                Objects.requireNonNull(request, "request"), savePreparation, worldCapture,
+                saves, mutations, background);
+    }
+
+    public synchronized ReturnPointRestoreOperation startRestore(
+            CommitId target, CommitAuthor author) throws IOException {
         Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(author, "author");
         if (operations.hasActiveOperation()) {
             throw new IllegalStateException("A dimension operation is already active");
         }
-        if (!mutations.snapshot().generations().isEmpty()) {
-            throw new IllegalStateException("Save or discard pending work before full Restore");
-        }
         BranchRef expected = mainRef();
-        CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
-            try {
-                return RestoreOperation.start(
-                        restores.prepare(expected, target), worldApply, refs, journals, UUID.randomUUID());
-            } catch (IOException failed) {
-                throw new CompletionException(failed);
-            }
-        }, background);
-        var operation = new BackgroundPreparedMutation<>(
-                preparation,
-                () -> validateRestoreBoundary(expected),
-                RestoreOperation::cancelBeforeApply);
+        UUID operationId = UUID.randomUUID();
+        SaveRequest returnPoint = new SaveRequest(
+                expected, author, "Return point before Restore", Instant.now(),
+                defaultWorkspaceId, Optional.empty(), CommitKind.HIDDEN_RETURN);
+        BranchName hiddenRef = new BranchName("hidden/return/" + operationId);
+        var operation = new ReturnPointRestoreOperation(
+                createSave(returnPoint), saved -> returnPointRestores.prepare(
+                        saved, target, hiddenRef, operationId));
         operations.start(operation);
         return operation;
-    }
-
-    private void validateRestoreBoundary(BranchRef expected) throws IOException {
-        if (!mutations.snapshot().generations().isEmpty()) {
-            throw new IOException("World changed while Restore was preparing");
-        }
-        if (!mainRef().equals(expected)) {
-            throw new IOException("Branch changed while Restore was preparing");
-        }
     }
 
     public ServerLevel level() { return level; }
