@@ -1,0 +1,42 @@
+package io.github.lumi.storage.repository;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
+
+final class AtomicFileWriter {
+    private AtomicFileWriter() {
+    }
+
+    static void replace(Path target, byte[] content) throws IOException {
+        Files.createDirectories(target.getParent());
+        Path temporary = Files.createTempFile(target.getParent(), ".atomic-", ".tmp");
+        try {
+            try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.WRITE,
+                    StandardOpenOption.TRUNCATE_EXISTING)) {
+                ByteBuffer buffer = ByteBuffer.wrap(content);
+                while (buffer.hasRemaining()) {
+                    channel.write(buffer);
+                }
+                channel.force(true);
+            }
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException unsupported) {
+                throw new IOException("Repository requires atomic moves: " + target, unsupported);
+            }
+            if (!Arrays.equals(content, Files.readAllBytes(target))) {
+                throw new IOException("Atomic file verification failed: " + target);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+}
