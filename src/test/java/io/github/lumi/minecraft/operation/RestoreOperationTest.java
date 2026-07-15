@@ -36,6 +36,7 @@ class RestoreOperationTest {
                 world, refs, journals,
                 UUID.fromString("10000000-0000-0000-0000-000000000001"));
 
+        assertEquals(2, world.prepareCalls);
         assertEquals(OperationPhase.PREPARED, journals.read().orElseThrow().phase());
         assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
 
@@ -121,11 +122,17 @@ class RestoreOperationTest {
         return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
     }
 
-    private static final class TwoStepApply implements WorldStateApply {
+    private static final class TwoStepApply implements TestWorldApply {
         private final Session session = new Session();
+        private int prepareCalls;
+
+        @Override public PreparedState prepare(State target) {
+            prepareCalls++;
+            return new TestPrepared(target);
+        }
 
         @Override
-        public ApplySession begin(State target) {
+        public ApplySession begin(PreparedState target) {
             return session;
         }
 
@@ -156,11 +163,11 @@ class RestoreOperationTest {
         }
     }
 
-    private static final class RepairThenVerify implements WorldStateApply {
+    private static final class RepairThenVerify implements TestWorldApply {
         private final Session session = new Session();
 
         @Override
-        public ApplySession begin(State target) {
+        public ApplySession begin(PreparedState target) {
             return session;
         }
 
@@ -180,7 +187,7 @@ class RestoreOperationTest {
         }
     }
 
-    private static final class ReturnAfterMismatch implements WorldStateApply {
+    private static final class ReturnAfterMismatch implements TestWorldApply {
         private final boolean returnVerifies;
         private int beginCalls;
 
@@ -189,7 +196,7 @@ class RestoreOperationTest {
         }
 
         @Override
-        public ApplySession begin(State target) {
+        public ApplySession begin(PreparedState target) {
             beginCalls++;
             return beginCalls == 1 ? new AlwaysMismatch() : new ReturnSession(returnVerifies);
         }
@@ -210,4 +217,13 @@ class RestoreOperationTest {
             @Override public void restartVerification() { }
         }
     }
+
+    private interface TestWorldApply extends WorldStateApply {
+        @Override default PreparedState prepare(State target) {
+            return new TestPrepared(target);
+        }
+    }
+
+    private record TestPrepared(WorldStateApply.State state)
+            implements WorldStateApply.PreparedState { }
 }

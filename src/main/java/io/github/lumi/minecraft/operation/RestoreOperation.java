@@ -20,6 +20,7 @@ public final class RestoreOperation implements DimensionMutation {
     private final BranchRefRepository refs;
     private final OperationJournalRepository journals;
     private final WorldStateApply.ApplySession targetSession;
+    private final WorldStateApply.PreparedState preparedReturn;
     private WorldStateApply.ApplySession returnSession;
     private OperationJournal journal;
     private RestoreStatus status = RestoreStatus.APPLYING;
@@ -32,13 +33,16 @@ public final class RestoreOperation implements DimensionMutation {
             WorldStateApply world,
             BranchRefRepository refs,
             OperationJournalRepository journals,
-            OperationJournal journal) {
+            OperationJournal journal,
+            WorldStateApply.PreparedState preparedTarget,
+            WorldStateApply.PreparedState preparedReturn) {
         this.restore = restore;
         this.world = world;
         this.refs = refs;
         this.journals = journals;
         this.journal = journal;
-        targetSession = world.begin(new WorldStateApply.State(restore.sections(), restore.entities()));
+        this.preparedReturn = preparedReturn;
+        targetSession = world.begin(preparedTarget);
     }
 
     public static RestoreOperation start(
@@ -51,6 +55,10 @@ public final class RestoreOperation implements DimensionMutation {
         Objects.requireNonNull(world, "world");
         Objects.requireNonNull(refs, "refs");
         Objects.requireNonNull(journals, "journals");
+        WorldStateApply.PreparedState preparedTarget = world.prepare(
+                new WorldStateApply.State(restore.sections(), restore.entities()));
+        WorldStateApply.PreparedState preparedReturn = world.prepare(
+                new WorldStateApply.State(restore.returnSections(), restore.returnEntities()));
         OperationTarget target = new OperationTarget(
                 restore.expectedRef().name(),
                 restore.expectedRef().commit(),
@@ -60,7 +68,8 @@ public final class RestoreOperation implements DimensionMutation {
         OperationJournal journal = journals.create(new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 OperationKind.RESTORE, OperationPhase.PREPARED, target));
-        return new RestoreOperation(restore, world, refs, journals, journal);
+        return new RestoreOperation(
+                restore, world, refs, journals, journal, preparedTarget, preparedReturn);
     }
 
     public RestoreStatus tick(long deadlineNanos) throws IOException {
@@ -116,8 +125,7 @@ public final class RestoreOperation implements DimensionMutation {
 
     private void beginReturn() throws IOException {
         journal = journals.advance(journal, OperationPhase.ROLLING_BACK);
-        returnSession = world.begin(new WorldStateApply.State(
-                restore.returnSections(), restore.returnEntities()));
+        returnSession = world.begin(preparedReturn);
         returnPhase = ReturnPhase.APPLYING;
         status = RestoreStatus.RETURNING;
     }
