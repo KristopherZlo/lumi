@@ -66,6 +66,10 @@ public final class BlockChangeApplier {
     private BlockChangeApplier() {
     }
 
+    static void warmUp() {
+        DIRECT_CHUNK_COMMIT_STRATEGY.warmUp();
+    }
+
     public static void applyChanges(ServerLevel level, List<BlockChangeRecord> changes) throws IOException {
         applyChanges(level, changes, 0, changes == null ? 0 : changes.size());
     }

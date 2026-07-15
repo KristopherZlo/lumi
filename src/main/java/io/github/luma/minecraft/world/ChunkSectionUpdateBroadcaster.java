@@ -15,6 +15,11 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 
 final class ChunkSectionUpdateBroadcaster {
 
+    void warmUp() {
+        initialize(ClientboundSectionBlocksUpdatePacket.class);
+        initialize(ClientboundBlockEntityDataPacket.class);
+    }
+
     int broadcastSection(
             ServerLevel level,
             SectionPos sectionPos,
@@ -81,6 +86,14 @@ final class ChunkSectionUpdateBroadcaster {
             addCellIfInside(cells, localX, localY, localZ + 1);
         }
         return cells;
+    }
+
+    private static void initialize(Class<?> type) {
+        try {
+            Class.forName(type.getName(), true, type.getClassLoader());
+        } catch (ClassNotFoundException exception) {
+            throw new IllegalStateException("Could not initialize world apply packet type " + type.getName(), exception);
+        }
     }
 
     private static void addCellIfInside(ShortSet cells, int localX, int localY, int localZ) {

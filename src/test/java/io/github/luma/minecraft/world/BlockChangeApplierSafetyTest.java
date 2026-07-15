@@ -82,9 +82,10 @@ class BlockChangeApplierSafetyTest {
         assertTrue(cleaner.contains("level.getBlockTicks().clearArea(box);"));
         assertTrue(cleaner.contains("level.getFluidTicks().clearArea(box);"));
         assertTrue(applier.contains("ReplayQueuedTickCleaner.clear(level, pos);"));
-        assertTrue(directSection.contains("ReplayQueuedTickCleaner.clear(level, pos);"));
-        assertTrue(sectionNative.contains("ReplayQueuedTickCleaner.clear(level, mutablePos);"));
-        assertTrue(directChunk.contains("ReplayQueuedTickCleaner.clear(level, mutablePos);"));
+        assertTrue(cleaner.contains("pos.getX() <= runEndX + 1"));
+        assertTrue(directSection.contains("ReplayQueuedTickCleaner.clear(level, changedPositions);"));
+        assertTrue(sectionNative.contains("ReplayQueuedTickCleaner.clear(level, queuedTickCleanupPositions);"));
+        assertTrue(directChunk.contains("ReplayQueuedTickCleaner.clear(level, queuedTickCleanupPositions);"));
         assertTrue(exactPlacement.contains("ReplayQueuedTickCleaner.clear(level, pos);"));
     }
 

@@ -142,6 +142,7 @@ final class WorldApplyTickWorkGate {
     }
 
     private boolean allowMixedApplyPaths(WorldApplyProfile profile) {
-        return profile != null && profile != WorldApplyProfile.NORMAL;
+        return profile == WorldApplyProfile.DIAGNOSTIC_TURBO
+                || profile == WorldApplyProfile.MAXIMUM;
     }
 }

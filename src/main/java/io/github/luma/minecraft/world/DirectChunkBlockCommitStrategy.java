@@ -1,5 +1,6 @@
 package io.github.luma.minecraft.world;
 
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.SectionChangeMask;
 
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
@@ -38,6 +39,12 @@ final class DirectChunkBlockCommitStrategy {
         this.sectionFallback = sectionFallback;
     }
 
+    void warmUp() {
+        new SectionLightUpdateBatch();
+        new ChunkHeightmapUpdatePlan();
+        this.updateBroadcaster.warmUp();
+    }
+
     DirectChunkApplyResult apply(
             ServerLevel level,
             ChunkBatch batch,
@@ -66,6 +73,7 @@ final class DirectChunkBlockCommitStrategy {
         int changedBlocks = 0;
         int skippedBlocks = 0;
         int directSections = 0;
+        List<BlockPos> queuedTickCleanupPositions = new java.util.ArrayList<>();
         Map<Integer, SectionUpdate> sectionUpdates = new LinkedHashMap<>();
         SectionLightUpdateBatch lightBatch = new SectionLightUpdateBatch();
         ChunkHeightmapUpdatePlan heightmapPlan = new ChunkHeightmapUpdatePlan();
@@ -95,6 +103,7 @@ final class DirectChunkBlockCommitStrategy {
                         directSections,
                         chunk,
                         sectionUpdates,
+                        queuedTickCleanupPositions,
                         lightBatch,
                         heightmapPlan
                 );
@@ -113,6 +122,7 @@ final class DirectChunkBlockCommitStrategy {
                         directSections,
                         chunk,
                         sectionUpdates,
+                        queuedTickCleanupPositions,
                         lightBatch,
                         heightmapPlan
                 );
@@ -132,6 +142,7 @@ final class DirectChunkBlockCommitStrategy {
                         sectionBatch.placements().get(index),
                         mutablePos,
                         update,
+                        queuedTickCleanupPositions,
                         lightBatch,
                         heightmapPlan
                 );
@@ -152,6 +163,11 @@ final class DirectChunkBlockCommitStrategy {
             }
         }
 
+        long queuedTickCleanupStartedAt = LumaLoadLog.start();
+        ReplayQueuedTickCleaner.clear(level, queuedTickCleanupPositions);
+        long queuedTickCleanupNanos = queuedTickCleanupStartedAt <= 0L
+                ? 0L
+                : System.nanoTime() - queuedTickCleanupStartedAt;
         BlockCommitResult directResult = this.finishDirect(
                 level,
                 chunk,
@@ -162,6 +178,12 @@ final class DirectChunkBlockCommitStrategy {
                 sectionUpdates,
                 lightBatch,
                 heightmapPlan
+        );
+        LumaLoadLog.record(
+                "world-op-apply",
+                "direct-queued-tick-cleanup",
+                queuedTickCleanupNanos,
+                "processed=" + processedBlocks + ", changed=" + changedBlocks
         );
         return new DirectChunkApplyResult(processedBlocks, sectionIndex, placementIndex, directResult);
     }
@@ -185,9 +207,11 @@ final class DirectChunkBlockCommitStrategy {
             int directSections,
             LevelChunk chunk,
             Map<Integer, SectionUpdate> sectionUpdates,
+            List<BlockPos> queuedTickCleanupPositions,
             SectionLightUpdateBatch lightBatch,
             ChunkHeightmapUpdatePlan heightmapPlan
     ) {
+        ReplayQueuedTickCleaner.clear(level, queuedTickCleanupPositions);
         BlockCommitResult directResult = this.finishDirect(
                 level,
                 chunk,
@@ -237,6 +261,7 @@ final class DirectChunkBlockCommitStrategy {
             PreparedBlockPlacement placement,
             BlockPos.MutableBlockPos mutablePos,
             SectionUpdate update,
+            List<BlockPos> queuedTickCleanupPositions,
             SectionLightUpdateBatch lightBatch,
             ChunkHeightmapUpdatePlan heightmapPlan
     ) {
@@ -259,7 +284,7 @@ final class DirectChunkBlockCommitStrategy {
             level.updatePOIOnBlockStateChange(mutablePos, currentState, targetState);
         }
         section.setBlockState(localX, localY, localZ, targetState, false);
-        ReplayQueuedTickCleaner.clear(level, mutablePos);
+        queuedTickCleanupPositions.add(mutablePos.immutable());
         heightmapPlan.record(sectionY, SectionChangeMask.localIndex(localX, localY, localZ));
         this.lightUpdatePlanner.plan(lightBatch, mutablePos, currentState, targetState);
         this.redstoneUpdatePlanner.propagate(level, mutablePos, currentState, targetState);

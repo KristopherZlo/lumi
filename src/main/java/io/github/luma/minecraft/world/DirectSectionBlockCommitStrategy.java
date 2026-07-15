@@ -79,13 +79,13 @@ final class DirectSectionBlockCommitStrategy implements BlockCommitStrategy {
 
             this.blockEntityRemover.remove(level, pos);
             section.setBlockState(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15, targetState, false);
-            ReplayQueuedTickCleaner.clear(level, pos);
             this.updateHeightmaps(chunk, pos, targetState);
             level.updatePOIOnBlockStateChange(pos, currentState, targetState);
             this.lightUpdatePlanner.plan(lightBatch, pos, currentState, targetState);
             this.redstoneUpdatePlanner.propagate(level, pos, currentState, targetState);
             changedPositions.add(pos.immutable());
         }
+        ReplayQueuedTickCleaner.clear(level, changedPositions);
 
         if (!changedPositions.isEmpty()) {
             chunk.markUnsaved();

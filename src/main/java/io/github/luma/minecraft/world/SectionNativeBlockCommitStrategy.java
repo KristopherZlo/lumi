@@ -4,6 +4,8 @@ import io.github.luma.domain.model.SectionChangeMask;
 
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
 import it.unimi.dsi.fastutil.shorts.ShortSet;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
@@ -65,11 +67,14 @@ final class SectionNativeBlockCommitStrategy {
 
         ApplyCounters counters = new ApplyCounters();
         ShortSet changedCells = new ShortOpenHashSet();
+        List<BlockPos> queuedTickCleanupPositions = new ArrayList<>();
         SectionLightUpdateBatch lightBatch = new SectionLightUpdateBatch();
         BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
         batch.buffer().changedCells().forEachSetCell(localIndex ->
-                this.applyCell(level, chunk, section, batch, localIndex, mutablePos, changedCells, lightBatch, counters)
+                this.applyCell(level, chunk, section, batch, localIndex, mutablePos, changedCells,
+                        queuedTickCleanupPositions, lightBatch, counters)
         );
+        ReplayQueuedTickCleaner.clear(level, queuedTickCleanupPositions);
 
         if (counters.changedBlocks > 0) {
             chunk.markUnsaved();
@@ -124,12 +129,14 @@ final class SectionNativeBlockCommitStrategy {
         }
 
         int processed = 0;
+        List<BlockPos> queuedTickCleanupPositions = new ArrayList<>();
         BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
         while (processed < maxCells && !cursor.isComplete()) {
-            this.applyCell(level, chunk, section, cursor, mutablePos);
+            this.applyCell(level, chunk, section, cursor, mutablePos, queuedTickCleanupPositions);
             cursor.advance();
             processed += 1;
         }
+        ReplayQueuedTickCleaner.clear(level, queuedTickCleanupPositions);
 
         if (!cursor.isComplete()) {
             return NativeSectionApplyResult.partial(processed);
@@ -172,6 +179,7 @@ final class SectionNativeBlockCommitStrategy {
             int localIndex,
             BlockPos.MutableBlockPos mutablePos,
             ShortSet changedCells,
+            List<BlockPos> queuedTickCleanupPositions,
             SectionLightUpdateBatch lightBatch,
             ApplyCounters counters
     ) {
@@ -195,7 +203,7 @@ final class SectionNativeBlockCommitStrategy {
             this.blockEntityRemover.remove(level, mutablePos);
         }
         section.setBlockState(localX, localY, localZ, targetState, false);
-        ReplayQueuedTickCleaner.clear(level, mutablePos);
+        queuedTickCleanupPositions.add(mutablePos.immutable());
         this.heightmapUpdater.update(chunk, batch.sectionY(), localIndex, targetState);
         this.poiUpdatePlanner.update(level, mutablePos, currentState, targetState);
         this.lightUpdatePlanner.plan(lightBatch, mutablePos, currentState, targetState);
@@ -213,7 +221,8 @@ final class SectionNativeBlockCommitStrategy {
             LevelChunk chunk,
             LevelChunkSection section,
             NativeSectionApplyCursor cursor,
-            BlockPos.MutableBlockPos mutablePos
+            BlockPos.MutableBlockPos mutablePos,
+            List<BlockPos> queuedTickCleanupPositions
     ) {
         PreparedSectionApplyBatch batch = cursor.batch();
         int localIndex = cursor.nextLocalIndex();
@@ -237,7 +246,7 @@ final class SectionNativeBlockCommitStrategy {
             this.blockEntityRemover.remove(level, mutablePos);
         }
         section.setBlockState(localX, localY, localZ, targetState, false);
-        ReplayQueuedTickCleaner.clear(level, mutablePos);
+        queuedTickCleanupPositions.add(mutablePos.immutable());
         this.heightmapUpdater.update(chunk, batch.sectionY(), localIndex, targetState);
         this.poiUpdatePlanner.update(level, mutablePos, currentState, targetState);
         this.lightUpdatePlanner.plan(cursor.lightBatch(), mutablePos, currentState, targetState);

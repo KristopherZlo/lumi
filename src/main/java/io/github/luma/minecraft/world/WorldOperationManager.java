@@ -606,6 +606,7 @@ public final class WorldOperationManager {
                 long loadStartedAt = LumaLoadLog.start();
                 try {
                     this.progressSink().update(OperationStage.PREPARING, 0, 0, "Preparing");
+                    BlockChangeApplier.warmUp();
                     PreparedApplyOperation preparedOperation = work.prepare(this.progressSink());
                     LumaLoadLog.recordSince(
                             "world-op",
@@ -707,7 +708,14 @@ public final class WorldOperationManager {
                         stopReason = "dispatcher-empty";
                         break;
                     }
+                    long pruneStartedAt = LumaLoadLog.start();
                     this.currentBatch = this.pruneNoOpBatch(this.currentTargetBatch);
+                    LumaLoadLog.recordSince(
+                            "world-op-apply",
+                            "prune-no-op-batch",
+                            pruneStartedAt,
+                            "placements=" + this.currentTargetBatch.totalPlacements()
+                    );
                     this.currentNativeSections = this.currentBatch.orderedNativeSections();
                     this.currentSections = this.currentBatch.orderedSections();
                     this.currentBlockEntities = List.copyOf(this.currentBatch.blockEntities().entrySet());
@@ -1419,6 +1427,13 @@ public final class WorldOperationManager {
                 this.sectionIndex = result.nextSectionIndex();
                 this.placementIndex = result.nextPlacementIndex();
                 long elapsedNanos = System.nanoTime() - startedAt;
+                LumaLoadLog.record(
+                        "world-op-apply",
+                        "sparse-chunk-step",
+                        elapsedNanos,
+                        "processed=" + result.processedBlocks()
+                                + ", directSections=" + result.commitResult().directSections()
+                );
                 if (this.debugApplyEnabled()) {
                     LumaDebugLog.log(
                             this.handle(),

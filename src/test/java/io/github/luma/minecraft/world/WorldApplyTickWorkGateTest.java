@@ -116,8 +116,8 @@ class WorldApplyTickWorkGateTest {
     }
 
     @Test
-    void fastProfilesAllowMixedApplyPathsUntilBudgetsAreConsumed() {
-        assertTrue(this.gate.canStartNextStep(
+    void historyFastKeepsRewriteWorkSeparateFromOtherApplyPaths() {
+        assertFalse(this.gate.canStartNextStep(
                 true,
                 SectionApplyPath.SECTION_REWRITE,
                 64,
@@ -128,7 +128,7 @@ class WorldApplyTickWorkGateTest {
                 this.budget,
                 WorldApplyProfile.HISTORY_FAST
         ));
-        assertTrue(this.gate.canStartNextStep(
+        assertFalse(this.gate.canStartNextStep(
                 true,
                 SectionApplyPath.SECTION_NATIVE,
                 SectionChangeMask.ENTRY_COUNT,
@@ -139,7 +139,7 @@ class WorldApplyTickWorkGateTest {
                 this.budget,
                 WorldApplyProfile.HISTORY_FAST
         ));
-        assertTrue(this.gate.canStartNextStep(
+        assertFalse(this.gate.canStartNextStep(
                 false,
                 null,
                 64,
@@ -149,6 +149,21 @@ class WorldApplyTickWorkGateTest {
                 0,
                 this.budget,
                 WorldApplyProfile.HISTORY_FAST
+        ));
+    }
+
+    @Test
+    void diagnosticProfilesMayMixApplyPathsUntilBudgetsAreConsumed() {
+        assertTrue(this.gate.canStartNextStep(
+                true,
+                SectionApplyPath.SECTION_REWRITE,
+                64,
+                0,
+                64,
+                0,
+                0,
+                this.budget,
+                WorldApplyProfile.DIAGNOSTIC_TURBO
         ));
     }
 
