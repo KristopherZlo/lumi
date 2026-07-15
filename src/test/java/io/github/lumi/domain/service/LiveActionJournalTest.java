@@ -61,6 +61,67 @@ class LiveActionJournalTest {
         assertEquals(Optional.empty(), journal.prepareRedo(PLAYER_A));
     }
 
+    @Test
+    void clearingRedoKeepsOlderUnrelatedUndoAvailable() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID first = add(journal, 1);
+        add(journal, 2);
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+        add(journal, 3);
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+
+        assertEquals(first, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+    }
+
+    @Test
+    void oversizedActionIsUnavailableWithAReason() {
+        LiveActionJournal journal = new LiveActionJournal(
+                new LiveActionJournal.Limits(64, 32, 128, 256));
+        UUID action = journal.begin(PLAYER_A);
+
+        journal.record(action, POSITION, block("stone"), block("gold_block"));
+
+        assertTrue(!journal.close(action));
+        assertTrue(journal.lastUnavailableReason(PLAYER_A).orElseThrow().contains("limit"));
+        assertEquals(Optional.empty(), journal.prepareUndo(PLAYER_A));
+    }
+
+    @Test
+    void evictsOldestClosedActionAtPlayerCountLimit() {
+        LiveActionJournal journal = new LiveActionJournal(
+                new LiveActionJournal.Limits(2, 1_000, 4_000, 8_000));
+        UUID first = add(journal, 1);
+        UUID second = add(journal, 2);
+        UUID third = add(journal, 3);
+
+        var newest = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(third, newest.actionId());
+        journal.complete(newest);
+        var remaining = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(second, remaining.actionId());
+        assertTrue(!remaining.actionId().equals(first));
+    }
+
+    @Test
+    void dimensionByteLimitEvictsOldestClosedPlayerAction() {
+        LiveActionJournal journal = new LiveActionJournal(
+                new LiveActionJournal.Limits(64, 1_000, 1_000, 80));
+        add(journal, 1);
+        UUID newer = journal.begin(PLAYER_B);
+        journal.record(newer, new BlockPosition(2, 0, 0), block("air"), block("stone"));
+        journal.close(newer);
+
+        assertEquals(Optional.empty(), journal.prepareUndo(PLAYER_A));
+        assertEquals(newer, journal.prepareUndo(PLAYER_B).orElseThrow().actionId());
+    }
+
+    private static UUID add(LiveActionJournal journal, int x) {
+        UUID action = journal.begin(PLAYER_A);
+        journal.record(action, new BlockPosition(x, 0, 0), block("air"), block("stone"));
+        journal.close(action);
+        return action;
+    }
+
     private static BlockSnapshot block(String id) {
         return new BlockSnapshot("minecraft:" + id, Optional.empty());
     }
