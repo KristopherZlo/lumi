@@ -15,10 +15,15 @@ final class AtomicFileWriter {
     }
 
     static void replace(Path target, byte[] content) throws IOException {
+        replace(target, content, () -> { });
+    }
+
+    static void replace(Path target, byte[] content, FailurePoint beforeMove) throws IOException {
         Files.createDirectories(target.getParent());
         Path temporary = Files.createTempFile(target.getParent(), ".atomic-", ".tmp");
         try {
             write(temporary, content);
+            beforeMove.run();
             try {
                 Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE,
                         StandardCopyOption.REPLACE_EXISTING);
@@ -66,5 +71,10 @@ final class AtomicFileWriter {
             }
             channel.force(true);
         }
+    }
+
+    @FunctionalInterface
+    interface FailurePoint {
+        void run() throws IOException;
     }
 }
