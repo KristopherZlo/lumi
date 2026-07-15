@@ -6,6 +6,8 @@ import java.util.HexFormat;
 import java.util.Objects;
 
 public record ObjectId(String hex) {
+    public static final int HEX_LENGTH = 64;
+
     public ObjectId {
         Objects.requireNonNull(hex, "hex");
         if (!hex.matches("[0-9a-f]{64}")) {
