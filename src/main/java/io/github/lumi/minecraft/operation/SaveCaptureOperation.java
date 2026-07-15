@@ -43,7 +43,7 @@ public final class SaveCaptureOperation implements DimensionMutation {
     }
 
     @Override
-    public void advance(long deadlineNanos) {
+    public void advance(long deadlineNanos) throws IOException {
         if (status == SaveOperationStatus.CAPTURING) {
             capture(deadlineNanos);
         } else if (status == SaveOperationStatus.WRITING && background.isDone()) {
@@ -51,7 +51,7 @@ public final class SaveCaptureOperation implements DimensionMutation {
         }
     }
 
-    private void capture(long deadlineNanos) {
+    private void capture(long deadlineNanos) throws IOException {
         if (session == null) {
             session = Objects.requireNonNull(capture.begin(dirty), "capture session");
         }
