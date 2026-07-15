@@ -1,6 +1,7 @@
 package io.github.lumi.domain.service;
 
 import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.ChunkInRegion;
 import io.github.lumi.domain.model.ChunkTree;
 import io.github.lumi.domain.model.CommitId;
@@ -18,6 +19,7 @@ import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -37,6 +39,18 @@ public final class RestoreService {
     }
 
     public PreparedRestore prepare(BranchRef currentRef, CommitId targetCommit) throws IOException {
+        return prepare(currentRef, targetCommit, null, false);
+    }
+
+    public PreparedRestore preparePartial(
+            BranchRef currentRef, CommitId targetCommit, BlockBox area, boolean outside)
+            throws IOException {
+        return prepare(currentRef, targetCommit, Objects.requireNonNull(area, "area"), outside);
+    }
+
+    private PreparedRestore prepare(
+            BranchRef currentRef, CommitId targetCommit, BlockBox area, boolean outside)
+            throws IOException {
         DimensionTree current = objects.readDimension(commits.read(currentRef.commit()).tree());
         DimensionTree target = objects.readDimension(commits.read(targetCommit).tree());
         Map<SectionKey, SectionBlob> sections = new HashMap<>();
@@ -54,7 +68,7 @@ public final class RestoreService {
             RegionTree targetRegion = targetRegionId.isPresent()
                     ? objects.readRegion(targetRegionId.orElseThrow()) : new RegionTree(Map.of());
             prepareRegion(regionCoordinate, currentRegion, targetRegion,
-                    sections, entities, returnSections, returnEntities);
+                    sections, entities, returnSections, returnEntities, area, outside);
         }
         return new PreparedRestore(currentRef, targetCommit,
                 sections, entities, returnSections, returnEntities);
@@ -67,7 +81,9 @@ public final class RestoreService {
             Map<SectionKey, SectionBlob> sections,
             Map<EntityChunkKey, EntityChunkBlob> entities,
             Map<SectionKey, SectionBlob> returnSections,
-            Map<EntityChunkKey, EntityChunkBlob> returnEntities) throws IOException {
+            Map<EntityChunkKey, EntityChunkBlob> returnEntities,
+            BlockBox area,
+            boolean outside) throws IOException {
         for (ChunkInRegion local : union(currentRegion.chunks().keySet(), targetRegion.chunks().keySet())) {
             Optional<ObjectId> currentId = Optional.ofNullable(currentRegion.chunks().get(local));
             Optional<ObjectId> targetId = Optional.ofNullable(targetRegion.chunks().get(local));
@@ -81,7 +97,7 @@ public final class RestoreService {
             int chunkX = regionCoordinate.x() * REGION_SIZE + local.x();
             int chunkZ = regionCoordinate.z() * REGION_SIZE + local.z();
             prepareChunk(chunkX, chunkZ, current, target,
-                    sections, entities, returnSections, returnEntities);
+                    sections, entities, returnSections, returnEntities, area, outside);
         }
     }
 
@@ -93,19 +109,27 @@ public final class RestoreService {
             Map<SectionKey, SectionBlob> sections,
             Map<EntityChunkKey, EntityChunkBlob> entities,
             Map<SectionKey, SectionBlob> returnSections,
-            Map<EntityChunkKey, EntityChunkBlob> returnEntities) throws IOException {
+            Map<EntityChunkKey, EntityChunkBlob> returnEntities,
+            BlockBox area,
+            boolean outside) throws IOException {
         for (int sectionY : union(current.sections().keySet(), target.sections().keySet())) {
             Optional<ObjectId> currentId = Optional.ofNullable(current.sections().get(sectionY));
             Optional<ObjectId> targetId = Optional.ofNullable(target.sections().get(sectionY));
             if (!currentId.equals(targetId)) {
                 SectionKey key = new SectionKey(chunkX, sectionY, chunkZ);
-                ObjectId resolved = targetId.isPresent() ? targetId.orElseThrow() : origin(key);
-                sections.put(key, objects.readSection(resolved));
+                if (area != null && !selectsSection(area, key, outside)) continue;
                 ObjectId returnId = currentId.isPresent() ? currentId.orElseThrow() : origin(key);
-                returnSections.put(key, objects.readSection(returnId));
+                ObjectId resolved = targetId.isPresent() ? targetId.orElseThrow() : origin(key);
+                SectionBlob before = objects.readSection(returnId);
+                SectionBlob after = objects.readSection(resolved);
+                SectionBlob selected = area == null ? after : select(before, after, key, area, outside);
+                if (!selected.equals(before)) {
+                    sections.put(key, selected);
+                    returnSections.put(key, before);
+                }
             }
         }
-        if (!current.entities().equals(target.entities())) {
+        if (area == null && !current.entities().equals(target.entities())) {
             EntityChunkKey key = new EntityChunkKey(chunkX, chunkZ);
             ObjectId resolved = target.entities().isPresent()
                     ? target.entities().orElseThrow()
@@ -116,6 +140,35 @@ public final class RestoreService {
                     : origin(key);
             returnEntities.put(key, objects.readEntities(returnId));
         }
+    }
+
+    private static boolean selectsSection(BlockBox area, SectionKey key, boolean outside) {
+        return outside ? !area.contains(key) : area.intersects(key);
+    }
+
+    private static SectionBlob select(
+            SectionBlob before, SectionBlob after, SectionKey key,
+            BlockBox area, boolean outside) {
+        boolean fullSection = outside ? !area.intersects(key) : area.contains(key);
+        if (fullSection) return after;
+        var blocks = new ArrayList<>(before.blockStates());
+        var blockEntities = new HashMap<>(before.blockEntities());
+        int baseX = key.chunkX() * 16;
+        int baseY = key.sectionY() * 16;
+        int baseZ = key.chunkZ() * 16;
+        for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+            int x = index & 15;
+            int z = index >> 4 & 15;
+            int y = index >> 8 & 15;
+            if (outside != area.contains(baseX + x, baseY + y, baseZ + z)) {
+                blocks.set(index, after.blockStates().get(index));
+                blockEntities.remove(index);
+                if (after.blockEntities().containsKey(index)) {
+                    blockEntities.put(index, after.blockEntities().get(index));
+                }
+            }
+        }
+        return new SectionBlob(blocks, blockEntities);
     }
 
     private ObjectId origin(io.github.lumi.domain.model.HistoryKey key) throws IOException {

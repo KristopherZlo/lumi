@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.ChunkInRegion;
 import io.github.lumi.domain.model.ChunkTree;
 import io.github.lumi.domain.model.Commit;
@@ -56,6 +57,47 @@ class RestoreServiceTest {
         assertEquals(Map.of(key, section("minecraft:air")), prepared.sections());
         assertEquals(Map.of(key, section("minecraft:stone")), prepared.returnSections());
         assertEquals(target, prepared.targetCommit());
+    }
+
+    @Test
+    void partialRestoreChangesOnlyBlocksInsideTheBox() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        var air = objects.write(section("minecraft:air"));
+        var stone = objects.write(section("minecraft:stone"));
+        var targetChunk = objects.write(new ChunkTree(
+                Map.of(0, air, 1, air), Optional.empty()));
+        var currentChunk = objects.write(new ChunkTree(
+                Map.of(0, stone, 1, stone), Optional.empty()));
+        var target = commits.write(commit(tree(objects, targetChunk), List.of()));
+        var current = commits.write(commit(tree(objects, currentChunk), List.of(target)));
+        var currentRef = new BranchRef(new BranchName("main"), current, 1);
+
+        PreparedRestore prepared = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot)).preparePartial(
+                        currentRef, target, new BlockBox(0, 0, 0, 0, 0, 0), false);
+
+        SectionBlob expected = section("minecraft:stone");
+        var blocks = new ArrayList<>(expected.blockStates());
+        blocks.set(0, "minecraft:air");
+        expected = new SectionBlob(blocks, Map.of());
+        assertEquals(Map.of(new SectionKey(0, 0, 0), expected), prepared.sections());
+        assertEquals(Map.of(new SectionKey(0, 0, 0), section("minecraft:stone")),
+                prepared.returnSections());
+        assertEquals(Map.of(), prepared.entities());
+
+        PreparedRestore outside = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot)).preparePartial(
+                        currentRef, target, new BlockBox(0, 0, 0, 15, 15, 15), true);
+        assertEquals(Map.of(new SectionKey(0, 1, 0), section("minecraft:air")),
+                outside.sections());
+    }
+
+    private static io.github.lumi.domain.model.ObjectId tree(
+            WorldObjectRepository objects,
+            io.github.lumi.domain.model.ObjectId chunk) throws IOException {
+        var region = objects.write(new RegionTree(Map.of(new ChunkInRegion(0, 0), chunk)));
+        return objects.write(new DimensionTree(Map.of(new RegionCoordinate(0, 0), region)));
     }
 
     private static SectionBlob section(String state) {
