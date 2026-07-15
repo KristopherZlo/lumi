@@ -11,9 +11,10 @@ final class ClientGameTestSuiteSelection {
     static boolean includes(String suite) {
         String selected = System.getProperty(PROPERTY, "all").trim();
         if ("all".equals(selected)) {
-            return true;
+            return !"load".equals(suite);
         }
-        if (!"core".equals(selected) && !"screens".equals(selected) && !"overlays".equals(selected)) {
+        if (!"core".equals(selected) && !"screens".equals(selected)
+                && !"overlays".equals(selected) && !"load".equals(selected)) {
             throw new IllegalArgumentException("Unknown client GameTest suite: " + selected);
         }
         return selected.equals(suite);

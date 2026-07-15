@@ -348,7 +348,13 @@ tasks.named('runClientGameTest').configure {
     jvmArgs('-Dlumi.testing.enabled=true')
     jvmArgs('-Dlumi.clientLoadLog=true')
     if (providers.gradleProperty('lumiClientGameTestSuite').isPresent()) {
-        jvmArgs("-Dlumi.client.gametest.suite=${providers.gradleProperty('lumiClientGameTestSuite').get()}")
+        def suite = providers.gradleProperty('lumiClientGameTestSuite').get()
+        jvmArgs("-Dlumi.client.gametest.suite=${suite}")
+        if (suite == 'load') {
+            jvmArgs('-Dlumi.loadLog=true')
+            jvmArgs('-Dlumi.loadLog.slowMs=10')
+            jvmArgs('-Dlumi.clientLoadLog.sampleTicks=5')
+        }
     }
 }
 
