@@ -11,7 +11,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -27,11 +26,11 @@ public final class MerkleNodeCodec {
             output.writeInt(chunk.sections().size());
             for (var entry : new TreeMap<>(chunk.sections()).entrySet()) {
                 output.writeInt(entry.getKey());
-                writeId(output, entry.getValue());
+                CanonicalBytes.writeId(output, entry.getValue());
             }
             output.writeBoolean(chunk.entities().isPresent());
             if (chunk.entities().isPresent()) {
-                writeId(output, chunk.entities().orElseThrow());
+                CanonicalBytes.writeId(output, chunk.entities().orElseThrow());
             }
         });
     }
@@ -42,7 +41,7 @@ public final class MerkleNodeCodec {
             for (var entry : new TreeMap<>(region.chunks()).entrySet()) {
                 output.writeByte(entry.getKey().x());
                 output.writeByte(entry.getKey().z());
-                writeId(output, entry.getValue());
+                CanonicalBytes.writeId(output, entry.getValue());
             }
         });
     }
@@ -53,7 +52,7 @@ public final class MerkleNodeCodec {
             for (var entry : new TreeMap<>(dimension.regions()).entrySet()) {
                 output.writeInt(entry.getKey().x());
                 output.writeInt(entry.getKey().z());
-                writeId(output, entry.getValue());
+                CanonicalBytes.writeId(output, entry.getValue());
             }
         });
     }
@@ -69,13 +68,15 @@ public final class MerkleNodeCodec {
                     throw new IOException("Sections are not in canonical order");
                 }
                 previous = sectionY;
-                sections.put(sectionY, readId(input));
+                sections.put(sectionY, CanonicalBytes.readId(input));
             }
             int entityFlag = input.readUnsignedByte();
             if (entityFlag > 1) {
                 throw new IOException("Invalid entity object flag");
             }
-            Optional<ObjectId> entities = entityFlag == 1 ? Optional.of(readId(input)) : Optional.empty();
+            Optional<ObjectId> entities = entityFlag == 1
+                    ? Optional.of(CanonicalBytes.readId(input))
+                    : Optional.empty();
             finish(input);
             return new ChunkTree(sections, entities);
         }
@@ -92,7 +93,7 @@ public final class MerkleNodeCodec {
                     throw new IOException("Chunks are not in canonical order");
                 }
                 previous = coordinate;
-                chunks.put(coordinate, readId(input));
+                chunks.put(coordinate, CanonicalBytes.readId(input));
             }
             finish(input);
             return new RegionTree(chunks);
@@ -110,7 +111,7 @@ public final class MerkleNodeCodec {
                     throw new IOException("Regions are not in canonical order");
                 }
                 previous = coordinate;
-                regions.put(coordinate, readId(input));
+                regions.put(coordinate, CanonicalBytes.readId(input));
             }
             finish(input);
             return new DimensionTree(regions);
@@ -140,18 +141,6 @@ public final class MerkleNodeCodec {
             throw new IOException("Invalid " + label + " count");
         }
         return count;
-    }
-
-    private static void writeId(DataOutputStream output, ObjectId id) throws IOException {
-        output.write(HexFormat.of().parseHex(id.hex()));
-    }
-
-    private static ObjectId readId(DataInputStream input) throws IOException {
-        byte[] bytes = input.readNBytes(32);
-        if (bytes.length != 32) {
-            throw new IOException("Truncated object ID");
-        }
-        return new ObjectId(HexFormat.of().formatHex(bytes));
     }
 
     private static void finish(DataInputStream input) throws IOException {
