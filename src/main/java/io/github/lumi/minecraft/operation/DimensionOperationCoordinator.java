@@ -43,7 +43,7 @@ public final class DimensionOperationCoordinator {
         if (active == null) {
             return;
         }
-        if (lease == null && !freezeReleased) {
+        if (lease == null && !freezeReleased && active.requiresFreeze()) {
             lease = Objects.requireNonNull(freeze.acquire(), "freeze lease");
         }
         long start = nanoTime.getAsLong();

@@ -61,6 +61,25 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
+    void ownsBackgroundPreparationWithoutFreezingUntilApplyIsReady() throws IOException {
+        RecordingFreeze freeze = new RecordingFreeze();
+        DeferredFreezeMutation mutation = new DeferredFreezeMutation();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L);
+        coordinator.start(mutation);
+
+        coordinator.tick();
+        assertEquals(0, freeze.acquireCalls);
+        assertTrue(coordinator.hasActiveOperation());
+
+        mutation.ready = true;
+        coordinator.tick();
+        assertEquals(1, freeze.acquireCalls);
+        assertEquals(1, freeze.releaseCalls);
+        assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
     void rejectsBudgetsBeyondGlobalTickLimit() {
         assertThrows(IllegalArgumentException.class,
                 () -> new DimensionOperationCoordinator(new RecordingFreeze(), () -> 0L, 50_000_001L));
@@ -91,6 +110,16 @@ class DimensionOperationCoordinatorTest {
         @Override public void advance(long deadlineNanos) { ticks++; }
         @Override public boolean isTerminal() { return ticks == 2; }
         @Override public boolean isSafeToRelease() { return ticks >= 1; }
+    }
+
+    private static final class DeferredFreezeMutation implements DimensionMutation {
+        private boolean ready;
+        private boolean complete;
+
+        @Override public boolean requiresFreeze() { return ready; }
+        @Override public void advance(long deadlineNanos) { complete = ready; }
+        @Override public boolean isTerminal() { return complete; }
+        @Override public boolean isSafeToRelease() { return complete; }
     }
 
     private static final class RecordingFreeze implements DimensionFreeze {
