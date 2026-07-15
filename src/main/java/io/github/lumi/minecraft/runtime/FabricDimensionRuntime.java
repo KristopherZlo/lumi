@@ -6,6 +6,7 @@ import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.LiveActionOperation;
 import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
 import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
+import io.github.lumi.minecraft.operation.BranchRefRestorePublication;
 import io.github.lumi.minecraft.operation.PendingRestorePublication;
 import io.github.lumi.minecraft.operation.RestoreOperation;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
@@ -23,6 +24,8 @@ import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
 import io.github.lumi.domain.service.LiveActionJournal;
+import io.github.lumi.domain.service.MergeService;
+import io.github.lumi.domain.service.PreparedMerge;
 import io.github.lumi.domain.service.BranchService;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveService;
@@ -84,6 +87,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final MinecraftWorldStateApply worldApply;
     private final OperationJournalRepository journals;
     private final BranchService branches;
+    private final MergeService merges;
     private final ReturnPointRestorePreparation returnPointRestores;
     private final Executor background;
     private final BranchRefRepository refs;
@@ -114,6 +118,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             BranchRefRepository refs,
             ActiveBranchRepository active,
             BranchService branches,
+            MergeService merges,
             UUID defaultWorkspaceId) {
         this.level = level;
         this.repository = repository;
@@ -125,6 +130,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.worldApply = worldApply;
         this.journals = journals;
         this.branches = branches;
+        this.merges = merges;
         this.background = background;
         this.refs = refs;
         this.active = active;
@@ -166,14 +172,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
                 objects, origins, working, background);
         var branches = new BranchService(commits, refs, active, working);
+        var trees = new MerkleTreeEditor(objects);
         return new FabricDimensionRuntime(
                 level, repository, freeze, new DimensionOperationCoordinator(
                         freeze, operation -> logTerminal(level, operation)),
                 mutations,
-                new SaveService(objects, new MerkleTreeEditor(objects), commits, refs, journals),
+                new SaveService(objects, trees, commits, refs, journals),
                 new RestoreService(objects, commits, origins),
                 new MinecraftWorldStateApply(level, freeze), journals,
-                background, refs, active, branches, workspaceId);
+                background, refs, active, branches,
+                new MergeService(objects, commits, origins, trees), workspaceId);
     }
 
     private static void logTerminal(ServerLevel level, DimensionMutation operation) {
@@ -376,6 +384,71 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public BranchRef createBranch(BranchName name) throws IOException {
         return branches.create(name, activeRef().commit());
+    }
+
+    public CompletableFuture<PreparedMerge> prepareMerge(
+            BranchName source,
+            CommitAuthor author,
+            String message) throws IOException {
+        BranchRef current = activeRef();
+        requireCleanMerge();
+        BranchRef sourceRef = refs.read(Objects.requireNonNull(source, "source"))
+                .orElseThrow(() -> new IOException("Merge source branch is missing: " + source));
+        var request = new MergeService.Request(
+                current, sourceRef, Objects.requireNonNull(author, "author"), message,
+                Instant.now(), defaultWorkspaceId, Optional.empty());
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return new PreparedMerge(request, merges.prepare(request));
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+    }
+
+    public synchronized BackgroundPreparedMutation<RestoreOperation> startMerge(
+            PreparedMerge plan,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        Objects.requireNonNull(plan, "plan");
+        if (operations.hasActiveOperation()) {
+            throw new IllegalStateException("A dimension operation is already active");
+        }
+        validateMerge(plan);
+        UUID operationId = UUID.randomUUID();
+        CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
+            try {
+                var prepared = restores.prepare(
+                        plan.request().current(), plan.result().commit());
+                return RestoreOperation.startMerge(
+                        prepared, worldApply, new BranchRefRestorePublication(refs),
+                        journals, operationId, restoreStateListener);
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+        var operation = new BackgroundPreparedMutation<>(
+                preparation, () -> validateMerge(plan),
+                RestoreOperation::cancelBeforeApply, true);
+        operations.start(operation, clearingLiveHistory(terminalObserver));
+        return operation;
+    }
+
+    private void validateMerge(PreparedMerge plan) throws IOException {
+        requireCleanMerge();
+        if (!activeRef().equals(plan.request().current())) {
+            throw new IOException("Active branch changed after merge preview");
+        }
+        BranchRef source = refs.read(plan.request().source().name()).orElseThrow(
+                () -> new IOException("Merge source branch no longer exists"));
+        if (!source.equals(plan.request().source())) {
+            throw new IOException("Merge source branch changed after preview");
+        }
+    }
+
+    private void requireCleanMerge() {
+        if (!mutations.snapshot().generations().isEmpty()) {
+            throw new IllegalStateException("Merge requires no pending world changes");
+        }
     }
 
     public synchronized ReturnPointRestoreOperation startPartialRestore(
