@@ -29,4 +29,20 @@ class BlockEntityBaselineStoreTest {
         assertEquals(Map.of(17, oldNbt), origin.blockEntities());
         assertTrue(baselines.takeOrigin(key, current).isEmpty());
     }
+
+    @Test
+    void discardsOnlyBaselinesBelongingToUnloadedChunk() {
+        BlockEntityBaselineStore baselines = new BlockEntityBaselineStore();
+        SectionBlob current = new SectionBlob(
+                new ArrayList<>(Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:air")), Map.of());
+        baselines.remember(new SectionKey(1, 0, 2), Map.of());
+        baselines.remember(new SectionKey(1, 1, 2), Map.of());
+        baselines.remember(new SectionKey(2, 0, 2), Map.of());
+
+        baselines.discardChunk(1, 2);
+
+        assertTrue(baselines.takeOrigin(new SectionKey(1, 0, 2), current).isEmpty());
+        assertTrue(baselines.takeOrigin(new SectionKey(1, 1, 2), current).isEmpty());
+        assertTrue(baselines.takeOrigin(new SectionKey(2, 0, 2), current).isPresent());
+    }
 }

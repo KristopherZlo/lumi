@@ -4,10 +4,12 @@ import io.github.lumi.LumiMod;
 import java.io.IOException;
 import java.util.Optional;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.chunk.LevelChunk;
 
 /** Binds the same dimension runtime lifecycle to integrated and dedicated servers. */
 public final class LumiServerRuntime {
@@ -16,7 +18,9 @@ public final class LumiServerRuntime {
     public void registerEvents() {
         ServerLifecycleEvents.SERVER_STARTING.register(this::starting);
         ServerWorldEvents.LOAD.register(this::load);
+        ServerChunkEvents.CHUNK_LOAD.register(this::chunkLoaded);
         ServerTickEvents.START_WORLD_TICK.register(this::tick);
+        ServerChunkEvents.CHUNK_UNLOAD.register(this::chunkUnloaded);
         ServerWorldEvents.UNLOAD.register(this::unload);
         ServerLifecycleEvents.SERVER_STOPPED.register(this::stopped);
     }
@@ -46,6 +50,18 @@ public final class LumiServerRuntime {
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Lumi dimension operation failed; its freeze and journal are retained", failed);
         }
+    }
+
+    private void chunkLoaded(ServerLevel level, LevelChunk chunk) {
+        try {
+            requireSession().find(level).orElseThrow().chunkLoaded(chunk);
+        } catch (IOException failed) {
+            throw new IllegalStateException("Cannot capture Lumi block-entity baseline", failed);
+        }
+    }
+
+    private void chunkUnloaded(ServerLevel level, LevelChunk chunk) {
+        requireSession().find(level).ifPresent(runtime -> runtime.chunkUnloaded(chunk));
     }
 
     private void unload(MinecraftServer server, ServerLevel level) {

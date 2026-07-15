@@ -31,4 +31,13 @@ public final class BlockEntityBaselineStore {
     public synchronized void discard(SectionKey key) {
         baselines.remove(Objects.requireNonNull(key, "key"));
     }
+
+    public synchronized boolean contains(SectionKey key) {
+        return baselines.containsKey(Objects.requireNonNull(key, "key"));
+    }
+
+    public synchronized void discardChunk(int chunkX, int chunkZ) {
+        baselines.keySet().removeIf(
+                key -> key.chunkX() == chunkX && key.chunkZ() == chunkZ);
+    }
 }

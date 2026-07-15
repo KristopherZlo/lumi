@@ -1,7 +1,9 @@
 package io.github.lumi.minecraft.runtime;
 
 import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
+import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
+import io.github.lumi.minecraft.world.MinecraftBlockEntityBaselineCapture;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
 import io.github.lumi.storage.repository.OriginStore;
@@ -12,6 +14,7 @@ import java.nio.file.Path;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.chunk.LevelChunk;
 
 /** Server-authoritative Lumi state owned by one loaded Minecraft dimension. */
 public final class FabricDimensionRuntime implements AutoCloseable {
@@ -20,6 +23,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final DimensionFreezeState freeze;
     private final DimensionOperationCoordinator operations;
     private final MutationDurabilityTracker mutations;
+    private final BlockEntityBaselineStore blockEntityBaselines = new BlockEntityBaselineStore();
+    private final MinecraftBlockEntityBaselineCapture baselineCapture =
+            new MinecraftBlockEntityBaselineCapture();
 
     private FabricDimensionRuntime(
             ServerLevel level,
@@ -52,11 +58,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         operations.tick();
     }
 
+    public void chunkLoaded(LevelChunk chunk) throws IOException {
+        baselineCapture.remember(level, chunk, mutations, blockEntityBaselines);
+    }
+
+    public void chunkUnloaded(LevelChunk chunk) {
+        blockEntityBaselines.discardChunk(chunk.getPos().x, chunk.getPos().z);
+    }
+
     public ServerLevel level() { return level; }
     public Path repository() { return repository; }
     public DimensionFreezeState freeze() { return freeze; }
     public DimensionOperationCoordinator operations() { return operations; }
     public MutationDurabilityTracker mutations() { return mutations; }
+    public BlockEntityBaselineStore blockEntityBaselines() { return blockEntityBaselines; }
 
     @Override
     public void close() {
