@@ -7,6 +7,7 @@
     "ChunkMapMixin",
     "EntityStorageMixin",
     "LevelChunkMixin",
+    "LevelTicksMixin",
     "PersistentEntitySectionManagerMixin",
     "ServerPlayerGameModeMixin",
     "ServerLevelMixin"

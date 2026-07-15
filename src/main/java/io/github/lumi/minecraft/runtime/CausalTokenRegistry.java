@@ -37,4 +37,10 @@ public final class CausalTokenRegistry<K> {
     public synchronized void clear() {
         owners.clear();
     }
+
+    public synchronized Set<K> drain() {
+        Set<K> work = Set.copyOf(owners.keySet());
+        owners.clear();
+        return work;
+    }
 }
