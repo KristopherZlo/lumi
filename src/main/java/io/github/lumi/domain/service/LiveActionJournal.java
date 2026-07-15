@@ -88,11 +88,11 @@ public final class LiveActionJournal {
     public synchronized boolean close(UUID actionId) {
         MutableAction action = requireAction(actionId);
         if (action.closed) {
-            return !action.changes.isEmpty();
+            return action.available && (!action.changes.isEmpty() || action.causalReferences > 0);
         }
         action.closed = true;
         openActions.remove(action.player, action.id);
-        if (!action.available || action.changes.isEmpty()) {
+        if (!action.available || (action.changes.isEmpty() && action.causalReferences == 0)) {
             evict(action);
             return false;
         }
@@ -101,6 +101,24 @@ public final class LiveActionJournal {
             evict(oldestClosed(action.player, action.id).orElseThrow());
         }
         return true;
+    }
+
+    public synchronized void retain(UUID actionId) {
+        requireAction(actionId).causalReferences++;
+    }
+
+    public synchronized void release(UUID actionId) {
+        MutableAction action = actions.get(Objects.requireNonNull(actionId, "actionId"));
+        if (action == null) {
+            return;
+        }
+        if (action.causalReferences < 1) {
+            throw new IllegalStateException("Live action has no causal reference to release");
+        }
+        action.causalReferences--;
+        if (action.closed && action.causalReferences == 0 && action.changes.isEmpty()) {
+            evict(action, false);
+        }
     }
 
     public synchronized Optional<Plan> prepareUndo(UUID player) {
@@ -317,6 +335,7 @@ public final class LiveActionJournal {
         private boolean started;
         private boolean available = true;
         private long bytes;
+        private int causalReferences;
 
         private MutableAction(UUID id, UUID player, long sequence) {
             this.id = id;

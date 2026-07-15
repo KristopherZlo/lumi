@@ -1,7 +1,7 @@
 package io.github.lumi.mixin;
 
 import io.github.lumi.LumiMod;
-import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
+import io.github.lumi.minecraft.runtime.MinecraftCausalTickTracker;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Optional;
@@ -18,14 +18,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(PistonMovingBlockEntity.class)
 abstract class PistonMovingBlockEntityMixin {
-    @Unique private static final ThreadLocal<Deque<Optional<DirectLiveActionContext.Scope>>>
+    @Unique private static final ThreadLocal<Deque<Optional<MinecraftCausalTickTracker.CausalExecution>>>
             LUMI_SCOPES = ThreadLocal.withInitial(ArrayDeque::new);
 
     @Inject(method = "tick", at = @At("HEAD"))
     private static void lumi$beginCarrierTick(
             Level level, BlockPos position, BlockState state,
             PistonMovingBlockEntity carrier, CallbackInfo callback) {
-        Optional<DirectLiveActionContext.Scope> scope = level instanceof ServerLevel serverLevel
+        Optional<MinecraftCausalTickTracker.CausalExecution> scope = level instanceof ServerLevel serverLevel
                 ? LumiMod.serverRuntime().find(serverLevel)
                         .flatMap(runtime -> runtime.causalTicks().resumeCarrier(carrier))
                 : Optional.empty();
@@ -40,8 +40,8 @@ abstract class PistonMovingBlockEntityMixin {
             LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime ->
                     runtime.causalTicks().finishedCarrier(carrier));
         }
-        Deque<Optional<DirectLiveActionContext.Scope>> scopes = LUMI_SCOPES.get();
-        scopes.removeLast().ifPresent(DirectLiveActionContext.Scope::close);
+        Deque<Optional<MinecraftCausalTickTracker.CausalExecution>> scopes = LUMI_SCOPES.get();
+        scopes.removeLast().ifPresent(MinecraftCausalTickTracker.CausalExecution::close);
         if (scopes.isEmpty()) {
             LUMI_SCOPES.remove();
         }

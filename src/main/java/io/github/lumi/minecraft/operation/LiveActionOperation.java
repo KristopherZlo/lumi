@@ -5,9 +5,8 @@ import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.world.LiveBlockWorldAccess;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -23,11 +22,12 @@ public final class LiveActionOperation implements DimensionMutation {
     private final LiveBlockWorldAccess world;
     private final LongSupplier nanoTime;
     private final Consumer<UUID> cancelPending;
-    private final List<BlockPosition> mismatches = new ArrayList<>();
+    private final Map<BlockPosition, BlockSnapshot> mismatches = new LinkedHashMap<>();
     private Phase phase = Phase.SELECTING;
     private LiveActionJournal.Plan plan;
     private Iterator<Map.Entry<BlockPosition, BlockSnapshot>> cursor;
     private Throwable failure;
+    private UUID retainedAction;
 
     public LiveActionOperation(
             LiveActionJournal journal,
@@ -82,6 +82,10 @@ public final class LiveActionOperation implements DimensionMutation {
                 phase = phase.beforeMutation() ? Phase.FAILED : Phase.DEGRADED;
             }
         }
+        if (isTerminal() && retainedAction != null) {
+            journal.release(retainedAction);
+            retainedAction = null;
+        }
     }
 
     private void step() throws IOException {
@@ -109,6 +113,8 @@ public final class LiveActionOperation implements DimensionMutation {
 
     private void cancelPending() {
         if (direction == LiveActionJournal.Direction.UNDO) {
+            retainedAction = plan.actionId();
+            journal.retain(retainedAction);
             cancelPending.accept(plan.actionId());
             plan = selectPlan().orElseThrow(
                     () -> new IllegalStateException("Live action disappeared during finalization"));
@@ -152,10 +158,14 @@ public final class LiveActionOperation implements DimensionMutation {
                 journal.complete(plan);
                 phase = Phase.SUCCEEDED;
             } else if (finalPass) {
-                failure = new IllegalStateException("Live action did not verify after one repair pass");
+                var mismatch = mismatches.entrySet().iterator().next();
+                failure = new IllegalStateException(
+                        "Live action did not verify after one repair pass at " + mismatch.getKey()
+                                + "; expected=" + plan.replacement().get(mismatch.getKey())
+                                + "; actual=" + mismatch.getValue());
                 phase = Phase.DEGRADED;
             } else {
-                cursor = mismatches.stream()
+                cursor = mismatches.keySet().stream()
                         .map(position -> Map.entry(position, plan.replacement().get(position)))
                         .iterator();
                 phase = Phase.REPAIRING;
@@ -163,8 +173,9 @@ public final class LiveActionOperation implements DimensionMutation {
             return;
         }
         var entry = cursor.next();
-        if (!entry.getValue().equals(world.read(entry.getKey()))) {
-            mismatches.add(entry.getKey());
+        BlockSnapshot actual = world.read(entry.getKey());
+        if (!entry.getValue().equals(actual)) {
+            mismatches.put(entry.getKey(), actual);
         }
     }
 

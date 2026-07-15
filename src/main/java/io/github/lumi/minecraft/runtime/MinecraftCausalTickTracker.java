@@ -14,6 +14,9 @@ import net.minecraft.world.level.BlockEventData;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.ticks.LevelTicks;
 import net.minecraft.world.ticks.ScheduledTick;
@@ -30,6 +33,7 @@ public final class MinecraftCausalTickTracker {
     private final OwnedBlockEventAccess eventAccess;
     private final CausalTokenRegistry<BlockEntity> blockCarriers = new CausalTokenRegistry<>();
     private final DimensionFreezeState freeze;
+    private final CausalTokenRegistry<Entity> entityCarriers = new CausalTokenRegistry<>();
 
     public MinecraftCausalTickTracker(
             LiveActionJournal journal,
@@ -55,56 +59,91 @@ public final class MinecraftCausalTickTracker {
         }
         if (binding != null) {
             DirectLiveActionContext.current(binding.tracker.journal).ifPresent(action ->
-                    binding.tracker.tokens.remember(
+                    binding.tracker.remember(binding.tracker.tokens,
                             new TickKey(binding.kind, tick.pos(), tick.type()), action));
         }
     }
 
-    public Optional<DirectLiveActionContext.Scope> resumeBlock(BlockPos position, Block block) {
+    public Optional<CausalExecution> resumeBlock(BlockPos position, Block block) {
         return resume(new TickKey(Kind.BLOCK, position, block));
     }
 
-    public Optional<DirectLiveActionContext.Scope> resumeFluid(BlockPos position, Fluid fluid) {
+    public Optional<CausalExecution> resumeFluid(BlockPos position, Fluid fluid) {
         return resume(new TickKey(Kind.FLUID, position, fluid));
     }
 
     public void scheduledBlockEvent(BlockEventData event) {
         if (!eventAccess.lumi$hasBlockEvent(event)) {
             DirectLiveActionContext.current(journal).ifPresent(action ->
-                    blockEvents.remember(event, action));
+                    remember(blockEvents, event, action));
         }
     }
 
-    public Optional<DirectLiveActionContext.Scope> resumeBlockEvent(BlockEventData event) {
-        return blockEvents.take(event).map(action -> DirectLiveActionContext.resume(journal, action));
+    public Optional<CausalExecution> resumeBlockEvent(BlockEventData event) {
+        return consume(blockEvents, event);
     }
 
     public void rememberCarrier(BlockEntity carrier) {
         if (carrier instanceof PistonMovingBlockEntity) {
             DirectLiveActionContext.current(journal).ifPresent(action ->
-                    blockCarriers.remember(carrier, action));
+                    remember(blockCarriers, carrier, action));
         }
     }
 
-    public Optional<DirectLiveActionContext.Scope> resumeCarrier(BlockEntity carrier) {
-        return blockCarriers.owner(carrier).map(action ->
-                DirectLiveActionContext.resume(journal, action));
+    public Optional<CausalExecution> resumeCarrier(BlockEntity carrier) {
+        return blockCarriers.owner(carrier).map(action -> new CausalExecution(
+                DirectLiveActionContext.resume(journal, action), () -> { }));
     }
 
     public void finishedCarrier(BlockEntity carrier) {
         if (carrier.isRemoved()) {
-            blockCarriers.forget(carrier);
+            blockCarriers.forget(carrier).ifPresent(journal::release);
+        }
+    }
+
+    public void rememberCarrier(Entity carrier) {
+        if (carrier instanceof FallingBlockEntity || carrier instanceof PrimedTnt) {
+            DirectLiveActionContext.current(journal).ifPresent(action ->
+                    remember(entityCarriers, carrier, action));
+        }
+    }
+
+    public Optional<CausalExecution> resumeCarrier(Entity carrier) {
+        return entityCarriers.owner(carrier).map(action -> new CausalExecution(
+                DirectLiveActionContext.resume(journal, action), () -> { }));
+    }
+
+    public void finishedCarrier(Entity carrier) {
+        if (carrier.isRemoved()) {
+            entityCarriers.forget(carrier).ifPresent(journal::release);
         }
     }
 
     public void cancel(java.util.UUID action) {
-        tokens.cancel(action).forEach(this::remove);
-        blockEvents.cancel(action).forEach(eventAccess::lumi$removeBlockEvent);
+        tokens.cancel(action).forEach(key -> {
+            remove(key);
+            journal.release(action);
+        });
+        blockEvents.cancel(action).forEach(event -> {
+            eventAccess.lumi$removeBlockEvent(event);
+            journal.release(action);
+        });
         blockCarriers.cancel(action).forEach(carrier -> {
             if (carrier instanceof PistonMovingBlockEntity piston) {
-                try (var ignored = DirectLiveActionContext.resume(journal, action)) {
-                    freeze.runAuthorized(piston::finalTick);
+                try {
+                    try (var ignored = DirectLiveActionContext.resume(journal, action)) {
+                        freeze.runAuthorized(piston::finalTick);
+                    }
+                } finally {
+                    journal.release(action);
                 }
+            }
+        });
+        entityCarriers.cancel(action).forEach(carrier -> {
+            try {
+                freeze.runAuthorized(carrier::discard);
+            } finally {
+                journal.release(action);
             }
         });
     }
@@ -113,6 +152,7 @@ public final class MinecraftCausalTickTracker {
         tokens.drain().forEach(this::remove);
         blockEvents.drain().forEach(eventAccess::lumi$removeBlockEvent);
         blockCarriers.clear();
+        entityCarriers.clear();
     }
 
     public void close() {
@@ -123,10 +163,25 @@ public final class MinecraftCausalTickTracker {
         tokens.clear();
         blockEvents.clear();
         blockCarriers.clear();
+        entityCarriers.clear();
     }
 
-    private Optional<DirectLiveActionContext.Scope> resume(TickKey key) {
-        return tokens.take(key).map(action -> DirectLiveActionContext.resume(journal, action));
+    private Optional<CausalExecution> resume(TickKey key) {
+        return consume(tokens, key);
+    }
+
+    private <K> void remember(CausalTokenRegistry<K> registry, K key, java.util.UUID action) {
+        Optional<java.util.UUID> previous = registry.remember(key, action);
+        if (previous.filter(action::equals).isPresent()) {
+            return;
+        }
+        previous.ifPresent(journal::release);
+        journal.retain(action);
+    }
+
+    private <K> Optional<CausalExecution> consume(CausalTokenRegistry<K> registry, K key) {
+        return registry.take(key).map(action -> new CausalExecution(
+                DirectLiveActionContext.resume(journal, action), () -> journal.release(action)));
     }
 
     @SuppressWarnings("unchecked")
@@ -143,4 +198,23 @@ public final class MinecraftCausalTickTracker {
     private record TickKey(Kind kind, BlockPos position, Object type) { }
 
     private record Binding(MinecraftCausalTickTracker tracker, Kind kind) { }
+
+    public static final class CausalExecution implements AutoCloseable {
+        private final DirectLiveActionContext.Scope scope;
+        private final Runnable completion;
+
+        private CausalExecution(DirectLiveActionContext.Scope scope, Runnable completion) {
+            this.scope = scope;
+            this.completion = completion;
+        }
+
+        @Override
+        public void close() {
+            try {
+                scope.close();
+            } finally {
+                completion.run();
+            }
+        }
+    }
 }

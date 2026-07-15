@@ -12,9 +12,9 @@ import java.util.UUID;
 public final class CausalTokenRegistry<K> {
     private final Map<K, UUID> owners = new HashMap<>();
 
-    public synchronized void remember(K work, UUID action) {
-        owners.put(Objects.requireNonNull(work, "work"),
-                Objects.requireNonNull(action, "action"));
+    public synchronized Optional<UUID> remember(K work, UUID action) {
+        return Optional.ofNullable(owners.put(Objects.requireNonNull(work, "work"),
+                Objects.requireNonNull(action, "action")));
     }
 
     public synchronized Optional<UUID> take(K work) {
@@ -25,8 +25,8 @@ public final class CausalTokenRegistry<K> {
         return Optional.ofNullable(owners.get(Objects.requireNonNull(work, "work")));
     }
 
-    public synchronized void forget(K work) {
-        owners.remove(Objects.requireNonNull(work, "work"));
+    public synchronized Optional<UUID> forget(K work) {
+        return Optional.ofNullable(owners.remove(Objects.requireNonNull(work, "work")));
     }
 
     public synchronized Set<K> cancel(UUID action) {

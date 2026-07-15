@@ -11,7 +11,8 @@
     "PersistentEntitySectionManagerMixin",
     "PistonMovingBlockEntityMixin",
     "ServerPlayerGameModeMixin",
-    "ServerLevelMixin"
+    "ServerLevelMixin",
+    "TransientCarrierEntityMixin"
   ],
   "injectors": {
     "defaultRequire": 1

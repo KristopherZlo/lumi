@@ -115,6 +115,32 @@ class LiveActionJournalTest {
         assertEquals(newer, journal.prepareUndo(PLAYER_B).orElseThrow().actionId());
     }
 
+    @Test
+    void causalReferenceKeepsEmptyClosedActionUntilReleased() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER_A);
+        journal.retain(action);
+
+        assertTrue(journal.close(action));
+        assertTrue(journal.prepareUndo(PLAYER_A).isPresent());
+        journal.release(action);
+
+        assertEquals(Optional.empty(), journal.prepareUndo(PLAYER_A));
+    }
+
+    @Test
+    void delayedChangeSurvivesAfterCausalReferenceReleases() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER_A);
+        journal.retain(action);
+        journal.close(action);
+        journal.record(action, POSITION, block("air"), block("stone"));
+        journal.release(action);
+
+        assertEquals(block("stone"),
+                journal.prepareUndo(PLAYER_A).orElseThrow().expected().get(POSITION));
+    }
+
     private static UUID add(LiveActionJournal journal, int x) {
         UUID action = journal.begin(PLAYER_A);
         journal.record(action, new BlockPosition(x, 0, 0), block("air"), block("stone"));

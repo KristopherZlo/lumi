@@ -133,8 +133,16 @@ abstract class LevelChunkMixin {
         }
         try {
             BlockPosition key = new BlockPosition(position.getX(), position.getY(), position.getZ());
+            Optional<BlockSnapshot> outerBefore = LUMI_LIVE_BLOCKS.get().stream()
+                    .flatMap(Optional::stream)
+                    .filter(pending -> pending.action.equals(action.orElseThrow())
+                            && pending.position.equals(key))
+                    .findFirst()
+                    .map(PendingLiveBlock::before);
+            BlockSnapshot before = outerBefore.isPresent()
+                    ? outerBefore.orElseThrow() : runtime.liveWorld().read(key);
             return Optional.of(new PendingLiveBlock(
-                    action.orElseThrow(), key, runtime.liveWorld().read(key)));
+                    action.orElseThrow(), key, before));
         } catch (IOException failed) {
             LumiMod.LOGGER.warn("Cannot capture live block before mutation at {}", position, failed);
             return Optional.empty();

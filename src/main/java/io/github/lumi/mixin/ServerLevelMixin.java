@@ -1,7 +1,7 @@
 package io.github.lumi.mixin;
 
 import io.github.lumi.LumiMod;
-import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
+import io.github.lumi.minecraft.runtime.MinecraftCausalTickTracker;
 import io.github.lumi.minecraft.world.OwnedBlockEventAccess;
 import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
 import java.util.ArrayDeque;
@@ -14,6 +14,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.BlockEventData;
 import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Shadow;
@@ -26,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 abstract class ServerLevelMixin implements OwnedBlockEventAccess {
     @Shadow @Final private ObjectLinkedOpenHashSet<BlockEventData> blockEvents;
     @Shadow @Final private List<BlockEventData> blockEventsToReschedule;
-    @Unique private final Deque<Optional<DirectLiveActionContext.Scope>> lumi$causalTicks =
+    @Unique private final Deque<Optional<MinecraftCausalTickTracker.CausalExecution>> lumi$causalTicks =
             new ArrayDeque<>();
 
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
@@ -88,6 +89,17 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
         lumi$endCausalTick();
     }
 
+    @Inject(method = "addEntity", at = @At("RETURN"))
+    private void lumi$captureEntityCarrier(
+            Entity entity,
+            org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> callback) {
+        if (callback.getReturnValue()) {
+            ServerLevel level = (ServerLevel) (Object) this;
+            LumiMod.serverRuntime().find(level).ifPresent(runtime ->
+                    runtime.causalTicks().rememberCarrier(entity));
+        }
+    }
+
     @Override
     public boolean lumi$hasBlockEvent(BlockEventData event) {
         return blockEvents.contains(event) || blockEventsToReschedule.contains(event);
@@ -101,6 +113,6 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
 
     @Unique
     private void lumi$endCausalTick() {
-        lumi$causalTicks.removeLast().ifPresent(DirectLiveActionContext.Scope::close);
+        lumi$causalTicks.removeLast().ifPresent(MinecraftCausalTickTracker.CausalExecution::close);
     }
 }
