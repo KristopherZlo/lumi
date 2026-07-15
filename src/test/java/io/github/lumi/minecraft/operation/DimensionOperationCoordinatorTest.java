@@ -46,6 +46,21 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
+    void releasesFreezeAfterCaptureWhileKeepingBackgroundOperationOwned() throws IOException {
+        RecordingFreeze freeze = new RecordingFreeze();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L);
+        coordinator.start(new CaptureThenBackground());
+
+        coordinator.tick();
+
+        assertEquals(1, freeze.releaseCalls);
+        assertTrue(coordinator.hasActiveOperation());
+        coordinator.tick();
+        assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
     void rejectsBudgetsBeyondGlobalTickLimit() {
         assertThrows(IllegalArgumentException.class,
                 () -> new DimensionOperationCoordinator(new RecordingFreeze(), () -> 0L, 50_000_001L));
@@ -68,6 +83,14 @@ class DimensionOperationCoordinatorTest {
 
         @Override public boolean isTerminal() { return ticks == 2; }
         @Override public boolean isSafeToRelease() { return !degraded; }
+    }
+
+    private static final class CaptureThenBackground implements DimensionMutation {
+        private int ticks;
+
+        @Override public void advance(long deadlineNanos) { ticks++; }
+        @Override public boolean isTerminal() { return ticks == 2; }
+        @Override public boolean isSafeToRelease() { return ticks >= 1; }
     }
 
     private static final class RecordingFreeze implements DimensionFreeze {

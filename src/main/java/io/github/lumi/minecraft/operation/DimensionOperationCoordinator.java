@@ -14,6 +14,7 @@ public final class DimensionOperationCoordinator {
     private final long tickBudgetNanos;
     private DimensionMutation active;
     private DimensionFreeze.Lease lease;
+    private boolean freezeReleased;
 
     public DimensionOperationCoordinator(DimensionFreeze freeze) {
         this(freeze, System::nanoTime, MAX_TICK_WORK_NANOS);
@@ -35,23 +36,28 @@ public final class DimensionOperationCoordinator {
             throw new IllegalStateException("A dimension mutation is already active");
         }
         active = operation;
+        freezeReleased = false;
     }
 
     public synchronized void tick() throws IOException {
         if (active == null) {
             return;
         }
-        if (lease == null) {
+        if (lease == null && !freezeReleased) {
             lease = Objects.requireNonNull(freeze.acquire(), "freeze lease");
         }
         long start = nanoTime.getAsLong();
         long deadline = start > Long.MAX_VALUE - tickBudgetNanos
                 ? Long.MAX_VALUE : start + tickBudgetNanos;
         active.advance(deadline);
-        if (active.isTerminal() && active.isSafeToRelease()) {
+        if (lease != null && active.isSafeToRelease()) {
             lease.release();
             lease = null;
+            freezeReleased = true;
+        }
+        if (active.isTerminal() && active.isSafeToRelease()) {
             active = null;
+            freezeReleased = false;
         }
     }
 
