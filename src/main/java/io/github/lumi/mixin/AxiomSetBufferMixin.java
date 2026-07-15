@@ -14,6 +14,7 @@ import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -27,6 +28,7 @@ import org.spongepowered.asm.mixin.Mixin;
 /** Makes one direct Axiom section-buffer write one durable, live-undoable action. */
 @Mixin(value = AxiomServerboundSetBuffer.class, remap = false)
 abstract class AxiomSetBufferMixin {
+    private static final long LUMI_MAX_CAPTURE_BYTES = 64L << 20;
     private static final MinecraftSectionCapture LUMI_SECTIONS = new MinecraftSectionCapture();
 
     @WrapMethod(method = "applyBlockBufferServer")
@@ -49,7 +51,7 @@ abstract class AxiomSetBufferMixin {
         try (var ignored = DirectLiveActionContext.open(
                 runtime.liveActions(), player.getUUID())) {
             UUID action = DirectLiveActionContext.current(runtime.liveActions()).orElseThrow();
-            captureBefore(buffer, mask, runtime, before, sections);
+            captureBefore(buffer, mask, runtime, action, before, sections);
             registerDurability(level, runtime, sections);
             try {
                 original.call(buffer, level, mask, player);
@@ -63,17 +65,38 @@ abstract class AxiomSetBufferMixin {
             BlockBuffer buffer,
             ChunkedBooleanRegion mask,
             FabricDimensionRuntime runtime,
+            UUID action,
             Map<BlockPosition, BlockSnapshot> before,
             Set<SectionKey> sections) {
+        long[] retainedBytes = {0};
+        boolean[] available = {buffer.estimateSizeInRAM() <= LUMI_MAX_CAPTURE_BYTES};
+        if (!available[0]) {
+            runtime.liveActions().makeUnavailable(
+                    action, "Axiom edit exceeded its live capture limit");
+        }
         buffer.forEach((x, y, z, state) -> {
             if (state == BlockBuffer.EMPTY_STATE || mask != null && !mask.contains(x, y, z)) {
                 return;
             }
             BlockPosition position = new BlockPosition(x, y, z);
-            try {
-                before.put(position, runtime.liveWorld().read(position));
-            } catch (IOException failed) {
-                throw new UncheckedIOException("Cannot capture Axiom block before mutation", failed);
+            if (available[0]) {
+                try {
+                    BlockSnapshot snapshot = runtime.liveWorld().read(position);
+                    long bytes = 128L
+                            + snapshot.blockState().getBytes(StandardCharsets.UTF_8).length
+                            + snapshot.blockEntity().map(nbt -> nbt.bytes().length).orElse(0);
+                    if (retainedBytes[0] + bytes > LUMI_MAX_CAPTURE_BYTES) {
+                        available[0] = false;
+                        before.clear();
+                        runtime.liveActions().makeUnavailable(
+                                action, "Axiom edit exceeded its live capture limit");
+                    } else {
+                        retainedBytes[0] += bytes;
+                        before.put(position, snapshot);
+                    }
+                } catch (IOException failed) {
+                    throw new UncheckedIOException("Cannot capture Axiom block before mutation", failed);
+                }
             }
             sections.add(MinecraftSectionCapture.key(new BlockPos(x, y, z)));
         });

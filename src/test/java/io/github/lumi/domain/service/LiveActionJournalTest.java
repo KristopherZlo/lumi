@@ -100,6 +100,18 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void externalCaptureLimitMakesOpenActionUnavailable() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER_A);
+
+        journal.makeUnavailable(action, "Axiom edit exceeded its capture limit");
+
+        assertTrue(!journal.close(action));
+        assertTrue(journal.lastUnavailableReason(PLAYER_A).orElseThrow().contains("Axiom"));
+        assertEquals(Optional.empty(), journal.prepareUndo(PLAYER_A));
+    }
+
+    @Test
     void evictsOldestClosedActionAtPlayerCountLimit() {
         LiveActionJournal journal = new LiveActionJournal(
                 new LiveActionJournal.Limits(2, 1_000, 4_000, 8_000));

@@ -187,6 +187,17 @@ public final class LiveActionJournal {
         return Optional.ofNullable(unavailableReasons.get(Objects.requireNonNull(player, "player")));
     }
 
+    public synchronized void makeUnavailable(UUID actionId, String reason) {
+        MutableAction action = requireAction(actionId);
+        if (action.closed) {
+            throw new IllegalStateException("Cannot disable a closed live action");
+        }
+        if (Objects.requireNonNull(reason, "reason").isBlank()) {
+            throw new IllegalArgumentException("Unavailable reason cannot be blank");
+        }
+        makeUnavailable(action, reason);
+    }
+
     private Optional<Plan> prepare(UUID player, Direction direction, Deque<UUID> stack) {
         Objects.requireNonNull(player, "player");
         UUID actionId = stack.peekLast();
