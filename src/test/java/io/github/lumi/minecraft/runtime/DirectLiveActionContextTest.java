@@ -1,0 +1,35 @@
+package io.github.lumi.minecraft.runtime;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import io.github.lumi.domain.model.BlockPosition;
+import io.github.lumi.domain.model.BlockSnapshot;
+import io.github.lumi.domain.service.LiveActionJournal;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+
+class DirectLiveActionContextTest {
+    @Test
+    void nestedPlayerCallKeepsOneRootAction() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID player = new UUID(0, 11);
+
+        try (var outer = DirectLiveActionContext.open(journal, player)) {
+            UUID root = DirectLiveActionContext.current(journal).orElseThrow();
+            try (var inner = DirectLiveActionContext.open(journal, player)) {
+                assertEquals(root, DirectLiveActionContext.current(journal).orElseThrow());
+                journal.record(root, new BlockPosition(1, 2, 3), block("stone"), block("air"));
+            }
+            assertEquals(root, DirectLiveActionContext.current(journal).orElseThrow());
+        }
+
+        assertEquals(Optional.empty(), DirectLiveActionContext.current(journal));
+        assertTrue(journal.prepareUndo(player).isPresent());
+    }
+
+    private static BlockSnapshot block(String id) {
+        return new BlockSnapshot("minecraft:" + id, Optional.empty());
+    }
+}

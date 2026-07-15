@@ -8,6 +8,7 @@
     "EntityStorageMixin",
     "LevelChunkMixin",
     "PersistentEntitySectionManagerMixin",
+    "ServerPlayerGameModeMixin",
     "ServerLevelMixin"
   ],
   "injectors": {
