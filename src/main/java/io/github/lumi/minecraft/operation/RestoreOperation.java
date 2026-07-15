@@ -14,7 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /** Advances one frozen-dimension restore without exceeding the caller's tick deadline. */
-public final class RestoreOperation {
+public final class RestoreOperation implements DimensionMutation {
     private final PreparedRestore restore;
     private final WorldStateApply world;
     private final BranchRefRepository refs;
@@ -149,6 +149,23 @@ public final class RestoreOperation {
 
     public RestoreStatus status() {
         return status;
+    }
+
+    @Override
+    public void advance(long deadlineNanos) throws IOException {
+        tick(deadlineNanos);
+    }
+
+    @Override
+    public boolean isTerminal() {
+        return status == RestoreStatus.COMPLETE
+                || status == RestoreStatus.RETURNED
+                || status == RestoreStatus.DEGRADED;
+    }
+
+    @Override
+    public boolean isSafeToRelease() {
+        return status == RestoreStatus.COMPLETE || status == RestoreStatus.RETURNED;
     }
 
     private enum ReturnPhase {
