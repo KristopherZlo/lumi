@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.BranchSwitchTarget;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
@@ -48,6 +49,23 @@ class OperationJournalRepositoryTest {
         assertThrows(JournalConflictException.class, () -> repository.clear(prepared));
         repository.clear(writing);
         assertEquals(Optional.empty(), repository.read());
+    }
+
+    @Test
+    void persistsBranchSwitchRefAndPointerRevisions() throws IOException {
+        OperationJournalRepository repository = new OperationJournalRepository(repositoryRoot);
+        OperationTarget target = new OperationTarget(
+                new BranchName("main"), id("expected"), 7,
+                Optional.of(id("target")), Optional.of(id("return")),
+                Optional.of(new BranchSwitchTarget(
+                        new BranchName("redstone-test"), 3, 5)));
+
+        var created = repository.create(new OperationJournal(
+                UUID.randomUUID(), OperationKind.BRANCH_SWITCH,
+                OperationPhase.PREPARED, target));
+
+        assertEquals(created, new OperationJournalRepository(repositoryRoot)
+                .read().orElseThrow());
     }
 
     private static OperationTarget target() {

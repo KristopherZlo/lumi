@@ -1,6 +1,7 @@
 package io.github.lumi.storage.repository;
 
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.BranchSwitchTarget;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.OperationJournal;
@@ -79,6 +80,7 @@ public final class OperationJournalRepository {
             output.writeLong(journal.target().expectedRevision());
             writeOptionalId(output, journal.target().target());
             writeOptionalId(output, journal.target().returnPoint());
+            writeBranchSwitch(output, journal.target().branchSwitch());
         }
         return bytes.toByteArray();
     }
@@ -101,7 +103,8 @@ public final class OperationJournalRepository {
             }
             OperationTarget target = new OperationTarget(
                     new BranchName(new String(branch, StandardCharsets.UTF_8)),
-                    readId(input), input.readLong(), readOptionalId(input), readOptionalId(input));
+                    readId(input), input.readLong(), readOptionalId(input), readOptionalId(input),
+                    readBranchSwitch(input));
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in operation journal");
             }
@@ -124,6 +127,41 @@ public final class OperationJournalRepository {
             throw new IOException("Invalid optional commit ID flag");
         }
         return present == 1 ? Optional.of(readId(input)) : Optional.empty();
+    }
+
+    private static void writeBranchSwitch(
+            DataOutputStream output, Optional<BranchSwitchTarget> branchSwitch) throws IOException {
+        output.writeBoolean(branchSwitch.isPresent());
+        if (branchSwitch.isEmpty()) return;
+        BranchSwitchTarget target = branchSwitch.orElseThrow();
+        byte[] name = target.branch().value().getBytes(StandardCharsets.UTF_8);
+        if (name.length > MAX_NAME_BYTES) {
+            throw new IOException("Branch switch target name is too large");
+        }
+        output.writeInt(name.length);
+        output.write(name);
+        output.writeLong(target.targetRevision());
+        output.writeLong(target.expectedActiveRevision());
+    }
+
+    private static Optional<BranchSwitchTarget> readBranchSwitch(
+            DataInputStream input) throws IOException {
+        int present = input.readUnsignedByte();
+        if (present > 1) {
+            throw new IOException("Invalid branch switch target flag");
+        }
+        if (present == 0) return Optional.empty();
+        int nameLength = input.readInt();
+        if (nameLength < 1 || nameLength > MAX_NAME_BYTES) {
+            throw new IOException("Invalid branch switch target name length");
+        }
+        byte[] name = input.readNBytes(nameLength);
+        if (name.length != nameLength) {
+            throw new IOException("Truncated branch switch target");
+        }
+        return Optional.of(new BranchSwitchTarget(
+                new BranchName(new String(name, StandardCharsets.UTF_8)),
+                input.readLong(), input.readLong()));
     }
 
     private static void writeId(DataOutputStream output, CommitId id) throws IOException {
