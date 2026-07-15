@@ -2,11 +2,16 @@ package io.github.lumi.minecraft.runtime;
 
 import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
+import io.github.lumi.minecraft.world.BatchedWorldStateCapture;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
+import io.github.lumi.minecraft.world.DurableSavePreparation;
 import io.github.lumi.minecraft.world.EntityChunkDurabilityGate;
 import io.github.lumi.minecraft.world.MinecraftBlockEntityBaselineCapture;
 import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
+import io.github.lumi.minecraft.world.MinecraftWorldStateReader;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
+import io.github.lumi.minecraft.world.SavePreparation;
+import io.github.lumi.minecraft.world.WorldStateCapture;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
@@ -30,6 +35,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final DimensionOperationCoordinator operations;
     private final MutationDurabilityTracker mutations;
     private final EntityChunkDurabilityGate entityDurability;
+    private final SavePreparation savePreparation;
+    private final WorldStateCapture worldCapture;
     private final BlockEntityBaselineStore blockEntityBaselines = new BlockEntityBaselineStore();
     private final MinecraftBlockEntityBaselineCapture baselineCapture =
             new MinecraftBlockEntityBaselineCapture();
@@ -47,6 +54,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.operations = operations;
         this.mutations = mutations;
         entityDurability = new EntityChunkDurabilityGate(mutations);
+        var worldReader = new MinecraftWorldStateReader(level);
+        savePreparation = new DurableSavePreparation(worldReader, entityDurability, mutations);
+        worldCapture = new BatchedWorldStateCapture(worldReader);
     }
 
     public static FabricDimensionRuntime open(
@@ -97,6 +107,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public DimensionFreezeState freeze() { return freeze; }
     public DimensionOperationCoordinator operations() { return operations; }
     public MutationDurabilityTracker mutations() { return mutations; }
+    public SavePreparation savePreparation() { return savePreparation; }
+    public WorldStateCapture worldCapture() { return worldCapture; }
     public BlockEntityBaselineStore blockEntityBaselines() { return blockEntityBaselines; }
 
     @Override

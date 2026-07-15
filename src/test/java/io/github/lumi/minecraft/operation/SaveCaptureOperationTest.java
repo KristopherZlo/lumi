@@ -17,6 +17,7 @@ import io.github.lumi.domain.service.CapturedWorldState;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveResult;
 import io.github.lumi.minecraft.world.WorldStateCapture;
+import io.github.lumi.minecraft.world.SavePreparation;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -29,6 +30,33 @@ import java.util.concurrent.Executor;
 import org.junit.jupiter.api.Test;
 
 class SaveCaptureOperationTest {
+    @Test
+    void holdsFreezeUntilPreparationEstablishesDurableBoundary() throws Exception {
+        WorkingIndex working = new WorkingIndex();
+        SectionKey key = new SectionKey(1, 0, 1);
+        working.markDirty(key);
+        var dirty = working.snapshot();
+        CapturedWorldState captured = new CapturedWorldState(
+                Map.of(key, airSection()), Map.of(), dirty,
+                new CommitStatistics(1, 0, SectionBlob.BLOCK_COUNT, 0));
+        TwoStepPreparation preparation = new TwoStepPreparation(dirty);
+        TwoStepCapture world = new TwoStepCapture(captured);
+        SaveCaptureOperation operation = new SaveCaptureOperation(
+                request(), preparation, world,
+                (request, state) -> new SaveResult(id('2'),
+                        new BranchRef(new BranchName("main"), id('2'), 1), state.generations()),
+                generations -> { }, Runnable::run);
+
+        operation.advance(50L);
+        assertEquals(SaveOperationStatus.PREPARING, operation.status());
+        assertTrue(!operation.isSafeToRelease());
+        assertEquals(0, world.session.captureCalls);
+
+        operation.advance(100L);
+        assertEquals(SaveOperationStatus.CAPTURING, operation.status());
+        assertEquals(1, world.session.captureCalls);
+    }
+
     @Test
     void releasesAfterCaptureAndClearsOnlySavedGenerationInBackground() throws Exception {
         SectionKey key = new SectionKey(0, 0, 0);
@@ -100,6 +128,24 @@ class SaveCaptureOperationTest {
             private Session(CapturedWorldState captured) { this.captured = captured; }
             @Override public boolean captureUntil(long deadlineNanos) { return ++captureCalls == 2; }
             @Override public CapturedWorldState finish() { return captured; }
+        }
+    }
+
+    private static final class TwoStepPreparation implements SavePreparation {
+        private final io.github.lumi.domain.model.WorkingIndexSnapshot dirty;
+        private int calls;
+
+        private TwoStepPreparation(io.github.lumi.domain.model.WorkingIndexSnapshot dirty) {
+            this.dirty = dirty;
+        }
+
+        @Override public Session begin() {
+            return new Session() {
+                @Override public boolean prepareUntil(long deadlineNanos) { return ++calls == 2; }
+                @Override public io.github.lumi.domain.model.WorkingIndexSnapshot finish() {
+                    return dirty;
+                }
+            };
         }
     }
 

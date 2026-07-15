@@ -6,6 +6,7 @@ import io.github.lumi.domain.service.SavePublisher;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveResult;
 import io.github.lumi.minecraft.world.WorldStateCapture;
+import io.github.lumi.minecraft.world.SavePreparation;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
@@ -16,14 +17,16 @@ import java.util.concurrent.Executor;
 /** Copies visible state while frozen, then publishes it without holding the freeze. */
 public final class SaveCaptureOperation implements DimensionMutation {
     private final SaveRequest request;
-    private final WorkingIndexSnapshot dirty;
+    private final SavePreparation preparation;
     private final WorldStateCapture capture;
     private final SavePublisher publisher;
     private final CapturedGenerationCompletion completion;
     private final Executor backgroundExecutor;
+    private WorkingIndexSnapshot dirty;
+    private SavePreparation.Session preparationSession;
     private WorldStateCapture.CaptureSession session;
     private CompletableFuture<SaveResult> background;
-    private SaveOperationStatus status = SaveOperationStatus.CAPTURING;
+    private SaveOperationStatus status = SaveOperationStatus.PREPARING;
     private SaveResult result;
     private Throwable failure;
 
@@ -34,8 +37,18 @@ public final class SaveCaptureOperation implements DimensionMutation {
             SavePublisher publisher,
             CapturedGenerationCompletion completion,
             Executor backgroundExecutor) {
+        this(request, fixedPreparation(dirty), capture, publisher, completion, backgroundExecutor);
+    }
+
+    public SaveCaptureOperation(
+            SaveRequest request,
+            SavePreparation preparation,
+            WorldStateCapture capture,
+            SavePublisher publisher,
+            CapturedGenerationCompletion completion,
+            Executor backgroundExecutor) {
         this.request = Objects.requireNonNull(request, "request");
-        this.dirty = Objects.requireNonNull(dirty, "dirty");
+        this.preparation = Objects.requireNonNull(preparation, "preparation");
         this.capture = Objects.requireNonNull(capture, "capture");
         this.publisher = Objects.requireNonNull(publisher, "publisher");
         this.completion = Objects.requireNonNull(completion, "completion");
@@ -44,11 +57,26 @@ public final class SaveCaptureOperation implements DimensionMutation {
 
     @Override
     public void advance(long deadlineNanos) throws IOException {
-        if (status == SaveOperationStatus.CAPTURING) {
+        if (status == SaveOperationStatus.PREPARING) {
+            prepare(deadlineNanos);
+        } else if (status == SaveOperationStatus.CAPTURING) {
             capture(deadlineNanos);
         } else if (status == SaveOperationStatus.WRITING && background.isDone()) {
             finishBackground();
         }
+    }
+
+    private void prepare(long deadlineNanos) throws IOException {
+        if (preparationSession == null) {
+            preparationSession = Objects.requireNonNull(
+                    preparation.begin(), "preparation session");
+        }
+        if (!preparationSession.prepareUntil(deadlineNanos)) {
+            return;
+        }
+        dirty = Objects.requireNonNull(preparationSession.finish(), "prepared generations");
+        status = SaveOperationStatus.CAPTURING;
+        capture(deadlineNanos);
     }
 
     private void capture(long deadlineNanos) throws IOException {
@@ -106,6 +134,14 @@ public final class SaveCaptureOperation implements DimensionMutation {
     }
 
     @Override public boolean isSafeToRelease() {
-        return status != SaveOperationStatus.CAPTURING;
+        return status == SaveOperationStatus.WRITING || isTerminal();
+    }
+
+    private static SavePreparation fixedPreparation(WorkingIndexSnapshot dirty) {
+        WorkingIndexSnapshot fixed = Objects.requireNonNull(dirty, "dirty");
+        return () -> new SavePreparation.Session() {
+            @Override public boolean prepareUntil(long deadlineNanos) { return true; }
+            @Override public WorkingIndexSnapshot finish() { return fixed; }
+        };
     }
 }
