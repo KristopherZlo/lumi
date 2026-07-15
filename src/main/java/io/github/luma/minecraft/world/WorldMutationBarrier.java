@@ -15,8 +15,10 @@ final class WorldMutationBarrier {
     private final Map<WorldOperationManager.ActiveOperation, Lease> leases = new ConcurrentHashMap<>();
 
     boolean blocks(ServerLevel level) {
-        return level != null
-                && !WorldMutationContext.captureSuppressed()
+        if (level == null || this.blockedServers.isEmpty()) {
+            return false;
+        }
+        return !WorldMutationContext.captureSuppressed()
                 && !WorldMutationContext.internalWorldApplyActive()
                 && this.blockedServers.contains(level.getServer());
     }

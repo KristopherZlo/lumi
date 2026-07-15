@@ -25,6 +25,7 @@ public final class EntityCausalContextRegistry {
             ThreadLocal.withInitial(ArrayDeque::new);
 
     private final Map<EntityContextKey, EntityCausalContext> contexts = new HashMap<>();
+    private volatile boolean contextsPresent;
 
     private EntityCausalContextRegistry() {
     }
@@ -47,6 +48,7 @@ public final class EntityCausalContextRegistry {
                 Instant.now(),
                 level.getGameTime() + CONTEXT_TTL_TICKS
         ));
+        this.contextsPresent = true;
         return true;
     }
 
@@ -63,6 +65,9 @@ public final class EntityCausalContextRegistry {
     }
 
     public ContextFrame pushIfPresent(Entity entity, ServerLevel level, WorldMutationSource sourceOverride) {
+        if (!this.contextsPresent) {
+            return ContextFrame.empty();
+        }
         EntityCausalContext context = this.context(entity, level);
         if (context == null) {
             return ContextFrame.empty();
@@ -90,6 +95,7 @@ public final class EntityCausalContextRegistry {
     public synchronized void clear(Entity entity) {
         if (entity != null && entity.getUUID() != null) {
             this.contexts.keySet().removeIf(key -> entity.getUUID().equals(key.entityUuid()));
+            this.contextsPresent = !this.contexts.isEmpty();
         }
     }
 
@@ -118,6 +124,7 @@ public final class EntityCausalContextRegistry {
         EntityCausalContext context = this.contexts.get(key);
         if (context != null && context.expiresAtGameTime() < level.getGameTime()) {
             this.contexts.remove(key);
+            this.contextsPresent = !this.contexts.isEmpty();
             return null;
         }
         return context;
