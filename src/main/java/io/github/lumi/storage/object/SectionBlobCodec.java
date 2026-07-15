@@ -7,7 +7,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -32,7 +31,7 @@ public final class SectionBlobCodec {
             output.writeInt(MAGIC);
             output.writeInt(palette.size());
             for (String state : palette) {
-                writeBytes(output, state.getBytes(StandardCharsets.UTF_8), MAX_STRING_BYTES, "block state");
+                CanonicalBytes.writeString(output, state, MAX_STRING_BYTES, "block state");
             }
             for (String state : section.blockStates()) {
                 output.writeShort(paletteIndexes.get(state));
@@ -40,7 +39,7 @@ public final class SectionBlobCodec {
             output.writeInt(section.blockEntities().size());
             for (var entry : new java.util.TreeMap<>(section.blockEntities()).entrySet()) {
                 output.writeShort(entry.getKey());
-                writeBytes(output, entry.getValue().bytes(), MAX_NBT_BYTES, "block entity NBT");
+                CanonicalBytes.write(output, entry.getValue().bytes(), MAX_NBT_BYTES, "block entity NBT");
             }
         }
         return bytes.toByteArray();
@@ -57,7 +56,7 @@ public final class SectionBlobCodec {
             }
             List<String> palette = new ArrayList<>(paletteSize);
             for (int index = 0; index < paletteSize; index++) {
-                palette.add(new String(readBytes(input, MAX_STRING_BYTES, "block state"), StandardCharsets.UTF_8));
+                palette.add(CanonicalBytes.readString(input, MAX_STRING_BYTES, "block state"));
             }
 
             List<String> states = new ArrayList<>(SectionBlob.BLOCK_COUNT);
@@ -81,7 +80,8 @@ public final class SectionBlobCodec {
                     throw new IOException("Block entities are not in canonical order");
                 }
                 previousIndex = localIndex;
-                blockEntities.put(localIndex, new CanonicalNbt(readBytes(input, MAX_NBT_BYTES, "block entity NBT")));
+                blockEntities.put(localIndex,
+                        new CanonicalNbt(CanonicalBytes.read(input, MAX_NBT_BYTES, "block entity NBT")));
             }
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in section blob");
@@ -92,23 +92,4 @@ public final class SectionBlobCodec {
         }
     }
 
-    private static void writeBytes(DataOutputStream output, byte[] value, int maximum, String label) throws IOException {
-        if (value.length > maximum) {
-            throw new IOException(label + " exceeds " + maximum + " bytes");
-        }
-        output.writeInt(value.length);
-        output.write(value);
-    }
-
-    private static byte[] readBytes(DataInputStream input, int maximum, String label) throws IOException {
-        int length = input.readInt();
-        if (length < 0 || length > maximum) {
-            throw new IOException("Invalid " + label + " length");
-        }
-        byte[] value = input.readNBytes(length);
-        if (value.length != length) {
-            throw new IOException("Truncated " + label);
-        }
-        return value;
-    }
 }
