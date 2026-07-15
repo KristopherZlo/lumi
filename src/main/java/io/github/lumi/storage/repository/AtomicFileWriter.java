@@ -18,14 +18,7 @@ final class AtomicFileWriter {
         Files.createDirectories(target.getParent());
         Path temporary = Files.createTempFile(target.getParent(), ".atomic-", ".tmp");
         try {
-            try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING)) {
-                ByteBuffer buffer = ByteBuffer.wrap(content);
-                while (buffer.hasRemaining()) {
-                    channel.write(buffer);
-                }
-                channel.force(true);
-            }
+            write(temporary, content);
             try {
                 Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE,
                         StandardCopyOption.REPLACE_EXISTING);
@@ -37,6 +30,41 @@ final class AtomicFileWriter {
             }
         } finally {
             Files.deleteIfExists(temporary);
+        }
+    }
+
+    static boolean createOnce(Path target, byte[] content) throws IOException {
+        Files.createDirectories(target.getParent());
+        if (Files.exists(target)) {
+            return false;
+        }
+        Path temporary = Files.createTempFile(target.getParent(), ".immutable-", ".tmp");
+        try {
+            write(temporary, content);
+            try {
+                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.FileAlreadyExistsException racedWriter) {
+                return false;
+            } catch (AtomicMoveNotSupportedException unsupported) {
+                throw new IOException("Repository requires atomic moves: " + target, unsupported);
+            }
+            if (!Arrays.equals(content, Files.readAllBytes(target))) {
+                throw new IOException("Create-once file verification failed: " + target);
+            }
+            return true;
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    private static void write(Path target, byte[] content) throws IOException {
+        try (FileChannel channel = FileChannel.open(target, StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING)) {
+            ByteBuffer buffer = ByteBuffer.wrap(content);
+            while (buffer.hasRemaining()) {
+                channel.write(buffer);
+            }
+            channel.force(true);
         }
     }
 }
