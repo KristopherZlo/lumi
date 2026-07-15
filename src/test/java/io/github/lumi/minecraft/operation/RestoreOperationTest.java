@@ -118,6 +118,22 @@ class RestoreOperationTest {
         assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
     }
 
+    @Test
+    void cancelsPreparedJournalBeforeAnyWorldMutation() throws IOException {
+        CommitId current = id('9');
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var expectedRef = refs.create(new BranchName("main"), current);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expectedRef, id('a'), Map.of(), Map.of(), Map.of(), Map.of()),
+                new RepairThenVerify(), refs, journals, UUID.randomUUID());
+
+        operation.cancelBeforeApply();
+
+        assertTrue(journals.read().isEmpty());
+        assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
+    }
+
     private static CommitId id(char digit) {
         return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
     }

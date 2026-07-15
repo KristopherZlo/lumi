@@ -159,6 +159,14 @@ public final class RestoreOperation implements DimensionMutation {
         return status;
     }
 
+    public void cancelBeforeApply() throws IOException {
+        if (status != RestoreStatus.APPLYING || journal.phase() != OperationPhase.PREPARED) {
+            throw new IllegalStateException("Restore has already started mutating the world");
+        }
+        journals.clear(journal);
+        status = RestoreStatus.CANCELLED;
+    }
+
     @Override
     public void advance(long deadlineNanos) throws IOException {
         tick(deadlineNanos);
@@ -168,12 +176,14 @@ public final class RestoreOperation implements DimensionMutation {
     public boolean isTerminal() {
         return status == RestoreStatus.COMPLETE
                 || status == RestoreStatus.RETURNED
+                || status == RestoreStatus.CANCELLED
                 || status == RestoreStatus.DEGRADED;
     }
 
     @Override
     public boolean isSafeToRelease() {
-        return status == RestoreStatus.COMPLETE || status == RestoreStatus.RETURNED;
+        return status == RestoreStatus.COMPLETE || status == RestoreStatus.RETURNED
+                || status == RestoreStatus.CANCELLED;
     }
 
     private enum ReturnPhase {

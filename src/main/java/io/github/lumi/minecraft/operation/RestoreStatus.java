@@ -7,5 +7,6 @@ public enum RestoreStatus {
     RETURNING,
     COMPLETE,
     RETURNED,
+    CANCELLED,
     DEGRADED
 }
