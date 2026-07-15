@@ -2,12 +2,14 @@ package io.github.lumi.minecraft.operation;
 
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
+import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.world.LiveBlockWorldAccess;
+import io.github.lumi.minecraft.world.LiveEntityWorldAccess;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,12 +22,14 @@ public final class LiveActionOperation implements DimensionMutation {
     private final UUID player;
     private final LiveActionJournal.Direction direction;
     private final LiveBlockWorldAccess world;
+    private final LiveEntityWorldAccess entities;
     private final LongSupplier nanoTime;
     private final Consumer<UUID> cancelPending;
-    private final Map<BlockPosition, BlockSnapshot> mismatches = new LinkedHashMap<>();
+    private final List<WorldChange<?>> mismatches = new ArrayList<>();
+    private List<WorldChange<?>> changes = List.of();
     private Phase phase = Phase.SELECTING;
     private LiveActionJournal.Plan plan;
-    private Iterator<Map.Entry<BlockPosition, BlockSnapshot>> cursor;
+    private Iterator<WorldChange<?>> cursor;
     private Throwable failure;
     private UUID retainedAction;
 
@@ -34,7 +38,8 @@ public final class LiveActionOperation implements DimensionMutation {
             UUID player,
             LiveActionJournal.Direction direction,
             LiveBlockWorldAccess world) {
-        this(journal, player, direction, world, System::nanoTime);
+        this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
+                System::nanoTime, ignored -> { });
     }
 
     public LiveActionOperation(
@@ -43,7 +48,18 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveActionJournal.Direction direction,
             LiveBlockWorldAccess world,
             Consumer<UUID> cancelPending) {
-        this(journal, player, direction, world, System::nanoTime, cancelPending);
+        this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
+                System::nanoTime, cancelPending);
+    }
+
+    public LiveActionOperation(
+            LiveActionJournal journal,
+            UUID player,
+            LiveActionJournal.Direction direction,
+            LiveBlockWorldAccess world,
+            LiveEntityWorldAccess entities,
+            Consumer<UUID> cancelPending) {
+        this(journal, player, direction, world, entities, System::nanoTime, cancelPending);
     }
 
     LiveActionOperation(
@@ -52,7 +68,8 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveActionJournal.Direction direction,
             LiveBlockWorldAccess world,
             LongSupplier nanoTime) {
-        this(journal, player, direction, world, nanoTime, ignored -> { });
+        this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
+                nanoTime, ignored -> { });
     }
 
     LiveActionOperation(
@@ -62,10 +79,23 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveBlockWorldAccess world,
             LongSupplier nanoTime,
             Consumer<UUID> cancelPending) {
+        this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
+                nanoTime, cancelPending);
+    }
+
+    private LiveActionOperation(
+            LiveActionJournal journal,
+            UUID player,
+            LiveActionJournal.Direction direction,
+            LiveBlockWorldAccess world,
+            LiveEntityWorldAccess entities,
+            LongSupplier nanoTime,
+            Consumer<UUID> cancelPending) {
         this.journal = Objects.requireNonNull(journal, "journal");
         this.player = Objects.requireNonNull(player, "player");
         this.direction = Objects.requireNonNull(direction, "direction");
         this.world = Objects.requireNonNull(world, "world");
+        this.entities = Objects.requireNonNull(entities, "entities");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         this.cancelPending = Objects.requireNonNull(cancelPending, "cancelPending");
     }
@@ -119,8 +149,19 @@ public final class LiveActionOperation implements DimensionMutation {
             plan = selectPlan().orElseThrow(
                     () -> new IllegalStateException("Live action disappeared during finalization"));
         }
-        cursor = plan.expected().entrySet().iterator();
+        prepareChanges();
+        cursor = changes.iterator();
         phase = Phase.VALIDATING;
+    }
+
+    private void prepareChanges() {
+        var prepared = new ArrayList<WorldChange<?>>(
+                plan.expected().size() + plan.expectedEntities().size());
+        plan.expected().forEach((position, expected) -> prepared.add(new BlockChange(
+                world, position, expected, plan.replacement().get(position))));
+        plan.expectedEntities().forEach((id, expected) -> prepared.add(new EntityChange(
+                entities, id, expected, plan.replacementEntities().get(id))));
+        changes = List.copyOf(prepared);
     }
 
     private Optional<LiveActionJournal.Plan> selectPlan() {
@@ -130,26 +171,26 @@ public final class LiveActionOperation implements DimensionMutation {
 
     private void validateOne() throws IOException {
         if (!cursor.hasNext()) {
-            cursor = plan.replacement().entrySet().iterator();
+            cursor = changes.iterator();
             phase = Phase.APPLYING;
             return;
         }
-        var entry = cursor.next();
-        if (!entry.getValue().equals(world.read(entry.getKey()))) {
-            failure = new IllegalStateException("Visible world conflicts with live action at " + entry.getKey());
+        WorldChange<?> change = cursor.next();
+        if (!change.matchesExpected()) {
+            failure = new IllegalStateException(
+                    "Visible world conflicts with live action at " + change.target());
             phase = Phase.FAILED;
         }
     }
 
     private void applyOne() throws IOException {
         if (!cursor.hasNext()) {
-            cursor = plan.replacement().entrySet().iterator();
+            cursor = changes.iterator();
             mismatches.clear();
             phase = Phase.VERIFYING;
             return;
         }
-        var entry = cursor.next();
-        world.write(entry.getKey(), entry.getValue());
+        cursor.next().applyReplacement();
     }
 
     private void verifyOne(boolean finalPass) throws IOException {
@@ -158,36 +199,30 @@ public final class LiveActionOperation implements DimensionMutation {
                 journal.complete(plan);
                 phase = Phase.SUCCEEDED;
             } else if (finalPass) {
-                var mismatch = mismatches.entrySet().iterator().next();
                 failure = new IllegalStateException(
-                        "Live action did not verify after one repair pass at " + mismatch.getKey()
-                                + "; expected=" + plan.replacement().get(mismatch.getKey())
-                                + "; actual=" + mismatch.getValue());
+                        "Live action did not verify after one repair pass at "
+                                + mismatches.getFirst().mismatch());
                 phase = Phase.DEGRADED;
             } else {
-                cursor = mismatches.keySet().stream()
-                        .map(position -> Map.entry(position, plan.replacement().get(position)))
-                        .iterator();
+                cursor = mismatches.iterator();
                 phase = Phase.REPAIRING;
             }
             return;
         }
-        var entry = cursor.next();
-        BlockSnapshot actual = world.read(entry.getKey());
-        if (!entry.getValue().equals(actual)) {
-            mismatches.put(entry.getKey(), actual);
+        WorldChange<?> change = cursor.next();
+        if (!change.matchesReplacement()) {
+            mismatches.add(change);
         }
     }
 
     private void repairOne() throws IOException {
         if (!cursor.hasNext()) {
             mismatches.clear();
-            cursor = plan.replacement().entrySet().iterator();
+            cursor = changes.iterator();
             phase = Phase.REVERIFYING;
             return;
         }
-        var entry = cursor.next();
-        world.write(entry.getKey(), entry.getValue());
+        cursor.next().applyReplacement();
     }
 
     @Override
@@ -213,6 +248,78 @@ public final class LiveActionOperation implements DimensionMutation {
     @Override
     public Optional<Throwable> failure() {
         return Optional.ofNullable(failure);
+    }
+
+    private abstract static class WorldChange<S> {
+        private final S expected;
+        private final S replacement;
+        private S actual;
+
+        private WorldChange(S expected, S replacement) {
+            this.expected = Objects.requireNonNull(expected, "expected");
+            this.replacement = Objects.requireNonNull(replacement, "replacement");
+        }
+
+        private boolean matchesExpected() throws IOException {
+            return expected.equals(read());
+        }
+
+        private boolean matchesReplacement() throws IOException {
+            actual = read();
+            return replacement.equals(actual);
+        }
+
+        private void applyReplacement() throws IOException {
+            write(replacement);
+        }
+
+        private String mismatch() {
+            return target() + "; expected=" + replacement + "; actual=" + actual;
+        }
+
+        protected abstract S read() throws IOException;
+
+        protected abstract void write(S state) throws IOException;
+
+        protected abstract String target();
+    }
+
+    private static final class BlockChange extends WorldChange<BlockSnapshot> {
+        private final LiveBlockWorldAccess world;
+        private final BlockPosition position;
+
+        private BlockChange(
+                LiveBlockWorldAccess world,
+                BlockPosition position,
+                BlockSnapshot expected,
+                BlockSnapshot replacement) {
+            super(expected, replacement);
+            this.world = world;
+            this.position = position;
+        }
+
+        @Override protected BlockSnapshot read() throws IOException { return world.read(position); }
+        @Override protected void write(BlockSnapshot state) throws IOException { world.write(position, state); }
+        @Override protected String target() { return "block " + position; }
+    }
+
+    private static final class EntityChange extends WorldChange<Optional<EntityState>> {
+        private final LiveEntityWorldAccess world;
+        private final UUID entityId;
+
+        private EntityChange(
+                LiveEntityWorldAccess world,
+                UUID entityId,
+                Optional<EntityState> expected,
+                Optional<EntityState> replacement) {
+            super(expected, replacement);
+            this.world = world;
+            this.entityId = entityId;
+        }
+
+        @Override protected Optional<EntityState> read() throws IOException { return world.read(entityId); }
+        @Override protected void write(Optional<EntityState> state) throws IOException { world.write(entityId, state); }
+        @Override protected String target() { return "entity " + entityId; }
     }
 
     private enum Phase {
