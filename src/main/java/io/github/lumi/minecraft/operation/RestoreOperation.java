@@ -16,11 +16,16 @@ import java.util.UUID;
 /** Advances one frozen-dimension restore without exceeding the caller's tick deadline. */
 public final class RestoreOperation {
     private final PreparedRestore restore;
+    private final WorldStateApply world;
     private final BranchRefRepository refs;
     private final OperationJournalRepository journals;
     private final WorldStateApply.ApplySession targetSession;
+    private WorldStateApply.ApplySession returnSession;
     private OperationJournal journal;
     private RestoreStatus status = RestoreStatus.APPLYING;
+    private boolean targetRepairAttempted;
+    private boolean returnRepairAttempted;
+    private ReturnPhase returnPhase;
 
     private RestoreOperation(
             PreparedRestore restore,
@@ -29,6 +34,7 @@ public final class RestoreOperation {
             OperationJournalRepository journals,
             OperationJournal journal) {
         this.restore = restore;
+        this.world = world;
         this.refs = refs;
         this.journals = journals;
         this.journal = journal;
@@ -58,26 +64,96 @@ public final class RestoreOperation {
     }
 
     public RestoreStatus tick(long deadlineNanos) throws IOException {
-        if (status == RestoreStatus.APPLYING) {
-            if (journal.phase() == OperationPhase.PREPARED) {
-                journal = journals.advance(journal, OperationPhase.APPLYING);
-            }
-            if (targetSession.applyUntil(deadlineNanos)) {
-                journal = journals.advance(journal, OperationPhase.VERIFYING);
-                status = RestoreStatus.VERIFYING;
-            }
-        } else if (status == RestoreStatus.VERIFYING
-                && targetSession.verifyUntil(deadlineNanos) == WorldStateApply.Verification.VERIFIED) {
-            refs.compareAndSet(restore.expectedRef(), restore.targetCommit());
-            journal = journals.advance(journal, OperationPhase.REF_PUBLISHED);
-            journal = journals.advance(journal, OperationPhase.COMPLETE);
-            journals.clear(journal);
-            status = RestoreStatus.COMPLETE;
+        switch (status) {
+            case APPLYING -> applyTarget(deadlineNanos);
+            case VERIFYING -> verifyTarget(deadlineNanos);
+            case REPAIRING -> repairTarget(deadlineNanos);
+            case RETURNING -> returnToPreviousState(deadlineNanos);
+            default -> { }
         }
         return status;
     }
 
+    private void applyTarget(long deadlineNanos) throws IOException {
+        if (journal.phase() == OperationPhase.PREPARED) {
+            journal = journals.advance(journal, OperationPhase.APPLYING);
+        }
+        if (targetSession.applyUntil(deadlineNanos)) {
+            journal = journals.advance(journal, OperationPhase.VERIFYING);
+            status = RestoreStatus.VERIFYING;
+        }
+    }
+
+    private void verifyTarget(long deadlineNanos) throws IOException {
+        switch (targetSession.verifyUntil(deadlineNanos)) {
+            case IN_PROGRESS -> { }
+            case VERIFIED -> completeTarget();
+            case MISMATCH -> {
+                if (targetRepairAttempted) {
+                    beginReturn();
+                } else {
+                    targetRepairAttempted = true;
+                    status = RestoreStatus.REPAIRING;
+                }
+            }
+        }
+    }
+
+    private void repairTarget(long deadlineNanos) {
+        if (targetSession.repairUntil(deadlineNanos)) {
+            targetSession.restartVerification();
+            status = RestoreStatus.VERIFYING;
+        }
+    }
+
+    private void completeTarget() throws IOException {
+        refs.compareAndSet(restore.expectedRef(), restore.targetCommit());
+        journal = journals.advance(journal, OperationPhase.REF_PUBLISHED);
+        journal = journals.advance(journal, OperationPhase.COMPLETE);
+        journals.clear(journal);
+        status = RestoreStatus.COMPLETE;
+    }
+
+    private void beginReturn() throws IOException {
+        journal = journals.advance(journal, OperationPhase.ROLLING_BACK);
+        returnSession = world.begin(new WorldStateApply.State(
+                restore.returnSections(), restore.returnEntities()));
+        returnPhase = ReturnPhase.APPLYING;
+        status = RestoreStatus.RETURNING;
+    }
+
+    private void returnToPreviousState(long deadlineNanos) throws IOException {
+        if (returnPhase == ReturnPhase.APPLYING && returnSession.applyUntil(deadlineNanos)) {
+            returnPhase = ReturnPhase.VERIFYING;
+        } else if (returnPhase == ReturnPhase.VERIFYING) {
+            WorldStateApply.Verification verification = returnSession.verifyUntil(deadlineNanos);
+            if (verification == WorldStateApply.Verification.VERIFIED) {
+                journal = journals.advance(journal, OperationPhase.COMPLETE);
+                journals.clear(journal);
+                status = RestoreStatus.RETURNED;
+            } else if (verification == WorldStateApply.Verification.MISMATCH) {
+                if (returnRepairAttempted) {
+                    journal = journals.advance(journal, OperationPhase.DEGRADED);
+                    status = RestoreStatus.DEGRADED;
+                } else {
+                    returnRepairAttempted = true;
+                    returnPhase = ReturnPhase.REPAIRING;
+                }
+            }
+        } else if (returnPhase == ReturnPhase.REPAIRING
+                && returnSession.repairUntil(deadlineNanos)) {
+            returnSession.restartVerification();
+            returnPhase = ReturnPhase.VERIFYING;
+        }
+    }
+
     public RestoreStatus status() {
         return status;
+    }
+
+    private enum ReturnPhase {
+        APPLYING,
+        VERIFYING,
+        REPAIRING
     }
 }

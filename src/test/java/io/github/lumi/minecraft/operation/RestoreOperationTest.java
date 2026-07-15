@@ -51,6 +51,72 @@ class RestoreOperationTest {
         assertEquals(1, world.session.verifyCalls);
     }
 
+    @Test
+    void repairsOneMismatchBeforePublishing() throws IOException {
+        CommitId current = id('3');
+        CommitId target = id('4');
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var expectedRef = refs.create(new BranchName("main"), current);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        RepairThenVerify world = new RepairThenVerify();
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expectedRef, target, Map.of(), Map.of(), Map.of(), Map.of()),
+                world, refs, journals, UUID.randomUUID());
+
+        assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.REPAIRING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.COMPLETE, operation.tick(Long.MAX_VALUE));
+        assertEquals(1, world.session.repairCalls);
+        assertEquals(target, refs.read(expectedRef.name()).orElseThrow().commit());
+    }
+
+    @Test
+    void returnsToPreparedPreOperationStateWhenTargetCannotVerify() throws IOException {
+        CommitId current = id('5');
+        CommitId target = id('6');
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var expectedRef = refs.create(new BranchName("main"), current);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        ReturnAfterMismatch world = new ReturnAfterMismatch(true);
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expectedRef, target, Map.of(), Map.of(), Map.of(), Map.of()),
+                world, refs, journals, UUID.randomUUID());
+
+        assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.REPAIRING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.RETURNED, operation.tick(Long.MAX_VALUE));
+        assertEquals(2, world.beginCalls);
+        assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
+        assertTrue(journals.read().isEmpty());
+    }
+
+    @Test
+    void keepsJournalAndDegradesWhenNeitherDirectionVerifies() throws IOException {
+        CommitId current = id('7');
+        CommitId target = id('8');
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var expectedRef = refs.create(new BranchName("main"), current);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expectedRef, target, Map.of(), Map.of(), Map.of(), Map.of()),
+                new ReturnAfterMismatch(false), refs, journals, UUID.randomUUID());
+
+        assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.REPAIRING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.DEGRADED, operation.tick(Long.MAX_VALUE));
+        assertEquals(OperationPhase.DEGRADED, journals.read().orElseThrow().phase());
+        assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
+    }
+
     private static CommitId id(char digit) {
         return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
     }
@@ -87,6 +153,61 @@ class RestoreOperationTest {
             public void restartVerification() {
                 throw new AssertionError("Repair was not expected");
             }
+        }
+    }
+
+    private static final class RepairThenVerify implements WorldStateApply {
+        private final Session session = new Session();
+
+        @Override
+        public ApplySession begin(State target) {
+            return session;
+        }
+
+        private static final class Session implements ApplySession {
+            private int verifyCalls;
+            private int repairCalls;
+
+            @Override public boolean applyUntil(long deadlineNanos) { return true; }
+            @Override public Verification verifyUntil(long deadlineNanos) {
+                return ++verifyCalls == 1 ? Verification.MISMATCH : Verification.VERIFIED;
+            }
+            @Override public boolean repairUntil(long deadlineNanos) {
+                repairCalls++;
+                return true;
+            }
+            @Override public void restartVerification() { }
+        }
+    }
+
+    private static final class ReturnAfterMismatch implements WorldStateApply {
+        private final boolean returnVerifies;
+        private int beginCalls;
+
+        private ReturnAfterMismatch(boolean returnVerifies) {
+            this.returnVerifies = returnVerifies;
+        }
+
+        @Override
+        public ApplySession begin(State target) {
+            beginCalls++;
+            return beginCalls == 1 ? new AlwaysMismatch() : new ReturnSession(returnVerifies);
+        }
+
+        private static final class AlwaysMismatch implements ApplySession {
+            @Override public boolean applyUntil(long deadlineNanos) { return true; }
+            @Override public Verification verifyUntil(long deadlineNanos) { return Verification.MISMATCH; }
+            @Override public boolean repairUntil(long deadlineNanos) { return true; }
+            @Override public void restartVerification() { }
+        }
+
+        private record ReturnSession(boolean verifies) implements ApplySession {
+            @Override public boolean applyUntil(long deadlineNanos) { return true; }
+            @Override public Verification verifyUntil(long deadlineNanos) {
+                return verifies ? Verification.VERIFIED : Verification.MISMATCH;
+            }
+            @Override public boolean repairUntil(long deadlineNanos) { return true; }
+            @Override public void restartVerification() { }
         }
     }
 }
