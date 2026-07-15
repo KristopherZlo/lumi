@@ -26,7 +26,11 @@ import java.util.Optional;
 import java.util.UUID;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Block;
 
 /** Temporary server-authoritative command surface for exercising V2 vertical slices. */
 public final class LumiCommands {
@@ -50,6 +54,17 @@ public final class LumiCommands {
                     .executes(command -> liveAction(command.getSource(), LiveActionJournal.Direction.UNDO));
             var redo = literal("redo").requires(LumiCommands::mayUse)
                     .executes(command -> liveAction(command.getSource(), LiveActionJournal.Direction.REDO));
+            var debugActionSet = literal("debug-action-set")
+                    .requires(LumiCommands::mayUse)
+                    .then(argument("x", integer()).then(argument("y", integer())
+                            .then(argument("z", integer()).then(argument("block", greedyString())
+                                    .executes(command -> debugActionSet(
+                                            command.getSource(),
+                                            new BlockPos(
+                                                    getInteger(command, "x"),
+                                                    getInteger(command, "y"),
+                                                    getInteger(command, "z")),
+                                            getString(command, "block")))))));
             var branch = literal("branch")
                     .requires(LumiCommands::mayUse)
                     .then(literal("create")
@@ -75,7 +90,8 @@ public final class LumiCommands {
                     .requires(LumiCommands::mayUse)
                     .then(argument("commit", word()).then(x1Arg));
             dispatcher.register(literal("lumi").then(save).then(restore)
-                    .then(restoreArea).then(rollback).then(undo).then(redo).then(branch));
+                    .then(restoreArea).then(rollback).then(undo).then(redo)
+                    .then(debugActionSet).then(branch));
         });
     }
 
@@ -192,14 +208,13 @@ public final class LumiCommands {
 
     private static int liveAction(
             CommandSourceStack source, LiveActionJournal.Direction direction) {
-        var player = source.getPlayer();
         var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
-        if (player == null || runtime == null) {
-            source.sendFailure(Component.literal("Lumi live action requires a ready player dimension"));
+        if (runtime == null) {
+            source.sendFailure(Component.literal("Lumi live action requires a ready dimension"));
             return 0;
         }
         try {
-            runtime.startLiveAction(player.getUUID(), direction, ignored -> { });
+            runtime.startLiveAction(author(source).id(), direction, ignored -> { });
             source.sendSuccess(() -> Component.literal("Lumi " + direction + " started"), false);
             return 1;
         } catch (IllegalStateException failed) {
@@ -207,6 +222,25 @@ public final class LumiCommands {
                     + failed.getMessage()));
             return 0;
         }
+    }
+
+    private static int debugActionSet(
+            CommandSourceStack source, BlockPos position, String blockName) {
+        var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
+        Identifier id = Identifier.tryParse(blockName);
+        var block = id == null ? Optional.<Block>empty() : BuiltInRegistries.BLOCK.getOptional(id);
+        if (runtime == null || block.isEmpty()) {
+            source.sendFailure(Component.literal("Lumi debug action requires a ready dimension and block"));
+            return 0;
+        }
+        try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), author(source).id())) {
+            source.getLevel().setBlock(position, block.orElseThrow().defaultBlockState(), Block.UPDATE_ALL);
+        } catch (IllegalStateException failed) {
+            source.sendFailure(Component.literal("Lumi debug action failed: " + failed.getMessage()));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Lumi debug block action captured"), false);
+        return 1;
     }
 
     private static CommitAuthor author(CommandSourceStack source) {
