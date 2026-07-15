@@ -133,6 +133,13 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         return working.snapshot();
     }
 
+    public synchronized boolean isDurable(WorkingIndexSnapshot captured) {
+        Objects.requireNonNull(captured, "captured");
+        return captured.generations().entrySet().stream().allMatch(entry ->
+                durableOrigins.contains(entry.getKey())
+                        && durableGenerations.getOrDefault(entry.getKey(), 0L) >= entry.getValue());
+    }
+
     @Override
     public void clear(WorkingIndexSnapshot captured) {
         boolean scheduleIndex;

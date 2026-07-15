@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /** Holds loaded vanilla entity baselines and delays changed stores until Lumi metadata is durable. */
 public final class EntityChunkDurabilityGate {
@@ -23,23 +24,31 @@ public final class EntityChunkDurabilityGate {
     }
 
     public synchronized boolean permitStore(EntityChunkKey key, EntityChunkBlob current) {
-        Objects.requireNonNull(key, "key");
-        Objects.requireNonNull(current, "current");
-        EntityChunkBlob baseline = baselines.get(key);
-        if (baseline == null) {
-            baselines.put(key, current);
-            return true;
-        }
-        if (!current.equals(baseline) && !current.equals(pending.get(key))) {
-            pending.put(key, current);
-            mutations.registerEntityMutation(key, () -> baseline);
-        }
+        observeCurrent(key, current);
         if (!mutations.canPublish(key)) {
             return false;
         }
         baselines.put(key, current);
         pending.remove(key);
         return true;
+    }
+
+    public synchronized void observeCurrent(EntityChunkKey key, EntityChunkBlob current) {
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(current, "current");
+        EntityChunkBlob baseline = baselines.get(key);
+        if (baseline == null) {
+            baselines.put(key, current);
+            return;
+        }
+        if (!current.equals(baseline) && !current.equals(pending.get(key))) {
+            pending.put(key, current);
+            mutations.registerEntityMutation(key, () -> baseline);
+        }
+    }
+
+    public synchronized Set<EntityChunkKey> trackedKeys() {
+        return Set.copyOf(baselines.keySet());
     }
 
     public synchronized void discard(EntityChunkKey key) {

@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,26 @@ class EntityChunkDurabilityGateTest {
         assertTrue(gate.permitStore(key, entities(1)));
         assertTrue(mutations.snapshot().generations().isEmpty());
         assertEquals(0, background.size());
+    }
+
+    @Test
+    void saveSweepCanObserveTrackedChunkWithoutVanillaStore() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        EntityChunkDurabilityGate gate = new EntityChunkDurabilityGate(mutations);
+        EntityChunkKey key = new EntityChunkKey(4, 5);
+        gate.rememberLoaded(key, entities(1));
+
+        gate.observeCurrent(key, entities(2));
+
+        assertEquals(Set.of(key), gate.trackedKeys());
+        assertEquals(1L, mutations.snapshot().generations().get(key));
+        assertFalse(mutations.isDurable(mutations.snapshot()));
+        background.runNext();
+        background.runNext();
+        assertTrue(mutations.isDurable(mutations.snapshot()));
     }
 
     private static EntityChunkBlob entities(int marker) {
