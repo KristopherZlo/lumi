@@ -1,12 +1,14 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.EntityChunkKey;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.LongSupplier;
+import java.util.UUID;
 
 /** Applies and verifies prepared sections one mutation at a time. */
 public final class PreparedWorldMutationSession implements WorldStateApply.ApplySession {
@@ -15,16 +17,14 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private final LongSupplier nanoTime;
     private MutationCursor apply;
     private MutationCursor repair;
-    private int verificationIndex;
+    private int sectionVerificationIndex;
+    private int entityVerificationIndex;
 
     public PreparedWorldMutationSession(
             PreparedMinecraftState target, PreparedWorldAccess world, LongSupplier nanoTime) {
         this.target = Objects.requireNonNull(target, "target");
         this.world = Objects.requireNonNull(world, "world");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
-        if (!target.entities().isEmpty()) {
-            throw new IllegalArgumentException("Entity apply is not attached to this cursor yet");
-        }
         apply = new MutationCursor();
     }
 
@@ -36,13 +36,24 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     @Override
     public WorldStateApply.Verification verifyUntil(long deadlineNanos) throws IOException {
         var sections = target.source().sections().entrySet().stream().toList();
-        while (verificationIndex < sections.size() && nanoTime.getAsLong() < deadlineNanos) {
-            var expected = sections.get(verificationIndex++);
+        while (sectionVerificationIndex < sections.size()
+                && nanoTime.getAsLong() < deadlineNanos) {
+            var expected = sections.get(sectionVerificationIndex++);
             if (!expected.getValue().equals(world.captureSection(expected.getKey()))) {
                 return WorldStateApply.Verification.MISMATCH;
             }
         }
-        return verificationIndex == sections.size()
+        var entities = target.source().entities().entrySet().stream().toList();
+        while (sectionVerificationIndex == sections.size()
+                && entityVerificationIndex < entities.size()
+                && nanoTime.getAsLong() < deadlineNanos) {
+            var expected = entities.get(entityVerificationIndex++);
+            if (!expected.getValue().equals(world.captureEntities(expected.getKey()))) {
+                return WorldStateApply.Verification.MISMATCH;
+            }
+        }
+        return sectionVerificationIndex == sections.size()
+                && entityVerificationIndex == entities.size()
                 ? WorldStateApply.Verification.VERIFIED
                 : WorldStateApply.Verification.IN_PROGRESS;
     }
@@ -57,18 +68,25 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
 
     @Override
     public void restartVerification() {
-        verificationIndex = 0;
+        sectionVerificationIndex = 0;
+        entityVerificationIndex = 0;
     }
 
     private final class MutationCursor {
         private final List<Map.Entry<SectionKey, DecodedSection>> sections =
                 new ArrayList<>(target.sections().entrySet());
+        private final List<Map.Entry<EntityChunkKey, DecodedEntityChunk>> entities =
+                new ArrayList<>(target.entities().entrySet());
         private int sectionIndex;
         private int blockIndex;
         private List<Integer> removals = List.of();
         private int removalIndex;
         private List<Map.Entry<Integer, net.minecraft.nbt.CompoundTag>> blockEntities = List.of();
         private int blockEntityIndex;
+        private int entityIndex;
+        private List<UUID> entityRemovals = List.of();
+        private int entityRemovalIndex;
+        private int entityAddIndex;
         private Phase phase = Phase.BLOCKS;
 
         private boolean advance(long deadlineNanos) throws IOException {
@@ -79,10 +97,14 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         }
 
         private void step() throws IOException {
-            if (sectionIndex == sections.size()) {
-                phase = Phase.COMPLETE;
-                return;
+            if (sectionIndex < sections.size()) {
+                stepSection();
+            } else {
+                stepEntityChunk();
             }
+        }
+
+        private void stepSection() throws IOException {
             var section = sections.get(sectionIndex);
             if (phase == Phase.BLOCKS) {
                 world.setBlock(section.getKey(), blockIndex,
@@ -115,12 +137,41 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 phase = Phase.BLOCKS;
             }
         }
+
+        private void stepEntityChunk() throws IOException {
+            if (entityIndex == entities.size()) {
+                phase = Phase.COMPLETE;
+                return;
+            }
+            var entityChunk = entities.get(entityIndex);
+            if (phase != Phase.REMOVE_ENTITIES && phase != Phase.ADD_ENTITIES) {
+                entityRemovals = world.durableEntityIds(entityChunk.getKey());
+                phase = Phase.REMOVE_ENTITIES;
+            } else if (phase == Phase.REMOVE_ENTITIES
+                    && entityRemovalIndex < entityRemovals.size()) {
+                world.removeEntity(
+                        entityChunk.getKey(), entityRemovals.get(entityRemovalIndex++));
+            } else if (phase == Phase.REMOVE_ENTITIES) {
+                phase = Phase.ADD_ENTITIES;
+            } else if (entityAddIndex < entityChunk.getValue().entities().size()) {
+                world.addEntity(entityChunk.getKey(),
+                        entityChunk.getValue().entities().get(entityAddIndex++));
+            } else {
+                entityIndex++;
+                entityRemovals = List.of();
+                entityRemovalIndex = 0;
+                entityAddIndex = 0;
+                phase = Phase.BLOCKS;
+            }
+        }
     }
 
     private enum Phase {
         BLOCKS,
         REMOVE_BLOCK_ENTITIES,
         LOAD_BLOCK_ENTITIES,
+        REMOVE_ENTITIES,
+        ADD_ENTITIES,
         COMPLETE
     }
 }
