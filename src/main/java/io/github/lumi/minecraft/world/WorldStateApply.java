@@ -28,11 +28,11 @@ public interface WorldStateApply {
     }
 
     interface ApplySession {
-        boolean applyUntil(long deadlineNanos);
+        boolean applyUntil(long deadlineNanos) throws IOException;
 
-        Verification verifyUntil(long deadlineNanos);
+        Verification verifyUntil(long deadlineNanos) throws IOException;
 
-        boolean repairUntil(long deadlineNanos);
+        boolean repairUntil(long deadlineNanos) throws IOException;
 
         void restartVerification();
     }

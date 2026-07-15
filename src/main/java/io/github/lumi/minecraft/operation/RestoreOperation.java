@@ -108,7 +108,7 @@ public final class RestoreOperation implements DimensionMutation {
         }
     }
 
-    private void repairTarget(long deadlineNanos) {
+    private void repairTarget(long deadlineNanos) throws IOException {
         if (targetSession.repairUntil(deadlineNanos)) {
             targetSession.restartVerification();
             status = RestoreStatus.VERIFYING;
