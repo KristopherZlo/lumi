@@ -17,6 +17,8 @@ class MinecraftSectionCaptureTest {
         assertEquals(new SectionKey(-1, -1, -1), MinecraftSectionCapture.key(position));
         assertEquals(4095, MinecraftSectionCapture.localIndex(position));
         assertEquals(0, MinecraftSectionCapture.localIndex(new BlockPos(16, 32, 48)));
+        assertEquals(new BlockPos(-1, -1, -1),
+                MinecraftPreparedWorldAccess.position(new SectionKey(-1, -1, -1), 4095));
     }
 
     @Test
