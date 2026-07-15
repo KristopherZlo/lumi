@@ -11,7 +11,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import net.jpountz.lz4.LZ4Exception;
 import net.jpountz.lz4.LZ4Factory;
 
@@ -96,6 +98,36 @@ public final class ObjectStore {
             }
             return payload;
         }
+    }
+
+    public Set<ObjectId> listIds() throws IOException {
+        if (!Files.exists(objectsDirectory)) {
+            return Set.of();
+        }
+        Set<ObjectId> ids = new HashSet<>();
+        try (var files = Files.walk(objectsDirectory)) {
+            for (Path file : files.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".lz4")).toList()) {
+                Path relative = objectsDirectory.relativize(file);
+                String directory = relative.getName(0).toString();
+                String filename = relative.getFileName().toString();
+                if (relative.getNameCount() != 2 || directory.length() != 2 || filename.length() != 66) {
+                    throw new IOException("Invalid object path: " + file);
+                }
+                ids.add(new ObjectId(directory + filename.substring(0, 62)));
+            }
+        } catch (IllegalArgumentException invalid) {
+            throw new IOException("Invalid object filename", invalid);
+        }
+        return Set.copyOf(ids);
+    }
+
+    public java.time.Instant modifiedAt(ObjectId id) throws IOException {
+        return Files.getLastModifiedTime(pathFor(id)).toInstant();
+    }
+
+    public void delete(ObjectId id) throws IOException {
+        Files.deleteIfExists(pathFor(id));
     }
 
     private byte[] compress(byte[] payload) {

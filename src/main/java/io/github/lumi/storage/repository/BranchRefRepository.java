@@ -16,6 +16,7 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.List;
 
 public final class BranchRefRepository {
     private static final int MAGIC = 0x4C524632;
@@ -60,6 +61,24 @@ public final class BranchRefRepository {
             throw new IOException("Ref filename and payload disagree: " + path);
         }
         return Optional.of(ref);
+    }
+
+    public synchronized List<BranchRef> list() throws IOException {
+        if (!Files.exists(headsDirectory)) {
+            return List.of();
+        }
+        try (var files = Files.list(headsDirectory)) {
+            var refs = new java.util.ArrayList<BranchRef>();
+            for (Path file : files.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".ref")).toList()) {
+                BranchRef ref = decode(Files.readAllBytes(file));
+                if (!path(ref.name()).equals(file)) {
+                    throw new IOException("Ref filename and payload disagree: " + file);
+                }
+                refs.add(ref);
+            }
+            return List.copyOf(refs);
+        }
     }
 
     private byte[] encode(BranchRef ref) throws IOException {

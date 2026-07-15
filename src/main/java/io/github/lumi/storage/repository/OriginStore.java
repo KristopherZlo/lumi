@@ -14,6 +14,8 @@ import java.nio.file.Path;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.HashSet;
+import java.util.Set;
 
 public final class OriginStore {
     private static final int MAGIC = 0x4C4F5232;
@@ -43,6 +45,28 @@ public final class OriginStore {
         Objects.requireNonNull(key, "key");
         Path path = path(key);
         return Files.exists(path) ? Optional.of(decode(key, Files.readAllBytes(path))) : Optional.empty();
+    }
+
+    public synchronized Set<ObjectId> allOrigins() throws IOException {
+        if (!Files.exists(originsDirectory)) {
+            return Set.of();
+        }
+        Set<ObjectId> origins = new HashSet<>();
+        try (var files = Files.walk(originsDirectory)) {
+            for (Path file : files.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".origin")).toList()) {
+                byte[] payload = Files.readAllBytes(file);
+                int kind = payload.length > 4 ? payload[4] & 0xff : -1;
+                int expectedLength = kind == 1 ? 49 : kind == 2 ? 45 : -1;
+                if (payload.length != expectedLength
+                        || java.nio.ByteBuffer.wrap(payload).getInt() != MAGIC) {
+                    throw new IOException("Invalid origin entry: " + file);
+                }
+                byte[] id = java.util.Arrays.copyOfRange(payload, payload.length - 32, payload.length);
+                origins.add(new ObjectId(HexFormat.of().formatHex(id)));
+            }
+        }
+        return Set.copyOf(origins);
     }
 
     private byte[] encode(HistoryKey key, ObjectId origin) throws IOException {
