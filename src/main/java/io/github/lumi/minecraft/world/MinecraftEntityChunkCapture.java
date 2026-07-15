@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -13,11 +14,21 @@ import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.entity.EntityAccess;
 import net.minecraft.world.level.storage.TagValueOutput;
 
 /** Copies durable non-player entities into Lumi's canonical chunk payload. */
 public final class MinecraftEntityChunkCapture {
+    public static EntityChunkKey key(ChunkPos position) {
+        Objects.requireNonNull(position, "position");
+        return key(position.x, position.z);
+    }
+
+    public static EntityChunkKey key(int chunkX, int chunkZ) {
+        return new EntityChunkKey(chunkX, chunkZ);
+    }
+
     public EntityChunkBlob capture(
             ServerLevel level, Stream<? extends EntityAccess> entityStream) throws IOException {
         Objects.requireNonNull(level, "level");

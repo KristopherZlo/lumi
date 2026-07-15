@@ -3,7 +3,9 @@ package io.github.lumi.minecraft.runtime;
 import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
+import io.github.lumi.minecraft.world.EntityChunkDurabilityGate;
 import io.github.lumi.minecraft.world.MinecraftBlockEntityBaselineCapture;
+import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
 import io.github.lumi.storage.repository.OriginStore;
@@ -13,8 +15,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.concurrent.Executor;
+import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.entity.ChunkEntities;
+import net.minecraft.world.level.entity.EntityAccess;
 
 /** Server-authoritative Lumi state owned by one loaded Minecraft dimension. */
 public final class FabricDimensionRuntime implements AutoCloseable {
@@ -23,9 +29,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final DimensionFreezeState freeze;
     private final DimensionOperationCoordinator operations;
     private final MutationDurabilityTracker mutations;
+    private final EntityChunkDurabilityGate entityDurability;
     private final BlockEntityBaselineStore blockEntityBaselines = new BlockEntityBaselineStore();
     private final MinecraftBlockEntityBaselineCapture baselineCapture =
             new MinecraftBlockEntityBaselineCapture();
+    private final MinecraftEntityChunkCapture entityCapture = new MinecraftEntityChunkCapture();
 
     private FabricDimensionRuntime(
             ServerLevel level,
@@ -38,6 +46,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.freeze = freeze;
         this.operations = operations;
         this.mutations = mutations;
+        entityDurability = new EntityChunkDurabilityGate(mutations);
     }
 
     public static FabricDimensionRuntime open(
@@ -64,6 +73,23 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public void chunkUnloaded(LevelChunk chunk) {
         blockEntityBaselines.discardChunk(chunk.getPos().x, chunk.getPos().z);
+    }
+
+    public void entityChunkLoaded(ChunkEntities<? extends EntityAccess> chunk) throws IOException {
+        entityDurability.rememberLoaded(
+                MinecraftEntityChunkCapture.key(chunk.getPos()),
+                entityCapture.capture(level, chunk.getEntities()));
+    }
+
+    public boolean permitEntityStore(
+            ChunkPos position, Stream<? extends EntityAccess> entities)
+            throws IOException {
+        var key = MinecraftEntityChunkCapture.key(position);
+        return entityDurability.permitStore(key, entityCapture.capture(level, entities));
+    }
+
+    public void entityChunkUnloaded(ChunkPos position) {
+        entityDurability.discard(MinecraftEntityChunkCapture.key(position));
     }
 
     public ServerLevel level() { return level; }
