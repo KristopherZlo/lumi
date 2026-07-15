@@ -86,6 +86,24 @@ class MutationDurabilityTrackerTest {
         assertTrue(new WorkingIndexRepository(repositoryRoot).read().generations().isEmpty());
     }
 
+    @Test
+    void drainsManyDistinctOriginsThroughOneBoundedBackgroundTask() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+
+        tracker.registerSectionMutation(new SectionKey(0, 0, 0), MutationDurabilityTrackerTest::airSection);
+        tracker.registerSectionMutation(new SectionKey(0, 1, 0), MutationDurabilityTrackerTest::airSection);
+        tracker.registerSectionMutation(new SectionKey(1, 0, 0), MutationDurabilityTrackerTest::airSection);
+
+        assertEquals(2, background.size());
+        background.runNext();
+        background.runNext();
+        assertTrue(tracker.canPublishChunk(0, 0));
+        assertTrue(tracker.canPublishChunk(1, 0));
+    }
+
     private static SectionBlob airSection() {
         return new SectionBlob(
                 new ArrayList<>(Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:air")), Map.of());

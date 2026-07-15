@@ -13,6 +13,7 @@ import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -38,7 +39,9 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private final Map<HistoryKey, Long> publicationRequirements = new HashMap<>();
     private final Map<ChunkCoordinate, Integer> blockedChunks = new HashMap<>();
     private final Set<HistoryKey> pendingOrigins = new HashSet<>();
+    private final ArrayDeque<Runnable> originWrites = new ArrayDeque<>();
     private long indexRevision;
+    private boolean originWriterScheduled;
     private boolean indexWriterScheduled;
 
     private MutationDurabilityTracker(
@@ -83,13 +86,15 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private <T> long register(HistoryKey key, Supplier<T> capture, OriginWriter<T> writer) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(capture, "preMutationCapture");
-        Runnable originWrite = null;
+        boolean scheduleOrigins = false;
         boolean scheduleIndex;
         long generation;
         synchronized (this) {
             if (!durableOrigins.contains(key) && pendingOrigins.add(key)) {
                 T origin = Objects.requireNonNull(capture.get(), "captured origin");
-                originWrite = () -> persistOrigin(key, origin, writer);
+                originWrites.add(() -> persistOrigin(key, origin, writer));
+                scheduleOrigins = !originWriterScheduled;
+                originWriterScheduled = true;
             }
             generation = working.markDirty(key);
             if (generation == 1) {
@@ -102,8 +107,8 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             scheduleIndex = !indexWriterScheduled;
             indexWriterScheduled = true;
         }
-        if (originWrite != null) {
-            background.execute(originWrite);
+        if (scheduleOrigins) {
+            background.execute(this::drainOrigins);
         }
         if (scheduleIndex) {
             background.execute(this::writeIndexUntilCurrent);
@@ -153,6 +158,20 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             }
         } catch (IOException failed) {
             LOGGER.log(Level.SEVERE, "Failed to persist Lumi origin for " + key, failed);
+        }
+    }
+
+    private void drainOrigins() {
+        while (true) {
+            Runnable write;
+            synchronized (this) {
+                write = originWrites.poll();
+                if (write == null) {
+                    originWriterScheduled = false;
+                    return;
+                }
+            }
+            write.run();
         }
     }
 
