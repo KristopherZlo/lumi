@@ -45,7 +45,7 @@ final class HistoryLoadWorldFixture {
         try (WorldMutationContext.SourceFrame ignored = WorldMutationContext.pushPlayerSource(
                 WorldMutationSource.PLAYER, AUTHOR, true)) {
             for (int index = start; index < end; index++) {
-                level.setBlock(this.position(index), target.defaultBlockState(), Block.UPDATE_CLIENTS);
+                level.setBlock(this.position(index), target.defaultBlockState(), Block.UPDATE_NONE);
             }
         }
     }

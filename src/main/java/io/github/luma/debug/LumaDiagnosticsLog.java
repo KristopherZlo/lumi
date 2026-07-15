@@ -12,13 +12,15 @@ public final class LumaDiagnosticsLog {
             "light",
             "lumi.lightLog",
             "lumi.lightLog.path",
-            "logs/lumi-light.log"
+            "logs/lumi-light.log",
+            false
     );
     private static final StructuredDiagnosticsLog BLOCK_APPLY_LOG = new StructuredDiagnosticsLog(
             "block-apply",
             "lumi.blockApplyLog",
             "lumi.blockApplyLog.path",
-            "logs/lumi-block-apply.log"
+            "logs/lumi-block-apply.log",
+            false
     );
     private static final StructuredDiagnosticsLog PARTIAL_RESTORE_LOG = new StructuredDiagnosticsLog(
             "partial-restore",

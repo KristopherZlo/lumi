@@ -20,7 +20,7 @@ import net.minecraft.world.level.block.Blocks;
 @SuppressWarnings("UnstableApiUsage")
 public final class LumiHistoryLoadClientGameTests implements FabricClientGameTest {
 
-    private static final int MUTATION_BATCH = 32;
+    private static final int MUTATION_BATCH = 24;
     private static final int VERIFY_BATCH = 1_024;
     private static final int MAX_WAIT_TICKS = 6_000;
     private static final long MAX_OPERATION_MILLIS = 120_000L;

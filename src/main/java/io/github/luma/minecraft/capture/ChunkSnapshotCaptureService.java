@@ -4,6 +4,7 @@ import io.github.luma.domain.model.ChunkPoint;
 import io.github.luma.domain.model.ChunkSectionSnapshotPayload;
 import io.github.luma.domain.model.ChunkSnapshotPayload;
 import io.github.luma.domain.model.EntityPayload;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.minecraft.world.PersistentBlockStatePolicy;
 import io.github.luma.storage.repository.SnapshotWriter;
 import java.util.ArrayList;
@@ -239,6 +240,7 @@ public final class ChunkSnapshotCaptureService {
                 this.normalizedOverridesBySection(blockStateOverrides);
         List<ChunkSectionSnapshotPayload> sections = new ArrayList<>();
 
+        long phaseStartedAt = LumaLoadLog.start();
         LevelChunkSection[] chunkSections = chunk.getSections();
         for (int index = 0; index < chunkSections.length; index++) {
             LevelChunkSection section = chunkSections[index];
@@ -270,7 +272,9 @@ public final class ChunkSnapshotCaptureService {
                 sections.add(captured.payload());
             }
         }
+        LumaLoadLog.recordSince("capture", "chunk-sections", phaseStartedAt, "sections=" + sections.size());
 
+        phaseStartedAt = LumaLoadLog.start();
         Map<Integer, CompoundTag> blockEntities = this.captureBlockEntities(level, chunk, includeSection);
         for (List<NormalizedBlockStateOverride> sectionOverrides : overridesBySection.values()) {
             for (NormalizedBlockStateOverride override : sectionOverrides) {
@@ -286,7 +290,12 @@ public final class ChunkSnapshotCaptureService {
                 }
             }
         }
+        LumaLoadLog.recordSince("capture", "chunk-block-entities", phaseStartedAt,
+                "blockEntities=" + blockEntities.size());
 
+        phaseStartedAt = LumaLoadLog.start();
+        List<EntityPayload> entities = includeEntities ? this.captureEntities(level, chunk, entityOverride) : List.of();
+        LumaLoadLog.recordSince("capture", "chunk-entities", phaseStartedAt, "entities=" + entities.size());
         return new ChunkSnapshotPayload(
                 chunk.getPos().x,
                 chunk.getPos().z,
@@ -294,7 +303,7 @@ public final class ChunkSnapshotCaptureService {
                 level.getMaxY(),
                 sections,
                 blockEntities,
-                includeEntities ? this.captureEntities(level, chunk, entityOverride) : List.of()
+                entities
         );
     }
 

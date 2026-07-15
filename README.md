@@ -367,6 +367,22 @@ on the Minecraft client thread.
 explosive context, TNT activation callbacks, frozen primed TNT ticks, and TNT
 explosion context.
 
+Detailed light and block-apply traces are enabled only by their explicit
+`lumi.lightLog` and `lumi.blockApplyLog` flags. They synchronously flush focused
+diagnostic records and are intentionally excluded from load-regression runs so
+the measurement does not include trace I/O.
+
+Run `powershell -ExecutionPolicy Bypass -File scripts/run-history-load-gate.ps1`
+for the blocking 50k/100k exactness, tick-time, progress, and bounded-heap gate.
+Raw server-backlog regressions remain owned by the paired vanilla/Lumi runtime
+load gate; the controlled client GameTest load journey gates its measured
+mutation and Lumi tick work because test-thread tasks also add wall time between
+integrated-server ticks.
+
+Production history restore keeps rewrite work in separate server ticks from
+native and sparse/direct work. Diagnostic throughput profiles may combine those
+paths, but normal restore favors the 50 ms responsiveness boundary.
+
 `-Dlumi.fluidUndoLog=true` writes `logs/lumi-fluid-undo.log` with fluid ticks,
 replay suppression, fluid-tail guards, and settled capture diagnostics. It is
 separate from `lumi.loadLog`, so it can be enabled alone while the broader logs

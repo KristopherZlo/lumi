@@ -2,6 +2,7 @@ package io.github.luma.minecraft.capture;
 
 import io.github.luma.LumaMod;
 import io.github.luma.debug.LumaDebugLog;
+import io.github.luma.debug.LumaLoadLog;
 import io.github.luma.domain.model.CaptureSessionState;
 import io.github.luma.domain.model.ProjectVariant;
 import io.github.luma.domain.model.RecoveryDraft;
@@ -223,6 +224,7 @@ final class WorkingDraftSessionManager {
         if (lastFlush != null && Duration.between(lastFlush, now).compareTo(flushInterval) < 0) {
             return;
         }
+        long materializationStartedAt = LumaLoadLog.start();
         int draftFingerprint = session.contentFingerprint();
         if (this.sessionRegistry.hasDraftFingerprint(projectId, draftFingerprint)) {
             this.sessionRegistry.recordUnchangedFlush(projectId, now);
@@ -234,11 +236,18 @@ final class WorkingDraftSessionManager {
             );
             return;
         }
+        RecoveryDraft draft = session.toDraft();
+        LumaLoadLog.recordSince(
+                "capture",
+                "working-draft-materialization",
+                materializationStartedAt,
+                "changes=" + session.size()
+        );
         this.persistenceCoordinator.enqueueDraftFlush(
                 trackedProject.layout(),
                 projectId,
                 trackedProject.project().name(),
-                session.toDraft()
+                draft
         );
         this.sessionRegistry.recordDraftFlush(projectId, now, draftFingerprint);
         LumaDebugLog.log(
