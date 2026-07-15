@@ -4,6 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.ActiveBranch;
+import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.BranchSwitchPlan;
+import io.github.lumi.domain.model.BranchSwitchTarget;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.OperationPhase;
@@ -14,6 +18,7 @@ import io.github.lumi.storage.repository.OperationJournalRepository;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -46,6 +51,25 @@ class RestoreOperationTest {
 
         assertEquals(RestoreStatus.COMPLETE, operation.status());
         assertEquals(1, publications.get());
+    }
+
+    @Test
+    void createsBranchSwitchJournalFromExplicitSpec() throws IOException {
+        BranchRef source = new BranchRef(new BranchName("main"), id('d'), 2);
+        BranchRef target = new BranchRef(new BranchName("redstone-test"), id('e'), 4);
+        var plan = new BranchSwitchPlan(new ActiveBranch(source.name(), 6), source, target);
+        var restore = new PreparedRestore(
+                source, target.commit(), Map.of(), Map.of(), Map.of(), Map.of());
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+
+        RestoreOperation.startBranchSwitch(
+                restore, new RepairThenVerify(), ignored -> { }, journals, UUID.randomUUID(),
+                RestoreStateListener.NONE, plan);
+
+        var journal = journals.read().orElseThrow();
+        assertEquals(io.github.lumi.domain.model.OperationKind.BRANCH_SWITCH, journal.kind());
+        assertEquals(Optional.of(new BranchSwitchTarget(target.name(), 4, 6)),
+                journal.target().branchSwitch());
     }
 
     @Test

@@ -12,6 +12,7 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
     private final CompletableFuture<T> preparation;
     private final FrozenValidation validation;
     private final PreparedDiscard<T> discard;
+    private final boolean freezeDuringPreparation;
     private T delegate;
     private Throwable failure;
 
@@ -19,14 +20,23 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
             CompletableFuture<T> preparation,
             FrozenValidation validation,
             PreparedDiscard<T> discard) {
+        this(preparation, validation, discard, false);
+    }
+
+    public BackgroundPreparedMutation(
+            CompletableFuture<T> preparation,
+            FrozenValidation validation,
+            PreparedDiscard<T> discard,
+            boolean freezeDuringPreparation) {
         this.preparation = Objects.requireNonNull(preparation, "preparation");
         this.validation = Objects.requireNonNull(validation, "validation");
         this.discard = Objects.requireNonNull(discard, "discard");
+        this.freezeDuringPreparation = freezeDuringPreparation;
     }
 
     @Override
     public boolean requiresFreeze() {
-        return delegate != null || (preparation.isDone()
+        return freezeDuringPreparation || delegate != null || (preparation.isDone()
                 && !preparation.isCompletedExceptionally() && !preparation.isCancelled());
     }
 

@@ -1,6 +1,8 @@
 package io.github.lumi.minecraft.operation;
 
 import io.github.lumi.domain.model.OperationJournal;
+import io.github.lumi.domain.model.BranchSwitchPlan;
+import io.github.lumi.domain.model.BranchSwitchTarget;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
@@ -64,11 +66,32 @@ public final class RestoreOperation implements DimensionMutation {
             OperationJournalRepository journals,
             UUID operationId,
             RestoreStateListener stateListener) throws IOException {
-        Objects.requireNonNull(restore, "restore");
-        Objects.requireNonNull(world, "world");
         Objects.requireNonNull(refs, "refs");
         return start(restore, world, new BranchRefRestorePublication(refs),
                 journals, operationId, stateListener);
+    }
+
+    public static RestoreOperation startBranchSwitch(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            BranchSwitchPlan plan) throws IOException {
+        Objects.requireNonNull(plan, "plan");
+        if (!restore.expectedRef().equals(plan.source())
+                || !restore.targetCommit().equals(plan.target().commit())) {
+            throw new IOException("Prepared Restore does not match branch switch plan");
+        }
+        OperationTarget target = new OperationTarget(
+                plan.source().name(), plan.source().commit(), plan.source().revision(),
+                Optional.of(plan.target().commit()), Optional.of(plan.source().commit()),
+                Optional.of(new BranchSwitchTarget(
+                        plan.target().name(), plan.target().revision(),
+                        plan.expectedActive().revision())));
+        return start(restore, world, publication, journals, operationId,
+                stateListener, OperationKind.BRANCH_SWITCH, target);
     }
 
     public static RestoreOperation start(
@@ -87,6 +110,25 @@ public final class RestoreOperation implements DimensionMutation {
             OperationJournalRepository journals,
             UUID operationId,
             RestoreStateListener stateListener) throws IOException {
+        OperationTarget target = new OperationTarget(
+                restore.expectedRef().name(),
+                restore.expectedRef().commit(),
+                restore.expectedRef().revision(),
+                Optional.of(restore.targetCommit()),
+                Optional.of(restore.expectedRef().commit()));
+        return start(restore, world, publication, journals, operationId,
+                stateListener, OperationKind.RESTORE, target);
+    }
+
+    private static RestoreOperation start(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            OperationKind kind,
+            OperationTarget target) throws IOException {
         Objects.requireNonNull(restore, "restore");
         Objects.requireNonNull(world, "world");
         Objects.requireNonNull(publication, "publication");
@@ -96,15 +138,10 @@ public final class RestoreOperation implements DimensionMutation {
                 new WorldStateApply.State(restore.sections(), restore.entities()));
         WorldStateApply.PreparedState preparedReturn = world.prepare(
                 new WorldStateApply.State(restore.returnSections(), restore.returnEntities()));
-        OperationTarget target = new OperationTarget(
-                restore.expectedRef().name(),
-                restore.expectedRef().commit(),
-                restore.expectedRef().revision(),
-                Optional.of(restore.targetCommit()),
-                Optional.of(restore.expectedRef().commit()));
         OperationJournal journal = journals.create(new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
-                OperationKind.RESTORE, OperationPhase.PREPARED, target));
+                Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
+                Objects.requireNonNull(target, "target")));
         return new RestoreOperation(
                 restore, world, publication, journals, journal,
                 preparedTarget, preparedReturn, stateListener);

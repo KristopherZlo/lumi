@@ -11,6 +11,25 @@ import org.junit.jupiter.api.Test;
 
 class BackgroundPreparedMutationTest {
     @Test
+    void canHoldFreezeWhilePreparationIsPending() throws Exception {
+        CompletableFuture<TestMutation> future = new CompletableFuture<>();
+        BackgroundPreparedMutation<TestMutation> prepared = new BackgroundPreparedMutation<>(
+                future, () -> { }, ignored -> { }, true);
+        RecordingFreeze freeze = new RecordingFreeze();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L);
+        coordinator.start(prepared);
+
+        coordinator.tick();
+        assertEquals(1, freeze.acquireCalls);
+        assertEquals(0, freeze.releaseCalls);
+
+        future.complete(new TestMutation());
+        coordinator.tick();
+        assertEquals(1, freeze.releaseCalls);
+    }
+
+    @Test
     void ownsPreparationThenValidatesUnderFreezeBeforeDelegating() throws Exception {
         CompletableFuture<TestMutation> future = new CompletableFuture<>();
         AtomicInteger validations = new AtomicInteger();
