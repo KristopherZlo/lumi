@@ -257,6 +257,22 @@ def installTestClientMods = tasks.register('installTestClientMods', Copy) {
     exclude 'forge-config-api-port-*.jar'
 }
 
+def builderToolsClientGameTestMods = layout.buildDirectory.dir('run/clientGameTest/mods')
+def installBuilderToolsClientGameTestMods = tasks.register('installBuilderToolsClientGameTestMods', Sync) {
+    dependsOn(downloadPinnedTestClientMods)
+    from(configurations.testClientMods) {
+        include 'worldedit-*.jar'
+    }
+    from(layout.buildDirectory.dir('test-client-downloads')) {
+        include 'Axiom-*.jar'
+    }
+    into(builderToolsClientGameTestMods)
+}
+
+def purgeBuilderToolsClientGameTestMods = tasks.register('purgeBuilderToolsClientGameTestMods', Delete) {
+    delete(builderToolsClientGameTestMods)
+}
+
 purgeTestClientRuntimeRemapCache.configure {
     mustRunAfter(installTestClientMods)
 }
@@ -347,8 +363,12 @@ def writeQuietClientRuntimeOptions = { String runDirPath ->
 tasks.named('runClientGameTest').configure {
     jvmArgs('-Dlumi.testing.enabled=true')
     jvmArgs('-Dlumi.clientLoadLog=true')
+    def selectedSuite = providers.gradleProperty('lumiClientGameTestSuite').orElse('all').get()
+    dependsOn(selectedSuite == 'tools'
+            ? installBuilderToolsClientGameTestMods
+            : purgeBuilderToolsClientGameTestMods)
     if (providers.gradleProperty('lumiClientGameTestSuite').isPresent()) {
-        def suite = providers.gradleProperty('lumiClientGameTestSuite').get()
+        def suite = selectedSuite
         jvmArgs("-Dlumi.client.gametest.suite=${suite}")
         if (suite == 'load') {
             jvmArgs('-Dlumi.loadLog=true')

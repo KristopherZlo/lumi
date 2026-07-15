@@ -183,7 +183,20 @@ Run the current client GameTests:
 .\gradlew.bat runClientGameTest --no-daemon
 ```
 
-This suite exercises the core builder save/compare/restore/branch journey, current screen action wiring, and the pending/compare overlays, including the held-Alt view. Repeat only the core stability gate with `.\gradlew.bat runClientGameTest -PlumiClientGameTestSuite=core --no-daemon`; `screens` and `overlays` are the other valid focused values. Server GameTests retain focused regressions for falling-block entity capture and random crop ticks. Legacy mode-driven journeys that called domain services directly are intentionally excluded because they did not exercise user-accessible workflows.
+This suite exercises the core builder save/compare/restore/branch journey, current screen action wiring, and the pending/compare overlays, including the held-Alt view. Repeat only the core stability gate with `.\gradlew.bat runClientGameTest -PlumiClientGameTestSuite=core --no-daemon`; `screens` and `overlays` are the other ordinary focused values. Server GameTests retain focused regressions for falling-block entity capture and random crop ticks. Legacy mode-driven journeys that called domain services directly are intentionally excluded because they did not exercise user-accessible workflows.
+
+Run the isolated real builder-tool gate:
+
+```powershell
+.\scripts\run-builder-tools-gate.ps1
+```
+
+The `tools` suite downloads the pinned Axiom `5.4.1` jar and resolves WorldEdit
+`7.4.2` into an isolated `build/run/clientGameTest/mods` directory. It applies
+real WorldEdit edit-session and Axiom server block-buffer mutations, requires
+their `WORLDEDIT` and `AXIOM` drafts, saves both versions, and restores both
+states exactly. Ordinary client GameTests purge that isolated mods directory so
+the external runtimes cannot affect core, overlay, or load measurements.
 
 Compare vanilla and Lumi world startup against the same normal-world seed:
 
