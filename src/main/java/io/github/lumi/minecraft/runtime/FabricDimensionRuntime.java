@@ -3,15 +3,20 @@ package io.github.lumi.minecraft.runtime;
 import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
 import io.github.lumi.minecraft.operation.DimensionMutation;
+import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
+import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
+import io.github.lumi.minecraft.operation.RestoreOperation;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestoreOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestorePreparation;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
+import io.github.lumi.domain.service.BranchService;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveService;
 import io.github.lumi.domain.service.RestoreService;
@@ -44,6 +49,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
@@ -63,11 +70,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final SavePreparation savePreparation;
     private final WorldStateCapture worldCapture;
     private final SaveService saves;
+    private final RestoreService restores;
+    private final MinecraftWorldStateApply worldApply;
+    private final OperationJournalRepository journals;
+    private final BranchService branches;
     private final ReturnPointRestorePreparation returnPointRestores;
     private final Executor background;
     private final BranchRefRepository refs;
     private final ActiveBranchRepository active;
     private final UUID defaultWorkspaceId;
+    private final io.github.lumi.minecraft.operation.RestoreStateListener restoreStateListener;
     private final BlockEntityBaselineStore blockEntityBaselines = new BlockEntityBaselineStore();
     private final MinecraftBlockEntityBaselineCapture baselineCapture =
             new MinecraftBlockEntityBaselineCapture();
@@ -86,6 +98,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             Executor background,
             BranchRefRepository refs,
             ActiveBranchRepository active,
+            BranchService branches,
             UUID defaultWorkspaceId) {
         this.level = level;
         this.repository = repository;
@@ -93,14 +106,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.operations = operations;
         this.mutations = mutations;
         this.saves = saves;
+        this.restores = restores;
+        this.worldApply = worldApply;
+        this.journals = journals;
+        this.branches = branches;
         this.background = background;
         this.refs = refs;
         this.active = active;
         this.defaultWorkspaceId = defaultWorkspaceId;
         entityDurability = new EntityChunkDurabilityGate(mutations);
+        restoreStateListener = new RestoreBaselineReconciler(
+                entityDurability, blockEntityBaselines);
         returnPointRestores = new ReturnPointRestorePreparation(
                 restores, worldApply, refs, journals,
-                new RestoreBaselineReconciler(entityDurability, blockEntityBaselines), background);
+                restoreStateListener, background);
         var worldReader = new MinecraftWorldStateReader(level);
         savePreparation = new DurableSavePreparation(worldReader, entityDurability, mutations);
         worldCapture = new BatchedWorldStateCapture(worldReader);
@@ -123,9 +142,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 .initialize(UUID.randomUUID());
         BranchRef selected = refs.read(active.read().orElseThrow().name()).orElseThrow();
         UUID workspaceId = commits.read(selected.commit()).workspaceId();
+        var working = new WorkingIndexRepository(repository);
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
-                objects, origins,
-                new WorkingIndexRepository(repository), background);
+                objects, origins, working, background);
+        var branches = new BranchService(commits, refs, active, working);
         return new FabricDimensionRuntime(
                 level, repository, freeze, new DimensionOperationCoordinator(
                         freeze, operation -> logTerminal(level, operation)),
@@ -133,7 +153,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 new SaveService(objects, new MerkleTreeEditor(objects), commits, refs, journals),
                 new RestoreService(objects, commits, origins),
                 new MinecraftWorldStateApply(level, freeze), journals,
-                background, refs, active, workspaceId);
+                background, refs, active, branches, workspaceId);
     }
 
     private static void logTerminal(ServerLevel level, DimensionMutation operation) {
@@ -223,6 +243,41 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         saved, target, hiddenRef, operationId));
         operations.start(operation, terminalObserver);
         return operation;
+    }
+
+    public synchronized BackgroundPreparedMutation<RestoreOperation> startBranchSwitch(
+            BranchName target) throws IOException {
+        return startBranchSwitch(target, ignored -> { });
+    }
+
+    public synchronized BackgroundPreparedMutation<RestoreOperation> startBranchSwitch(
+            BranchName target,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        if (operations.hasActiveOperation()) {
+            throw new IllegalStateException("A dimension operation is already active");
+        }
+        BranchSwitchPlan plan = branches.prepareSwitch(target);
+        UUID operationId = UUID.randomUUID();
+        CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
+            try {
+                var prepared = restores.prepare(plan.source(), plan.target().commit());
+                return RestoreOperation.startBranchSwitch(
+                        prepared, worldApply,
+                        new BranchSwitchRestorePublication(branches, plan),
+                        journals, operationId, restoreStateListener, plan);
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+        var operation = new BackgroundPreparedMutation<>(
+                preparation, () -> branches.validateSwitch(plan),
+                RestoreOperation::cancelBeforeApply, true);
+        operations.start(operation, terminalObserver);
+        return operation;
+    }
+
+    public BranchRef createBranch(BranchName name) throws IOException {
+        return branches.create(name, activeRef().commit());
     }
 
     public ServerLevel level() { return level; }

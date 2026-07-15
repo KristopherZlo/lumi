@@ -70,8 +70,18 @@ public final class BranchService {
     }
 
     public void completeSwitch(BranchSwitchPlan plan) throws IOException {
+        validateSwitch(plan);
+        active.compareAndSet(plan.expectedActive(), plan.target().name());
+    }
+
+    public void validateSwitch(BranchSwitchPlan plan) throws IOException {
         Objects.requireNonNull(plan, "plan");
         ensureClean();
+        var selected = active.read().orElseThrow(
+                () -> new RefConflictException("Active branch no longer exists"));
+        if (!selected.equals(plan.expectedActive())) {
+            throw new RefConflictException("Active branch changed during switch");
+        }
         BranchRef source = refs.read(plan.source().name()).orElseThrow(
                 () -> new RefConflictException("Source branch no longer exists"));
         BranchRef target = refs.read(plan.target().name()).orElseThrow(
@@ -82,7 +92,6 @@ public final class BranchService {
         if (!target.equals(plan.target())) {
             throw new RefConflictException("Target branch changed during switch");
         }
-        active.compareAndSet(plan.expectedActive(), target.name());
     }
 
     private void ensureClean() throws IOException {

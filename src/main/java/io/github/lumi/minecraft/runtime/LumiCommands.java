@@ -8,6 +8,7 @@ import static net.minecraft.commands.Commands.literal;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.CommitAuthor;
+import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
@@ -35,7 +36,15 @@ public final class LumiCommands {
                     .requires(LumiCommands::mayUse)
                     .then(argument("commit", word()).executes(command ->
                             restore(command.getSource(), getString(command, "commit"))));
-            dispatcher.register(literal("lumi").then(save).then(restore));
+            var branch = literal("branch")
+                    .requires(LumiCommands::mayUse)
+                    .then(literal("create")
+                            .then(argument("name", greedyString()).executes(command ->
+                                    createBranch(command.getSource(), getString(command, "name")))))
+                    .then(literal("switch")
+                            .then(argument("name", greedyString()).executes(command ->
+                                    switchBranch(command.getSource(), getString(command, "name")))));
+            dispatcher.register(literal("lumi").then(save).then(restore).then(branch));
         });
     }
 
@@ -74,6 +83,40 @@ public final class LumiCommands {
             return 1;
         } catch (IOException | IllegalStateException | IllegalArgumentException failed) {
             source.sendFailure(Component.literal("Lumi restore could not start: " + failed.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int createBranch(CommandSourceStack source, String name) {
+        var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
+        if (runtime == null) {
+            source.sendFailure(Component.literal("Lumi is not ready for this dimension"));
+            return 0;
+        }
+        try {
+            runtime.createBranch(new BranchName(name));
+            source.sendSuccess(() -> Component.literal("Lumi branch created: " + name), false);
+            return 1;
+        } catch (IOException | IllegalArgumentException failed) {
+            source.sendFailure(Component.literal("Lumi branch could not be created: "
+                    + failed.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int switchBranch(CommandSourceStack source, String name) {
+        var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
+        if (runtime == null) {
+            source.sendFailure(Component.literal("Lumi is not ready for this dimension"));
+            return 0;
+        }
+        try {
+            runtime.startBranchSwitch(new BranchName(name));
+            source.sendSuccess(() -> Component.literal("Lumi branch switch started: " + name), false);
+            return 1;
+        } catch (IOException | IllegalStateException | IllegalArgumentException failed) {
+            source.sendFailure(Component.literal("Lumi branch switch could not start: "
+                    + failed.getMessage()));
             return 0;
         }
     }

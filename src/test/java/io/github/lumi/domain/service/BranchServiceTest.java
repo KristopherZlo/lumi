@@ -52,6 +52,7 @@ class BranchServiceTest {
         var switchPlan = branches.prepareSwitch(created.name());
 
         assertEquals(main, branches.active());
+        branches.validateSwitch(switchPlan);
         branches.completeSwitch(switchPlan);
         assertEquals(created, branches.active());
     }
