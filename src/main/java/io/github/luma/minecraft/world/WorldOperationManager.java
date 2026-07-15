@@ -40,6 +40,7 @@ public final class WorldOperationManager {
     private static final int EXACT_REPLAY_GUARD_TICKS = 40;
     private static final int LIGHT_PUBLISH_TICKS = 2;
     private static final int PREPARATION_HANDOFF_TICKS = 2;
+    private static final long CHUNK_SETUP_HANDOFF_NANOS = 5_000_000L;
     private static final double MIN_ADAPTIVE_SCALE = 0.25D;
     private static final double MAX_ADAPTIVE_SCALE = 1.25D;
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
@@ -718,10 +719,11 @@ public final class WorldOperationManager {
                     }
                     long pruneStartedAt = LumaLoadLog.start();
                     this.currentBatch = this.pruneNoOpBatch(this.currentTargetBatch);
-                    LumaLoadLog.recordSince(
+                    long pruneElapsedNanos = System.nanoTime() - pruneStartedAt;
+                    LumaLoadLog.record(
                             "world-op-apply",
                             "prune-no-op-batch",
-                            pruneStartedAt,
+                            pruneElapsedNanos,
                             "placements=" + this.currentTargetBatch.totalPlacements()
                     );
                     this.currentNativeSections = this.currentBatch.orderedNativeSections();
@@ -768,6 +770,10 @@ public final class WorldOperationManager {
                     }
                     this.logBlockApplyChunkStart(this.currentBatch);
                     WorldOperationManager.this.historyDebugLog.logReplayBatch(this.handle(), this.currentBatch);
+                    if (pruneElapsedNanos >= CHUNK_SETUP_HANDOFF_NANOS) {
+                        stopReason = "chunk-setup-handoff";
+                        break;
+                    }
                 }
 
                 WorldApplyTickGateDecision decision = WorldOperationManager.this.tickWorkGate.decide(
