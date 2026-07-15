@@ -18,8 +18,6 @@ import net.minecraft.world.level.gamerules.GameRules;
 
 /** Integrated gates for exact session-only world actions. */
 public final class LumiLiveActionGameTests {
-    private static UUID activeTest;
-
     @GameTest(maxTicks = 2000)
     public void directBlockUndoRedoIsExact(GameTestHelper helper) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
@@ -30,7 +28,7 @@ public final class LumiLiveActionGameTests {
         BlockPos position = helper.absolutePos(new BlockPos(1, 1, 1));
 
         helper.startSequence()
-                .thenWaitUntil(() -> acquire(helper, test))
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
                 .thenExecute(() -> {
                     helper.getLevel().setBlock(
                             position, Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
@@ -51,7 +49,7 @@ public final class LumiLiveActionGameTests {
                 .thenWaitUntil(() -> requireIdle(helper, runtime))
                 .thenExecute(() -> helper.assertBlockState(
                         relative, Blocks.GOLD_BLOCK.defaultBlockState()))
-                .thenExecute(() -> release(test))
+                .thenExecute(() -> LumiGameTestLease.release(test))
                 .thenSucceed();
     }
 
@@ -67,7 +65,7 @@ public final class LumiLiveActionGameTests {
         AtomicReference<BlockState> settled = new AtomicReference<>();
 
         helper.startSequence()
-                .thenWaitUntil(() -> acquire(helper, test))
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
                 .thenExecute(() -> {
                     prepareFire(helper, relative);
                     try (var ignored = DirectLiveActionContext.open(
@@ -96,7 +94,7 @@ public final class LumiLiveActionGameTests {
                         player, LiveActionJournal.Direction.REDO, ignored -> { }))
                 .thenWaitUntil(() -> requireIdle(helper, runtime))
                 .thenExecute(() -> helper.assertBlockState(relative, settled.get()))
-                .thenExecute(() -> release(test))
+                .thenExecute(() -> LumiGameTestLease.release(test))
                 .thenSucceed();
     }
 
@@ -113,7 +111,7 @@ public final class LumiLiveActionGameTests {
         AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
 
         helper.startSequence()
-                .thenWaitUntil(() -> acquire(helper, test))
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
                 .thenExecute(() -> {
                     prepareFire(helper, relative);
                     try (var ignored = DirectLiveActionContext.open(
@@ -142,7 +140,7 @@ public final class LumiLiveActionGameTests {
                         "Overlapping fire Undo must fail"))
                 .thenExecute(() -> helper.assertBlockState(
                         relative, Blocks.DIAMOND_BLOCK.defaultBlockState()))
-                .thenExecute(() -> release(test))
+                .thenExecute(() -> LumiGameTestLease.release(test))
                 .thenSucceed();
     }
 
@@ -151,19 +149,6 @@ public final class LumiLiveActionGameTests {
         helper.getLevel().getGameRules().set(
                 GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER, -1,
                 helper.getLevel().getServer());
-    }
-
-    private static synchronized void acquire(GameTestHelper helper, UUID test) {
-        if (activeTest == null) activeTest = test;
-        helper.assertValueEqual(test, activeTest,
-                "Another Lumi GameTest owns the dimension");
-    }
-
-    private static synchronized void release(UUID test) {
-        if (!test.equals(activeTest)) {
-            throw new IllegalStateException("Lumi GameTest lease changed");
-        }
-        activeTest = null;
     }
 
     private static void requireIdle(GameTestHelper helper, FabricDimensionRuntime runtime) {

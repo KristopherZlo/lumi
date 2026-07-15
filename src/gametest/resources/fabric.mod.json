@@ -5,7 +5,10 @@
   "name": "Lumi Game Tests",
   "environment": "server",
   "entrypoints": {
-    "fabric-gametest": ["io.github.lumi.gametest.LumiLiveActionGameTests"]
+    "fabric-gametest": [
+      "io.github.lumi.gametest.LumiLiveActionGameTests",
+      "io.github.lumi.gametest.LumiTntGameTests"
+    ]
   },
   "depends": {
     "lumi": "*",
