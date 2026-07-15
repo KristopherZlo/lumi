@@ -14,11 +14,14 @@ class DimensionFreezeStateTest {
 
         assertTrue(freeze.isFrozen());
         assertFalse(freeze.isMutationAllowed());
+        assertFalse(freeze.isAuthorizedMutation());
         freeze.runAuthorized(() -> {
             assertTrue(freeze.isMutationAllowed());
+            assertTrue(freeze.isAuthorizedMutation());
             freeze.runAuthorized(() -> assertTrue(freeze.isMutationAllowed()));
         });
         assertFalse(freeze.isMutationAllowed());
+        assertFalse(freeze.isAuthorizedMutation());
 
         lease.release();
         assertFalse(freeze.isFrozen());

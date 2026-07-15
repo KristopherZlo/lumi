@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "io.github.lumi.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ChunkMapMixin",
+    "LevelChunkMixin",
+    "ServerLevelMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

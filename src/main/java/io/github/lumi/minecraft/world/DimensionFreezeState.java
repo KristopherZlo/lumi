@@ -24,6 +24,10 @@ public final class DimensionFreezeState implements DimensionFreeze {
         return !isFrozen() || authorizationDepth.get() > 0;
     }
 
+    public boolean isAuthorizedMutation() {
+        return authorizationDepth.get() > 0;
+    }
+
     public void runAuthorized(Runnable mutation) {
         Objects.requireNonNull(mutation, "mutation");
         int previous = authorizationDepth.get();
