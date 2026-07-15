@@ -79,7 +79,7 @@ final class VersionPayloadVerifier {
         for (StoredBlockChange change : changes) {
             indexed.put(change.pos(), change);
         }
-        return Map.copyOf(indexed);
+        return indexed;
     }
 
     private static Map<String, StoredEntityChange> entityChanges(RecoveryDraft draft) {
@@ -91,6 +91,6 @@ final class VersionPayloadVerifier {
         for (StoredEntityChange change : changes) {
             indexed.put(change.entityId(), change);
         }
-        return Map.copyOf(indexed);
+        return indexed;
     }
 }
