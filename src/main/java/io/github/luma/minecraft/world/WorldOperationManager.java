@@ -39,6 +39,7 @@ public final class WorldOperationManager {
 
     private static final int EXACT_REPLAY_GUARD_TICKS = 40;
     private static final int LIGHT_PUBLISH_TICKS = 2;
+    private static final int PREPARATION_HANDOFF_TICKS = 2;
     private static final double MIN_ADAPTIVE_SCALE = 0.25D;
     private static final double MAX_ADAPTIVE_SCALE = 1.25D;
     private static final WorldOperationManager INSTANCE = new WorldOperationManager();
@@ -579,6 +580,7 @@ public final class WorldOperationManager {
         private int placementIndex = 0;
         private int blockEntityIndex = 0;
         private int entityIndex = 0;
+        private int preparationHandoffTicks;
         private boolean blockEntitiesApplied = false;
         private boolean entitiesApplied = false;
         private int appliedWorkUnits = 0;
@@ -670,6 +672,12 @@ public final class WorldOperationManager {
                 if (this.prepared.totalWorkUnits() == 0) {
                     return this.advanceCompletion();
                 }
+                this.preparationHandoffTicks = PREPARATION_HANDOFF_TICKS;
+            }
+
+            if (this.preparationHandoffTicks > 0) {
+                this.preparationHandoffTicks -= 1;
+                return false;
             }
 
             if (this.phases.preloadPending()
