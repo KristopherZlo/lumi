@@ -1,6 +1,7 @@
 param(
     [int]$MaxTickMillis = 50,
     [int]$MaxHeapUsedMiB = 2304,
+    [string]$JavaHome,
     [switch]$SkipRun
 )
 
@@ -10,6 +11,7 @@ $runRoot = Join-Path $repositoryRoot 'build/run/clientGameTest'
 $loadLog = Join-Path $runRoot 'logs/lumi-load.log'
 $clientLoadLog = Join-Path $runRoot 'logs/lumi-client-load.log'
 $latestLog = Join-Path $runRoot 'logs/latest.log'
+$testClientScript = Join-Path $PSScriptRoot 'run-test-client.ps1'
 
 function Require([bool]$condition, [string]$message) {
     if (-not $condition) {
@@ -48,7 +50,13 @@ function Has-IntermediateProgress([string]$text, [string]$label, [string]$stage)
 Push-Location $repositoryRoot
 try {
     if (-not $SkipRun) {
-        & .\gradlew.bat runClientGameTest -PlumiClientGameTestSuite=load
+        $arguments = @{
+            GradleTasks = @('runClientGameTest', '-PlumiClientGameTestSuite=load')
+        }
+        if ($JavaHome) {
+            $arguments.JavaHome = $JavaHome
+        }
+        & $testClientScript @arguments
         Require ($LASTEXITCODE -eq 0) "Gradle load suite exited with code $LASTEXITCODE"
     }
 

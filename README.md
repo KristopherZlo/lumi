@@ -214,7 +214,12 @@ Run the alpha gate:
 .\scripts\run-alpha-release-check.ps1
 ```
 
-The wrapper stops and returns a non-zero exit code on the first failing child check.
+The wrapper stops and returns a non-zero exit code on the first failing child
+check. A complete run blocks on unit/coverage checks, server and ordinary client
+GameTests, the isolated real WorldEdit/Axiom gate, the exact 50k/100k history
+load gate, and three paired vanilla/Lumi idle-load measurements. Automated
+crash injection is intentionally not claimed; crash-interruption testing needs
+manual sign-off before release.
 
 The automated behavior coverage contract is tracked in [SMOKE_BEHAVIOR.md](SMOKE_BEHAVIOR.md). Developer workflow details are in [docs/development.md](docs/development.md).
 
