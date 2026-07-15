@@ -81,12 +81,14 @@ class RestoreOperationTest {
                 source, id('0'), Map.of(), Map.of(), Map.of(), Map.of());
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
         var area = new BlockAreaTarget(new BlockBox(1, 2, 3, 4, 5, 6), false);
+        CommitId checkpoint = id('a');
 
         RestoreOperation.startPartial(
                 restore, new RepairThenVerify(), ignored -> { }, journals,
-                UUID.randomUUID(), RestoreStateListener.NONE, area);
+                UUID.randomUUID(), RestoreStateListener.NONE, area, checkpoint);
 
         assertEquals(Optional.of(area), journals.read().orElseThrow().target().blockArea());
+        assertEquals(Optional.of(checkpoint), journals.read().orElseThrow().target().returnPoint());
     }
 
     @Test

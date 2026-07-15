@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.BranchSwitchTarget;
 import io.github.lumi.domain.model.BlockAreaTarget;
+import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
@@ -102,12 +103,14 @@ public final class RestoreOperation implements DimensionMutation {
             OperationJournalRepository journals,
             UUID operationId,
             RestoreStateListener stateListener,
-            BlockAreaTarget area) throws IOException {
+            BlockAreaTarget area,
+            CommitId returnPoint) throws IOException {
         Objects.requireNonNull(area, "area");
+        Objects.requireNonNull(returnPoint, "returnPoint");
         OperationTarget target = new OperationTarget(
                 restore.expectedRef().name(), restore.expectedRef().commit(),
                 restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
-                Optional.of(restore.expectedRef().commit()), Optional.empty(),
+                Optional.of(returnPoint), Optional.empty(),
                 Optional.of(area));
         return start(restore, world, publication, journals, operationId,
                 stateListener, OperationKind.RESTORE, target);

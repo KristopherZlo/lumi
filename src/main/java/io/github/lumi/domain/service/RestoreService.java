@@ -39,19 +39,31 @@ public final class RestoreService {
     }
 
     public PreparedRestore prepare(BranchRef currentRef, CommitId targetCommit) throws IOException {
-        return prepare(currentRef, targetCommit, null, false);
+        return prepare(currentRef, currentRef.commit(), targetCommit, null, false);
     }
 
     public PreparedRestore preparePartial(
             BranchRef currentRef, CommitId targetCommit, BlockBox area, boolean outside)
             throws IOException {
-        return prepare(currentRef, targetCommit, Objects.requireNonNull(area, "area"), outside);
+        return prepare(currentRef, currentRef.commit(), targetCommit,
+                Objects.requireNonNull(area, "area"), outside);
+    }
+
+    public PreparedRestore preparePartial(
+            BranchRef expectedRef,
+            CommitId sourceCommit,
+            CommitId targetCommit,
+            BlockBox area,
+            boolean outside) throws IOException {
+        return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
+                targetCommit, Objects.requireNonNull(area, "area"), outside);
     }
 
     private PreparedRestore prepare(
-            BranchRef currentRef, CommitId targetCommit, BlockBox area, boolean outside)
+            BranchRef currentRef, CommitId sourceCommit, CommitId targetCommit,
+            BlockBox area, boolean outside)
             throws IOException {
-        DimensionTree current = objects.readDimension(commits.read(currentRef.commit()).tree());
+        DimensionTree current = objects.readDimension(commits.read(sourceCommit).tree());
         DimensionTree target = objects.readDimension(commits.read(targetCommit).tree());
         Map<SectionKey, SectionBlob> sections = new HashMap<>();
         Map<EntityChunkKey, EntityChunkBlob> entities = new HashMap<>();

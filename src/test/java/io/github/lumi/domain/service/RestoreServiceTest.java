@@ -91,6 +91,19 @@ class RestoreServiceTest {
                         currentRef, target, new BlockBox(0, 0, 0, 15, 15, 15), true);
         assertEquals(Map.of(new SectionKey(0, 1, 0), section("minecraft:air")),
                 outside.sections());
+
+        var gold = objects.write(section("minecraft:gold_block"));
+        var checkpointChunk = objects.write(new ChunkTree(
+                Map.of(0, gold, 1, stone), Optional.empty()));
+        var checkpoint = commits.write(commit(
+                tree(objects, checkpointChunk), List.of(current)));
+        PreparedRestore fromCheckpoint = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot)).preparePartial(
+                        currentRef, checkpoint, target,
+                        new BlockBox(0, 0, 0, 0, 0, 0), false);
+        assertEquals("minecraft:gold_block", fromCheckpoint.returnSections()
+                .get(new SectionKey(0, 0, 0)).blockStates().get(0));
+        assertEquals(currentRef, fromCheckpoint.expectedRef());
     }
 
     private static io.github.lumi.domain.model.ObjectId tree(

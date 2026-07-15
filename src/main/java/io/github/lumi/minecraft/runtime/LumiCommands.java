@@ -154,7 +154,7 @@ public final class LumiCommands {
         try {
             runtime.startPartialRestore(
                     new CommitId(new ObjectId(commitHex)),
-                    new BlockAreaTarget(area, outside), ignored -> { });
+                    new BlockAreaTarget(area, outside), author(source), ignored -> { });
             source.sendSuccess(() -> Component.literal(
                     "Lumi block-area Restore started"), false);
             return 1;

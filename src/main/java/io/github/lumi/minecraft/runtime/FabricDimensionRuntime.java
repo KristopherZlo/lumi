@@ -282,46 +282,43 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return branches.create(name, activeRef().commit());
     }
 
-    public synchronized BackgroundPreparedMutation<RestoreOperation> startPartialRestore(
+    public synchronized ReturnPointRestoreOperation startPartialRestore(
             CommitId target,
             BlockAreaTarget area,
+            CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         if (operations.hasActiveOperation()) {
             throw new IllegalStateException("A dimension operation is already active");
         }
-        requireCleanWorkingIndex();
         BranchRef expected = activeRef();
         UUID operationId = UUID.randomUUID();
-        CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
-            try {
-                var prepared = restores.preparePartial(
-                        expected, target, area.area(), area.outside());
-                return RestoreOperation.startPartial(
-                        prepared, worldApply, new PendingRestorePublication(mutations),
-                        journals, operationId, restoreStateListener, area);
-            } catch (IOException failed) {
-                throw new CompletionException(failed);
-            }
-        }, background);
-        var operation = new BackgroundPreparedMutation<>(
-                preparation,
-                () -> {
-                    requireCleanWorkingIndex();
-                    if (!activeRef().equals(expected)) {
-                        throw new IOException("Active branch changed during partial Restore");
+        BranchName hidden = new BranchName("hidden/partial/" + operationId);
+        SaveRequest checkpointRequest = new SaveRequest(
+                expected, Objects.requireNonNull(author, "author"),
+                "Checkpoint before partial Restore", Instant.now(), defaultWorkspaceId,
+                Optional.empty(), CommitKind.HIDDEN_RETURN);
+        SaveCaptureOperation checkpoint = new SaveCaptureOperation(
+                checkpointRequest, savePreparation, worldCapture,
+                (request, captured) -> saves.checkpoint(request, captured, hidden),
+                ignored -> { }, background);
+        var operation = new ReturnPointRestoreOperation(checkpoint, saved ->
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        if (!activeRef().equals(expected)) {
+                            throw new IOException("Active branch changed during partial Restore");
+                        }
+                        var prepared = restores.preparePartial(
+                                expected, saved.commitId(), target, area.area(), area.outside());
+                        return RestoreOperation.startPartial(
+                                prepared, worldApply, new PendingRestorePublication(mutations),
+                                journals, operationId, restoreStateListener, area,
+                                saved.commitId());
+                    } catch (IOException failed) {
+                        throw new CompletionException(failed);
                     }
-                },
-                RestoreOperation::cancelBeforeApply,
-                true);
+                }, background));
         operations.start(operation, terminalObserver);
         return operation;
-    }
-
-    private void requireCleanWorkingIndex() {
-        // ponytail: clean-only until hidden checkpoint capture preserves existing pending work.
-        if (!mutations.snapshot().generations().isEmpty()) {
-            throw new IllegalStateException("Partial Restore currently requires no pending work");
-        }
     }
 
     public ServerLevel level() { return level; }
