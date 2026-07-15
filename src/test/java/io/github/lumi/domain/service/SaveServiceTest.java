@@ -84,6 +84,35 @@ class SaveServiceTest {
         assertEquals(tree, commits.read(result.commitId()).tree());
     }
 
+    @Test
+    void createsHiddenCheckpointWithoutMovingTheSourceBranch() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var rootTree = objects.write(new DimensionTree(Map.of()));
+        var initialId = commits.write(commit(rootTree, List.of(), "Initial"));
+        var initialRef = refs.create(new BranchName("main"), initialId);
+        SectionKey key = new SectionKey(0, 0, 0);
+        var captured = new CapturedWorldState(
+                Map.of(key, airSection()), Map.of(),
+                new WorkingIndexSnapshot(Map.of(key, 3L)),
+                new CommitStatistics(1, 0, 1, 0));
+        SaveService service = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
+                new OperationJournalRepository(repositoryRoot));
+        var request = new SaveRequest(
+                initialRef, author(), "Partial Restore checkpoint", Instant.EPOCH,
+                UUID.fromString("20000000-0000-0000-0000-000000000002"),
+                Optional.empty(), CommitKind.HIDDEN_RETURN);
+
+        SaveResult result = service.checkpoint(
+                request, captured, new BranchName("hidden/return/test"));
+
+        assertEquals(initialRef, refs.read(initialRef.name()).orElseThrow());
+        assertEquals(result.branchRef(), refs.read(result.branchRef().name()).orElseThrow());
+        assertEquals(result.commitId(), result.branchRef().commit());
+        assertEquals(captured.generations(), result.capturedGenerations());
+    }
+
     private static Commit commit(io.github.lumi.domain.model.ObjectId tree,
             List<io.github.lumi.domain.model.CommitId> parents, String message) {
         return new Commit(tree, parents, author(), message, Instant.EPOCH,
