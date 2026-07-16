@@ -5,7 +5,9 @@ import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
+import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
+import io.github.lumi.client.ui.BranchNameController;
 import io.github.lumi.client.ui.SaveScreenController;
 import io.github.lumi.network.HistorySnapshotPayload;
 import net.fabricmc.api.ClientModInitializer;
@@ -30,6 +32,10 @@ public final class LumiClient implements ClientModInitializer {
                                 () -> client.setScreen(new LumiSaveScreen(
                                         client.screen,
                                         new SaveScreenController(NETWORKING::save))),
+                                () -> client.setScreen(new LumiBranchScreen(
+                                        client.screen,
+                                        currentBranch(),
+                                        new BranchNameController(NETWORKING::createBranch))),
                                 NETWORKING::quickRollback, NETWORKING::restore));
                     }
 
@@ -79,6 +85,14 @@ public final class LumiClient implements ClientModInitializer {
         }
         client.setScreen(new LumiRecoveryScreen(
                 client.screen, NETWORKING::resumeRecovery, NETWORKING::returnRecovery));
+    }
+
+    private static String currentBranch() {
+        String value = HISTORY.state().snapshot().orElseThrow(
+                () -> new IllegalStateException("Lumi history has not synchronized yet"))
+                .branchName();
+        int slash = value.lastIndexOf('/');
+        return slash < 0 ? value : value.substring(slash + 1);
     }
 
     public static ClientHistoryStore history() {

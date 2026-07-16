@@ -77,6 +77,13 @@ public final class LumiServerNetworking {
                 reject(player, payload, runtime, "History changed; refresh and try again");
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.BRANCH_CREATE) {
+                runtime.createBranch(new BranchName(payload.argument().trim()));
+                sendEvent(player, payload, runtime,
+                        OperationEventPayload.State.SUCCEEDED, "Branch created");
+                sendSnapshot(player, runtime);
+                return;
+            }
             Started started = start(player, runtime, actual, payload);
             TICKET_OWNERS.put(started.ticket().id(),
                     new TicketOwner(player.getUUID(), payload.requestId()));
@@ -121,6 +128,8 @@ public final class LumiServerNetworking {
                     RecoveryChoice.RESUME_TARGET, terminal);
             case RECOVER_RETURN -> runtime.startRecovery(
                     RecoveryChoice.RETURN_CHECKPOINT, terminal);
+            case BRANCH_CREATE -> throw new IllegalStateException(
+                    "Branch creation does not use the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));

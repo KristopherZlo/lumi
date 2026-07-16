@@ -39,6 +39,10 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), HistoryCommandPayload.Kind.BRANCH_SWITCH,
                 "workspace/lab/idea", id('2'), 43);
         assertEquals(switchBranch, roundTrip(HistoryCommandPayload.CODEC, switchBranch));
+        HistoryCommandPayload createBranch = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.BRANCH_CREATE,
+                "idea", id('2'), 43);
+        assertEquals(createBranch, roundTrip(HistoryCommandPayload.CODEC, createBranch));
     }
 
     @Test
@@ -50,6 +54,8 @@ class LumiPayloadCodecTest {
                 request, HistoryCommandPayload.Kind.SAVE, "Save", id('1'), -1));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.UNDO, "unexpected", id('1'), 0));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.BRANCH_CREATE, " ", id('1'), 0));
     }
 
     @Test

@@ -42,8 +42,9 @@ public record HistoryCommandPayload(
                 && !argument.isEmpty()) {
             throw new IllegalArgumentException(kind + " does not accept an argument");
         }
-        if (kind == Kind.BRANCH_SWITCH && argument.isBlank()) {
-            throw new IllegalArgumentException("Branch switch requires a branch name");
+        if ((kind == Kind.BRANCH_SWITCH || kind == Kind.BRANCH_CREATE)
+                && argument.isBlank()) {
+            throw new IllegalArgumentException(kind + " requires a branch name");
         }
     }
 
@@ -67,7 +68,7 @@ public record HistoryCommandPayload(
 
     public enum Kind {
         SAVE(0), RESTORE(1), QUICK_ROLLBACK(2), UNDO(3), REDO(4), BRANCH_SWITCH(5),
-        RECOVER_RESUME(6), RECOVER_RETURN(7);
+        RECOVER_RESUME(6), RECOVER_RETURN(7), BRANCH_CREATE(8);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

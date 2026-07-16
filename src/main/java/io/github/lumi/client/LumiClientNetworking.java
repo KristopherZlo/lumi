@@ -64,6 +64,11 @@ public final class LumiClientNetworking {
                 Objects.requireNonNull(branchName, "branchName"));
     }
 
+    public UUID createBranch(String branchName) {
+        return send(HistoryCommandPayload.Kind.BRANCH_CREATE,
+                Objects.requireNonNull(branchName, "branchName"));
+    }
+
     public UUID resumeRecovery() {
         return send(HistoryCommandPayload.Kind.RECOVER_RESUME, "");
     }
