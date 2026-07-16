@@ -3,6 +3,7 @@ package io.github.lumi.domain.model;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,7 +17,8 @@ public record Commit(
         UUID workspaceId,
         Optional<UUID> zoneId,
         CommitKind kind,
-        CommitStatistics statistics) {
+        CommitStatistics statistics,
+        Map<UUID, PlayerSpawn> playerSpawns) {
     public Commit {
         Objects.requireNonNull(tree, "tree");
         parents = List.copyOf(Objects.requireNonNull(parents, "parents"));
@@ -27,8 +29,23 @@ public record Commit(
         zoneId = Objects.requireNonNull(zoneId, "zoneId");
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(statistics, "statistics");
+        playerSpawns = Map.copyOf(Objects.requireNonNull(playerSpawns, "playerSpawns"));
         if (parents.size() > 2 || new HashSet<>(parents).size() != parents.size()) {
             throw new IllegalArgumentException("Commit must have zero, one or two distinct parents");
         }
+    }
+
+    public Commit(
+            ObjectId tree,
+            List<CommitId> parents,
+            CommitAuthor author,
+            String message,
+            Instant timestamp,
+            UUID workspaceId,
+            Optional<UUID> zoneId,
+            CommitKind kind,
+            CommitStatistics statistics) {
+        this(tree, parents, author, message, timestamp, workspaceId, zoneId,
+                kind, statistics, Map.of());
     }
 }

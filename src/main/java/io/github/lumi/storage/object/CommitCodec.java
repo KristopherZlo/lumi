@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
+import io.github.lumi.domain.model.PlayerSpawn;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -12,11 +13,14 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 public final class CommitCodec {
     private static final int MAGIC = 0x4C554D32;
     private static final int MAX_TEXT_BYTES = 1024 * 1024;
+    private static final int MAX_PLAYER_SPAWNS = 10_000;
 
     public byte[] encode(Commit commit) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -42,6 +46,18 @@ public final class CommitCodec {
             output.writeInt(commit.statistics().entityChunks());
             output.writeLong(commit.statistics().blocks());
             output.writeInt(commit.statistics().entities());
+            output.writeInt(commit.playerSpawns().size());
+            for (var entry : commit.playerSpawns().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey()).toList()) {
+                CanonicalBytes.writeUuid(output, entry.getKey());
+                PlayerSpawn spawn = entry.getValue();
+                output.writeInt(spawn.x());
+                output.writeInt(spawn.y());
+                output.writeInt(spawn.z());
+                output.writeFloat(spawn.yaw());
+                output.writeFloat(spawn.pitch());
+                output.writeBoolean(spawn.forced());
+            }
         }
         return bytes.toByteArray();
     }
@@ -75,11 +91,27 @@ public final class CommitCodec {
             CommitKind kind = CommitKind.fromCode(kindCode);
             var statistics = new CommitStatistics(
                     input.readInt(), input.readInt(), input.readLong(), input.readInt());
+            Map<java.util.UUID, PlayerSpawn> playerSpawns = new HashMap<>();
+            if (input.available() != 0) {
+                int count = input.readInt();
+                if (count < 0 || count > MAX_PLAYER_SPAWNS) {
+                    throw new IOException("Invalid player spawn count");
+                }
+                for (int index = 0; index < count; index++) {
+                    var player = CanonicalBytes.readUuid(input);
+                    var spawn = new PlayerSpawn(
+                            input.readInt(), input.readInt(), input.readInt(),
+                            input.readFloat(), input.readFloat(), input.readBoolean());
+                    if (playerSpawns.put(player, spawn) != null) {
+                        throw new IOException("Duplicate player spawn UUID");
+                    }
+                }
+            }
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in commit");
             }
             return new Commit(tree, parents, author, message, timestamp, workspace, zone,
-                    kind, statistics);
+                    kind, statistics, playerSpawns);
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid commit payload", invalid);
         }

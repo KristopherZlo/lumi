@@ -10,10 +10,13 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.domain.model.PlayerSpawn;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -37,6 +40,20 @@ class CommitCodecTest {
                 () -> commit(List.of(commitId("one"), commitId("two"), commitId("three"))));
     }
 
+    @Test
+    void readsCommitPayloadWrittenBeforePlayerSpawnExtension() throws IOException {
+        Commit modern = new Commit(
+                ObjectId.hash("tree".getBytes(StandardCharsets.UTF_8)), List.of(),
+                new CommitAuthor(UUID.randomUUID(), "Builder"), "Old", Instant.EPOCH,
+                UUID.randomUUID(), Optional.empty(), CommitKind.MANUAL,
+                new CommitStatistics(0, 0, 0, 0));
+        byte[] encoded = codec.encode(modern);
+
+        Commit decoded = codec.decode(Arrays.copyOf(encoded, encoded.length - Integer.BYTES));
+
+        assertEquals(modern, decoded);
+    }
+
     private static Commit commit(List<CommitId> parents) {
         return new Commit(
                 ObjectId.hash("tree".getBytes(StandardCharsets.UTF_8)),
@@ -47,7 +64,12 @@ class CommitCodecTest {
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 Optional.of(UUID.fromString("30000000-0000-0000-0000-000000000003")),
                 CommitKind.MERGE,
-                new CommitStatistics(4, 1, 27, 2));
+                new CommitStatistics(4, 1, 27, 2),
+                Map.of(
+                        UUID.fromString("40000000-0000-0000-0000-000000000004"),
+                        new PlayerSpawn(12, 64, -9, 90.0F, 10.0F, true),
+                        UUID.fromString("50000000-0000-0000-0000-000000000005"),
+                        new PlayerSpawn(-2, 80, 33, -45.0F, 0.0F, false)));
     }
 
     private static CommitId commitId(String value) {
