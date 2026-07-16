@@ -436,6 +436,24 @@ public final class RestoreOperation implements DimensionMutation {
     }
 
     @Override
+    public boolean cancel() throws IOException {
+        if (status != RestoreStatus.APPLYING
+                || journal.phase() != OperationPhase.PREPARED) {
+            return false;
+        }
+        cancelBeforeApply();
+        return true;
+    }
+
+    @Override
+    public void close() {
+        targetSession.close();
+        if (returnSession != null) {
+            returnSession.close();
+        }
+    }
+
+    @Override
     public void advance(long deadlineNanos) throws IOException {
         tick(deadlineNanos);
     }

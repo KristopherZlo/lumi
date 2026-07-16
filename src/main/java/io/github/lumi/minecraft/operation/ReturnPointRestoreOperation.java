@@ -16,6 +16,7 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
     private DimensionMutation restore;
     private SaveResult returnPoint;
     private Throwable failure;
+    private boolean cancelled;
 
     public ReturnPointRestoreOperation(
             SaveCaptureOperation returnPointSave,
@@ -26,7 +27,7 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
 
     @Override
     public void advance(long deadlineNanos) throws IOException {
-        if (failure != null) {
+        if (failure != null || cancelled) {
             return;
         }
         switch (phase) {
@@ -80,6 +81,9 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
 
     @Override
     public MutationTerminalState terminalState() {
+        if (cancelled) {
+            return MutationTerminalState.CANCELLED;
+        }
         if (failure != null) {
             return MutationTerminalState.FAILED;
         }
@@ -91,12 +95,14 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
 
     @Override
     public boolean isTerminal() {
-        return failure != null || phase == Phase.RESTORING && restore.isTerminal();
+        return cancelled || failure != null
+                || phase == Phase.RESTORING && restore.isTerminal();
     }
 
     @Override
     public boolean isSafeToRelease() {
-        return failure != null || phase == Phase.RESTORING && restore.isSafeToRelease();
+        return cancelled || failure != null
+                || phase == Phase.RESTORING && restore.isSafeToRelease();
     }
 
     @Override public OperationProgress progress() {
@@ -111,6 +117,43 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
     public MutationTerminalState unhandledFailureState() {
         return phase == Phase.RESTORING
                 ? restore.unhandledFailureState() : MutationTerminalState.FAILED;
+    }
+
+    @Override
+    public boolean cancel() throws IOException {
+        boolean accepted = switch (phase) {
+            case SAVING_RETURN_POINT -> returnPointSave.cancel();
+            case PREPARING_RESTORE -> cancelPreparedRestore();
+            case RESTORING -> restore.cancel();
+        };
+        cancelled = accepted;
+        return accepted;
+    }
+
+    @Override
+    public void close() throws IOException {
+        returnPointSave.close();
+        if (restore != null) {
+            restore.close();
+        } else if (preparation != null && preparation.isDone()
+                && !preparation.isCompletedExceptionally()
+                && !preparation.isCancelled()) {
+            preparation.join().close();
+        }
+        if (preparation != null && !preparation.isDone()) {
+            preparation.cancel(true);
+        }
+        cancelled = true;
+    }
+
+    private boolean cancelPreparedRestore() throws IOException {
+        if (!preparation.isDone() || preparation.isCompletedExceptionally()
+                || preparation.isCancelled()) {
+            return false;
+        }
+        restore = Objects.requireNonNull(preparation.join(), "prepared restore");
+        phase = Phase.RESTORING;
+        return restore.cancel();
     }
 
     @FunctionalInterface

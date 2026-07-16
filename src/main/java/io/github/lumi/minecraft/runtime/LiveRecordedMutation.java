@@ -47,4 +47,29 @@ public final class LiveRecordedMutation implements DimensionMutation {
         return delegate.unhandledFailureState();
     }
     @Override public OperationProgress progress() { return delegate.progress(); }
+
+    @Override
+    public boolean cancel() throws IOException {
+        boolean cancelled = delegate.cancel();
+        if (cancelled) {
+            closeAction();
+        }
+        return cancelled;
+    }
+
+    @Override
+    public void close() throws IOException {
+        try {
+            delegate.close();
+        } finally {
+            closeAction();
+        }
+    }
+
+    private void closeAction() {
+        if (!closed) {
+            journal.close(action);
+            closed = true;
+        }
+    }
 }

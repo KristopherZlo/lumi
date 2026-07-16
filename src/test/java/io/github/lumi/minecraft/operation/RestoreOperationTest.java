@@ -292,7 +292,7 @@ class RestoreOperationTest {
                 new PreparedRestore(expectedRef, id('a'), Map.of(), Map.of(), Map.of(), Map.of()),
                 new RepairThenVerify(), refs, journals, UUID.randomUUID());
 
-        operation.cancelBeforeApply();
+        assertTrue(operation.cancel());
 
         assertTrue(journals.read().isEmpty());
         assertEquals(MutationTerminalState.CANCELLED, operation.terminalState());

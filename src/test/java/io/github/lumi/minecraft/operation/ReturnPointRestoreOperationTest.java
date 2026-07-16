@@ -85,6 +85,36 @@ class ReturnPointRestoreOperationTest {
         assertEquals("broken target", operation.failure().orElseThrow().getMessage());
     }
 
+    @Test
+    void cancelsNestedReturnPointCaptureBeforePublication() throws Exception {
+        WorkingIndexSnapshot clean = WorkingIndexSnapshot.empty();
+        int[] closes = {0};
+        SaveCaptureOperation save = new SaveCaptureOperation(
+                request(), clean,
+                dirty -> new io.github.lumi.minecraft.world.WorldStateCapture.CaptureSession() {
+                    @Override public boolean captureUntil(long deadlineNanos) { return false; }
+                    @Override public CapturedWorldState finish() {
+                        throw new AssertionError("Cancelled capture must not finish");
+                    }
+                    @Override public void close() { closes[0]++; }
+                },
+                (request, captured) -> {
+                    throw new AssertionError("Cancelled Save must not publish");
+                },
+                ignored -> { }, Runnable::run);
+        ReturnPointRestoreOperation operation = new ReturnPointRestoreOperation(
+                save, ignored -> {
+                    throw new AssertionError("Cancelled return point must not prepare Restore");
+                });
+        operation.advance(Long.MAX_VALUE);
+
+        assertTrue(operation.cancel());
+
+        assertEquals(1, closes[0]);
+        assertEquals(MutationTerminalState.CANCELLED, operation.terminalState());
+        assertTrue(operation.isSafeToRelease());
+    }
+
     private static io.github.lumi.minecraft.world.WorldStateCapture.CaptureSession immediateCapture(
             CapturedWorldState captured) {
         return new io.github.lumi.minecraft.world.WorldStateCapture.CaptureSession() {

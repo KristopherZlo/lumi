@@ -1,11 +1,13 @@
 package io.github.lumi.minecraft.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.DimensionMutation;
+import io.github.lumi.minecraft.operation.MutationTerminalState;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -40,6 +42,18 @@ class LiveRecordedMutationTest {
         assertEquals(Optional.empty(), journal.prepareUndo(PLAYER));
     }
 
+    @Test
+    void propagatesCancellationAndClosesTheLiveAction() throws Exception {
+        LiveActionJournal journal = new LiveActionJournal();
+        CancellableMutation delegate = new CancellableMutation();
+        LiveRecordedMutation operation = new LiveRecordedMutation(journal, PLAYER, delegate);
+
+        assertTrue(operation.cancel());
+
+        assertEquals(MutationTerminalState.CANCELLED, operation.terminalState());
+        assertEquals(Optional.empty(), journal.prepareUndo(PLAYER));
+    }
+
     private static BlockSnapshot block(String id) {
         return new BlockSnapshot("minecraft:" + id, Optional.empty());
     }
@@ -70,5 +84,20 @@ class LiveRecordedMutationTest {
         @Override public void advance(long deadlineNanos) { complete = true; }
         @Override public boolean isTerminal() { return complete; }
         @Override public boolean isSafeToRelease() { return complete; }
+    }
+
+    private static final class CancellableMutation implements DimensionMutation {
+        private boolean cancelled;
+
+        @Override public void advance(long deadlineNanos) { }
+        @Override public boolean cancel() {
+            cancelled = true;
+            return true;
+        }
+        @Override public boolean isTerminal() { return cancelled; }
+        @Override public boolean isSafeToRelease() { return cancelled; }
+        @Override public MutationTerminalState terminalState() {
+            return MutationTerminalState.CANCELLED;
+        }
     }
 }
