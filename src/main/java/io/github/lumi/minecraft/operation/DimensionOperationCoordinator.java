@@ -5,12 +5,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Objects;
-import java.util.OptionalInt;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.Consumer;
-import java.util.function.LongSupplier;
 import java.util.function.IntConsumer;
+import java.util.function.LongSupplier;
 
 /** Serializes mutation and enforces the global 50 ms server-tick work limit. */
 public final class DimensionOperationCoordinator {
@@ -132,23 +132,33 @@ public final class DimensionOperationCoordinator {
         if (active == null) {
             return;
         }
-        if (lease == null && !freezeReleased && active.requiresFreeze()) {
-            lease = Objects.requireNonNull(freeze.acquire(), "freeze lease");
-        }
         if (active.isTerminal()) {
             reportTerminal();
+            releaseFreezeIfSafe();
+            clearTerminalIfSafe();
             return;
+        }
+        if (lease == null && !freezeReleased && active.requiresFreeze()) {
+            lease = Objects.requireNonNull(freeze.acquire(), "freeze lease");
         }
         long start = nanoTime.getAsLong();
         long deadline = start > Long.MAX_VALUE - tickBudgetNanos
                 ? Long.MAX_VALUE : start + tickBudgetNanos;
         active.advance(deadline);
         reportTerminal();
+        releaseFreezeIfSafe();
+        clearTerminalIfSafe();
+    }
+
+    private void releaseFreezeIfSafe() {
         if (lease != null && active.isSafeToRelease()) {
             lease.release();
             lease = null;
             freezeReleased = true;
         }
+    }
+
+    private void clearTerminalIfSafe() {
         if (active.isTerminal() && active.isSafeToRelease()) {
             positionObservers.remove(activeTicket);
             active = null;

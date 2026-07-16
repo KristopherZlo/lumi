@@ -174,6 +174,20 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
+    void releasesOperationThatIsAlreadyTerminalWhenActivated() throws IOException {
+        var outcomes = new ArrayList<MutationTerminalState>();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                new RecordingFreeze(), () -> 0L, 1L,
+                mutation -> outcomes.add(mutation.terminalState()));
+
+        coordinator.start(new AlreadyTerminalMutation());
+        coordinator.tick();
+
+        assertEquals(java.util.List.of(MutationTerminalState.SUCCEEDED), outcomes);
+        assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
     void adoptsRecoveryFreezeWithoutAnUnfrozenGap() throws IOException {
         RecordingFreeze freeze = new RecordingFreeze();
         DimensionFreeze.Lease recoveryLease = freeze.acquire();
@@ -244,6 +258,12 @@ class DimensionOperationCoordinatorTest {
 
         @Override public boolean isTerminal() { return ticks >= requiredTicks; }
         @Override public boolean isSafeToRelease() { return isTerminal(); }
+    }
+
+    private static final class AlreadyTerminalMutation implements DimensionMutation {
+        @Override public void advance(long deadlineNanos) { }
+        @Override public boolean isTerminal() { return true; }
+        @Override public boolean isSafeToRelease() { return true; }
     }
 
     private static final class RecordingFreeze implements DimensionFreeze {
