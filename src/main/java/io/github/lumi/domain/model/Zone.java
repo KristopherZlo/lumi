@@ -11,7 +11,8 @@ public record Zone(
         String name,
         int color,
         Set<SectionKey> cells,
-        Set<UUID> activeActors) {
+        Set<UUID> activeActors,
+        long revision) {
     public Zone {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(workspaceId, "workspaceId");
@@ -22,5 +23,18 @@ public record Zone(
                 || name.chars().anyMatch(Character::isISOControl)) {
             throw new IllegalArgumentException("Zone name must be 1-256 visible characters");
         }
+        if (revision < 0) {
+            throw new IllegalArgumentException("Zone revision cannot be negative");
+        }
+    }
+
+    public Zone(
+            UUID id,
+            UUID workspaceId,
+            String name,
+            int color,
+            Set<SectionKey> cells,
+            Set<UUID> activeActors) {
+        this(id, workspaceId, name, color, cells, activeActors, 0);
     }
 }

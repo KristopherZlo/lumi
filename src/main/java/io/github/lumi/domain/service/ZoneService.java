@@ -65,6 +65,6 @@ public final class ZoneService {
 
     private static Zone copy(Zone source, Set<SectionKey> cells, Set<UUID> actors) {
         return new Zone(source.id(), source.workspaceId(), source.name(), source.color(),
-                cells, actors);
+                cells, actors, Math.addExact(source.revision(), 1));
     }
 }

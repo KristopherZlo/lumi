@@ -52,6 +52,9 @@ public final class ZoneRepository {
                 || !expected.workspaceId().equals(update.workspaceId())) {
             throw new IllegalArgumentException("Zone identity cannot change");
         }
+        if (update.revision() != Math.addExact(expected.revision(), 1)) {
+            throw new IllegalArgumentException("Zone replacement must advance its revision once");
+        }
         Zone current = read(expected.workspaceId(), expected.id()).orElseThrow(
                 () -> new RefConflictException("Zone no longer exists: " + expected.id()));
         if (!current.equals(expected)) {
@@ -117,6 +120,7 @@ public final class ZoneRepository {
             actors.sort(Comparator.naturalOrder());
             output.writeInt(actors.size());
             for (UUID actor : actors) writeUuid(output, actor);
+            output.writeLong(zone.revision());
         }
         return bytes.toByteArray();
     }
@@ -153,11 +157,12 @@ public final class ZoneRepository {
                 actors.add(actor);
                 previousActor = actor;
             }
+            long revision = input.available() == 0 ? 0 : input.readLong();
             if (input.available() != 0) {
                 throw new IOException("Zone metadata is not canonical");
             }
             return new Zone(id, workspace, new String(name, StandardCharsets.UTF_8),
-                    color, cells, actors);
+                    color, cells, actors, revision);
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid zone metadata", invalid);
         }

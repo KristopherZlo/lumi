@@ -25,7 +25,7 @@ class ZoneRepositoryTest {
         repository.create(created);
         Zone updated = new Zone(
                 created.id(), workspace, "Output", created.color(),
-                Set.of(new SectionKey(4, 5, 6)), Set.of());
+                Set.of(new SectionKey(4, 5, 6)), Set.of(), 1);
         repository.replace(created, updated);
 
         assertEquals(updated, repository.read(workspace, created.id()).orElseThrow());
