@@ -2,12 +2,11 @@ package io.github.lumi.client.ui;
 
 import java.util.Objects;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Secondary client-only tools kept away from the main history workflow. */
-public final class LumiMoreScreen extends Screen {
+public final class LumiMoreScreen extends LumiLegacyModalScreen {
     private final Screen parent;
     private final Runnable onboarding;
     private final Runnable hotkeys;
@@ -52,17 +51,19 @@ public final class LumiMoreScreen extends Screen {
     }
 
     private void button(String key, Runnable action, int offset) {
-        addRenderableWidget(Button.builder(Component.translatable(key), ignored -> action.run())
-                .bounds(panelX + 16, panelY + offset, panelWidth - 32, 20).build());
+        addLegacyButton(panelX + 16, panelY + offset, panelWidth - 32,
+                Component.translatable(key), action, LumiLegacyButton.Kind.NORMAL);
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderTransparentBackground(graphics);
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 312, 0xee15181d);
-        graphics.drawString(font, title, panelX + 16, panelY + 18, 0xffffffff, false);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, 312);
+        renderLegacyPanel(graphics, panelX + 12, panelY + 58,
+                panelWidth - 24, 206);
+        graphics.drawString(font, title, panelX + 16, panelY + 18,
+                LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.more.help"),
-                panelX + 16, panelY + 40, 0xffaeb6c2, false);
+                panelX + 16, panelY + 40, LegacyLumiTheme.MUTED, false);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 

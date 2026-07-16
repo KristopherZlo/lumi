@@ -4,12 +4,11 @@ import io.github.lumi.client.diagnostics.ClientDiagnostics;
 import io.github.lumi.client.state.ClientHistoryStore;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Read-only support screen; it never scans chunks or mutates history. */
-public final class LumiDiagnosticsScreen extends Screen {
+public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
     private final Screen parent;
     private final ClientHistoryStore history;
     private ClientDiagnostics diagnostics;
@@ -34,18 +33,20 @@ public final class LumiDiagnosticsScreen extends Screen {
         panelWidth = Math.min(430, width - 24);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - 260) / 2);
-        addRenderableWidget(Button.builder(
-                Component.translatable("luma.action.close"), ignored -> onClose())
-                .bounds(panelX + panelWidth - 76, panelY + 12, 60, 20).build());
+        addLegacyButton(panelX + panelWidth - 76, panelY + 10, 60,
+                Component.translatable("luma.action.close"),
+                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderTransparentBackground(graphics);
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 260, 0xee15181d);
-        graphics.drawString(font, title, panelX + 16, panelY + 18, 0xffffffff, false);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, 260);
+        renderLegacyPanel(graphics, panelX + 12, panelY + 60,
+                panelWidth - 24, 180);
+        graphics.drawString(font, title, panelX + 16, panelY + 18,
+                LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.diagnostics.help"),
-                panelX + 16, panelY + 42, 0xffaeb6c2, false);
+                panelX + 16, panelY + 42, LegacyLumiTheme.MUTED, false);
         int y = panelY + 70;
         y = row(graphics, y, "Dimension", diagnostics.dimension());
         y = row(graphics, y, "Workspace", diagnostics.workspace());
@@ -60,9 +61,10 @@ public final class LumiDiagnosticsScreen extends Screen {
     }
 
     private int row(GuiGraphics graphics, int y, String label, String value) {
-        graphics.drawString(font, label, panelX + 20, y, 0xff8f9aa8, false);
+        graphics.drawString(font, label, panelX + 20, y,
+                LegacyLumiTheme.MUTED, false);
         graphics.drawString(font, font.plainSubstrByWidth(value, panelWidth - 155),
-                panelX + 145, y, 0xfff0f3f6, false);
+                panelX + 145, y, LegacyLumiTheme.TEXT, false);
         return y + 21;
     }
 
