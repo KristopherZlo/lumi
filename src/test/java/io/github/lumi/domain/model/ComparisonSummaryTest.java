@@ -13,12 +13,17 @@ class ComparisonSummaryTest {
         CommitId after = new CommitId(new ObjectId("2".repeat(ObjectId.HEX_LENGTH)));
         Map<String, MaterialDelta> materials = new java.util.HashMap<>();
         materials.put("minecraft:stone", new MaterialDelta(3, 8));
+        var sections = new java.util.ArrayList<>(
+                java.util.List.of(new SectionKey(1, 2, 3)));
 
         ComparisonSummary summary = new ComparisonSummary(
-                before, after, 2, 1, materials);
+                before, after, 2, 1, sections, materials);
         materials.clear();
+        sections.clear();
 
         assertEquals(5, summary.materials().get("minecraft:stone").change());
+        assertEquals(java.util.List.of(new SectionKey(1, 2, 3)),
+                summary.sectionPreview());
         assertThrows(UnsupportedOperationException.class,
                 () -> summary.materials().clear());
     }

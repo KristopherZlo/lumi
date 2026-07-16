@@ -411,7 +411,12 @@ public final class LumiServerNetworking {
                 .toList();
         return new CompareResultPayload(
                 requestId, dimension, summary.before(), summary.after(),
-                summary.changedSections(), summary.changedEntityChunks(), materials, "");
+                summary.changedSections(), summary.changedEntityChunks(),
+                summary.sectionPreview().stream()
+                        .map(section -> new CompareResultPayload.ChangedSection(
+                                section.chunkX(), section.sectionY(), section.chunkZ()))
+                        .toList(),
+                materials, "");
     }
 
     private static String failureMessage(Throwable failure) {

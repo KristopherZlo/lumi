@@ -979,6 +979,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         before, after,
                         difference.sections().size(),
                         difference.entities().size(),
+                        difference.sections().keySet().stream().limit(512).toList(),
                         new MaterialCountService(objects).count(difference, cancelled));
             } catch (IOException failed) {
                 throw new CompletionException(failed);

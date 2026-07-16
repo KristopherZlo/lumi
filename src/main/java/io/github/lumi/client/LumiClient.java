@@ -155,7 +155,8 @@ public final class LumiClient implements ClientModInitializer {
         hotkeys.register();
         new LumiSelectionTool(SELECTION, LumiClient::showFeedback).register();
         new LumiOperationHud(HISTORY).register();
-        new LumiPendingChangeOverlay(HISTORY, NETWORKING::refreshSnapshot).register();
+        new LumiPendingChangeOverlay(
+                HISTORY, COMPARISONS, NETWORKING::refreshSnapshot).register();
         LumiMod.LOGGER.info("Lumi V2 client initialized");
     }
 

@@ -20,6 +20,7 @@ class ComparePayloadTest {
         CompareResultPayload result = new CompareResultPayload(
                 UUID.randomUUID(), "minecraft:overworld",
                 argument.before(), argument.after(), 4, 2,
+                List.of(new CompareResultPayload.ChangedSection(1, 2, 3)),
                 List.of(new CompareResultPayload.Material(
                         "minecraft:stone", 10, 14)), "");
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
