@@ -4,6 +4,7 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
+import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.SaveScreenController;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
@@ -19,6 +20,16 @@ public final class LumiClient implements ClientModInitializer {
         NETWORKING.register();
         new LumiHotkeys(new HotkeyActionDispatcher(
                 new HotkeyActionDispatcher.Actions() {
+                    @Override public void openDashboard() {
+                        Minecraft client = Minecraft.getInstance();
+                        client.setScreen(new LumiDashboardScreen(
+                                client.screen, HISTORY,
+                                () -> client.setScreen(new LumiSaveScreen(
+                                        client.screen,
+                                        new SaveScreenController(NETWORKING::save))),
+                                NETWORKING::quickRollback, NETWORKING::restore));
+                    }
+
                     @Override public void openSave() {
                         Minecraft client = Minecraft.getInstance();
                         client.setScreen(new LumiSaveScreen(

@@ -12,6 +12,7 @@ class HotkeyActionDispatcherTest {
         var statuses = new ArrayList<String>();
         HotkeyActionDispatcher dispatcher = new HotkeyActionDispatcher(
                 new HotkeyActionDispatcher.Actions() {
+                    @Override public void openDashboard() { calls.add("dashboard"); }
                     @Override public void openSave() { calls.add("save"); }
                     @Override public void undo() { calls.add("undo"); }
                     @Override public void redo() { calls.add("redo"); }
@@ -22,7 +23,8 @@ class HotkeyActionDispatcherTest {
             dispatcher.dispatch(action);
         }
 
-        assertEquals(java.util.List.of("save", "undo", "redo", "rollback"), calls);
+        assertEquals(java.util.List.of(
+                "dashboard", "save", "undo", "redo", "rollback"), calls);
         assertEquals(java.util.List.of(
                 "luma.status.undo_started", "luma.status.redo_started",
                 "luma.status.quick_rollback_started"), statuses);

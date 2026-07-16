@@ -17,6 +17,7 @@ public final class HotkeyActionDispatcher {
         Objects.requireNonNull(action, "action");
         try {
             switch (action) {
+                case DASHBOARD -> actions.openDashboard();
                 case SAVE -> actions.openSave();
                 case UNDO -> {
                     actions.undo();
@@ -37,9 +38,10 @@ public final class HotkeyActionDispatcher {
         }
     }
 
-    public enum Action { SAVE, UNDO, REDO, QUICK_ROLLBACK }
+    public enum Action { DASHBOARD, SAVE, UNDO, REDO, QUICK_ROLLBACK }
 
     public interface Actions {
+        void openDashboard();
         void openSave();
         void undo();
         void redo();
