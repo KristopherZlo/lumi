@@ -25,7 +25,8 @@ final class FabricServerSession implements AutoCloseable {
     private final MinecraftServer server;
     private final DimensionRepositoryLayout layout;
     private final LumiPermissionService permissions;
-    private final ExecutorService background;
+    private final ExecutorService operationBackground;
+    private final ExecutorService durabilityBackground;
     private final LoadedDimensionRegistry<ServerLevel, FabricDimensionRuntime> dimensions =
             new LoadedDimensionRegistry<>();
 
@@ -34,12 +35,17 @@ final class FabricServerSession implements AutoCloseable {
         var worldRoot = server.getWorldPath(LevelResource.ROOT);
         layout = new DimensionRepositoryLayout(worldRoot);
         permissions = new LumiPermissionService(new SurvivalOptInRepository(worldRoot));
+        operationBackground = newBackgroundExecutor("Operation");
+        durabilityBackground = newBackgroundExecutor("Durability");
+    }
+
+    private static ExecutorService newBackgroundExecutor(String role) {
         AtomicInteger threadNumber = new AtomicInteger();
-        background = new ThreadPoolExecutor(
+        return new ThreadPoolExecutor(
                 BACKGROUND_THREADS, BACKGROUND_THREADS, 0L, TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(BACKGROUND_QUEUE), runnable -> {
                     Thread thread = new Thread(runnable,
-                            "Lumi-V2-Background-" + threadNumber.incrementAndGet());
+                            "Lumi-V2-" + role + "-" + threadNumber.incrementAndGet());
                     thread.setDaemon(true);
                     return thread;
                 }, new ThreadPoolExecutor.AbortPolicy());
@@ -47,7 +53,8 @@ final class FabricServerSession implements AutoCloseable {
 
     void load(ServerLevel level) throws IOException {
         requireServer(level);
-        dimensions.load(level, FabricDimensionRuntime.open(level, layout, background));
+        dimensions.load(level, FabricDimensionRuntime.open(
+                level, layout, operationBackground, durabilityBackground));
     }
 
     void tick(MinecraftServer tickingServer) throws IOException {
@@ -95,9 +102,17 @@ final class FabricServerSession implements AutoCloseable {
     @Override
     public void close() throws Exception {
         dimensions.close();
-        background.shutdown();
-        if (!background.awaitTermination(30, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("Lumi background durability work did not finish in 30 seconds");
+        operationBackground.shutdown();
+        durabilityBackground.shutdown();
+        boolean operationsFinished =
+                operationBackground.awaitTermination(30, TimeUnit.SECONDS);
+        boolean durabilityFinished =
+                durabilityBackground.awaitTermination(30, TimeUnit.SECONDS);
+        if (!operationsFinished || !durabilityFinished) {
+            throw new IllegalStateException(
+                    "Lumi background work did not finish in 30 seconds"
+                            + " (operations=" + operationsFinished
+                            + ", durability=" + durabilityFinished + ")");
         }
     }
 

@@ -254,10 +254,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public static FabricDimensionRuntime open(
-            ServerLevel level, DimensionRepositoryLayout layout, Executor background) throws IOException {
+            ServerLevel level,
+            DimensionRepositoryLayout layout,
+            Executor background,
+            Executor durabilityBackground) throws IOException {
         Objects.requireNonNull(level, "level");
         Objects.requireNonNull(layout, "layout");
         Objects.requireNonNull(background, "background");
+        Objects.requireNonNull(durabilityBackground, "durabilityBackground");
         Path repository = layout.resolve(level.dimension().identifier().toString());
         DimensionFreezeState freeze = new DimensionFreezeState();
         var objects = new WorldObjectRepository(repository);
@@ -288,7 +292,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
         var working = new WorkingIndexRepository(repository);
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
-                objects, origins, working, background);
+                objects, origins, working, durabilityBackground);
         var branches = new BranchService(commits, refs, active, working);
         var trees = new MerkleTreeEditor(objects);
         var restoreService = new RestoreService(objects, commits, origins);

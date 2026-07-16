@@ -12,7 +12,8 @@
       "io.github.lumi.gametest.LumiFluidGameTests",
       "io.github.lumi.gametest.LumiPistonGameTests",
       "io.github.lumi.gametest.LumiWorldEditGameTests",
-      "io.github.lumi.gametest.LumiAxiomGameTests"
+      "io.github.lumi.gametest.LumiAxiomGameTests",
+      "io.github.lumi.gametest.LumiHistoryGameTests"
     ]
   },
   "depends": {
