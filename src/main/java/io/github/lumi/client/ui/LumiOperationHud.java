@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.network.OperationEventPayload;
@@ -27,6 +28,7 @@ public final class LumiOperationHud {
     private void render(GuiGraphics graphics, net.minecraft.client.DeltaTracker ignored) {
         OperationEventPayload event = history.state().activeOperation().orElse(null);
         if (event == null) {
+            renderWorkspace(graphics);
             return;
         }
         var font = Minecraft.getInstance().font;
@@ -48,5 +50,37 @@ public final class LumiOperationHud {
                             x + 8 + (int) Math.round(barWidth * fraction), y + 23,
                             0xff70d6a5);
                 });
+    }
+
+    private void renderWorkspace(GuiGraphics graphics) {
+        var snapshot = history.state().snapshot().orElse(null);
+        var client = Minecraft.getInstance();
+        if (snapshot == null || client.player == null) {
+            return;
+        }
+        boolean expanded = InputConstants.isKeyDown(
+                client.getWindow(), InputConstants.KEY_LALT)
+                || InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RALT);
+        String branch = snapshot.branchName();
+        int slash = branch.lastIndexOf('/');
+        if (slash >= 0) {
+            branch = branch.substring(slash + 1);
+        }
+        String title = snapshot.workspaceName() + " · " + branch
+                + " · " + snapshot.pendingKeys() + " pending";
+        int width = Math.min(270, Math.max(150, client.font.width(title) + 16));
+        int height = expanded ? 68 : 22;
+        int x = graphics.guiWidth() - width - 10;
+        graphics.fill(x, 10, x + width, 10 + height, 0xd9111419);
+        graphics.drawString(client.font, client.font.plainSubstrByWidth(title, width - 12),
+                x + 6, 17, snapshot.pendingKeys() == 0 ? 0xffaeb6c2 : 0xffffd166, false);
+        if (expanded) {
+            graphics.drawString(client.font, "Alt+S save · Alt+Z/Y undo/redo",
+                    x + 6, 35, 0xfff0f3f6, false);
+            graphics.drawString(client.font, "Alt+L history · Alt+R rollback",
+                    x + 6, 48, 0xfff0f3f6, false);
+            graphics.drawString(client.font, "Alt+1..0 switch branch",
+                    x + 6, 61, 0xff8f9aa8, false);
+        }
     }
 }
