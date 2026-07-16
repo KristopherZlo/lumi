@@ -8,6 +8,7 @@ import io.github.lumi.client.onboarding.ClientOnboardingStateRepository;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
+import io.github.lumi.client.ui.LumiDiagnosticsScreen;
 import io.github.lumi.client.ui.LumiDeleteVersionScreen;
 import io.github.lumi.client.ui.LumiDeletedVersionsScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
@@ -174,7 +175,8 @@ public final class LumiClient implements ClientModInitializer {
                 () -> client.setScreen(new LumiHotkeyScreen(
                         client.screen,
                         LumiHotkeys.shortcuts(client.options.keyMappings))),
-                () -> client.setScreen(new LumiSpecialThanksScreen(client.screen))));
+                () -> client.setScreen(new LumiSpecialThanksScreen(client.screen)),
+                () -> client.setScreen(new LumiDiagnosticsScreen(client.screen, HISTORY))));
     }
 
     private static void openZoneDetails(
