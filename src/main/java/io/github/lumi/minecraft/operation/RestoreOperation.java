@@ -37,6 +37,10 @@ public final class RestoreOperation implements DimensionMutation {
     private boolean returnRepairAttempted;
     private ReturnPhase returnPhase;
 
+    @Override public OperationProgress progress() {
+        return OperationProgress.indeterminate("Restore: " + status.name().toLowerCase());
+    }
+
     private RestoreOperation(
             PreparedRestore restore,
             WorldStateApply world,

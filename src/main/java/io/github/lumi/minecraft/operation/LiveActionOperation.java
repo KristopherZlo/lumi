@@ -29,6 +29,10 @@ public final class LiveActionOperation implements DimensionMutation {
     private final List<WorldChange<?>> mismatches = new ArrayList<>();
     private List<WorldChange<?>> changes = List.of();
     private Phase phase = Phase.SELECTING;
+
+    @Override public OperationProgress progress() {
+        return OperationProgress.indeterminate("Live action: " + phase.name().toLowerCase());
+    }
     private LiveActionJournal.Plan plan;
     private Iterator<WorldChange<?>> cursor;
     private Throwable failure;

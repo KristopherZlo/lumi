@@ -88,6 +88,11 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
         return Optional.ofNullable(failure);
     }
 
+    @Override public OperationProgress progress() {
+        return delegate == null ? OperationProgress.indeterminate("Preparing world state")
+                : delegate.progress();
+    }
+
     @Override
     public MutationTerminalState terminalState() {
         if (failure != null) {

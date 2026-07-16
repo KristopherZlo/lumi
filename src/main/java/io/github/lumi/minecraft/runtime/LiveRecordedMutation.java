@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.runtime;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
+import io.github.lumi.minecraft.operation.OperationProgress;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
@@ -42,4 +43,5 @@ public final class LiveRecordedMutation implements DimensionMutation {
     @Override public boolean requiresFreeze() { return delegate.requiresFreeze(); }
     @Override public MutationTerminalState terminalState() { return delegate.terminalState(); }
     @Override public Optional<Throwable> failure() { return delegate.failure(); }
+    @Override public OperationProgress progress() { return delegate.progress(); }
 }

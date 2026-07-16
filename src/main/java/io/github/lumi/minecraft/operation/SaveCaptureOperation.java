@@ -147,6 +147,10 @@ public final class SaveCaptureOperation implements DimensionMutation {
         return status == SaveOperationStatus.WRITING || isTerminal();
     }
 
+    @Override public OperationProgress progress() {
+        return OperationProgress.indeterminate("Save: " + status.name().toLowerCase());
+    }
+
     private static SavePreparation fixedPreparation(WorkingIndexSnapshot dirty) {
         WorkingIndexSnapshot fixed = Objects.requireNonNull(dirty, "dirty");
         return () -> new SavePreparation.Session() {

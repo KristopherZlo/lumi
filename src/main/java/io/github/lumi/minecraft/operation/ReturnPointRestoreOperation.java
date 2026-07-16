@@ -99,6 +99,14 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
         return failure != null || phase == Phase.RESTORING && restore.isSafeToRelease();
     }
 
+    @Override public OperationProgress progress() {
+        return switch (phase) {
+            case SAVING_RETURN_POINT -> returnPointSave.progress();
+            case PREPARING_RESTORE -> OperationProgress.indeterminate("Preparing Restore");
+            case RESTORING -> restore.progress();
+        };
+    }
+
     @FunctionalInterface
     public interface RestorePreparation {
         CompletableFuture<? extends DimensionMutation> prepare(SaveResult returnPoint);
