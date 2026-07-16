@@ -102,23 +102,65 @@ public final class LumiServerNetworking {
                 compare(player, runtime, payload, context);
                 return;
             }
-            Started started = start(player, runtime, actual, payload);
-            TICKET_OWNERS.put(started.ticket().id(),
-                    new TicketOwner(player.getUUID(), payload.requestId()));
-            runtime.operations().observeQueuePosition(started.ticket(), position -> {
-                String message = position == 0
-                        ? "Operation accepted" : "Queued at position " + position;
-                sendEvent(player, payload, runtime, OperationEventPayload.State.ACCEPTED,
-                        message, Optional.of(started.ticket()), position);
-                bossBar(player, started.ticket(), position).setVisible(position == 0);
-            });
-            runtime.operations().observeProgress(started.ticket(), progress ->
-                    runtime.operations().queuePosition(started.ticket()).ifPresent(position ->
-                            sendProgress(player, payload, runtime, started.ticket(),
-                                    position, progress)));
+            if (payload.kind() == HistoryCommandPayload.Kind.MERGE) {
+                merge(player, runtime, payload, context);
+                return;
+            }
+            track(player, runtime, payload, start(player, runtime, actual, payload));
         } catch (IOException | IllegalArgumentException | IllegalStateException failed) {
             reject(player, payload, runtime, failed.getMessage());
         }
+    }
+
+    private static void merge(
+            ServerPlayer player,
+            FabricDimensionRuntime runtime,
+            HistoryCommandPayload payload,
+            ServerPlayNetworking.Context context) throws IOException {
+        MergeArgument argument = MergeArgument.parse(payload.argument());
+        CommitAuthor author = new CommitAuthor(
+                player.getUUID(), player.getName().getString());
+        sendEvent(player, payload, runtime,
+                OperationEventPayload.State.ACCEPTED, "Preparing merge");
+        runtime.prepareMerge(
+                        new BranchName(argument.sourceBranch()), author, argument.message())
+                .whenComplete((plan, failure) -> context.server().execute(() -> {
+                    if (failure != null) {
+                        reject(player, payload, runtime, failureMessage(failure));
+                        return;
+                    }
+                    try {
+                        DimensionMutation operation = runtime.startMerge(
+                                plan, completed ->
+                                        terminal(player, runtime, payload, completed));
+                        OperationTicket ticket = runtime.operations().ticketOf(operation)
+                                .orElseThrow(() -> new IllegalStateException(
+                                        "Accepted merge has no queue ticket"));
+                        track(player, runtime, payload, new Started(ticket));
+                    } catch (IOException | IllegalArgumentException | IllegalStateException failed) {
+                        reject(player, payload, runtime, failed.getMessage());
+                    }
+                }));
+    }
+
+    private static void track(
+            ServerPlayer player,
+            FabricDimensionRuntime runtime,
+            HistoryCommandPayload payload,
+            Started started) {
+        TICKET_OWNERS.put(started.ticket().id(),
+                new TicketOwner(player.getUUID(), payload.requestId()));
+        runtime.operations().observeQueuePosition(started.ticket(), position -> {
+            String message = position == 0
+                    ? "Operation accepted" : "Queued at position " + position;
+            sendEvent(player, payload, runtime, OperationEventPayload.State.ACCEPTED,
+                    message, Optional.of(started.ticket()), position);
+            bossBar(player, started.ticket(), position).setVisible(position == 0);
+        });
+        runtime.operations().observeProgress(started.ticket(), progress ->
+                runtime.operations().queuePosition(started.ticket()).ifPresent(position ->
+                        sendProgress(player, payload, runtime, started.ticket(),
+                                position, progress)));
     }
 
     private static void compare(
@@ -237,6 +279,8 @@ public final class LumiServerNetworking {
                     "Compare does not use the mutation queue");
             case COMPARE_CANCEL -> throw new IllegalStateException(
                     "Compare cancellation does not use the mutation queue");
+            case MERGE -> throw new IllegalStateException(
+                    "Merge preparation starts before the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));

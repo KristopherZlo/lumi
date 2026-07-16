@@ -49,11 +49,15 @@ public final class MergeService {
 
     public Result prepare(Request request) throws IOException {
         Objects.requireNonNull(request, "request");
+        Commit currentCommit = commits.read(request.current.commit());
+        Commit sourceCommit = commits.read(request.source.commit());
+        if (!currentCommit.workspaceId().equals(request.workspaceId)
+                || !sourceCommit.workspaceId().equals(request.workspaceId)) {
+            throw new IOException("Merge branches do not belong to the requested workspace");
+        }
         CommitId base = graph.nearestCommonAncestor(
                 request.current.commit(), request.source.commit());
         Commit baseCommit = commits.read(base);
-        Commit currentCommit = commits.read(request.current.commit());
-        Commit sourceCommit = commits.read(request.source.commit());
         var currentDifference = compare.compare(base, request.current.commit());
         var sourceDifference = compare.compare(base, request.source.commit());
         Map<HistoryKey, ObjectId> changes = new HashMap<>();

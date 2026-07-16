@@ -1,6 +1,7 @@
 package io.github.lumi.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
@@ -20,6 +21,7 @@ import io.github.lumi.domain.model.RegionTree;
 import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.storage.repository.CommitRepository;
+import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.MerkleTreeEditor;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -35,6 +37,31 @@ import org.junit.jupiter.api.io.TempDir;
 
 class MergeServiceTest {
     @TempDir java.nio.file.Path repositoryRoot;
+
+    @Test
+    void rejectsSourceFromAnotherWorkspace() throws Exception {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        OriginStore origins = new OriginStore(repositoryRoot);
+        UUID currentWorkspace = new UUID(0, 2);
+        UUID foreignWorkspace = new UUID(0, 9);
+        CommitId base = commits.write(commit(
+                objects.write(new DimensionTree(Map.of())), List.of(), currentWorkspace));
+        CommitId current = commits.write(commit(
+                objects.write(new DimensionTree(Map.of())), List.of(base), currentWorkspace));
+        CommitId source = commits.write(commit(
+                objects.write(new DimensionTree(Map.of())), List.of(base), foreignWorkspace));
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var currentRef = refs.create(new BranchName("main"), current);
+        var sourceRef = refs.create(new BranchName("foreign"), source);
+        MergeService service = new MergeService(
+                objects, commits, origins, new MerkleTreeEditor(objects));
+
+        assertThrows(java.io.IOException.class, () -> service.prepare(
+                new MergeService.Request(
+                        currentRef, sourceRef, author(), "Merge foreign", Instant.EPOCH,
+                        currentWorkspace, Optional.empty())));
+    }
 
     @Test
     void writesTwoParentCommitWithCombinedSectionAndSourceWins() throws Exception {
@@ -121,6 +148,19 @@ class MergeServiceTest {
         assertEquals(Map.of(player, sourceSpawn),
                 commits.read(result.commit()).playerSpawns());
         assertEquals(1, result.conflicts());
+    }
+
+    private static Commit commit(
+            io.github.lumi.domain.model.ObjectId tree,
+            List<CommitId> parents,
+            UUID workspace) {
+        return new Commit(tree, parents, author(), "Save", Instant.EPOCH,
+                workspace, Optional.empty(), CommitKind.MANUAL,
+                new CommitStatistics(0, 0, 0, 0));
+    }
+
+    private static CommitAuthor author() {
+        return new CommitAuthor(new UUID(0, 1), "Builder");
     }
 
     private static Commit commit(

@@ -46,6 +46,9 @@ public record HistoryCommandPayload(
         if (kind == Kind.COMPARE_CANCEL) {
             UUID.fromString(argument);
         }
+        if (kind == Kind.MERGE) {
+            MergeArgument.parse(argument);
+        }
         if ((kind == Kind.QUICK_ROLLBACK || kind == Kind.UNDO || kind == Kind.REDO
                 || kind == Kind.RECOVER_RESUME || kind == Kind.RECOVER_RETURN)
                 && !argument.isEmpty()) {
@@ -79,7 +82,7 @@ public record HistoryCommandPayload(
         SAVE(0), RESTORE(1), QUICK_ROLLBACK(2), UNDO(3), REDO(4), BRANCH_SWITCH(5),
         RECOVER_RESUME(6), RECOVER_RETURN(7), BRANCH_CREATE(8),
         RESTORE_NO_ENTITIES(9), RESTORE_AREA(10), COMPARE(11), COMPARE_CANCEL(12),
-        AMEND(13);
+        AMEND(13), MERGE(14);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

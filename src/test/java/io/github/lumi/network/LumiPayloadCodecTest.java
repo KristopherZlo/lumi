@@ -26,6 +26,11 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), HistoryCommandPayload.Kind.AMEND,
                 "Improved clock", id('1'), 42);
         assertEquals(amend, roundTrip(HistoryCommandPayload.CODEC, amend));
+        HistoryCommandPayload merge = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.MERGE,
+                new MergeArgument("workspace/lab/idea", "Merge idea").encode(),
+                id('1'), 42);
+        assertEquals(merge, roundTrip(HistoryCommandPayload.CODEC, merge));
         OperationCancelPayload cancel = new OperationCancelPayload(
                 UUID.randomUUID(), UUID.randomUUID());
         assertEquals(cancel, roundTrip(OperationCancelPayload.CODEC, cancel));
