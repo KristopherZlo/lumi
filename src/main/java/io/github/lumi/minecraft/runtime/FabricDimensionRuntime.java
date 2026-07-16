@@ -587,7 +587,15 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         } else if (request.kind() == CommitKind.ZONE) {
             throw new IOException("Zone commit requires a zone ID");
         }
-        return new ScopedSavePreparation(savePreparation, scope);
+        return scopedSavePreparation(scope);
+    }
+
+    private SavePreparation scopedSavePreparation(
+            Predicate<io.github.lumi.domain.model.HistoryKey> scope) {
+        return new ScopedSavePreparation(
+                new DurableSavePreparation(
+                        worldReader, entityDurability, mutations, scope),
+                scope);
     }
 
     public synchronized DimensionMutation startRestore(
@@ -1171,8 +1179,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 expected, author,
                 "Checkpoint before zone Restore", Instant.now(), workspace.id(),
                 Optional.of(zone.id()), CommitKind.HIDDEN_RETURN);
-        SavePreparation scoped = new ScopedSavePreparation(
-                savePreparation, key -> workspace.includes(key) && scope.includes(key));
+        SavePreparation scoped = scopedSavePreparation(
+                key -> workspace.includes(key) && scope.includes(key));
         SaveCaptureOperation checkpoint = createChunkReadySave(
                 checkpointRequest, scoped,
                 (request, captured) -> saves.checkpoint(request, captured, hidden),

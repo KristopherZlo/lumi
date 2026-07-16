@@ -15,6 +15,7 @@ import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 import java.util.UUID;
@@ -56,6 +57,40 @@ class DurableSavePreparationTest {
 
         assertTrue(session.prepareUntil(110));
         assertEquals(mutations.snapshot(), session.finish());
+    }
+
+    @Test
+    void scopedPreparationDoesNotReadUnrelatedEntityChunks() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        EntityChunkDurabilityGate entities = new EntityChunkDurabilityGate(mutations);
+        EntityChunkKey included = new EntityChunkKey(2, 3);
+        EntityChunkKey excluded = new EntityChunkKey(200, 300);
+        entities.rememberLoaded(included, entities(1));
+        entities.rememberLoaded(excluded, entities(1));
+        var reads = new ArrayList<EntityChunkKey>();
+        WorldStateReader reader = new WorldStateReader() {
+            @Override public SectionBlob read(SectionKey ignored) {
+                throw new AssertionError("Preparation reads only entity baselines");
+            }
+            @Override public EntityChunkBlob read(EntityChunkKey key) {
+                reads.add(key);
+                return entities(2);
+            }
+        };
+        SavePreparation.Session session = new DurableSavePreparation(
+                reader, entities, mutations, key -> key.equals(included)).begin();
+
+        assertFalse(session.prepareUntil(Long.MAX_VALUE));
+        background.runNext();
+        background.runNext();
+        assertTrue(session.prepareUntil(Long.MAX_VALUE));
+
+        assertEquals(List.of(included), reads);
+        assertEquals(java.util.Set.of(included),
+                session.finish().generations().keySet());
     }
 
     private static EntityChunkBlob entities(int marker) {

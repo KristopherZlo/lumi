@@ -1,11 +1,13 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.function.LongSupplier;
 
 /** Sweeps loaded entity chunks, then waits for the matching origin/index boundary. */
@@ -13,13 +15,22 @@ public final class DurableSavePreparation implements SavePreparation {
     private final WorldStateReader reader;
     private final EntityChunkDurabilityGate entities;
     private final MutationDurabilityTracker mutations;
+    private final Predicate<HistoryKey> includes;
     private final LongSupplier nanoTime;
 
     public DurableSavePreparation(
             WorldStateReader reader,
             EntityChunkDurabilityGate entities,
             MutationDurabilityTracker mutations) {
-        this(reader, entities, mutations, System::nanoTime);
+        this(reader, entities, mutations, ignored -> true, System::nanoTime);
+    }
+
+    public DurableSavePreparation(
+            WorldStateReader reader,
+            EntityChunkDurabilityGate entities,
+            MutationDurabilityTracker mutations,
+            Predicate<HistoryKey> includes) {
+        this(reader, entities, mutations, includes, System::nanoTime);
     }
 
     DurableSavePreparation(
@@ -27,15 +38,27 @@ public final class DurableSavePreparation implements SavePreparation {
             EntityChunkDurabilityGate entities,
             MutationDurabilityTracker mutations,
             LongSupplier nanoTime) {
+        this(reader, entities, mutations, ignored -> true, nanoTime);
+    }
+
+    DurableSavePreparation(
+            WorldStateReader reader,
+            EntityChunkDurabilityGate entities,
+            MutationDurabilityTracker mutations,
+            Predicate<HistoryKey> includes,
+            LongSupplier nanoTime) {
         this.reader = Objects.requireNonNull(reader, "reader");
         this.entities = Objects.requireNonNull(entities, "entities");
         this.mutations = Objects.requireNonNull(mutations, "mutations");
+        this.includes = Objects.requireNonNull(includes, "includes");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
     }
 
     @Override
     public Session begin() {
-        return new PreparationSession(new ArrayList<>(entities.trackedKeys()));
+        return new PreparationSession(entities.trackedKeys().stream()
+                .filter(includes)
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new)));
     }
 
     private final class PreparationSession implements Session {
