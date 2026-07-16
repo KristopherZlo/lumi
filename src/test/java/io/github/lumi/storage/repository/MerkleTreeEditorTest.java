@@ -35,7 +35,12 @@ class MerkleTreeEditorTest {
         ObjectId chunkId = region.chunks().get(new ChunkInRegion(31, 0));
         assertEquals(section, objects.readChunk(chunkId).sections().get(5));
         try (var files = Files.walk(repositoryRoot.resolve("objects"))) {
-            assertEquals(4, files.filter(Files::isRegularFile).count());
+            var names = files.filter(Files::isRegularFile)
+                    .map(path -> path.getFileName().toString())
+                    .toList();
+            assertEquals(1, names.stream().filter(name -> name.endsWith(".lz4")).count());
+            assertEquals(1, names.stream().filter(name -> name.endsWith(".pack")).count());
+            assertEquals(1, names.stream().filter(name -> name.endsWith(".idx")).count());
         }
     }
 

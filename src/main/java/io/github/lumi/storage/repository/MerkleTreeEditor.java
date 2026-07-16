@@ -29,7 +29,23 @@ public final class MerkleTreeEditor {
         if (changes.isEmpty() && baseRoot.isPresent()) {
             return baseRoot.orElseThrow();
         }
+        try (WorldObjectRepository.WriteBatch batch = objects.beginBatch()) {
+            ObjectId root = update(baseRoot, changes, batch);
+            batch.publish();
+            return root;
+        }
+    }
 
+    public ObjectId update(
+            Optional<ObjectId> baseRoot,
+            Map<HistoryKey, ObjectId> changes,
+            WorldObjectRepository.WriteBatch batch) throws IOException {
+        Objects.requireNonNull(baseRoot, "baseRoot");
+        Objects.requireNonNull(changes, "changes");
+        Objects.requireNonNull(batch, "batch");
+        if (changes.isEmpty() && baseRoot.isPresent()) {
+            return baseRoot.orElseThrow();
+        }
         DimensionTree base = baseRoot.isPresent()
                 ? objects.readDimension(baseRoot.orElseThrow())
                 : new DimensionTree(Map.of());
@@ -54,11 +70,11 @@ public final class MerkleTreeEditor {
                         entities = Optional.of(change.getValue());
                     }
                 }
-                chunks.put(chunkChange.getKey(), objects.write(new ChunkTree(sections, entities)));
+                chunks.put(chunkChange.getKey(), batch.write(new ChunkTree(sections, entities)));
             }
-            regions.put(regionChange.getKey(), objects.write(new RegionTree(chunks)));
+            regions.put(regionChange.getKey(), batch.write(new RegionTree(chunks)));
         }
-        return objects.write(new DimensionTree(regions));
+        return batch.write(new DimensionTree(regions));
     }
 
     private static Map<RegionCoordinate, Map<ChunkInRegion, Map<HistoryKey, ObjectId>>> group(

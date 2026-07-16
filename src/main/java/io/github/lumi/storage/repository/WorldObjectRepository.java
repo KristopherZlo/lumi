@@ -43,19 +43,11 @@ public final class WorldObjectRepository {
             Map<EntityChunkKey, EntityChunkBlob> entities) throws IOException {
         Objects.requireNonNull(sections, "sections");
         Objects.requireNonNull(entities, "entities");
-        Map<HistoryKey, ObjectId> written = new LinkedHashMap<>();
-        try (ObjectStore.WriteBatch batch = store.beginBatch()) {
-            for (var section : sections.entrySet()) {
-                written.put(section.getKey(),
-                        batch.write(sectionCodec.encode(section.getValue())));
-            }
-            for (var entityChunk : entities.entrySet()) {
-                written.put(entityChunk.getKey(),
-                        batch.write(entityCodec.encode(entityChunk.getValue())));
-            }
+        try (WriteBatch batch = beginBatch()) {
+            Map<HistoryKey, ObjectId> written = batch.writeCaptured(sections, entities);
             batch.publish();
+            return written;
         }
-        return Map.copyOf(written);
     }
 
     public ObjectId write(ChunkTree chunk) throws IOException {
@@ -103,5 +95,59 @@ public final class WorldObjectRepository {
             throw new IOException("Object payload hash does not match package manifest");
         }
         return store.write(payload);
+    }
+
+    public WriteBatch beginBatch() throws IOException {
+        return new WriteBatch(store.beginBatch());
+    }
+
+    public final class WriteBatch implements AutoCloseable {
+        private final ObjectStore.WriteBatch batch;
+
+        private WriteBatch(ObjectStore.WriteBatch batch) {
+            this.batch = Objects.requireNonNull(batch, "batch");
+        }
+
+        public Map<HistoryKey, ObjectId> writeCaptured(
+                Map<SectionKey, SectionBlob> sections,
+                Map<EntityChunkKey, EntityChunkBlob> entities) throws IOException {
+            Map<HistoryKey, ObjectId> written = new LinkedHashMap<>();
+            for (var section : sections.entrySet()) {
+                written.put(section.getKey(), write(section.getValue()));
+            }
+            for (var entityChunk : entities.entrySet()) {
+                written.put(entityChunk.getKey(), write(entityChunk.getValue()));
+            }
+            return Map.copyOf(written);
+        }
+
+        public ObjectId write(SectionBlob section) throws IOException {
+            return batch.write(sectionCodec.encode(section));
+        }
+
+        public ObjectId write(EntityChunkBlob entities) throws IOException {
+            return batch.write(entityCodec.encode(entities));
+        }
+
+        public ObjectId write(ChunkTree chunk) throws IOException {
+            return batch.write(merkleCodec.encode(chunk));
+        }
+
+        public ObjectId write(RegionTree region) throws IOException {
+            return batch.write(merkleCodec.encode(region));
+        }
+
+        public ObjectId write(DimensionTree dimension) throws IOException {
+            return batch.write(merkleCodec.encode(dimension));
+        }
+
+        public void publish() throws IOException {
+            batch.publish();
+        }
+
+        @Override
+        public void close() throws IOException {
+            batch.close();
+        }
     }
 }

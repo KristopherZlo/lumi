@@ -85,9 +85,13 @@ public final class SaveService implements SavePublisher {
     private CommitId writeCommit(SaveRequest request, CapturedWorldState captured)
             throws IOException {
         Commit parent = commits.read(request.expectedRef().commit());
-        Map<HistoryKey, ObjectId> changes = objects.writeCaptured(
-                captured.sections(), captured.entities());
-        ObjectId tree = trees.update(Optional.of(parent.tree()), changes);
+        ObjectId tree;
+        try (WorldObjectRepository.WriteBatch batch = objects.beginBatch()) {
+            Map<HistoryKey, ObjectId> changes = batch.writeCaptured(
+                    captured.sections(), captured.entities());
+            tree = trees.update(Optional.of(parent.tree()), changes, batch);
+            batch.publish();
+        }
         List<CommitId> parents = request.kind() == CommitKind.AMEND
                 ? parent.parents() : List.of(request.expectedRef().commit());
         Commit commit = new Commit(

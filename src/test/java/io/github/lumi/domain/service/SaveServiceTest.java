@@ -66,6 +66,9 @@ class SaveServiceTest {
         assertEquals(captured.generations(), result.capturedGenerations());
         assertEquals(Map.of(player, spawn), saved.playerSpawns());
         assertTrue(new OperationJournalRepository(repositoryRoot).read().isEmpty());
+        try (var files = Files.walk(repositoryRoot.resolve("objects").resolve("packs"))) {
+            assertEquals(1, files.filter(path -> path.toString().endsWith(".pack")).count());
+        }
     }
 
     @Test
