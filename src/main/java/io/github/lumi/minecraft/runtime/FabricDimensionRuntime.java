@@ -84,10 +84,12 @@ import io.github.lumi.storage.repository.WorldObjectRepository;
 import io.github.lumi.storage.repository.WorkspaceRepository;
 import io.github.lumi.storage.repository.ZoneRepository;
 import io.github.lumi.storage.repository.TombstoneRepository;
+import io.github.lumi.storage.repository.GarbageCollector;
 import io.github.lumi.storage.packageformat.LumiPackageDirectory;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.List;
 import java.util.Map;
@@ -137,6 +139,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final ReturnPointRestorePreparation returnPointRestores;
     private final ImportExportService packageHistory;
     private final LumiPackageDirectory packageDirectory;
+    private final GarbageCollectionScheduler garbageCollection;
     private final Executor background;
     private final BranchRefRepository refs;
     private final ActiveBranchRepository active;
@@ -218,6 +221,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 level.dimension().identifier().toString(), repository);
         packageDirectory = new LumiPackageDirectory(
                 level.getServer().getWorldPath(LevelResource.ROOT));
+        garbageCollection = new GarbageCollectionScheduler(
+                level.getGameTime(), background,
+                () -> new GarbageCollector(repository).collect(
+                        Set.of(), Instant.now().minus(Duration.ofHours(24))),
+                result -> {
+                    if (result.deletedCommits() > 0 || result.deletedObjects() > 0) {
+                        LumiMod.LOGGER.info(
+                                "Lumi GC removed {} commits and {} objects from {}",
+                                result.deletedCommits(), result.deletedObjects(),
+                                level.dimension().identifier());
+                    }
+                },
+                failure -> LumiMod.LOGGER.error(
+                        "Lumi background garbage collection failed", failure));
         worldReader = new MinecraftWorldStateReader(level);
         savePreparation = new DurableSavePreparation(worldReader, entityDurability, mutations);
         worldCapture = new BatchedWorldStateCapture(worldReader);
@@ -304,6 +321,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             zoneGrowth.flush();
         }
         scheduleAutoVersion();
+        garbageCollection.tick(level.getGameTime(),
+                recoveryJournal().isPresent()
+                        || operations.hasActiveOperation()
+                        || operations.queuedCount() > 0
+                        || !mutations.snapshot().generations().isEmpty());
     }
 
     private void scheduleAutoVersion() {
