@@ -14,6 +14,7 @@ class HotkeyActionDispatcherTest {
                 new HotkeyActionDispatcher.Actions() {
                     @Override public void openDashboard() { calls.add("dashboard"); }
                     @Override public void openSave() { calls.add("save"); }
+                    @Override public void openHotkeys() { calls.add("hotkeys"); }
                     @Override public boolean undoSelection() { return false; }
                     @Override public boolean redoSelection() { return false; }
                     @Override public void undo() { calls.add("undo"); }
@@ -29,7 +30,7 @@ class HotkeyActionDispatcherTest {
         }
 
         assertEquals(java.util.List.of(
-                "dashboard", "save", "undo", "redo", "rollback"), calls);
+                "dashboard", "save", "hotkeys", "undo", "redo", "rollback"), calls);
         assertEquals(java.util.List.of(
                 "luma.status.undo_started", "luma.status.redo_started",
                 "luma.status.quick_rollback_started"), statuses);
@@ -46,6 +47,7 @@ class HotkeyActionDispatcherTest {
                 new HotkeyActionDispatcher.Actions() {
                     @Override public void openDashboard() { }
                     @Override public void openSave() { }
+                    @Override public void openHotkeys() { }
                     @Override public boolean undoSelection() { return true; }
                     @Override public boolean redoSelection() { return true; }
                     @Override public void undo() { calls.add("world-undo"); }

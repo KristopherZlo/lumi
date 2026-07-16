@@ -19,6 +19,7 @@ public final class HotkeyActionDispatcher {
             switch (action) {
                 case DASHBOARD -> actions.openDashboard();
                 case SAVE -> actions.openSave();
+                case HOTKEYS -> actions.openHotkeys();
                 case UNDO -> {
                     if (actions.undoSelection()) {
                         feedback.accept("luma.selection.undo");
@@ -58,11 +59,12 @@ public final class HotkeyActionDispatcher {
         }
     }
 
-    public enum Action { DASHBOARD, SAVE, UNDO, REDO, QUICK_ROLLBACK }
+    public enum Action { DASHBOARD, SAVE, HOTKEYS, UNDO, REDO, QUICK_ROLLBACK }
 
     public interface Actions {
         void openDashboard();
         void openSave();
+        void openHotkeys();
         boolean undoSelection();
         boolean redoSelection();
         void undo();

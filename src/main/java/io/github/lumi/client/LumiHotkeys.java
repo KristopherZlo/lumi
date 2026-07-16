@@ -2,6 +2,7 @@ package io.github.lumi.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.LumiMod;
+import java.util.List;
 import java.util.Objects;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -21,6 +22,7 @@ public final class LumiHotkeys {
     private final KeyMapping redo = mapping("key.lumi.redo", InputConstants.KEY_Y);
     private final KeyMapping rollback = mapping(
             "key.lumi.quick_rollback", InputConstants.KEY_R);
+    private final KeyMapping info = mapping("key.lumi.hotkey_info", InputConstants.KEY_I);
     private final KeyMapping[] branches = {
             mapping("key.lumi.branch_slot.1", InputConstants.KEY_1),
             mapping("key.lumi.branch_slot.2", InputConstants.KEY_2),
@@ -44,6 +46,7 @@ public final class LumiHotkeys {
         KeyBindingHelper.registerKeyBinding(undo);
         KeyBindingHelper.registerKeyBinding(redo);
         KeyBindingHelper.registerKeyBinding(rollback);
+        KeyBindingHelper.registerKeyBinding(info);
         for (KeyMapping branch : branches) {
             KeyBindingHelper.registerKeyBinding(branch);
         }
@@ -57,6 +60,7 @@ public final class LumiHotkeys {
         consume(undo, canAct, HotkeyActionDispatcher.Action.UNDO);
         consume(redo, canAct, HotkeyActionDispatcher.Action.REDO);
         consume(rollback, canAct, HotkeyActionDispatcher.Action.QUICK_ROLLBACK);
+        consume(info, canAct, HotkeyActionDispatcher.Action.HOTKEYS);
         for (int slot = 0; slot < branches.length; slot++) {
             if (consume(branches[slot]) && canAct) {
                 dispatcher.switchBranch(slot);
@@ -91,4 +95,37 @@ public final class LumiHotkeys {
     private static KeyMapping mapping(String translationKey, int key) {
         return new KeyMapping(translationKey, InputConstants.Type.KEYSYM, key, CATEGORY);
     }
+
+    public static List<Shortcut> shortcuts(KeyMapping[] mappings) {
+        return List.of(
+                shortcut("luma.hotkeys.open_workspace", "luma.hotkeys.open_workspace_help",
+                        mapping(mappings, "key.lumi.open_dashboard")),
+                shortcut("luma.hotkeys.quick_save", "luma.hotkeys.quick_save_help",
+                        mapping(mappings, "key.lumi.quick_save")),
+                shortcut("luma.hotkeys.undo", "luma.hotkeys.undo_help",
+                        mapping(mappings, "key.lumi.undo")),
+                shortcut("luma.hotkeys.redo", "luma.hotkeys.redo_help",
+                        mapping(mappings, "key.lumi.redo")),
+                shortcut("luma.hotkeys.quick_rollback",
+                        "luma.hotkeys.quick_rollback_help",
+                        mapping(mappings, "key.lumi.quick_rollback")),
+                shortcut("luma.hotkeys.shortcut_info",
+                        "luma.hotkeys.shortcut_info_help",
+                        mapping(mappings, "key.lumi.hotkey_info")));
+    }
+
+    private static KeyMapping mapping(KeyMapping[] mappings, String name) {
+        for (KeyMapping mapping : mappings) {
+            if (name.equals(mapping.getName())) {
+                return mapping;
+            }
+        }
+        throw new IllegalStateException("Missing Lumi key mapping: " + name);
+    }
+
+    private static Shortcut shortcut(String labelKey, String helpKey, KeyMapping key) {
+        return new Shortcut(labelKey, helpKey, key.getTranslatedKeyMessage().getString());
+    }
+
+    public record Shortcut(String labelKey, String helpKey, String key) { }
 }

@@ -13,6 +13,7 @@ import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiCompareScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
 import io.github.lumi.client.ui.LumiPackageScreen;
+import io.github.lumi.client.ui.LumiHotkeyScreen;
 import io.github.lumi.client.ui.LumiZonesScreen;
 import io.github.lumi.client.ui.LumiZoneDetailsScreen;
 import io.github.lumi.client.ui.LumiZoneRestoreScreen;
@@ -44,7 +45,7 @@ public final class LumiClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         NETWORKING.register();
-        new LumiHotkeys(new HotkeyActionDispatcher(
+        LumiHotkeys hotkeys = new LumiHotkeys(new HotkeyActionDispatcher(
                 new HotkeyActionDispatcher.Actions() {
                     @Override public void openDashboard() {
                         Minecraft client = Minecraft.getInstance();
@@ -105,6 +106,13 @@ public final class LumiClient implements ClientModInitializer {
                                         NETWORKING::save, NETWORKING::amend)));
                     }
 
+                    @Override public void openHotkeys() {
+                        Minecraft client = Minecraft.getInstance();
+                        client.setScreen(new LumiHotkeyScreen(
+                                client.screen,
+                                LumiHotkeys.shortcuts(client.options.keyMappings)));
+                    }
+
                     @Override public boolean undoSelection() { return SELECTION.undo(); }
                     @Override public boolean redoSelection() { return SELECTION.redo(); }
                     @Override public void undo() { NETWORKING.undo(); }
@@ -123,7 +131,8 @@ public final class LumiClient implements ClientModInitializer {
                             NETWORKING.switchBranch(branch.name());
                         }
                     }
-                }, LumiClient::showFeedback)).register();
+                }, LumiClient::showFeedback));
+        hotkeys.register();
         new LumiSelectionTool(SELECTION, LumiClient::showFeedback).register();
         new LumiOperationHud(HISTORY).register();
         LumiMod.LOGGER.info("Lumi V2 client initialized");
