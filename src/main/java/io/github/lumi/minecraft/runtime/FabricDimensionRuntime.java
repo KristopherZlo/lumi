@@ -8,6 +8,7 @@ import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
 import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
 import io.github.lumi.minecraft.operation.BranchRefRestorePublication;
 import io.github.lumi.minecraft.operation.PendingRestorePublication;
+import io.github.lumi.minecraft.operation.OperationPriority;
 import io.github.lumi.minecraft.operation.RestoreOperation;
 import io.github.lumi.minecraft.operation.RestorePublication;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
@@ -385,7 +386,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             SaveRequest request, Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         SaveCaptureOperation operation = createSave(request);
-        operations.start(operation, terminalObserver);
+        operations.enqueue(operation, OperationPriority.NORMAL, terminalObserver);
         return operation;
     }
 
@@ -455,7 +456,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var operation = new LiveActionOperation(
                 liveActions, player, direction, liveWorld,
                 liveEntityWorld, this::cancelLiveAction, this::publishLiveAction);
-        operations.start(operation, terminalObserver);
+        operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
         return operation;
     }
 
