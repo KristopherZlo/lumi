@@ -39,6 +39,18 @@ public final class LumiClientNetworking {
                 Objects.requireNonNull(target, "target").hex());
     }
 
+    public UUID quickRollback() {
+        return send(HistoryCommandPayload.Kind.QUICK_ROLLBACK, "");
+    }
+
+    public UUID undo() {
+        return send(HistoryCommandPayload.Kind.UNDO, "");
+    }
+
+    public UUID redo() {
+        return send(HistoryCommandPayload.Kind.REDO, "");
+    }
+
     public UUID cancel(UUID originalRequest) {
         var event = history.state().events().get(
                 Objects.requireNonNull(originalRequest, "originalRequest"));

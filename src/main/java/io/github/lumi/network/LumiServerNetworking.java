@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.PermissionDecision;
+import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.operation.OperationTicket;
@@ -90,15 +91,18 @@ public final class LumiServerNetworking {
         CommitAuthor author = new CommitAuthor(player.getUUID(), player.getName().getString());
         java.util.function.Consumer<DimensionMutation> terminal = operation ->
                 terminal(player, runtime, payload, operation);
-        DimensionMutation operation;
-        if (payload.kind() == HistoryCommandPayload.Kind.SAVE) {
-            operation = runtime.startSave(new SaveRequest(
+        DimensionMutation operation = switch (payload.kind()) {
+            case SAVE -> runtime.startSave(new SaveRequest(
                     expected, author, payload.argument(), Instant.now(),
                     runtime.activeWorkspaceId(), Optional.empty(), CommitKind.MANUAL), terminal);
-        } else {
-            operation = runtime.startRestore(
+            case RESTORE -> runtime.startRestore(
                     new CommitId(new ObjectId(payload.argument())), author, terminal);
-        }
+            case QUICK_ROLLBACK -> runtime.startQuickRollback(author, terminal);
+            case UNDO -> runtime.startLiveAction(
+                    player.getUUID(), LiveActionJournal.Direction.UNDO, terminal);
+            case REDO -> runtime.startLiveAction(
+                    player.getUUID(), LiveActionJournal.Direction.REDO, terminal);
+        };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
         return new Started(ticket);

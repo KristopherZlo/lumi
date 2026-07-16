@@ -23,6 +23,14 @@ class LumiPayloadCodecTest {
         OperationCancelPayload cancel = new OperationCancelPayload(
                 UUID.randomUUID(), UUID.randomUUID());
         assertEquals(cancel, roundTrip(OperationCancelPayload.CODEC, cancel));
+        for (HistoryCommandPayload.Kind kind : java.util.List.of(
+                HistoryCommandPayload.Kind.QUICK_ROLLBACK,
+                HistoryCommandPayload.Kind.UNDO,
+                HistoryCommandPayload.Kind.REDO)) {
+            HistoryCommandPayload live = new HistoryCommandPayload(
+                    UUID.randomUUID(), kind, "", id('2'), 43);
+            assertEquals(live, roundTrip(HistoryCommandPayload.CODEC, live));
+        }
     }
 
     @Test
@@ -32,6 +40,8 @@ class LumiPayloadCodecTest {
                 request, HistoryCommandPayload.Kind.RESTORE, "not-a-commit", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.SAVE, "Save", id('1'), -1));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.UNDO, "unexpected", id('1'), 0));
     }
 
     @Test

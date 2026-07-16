@@ -10,7 +10,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
-/** Ref-CAS guarded Save or Restore intent sent to the authoritative server. */
+/** Ref-CAS guarded history intent sent to the authoritative server. */
 public record HistoryCommandPayload(
         UUID requestId,
         Kind kind,
@@ -37,6 +37,10 @@ public record HistoryCommandPayload(
         if (kind == Kind.RESTORE) {
             new ObjectId(argument);
         }
+        if ((kind == Kind.QUICK_ROLLBACK || kind == Kind.UNDO || kind == Kind.REDO)
+                && !argument.isEmpty()) {
+            throw new IllegalArgumentException(kind + " does not accept an argument");
+        }
     }
 
     private void write(FriendlyByteBuf buffer) {
@@ -58,7 +62,7 @@ public record HistoryCommandPayload(
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
 
     public enum Kind {
-        SAVE(0), RESTORE(1);
+        SAVE(0), RESTORE(1), QUICK_ROLLBACK(2), UNDO(3), REDO(4);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {
