@@ -7,13 +7,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
 
 /** Manual update check; all network work stays off the render thread. */
-public final class LumiUpdateScreen extends Screen {
+public final class LumiUpdateScreen extends LumiLegacyModalScreen {
     private static final ExecutorService EXECUTOR =
             Executors.newSingleThreadExecutor(task -> {
                 Thread thread = new Thread(task, "lumi-update-check");
@@ -40,22 +39,21 @@ public final class LumiUpdateScreen extends Screen {
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - 292) / 2);
         if (result != null && result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE) {
-            addRenderableWidget(Button.builder(
+            addLegacyButton(panelX + 16, panelY + 214, panelWidth - 32,
                     Component.translatable("luma.action.download_update"),
-                    ignored -> Util.getPlatform().openUri(
-                            result.release().orElseThrow().downloadUri()))
-                    .bounds(panelX + 16, panelY + 214, panelWidth - 32, 20).build());
+                    () -> Util.getPlatform().openUri(
+                            result.release().orElseThrow().downloadUri()),
+                    LumiLegacyButton.Kind.PRIMARY);
         }
-        Button check = Button.builder(
+        LumiLegacyButton check = addLegacyButton(
+                panelX + 16, panelY + 242, panelWidth - 102,
                 Component.translatable(checking
                         ? "luma.action.checking_updates" : "luma.action.check_updates"),
-                ignored -> check())
-                .bounds(panelX + 16, panelY + 242, panelWidth - 102, 20).build();
+                this::check, LumiLegacyButton.Kind.NORMAL);
         check.active = !checking;
-        addRenderableWidget(check);
-        addRenderableWidget(Button.builder(
-                Component.translatable("luma.action.close"), ignored -> onClose())
-                .bounds(panelX + panelWidth - 76, panelY + 242, 60, 20).build());
+        addLegacyButton(panelX + panelWidth - 76, panelY + 242, 60,
+                Component.translatable("luma.action.close"),
+                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     private void check() {
@@ -76,11 +74,13 @@ public final class LumiUpdateScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderTransparentBackground(graphics);
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 292, 0xee15181d);
-        graphics.drawString(font, title, panelX + 16, panelY + 18, 0xffffffff, false);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, 292);
+        graphics.drawString(font, title, panelX + 16, panelY + 18,
+                LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.more.updates_help"),
-                panelX + 16, panelY + 42, 0xffaeb6c2, false);
+                panelX + 16, panelY + 42, LegacyLumiTheme.MUTED, false);
+        renderLegacyPanel(graphics, panelX + 12, panelY + 66,
+                panelWidth - 24, 136);
         renderResult(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
@@ -103,24 +103,25 @@ public final class LumiUpdateScreen extends Screen {
             heading = Component.translatable("luma.update.check_failed_title");
             body = Component.translatable("luma.update.check_failed_body");
         }
-        graphics.drawString(font, heading, panelX + 16, panelY + 76, 0xffffd166, false);
-        int y = drawWrapped(graphics, body, panelY + 98, 0xffd8dee7);
+        graphics.drawString(font, heading, panelX + 22, panelY + 76,
+                LegacyLumiTheme.ACCENT, false);
+        int y = drawWrapped(graphics, body, panelY + 98, LegacyLumiTheme.TEXT);
         if (result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE) {
             graphics.drawString(font, Component.translatable("luma.update.changes_title"),
-                    panelX + 16, y + 8, 0xffffffff, false);
+                    panelX + 22, y + 8, LegacyLumiTheme.TEXT, false);
             drawWrapped(graphics,
                     Component.literal(result.release().orElseThrow().summary()),
-                    y + 26, 0xffaeb6c2);
+                    y + 26, LegacyLumiTheme.MUTED);
         }
     }
 
     private int drawWrapped(GuiGraphics graphics, Component text, int startY, int color) {
         int y = startY;
-        for (var line : font.split(text, panelWidth - 32)) {
+        for (var line : font.split(text, panelWidth - 44)) {
             if (y > panelY + 198) {
                 break;
             }
-            graphics.drawString(font, line, panelX + 16, y, color, false);
+            graphics.drawString(font, line, panelX + 22, y, color, false);
             y += 11;
         }
         return y;

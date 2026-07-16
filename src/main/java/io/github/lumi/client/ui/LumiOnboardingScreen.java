@@ -2,12 +2,11 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.client.onboarding.OnboardingTour;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Replayable, non-destructive introduction to the core builder loop. */
-public final class LumiOnboardingScreen extends Screen {
+public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
     private final Screen parent;
     private final Runnable completed;
     private final OnboardingTour tour = new OnboardingTour();
@@ -30,42 +29,47 @@ public final class LumiOnboardingScreen extends Screen {
         panelWidth = Math.min(390, width - 24);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - 210) / 2);
-        Button back = Button.builder(Component.translatable("luma.action.back"), ignored -> {
-            tour.previous();
-            rebuildWidgets();
-        }).bounds(panelX + 16, panelY + 170, 80, 20).build();
+        LumiLegacyButton back = addLegacyButton(
+                panelX + 16, panelY + 170, 80,
+                Component.translatable("luma.action.back"), () -> {
+                    tour.previous();
+                    rebuildWidgets();
+                }, LumiLegacyButton.Kind.NORMAL);
         back.active = !tour.first();
-        addRenderableWidget(back);
-        addRenderableWidget(Button.builder(
+        addLegacyButton(
+                panelX + panelWidth - 96, panelY + 170, 80,
                 Component.translatable(tour.last() ? "luma.action.finish" : "luma.action.next"),
-                ignored -> {
+                () -> {
                     if (tour.last()) {
                         onClose();
                     } else {
                         tour.next();
                         rebuildWidgets();
                     }
-                }).bounds(panelX + panelWidth - 96, panelY + 170, 80, 20).build());
+                }, LumiLegacyButton.Kind.PRIMARY);
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderTransparentBackground(graphics);
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 206, 0xee15181d);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, 206);
+        LegacyLumiTheme.outlined(graphics,
+                panelX + 12, panelY + 36, panelWidth - 24, 118,
+                LegacyLumiTheme.PANEL, LegacyLumiTheme.PANEL_BORDER);
         graphics.drawString(font,
                 Component.translatable("luma.onboarding.header",
                         tour.displayIndex(), OnboardingTour.pageCount()),
-                panelX + 16, panelY + 18, 0xff8f9aa8, false);
+                panelX + 16, panelY + 18, LegacyLumiTheme.MUTED, false);
         OnboardingTour.Page page = tour.current();
         graphics.drawString(font,
                 Component.translatable("luma.onboarding.topic_" + page.id()),
-                panelX + 16, panelY + 42, 0xffffd166, false);
+                panelX + 24, panelY + 48, LegacyLumiTheme.ACCENT, false);
         graphics.drawString(font, Component.translatable(page.titleKey()),
-                panelX + 16, panelY + 62, 0xffffffff, false);
-        int y = panelY + 86;
+                panelX + 24, panelY + 68, LegacyLumiTheme.TEXT, false);
+        int y = panelY + 92;
         for (var line : font.split(
-                Component.translatable(page.helpKey()), panelWidth - 32)) {
-            graphics.drawString(font, line, panelX + 16, y, 0xffaeb6c2, false);
+                Component.translatable(page.helpKey()), panelWidth - 48)) {
+            graphics.drawString(font, line, panelX + 24, y,
+                    LegacyLumiTheme.MUTED, false);
             y += 12;
         }
         super.render(graphics, mouseX, mouseY, partialTick);

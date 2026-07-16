@@ -3,12 +3,11 @@ package io.github.lumi.client.ui;
 import io.github.lumi.client.LumiHotkeys;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Read-only table of the actual registered Lumi shortcuts. */
-public final class LumiHotkeyScreen extends Screen {
+public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
     private final Screen parent;
     private final List<LumiHotkeys.Shortcut> shortcuts;
     private int panelX;
@@ -27,34 +26,33 @@ public final class LumiHotkeyScreen extends Screen {
         panelX = (width - panelWidth) / 2;
         int panelHeight = 76 + shortcuts.size() * 34;
         panelY = Math.max(12, (height - panelHeight) / 2);
-        addRenderableWidget(Button.builder(
-                Component.translatable("luma.action.close"), ignored -> onClose())
-                .bounds(panelX + panelWidth - 76, panelY + 12, 60, 20).build());
+        addLegacyButton(panelX + panelWidth - 76, panelY + 10, 60,
+                Component.translatable("luma.action.close"),
+                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderTransparentBackground(graphics);
         int panelHeight = 76 + shortcuts.size() * 34;
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight,
-                0xee15181d);
-        graphics.drawString(font, title, panelX + 16, panelY + 17, 0xffffffff, false);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
+        graphics.drawString(font, title, panelX + 16, panelY + 17,
+                LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.hotkeys.help"),
-                panelX + 16, panelY + 38, 0xffaeb6c2, false);
+                panelX + 16, panelY + 38, LegacyLumiTheme.MUTED, false);
         for (int index = 0; index < shortcuts.size(); index++) {
             LumiHotkeys.Shortcut shortcut = shortcuts.get(index);
             int y = panelY + 62 + index * 34;
-            graphics.fill(panelX + 12, y - 5, panelX + panelWidth - 12, y + 25,
-                    0xff20252c);
+            renderLegacyPanel(graphics,
+                    panelX + 12, y - 5, panelWidth - 24, 30);
             graphics.drawString(font, "Alt + " + shortcut.key(),
-                    panelX + 20, y + 3, 0xffffd166, false);
+                    panelX + 20, y + 3, LegacyLumiTheme.ACCENT, false);
             graphics.drawString(font, Component.translatable(shortcut.labelKey()),
-                    panelX + 118, y, 0xfff0f3f6, false);
+                    panelX + 118, y, LegacyLumiTheme.TEXT, false);
             graphics.drawString(font,
                     font.plainSubstrByWidth(
                             Component.translatable(shortcut.helpKey()).getString(),
                             panelWidth - 150),
-                    panelX + 118, y + 12, 0xff8f9aa8, false);
+                    panelX + 118, y + 12, LegacyLumiTheme.MUTED, false);
         }
         super.render(graphics, mouseX, mouseY, partialTick);
     }

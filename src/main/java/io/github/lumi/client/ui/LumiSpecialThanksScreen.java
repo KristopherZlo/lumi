@@ -1,12 +1,11 @@
 package io.github.lumi.client.ui;
 
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Bundled credits; opening this screen performs no network request. */
-public final class LumiSpecialThanksScreen extends Screen {
+public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
     private final Screen parent;
     private int panelX;
     private int panelY;
@@ -22,18 +21,18 @@ public final class LumiSpecialThanksScreen extends Screen {
         panelWidth = Math.min(390, width - 24);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - 190) / 2);
-        addRenderableWidget(Button.builder(
-                Component.translatable("luma.action.close"), ignored -> onClose())
-                .bounds(panelX + panelWidth - 76, panelY + 12, 60, 20).build());
+        addLegacyButton(panelX + panelWidth - 76, panelY + 10, 60,
+                Component.translatable("luma.action.close"),
+                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderTransparentBackground(graphics);
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 190, 0xee15181d);
-        graphics.drawString(font, title, panelX + 16, panelY + 18, 0xffffffff, false);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, 190);
+        graphics.drawString(font, title, panelX + 16, panelY + 18,
+                LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.special_thanks.help"),
-                panelX + 16, panelY + 42, 0xffaeb6c2, false);
+                panelX + 16, panelY + 42, LegacyLumiTheme.MUTED, false);
         entry(graphics, panelY + 76, "ImZlo",
                 Component.translatable("luma.special_thanks.zlo_role"));
         entry(graphics, panelY + 122, "Nayakochii", Component.literal("Tester"));
@@ -41,9 +40,11 @@ public final class LumiSpecialThanksScreen extends Screen {
     }
 
     private void entry(GuiGraphics graphics, int y, String name, Component role) {
-        graphics.fill(panelX + 16, y, panelX + panelWidth - 16, y + 34, 0xff20252c);
-        graphics.drawString(font, name, panelX + 26, y + 7, 0xfff0f3f6, false);
-        graphics.drawString(font, role, panelX + 26, y + 19, 0xff8f9aa8, false);
+        renderLegacyPanel(graphics, panelX + 16, y, panelWidth - 32, 34);
+        graphics.drawString(font, name, panelX + 26, y + 7,
+                LegacyLumiTheme.TEXT, false);
+        graphics.drawString(font, role, panelX + 26, y + 19,
+                LegacyLumiTheme.MUTED, false);
     }
 
     @Override public boolean isPauseScreen() { return false; }
