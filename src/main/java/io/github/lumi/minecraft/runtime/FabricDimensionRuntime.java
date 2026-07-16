@@ -706,7 +706,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public io.github.lumi.domain.model.Zone createZone(
             String name, int color, java.util.Set<SectionKey> cells) throws IOException {
         requireZoneMetadataMutable();
-        return zones.create(UUID.randomUUID(), activeWorkspaceId(), name, color, cells);
+        java.util.Set<SectionKey> selected = java.util.Set.copyOf(cells);
+        if (selected.isEmpty()) {
+            throw new IllegalArgumentException("Zone selection cannot be empty");
+        }
+        var workspace = activeWorkspace();
+        if (selected.stream().anyMatch(cell -> !workspace.includes(cell))) {
+            throw new IllegalArgumentException(
+                    "Zone selection extends outside the active workspace");
+        }
+        return zones.create(UUID.randomUUID(), workspace.id(), name, color, selected);
+    }
+
+    public List<io.github.lumi.domain.model.Zone> visibleZones() throws IOException {
+        return zones.list(activeWorkspaceId());
     }
 
     public io.github.lumi.domain.model.Zone setZoneActorActive(

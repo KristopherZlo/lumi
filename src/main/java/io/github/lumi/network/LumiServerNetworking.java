@@ -98,6 +98,10 @@ public final class LumiServerNetworking {
                 sendSnapshot(player, runtime);
                 return;
             }
+            if (isZoneMetadata(payload.kind())) {
+                updateZoneMetadata(player, runtime, payload);
+                return;
+            }
             if (payload.kind() == HistoryCommandPayload.Kind.COMPARE) {
                 compare(player, runtime, payload, context);
                 return;
@@ -110,6 +114,33 @@ public final class LumiServerNetworking {
         } catch (IOException | IllegalArgumentException | IllegalStateException failed) {
             reject(player, payload, runtime, failed.getMessage());
         }
+    }
+
+    private static boolean isZoneMetadata(HistoryCommandPayload.Kind kind) {
+        return kind == HistoryCommandPayload.Kind.ZONE_CREATE
+                || kind == HistoryCommandPayload.Kind.ZONE_ENTER
+                || kind == HistoryCommandPayload.Kind.ZONE_LEAVE;
+    }
+
+    private static void updateZoneMetadata(
+            ServerPlayer player,
+            FabricDimensionRuntime runtime,
+            HistoryCommandPayload payload) throws IOException {
+        String message;
+        if (payload.kind() == HistoryCommandPayload.Kind.ZONE_CREATE) {
+            ZoneCreateArgument argument = ZoneCreateArgument.parse(payload.argument());
+            runtime.createZone(argument.name(), 0xff4aa3ff,
+                    argument.area().sectionCells(1_000_000));
+            message = "Zone created";
+        } else {
+            UUID zoneId = UUID.fromString(payload.argument());
+            boolean active = payload.kind() == HistoryCommandPayload.Kind.ZONE_ENTER;
+            runtime.setZoneActorActive(zoneId, player.getUUID(), active);
+            message = active ? "Zone entered" : "Zone left";
+        }
+        sendEvent(player, payload, runtime,
+                OperationEventPayload.State.SUCCEEDED, message);
+        sendSnapshot(player, runtime);
     }
 
     private static void merge(
@@ -281,6 +312,8 @@ public final class LumiServerNetworking {
                     "Compare cancellation does not use the mutation queue");
             case MERGE -> throw new IllegalStateException(
                     "Merge preparation starts before the mutation queue");
+            case ZONE_CREATE, ZONE_ENTER, ZONE_LEAVE -> throw new IllegalStateException(
+                    "Zone metadata does not use the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
@@ -489,13 +522,19 @@ public final class LumiServerNetworking {
                     .map(ref -> new HistorySnapshotPayload.Branch(
                             ref.name().value(), ref.commit(), ref.name().equals(head.name())))
                     .toList();
+            var zoneViews = runtime.visibleZones().stream()
+                    .limit(64)
+                    .map(zone -> new HistorySnapshotPayload.ZoneView(
+                            zone.id(), zone.name(), zone.color(), zone.cells().size(),
+                            zone.revision(), zone.activeActors().contains(player.getUUID())))
+                    .toList();
             send(player, new HistorySnapshotPayload(
                     dimension(runtime), head.commit(), head.revision(),
                     runtime.mutations().snapshot().generations().size(),
                     runtime.operations().hasActiveOperation(),
                     runtime.recoveryJournal().isPresent(),
                     workspace.id(), workspace.name(), head.name().value(),
-                    versions, branchViews));
+                    versions, branchViews, zoneViews));
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi history snapshot", failed);
         }

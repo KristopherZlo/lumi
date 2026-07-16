@@ -31,6 +31,19 @@ class LumiPayloadCodecTest {
                 new MergeArgument("workspace/lab/idea", "Merge idea").encode(),
                 id('1'), 42);
         assertEquals(merge, roundTrip(HistoryCommandPayload.CODEC, merge));
+        var zoneCreate = new ZoneCreateArgument(
+                "Clock", new io.github.lumi.domain.model.BlockBox(1, 2, 3, 4, 5, 6));
+        HistoryCommandPayload createZone = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_CREATE,
+                zoneCreate.encode(), id('1'), 42);
+        assertEquals(createZone, roundTrip(HistoryCommandPayload.CODEC, createZone));
+        for (HistoryCommandPayload.Kind kind : java.util.List.of(
+                HistoryCommandPayload.Kind.ZONE_ENTER,
+                HistoryCommandPayload.Kind.ZONE_LEAVE)) {
+            HistoryCommandPayload zoneActor = new HistoryCommandPayload(
+                    UUID.randomUUID(), kind, UUID.randomUUID().toString(), id('1'), 42);
+            assertEquals(zoneActor, roundTrip(HistoryCommandPayload.CODEC, zoneActor));
+        }
         OperationCancelPayload cancel = new OperationCancelPayload(
                 UUID.randomUUID(), UUID.randomUUID());
         assertEquals(cancel, roundTrip(OperationCancelPayload.CODEC, cancel));
@@ -106,7 +119,9 @@ class LumiPayloadCodecTest {
                         CommitKind.MANUAL)),
                 java.util.List.of(
                         new HistorySnapshotPayload.Branch("main", id('a'), true),
-                        new HistorySnapshotPayload.Branch("idea", id('b'), false)));
+                        new HistorySnapshotPayload.Branch("idea", id('b'), false)),
+                java.util.List.of(new HistorySnapshotPayload.ZoneView(
+                        new UUID(0, 8), "Clock", 0xff336699, 4, 2, true)));
         OperationEventPayload event = new OperationEventPayload(
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 "minecraft:overworld", OperationEventPayload.State.ACCEPTED,
