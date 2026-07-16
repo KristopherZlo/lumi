@@ -101,7 +101,8 @@ public final class SaveService implements SavePublisher {
                 request.workspaceId(),
                 request.zoneId(),
                 request.kind(),
-                captured.statistics());
+                captured.statistics(),
+                captured.playerSpawns());
         return commits.write(commit);
     }
 

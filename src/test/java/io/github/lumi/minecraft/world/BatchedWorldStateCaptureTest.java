@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndex;
@@ -32,6 +33,8 @@ class BatchedWorldStateCaptureTest {
         var dirty = working.snapshot();
         AtomicLong clock = new AtomicLong();
         List<Object> reads = new ArrayList<>();
+        UUID player = UUID.fromString("10000000-0000-0000-0000-000000000001");
+        PlayerSpawn spawn = new PlayerSpawn(4, 65, 8, 90.0F, 0.0F, false);
         WorldStateReader reader = new WorldStateReader() {
             @Override public SectionBlob read(SectionKey key) {
                 reads.add(key);
@@ -44,6 +47,11 @@ class BatchedWorldStateCaptureTest {
                 clock.addAndGet(60);
                 return entities;
             }
+
+            @Override public Map<UUID, PlayerSpawn> readPlayerSpawns() {
+                reads.add(player);
+                return Map.of(player, spawn);
+            }
         };
         WorldStateCapture.CaptureSession session =
                 new BatchedWorldStateCapture(reader, clock::get).begin(dirty);
@@ -55,6 +63,7 @@ class BatchedWorldStateCaptureTest {
         var captured = session.finish();
         assertEquals(Map.of(sectionKey, section), captured.sections());
         assertEquals(Map.of(entityKey, entities), captured.entities());
+        assertEquals(Map.of(player, spawn), captured.playerSpawns());
         assertEquals(dirty, captured.generations());
         assertEquals(1, captured.statistics().sections());
         assertEquals(1, captured.statistics().entityChunks());

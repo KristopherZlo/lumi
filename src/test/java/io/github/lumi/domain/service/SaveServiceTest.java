@@ -10,6 +10,7 @@ import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
+import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
@@ -42,11 +43,13 @@ class SaveServiceTest {
         var rootTree = objects.write(new DimensionTree(Map.of()));
         var initialId = commits.write(commit(rootTree, List.of(), "Initial"));
         var initialRef = refs.create(new BranchName("main"), initialId);
+        UUID player = UUID.fromString("30000000-0000-0000-0000-000000000003");
+        PlayerSpawn spawn = new PlayerSpawn(10, 70, -20, 180.0F, 0.0F, true);
         SectionKey key = new SectionKey(0, 0, 0);
         CapturedWorldState captured = new CapturedWorldState(
                 Map.of(key, airSection()), Map.of(),
                 new WorkingIndexSnapshot(Map.of(key, 3L)),
-                new CommitStatistics(1, 0, 1, 0));
+                new CommitStatistics(1, 0, 1, 0), Map.of(player, spawn));
         SaveService service = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
                 new OperationJournalRepository(repositoryRoot));
 
@@ -59,6 +62,7 @@ class SaveServiceTest {
         assertEquals(List.of(initialId), saved.parents());
         assertEquals(result.branchRef(), refs.read(new BranchName("main")).orElseThrow());
         assertEquals(captured.generations(), result.capturedGenerations());
+        assertEquals(Map.of(player, spawn), saved.playerSpawns());
         assertTrue(new OperationJournalRepository(repositoryRoot).read().isEmpty());
     }
 

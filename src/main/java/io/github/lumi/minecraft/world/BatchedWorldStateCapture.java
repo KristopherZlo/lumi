@@ -7,6 +7,7 @@ import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
+import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.service.CapturedWorldState;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -14,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.LongSupplier;
 
 /** Copies dirty decoded payloads without exceeding the coordinator deadline. */
@@ -40,6 +42,7 @@ public final class BatchedWorldStateCapture implements WorldStateCapture {
         private final List<HistoryKey> keys;
         private final Map<SectionKey, SectionBlob> sections = new HashMap<>();
         private final Map<EntityChunkKey, EntityChunkBlob> entities = new HashMap<>();
+        private Map<UUID, PlayerSpawn> playerSpawns;
         private int next;
 
         private Session(WorkingIndexSnapshot dirty) {
@@ -58,12 +61,15 @@ public final class BatchedWorldStateCapture implements WorldStateCapture {
                     entities.put(entityChunk, reader.read(entityChunk));
                 }
             }
-            return next == keys.size();
+            if (next == keys.size() && playerSpawns == null) {
+                playerSpawns = Map.copyOf(reader.readPlayerSpawns());
+            }
+            return next == keys.size() && playerSpawns != null;
         }
 
         @Override
         public CapturedWorldState finish() {
-            if (next != keys.size()) {
+            if (next != keys.size() || playerSpawns == null) {
                 throw new IllegalStateException("World capture is not complete");
             }
             int entityCount = entities.values().stream()
@@ -73,7 +79,7 @@ public final class BatchedWorldStateCapture implements WorldStateCapture {
                     new CommitStatistics(
                             sections.size(), entities.size(),
                             Math.multiplyExact((long) sections.size(), SectionBlob.BLOCK_COUNT),
-                            entityCount));
+                            entityCount), playerSpawns);
         }
     }
 }

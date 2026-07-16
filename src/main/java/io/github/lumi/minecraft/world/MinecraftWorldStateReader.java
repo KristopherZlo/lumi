@@ -4,8 +4,12 @@ import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.PlayerSpawn;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.StreamSupport;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -35,5 +39,22 @@ public final class MinecraftWorldStateReader implements WorldStateReader {
                 .filter(entity -> entity.chunkPosition().x == key.chunkX()
                         && entity.chunkPosition().z == key.chunkZ());
         return entities.capture(level, matching);
+    }
+
+    @Override
+    public Map<UUID, PlayerSpawn> readPlayerSpawns() {
+        Map<UUID, PlayerSpawn> spawns = new HashMap<>();
+        for (var player : level.getServer().getPlayerList().getPlayers()) {
+            var config = player.getRespawnConfig();
+            if (config == null || !config.respawnData().dimension().equals(level.dimension())) {
+                continue;
+            }
+            var data = config.respawnData();
+            var position = data.pos();
+            spawns.put(player.getUUID(), new PlayerSpawn(
+                    position.getX(), position.getY(), position.getZ(),
+                    data.yaw(), data.pitch(), config.forced()));
+        }
+        return Map.copyOf(spawns);
     }
 }
