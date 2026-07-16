@@ -106,6 +106,17 @@ public final class LumiServerNetworking {
                 sendSnapshot(player, runtime);
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.WORKSPACE_CREATE) {
+                WorkspaceCreateArgument argument =
+                        WorkspaceCreateArgument.parse(payload.argument());
+                runtime.createWorkspace(
+                        argument.name(), argument.bounds(),
+                        new CommitAuthor(player.getUUID(), player.getName().getString()));
+                sendEvent(player, payload, runtime,
+                        OperationEventPayload.State.SUCCEEDED, "Workspace created");
+                sendSnapshot(player, runtime);
+                return;
+            }
             if (isPackageCommand(payload.kind())) {
                 packageCommand(player, runtime, actual, payload, context);
                 return;
@@ -426,6 +437,8 @@ public final class LumiServerNetworking {
                     player.getUUID(), LiveActionJournal.Direction.REDO, terminal);
             case BRANCH_SWITCH -> runtime.startBranchSwitch(
                     new BranchName(payload.argument()), terminal);
+            case WORKSPACE_SWITCH -> runtime.startWorkspaceSwitch(
+                    UUID.fromString(payload.argument()), terminal);
             case RECOVER_RESUME -> runtime.startRecovery(
                     RecoveryChoice.RESUME_TARGET, terminal);
             case RECOVER_RETURN -> runtime.startRecovery(
@@ -458,8 +471,8 @@ public final class LumiServerNetworking {
             case PACKAGE_EXPORT, PACKAGE_INSPECT, PACKAGE_IMPORT ->
                     throw new IllegalStateException(
                             "Package commands do not use the mutation queue");
-            case WORKSPACE_CREATE, WORKSPACE_SWITCH -> throw new IllegalStateException(
-                    "Workspace commands are not registered yet");
+            case WORKSPACE_CREATE -> throw new IllegalStateException(
+                    "Workspace creation does not use the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
@@ -657,6 +670,13 @@ public final class LumiServerNetworking {
         try {
             BranchRef head = runtime.activeRef();
             var workspace = runtime.activeWorkspace();
+            var workspaceViews = runtime.visibleWorkspaces().stream()
+                    .map(visible -> new HistorySnapshotPayload.WorkspaceView(
+                            visible.id(), visible.name(), visible.id().equals(workspace.id()),
+                            visible.bounds().isPresent(),
+                            visible.settings().hideZoneCommits(),
+                            visible.settings().includeEntitiesOnRestore()))
+                    .toList();
             var versions = runtime.history(32).stream()
                     .map(entry -> new HistorySnapshotPayload.Version(
                             entry.id(), entry.commit().message(),
@@ -698,7 +718,7 @@ public final class LumiServerNetworking {
                     runtime.operations().hasActiveOperation(),
                     runtime.recoveryJournal().isPresent(),
                     workspace.id(), workspace.name(), head.name().value(),
-                    versions, branchViews, zoneViews, deleted));
+                    workspaceViews, versions, branchViews, zoneViews, deleted));
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi history snapshot", failed);
         }

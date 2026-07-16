@@ -17,7 +17,9 @@ import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.network.ZoneCreateArgument;
 import io.github.lumi.network.ZoneRestoreArgument;
 import io.github.lumi.network.ZoneSaveArgument;
+import io.github.lumi.network.WorkspaceCreateArgument;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -110,6 +112,18 @@ public final class LumiClientNetworking {
     public UUID createBranch(String branchName) {
         return send(HistoryCommandPayload.Kind.BRANCH_CREATE,
                 Objects.requireNonNull(branchName, "branchName"));
+    }
+
+    public UUID createWorkspace(String name, Optional<BlockBox> bounds) {
+        return send(HistoryCommandPayload.Kind.WORKSPACE_CREATE,
+                new WorkspaceCreateArgument(
+                        Objects.requireNonNull(name, "name"),
+                        Objects.requireNonNull(bounds, "bounds")).encode());
+    }
+
+    public UUID switchWorkspace(UUID workspaceId) {
+        return send(HistoryCommandPayload.Kind.WORKSPACE_SWITCH,
+                Objects.requireNonNull(workspaceId, "workspaceId").toString());
     }
 
     public UUID createZone(String name, BlockBox area) {
