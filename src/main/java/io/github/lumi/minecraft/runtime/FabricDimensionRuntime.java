@@ -38,6 +38,7 @@ import io.github.lumi.domain.service.RecoveryChoice;
 import io.github.lumi.domain.service.RecoveryService;
 import io.github.lumi.domain.service.SaveJournalRecovery;
 import io.github.lumi.domain.service.PublishedApplyRecovery;
+import io.github.lumi.domain.service.WorkspaceService;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.BatchedWorldStateCapture;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
@@ -55,6 +56,7 @@ import io.github.lumi.minecraft.world.SavePreparation;
 import io.github.lumi.minecraft.world.WorldStateCapture;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
 import io.github.lumi.storage.repository.ActiveBranchRepository;
+import io.github.lumi.storage.repository.ActiveWorkspaceRepository;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.MerkleTreeEditor;
@@ -62,6 +64,7 @@ import io.github.lumi.storage.repository.OperationJournalRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
+import io.github.lumi.storage.repository.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -97,6 +100,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final BranchService branches;
     private final MergeService merges;
     private final RecoveryService recoveries;
+    private final WorkspaceService workspaces;
     private final ReturnPointRestorePreparation returnPointRestores;
     private final Executor background;
     private final BranchRefRepository refs;
@@ -130,6 +134,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             ActiveBranchRepository active,
             BranchService branches,
             MergeService merges,
+            WorkspaceService workspaces,
             UUID defaultWorkspaceId,
             OperationJournal pendingRecovery,
             io.github.lumi.minecraft.world.DimensionFreeze.Lease recoveryLease) {
@@ -144,6 +149,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.journals = journals;
         this.branches = branches;
         this.merges = merges;
+        this.workspaces = workspaces;
         recoveries = new RecoveryService(restores);
         this.background = background;
         this.refs = refs;
@@ -196,6 +202,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
         BranchRef selected = refs.read(active.read().orElseThrow().name()).orElseThrow();
         UUID workspaceId = commits.read(selected.commit()).workspaceId();
+        var workspaceService = new WorkspaceService(
+                new WorkspaceRepository(repository),
+                new ActiveWorkspaceRepository(repository), commits, refs);
+        workspaceService.initializeDefault(workspaceId);
         var working = new WorkingIndexRepository(repository);
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
                 objects, origins, working, background);
@@ -210,7 +220,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 restoreService,
                 new MinecraftWorldStateApply(level, freeze), journals,
                 background, refs, active, branches,
-                new MergeService(objects, commits, origins, trees), workspaceId,
+                new MergeService(objects, commits, origins, trees), workspaceService, workspaceId,
                 interrupted.orElse(null), recoveryLease);
     }
 
@@ -507,6 +517,21 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public BranchRef createBranch(BranchName name) throws IOException {
         requireNoRecovery();
         return branches.create(name, activeRef().commit());
+    }
+
+    public WorkspaceService.Creation createWorkspace(
+            String name,
+            Optional<io.github.lumi.domain.model.BlockBox> bounds,
+            CommitAuthor author) throws IOException {
+        requireNoRecovery();
+        return workspaces.create(
+                UUID.randomUUID(), name, bounds,
+                io.github.lumi.domain.model.WorkspaceSettings.defaults(),
+                activeRef(), Objects.requireNonNull(author, "author"), Instant.now());
+    }
+
+    public io.github.lumi.domain.model.Workspace activeWorkspace() throws IOException {
+        return workspaces.active();
     }
 
     public CompletableFuture<PreparedMerge> prepareMerge(
