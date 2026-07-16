@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.HistoryEntry;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
+import io.github.lumi.storage.repository.TombstoneRepository;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,10 +23,15 @@ public final class HistoryQueryService {
     private static final int MAX_QUERY = 1_000;
     private final CommitRepository commits;
     private final BranchRefRepository refs;
+    private final TombstoneRepository tombstones;
 
-    public HistoryQueryService(CommitRepository commits, BranchRefRepository refs) {
+    public HistoryQueryService(
+            CommitRepository commits,
+            BranchRefRepository refs,
+            TombstoneRepository tombstones) {
         this.commits = Objects.requireNonNull(commits, "commits");
         this.refs = Objects.requireNonNull(refs, "refs");
+        this.tombstones = Objects.requireNonNull(tombstones, "tombstones");
     }
 
     public List<HistoryEntry> firstParent(BranchName branch, int limit) throws IOException {
@@ -78,7 +84,8 @@ public final class HistoryQueryService {
                 }
                 break;
             }
-            if (commit.kind() == CommitKind.ZONE && commit.zoneId().isPresent()) {
+            if (tombstones.read(next).isEmpty()
+                    && commit.kind() == CommitKind.ZONE && commit.zoneId().isPresent()) {
                 ArrayList<HistoryEntry> history =
                         found.get(commit.zoneId().orElseThrow());
                 if (history != null && history.size() < limit) {
@@ -116,7 +123,7 @@ public final class HistoryQueryService {
                 }
                 break;
             }
-            if (included.test(commit)) {
+            if (tombstones.read(next).isEmpty() && included.test(commit)) {
                 history.add(new HistoryEntry(next, commit));
             }
             if (commit.parents().isEmpty()) {

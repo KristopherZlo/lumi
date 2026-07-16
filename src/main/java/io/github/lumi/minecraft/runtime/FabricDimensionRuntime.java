@@ -79,6 +79,7 @@ import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import io.github.lumi.storage.repository.WorkspaceRepository;
 import io.github.lumi.storage.repository.ZoneRepository;
+import io.github.lumi.storage.repository.TombstoneRepository;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -669,7 +670,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public List<io.github.lumi.domain.model.HistoryEntry> history(int limit)
             throws IOException {
         BranchRef ref = activeRef();
-        return new HistoryQueryService(new CommitRepository(repository), refs)
+        return new HistoryQueryService(
+                new CommitRepository(repository), refs, new TombstoneRepository(repository))
                 .firstParent(ref.name(), activeWorkspaceId(), limit);
     }
 
@@ -680,7 +682,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         for (UUID zoneId : requested) {
             zones.require(workspace, zoneId);
         }
-        return new HistoryQueryService(new CommitRepository(repository), refs)
+        return new HistoryQueryService(
+                new CommitRepository(repository), refs, new TombstoneRepository(repository))
                 .firstParentByZone(activeRef().name(), workspace, requested, limit);
     }
 

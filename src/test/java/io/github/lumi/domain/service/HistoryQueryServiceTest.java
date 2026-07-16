@@ -12,6 +12,7 @@ import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.HistoryEntry;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
+import io.github.lumi.storage.repository.TombstoneRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -37,7 +38,7 @@ class HistoryQueryServiceTest {
         CommitId third = commits.write(commit(tree, List.of(second), "Third", 3));
         refs.create(new BranchName("main"), third);
 
-        List<HistoryEntry> history = new HistoryQueryService(commits, refs)
+        List<HistoryEntry> history = query(commits, refs)
                 .firstParent(new BranchName("main"), 2);
 
         assertEquals(List.of(third, second), history.stream().map(HistoryEntry::id).toList());
@@ -59,7 +60,7 @@ class HistoryQueryServiceTest {
                 tree, List.of(source), "Initial workspace", 2, namedWorkspace));
         refs.create(new BranchName("workspace/named/main"), root);
 
-        List<HistoryEntry> history = new HistoryQueryService(commits, refs)
+        List<HistoryEntry> history = query(commits, refs)
                 .firstParent(new BranchName("workspace/named/main"), namedWorkspace, 10);
 
         assertEquals(List.of(root), history.stream().map(HistoryEntry::id).toList());
@@ -79,7 +80,7 @@ class HistoryQueryServiceTest {
                 CommitKind.ZONE, new CommitStatistics(0, 0, 0, 0)));
         BranchName branch = new BranchName("main");
         refs.create(branch, zone);
-        HistoryQueryService query = new HistoryQueryService(commits, refs);
+        HistoryQueryService query = query(commits, refs);
 
         assertEquals(List.of(manual), query.firstParent(branch, workspace, 10).stream()
                 .map(HistoryEntry::id).toList());
@@ -104,10 +105,10 @@ class HistoryQueryServiceTest {
         BranchName branch = new BranchName("main");
         refs.create(branch, doorSave);
 
-        assertEquals(List.of(clockSave), new HistoryQueryService(commits, refs)
+        assertEquals(List.of(clockSave), query(commits, refs)
                 .firstParentForZone(branch, workspace, clock, 10).stream()
                 .map(HistoryEntry::id).toList());
-        var histories = new HistoryQueryService(commits, refs)
+        var histories = query(commits, refs)
                 .firstParentByZone(branch, workspace, Set.of(clock, door), 10);
         assertEquals(List.of(clockSave), histories.get(clock).stream()
                 .map(HistoryEntry::id).toList());
@@ -130,9 +131,33 @@ class HistoryQueryServiceTest {
         BranchName branch = new BranchName("main");
         refs.create(branch, manual);
 
-        assertEquals(List.of(manual), new HistoryQueryService(commits, refs)
+        assertEquals(List.of(manual), query(commits, refs)
                 .firstParent(branch, workspace, true, 10).stream()
                 .map(HistoryEntry::id).toList());
+    }
+
+    @Test
+    void hidesTombstonedCommitButContinuesThroughItsParent() throws Exception {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        CommitId first = commits.write(commit(tree, List.of(), "First", 1));
+        CommitId deleted = commits.write(commit(tree, List.of(first), "Deleted", 2));
+        refs.create(new BranchName("main"), deleted);
+        new TombstoneRepository(repositoryRoot).create(
+                new io.github.lumi.domain.model.CommitTombstone(
+                        deleted, new CommitAuthor(new UUID(0, 1), "Builder"), Instant.EPOCH));
+
+        assertEquals(List.of(first), query(commits, refs)
+                .firstParent(new BranchName("main"), 10).stream()
+                .map(HistoryEntry::id).toList());
+    }
+
+    private HistoryQueryService query(
+            CommitRepository commits, BranchRefRepository refs) {
+        return new HistoryQueryService(
+                commits, refs, new TombstoneRepository(repositoryRoot));
     }
 
     private static Commit commit(

@@ -9,6 +9,7 @@ import io.github.lumi.domain.model.Commit;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
+import io.github.lumi.domain.model.CommitTombstone;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.storage.object.ObjectStore;
@@ -58,8 +59,38 @@ class GarbageCollectorTest {
         assertThrows(NoSuchFileException.class, () -> rawObjects.read(oldOrphan));
     }
 
+    @Test
+    void retainsTombstonedDataUntilExplicitCleanup() throws IOException {
+        ObjectStore rawObjects = new ObjectStore(repositoryRoot.resolve("objects"));
+        ObjectId payload = rawObjects.write(new byte[] {9});
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        ObjectId tree = new MerkleTreeEditor(objects).update(
+                Optional.empty(), Map.of(new SectionKey(0, 0, 0), payload));
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        var commitId = commits.write(commit(tree));
+        TombstoneRepository tombstones = new TombstoneRepository(repositoryRoot);
+        tombstones.create(new CommitTombstone(
+                commitId, new CommitAuthor(new UUID(0, 7), "Builder"), Instant.EPOCH));
+        Instant cutoff = Instant.parse("2026-07-15T12:00:00Z");
+        makeOld(repositoryRoot.resolve("objects"), cutoff.minus(Duration.ofDays(2)));
+        makeOld(repositoryRoot.resolve("commits"), cutoff.minus(Duration.ofDays(2)));
+
+        new GarbageCollector(repositoryRoot).collect(Set.of(), cutoff);
+        assertArrayEquals(new byte[] {9}, rawObjects.read(payload));
+
+        tombstones.delete(commitId);
+        new GarbageCollector(repositoryRoot).collect(Set.of(), cutoff);
+
+        assertThrows(NoSuchFileException.class, () -> commits.read(commitId));
+        assertThrows(NoSuchFileException.class, () -> rawObjects.read(payload));
+    }
+
     private void makeObjectsOld(Instant timestamp) throws IOException {
-        try (var files = Files.walk(repositoryRoot.resolve("objects"))) {
+        makeOld(repositoryRoot.resolve("objects"), timestamp);
+    }
+
+    private static void makeOld(Path root, Instant timestamp) throws IOException {
+        try (var files = Files.walk(root)) {
             for (Path file : files.filter(Files::isRegularFile).toList()) {
                 Files.setLastModifiedTime(file, FileTime.from(timestamp));
             }

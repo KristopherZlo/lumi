@@ -18,6 +18,7 @@ public final class GarbageCollector {
     private final CommitRepository commitRepository;
     private final BranchRefRepository refs;
     private final OriginStore origins;
+    private final TombstoneRepository tombstones;
 
     public GarbageCollector(Path dimensionRepository) {
         Objects.requireNonNull(dimensionRepository, "dimensionRepository");
@@ -27,6 +28,7 @@ public final class GarbageCollector {
         commitRepository = new CommitRepository(dimensionRepository);
         refs = new BranchRefRepository(dimensionRepository);
         origins = new OriginStore(dimensionRepository);
+        tombstones = new TombstoneRepository(dimensionRepository);
     }
 
     public GarbageCollectionResult collect(Set<CommitId> retainedCommits, Instant deleteBefore) throws IOException {
@@ -34,6 +36,7 @@ public final class GarbageCollector {
         Objects.requireNonNull(deleteBefore, "deleteBefore");
         Set<CommitId> roots = new HashSet<>(retainedCommits);
         refs.list().forEach(ref -> roots.add(ref.commit()));
+        tombstones.list().forEach(tombstone -> roots.add(tombstone.commit()));
         Set<ObjectId> allCommitObjects = commits.listIds();
         for (ObjectId id : allCommitObjects) {
             if (!commits.modifiedAt(id).isBefore(deleteBefore)) {
