@@ -12,6 +12,7 @@
     "EntityStorageMixin",
     "LevelChunkMixin",
     "LevelTicksMixin",
+    "MinecraftServerAccessor",
     "PersistentEntitySectionManagerMixin",
     "PistonMovingBlockEntityMixin",
     "ServerPlayerGameModeMixin",

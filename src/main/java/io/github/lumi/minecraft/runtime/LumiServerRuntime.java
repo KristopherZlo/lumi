@@ -47,6 +47,12 @@ public final class LumiServerRuntime {
         if (session != null) {
             throw new IllegalStateException("A Lumi server session is already active");
         }
+        try {
+            PreModBackupService.run(server);
+        } catch (IOException failed) {
+            throw new IllegalStateException(
+                    "Optional pre-Lumi backup failed; the world was not opened", failed);
+        }
         session = new FabricServerSession(server);
     }
 

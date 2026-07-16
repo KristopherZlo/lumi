@@ -29,6 +29,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   once and controllable from More > Settings.
 - More > Check updates performs a manual bounded lookup against Lumi's fixed
   GitHub-hosted release manifest.
+- A one-time native Minecraft world backup can be requested before first V2
+  history creation with `-Dlumi.preModBackup.maxMiB=<limit>`; it is off by default.
 
 The implementation grows only through tested vertical slices. See
 [`modules.md`](modules.md) for code ownership and `docs/architecture.md` for
