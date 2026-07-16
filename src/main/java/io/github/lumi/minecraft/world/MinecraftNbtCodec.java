@@ -81,14 +81,44 @@ public final class MinecraftNbtCodec {
     }
 
     private static void writeList(ListTag list, DataOutput output, int depth) throws IOException {
-        byte elementType = list.isEmpty() ? Tag.TAG_END : list.getFirst().getId();
+        byte elementType = rawElementType(list);
         output.writeByte(elementType);
         output.writeInt(list.size());
         for (Tag element : list) {
-            if (element.getId() != elementType || elementType == Tag.TAG_END) {
-                throw new IOException("NBT list contains inconsistent element types");
+            if (elementType == Tag.TAG_COMPOUND && needsCompoundWrapper(element)) {
+                writeCompoundWrapper(element, output, depth);
+            } else {
+                writePayload(element, output, depth + 1);
             }
-            writePayload(element, output, depth + 1);
         }
+    }
+
+    private static byte rawElementType(ListTag list) throws IOException {
+        byte elementType = Tag.TAG_END;
+        for (Tag element : list) {
+            byte candidate = Objects.requireNonNull(element, "list element").getId();
+            if (candidate == Tag.TAG_END) {
+                throw new IOException("NBT lists cannot contain end tags");
+            }
+            if (elementType == Tag.TAG_END) {
+                elementType = candidate;
+            } else if (elementType != candidate) {
+                return Tag.TAG_COMPOUND;
+            }
+        }
+        return elementType;
+    }
+
+    private static boolean needsCompoundWrapper(Tag element) {
+        return !(element instanceof CompoundTag compound)
+                || compound.size() == 1 && compound.contains("");
+    }
+
+    private static void writeCompoundWrapper(
+            Tag element, DataOutput output, int depth) throws IOException {
+        output.writeByte(element.getId());
+        output.writeUTF("");
+        writePayload(element, output, depth + 2);
+        output.writeByte(Tag.TAG_END);
     }
 }
