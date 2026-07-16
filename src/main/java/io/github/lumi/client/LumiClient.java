@@ -4,6 +4,7 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientSelection;
+import io.github.lumi.client.onboarding.ClientOnboardingStateRepository;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
@@ -40,9 +41,12 @@ public final class LumiClient implements ClientModInitializer {
     private static final ClientHistoryStore HISTORY = new ClientHistoryStore();
     private static final ClientCompareStore COMPARISONS = new ClientCompareStore();
     private static final ClientSelection SELECTION = new ClientSelection();
+    private static final ClientOnboardingStateRepository ONBOARDING =
+            new ClientOnboardingStateRepository();
+    private static boolean onboardingShown;
     private static final LumiClientNetworking NETWORKING =
             new LumiClientNetworking(
-                    HISTORY, COMPARISONS, LumiClient::showRecovery,
+                    HISTORY, COMPARISONS, LumiClient::acceptSnapshot,
                     LumiClient::showPackageInspection);
 
     @Override
@@ -165,7 +169,8 @@ public final class LumiClient implements ClientModInitializer {
         Minecraft client = Minecraft.getInstance();
         client.setScreen(new LumiMoreScreen(
                 parent,
-                () -> client.setScreen(new LumiOnboardingScreen(client.screen)),
+                () -> client.setScreen(new LumiOnboardingScreen(
+                        client.screen, ONBOARDING::markCompleted)),
                 () -> client.setScreen(new LumiHotkeyScreen(
                         client.screen,
                         LumiHotkeys.shortcuts(client.options.keyMappings))),
@@ -190,6 +195,21 @@ public final class LumiClient implements ClientModInitializer {
         }
         client.setScreen(new LumiRecoveryScreen(
                 client.screen, NETWORKING::resumeRecovery, NETWORKING::returnRecovery));
+    }
+
+    private static void acceptSnapshot(HistorySnapshotPayload snapshot) {
+        showRecovery(snapshot);
+        Minecraft client = Minecraft.getInstance();
+        if (snapshot.recoveryPending()
+                || snapshot.operationActive()
+                || onboardingShown
+                || ONBOARDING.completed()
+                || client.player == null
+                || client.screen != null) {
+            return;
+        }
+        onboardingShown = true;
+        client.setScreen(new LumiOnboardingScreen(null, ONBOARDING::markCompleted));
     }
 
     private static void showPackageInspection(PackageInspectionPayload inspection) {

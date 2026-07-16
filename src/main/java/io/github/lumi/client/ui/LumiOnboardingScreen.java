@@ -9,14 +9,20 @@ import net.minecraft.network.chat.Component;
 /** Replayable, non-destructive introduction to the core builder loop. */
 public final class LumiOnboardingScreen extends Screen {
     private final Screen parent;
+    private final Runnable completed;
     private final OnboardingTour tour = new OnboardingTour();
     private int panelX;
     private int panelY;
     private int panelWidth;
 
     public LumiOnboardingScreen(Screen parent) {
+        this(parent, () -> { });
+    }
+
+    public LumiOnboardingScreen(Screen parent, Runnable completed) {
         super(Component.translatable("luma.screen.onboarding.title"));
         this.parent = parent;
+        this.completed = java.util.Objects.requireNonNull(completed, "completed");
     }
 
     @Override
@@ -66,5 +72,8 @@ public final class LumiOnboardingScreen extends Screen {
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { minecraft.setScreen(parent); }
+    @Override public void onClose() {
+        completed.run();
+        minecraft.setScreen(parent);
+    }
 }
