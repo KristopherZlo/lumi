@@ -35,7 +35,9 @@ public final class ClientHistoryStore {
                 snapshot.dimensionId(), event.head(), event.revision(), snapshot.pendingKeys(),
                 events.values().stream().anyMatch(value ->
                         value.state() == OperationEventPayload.State.ACCEPTED
-                                || value.state() == OperationEventPayload.State.PROGRESS));
+                                || value.state() == OperationEventPayload.State.PROGRESS),
+                snapshot.workspaceId(), snapshot.workspaceName(), snapshot.branchName(),
+                snapshot.versions());
     }
 
     public synchronized ClientHistoryState state() {

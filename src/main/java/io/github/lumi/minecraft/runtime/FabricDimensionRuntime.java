@@ -33,6 +33,7 @@ import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
+import io.github.lumi.domain.service.HistoryQueryService;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.MergeService;
 import io.github.lumi.domain.service.PreparedMerge;
@@ -79,6 +80,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
@@ -635,6 +637,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public io.github.lumi.domain.model.Workspace activeWorkspace() throws IOException {
         return workspaces.active();
+    }
+
+    public List<io.github.lumi.domain.model.HistoryEntry> history(int limit)
+            throws IOException {
+        BranchRef ref = activeRef();
+        return new HistoryQueryService(new CommitRepository(repository), refs)
+                .firstParent(ref.name(), activeWorkspaceId(), limit);
     }
 
     public io.github.lumi.domain.model.Zone createZone(

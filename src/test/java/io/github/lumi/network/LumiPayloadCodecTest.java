@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.minecraft.operation.OperationProgress;
 import io.netty.buffer.Unpooled;
@@ -48,7 +49,11 @@ class LumiPayloadCodecTest {
     @Test
     void snapshotAndTerminalEventRoundTrip() {
         HistorySnapshotPayload snapshot = new HistorySnapshotPayload(
-                "minecraft:overworld", id('a'), 7, 3, true);
+                "minecraft:overworld", id('a'), 7, 3, true,
+                new UUID(0, 7), "Redstone lab", "workspace/lab/main",
+                java.util.List.of(new HistorySnapshotPayload.Version(
+                        id('a'), "Clock works", "Builder", 1234,
+                        CommitKind.MANUAL)));
         OperationEventPayload event = new OperationEventPayload(
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 "minecraft:overworld", OperationEventPayload.State.ACCEPTED,

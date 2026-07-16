@@ -86,6 +86,26 @@ class HistoryQueryServiceTest {
                 .map(HistoryEntry::id).toList());
     }
 
+    @Test
+    void neverShowsInternalSafetyCommitsInBuilderHistory() throws Exception {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        UUID workspace = new UUID(0, 2);
+        CommitId hidden = commits.write(new Commit(
+                tree, List.of(), new CommitAuthor(new UUID(0, 1), "Builder"), "Checkpoint",
+                Instant.EPOCH, workspace, Optional.empty(), CommitKind.HIDDEN_RETURN,
+                new CommitStatistics(0, 0, 0, 0)));
+        CommitId manual = commits.write(commit(tree, List.of(hidden), "Visible", 1));
+        BranchName branch = new BranchName("main");
+        refs.create(branch, manual);
+
+        assertEquals(List.of(manual), new HistoryQueryService(commits, refs)
+                .firstParent(branch, workspace, true, 10).stream()
+                .map(HistoryEntry::id).toList());
+    }
+
     private static Commit commit(
             io.github.lumi.domain.model.ObjectId tree,
             List<CommitId> parents,

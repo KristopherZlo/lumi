@@ -273,10 +273,19 @@ public final class LumiServerNetworking {
     private static void sendSnapshot(ServerPlayer player, FabricDimensionRuntime runtime) {
         try {
             BranchRef head = runtime.activeRef();
+            var workspace = runtime.activeWorkspace();
+            var versions = runtime.history(32).stream()
+                    .map(entry -> new HistorySnapshotPayload.Version(
+                            entry.id(), entry.commit().message(),
+                            entry.commit().author().name(),
+                            entry.commit().timestamp().toEpochMilli(),
+                            entry.commit().kind()))
+                    .toList();
             send(player, new HistorySnapshotPayload(
                     dimension(runtime), head.commit(), head.revision(),
                     runtime.mutations().snapshot().generations().size(),
-                    runtime.operations().hasActiveOperation()));
+                    runtime.operations().hasActiveOperation(),
+                    workspace.id(), workspace.name(), head.name().value(), versions));
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi history snapshot", failed);
         }

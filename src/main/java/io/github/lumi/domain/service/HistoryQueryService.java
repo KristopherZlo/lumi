@@ -63,7 +63,7 @@ public final class HistoryQueryService {
                 }
                 break;
             }
-            if (includeZoneCommits || commit.kind() != CommitKind.ZONE) {
+            if (visible(commit.kind(), includeZoneCommits)) {
                 history.add(new HistoryEntry(next, commit));
             }
             if (commit.parents().isEmpty()) {
@@ -72,5 +72,13 @@ public final class HistoryQueryService {
             next = commit.parents().getFirst();
         }
         return List.copyOf(history);
+    }
+
+    private static boolean visible(CommitKind kind, boolean includeZoneCommits) {
+        return switch (kind) {
+            case HIDDEN_SAFETY, HIDDEN_RETURN -> false;
+            case ZONE -> includeZoneCommits;
+            default -> true;
+        };
     }
 }
