@@ -13,6 +13,7 @@ import io.github.lumi.network.MergeArgument;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
 import io.github.lumi.network.PartialRestoreArgument;
+import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.network.ZoneCreateArgument;
 import io.github.lumi.network.ZoneRestoreArgument;
 import io.github.lumi.network.ZoneSaveArgument;
@@ -27,14 +28,17 @@ public final class LumiClientNetworking {
     private final ClientHistoryStore history;
     private final ClientCompareStore comparisons;
     private final Consumer<HistorySnapshotPayload> snapshotListener;
+    private final Consumer<PackageInspectionPayload> packageListener;
 
     public LumiClientNetworking(
             ClientHistoryStore history,
             ClientCompareStore comparisons,
-            Consumer<HistorySnapshotPayload> snapshotListener) {
+            Consumer<HistorySnapshotPayload> snapshotListener,
+            Consumer<PackageInspectionPayload> packageListener) {
         this.history = Objects.requireNonNull(history, "history");
         this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
         this.snapshotListener = Objects.requireNonNull(snapshotListener, "snapshotListener");
+        this.packageListener = Objects.requireNonNull(packageListener, "packageListener");
     }
 
     public void register() {
@@ -50,6 +54,9 @@ public final class LumiClientNetworking {
         ClientPlayNetworking.registerGlobalReceiver(
                 CompareResultPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> comparisons.accept(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(
+                PackageInspectionPayload.TYPE, (payload, context) ->
+                        context.client().execute(() -> packageListener.accept(payload)));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             history.clear();
             comparisons.clear();
@@ -144,6 +151,21 @@ public final class LumiClientNetworking {
     public UUID cleanupVersion(CommitId target) {
         return send(HistoryCommandPayload.Kind.CLEANUP_VERSION,
                 Objects.requireNonNull(target, "target").hex());
+    }
+
+    public UUID exportPackage(String name) {
+        return send(HistoryCommandPayload.Kind.PACKAGE_EXPORT,
+                Objects.requireNonNull(name, "name"));
+    }
+
+    public UUID inspectPackage(String name) {
+        return send(HistoryCommandPayload.Kind.PACKAGE_INSPECT,
+                Objects.requireNonNull(name, "name"));
+    }
+
+    public UUID importPackage(UUID inspectionToken) {
+        return send(HistoryCommandPayload.Kind.PACKAGE_IMPORT,
+                Objects.requireNonNull(inspectionToken, "inspectionToken").toString());
     }
 
     public UUID merge(String sourceBranch) {

@@ -943,6 +943,7 @@
   "luma.share.import_title": "Import history",
   "luma.share.import_help": "Drop shared package zips into lumi-projects or enter an absolute path. Lumi brings each package in as a review project first.",
   "luma.share.import_path": "Archive path",
+  "luma.share.package_name": "Package name",
   "luma.share.import_ready": "Imported review project: %s",
   "luma.share.package_folder_title": "Package folder",
   "luma.share.package_folder_help": "Lumi reads and writes portable history packages from the game-root lumi-projects folder.",

@@ -12,6 +12,7 @@ import io.github.lumi.client.ui.LumiDeletedVersionsScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiCompareScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
+import io.github.lumi.client.ui.LumiPackageScreen;
 import io.github.lumi.client.ui.LumiZonesScreen;
 import io.github.lumi.client.ui.LumiZoneDetailsScreen;
 import io.github.lumi.client.ui.LumiZoneRestoreScreen;
@@ -19,12 +20,15 @@ import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.client.ui.LumiRestoreScreen;
 import io.github.lumi.client.ui.BranchNameController;
 import io.github.lumi.client.ui.SaveScreenController;
+import io.github.lumi.client.ui.PackageScreenController;
 import io.github.lumi.client.ui.ZoneScreenController;
 import io.github.lumi.client.ui.ZoneDetailsController;
 import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.PackageInspectionPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.network.chat.Component;
 
 /** Client entrypoint; retained UI controllers consume this single networking facade. */
@@ -33,7 +37,9 @@ public final class LumiClient implements ClientModInitializer {
     private static final ClientCompareStore COMPARISONS = new ClientCompareStore();
     private static final ClientSelection SELECTION = new ClientSelection();
     private static final LumiClientNetworking NETWORKING =
-            new LumiClientNetworking(HISTORY, COMPARISONS, LumiClient::showRecovery);
+            new LumiClientNetworking(
+                    HISTORY, COMPARISONS, LumiClient::showRecovery,
+                    LumiClient::showPackageInspection);
 
     @Override
     public void onInitializeClient() {
@@ -63,6 +69,10 @@ public final class LumiClient implements ClientModInitializer {
                                 () -> openZones(client.screen),
                                 () -> client.setScreen(new LumiDeletedVersionsScreen(
                                         client.screen, HISTORY, NETWORKING::cleanupVersion)),
+                                () -> client.setScreen(new LumiPackageScreen(
+                                        client.screen, new PackageScreenController(
+                                                NETWORKING::exportPackage,
+                                                NETWORKING::inspectPackage))),
                                 NETWORKING::quickRollback,
                                 version -> client.setScreen(new LumiRestoreScreen(
                                         client.screen,
@@ -156,6 +166,33 @@ public final class LumiClient implements ClientModInitializer {
         }
         client.setScreen(new LumiRecoveryScreen(
                 client.screen, NETWORKING::resumeRecovery, NETWORKING::returnRecovery));
+    }
+
+    private static void showPackageInspection(PackageInspectionPayload inspection) {
+        Minecraft client = Minecraft.getInstance();
+        if (!(client.screen instanceof LumiPackageScreen packages)) {
+            return;
+        }
+        Component details = Component.translatable(
+                        "luma.share.package_safety_warning")
+                .append("\n")
+                .append(Component.literal(
+                        inspection.packageName() + ".lumi\n"
+                                + inspection.message() + " — " + inspection.author()
+                                + "\n" + inspection.totalBytes() + " bytes, "
+                                + inspection.objectCount() + " objects"));
+        client.setScreen(new ConfirmScreen(confirmed -> {
+            client.setScreen(packages);
+            if (!confirmed) {
+                return;
+            }
+            try {
+                NETWORKING.importPackage(inspection.requestId());
+            } catch (RuntimeException failed) {
+                showFeedback(failed.getMessage() == null
+                        ? "Lumi import could not start" : failed.getMessage());
+            }
+        }, Component.translatable("luma.share.import_title"), details));
     }
 
     private static String currentBranch() {
