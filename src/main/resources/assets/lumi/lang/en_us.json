@@ -463,6 +463,7 @@
   "luma.compare.loading_title": "Building comparison",
   "luma.compare.loading": "Lumi is reading the history data in the background so the game stays responsive.",
   "luma.compare.summary": "%s -> %s | changed blocks: %s | changed chunks: %s",
+  "luma.compare.section_summary": "Changed sections: %s | entity chunks: %s",
   "luma.compare.block_entry": "(%s, %s, %s) | %s",
   "luma.compare.material_entry": "%s | delta: %s",
   "luma.compare.overlay_on": "Visual compare overlay is enabled.",

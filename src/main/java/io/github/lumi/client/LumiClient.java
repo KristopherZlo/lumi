@@ -8,6 +8,7 @@ import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
+import io.github.lumi.client.ui.LumiCompareScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.client.ui.LumiRestoreScreen;
 import io.github.lumi.client.ui.BranchNameController;
@@ -54,7 +55,13 @@ public final class LumiClient implements ClientModInitializer {
                                                 NETWORKING.restoreWithoutEntities(target);
                                             }
                                         },
-                                        NETWORKING::restoreArea))));
+                                        NETWORKING::restoreArea)),
+                                target -> client.setScreen(new LumiCompareScreen(
+                                        client.screen,
+                                        COMPARISONS,
+                                        target.label(),
+                                        () -> NETWORKING.compare(
+                                                target.before(), target.after())))));
                     }
 
                     @Override public void openSave() {

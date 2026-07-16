@@ -407,6 +407,7 @@
   "luma.compare.loading_title": "Сравнение создается",
   "luma.compare.loading": "Lumi читает данные истории в фоне, чтобы игра оставалась отзывчивой.",
   "luma.compare.summary": "%s -> %s | измененных блоков: %s | измененных чанков: %s",
+  "luma.compare.section_summary": "Изменено секций: %s | чанков сущностей: %s",
   "luma.compare.block_entry": "(%s, %s, %s) | %s",
   "luma.compare.material_entry": "%s | дельта: %s",
   "luma.compare.overlay_on": "Подсветка изменений включена.",

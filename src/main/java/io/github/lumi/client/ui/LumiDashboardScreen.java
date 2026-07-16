@@ -18,6 +18,8 @@ public final class LumiDashboardScreen extends Screen {
     private final Runnable openBranch;
     private final Runnable quickRollback;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
+    private final Consumer<VersionCompareController.Target> openCompare;
+    private final VersionCompareController compareController = new VersionCompareController();
     private HistorySnapshotPayload snapshot;
     private int panelX;
     private int panelY;
@@ -29,7 +31,8 @@ public final class LumiDashboardScreen extends Screen {
             Runnable openSave,
             Runnable openBranch,
             Runnable quickRollback,
-            Consumer<HistorySnapshotPayload.Version> openRestore) {
+            Consumer<HistorySnapshotPayload.Version> openRestore,
+            Consumer<VersionCompareController.Target> openCompare) {
         super(Component.translatable("luma.screen.dashboard.title"));
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
@@ -37,6 +40,7 @@ public final class LumiDashboardScreen extends Screen {
         this.openBranch = Objects.requireNonNull(openBranch, "openBranch");
         this.quickRollback = Objects.requireNonNull(quickRollback, "quickRollback");
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
+        this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
     }
 
     @Override
@@ -68,6 +72,11 @@ public final class LumiDashboardScreen extends Screen {
         for (int index = 0; index < visible; index++) {
             int rowY = panelY + 128 + index * 32;
             HistorySnapshotPayload.Version version = snapshot.versions().get(index);
+            compareController.target(snapshot.versions(), index).ifPresent(target ->
+                    addRenderableWidget(Button.builder(
+                            Component.translatable("luma.action.compare"),
+                            ignored -> openCompare.accept(target))
+                            .bounds(panelX + panelWidth - 168, rowY + 4, 72, 20).build()));
             addRenderableWidget(Button.builder(
                     Component.translatable("luma.action.restore"),
                     ignored -> openRestore.accept(version))
@@ -106,7 +115,7 @@ public final class LumiDashboardScreen extends Screen {
             graphics.fill(panelX + 16, rowY, panelX + panelWidth - 16, rowY + 28,
                     0xff20252c);
             graphics.drawString(font,
-                    font.plainSubstrByWidth(version.message(), panelWidth - 200),
+                    font.plainSubstrByWidth(version.message(), panelWidth - 280),
                     panelX + 24, rowY + 5, 0xfff0f3f6, false);
             graphics.drawString(font, version.author(), panelX + 24, rowY + 17,
                     0xff8f9aa8, false);
