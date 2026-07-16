@@ -23,7 +23,8 @@ class TelemetrySpoolRepositoryTest {
     }
 
     private static TelemetryEvent event(String id) {
-        return new TelemetryEvent(id, TelemetryEventType.OPERATION_FAILED, 1,
-                "0.2", "1.21.11", Map.of("operation", "Restore"));
+        return new TelemetryEvent(id, 1, TelemetryEventType.OPERATION_FAILED,
+                "2026-01-01T00:00:00Z", new TelemetryEnvironment("0.2", "1.21.11"),
+                Map.of("operation", "Restore"));
     }
 }

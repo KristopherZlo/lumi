@@ -8,7 +8,7 @@ import java.util.Set;
 final class TelemetryPrivacy {
     private static final int MAX_VALUE_LENGTH = 256;
     private static final Set<String> ALLOWED_FIELDS = Set.of(
-            "operation", "phase", "failureClass", "failureFrame",
+            "operation", "stage", "failureClass", "failureFrame",
             "elapsedMicros", "budgetMicros");
 
     private TelemetryPrivacy() { }
