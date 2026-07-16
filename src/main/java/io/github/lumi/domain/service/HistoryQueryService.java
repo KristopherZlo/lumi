@@ -2,6 +2,7 @@ package io.github.lumi.domain.service;
 
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.HistoryEntry;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
@@ -24,17 +25,27 @@ public final class HistoryQueryService {
     }
 
     public List<HistoryEntry> firstParent(BranchName branch, int limit) throws IOException {
-        return firstParent(branch, Optional.empty(), limit);
+        return firstParent(branch, Optional.empty(), true, limit);
     }
 
     public List<HistoryEntry> firstParent(
             BranchName branch, UUID workspaceId, int limit) throws IOException {
         return firstParent(branch, Optional.of(Objects.requireNonNull(workspaceId, "workspaceId")),
-                limit);
+                false, limit);
+    }
+
+    public List<HistoryEntry> firstParent(
+            BranchName branch, UUID workspaceId, boolean includeZoneCommits, int limit)
+            throws IOException {
+        return firstParent(branch, Optional.of(Objects.requireNonNull(workspaceId, "workspaceId")),
+                includeZoneCommits, limit);
     }
 
     private List<HistoryEntry> firstParent(
-            BranchName branch, Optional<UUID> workspaceId, int limit) throws IOException {
+            BranchName branch,
+            Optional<UUID> workspaceId,
+            boolean includeZoneCommits,
+            int limit) throws IOException {
         Objects.requireNonNull(branch, "branch");
         if (limit < 1 || limit > MAX_QUERY) {
             throw new IllegalArgumentException("History limit must be between 1 and " + MAX_QUERY);
@@ -42,7 +53,8 @@ public final class HistoryQueryService {
         CommitId next = refs.read(branch).orElseThrow(
                 () -> new IOException("Branch does not exist: " + branch)).commit();
         ArrayList<HistoryEntry> history = new ArrayList<>(Math.min(limit, 64));
-        while (history.size() < limit) {
+        int visited = 0;
+        while (history.size() < limit && visited++ < MAX_QUERY) {
             var commit = commits.read(next);
             if (workspaceId.isPresent()
                     && !commit.workspaceId().equals(workspaceId.orElseThrow())) {
@@ -51,7 +63,9 @@ public final class HistoryQueryService {
                 }
                 break;
             }
-            history.add(new HistoryEntry(next, commit));
+            if (includeZoneCommits || commit.kind() != CommitKind.ZONE) {
+                history.add(new HistoryEntry(next, commit));
+            }
             if (commit.parents().isEmpty()) {
                 break;
             }

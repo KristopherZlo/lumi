@@ -42,6 +42,8 @@ import io.github.lumi.domain.service.RecoveryService;
 import io.github.lumi.domain.service.SaveJournalRecovery;
 import io.github.lumi.domain.service.PublishedApplyRecovery;
 import io.github.lumi.domain.service.WorkspaceService;
+import io.github.lumi.domain.service.ZoneScope;
+import io.github.lumi.domain.service.ZoneService;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.BatchedWorldStateCapture;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
@@ -69,6 +71,7 @@ import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import io.github.lumi.storage.repository.WorkspaceRepository;
+import io.github.lumi.storage.repository.ZoneRepository;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -79,6 +82,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -105,6 +109,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final MergeService merges;
     private final RecoveryService recoveries;
     private final WorkspaceService workspaces;
+    private final ZoneService zones;
     private final ReturnPointRestorePreparation returnPointRestores;
     private final Executor background;
     private final BranchRefRepository refs;
@@ -139,6 +144,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             BranchService branches,
             MergeService merges,
             WorkspaceService workspaces,
+            ZoneService zones,
             UUID defaultWorkspaceId,
             OperationJournal pendingRecovery,
             io.github.lumi.minecraft.world.DimensionFreeze.Lease recoveryLease) {
@@ -154,6 +160,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.branches = branches;
         this.merges = merges;
         this.workspaces = workspaces;
+        this.zones = zones;
         recoveries = new RecoveryService(restores);
         this.background = background;
         this.refs = refs;
@@ -224,7 +231,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 restoreService,
                 new MinecraftWorldStateApply(level, freeze), journals,
                 background, refs, active, branches,
-                new MergeService(objects, commits, origins, trees), workspaceService, workspaceId,
+                new MergeService(objects, commits, origins, trees), workspaceService,
+                new ZoneService(new ZoneRepository(repository)), workspaceId,
                 interrupted.orElse(null), recoveryLease);
     }
 
@@ -385,9 +393,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         if (!workspace.id().equals(workspaces.active().id())) {
             throw new IOException("Save workspace is not active: " + workspace.id());
         }
+        Predicate<io.github.lumi.domain.model.HistoryKey> scope = workspace::includes;
+        if (request.zoneId().isPresent()) {
+            if (request.kind() != CommitKind.ZONE) {
+                throw new IOException("Zone Save requires zone commit kind");
+            }
+            ZoneScope zone = new ZoneScope(zones.require(
+                    workspace.id(), request.zoneId().orElseThrow()));
+            scope = key -> workspace.includes(key) && zone.includes(key);
+        } else if (request.kind() == CommitKind.ZONE) {
+            throw new IOException("Zone commit requires a zone ID");
+        }
         return new SaveCaptureOperation(
                 Objects.requireNonNull(request, "request"),
-                new ScopedSavePreparation(savePreparation, workspace::includes), worldCapture,
+                new ScopedSavePreparation(savePreparation, scope), worldCapture,
                 saves, mutations, background);
     }
 
@@ -586,6 +605,24 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public io.github.lumi.domain.model.Workspace activeWorkspace() throws IOException {
         return workspaces.active();
+    }
+
+    public io.github.lumi.domain.model.Zone createZone(
+            String name, int color, java.util.Set<SectionKey> cells) throws IOException {
+        requireNoRecovery();
+        return zones.create(UUID.randomUUID(), activeWorkspaceId(), name, color, cells);
+    }
+
+    public io.github.lumi.domain.model.Zone setZoneActorActive(
+            UUID zoneId, UUID actor, boolean enabled) throws IOException {
+        requireNoRecovery();
+        return zones.setActorActive(activeWorkspaceId(), zoneId, actor, enabled);
+    }
+
+    public io.github.lumi.domain.model.Zone growZoneForActor(
+            UUID zoneId, UUID actor, SectionKey cell) throws IOException {
+        requireNoRecovery();
+        return zones.growForActor(activeWorkspaceId(), zoneId, actor, cell);
     }
 
     public CompletableFuture<PreparedMerge> prepareMerge(
