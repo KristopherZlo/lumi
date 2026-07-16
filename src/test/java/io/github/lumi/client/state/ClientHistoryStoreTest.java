@@ -7,6 +7,8 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.OperationEventPayload;
+import io.github.lumi.minecraft.operation.OperationProgress;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -65,6 +67,19 @@ class ClientHistoryStoreTest {
         store.accept(new OperationEventPayload(
                 first, "minecraft:overworld", OperationEventPayload.State.SUCCEEDED,
                 "Done", id('2'), 1));
+
+        assertEquals(true, store.state().snapshot().orElseThrow().operationActive());
+    }
+
+    @Test
+    void progressEventKeepsOperationBusy() {
+        ClientHistoryStore store = new ClientHistoryStore();
+        store.accept(new HistorySnapshotPayload(
+                "minecraft:overworld", id('1'), 0, 0, false));
+        store.accept(new OperationEventPayload(
+                UUID.randomUUID(), "minecraft:overworld", OperationEventPayload.State.PROGRESS,
+                "Save: writing", id('1'), 0, Optional.of(UUID.randomUUID()), 0,
+                Optional.of(OperationProgress.indeterminate("Save: writing"))));
 
         assertEquals(true, store.state().snapshot().orElseThrow().operationActive());
     }

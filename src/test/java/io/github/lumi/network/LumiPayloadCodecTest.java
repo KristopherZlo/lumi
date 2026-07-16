@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.minecraft.operation.OperationProgress;
 import io.netty.buffer.Unpooled;
 import java.util.UUID;
 import java.util.Optional;
@@ -56,6 +57,12 @@ class LumiPayloadCodecTest {
 
         assertEquals(snapshot, roundTrip(HistorySnapshotPayload.CODEC, snapshot));
         assertEquals(event, roundTrip(OperationEventPayload.CODEC, event));
+        OperationEventPayload progress = new OperationEventPayload(
+                UUID.randomUUID(), "minecraft:overworld",
+                OperationEventPayload.State.PROGRESS, "Restore: applying", id('b'), 8,
+                Optional.of(UUID.randomUUID()), 0,
+                Optional.of(new OperationProgress("Restore: applying", 4, 10)));
+        assertEquals(progress, roundTrip(OperationEventPayload.CODEC, progress));
     }
 
     private static CommitId id(char digit) {

@@ -136,8 +136,8 @@ public final class DimensionOperationCoordinator {
             return;
         }
         if (active.isTerminal()) {
-            reportTerminal();
             notifyProgress();
+            reportTerminal();
             releaseFreezeIfSafe();
             clearTerminalIfSafe();
             return;
@@ -149,8 +149,8 @@ public final class DimensionOperationCoordinator {
         long deadline = start > Long.MAX_VALUE - tickBudgetNanos
                 ? Long.MAX_VALUE : start + tickBudgetNanos;
         active.advance(deadline);
-        reportTerminal();
         notifyProgress();
+        reportTerminal();
         releaseFreezeIfSafe();
         clearTerminalIfSafe();
     }

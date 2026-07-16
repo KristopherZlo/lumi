@@ -12,6 +12,7 @@ import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.operation.OperationTicket;
+import io.github.lumi.minecraft.operation.OperationProgress;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import java.io.IOException;
 import java.time.Instant;
@@ -78,6 +79,10 @@ public final class LumiServerNetworking {
                 sendEvent(player, payload, runtime, OperationEventPayload.State.ACCEPTED,
                         message, Optional.of(started.ticket()), position);
             });
+            runtime.operations().observeProgress(started.ticket(), progress ->
+                    runtime.operations().queuePosition(started.ticket()).ifPresent(position ->
+                            sendProgress(player, payload, runtime, started.ticket(),
+                                    position, progress)));
         } catch (IOException | IllegalArgumentException | IllegalStateException failed) {
             reject(player, payload, runtime, failed.getMessage());
         }
@@ -243,6 +248,25 @@ public final class LumiServerNetworking {
                     queuePosition));
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi operation event", failed);
+        }
+    }
+
+    private static void sendProgress(
+            ServerPlayer player,
+            HistoryCommandPayload request,
+            FabricDimensionRuntime runtime,
+            OperationTicket ticket,
+            int queuePosition,
+            OperationProgress progress) {
+        try {
+            BranchRef head = runtime.activeRef();
+            send(player, new OperationEventPayload(
+                    request.requestId(), dimension(runtime),
+                    OperationEventPayload.State.PROGRESS, progress.phase(),
+                    head.commit(), head.revision(), Optional.of(ticket.id()),
+                    queuePosition, Optional.of(progress)));
+        } catch (IOException failed) {
+            LumiMod.LOGGER.error("Cannot publish Lumi operation progress", failed);
         }
     }
 

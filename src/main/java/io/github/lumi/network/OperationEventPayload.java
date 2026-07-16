@@ -3,6 +3,7 @@ package io.github.lumi.network;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.minecraft.operation.OperationProgress;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,7 +21,8 @@ public record OperationEventPayload(
         CommitId head,
         long revision,
         Optional<UUID> ticketId,
-        int queuePosition) implements CustomPacketPayload {
+        int queuePosition,
+        Optional<OperationProgress> progress) implements CustomPacketPayload {
     private static final int MAX_DIMENSION_BYTES = 256;
     private static final int MAX_MESSAGE_BYTES = 4096;
     public static final Type<OperationEventPayload> TYPE = new Type<>(
@@ -35,6 +37,7 @@ public record OperationEventPayload(
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(head, "head");
         ticketId = Objects.requireNonNull(ticketId, "ticketId");
+        progress = Objects.requireNonNull(progress, "progress");
         if (dimensionId.isBlank() || dimensionId.length() > MAX_DIMENSION_BYTES) {
             throw new IllegalArgumentException("Invalid dimension ID");
         }
@@ -47,6 +50,9 @@ public record OperationEventPayload(
         if (ticketId.isPresent() != (queuePosition >= 0)) {
             throw new IllegalArgumentException("Queue position requires an operation ticket");
         }
+        if ((state == State.PROGRESS) != progress.isPresent()) {
+            throw new IllegalArgumentException("Only progress events carry progress");
+        }
     }
 
     public OperationEventPayload(
@@ -56,7 +62,21 @@ public record OperationEventPayload(
             String message,
             CommitId head,
             long revision) {
-        this(requestId, dimensionId, state, message, head, revision, Optional.empty(), -1);
+        this(requestId, dimensionId, state, message, head, revision,
+                Optional.empty(), -1, Optional.empty());
+    }
+
+    public OperationEventPayload(
+            UUID requestId,
+            String dimensionId,
+            State state,
+            String message,
+            CommitId head,
+            long revision,
+            Optional<UUID> ticketId,
+            int queuePosition) {
+        this(requestId, dimensionId, state, message, head, revision,
+                ticketId, queuePosition, Optional.empty());
     }
 
     private void write(FriendlyByteBuf buffer) {
@@ -69,6 +89,12 @@ public record OperationEventPayload(
         buffer.writeBoolean(ticketId.isPresent());
         ticketId.ifPresent(buffer::writeUUID);
         buffer.writeVarInt(queuePosition + 1);
+        buffer.writeBoolean(progress.isPresent());
+        progress.ifPresent(value -> {
+            buffer.writeUtf(value.phase(), 256);
+            buffer.writeVarLong(value.completed());
+            buffer.writeVarLong(value.total());
+        });
     }
 
     private static OperationEventPayload read(FriendlyByteBuf buffer) {
@@ -80,15 +106,21 @@ public record OperationEventPayload(
         long revision = buffer.readVarLong();
         Optional<UUID> ticket = buffer.readBoolean()
                 ? Optional.of(buffer.readUUID()) : Optional.empty();
+        int queuePosition = buffer.readVarInt() - 1;
+        Optional<OperationProgress> progress = buffer.readBoolean()
+                ? Optional.of(new OperationProgress(
+                        buffer.readUtf(256), buffer.readVarLong(), buffer.readVarLong()))
+                : Optional.empty();
         return new OperationEventPayload(
                 request, dimension, state, message, head, revision,
-                ticket, buffer.readVarInt() - 1);
+                ticket, queuePosition, progress);
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
 
     public enum State {
-        ACCEPTED(0), SUCCEEDED(1), FAILED(2), CANCELLED(3), RETURNED(4), DEGRADED(5);
+        ACCEPTED(0), SUCCEEDED(1), FAILED(2), CANCELLED(3), RETURNED(4), DEGRADED(5),
+        PROGRESS(6);
         private final int code;
         State(int code) { this.code = code; }
         private static State fromCode(int code) {
