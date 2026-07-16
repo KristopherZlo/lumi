@@ -9,6 +9,7 @@ import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.PlayerSpawn;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -78,6 +79,23 @@ class PreparedWorldMutationSessionTest {
                 session.verifyUntil(Long.MAX_VALUE));
     }
 
+    @Test
+    void appliesAndVerifiesSavedPlayerSpawns() throws Exception {
+        UUID player = UUID.fromString("10000000-0000-0000-0000-000000000001");
+        PlayerSpawn spawn = new PlayerSpawn(8, 72, -3, 45.0F, 5.0F, true);
+        PreparedMinecraftState target = new PreparedMinecraftState(
+                new WorldStateApply.State(Map.of(), Map.of(), Map.of(player, spawn)),
+                Map.of(), Map.of());
+        FakeWorld world = new FakeWorld(new AtomicLong(), null);
+        PreparedWorldMutationSession session =
+                new PreparedWorldMutationSession(target, world, () -> 0L);
+
+        assertTrue(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(Map.of(player, spawn), world.playerSpawns);
+        assertEquals(WorldStateApply.Verification.VERIFIED,
+                session.verifyUntil(Long.MAX_VALUE));
+    }
+
     private static final class FakeWorld implements PreparedWorldAccess {
         private final AtomicLong clock;
         private final SectionBlob captured;
@@ -86,6 +104,7 @@ class PreparedWorldMutationSessionTest {
         private EntityChunkBlob capturedEntities = new EntityChunkBlob(List.of());
         private final List<UUID> removedEntities = new ArrayList<>();
         private final List<UUID> addedEntities = new ArrayList<>();
+        private Map<UUID, PlayerSpawn> playerSpawns = Map.of();
 
         private FakeWorld(AtomicLong clock, SectionBlob captured) {
             this.clock = clock;
@@ -114,6 +133,12 @@ class PreparedWorldMutationSessionTest {
         }
         @Override public EntityChunkBlob captureEntities(EntityChunkKey key) {
             return capturedEntities;
+        }
+        @Override public void applyPlayerSpawns(Map<UUID, PlayerSpawn> spawns) {
+            playerSpawns = Map.copyOf(spawns);
+        }
+        @Override public boolean matchesPlayerSpawns(Map<UUID, PlayerSpawn> spawns) {
+            return playerSpawns.equals(spawns);
         }
     }
 }

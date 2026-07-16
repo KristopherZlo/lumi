@@ -14,6 +14,7 @@ import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.RegionCoordinate;
 import io.github.lumi.domain.model.RegionTree;
+import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.storage.repository.CommitRepository;
@@ -112,6 +113,30 @@ class RestoreServiceTest {
                 .get(new SectionKey(0, 0, 0)).blockStates().get(0));
     }
 
+    @Test
+    void fullRestoreCarriesPlayerSpawnsButPartialRestoreDoesNot() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        UUID player = UUID.fromString("30000000-0000-0000-0000-000000000003");
+        PlayerSpawn before = new PlayerSpawn(1, 64, 1, 0.0F, 0.0F, false);
+        PlayerSpawn after = new PlayerSpawn(9, 70, -4, 90.0F, 12.0F, true);
+        var target = commits.write(commit(tree, List.of(), Map.of(player, after)));
+        var current = commits.write(commit(tree, List.of(target), Map.of(player, before)));
+        var currentRef = new BranchRef(new BranchName("main"), current, 1);
+        RestoreService service = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot));
+
+        PreparedRestore full = service.prepare(currentRef, target);
+        PreparedRestore partial = service.preparePartial(
+                currentRef, target, new BlockBox(0, 0, 0, 15, 15, 15), false);
+
+        assertEquals(Map.of(player, after), full.playerSpawns());
+        assertEquals(Map.of(player, before), full.returnPlayerSpawns());
+        assertEquals(true, full.restorePlayerSpawns());
+        assertEquals(false, partial.restorePlayerSpawns());
+    }
+
     private static io.github.lumi.domain.model.ObjectId tree(
             WorldObjectRepository objects,
             io.github.lumi.domain.model.ObjectId chunk) throws IOException {
@@ -126,10 +151,16 @@ class RestoreServiceTest {
 
     private static Commit commit(io.github.lumi.domain.model.ObjectId tree,
             List<io.github.lumi.domain.model.CommitId> parents) {
+        return commit(tree, parents, Map.of());
+    }
+
+    private static Commit commit(io.github.lumi.domain.model.ObjectId tree,
+            List<io.github.lumi.domain.model.CommitId> parents,
+            Map<UUID, PlayerSpawn> spawns) {
         return new Commit(tree, parents,
                 new CommitAuthor(UUID.fromString("10000000-0000-0000-0000-000000000001"), "Builder"),
                 "Save", Instant.EPOCH,
                 UUID.fromString("20000000-0000-0000-0000-000000000002"), Optional.empty(),
-                CommitKind.MANUAL, new CommitStatistics(1, 0, 1, 0));
+                CommitKind.MANUAL, new CommitStatistics(1, 0, 1, 0), spawns);
     }
 }

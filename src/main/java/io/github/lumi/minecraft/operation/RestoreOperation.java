@@ -192,9 +192,12 @@ public final class RestoreOperation implements DimensionMutation {
         Objects.requireNonNull(journals, "journals");
         Objects.requireNonNull(stateListener, "stateListener");
         WorldStateApply.PreparedState preparedTarget = world.prepare(
-                new WorldStateApply.State(restore.sections(), restore.entities()));
+                new WorldStateApply.State(
+                        restore.sections(), restore.entities(), restore.playerSpawns()));
         WorldStateApply.PreparedState preparedReturn = world.prepare(
-                new WorldStateApply.State(restore.returnSections(), restore.returnEntities()));
+                new WorldStateApply.State(
+                        restore.returnSections(), restore.returnEntities(),
+                        restore.returnPlayerSpawns()));
         OperationJournal journal = journals.create(new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,

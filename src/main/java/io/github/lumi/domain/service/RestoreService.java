@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.ChunkInRegion;
 import io.github.lumi.domain.model.ChunkTree;
+import io.github.lumi.domain.model.Commit;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.EntityChunkBlob;
@@ -70,8 +71,10 @@ public final class RestoreService {
             BranchRef currentRef, CommitId sourceCommit, CommitId targetCommit,
             BlockBox area, boolean outside)
             throws IOException {
-        DimensionTree current = objects.readDimension(commits.read(sourceCommit).tree());
-        DimensionTree target = objects.readDimension(commits.read(targetCommit).tree());
+        Commit currentCommit = commits.read(sourceCommit);
+        Commit targetCommitValue = commits.read(targetCommit);
+        DimensionTree current = objects.readDimension(currentCommit.tree());
+        DimensionTree target = objects.readDimension(targetCommitValue.tree());
         Map<SectionKey, SectionBlob> sections = new HashMap<>();
         Map<EntityChunkKey, EntityChunkBlob> entities = new HashMap<>();
         Map<SectionKey, SectionBlob> returnSections = new HashMap<>();
@@ -89,8 +92,12 @@ public final class RestoreService {
             prepareRegion(regionCoordinate, currentRegion, targetRegion,
                     sections, entities, returnSections, returnEntities, area, outside);
         }
+        boolean restorePlayerSpawns = area == null;
         return new PreparedRestore(currentRef, targetCommit,
-                sections, entities, returnSections, returnEntities);
+                sections, entities, returnSections, returnEntities,
+                restorePlayerSpawns ? targetCommitValue.playerSpawns() : Map.of(),
+                restorePlayerSpawns ? currentCommit.playerSpawns() : Map.of(),
+                restorePlayerSpawns);
     }
 
     private void prepareRegion(

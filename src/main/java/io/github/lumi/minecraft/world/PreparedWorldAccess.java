@@ -4,9 +4,11 @@ import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.PlayerSpawn;
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
+import java.util.Map;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -29,4 +31,8 @@ public interface PreparedWorldAccess {
     void addEntity(EntityChunkKey key, DecodedEntity entity) throws IOException;
 
     EntityChunkBlob captureEntities(EntityChunkKey key) throws IOException;
+
+    void applyPlayerSpawns(Map<UUID, PlayerSpawn> spawns) throws IOException;
+
+    boolean matchesPlayerSpawns(Map<UUID, PlayerSpawn> spawns) throws IOException;
 }

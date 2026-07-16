@@ -19,6 +19,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private MutationCursor repair;
     private int sectionVerificationIndex;
     private int entityVerificationIndex;
+    private boolean playerSpawnsVerified;
 
     public PreparedWorldMutationSession(
             PreparedMinecraftState target, PreparedWorldAccess world, LongSupplier nanoTime) {
@@ -52,9 +53,16 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 return WorldStateApply.Verification.MISMATCH;
             }
         }
-        return sectionVerificationIndex == sections.size()
+        if (sectionVerificationIndex == sections.size()
                 && entityVerificationIndex == entities.size()
-                ? WorldStateApply.Verification.VERIFIED
+                && !playerSpawnsVerified
+                && nanoTime.getAsLong() < deadlineNanos) {
+            if (!world.matchesPlayerSpawns(target.source().playerSpawns())) {
+                return WorldStateApply.Verification.MISMATCH;
+            }
+            playerSpawnsVerified = true;
+        }
+        return playerSpawnsVerified ? WorldStateApply.Verification.VERIFIED
                 : WorldStateApply.Verification.IN_PROGRESS;
     }
 
@@ -70,6 +78,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     public void restartVerification() {
         sectionVerificationIndex = 0;
         entityVerificationIndex = 0;
+        playerSpawnsVerified = false;
     }
 
     private final class MutationCursor {
@@ -87,6 +96,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         private List<UUID> entityRemovals = List.of();
         private int entityRemovalIndex;
         private int entityAddIndex;
+        private boolean playerSpawnsApplied;
         private Phase phase = Phase.BLOCKS;
 
         private boolean advance(long deadlineNanos) throws IOException {
@@ -99,8 +109,13 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         private void step() throws IOException {
             if (sectionIndex < sections.size()) {
                 stepSection();
-            } else {
+            } else if (entityIndex < entities.size()) {
                 stepEntityChunk();
+            } else if (!playerSpawnsApplied) {
+                world.applyPlayerSpawns(target.source().playerSpawns());
+                playerSpawnsApplied = true;
+            } else {
+                phase = Phase.COMPLETE;
             }
         }
 
@@ -139,10 +154,6 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         }
 
         private void stepEntityChunk() throws IOException {
-            if (entityIndex == entities.size()) {
-                phase = Phase.COMPLETE;
-                return;
-            }
             var entityChunk = entities.get(entityIndex);
             if (phase != Phase.REMOVE_ENTITIES && phase != Phase.ADD_ENTITIES) {
                 entityRemovals = world.durableEntityIds(entityChunk.getKey());

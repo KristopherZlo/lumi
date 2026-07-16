@@ -4,16 +4,20 @@ import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.PlayerSpawn;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.StreamSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityProcessor;
@@ -25,6 +29,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.LevelData;
 
 /** Minecraft adapter for authorized, loaded-chunk Restore mutation and reread. */
 public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
@@ -138,6 +143,32 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
         return entities.capture(level, matchingEntities(key));
     }
 
+    @Override
+    public void applyPlayerSpawns(Map<UUID, PlayerSpawn> spawns) {
+        for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+            PlayerSpawn spawn = spawns.get(player.getUUID());
+            if (spawn == null) {
+                continue;
+            }
+            var data = LevelData.RespawnData.of(
+                    level.dimension(), new BlockPos(spawn.x(), spawn.y(), spawn.z()),
+                    spawn.yaw(), spawn.pitch());
+            player.setRespawnPosition(
+                    new ServerPlayer.RespawnConfig(data, spawn.forced()), false);
+        }
+    }
+
+    @Override
+    public boolean matchesPlayerSpawns(Map<UUID, PlayerSpawn> spawns) {
+        for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+            PlayerSpawn expected = spawns.get(player.getUUID());
+            if (expected != null && !Optional.of(expected).equals(currentSpawn(player))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     static BlockPos position(SectionKey key, int localIndex) {
         if (localIndex < 0 || localIndex >= SectionBlob.BLOCK_COUNT) {
             throw new IllegalArgumentException("Local section index must be 0-4095");
@@ -167,5 +198,17 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
 
     private static boolean isDurableRoot(Entity entity) {
         return !(entity instanceof Player) && !entity.isPassenger() && entity.shouldBeSaved();
+    }
+
+    private Optional<PlayerSpawn> currentSpawn(ServerPlayer player) {
+        var config = player.getRespawnConfig();
+        if (config == null || !config.respawnData().dimension().equals(level.dimension())) {
+            return Optional.empty();
+        }
+        var data = config.respawnData();
+        var position = data.pos();
+        return Optional.of(new PlayerSpawn(
+                position.getX(), position.getY(), position.getZ(),
+                data.yaw(), data.pitch(), config.forced()));
     }
 }
