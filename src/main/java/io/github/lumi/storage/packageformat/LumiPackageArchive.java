@@ -71,6 +71,13 @@ public final class LumiPackageArchive {
 
     public LumiPackageManifest read(Path source, PayloadConsumer consumer)
             throws IOException {
+        return read(source, null, consumer);
+    }
+
+    public LumiPackageManifest read(
+            Path source,
+            LumiPackageManifest expectedManifest,
+            PayloadConsumer consumer) throws IOException {
         Path input = packagePath(source);
         Objects.requireNonNull(consumer, "consumer");
         long archiveBytes = Files.size(input);
@@ -82,6 +89,9 @@ public final class LumiPackageArchive {
             LumiPackageManifest manifest =
                     manifests.decode(readBounded(zip, MAX_MANIFEST_BYTES));
             zip.closeEntry();
+            if (expectedManifest != null && !manifest.equals(expectedManifest)) {
+                throw new IOException("Lumi package changed after confirmation");
+            }
 
             requireEntry(zip.getNextEntry(), commitPath(manifest.commit()));
             byte[] commit = readExact(zip, manifest.commitBytes());
