@@ -57,13 +57,14 @@ public final class GarbageCollector {
             reachableObjects.addAll(worldGraph.scan(commit.tree()).reachable());
         }
 
-        int deletedObjects = 0;
+        Set<ObjectId> collectableObjects = new HashSet<>();
         for (ObjectId id : objects.listIds()) {
             if (!reachableObjects.contains(id) && objects.modifiedAt(id).isBefore(deleteBefore)) {
-                objects.delete(id);
-                deletedObjects++;
+                collectableObjects.add(id);
             }
         }
+        int deletedObjects = objects.deleteAll(collectableObjects);
+        objects.deleteOrphanPacksBefore(deleteBefore);
         int deletedCommits = 0;
         for (ObjectId id : allCommitObjects) {
             if (!reachableCommits.contains(new CommitId(id)) && commits.modifiedAt(id).isBefore(deleteBefore)) {

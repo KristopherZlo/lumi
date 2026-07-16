@@ -151,7 +151,53 @@ public final class ObjectStore {
     }
 
     public void delete(ObjectId id) throws IOException {
-        Files.deleteIfExists(pathFor(id));
+        deleteAll(Set.of(id));
+    }
+
+    public synchronized int deleteAll(Set<ObjectId> candidates) throws IOException {
+        Objects.requireNonNull(candidates, "candidates");
+        int deleted = 0;
+        for (ObjectId id : candidates) {
+            if (Files.deleteIfExists(pathFor(id))) {
+                deleted++;
+            }
+        }
+
+        Map<Path, Set<ObjectId>> contents = new HashMap<>();
+        packedObjects().forEach((id, entry) ->
+                contents.computeIfAbsent(entry.pack(), ignored -> new HashSet<>()).add(id));
+        Map<ObjectId, PackedObject> retained = new HashMap<>(packedObjects());
+        for (var pack : contents.entrySet()) {
+            if (!candidates.containsAll(pack.getValue())) {
+                continue;
+            }
+            Files.deleteIfExists(indexFor(pack.getKey()));
+            Files.deleteIfExists(pack.getKey());
+            pack.getValue().forEach(retained::remove);
+            deleted += pack.getValue().size();
+        }
+        packedObjects = Map.copyOf(retained);
+        return deleted;
+    }
+
+    public synchronized void deleteOrphanPacksBefore(java.time.Instant cutoff)
+            throws IOException {
+        Objects.requireNonNull(cutoff, "cutoff");
+        if (!Files.exists(packsDirectory)) {
+            return;
+        }
+        Set<Path> indexed = new HashSet<>();
+        packedObjects().values().forEach(entry -> indexed.add(entry.pack()));
+        try (var files = Files.list(packsDirectory)) {
+            for (Path pack : files
+                    .filter(path -> path.getFileName().toString().endsWith(".pack"))
+                    .filter(path -> !indexed.contains(path))
+                    .toList()) {
+                if (Files.getLastModifiedTime(pack).toInstant().isBefore(cutoff)) {
+                    Files.deleteIfExists(pack);
+                }
+            }
+        }
     }
 
     public WriteBatch beginBatch() throws IOException {
@@ -188,6 +234,11 @@ public final class ObjectStore {
     private Path pathFor(ObjectId id) {
         String hex = id.hex();
         return objectsDirectory.resolve(hex.substring(0, 2)).resolve(hex.substring(2) + ".lz4");
+    }
+
+    private static Path indexFor(Path pack) {
+        String name = pack.getFileName().toString();
+        return pack.resolveSibling(name.substring(0, name.length() - 5) + ".idx");
     }
 
     private synchronized PackedObject packedObject(ObjectId id) throws IOException {

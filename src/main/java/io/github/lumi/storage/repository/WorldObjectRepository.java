@@ -3,9 +3,12 @@ package io.github.lumi.storage.repository;
 import io.github.lumi.domain.model.ChunkTree;
 import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.RegionTree;
 import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.storage.object.EntityChunkBlobCodec;
 import io.github.lumi.storage.object.MerkleNodeCodec;
 import io.github.lumi.storage.object.ObjectStore;
@@ -13,6 +16,8 @@ import io.github.lumi.storage.object.SectionBlobCodec;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public final class WorldObjectRepository {
     private final ObjectStore store;
@@ -31,6 +36,26 @@ public final class WorldObjectRepository {
 
     public ObjectId write(EntityChunkBlob entities) throws IOException {
         return store.write(entityCodec.encode(entities));
+    }
+
+    public Map<HistoryKey, ObjectId> writeCaptured(
+            Map<SectionKey, SectionBlob> sections,
+            Map<EntityChunkKey, EntityChunkBlob> entities) throws IOException {
+        Objects.requireNonNull(sections, "sections");
+        Objects.requireNonNull(entities, "entities");
+        Map<HistoryKey, ObjectId> written = new LinkedHashMap<>();
+        try (ObjectStore.WriteBatch batch = store.beginBatch()) {
+            for (var section : sections.entrySet()) {
+                written.put(section.getKey(),
+                        batch.write(sectionCodec.encode(section.getValue())));
+            }
+            for (var entityChunk : entities.entrySet()) {
+                written.put(entityChunk.getKey(),
+                        batch.write(entityCodec.encode(entityChunk.getValue())));
+            }
+            batch.publish();
+        }
+        return Map.copyOf(written);
     }
 
     public ObjectId write(ChunkTree chunk) throws IOException {

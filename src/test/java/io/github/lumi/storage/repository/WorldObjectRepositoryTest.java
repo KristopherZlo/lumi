@@ -4,8 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.github.lumi.domain.model.ChunkTree;
 import io.github.lumi.domain.model.DimensionTree;
+import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.SectionBlob;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,5 +34,28 @@ class WorldObjectRepositoryTest {
         assertEquals(section, repository.readSection(sectionId));
         assertEquals(chunk, repository.readChunk(chunkId));
         assertEquals(dimension, repository.readDimension(dimensionId));
+    }
+
+    @Test
+    void writesCapturedLeavesInOneImmutablePack() throws IOException {
+        WorldObjectRepository repository = new WorldObjectRepository(repositoryRoot);
+        Map<SectionKey, SectionBlob> sections = new java.util.LinkedHashMap<>();
+        for (int index = 0; index < 64; index++) {
+            sections.put(new SectionKey(index, 0, 0), new SectionBlob(
+                    new ArrayList<>(Collections.nCopies(
+                            SectionBlob.BLOCK_COUNT, "minecraft:test_" + index)),
+                    Map.of()));
+        }
+
+        var written = repository.writeCaptured(sections, Map.of());
+
+        assertEquals(sections.keySet(), written.keySet());
+        for (var entry : sections.entrySet()) {
+            assertEquals(entry.getValue(),
+                    repository.readSection(written.get(entry.getKey())));
+        }
+        try (var files = Files.list(repositoryRoot.resolve("objects").resolve("packs"))) {
+            assertEquals(2, files.filter(Files::isRegularFile).count());
+        }
     }
 }

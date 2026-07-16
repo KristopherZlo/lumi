@@ -17,7 +17,6 @@ import io.github.lumi.storage.repository.OperationJournalRepository;
 import io.github.lumi.storage.repository.RefConflictException;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -86,13 +85,8 @@ public final class SaveService implements SavePublisher {
     private CommitId writeCommit(SaveRequest request, CapturedWorldState captured)
             throws IOException {
         Commit parent = commits.read(request.expectedRef().commit());
-        Map<HistoryKey, ObjectId> changes = new HashMap<>();
-        for (var section : captured.sections().entrySet()) {
-            changes.put(section.getKey(), objects.write(section.getValue()));
-        }
-        for (var entities : captured.entities().entrySet()) {
-            changes.put(entities.getKey(), objects.write(entities.getValue()));
-        }
+        Map<HistoryKey, ObjectId> changes = objects.writeCaptured(
+                captured.sections(), captured.entities());
         ObjectId tree = trees.update(Optional.of(parent.tree()), changes);
         List<CommitId> parents = request.kind() == CommitKind.AMEND
                 ? parent.parents() : List.of(request.expectedRef().commit());

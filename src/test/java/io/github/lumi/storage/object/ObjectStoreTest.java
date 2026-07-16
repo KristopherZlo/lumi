@@ -3,6 +3,7 @@ package io.github.lumi.storage.object;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.ObjectId;
 import java.io.IOException;
@@ -11,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -71,6 +73,7 @@ class ObjectStoreTest {
             batch.publish();
         }
 
+        store = new ObjectStore(tempDir);
         assertEquals(expected.keySet(), store.listIds());
         for (var entry : expected.entrySet()) {
             assertArrayEquals(entry.getValue(), store.read(entry.getKey()));
@@ -78,5 +81,22 @@ class ObjectStoreTest {
         try (var files = Files.walk(tempDir)) {
             assertEquals(3, files.filter(Files::isRegularFile).count());
         }
+    }
+
+    @Test
+    void deletesAnImmutablePackOnlyWhenEveryEntryIsCollectable() throws IOException {
+        ObjectStore store = new ObjectStore(tempDir);
+        ObjectId first;
+        ObjectId second;
+        try (ObjectStore.WriteBatch batch = store.beginBatch()) {
+            first = batch.write("first".getBytes(StandardCharsets.UTF_8));
+            second = batch.write("second".getBytes(StandardCharsets.UTF_8));
+            batch.publish();
+        }
+
+        assertEquals(0, store.deleteAll(Set.of(first)));
+        assertArrayEquals("first".getBytes(StandardCharsets.UTF_8), store.read(first));
+        assertEquals(2, store.deleteAll(Set.of(first, second)));
+        assertTrue(store.listIds().isEmpty());
     }
 }
