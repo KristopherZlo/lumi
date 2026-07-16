@@ -61,6 +61,12 @@ fabricApi {
     }
 }
 
+tasks.named('runGameTest') {
+    doFirst {
+        delete(layout.buildDirectory.dir('run/gameTest/world'))
+    }
+}
+
 dependencies {
     axiomDistribution "maven.modrinth:N6n5dqoA:${project.axiom_version_id}"
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
