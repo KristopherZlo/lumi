@@ -65,6 +65,9 @@ class CompareServiceTest {
         assertTrue(compare.compare(empty, changed, new ZoneScope(excluded)).isEmpty());
         assertThrows(CancellationException.class,
                 () -> compare.compare(empty, changed, () -> true));
+        assertThrows(CancellationException.class,
+                () -> compare.compare(
+                        empty, changed, new ZoneScope(included), () -> true));
     }
 
     private static io.github.lumi.domain.model.ObjectId tree(

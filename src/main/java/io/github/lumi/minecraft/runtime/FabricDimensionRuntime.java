@@ -941,10 +941,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public CompletableFuture<ComparisonSummary> compare(
             CommitId before, CommitId after, BooleanSupplier cancelled) throws IOException {
+        return compare(before, after, null, cancelled);
+    }
+
+    public CompletableFuture<ComparisonSummary> compare(
+            CommitId before,
+            CommitId after,
+            UUID zoneId,
+            BooleanSupplier cancelled) throws IOException {
         Objects.requireNonNull(before, "before");
         Objects.requireNonNull(after, "after");
         Objects.requireNonNull(cancelled, "cancelled");
         UUID workspace = activeWorkspaceId();
+        ZoneScope scope = zoneId == null
+                ? null : new ZoneScope(zones.require(workspace, zoneId));
         return CompletableFuture.supplyAsync(() -> {
             try {
                 WorldObjectRepository objects = new WorldObjectRepository(repository);
@@ -954,9 +964,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     throw new IOException(
                             "Compare commits do not belong to the active workspace");
                 }
-                var difference = new CompareService(
-                        objects, commits, new OriginStore(repository))
-                        .compare(before, after, cancelled);
+                CompareService compare = new CompareService(
+                        objects, commits, new OriginStore(repository));
+                var difference = scope == null
+                        ? compare.compare(before, after, cancelled)
+                        : compare.compare(before, after, scope, cancelled);
                 return new ComparisonSummary(
                         before, after,
                         difference.sections().size(),

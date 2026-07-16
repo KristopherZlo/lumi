@@ -53,7 +53,7 @@ public final class CompareService {
         return compare(before, after, scope, () -> false);
     }
 
-    private WorldDifference compare(
+    public WorldDifference compare(
             CommitId before,
             CommitId after,
             ZoneScope scope,

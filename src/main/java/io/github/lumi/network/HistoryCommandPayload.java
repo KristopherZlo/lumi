@@ -44,6 +44,9 @@ public record HistoryCommandPayload(
         if (kind == Kind.COMPARE) {
             CompareArgument.parse(argument);
         }
+        if (kind == Kind.ZONE_COMPARE) {
+            ZoneCompareArgument.parse(argument);
+        }
         if (kind == Kind.COMPARE_CANCEL) {
             UUID.fromString(argument);
         }
@@ -113,7 +116,7 @@ public record HistoryCommandPayload(
         AMEND(13), MERGE(14), ZONE_CREATE(15), ZONE_ENTER(16), ZONE_LEAVE(17),
         ZONE_SAVE(18), ZONE_RESTORE(19), DELETE_VERSION(20), CLEANUP_VERSION(21),
         PACKAGE_EXPORT(22), PACKAGE_INSPECT(23), PACKAGE_IMPORT(24),
-        WORKSPACE_CREATE(25), WORKSPACE_SWITCH(26);
+        WORKSPACE_CREATE(25), WORKSPACE_SWITCH(26), ZONE_COMPARE(27);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

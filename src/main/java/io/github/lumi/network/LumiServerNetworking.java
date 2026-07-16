@@ -143,7 +143,8 @@ public final class LumiServerNetworking {
                 updateZoneMetadata(player, runtime, payload);
                 return;
             }
-            if (payload.kind() == HistoryCommandPayload.Kind.COMPARE) {
+            if (payload.kind() == HistoryCommandPayload.Kind.COMPARE
+                    || payload.kind() == HistoryCommandPayload.Kind.ZONE_COMPARE) {
                 compare(player, runtime, payload, context);
                 return;
             }
@@ -336,11 +337,23 @@ public final class LumiServerNetworking {
             FabricDimensionRuntime runtime,
             HistoryCommandPayload payload,
             ServerPlayNetworking.Context context) throws IOException {
-        CompareArgument argument = CompareArgument.parse(payload.argument());
+        CommitId before;
+        CommitId after;
+        CompletableFuture<ComparisonSummary> future;
         String dimension = dimension(runtime);
         AtomicBoolean cancelled = new AtomicBoolean();
-        CompletableFuture<ComparisonSummary> future = runtime.compare(
-                argument.before(), argument.after(), cancelled::get);
+        if (payload.kind() == HistoryCommandPayload.Kind.ZONE_COMPARE) {
+            ZoneCompareArgument argument = ZoneCompareArgument.parse(payload.argument());
+            before = argument.before();
+            after = argument.after();
+            future = runtime.compare(
+                    before, after, argument.zoneId(), cancelled::get);
+        } else {
+            CompareArgument argument = CompareArgument.parse(payload.argument());
+            before = argument.before();
+            after = argument.after();
+            future = runtime.compare(before, after, cancelled::get);
+        }
         CompareJob job = new CompareJob(player.getUUID(), cancelled, future);
         if (COMPARES.putIfAbsent(payload.requestId(), job) != null) {
             cancelled.set(true);
@@ -357,7 +370,7 @@ public final class LumiServerNetworking {
                     } else {
                         send(player, new CompareResultPayload(
                                 payload.requestId(), dimension,
-                                argument.before(), argument.after(), 0, 0,
+                                before, after, 0, 0,
                                 java.util.List.of(), failureMessage(failure)));
                     }
                 }));
@@ -456,7 +469,7 @@ public final class LumiServerNetworking {
             }
             case BRANCH_CREATE -> throw new IllegalStateException(
                     "Branch creation does not use the mutation queue");
-            case COMPARE -> throw new IllegalStateException(
+            case COMPARE, ZONE_COMPARE -> throw new IllegalStateException(
                     "Compare does not use the mutation queue");
             case COMPARE_CANCEL -> throw new IllegalStateException(
                     "Compare cancellation does not use the mutation queue");
