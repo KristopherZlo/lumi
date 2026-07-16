@@ -20,6 +20,7 @@ import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -480,15 +481,28 @@ public final class LumiServerNetworking {
                     "Operation ticket is not owned by this player");
             return;
         }
-        if (!runtime.operations().cancelQueued(new OperationTicket(payload.ticketId()))) {
+        OperationTicket ticket = new OperationTicket(payload.ticketId());
+        OptionalInt position = runtime.operations().queuePosition(ticket);
+        boolean active = position.isPresent() && position.orElseThrow() == 0;
+        try {
+            if (!runtime.operations().cancel(ticket)) {
+                sendEvent(player, payload.requestId(), runtime,
+                        OperationEventPayload.State.FAILED,
+                        "Operation can no longer be cancelled safely");
+                return;
+            }
+        } catch (IOException failed) {
             sendEvent(player, payload.requestId(), runtime, OperationEventPayload.State.FAILED,
-                    "Active operations cannot be cancelled");
+                    failureMessage(failed));
+            return;
+        }
+        if (active) {
             return;
         }
         TICKET_OWNERS.remove(payload.ticketId(), owner);
         removeBossBar(payload.ticketId());
         sendEvent(player, owner.requestId(), runtime, OperationEventPayload.State.CANCELLED,
-                "Queued operation cancelled");
+                "Operation cancelled before it started");
         broadcastSnapshot(runtime);
     }
 

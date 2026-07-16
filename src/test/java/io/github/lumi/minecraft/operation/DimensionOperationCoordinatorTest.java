@@ -73,16 +73,55 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
-    void queuedOperationCanBeCancelledBeforeItStarts() {
+    void queuedOperationCanBeCancelledBeforeItStarts() throws Exception {
         DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
                 new RecordingFreeze(), () -> 0L, 1L);
         coordinator.start(new TwoTickMutation(false));
         OperationTicket queued = coordinator.enqueue(
                 new TwoTickMutation(false), OperationPriority.NORMAL, ignored -> { });
 
-        assertTrue(coordinator.cancelQueued(queued));
+        assertTrue(coordinator.cancel(queued));
         assertEquals(0, coordinator.queuedCount());
-        assertTrue(!coordinator.cancelQueued(queued));
+        assertTrue(!coordinator.cancel(queued));
+    }
+
+    @Test
+    void cancelsSafeActiveOperationAndReleasesItsFreeze() throws Exception {
+        RecordingFreeze freeze = new RecordingFreeze();
+        var outcomes = new ArrayList<MutationTerminalState>();
+        CancellableMutation mutation = new CancellableMutation();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L,
+                operation -> outcomes.add(operation.terminalState()));
+        coordinator.start(mutation);
+        OperationTicket ticket = coordinator.ticketOf(mutation).orElseThrow();
+        coordinator.tick();
+
+        assertTrue(coordinator.cancel(ticket));
+
+        assertEquals(java.util.List.of(MutationTerminalState.CANCELLED), outcomes);
+        assertEquals(1, freeze.releaseCalls);
+        assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
+    void closeReleasesFreezeAndClosesActiveAndQueuedResources() throws Exception {
+        RecordingFreeze freeze = new RecordingFreeze();
+        CloseTrackingMutation active = new CloseTrackingMutation();
+        CloseTrackingMutation queued = new CloseTrackingMutation();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L);
+        coordinator.start(active);
+        coordinator.enqueue(queued, OperationPriority.NORMAL, ignored -> { });
+        coordinator.tick();
+
+        coordinator.close();
+
+        assertEquals(1, active.closeCalls);
+        assertEquals(1, queued.closeCalls);
+        assertEquals(1, freeze.releaseCalls);
+        assertTrue(!coordinator.hasActiveOperation());
+        assertEquals(0, coordinator.queuedCount());
     }
 
     @Test
@@ -325,6 +364,30 @@ class DimensionOperationCoordinatorTest {
         @Override public void advance(long deadlineNanos) { }
         @Override public boolean isTerminal() { return true; }
         @Override public boolean isSafeToRelease() { return true; }
+    }
+
+    private static final class CancellableMutation implements DimensionMutation {
+        private boolean cancelled;
+
+        @Override public void advance(long deadlineNanos) { }
+        @Override public boolean cancel() {
+            cancelled = true;
+            return true;
+        }
+        @Override public boolean isTerminal() { return cancelled; }
+        @Override public boolean isSafeToRelease() { return cancelled; }
+        @Override public MutationTerminalState terminalState() {
+            return MutationTerminalState.CANCELLED;
+        }
+    }
+
+    private static final class CloseTrackingMutation implements DimensionMutation {
+        private int closeCalls;
+
+        @Override public void advance(long deadlineNanos) { }
+        @Override public boolean isTerminal() { return false; }
+        @Override public boolean isSafeToRelease() { return false; }
+        @Override public void close() { closeCalls++; }
     }
 
     private static final class ThrowingMutation implements DimensionMutation {

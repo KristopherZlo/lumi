@@ -13,7 +13,7 @@ import java.util.function.IntConsumer;
 import java.util.function.LongSupplier;
 
 /** Serializes mutation and enforces the global 50 ms server-tick work limit. */
-public final class DimensionOperationCoordinator {
+public final class DimensionOperationCoordinator implements AutoCloseable {
     public static final long MAX_TICK_WORK_NANOS = 50_000_000L;
     public static final int MAX_QUEUED_OPERATIONS = 64;
 
@@ -224,16 +224,37 @@ public final class DimensionOperationCoordinator {
                 .map(QueuedOperation::ticket).findFirst();
     }
 
-    public synchronized boolean cancelQueued(OperationTicket ticket) {
+    public synchronized boolean cancel(OperationTicket ticket) throws IOException {
         Objects.requireNonNull(ticket, "ticket");
-        boolean removed = queued.removeIf(entry -> entry.ticket().equals(ticket));
-        if (removed) {
+        if (ticket.equals(activeTicket)) {
+            if (!active.cancel()) {
+                return false;
+            }
+            if (!active.isTerminal() || !active.isSafeToRelease()
+                    || active.terminalState() != MutationTerminalState.CANCELLED) {
+                throw new IOException(
+                        "Operation accepted cancellation without a safe CANCELLED state");
+            }
+            notifyProgress();
+            reportTerminal();
+            releaseFreezeIfSafe();
+            clearTerminalIfSafe();
+            return true;
+        }
+        for (int index = 0; index < queued.size(); index++) {
+            QueuedOperation entry = queued.get(index);
+            if (!entry.ticket().equals(ticket)) {
+                continue;
+            }
+            entry.operation().close();
+            queued.remove(index);
             positionObservers.remove(ticket);
             progressObservers.remove(ticket);
             publishedProgress.remove(ticket);
             notifyPositions();
+            return true;
         }
-        return removed;
+        return false;
     }
 
     public synchronized void observeQueuePosition(
@@ -288,6 +309,46 @@ public final class DimensionOperationCoordinator {
             entry.getValue().accept(position.orElseThrow());
             return false;
         });
+    }
+
+    @Override
+    public synchronized void close() throws IOException {
+        IOException failure = null;
+        for (QueuedOperation entry : queued) {
+            try {
+                entry.operation().close();
+            } catch (IOException failed) {
+                failure = append(failure, failed);
+            }
+        }
+        if (active != null) {
+            try {
+                active.close();
+            } catch (IOException failed) {
+                failure = append(failure, failed);
+            }
+        }
+        if (lease != null) {
+            lease.release();
+        }
+        queued.clear();
+        positionObservers.clear();
+        progressObservers.clear();
+        publishedProgress.clear();
+        active = null;
+        activeTicket = null;
+        lease = null;
+        if (failure != null) {
+            throw failure;
+        }
+    }
+
+    private static IOException append(IOException failure, IOException added) {
+        if (failure == null) {
+            return added;
+        }
+        failure.addSuppressed(added);
+        return failure;
     }
 
     private record QueuedOperation(

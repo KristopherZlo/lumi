@@ -8,7 +8,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
-/** Requests cancellation of one owned operation before it becomes active. */
+/** Requests cancellation of one owned operation while it can still stop safely. */
 public record OperationCancelPayload(UUID requestId, UUID ticketId)
         implements CustomPacketPayload {
     public static final Type<OperationCancelPayload> TYPE = new Type<>(

@@ -1223,13 +1223,17 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
         zoneGrowth.flush();
-        if (recoveryLease != null) {
-            recoveryLease.release();
-            recoveryLease = null;
+        try {
+            operations.close();
+        } finally {
+            if (recoveryLease != null) {
+                recoveryLease.release();
+                recoveryLease = null;
+            }
+            causalTicks.close();
         }
-        causalTicks.close();
         // Repository state has no open handles; background work is owned by the server session.
     }
 
