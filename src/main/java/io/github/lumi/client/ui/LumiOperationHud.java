@@ -26,9 +26,9 @@ public final class LumiOperationHud {
     }
 
     private void render(GuiGraphics graphics, net.minecraft.client.DeltaTracker ignored) {
+        int y = renderWorkspace(graphics);
         OperationEventPayload event = history.state().activeOperation().orElse(null);
         if (event == null) {
-            renderWorkspace(graphics);
             return;
         }
         var font = Minecraft.getInstance().font;
@@ -37,7 +37,6 @@ public final class LumiOperationHud {
                         .orElse(event.message());
         int width = Math.min(240, Math.max(120, font.width(text) + 20));
         int x = graphics.guiWidth() - width - 10;
-        int y = 10;
         graphics.fill(x, y, x + width, y + 28, 0xd9111419);
         graphics.drawString(font, font.plainSubstrByWidth(text, width - 16),
                 x + 8, y + 6, 0xfff0f3f6, false);
@@ -52,11 +51,11 @@ public final class LumiOperationHud {
                 });
     }
 
-    private void renderWorkspace(GuiGraphics graphics) {
+    private int renderWorkspace(GuiGraphics graphics) {
         var snapshot = history.state().snapshot().orElse(null);
         var client = Minecraft.getInstance();
         if (snapshot == null || client.player == null) {
-            return;
+            return 10;
         }
         boolean expanded = InputConstants.isKeyDown(
                 client.getWindow(), InputConstants.KEY_LALT)
@@ -82,5 +81,10 @@ public final class LumiOperationHud {
             graphics.drawString(client.font, "Alt+1..0 switch branch",
                     x + 6, 61, 0xff8f9aa8, false);
         }
+        return nextPanelY(10, height);
+    }
+
+    static int nextPanelY(int top, int height) {
+        return top + height + 6;
     }
 }

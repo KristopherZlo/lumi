@@ -17,9 +17,11 @@ class PendingPreviewRefreshControllerTest {
         controller.tick(true, true);
         controller.tick(false, true);
         controller.tick(true, false);
+        controller.tick(true, true);
+        controller.tick(true, true);
         controller.tick(false, true);
         controller.tick(true, true);
 
-        assertEquals(2, refreshes.get());
+        assertEquals(3, refreshes.get());
     }
 }

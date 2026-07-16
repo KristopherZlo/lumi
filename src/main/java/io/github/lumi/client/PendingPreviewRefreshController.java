@@ -15,6 +15,6 @@ public final class PendingPreviewRefreshController {
         if (altDown && !altWasDown && canRefresh) {
             refresh.run();
         }
-        altWasDown = altDown;
+        altWasDown = altDown && canRefresh;
     }
 }
