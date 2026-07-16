@@ -16,6 +16,7 @@ public final class LumiDashboardScreen extends Screen {
     private final ClientHistoryStore history;
     private final Runnable openSave;
     private final Runnable openBranch;
+    private final Runnable openMerge;
     private final Runnable quickRollback;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
     private final Consumer<VersionCompareController.Target> openCompare;
@@ -30,6 +31,7 @@ public final class LumiDashboardScreen extends Screen {
             ClientHistoryStore history,
             Runnable openSave,
             Runnable openBranch,
+            Runnable openMerge,
             Runnable quickRollback,
             Consumer<HistorySnapshotPayload.Version> openRestore,
             Consumer<VersionCompareController.Target> openCompare) {
@@ -38,6 +40,7 @@ public final class LumiDashboardScreen extends Screen {
         this.history = Objects.requireNonNull(history, "history");
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openBranch = Objects.requireNonNull(openBranch, "openBranch");
+        this.openMerge = Objects.requireNonNull(openMerge, "openMerge");
         this.quickRollback = Objects.requireNonNull(quickRollback, "quickRollback");
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
         this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
@@ -50,7 +53,7 @@ public final class LumiDashboardScreen extends Screen {
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(16, (height - 330) / 2);
         int buttonY = panelY + 72;
-        int buttonWidth = (panelWidth - 64) / 4;
+        int buttonWidth = (panelWidth - 64) / 5;
         addRenderableWidget(Button.builder(
                 Component.translatable("luma.action.save_build"), ignored -> openSave.run())
                 .bounds(panelX + 16, buttonY, buttonWidth, 20).build());
@@ -58,13 +61,17 @@ public final class LumiDashboardScreen extends Screen {
                 Component.translatable("luma.action.variant_create"), ignored -> openBranch.run())
                 .bounds(panelX + 24 + buttonWidth, buttonY, buttonWidth, 20).build());
         addRenderableWidget(Button.builder(
+                Component.translatable("luma.action.merge_into_current"),
+                ignored -> openMerge.run())
+                .bounds(panelX + 32 + buttonWidth * 2, buttonY, buttonWidth, 20).build());
+        addRenderableWidget(Button.builder(
                 Component.translatable("key.lumi.quick_rollback"), ignored -> {
                     quickRollback.run();
                     onClose();
-                }).bounds(panelX + 32 + buttonWidth * 2, buttonY, buttonWidth, 20).build());
+                }).bounds(panelX + 40 + buttonWidth * 3, buttonY, buttonWidth, 20).build());
         addRenderableWidget(Button.builder(
                 Component.translatable("luma.action.close"), ignored -> onClose())
-                .bounds(panelX + 40 + buttonWidth * 3, buttonY, buttonWidth, 20).build());
+                .bounds(panelX + 48 + buttonWidth * 4, buttonY, buttonWidth, 20).build());
         if (snapshot == null) {
             return;
         }

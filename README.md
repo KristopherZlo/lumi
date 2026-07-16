@@ -18,6 +18,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - Alt+Z/Y is session-only and separate from durable commits.
 - Alt+S opens the Save form; Alt+R starts Quick Rollback through the same server path.
 - The same form can replace the latest version with a crash-safe Amend.
+- Another branch can be merged through the same verified apply pipeline;
+  overlapping conflicts explicitly use the source branch.
 - Alt+L opens the current workspace history from the immutable server snapshot.
 
 The implementation grows only through tested vertical slices. See

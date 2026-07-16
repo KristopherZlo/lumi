@@ -8,6 +8,7 @@ import io.github.lumi.network.HistoryCommandPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.CompareArgument;
 import io.github.lumi.network.CompareResultPayload;
+import io.github.lumi.network.MergeArgument;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
 import io.github.lumi.network.PartialRestoreArgument;
@@ -98,6 +99,14 @@ public final class LumiClientNetworking {
     public UUID createBranch(String branchName) {
         return send(HistoryCommandPayload.Kind.BRANCH_CREATE,
                 Objects.requireNonNull(branchName, "branchName"));
+    }
+
+    public UUID merge(String sourceBranch) {
+        String source = Objects.requireNonNull(sourceBranch, "sourceBranch");
+        int slash = source.lastIndexOf('/');
+        String shortName = slash < 0 ? source : source.substring(slash + 1);
+        return send(HistoryCommandPayload.Kind.MERGE,
+                new MergeArgument(source, "Merge " + shortName).encode());
     }
 
     public UUID compare(CommitId before, CommitId after) {

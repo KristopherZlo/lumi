@@ -9,6 +9,7 @@ import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiCompareScreen;
+import io.github.lumi.client.ui.LumiMergeScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.client.ui.LumiRestoreScreen;
 import io.github.lumi.client.ui.BranchNameController;
@@ -43,6 +44,14 @@ public final class LumiClient implements ClientModInitializer {
                                         client.screen,
                                         currentBranch(),
                                         new BranchNameController(NETWORKING::createBranch))),
+                                () -> {
+                                    var snapshot = HISTORY.state().snapshot().orElseThrow(
+                                            () -> new IllegalStateException(
+                                                    "Lumi history has not synchronized yet"));
+                                    client.setScreen(new LumiMergeScreen(
+                                            client.screen, snapshot.branchName(),
+                                            snapshot.branches(), NETWORKING::merge));
+                                },
                                 NETWORKING::quickRollback,
                                 version -> client.setScreen(new LumiRestoreScreen(
                                         client.screen,
