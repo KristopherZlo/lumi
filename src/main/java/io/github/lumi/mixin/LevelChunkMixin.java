@@ -10,7 +10,6 @@ import java.io.UncheckedIOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -29,6 +28,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LevelChunk.class)
 abstract class LevelChunkMixin {
+    @Unique private static final long LUMI_MUTATION_DENIED = -1L;
+    @Unique private static final long LUMI_MUTATION_UNTRACKED = 0L;
     private static final MinecraftSectionCapture LUMI_SECTION_CAPTURE = new MinecraftSectionCapture();
     @Unique private static final ThreadLocal<Deque<Optional<PendingBlockMutation>>> LUMI_LIVE_BLOCKS =
             ThreadLocal.withInitial(ArrayDeque::new);
@@ -48,12 +49,12 @@ abstract class LevelChunkMixin {
         BlockState current = chunk.getBlockState(position);
         Optional<PendingBlockMutation> pending = Optional.empty();
         if (!current.equals(update)) {
-            MutationPermit permit = lumi$trackSectionBeforeMutation(serverLevel, position);
-            if (!permit.allowed()) {
+            long generation = lumi$trackSectionBeforeMutation(serverLevel, position);
+            if (generation == LUMI_MUTATION_DENIED) {
                 callback.setReturnValue(current);
             } else {
                 pending = Optional.of(new PendingBlockMutation(
-                        current, permit.generation(),
+                        current, generation,
                         lumi$captureLiveBefore(serverLevel, position)));
             }
         }
@@ -80,9 +81,9 @@ abstract class LevelChunkMixin {
                 return;
             }
             var runtime = LumiMod.serverRuntime().find(serverLevel).orElse(null);
-            if (runtime != null && value.generation().isPresent()) {
+            if (runtime != null && value.generation() > LUMI_MUTATION_UNTRACKED) {
                 runtime.mutations().recordBlockMutation(
-                        blockPosition(position), value.generation().orElseThrow());
+                        blockPosition(position), value.generation());
             }
             value.live().ifPresent(live ->
                     lumi$recordLiveAfter(serverLevel, position, live));
@@ -94,15 +95,15 @@ abstract class LevelChunkMixin {
         if (level instanceof ServerLevel serverLevel) {
             LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime ->
                     runtime.causalTicks().rememberCarrier(blockEntity));
-            MutationPermit permit = lumi$trackSectionBeforeMutation(
+            long generation = lumi$trackSectionBeforeMutation(
                     serverLevel, blockEntity.getBlockPos());
-            if (!permit.allowed()) {
+            if (generation == LUMI_MUTATION_DENIED) {
                 callback.cancel();
-            } else if (permit.generation().isPresent()) {
+            } else if (generation > LUMI_MUTATION_UNTRACKED) {
                 LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime ->
                         runtime.mutations().recordBlockMutation(
                                 blockPosition(blockEntity.getBlockPos()),
-                                permit.generation().orElseThrow()));
+                                generation));
             }
         }
     }
@@ -110,34 +111,33 @@ abstract class LevelChunkMixin {
     @Inject(method = "removeBlockEntity", at = @At("HEAD"), cancellable = true)
     private void lumi$trackBlockEntityRemoval(BlockPos position, CallbackInfo callback) {
         if (level instanceof ServerLevel serverLevel) {
-            MutationPermit permit = lumi$trackSectionBeforeMutation(serverLevel, position);
-            if (!permit.allowed()) {
+            long generation = lumi$trackSectionBeforeMutation(serverLevel, position);
+            if (generation == LUMI_MUTATION_DENIED) {
                 callback.cancel();
-            } else if (permit.generation().isPresent()) {
+            } else if (generation > LUMI_MUTATION_UNTRACKED) {
                 LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime ->
                         runtime.mutations().recordBlockMutation(
-                                blockPosition(position),
-                                permit.generation().orElseThrow()));
+                                blockPosition(position), generation));
             }
         }
     }
 
-    private MutationPermit lumi$trackSectionBeforeMutation(
+    private long lumi$trackSectionBeforeMutation(
             ServerLevel serverLevel, BlockPos position) {
         var runtime = LumiMod.serverRuntime().find(serverLevel).orElse(null);
         if (runtime == null) {
-            return MutationPermit.ALLOWED;
+            return LUMI_MUTATION_UNTRACKED;
         }
         LevelChunk chunk = (LevelChunk) (Object) this;
         if (!runtime.isChunkMutationTrackable(
                 chunk.getPos().x, chunk.getPos().z)) {
-            return MutationPermit.ALLOWED;
+            return LUMI_MUTATION_UNTRACKED;
         }
         if (!runtime.freeze().isMutationAllowed()) {
-            return MutationPermit.DENIED;
+            return LUMI_MUTATION_DENIED;
         }
         if (runtime.freeze().isAuthorizedMutation()) {
-            return MutationPermit.ALLOWED;
+            return LUMI_MUTATION_UNTRACKED;
         }
         var key = MinecraftSectionCapture.key(position);
         long generation = runtime.mutations().registerSectionMutation(key, () -> {
@@ -148,7 +148,7 @@ abstract class LevelChunkMixin {
             }
         });
         runtime.blockEntityBaselines().discard(key);
-        return new MutationPermit(true, OptionalLong.of(generation));
+        return generation;
     }
 
     @Unique
@@ -211,14 +211,6 @@ abstract class LevelChunkMixin {
     @Unique
     private record PendingBlockMutation(
             BlockState before,
-            OptionalLong generation,
+            long generation,
             Optional<PendingLiveBlock> live) { }
-
-    @Unique
-    private record MutationPermit(boolean allowed, OptionalLong generation) {
-        private static final MutationPermit ALLOWED =
-                new MutationPermit(true, OptionalLong.empty());
-        private static final MutationPermit DENIED =
-                new MutationPermit(false, OptionalLong.empty());
-    }
 }
