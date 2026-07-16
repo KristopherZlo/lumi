@@ -64,4 +64,19 @@ public final class WorldObjectRepository {
     public DimensionTree readDimension(ObjectId id) throws IOException {
         return merkleCodec.decodeDimension(store.read(id));
     }
+
+    public byte[] readCanonical(ObjectId id) throws IOException {
+        return store.read(Objects.requireNonNull(id, "id"));
+    }
+
+    public ObjectId writeCanonical(ObjectId expected, byte[] payload)
+            throws IOException {
+        Objects.requireNonNull(expected, "expected");
+        Objects.requireNonNull(payload, "payload");
+        ObjectId actual = ObjectId.hash(payload);
+        if (!actual.equals(expected)) {
+            throw new IOException("Object payload hash does not match package manifest");
+        }
+        return store.write(payload);
+    }
 }
