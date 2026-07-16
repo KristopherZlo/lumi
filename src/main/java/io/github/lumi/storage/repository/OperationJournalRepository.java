@@ -10,6 +10,7 @@ import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
+import io.github.lumi.domain.model.WorkspaceSwitchTarget;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -85,6 +86,7 @@ public final class OperationJournalRepository {
             writeBranchSwitch(output, journal.target().branchSwitch());
             writeBlockArea(output, journal.target().blockArea());
             output.writeBoolean(journal.target().excludeEntities());
+            writeWorkspaceSwitch(output, journal.target().workspaceSwitch());
         }
         return bytes.toByteArray();
     }
@@ -120,9 +122,11 @@ public final class OperationJournalRepository {
                 }
                 excludeEntities = excluded == 1;
             }
+            var workspaceSwitch = input.available() == 0
+                    ? Optional.<WorkspaceSwitchTarget>empty() : readWorkspaceSwitch(input);
             OperationTarget target = new OperationTarget(
                     branchName, expected, revision, targetCommit, returnPoint,
-                    branchSwitch, blockArea, excludeEntities);
+                    branchSwitch, blockArea, excludeEntities, workspaceSwitch);
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in operation journal");
             }
@@ -211,6 +215,27 @@ public final class OperationJournalRepository {
             throw new IOException("Invalid outside Restore flag");
         }
         return Optional.of(new BlockAreaTarget(area, outside == 1));
+    }
+
+    private static void writeWorkspaceSwitch(
+            DataOutputStream output,
+            Optional<WorkspaceSwitchTarget> workspaceSwitch) throws IOException {
+        output.writeBoolean(workspaceSwitch.isPresent());
+        if (workspaceSwitch.isEmpty()) return;
+        WorkspaceSwitchTarget target = workspaceSwitch.orElseThrow();
+        writeUuid(output, target.expectedWorkspace());
+        writeUuid(output, target.targetWorkspace());
+        output.writeLong(target.expectedRevision());
+    }
+
+    private static Optional<WorkspaceSwitchTarget> readWorkspaceSwitch(
+            DataInputStream input) throws IOException {
+        int present = input.readUnsignedByte();
+        if (present > 1) {
+            throw new IOException("Invalid workspace switch target flag");
+        }
+        return present == 0 ? Optional.empty() : Optional.of(new WorkspaceSwitchTarget(
+                readUuid(input), readUuid(input), input.readLong()));
     }
 
     private static void writeId(DataOutputStream output, CommitId id) throws IOException {

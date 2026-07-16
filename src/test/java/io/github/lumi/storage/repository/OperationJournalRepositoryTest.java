@@ -12,6 +12,7 @@ import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
+import io.github.lumi.domain.model.WorkspaceSwitchTarget;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -61,6 +62,25 @@ class OperationJournalRepositoryTest {
                 Optional.of(id("target")), Optional.of(id("return")),
                 Optional.of(new BranchSwitchTarget(
                         new BranchName("redstone-test"), 3, 5)));
+
+        var created = repository.create(new OperationJournal(
+                UUID.randomUUID(), OperationKind.BRANCH_SWITCH,
+                OperationPhase.PREPARED, target));
+
+        assertEquals(created, new OperationJournalRepository(repositoryRoot)
+                .read().orElseThrow());
+    }
+
+    @Test
+    void persistsWorkspaceSwitchPointerRevisions() throws IOException {
+        OperationJournalRepository repository = new OperationJournalRepository(repositoryRoot);
+        OperationTarget target = new OperationTarget(
+                new BranchName("main"), id("expected"), 7,
+                Optional.of(id("target")), Optional.of(id("return")),
+                Optional.of(new BranchSwitchTarget(new BranchName("workspace/next/main"), 3, 5)),
+                Optional.empty(), false,
+                Optional.of(new WorkspaceSwitchTarget(
+                        new UUID(0, 1), new UUID(0, 2), 4)));
 
         var created = repository.create(new OperationJournal(
                 UUID.randomUUID(), OperationKind.BRANCH_SWITCH,

@@ -11,7 +11,8 @@ public record OperationTarget(
         Optional<CommitId> returnPoint,
         Optional<BranchSwitchTarget> branchSwitch,
         Optional<BlockAreaTarget> blockArea,
-        boolean excludeEntities) {
+        boolean excludeEntities,
+        Optional<WorkspaceSwitchTarget> workspaceSwitch) {
     public OperationTarget {
         Objects.requireNonNull(branch, "branch");
         Objects.requireNonNull(expectedHead, "expectedHead");
@@ -19,6 +20,7 @@ public record OperationTarget(
         returnPoint = Objects.requireNonNull(returnPoint, "returnPoint");
         branchSwitch = Objects.requireNonNull(branchSwitch, "branchSwitch");
         blockArea = Objects.requireNonNull(blockArea, "blockArea");
+        workspaceSwitch = Objects.requireNonNull(workspaceSwitch, "workspaceSwitch");
         if (expectedRevision < 0) {
             throw new IllegalArgumentException("Expected ref revision cannot be negative");
         }
@@ -33,6 +35,22 @@ public record OperationTarget(
         if (branchSwitch.isPresent() && blockArea.isPresent()) {
             throw new IllegalArgumentException("Branch switch cannot be a partial Restore");
         }
+        if (workspaceSwitch.isPresent() && branchSwitch.isEmpty()) {
+            throw new IllegalArgumentException("Workspace switch requires a branch switch");
+        }
+    }
+
+    public OperationTarget(
+            BranchName branch,
+            CommitId expectedHead,
+            long expectedRevision,
+            Optional<CommitId> target,
+            Optional<CommitId> returnPoint,
+            Optional<BranchSwitchTarget> branchSwitch,
+            Optional<BlockAreaTarget> blockArea,
+            boolean excludeEntities) {
+        this(branch, expectedHead, expectedRevision, target, returnPoint,
+                branchSwitch, blockArea, excludeEntities, Optional.empty());
     }
 
     public OperationTarget(
@@ -42,7 +60,7 @@ public record OperationTarget(
             Optional<CommitId> target,
             Optional<CommitId> returnPoint) {
         this(branch, expectedHead, expectedRevision, target, returnPoint,
-                Optional.empty(), Optional.empty(), false);
+                Optional.empty(), Optional.empty(), false, Optional.empty());
     }
 
     public OperationTarget(
@@ -53,7 +71,7 @@ public record OperationTarget(
             Optional<CommitId> returnPoint,
             Optional<BranchSwitchTarget> branchSwitch) {
         this(branch, expectedHead, expectedRevision, target, returnPoint,
-                branchSwitch, Optional.empty(), false);
+                branchSwitch, Optional.empty(), false, Optional.empty());
     }
 
     public OperationTarget(
@@ -65,6 +83,6 @@ public record OperationTarget(
             Optional<BranchSwitchTarget> branchSwitch,
             Optional<BlockAreaTarget> blockArea) {
         this(branch, expectedHead, expectedRevision, target, returnPoint,
-                branchSwitch, blockArea, false);
+                branchSwitch, blockArea, false, Optional.empty());
     }
 }
