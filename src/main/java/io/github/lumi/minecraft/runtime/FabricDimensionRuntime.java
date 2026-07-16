@@ -443,10 +443,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private ReturnPointRestoreOperation createRestore(
             CommitId target, CommitAuthor author, boolean includeEntities) throws IOException {
         BranchRef expected = activeRef();
+        UUID workspaceId = activeWorkspaceId();
+        restores.requireTargetInWorkspace(target, workspaceId);
         UUID operationId = UUID.randomUUID();
         SaveRequest returnPoint = new SaveRequest(
                 expected, author, "Return point before Restore", Instant.now(),
-                activeWorkspaceId(), Optional.empty(), CommitKind.HIDDEN_RETURN);
+                workspaceId, Optional.empty(), CommitKind.HIDDEN_RETURN);
         BranchName hiddenRef = new BranchName("hidden/return/" + operationId);
         var operation = new ReturnPointRestoreOperation(
                 createSave(returnPoint), saved -> returnPointRestores.prepare(
@@ -740,11 +742,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private ReturnPointRestoreOperation createPartialRestore(
             CommitId target, BlockAreaTarget area, CommitAuthor author) throws IOException {
         BranchRef expected = activeRef();
+        UUID workspaceId = activeWorkspaceId();
+        restores.requireTargetInWorkspace(target, workspaceId);
         UUID operationId = UUID.randomUUID();
         BranchName hidden = new BranchName("hidden/partial/" + operationId);
         SaveRequest checkpointRequest = new SaveRequest(
                 expected, author,
-                "Checkpoint before partial Restore", Instant.now(), activeWorkspaceId(),
+                "Checkpoint before partial Restore", Instant.now(), workspaceId,
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
         SaveCaptureOperation checkpoint = new SaveCaptureOperation(
                 checkpointRequest, savePreparation, worldCapture,

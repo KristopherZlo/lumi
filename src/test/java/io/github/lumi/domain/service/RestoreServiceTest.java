@@ -1,6 +1,7 @@
 package io.github.lumi.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
@@ -165,6 +166,24 @@ class RestoreServiceTest {
         assertEquals(Map.of(new EntityChunkKey(0, 0), after), included.entities());
         assertEquals(Map.of(), excluded.entities());
         assertEquals(Map.of(), excluded.returnEntities());
+    }
+
+    @Test
+    void rejectsTargetFromAnotherWorkspace() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        UUID activeWorkspace = new UUID(0, 2);
+        UUID foreignWorkspace = new UUID(0, 3);
+        var target = commits.write(new Commit(
+                tree, List.of(), new CommitAuthor(new UUID(0, 1), "Builder"), "Foreign",
+                Instant.EPOCH, foreignWorkspace, Optional.empty(), CommitKind.MANUAL,
+                new CommitStatistics(0, 0, 0, 0)));
+        RestoreService service = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot));
+
+        assertThrows(IOException.class,
+                () -> service.requireTargetInWorkspace(target, activeWorkspace));
     }
 
     @Test

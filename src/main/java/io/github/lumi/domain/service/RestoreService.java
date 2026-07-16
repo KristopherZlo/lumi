@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 public final class RestoreService {
     private static final int REGION_SIZE = 32;
@@ -38,6 +39,15 @@ public final class RestoreService {
         this.objects = Objects.requireNonNull(objects, "objects");
         this.commits = Objects.requireNonNull(commits, "commits");
         this.origins = Objects.requireNonNull(origins, "origins");
+    }
+
+    public void requireTargetInWorkspace(CommitId targetCommit, UUID workspaceId)
+            throws IOException {
+        Objects.requireNonNull(targetCommit, "targetCommit");
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        if (!commits.read(targetCommit).workspaceId().equals(workspaceId)) {
+            throw new IOException("Restore target does not belong to active workspace");
+        }
     }
 
     public PreparedRestore prepare(BranchRef currentRef, CommitId targetCommit) throws IOException {
