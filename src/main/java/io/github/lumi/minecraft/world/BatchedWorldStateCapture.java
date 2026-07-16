@@ -22,14 +22,25 @@ import java.util.function.LongSupplier;
 public final class BatchedWorldStateCapture implements WorldStateCapture {
     private final WorldStateReader reader;
     private final LongSupplier nanoTime;
+    private final Runnable completion;
 
     public BatchedWorldStateCapture(WorldStateReader reader) {
-        this(reader, System::nanoTime);
+        this(reader, System::nanoTime, () -> { });
+    }
+
+    public BatchedWorldStateCapture(WorldStateReader reader, Runnable completion) {
+        this(reader, System::nanoTime, completion);
     }
 
     BatchedWorldStateCapture(WorldStateReader reader, LongSupplier nanoTime) {
+        this(reader, nanoTime, () -> { });
+    }
+
+    BatchedWorldStateCapture(
+            WorldStateReader reader, LongSupplier nanoTime, Runnable completion) {
         this.reader = Objects.requireNonNull(reader, "reader");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
+        this.completion = Objects.requireNonNull(completion, "completion");
     }
 
     @Override
@@ -44,6 +55,7 @@ public final class BatchedWorldStateCapture implements WorldStateCapture {
         private final Map<EntityChunkKey, EntityChunkBlob> entities = new HashMap<>();
         private Map<UUID, PlayerSpawn> playerSpawns;
         private int next;
+        private boolean finished;
 
         private Session(WorkingIndexSnapshot dirty) {
             this.dirty = dirty;
@@ -71,6 +83,10 @@ public final class BatchedWorldStateCapture implements WorldStateCapture {
         public CapturedWorldState finish() {
             if (next != keys.size() || playerSpawns == null) {
                 throw new IllegalStateException("World capture is not complete");
+            }
+            if (!finished) {
+                completion.run();
+                finished = true;
             }
             int entityCount = entities.values().stream()
                     .mapToInt(chunk -> chunk.entities().size()).sum();

@@ -71,6 +71,25 @@ class BatchedWorldStateCaptureTest {
         assertEquals(1, captured.statistics().entities());
     }
 
+    @Test
+    void releasesRetainedChunksOnlyAfterCaptureFinishes() throws Exception {
+        WorkingIndex working = new WorkingIndex();
+        working.markDirty(new SectionKey(0, 0, 0));
+        int[] releases = {0};
+        WorldStateReader reader = new WorldStateReader() {
+            @Override public SectionBlob read(SectionKey key) { return airSection(); }
+            @Override public EntityChunkBlob read(EntityChunkKey key) { return entities(); }
+        };
+        WorldStateCapture.CaptureSession session =
+                new BatchedWorldStateCapture(
+                        reader, (Runnable) () -> releases[0]++).begin(working.snapshot());
+
+        assertTrue(session.captureUntil(Long.MAX_VALUE));
+        assertEquals(0, releases[0]);
+        session.finish();
+        assertEquals(1, releases[0]);
+    }
+
     private static SectionBlob airSection() {
         return new SectionBlob(
                 new ArrayList<>(Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:air")),
