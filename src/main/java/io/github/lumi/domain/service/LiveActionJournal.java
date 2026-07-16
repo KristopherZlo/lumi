@@ -187,6 +187,11 @@ public final class LiveActionJournal {
         return Optional.ofNullable(unavailableReasons.get(Objects.requireNonNull(player, "player")));
     }
 
+    public synchronized Optional<UUID> owner(UUID actionId) {
+        MutableAction action = actions.get(Objects.requireNonNull(actionId, "actionId"));
+        return action == null ? Optional.empty() : Optional.of(action.player);
+    }
+
     public synchronized void makeUnavailable(UUID actionId, String reason) {
         MutableAction action = requireAction(actionId);
         if (action.closed) {

@@ -37,6 +37,15 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void exposesPlayerOwnershipForCausalConsequences() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER_A);
+
+        assertEquals(Optional.of(PLAYER_A), journal.owner(action));
+        assertEquals(Optional.empty(), journal.owner(UUID.randomUUID()));
+    }
+
+    @Test
     void refusesWholeUndoAfterNewerPlayerOverlapsAnyPosition() {
         LiveActionJournal journal = new LiveActionJournal();
         UUID first = journal.begin(PLAYER_A);

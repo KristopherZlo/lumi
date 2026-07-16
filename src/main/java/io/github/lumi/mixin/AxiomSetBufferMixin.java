@@ -128,6 +128,7 @@ abstract class AxiomSetBufferMixin {
                 BlockSnapshot after = runtime.liveWorld().read(position);
                 if (!snapshot.equals(after)) {
                     runtime.liveActions().record(action, position, snapshot, after);
+                    runtime.recordCausalZoneGrowth(action, position);
                 }
             } catch (IOException failed) {
                 throw new UncheckedIOException("Cannot capture Axiom block after mutation", failed);

@@ -161,6 +161,7 @@ abstract class LevelChunkMixin {
             if (!pending.before.equals(after)) {
                 runtime.liveActions().record(
                         pending.action, pending.position, pending.before, after);
+                runtime.recordCausalZoneGrowth(pending.action, pending.position);
             }
         } catch (IOException | IllegalArgumentException failed) {
             LumiMod.LOGGER.warn("Cannot finish live block mutation at {}", position, failed);

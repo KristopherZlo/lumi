@@ -22,6 +22,7 @@ import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.ActiveBranch;
 import io.github.lumi.domain.model.ActiveWorkspace;
 import io.github.lumi.domain.model.BlockAreaTarget;
+import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
@@ -112,6 +113,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final RecoveryService recoveries;
     private final WorkspaceService workspaces;
     private final ZoneService zones;
+    private final CausalZoneGrowthTracker zoneGrowth;
     private final ReturnPointRestorePreparation returnPointRestores;
     private final Executor background;
     private final BranchRefRepository refs;
@@ -129,6 +131,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final MinecraftEntityChunkCapture entityCapture = new MinecraftEntityChunkCapture();
     private OperationJournal pendingRecovery;
     private io.github.lumi.minecraft.world.DimensionFreeze.Lease recoveryLease;
+    private volatile UUID selectedWorkspaceId;
 
     private FabricDimensionRuntime(
             ServerLevel level,
@@ -163,6 +166,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.merges = merges;
         this.workspaces = workspaces;
         this.zones = zones;
+        selectedWorkspaceId = defaultWorkspaceId;
+        zoneGrowth = new CausalZoneGrowthTracker(zones, background,
+                failure -> LumiMod.LOGGER.error("Cannot persist causal zone growth", failure));
         recoveries = new RecoveryService(restores, zones);
         this.background = background;
         this.refs = refs;
@@ -218,6 +224,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         .finalizeIfPublished(interrupted.orElseThrow())) {
             interrupted = Optional.empty();
         }
+        workspaceId = workspaceService.active().id();
         var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
         var working = new WorkingIndexRepository(repository);
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
@@ -260,7 +267,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public void tick() throws IOException {
-        operations.tick();
+        try {
+            operations.tick();
+        } finally {
+            zoneGrowth.flush();
+        }
     }
 
     public synchronized Optional<OperationJournal> recoveryJournal() {
@@ -339,8 +350,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                 workspaceTarget.expectedWorkspace(),
                                 workspaceTarget.expectedRevision()),
                         workspaceTarget.targetWorkspace(), plan);
-                return new WorkspaceSwitchRestorePublication(
-                        branches, workspaces, workspacePlan);
+                return workspaceSwitchPublication(workspacePlan);
             }
             return new BranchSwitchRestorePublication(branches, plan);
         }
@@ -594,8 +604,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             try {
                 var prepared = restores.prepare(branch.source(), branch.target().commit());
                 return RestoreOperation.startWorkspaceSwitch(
-                        prepared, worldApply,
-                        new WorkspaceSwitchRestorePublication(branches, workspaces, plan),
+                        prepared, worldApply, workspaceSwitchPublication(plan),
                         journals, operationId, restoreStateListener, plan);
             } catch (IOException failed) {
                 throw new CompletionException(failed);
@@ -644,6 +653,23 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             UUID zoneId, UUID actor, SectionKey cell) throws IOException {
         requireZoneMetadataMutable();
         return zones.growForActor(activeWorkspaceId(), zoneId, actor, cell);
+    }
+
+    public void recordCausalZoneGrowth(UUID actionId, BlockPosition position) {
+        Objects.requireNonNull(position, "position");
+        liveActions.owner(actionId).ifPresent(actor -> zoneGrowth.record(
+                selectedWorkspaceId, actor,
+                new SectionKey(
+                        Math.floorDiv(position.x(), 16), Math.floorDiv(position.y(), 16),
+                        Math.floorDiv(position.z(), 16))));
+    }
+
+    private RestorePublication workspaceSwitchPublication(WorkspaceSwitchPlan plan) {
+        var publication = new WorkspaceSwitchRestorePublication(branches, workspaces, plan);
+        return restore -> {
+            publication.publish(restore);
+            selectedWorkspaceId = plan.targetWorkspace();
+        };
     }
 
     private void requireZoneMetadataMutable() {
@@ -894,7 +920,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 () -> new IOException("Active Lumi branch ref is missing: " + name));
     }
     public UUID defaultWorkspaceId() { return defaultWorkspaceId; }
-    public UUID activeWorkspaceId() throws IOException { return workspaces.active().id(); }
+    public UUID activeWorkspaceId() throws IOException { return selectedWorkspaceId; }
     public BlockEntityBaselineStore blockEntityBaselines() { return blockEntityBaselines; }
 
     private synchronized void requireNoRecovery() {
@@ -906,6 +932,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     @Override
     public void close() {
+        zoneGrowth.flush();
         if (recoveryLease != null) {
             recoveryLease.release();
             recoveryLease = null;
