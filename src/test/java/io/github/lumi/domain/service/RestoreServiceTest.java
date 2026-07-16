@@ -21,6 +21,7 @@ import io.github.lumi.domain.model.RegionTree;
 import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.Zone;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -164,6 +165,37 @@ class RestoreServiceTest {
         assertEquals(Map.of(new EntityChunkKey(0, 0), after), included.entities());
         assertEquals(Map.of(), excluded.entities());
         assertEquals(Map.of(), excluded.returnEntities());
+    }
+
+    @Test
+    void zoneRestoreSelectsExactCellsAndTheirEntityColumns() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        EntityChunkBlob beforeEntities = new EntityChunkBlob(List.of());
+        EntityChunkBlob afterEntities = new EntityChunkBlob(List.of(new EntityState(
+                new UUID(0, 9), "minecraft:armor_stand", new CanonicalNbt(new byte[] {1}))));
+        var targetChunk = objects.write(new ChunkTree(
+                Map.of(0, objects.write(section("minecraft:air")),
+                        1, objects.write(section("minecraft:air"))),
+                Optional.of(objects.write(afterEntities))));
+        var currentChunk = objects.write(new ChunkTree(
+                Map.of(0, objects.write(section("minecraft:stone")),
+                        1, objects.write(section("minecraft:stone"))),
+                Optional.of(objects.write(beforeEntities))));
+        var target = commits.write(commit(tree(objects, targetChunk), List.of()));
+        var current = commits.write(commit(tree(objects, currentChunk), List.of(target)));
+        var currentRef = new BranchRef(new BranchName("main"), current, 1);
+        Zone zone = new Zone(new UUID(0, 4), new UUID(0, 2), "Cell", 0,
+                java.util.Set.of(new SectionKey(0, 1, 0)), java.util.Set.of());
+
+        PreparedRestore prepared = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot))
+                .prepareZone(currentRef, target, new ZoneScope(zone));
+
+        assertEquals(Map.of(new SectionKey(0, 1, 0), section("minecraft:air")),
+                prepared.sections());
+        assertEquals(Map.of(new EntityChunkKey(0, 0), afterEntities), prepared.entities());
+        assertEquals(false, prepared.restorePlayerSpawns());
     }
 
     private static io.github.lumi.domain.model.ObjectId tree(

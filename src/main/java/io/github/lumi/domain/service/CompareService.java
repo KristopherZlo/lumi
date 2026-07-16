@@ -38,6 +38,11 @@ public final class CompareService {
     }
 
     public WorldDifference compare(CommitId before, CommitId after) throws IOException {
+        return compare(before, after, null);
+    }
+
+    public WorldDifference compare(CommitId before, CommitId after, ZoneScope scope)
+            throws IOException {
         Objects.requireNonNull(before, "before");
         Objects.requireNonNull(after, "after");
         if (before.equals(after)) {
@@ -55,7 +60,7 @@ public final class CompareService {
                     ? objects.readRegion(leftId.orElseThrow()) : new RegionTree(Map.of());
             RegionTree rightRegion = rightId.isPresent()
                     ? objects.readRegion(rightId.orElseThrow()) : new RegionTree(Map.of());
-            compareRegion(coordinate, leftRegion, rightRegion, sections, entities);
+            compareRegion(coordinate, leftRegion, rightRegion, sections, entities, scope);
         }
         return new WorldDifference(sections, entities);
     }
@@ -65,7 +70,8 @@ public final class CompareService {
             RegionTree left,
             RegionTree right,
             Map<SectionKey, ObjectChange> sections,
-            Map<EntityChunkKey, ObjectChange> entities) throws IOException {
+            Map<EntityChunkKey, ObjectChange> entities,
+            ZoneScope scope) throws IOException {
         for (ChunkInRegion local : union(left.chunks().keySet(), right.chunks().keySet())) {
             Optional<ObjectId> leftId = Optional.ofNullable(left.chunks().get(local));
             Optional<ObjectId> rightId = Optional.ofNullable(right.chunks().get(local));
@@ -76,7 +82,7 @@ public final class CompareService {
                     ? objects.readChunk(rightId.orElseThrow()) : new ChunkTree(Map.of(), Optional.empty());
             int chunkX = region.x() * REGION_SIZE + local.x();
             int chunkZ = region.z() * REGION_SIZE + local.z();
-            compareChunk(chunkX, chunkZ, leftChunk, rightChunk, sections, entities);
+            compareChunk(chunkX, chunkZ, leftChunk, rightChunk, sections, entities, scope);
         }
     }
 
@@ -86,14 +92,17 @@ public final class CompareService {
             ChunkTree left,
             ChunkTree right,
             Map<SectionKey, ObjectChange> sections,
-            Map<EntityChunkKey, ObjectChange> entities) throws IOException {
+            Map<EntityChunkKey, ObjectChange> entities,
+            ZoneScope scope) throws IOException {
         for (int sectionY : union(left.sections().keySet(), right.sections().keySet())) {
             SectionKey key = new SectionKey(chunkX, sectionY, chunkZ);
+            if (scope != null && !scope.includes(key)) continue;
             addIfChanged(sections, key,
                     Optional.ofNullable(left.sections().get(sectionY)),
                     Optional.ofNullable(right.sections().get(sectionY)));
         }
         EntityChunkKey entityKey = new EntityChunkKey(chunkX, chunkZ);
+        if (scope != null && !scope.includes(entityKey)) return;
         addIfChanged(entities, entityKey, left.entities(), right.entities());
     }
 

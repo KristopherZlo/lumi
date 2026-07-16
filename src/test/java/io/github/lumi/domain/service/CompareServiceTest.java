@@ -17,6 +17,7 @@ import io.github.lumi.domain.model.ObjectChange;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorldDifference;
+import io.github.lumi.domain.model.Zone;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -54,6 +55,12 @@ class CompareServiceTest {
         assertEquals(Map.of(key, new ObjectChange(origin, stone)), difference.sections());
         assertTrue(difference.entities().isEmpty());
         assertEquals(1, difference.changeCount());
+        Zone included = new Zone(new UUID(0, 3), new UUID(0, 2), "Included", 0,
+                java.util.Set.of(key), java.util.Set.of());
+        Zone excluded = new Zone(new UUID(0, 4), new UUID(0, 2), "Excluded", 0,
+                java.util.Set.of(new SectionKey(1, 0, 0)), java.util.Set.of());
+        assertEquals(difference, compare.compare(empty, changed, new ZoneScope(included)));
+        assertTrue(compare.compare(empty, changed, new ZoneScope(excluded)).isEmpty());
     }
 
     private static io.github.lumi.domain.model.ObjectId tree(

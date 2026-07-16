@@ -40,33 +40,33 @@ public final class RestoreService {
     }
 
     public PreparedRestore prepare(BranchRef currentRef, CommitId targetCommit) throws IOException {
-        return prepare(currentRef, currentRef.commit(), targetCommit, null, false, true);
+        return prepare(currentRef, currentRef.commit(), targetCommit, null, false, true, null);
     }
 
     public PreparedRestore prepare(
             BranchRef expectedRef, CommitId sourceCommit, CommitId targetCommit)
             throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
-                targetCommit, null, false, true);
+                targetCommit, null, false, true, null);
     }
 
     public PreparedRestore prepareWithoutEntities(
             BranchRef currentRef, CommitId targetCommit) throws IOException {
-        return prepare(currentRef, currentRef.commit(), targetCommit, null, false, false);
+        return prepare(currentRef, currentRef.commit(), targetCommit, null, false, false, null);
     }
 
     public PreparedRestore prepareWithoutEntities(
             BranchRef expectedRef, CommitId sourceCommit, CommitId targetCommit)
             throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
-                targetCommit, null, false, false);
+                targetCommit, null, false, false, null);
     }
 
     public PreparedRestore preparePartial(
             BranchRef currentRef, CommitId targetCommit, BlockBox area, boolean outside)
             throws IOException {
         return prepare(currentRef, currentRef.commit(), targetCommit,
-                Objects.requireNonNull(area, "area"), outside, false);
+                Objects.requireNonNull(area, "area"), outside, false, null);
     }
 
     public PreparedRestore preparePartial(
@@ -76,12 +76,27 @@ public final class RestoreService {
             BlockBox area,
             boolean outside) throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
-                targetCommit, Objects.requireNonNull(area, "area"), outside, false);
+                targetCommit, Objects.requireNonNull(area, "area"), outside, false, null);
+    }
+
+    public PreparedRestore prepareZone(
+            BranchRef currentRef, CommitId targetCommit, ZoneScope scope) throws IOException {
+        return prepare(currentRef, currentRef.commit(), targetCommit,
+                null, false, true, Objects.requireNonNull(scope, "scope"));
+    }
+
+    public PreparedRestore prepareZone(
+            BranchRef expectedRef,
+            CommitId sourceCommit,
+            CommitId targetCommit,
+            ZoneScope scope) throws IOException {
+        return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
+                targetCommit, null, false, true, Objects.requireNonNull(scope, "scope"));
     }
 
     private PreparedRestore prepare(
             BranchRef currentRef, CommitId sourceCommit, CommitId targetCommit,
-            BlockBox area, boolean outside, boolean includeEntities)
+            BlockBox area, boolean outside, boolean includeEntities, ZoneScope scope)
             throws IOException {
         Commit currentCommit = commits.read(sourceCommit);
         Commit targetCommitValue = commits.read(targetCommit);
@@ -103,9 +118,9 @@ public final class RestoreService {
                     ? objects.readRegion(targetRegionId.orElseThrow()) : new RegionTree(Map.of());
             prepareRegion(regionCoordinate, currentRegion, targetRegion,
                     sections, entities, returnSections, returnEntities,
-                    area, outside, includeEntities);
+                    area, outside, includeEntities, scope);
         }
-        boolean restorePlayerSpawns = area == null;
+        boolean restorePlayerSpawns = area == null && scope == null;
         return new PreparedRestore(currentRef, targetCommit,
                 sections, entities, returnSections, returnEntities,
                 restorePlayerSpawns ? targetCommitValue.playerSpawns() : Map.of(),
@@ -123,7 +138,8 @@ public final class RestoreService {
             Map<EntityChunkKey, EntityChunkBlob> returnEntities,
             BlockBox area,
             boolean outside,
-            boolean includeEntities) throws IOException {
+            boolean includeEntities,
+            ZoneScope scope) throws IOException {
         for (ChunkInRegion local : union(currentRegion.chunks().keySet(), targetRegion.chunks().keySet())) {
             Optional<ObjectId> currentId = Optional.ofNullable(currentRegion.chunks().get(local));
             Optional<ObjectId> targetId = Optional.ofNullable(targetRegion.chunks().get(local));
@@ -138,7 +154,7 @@ public final class RestoreService {
             int chunkZ = regionCoordinate.z() * REGION_SIZE + local.z();
             prepareChunk(chunkX, chunkZ, current, target,
                     sections, entities, returnSections, returnEntities,
-                    area, outside, includeEntities);
+                    area, outside, includeEntities, scope);
         }
     }
 
@@ -153,13 +169,15 @@ public final class RestoreService {
             Map<EntityChunkKey, EntityChunkBlob> returnEntities,
             BlockBox area,
             boolean outside,
-            boolean includeEntities) throws IOException {
+            boolean includeEntities,
+            ZoneScope scope) throws IOException {
         for (int sectionY : union(current.sections().keySet(), target.sections().keySet())) {
             Optional<ObjectId> currentId = Optional.ofNullable(current.sections().get(sectionY));
             Optional<ObjectId> targetId = Optional.ofNullable(target.sections().get(sectionY));
             if (!currentId.equals(targetId)) {
                 SectionKey key = new SectionKey(chunkX, sectionY, chunkZ);
                 if (area != null && !selectsSection(area, key, outside)) continue;
+                if (scope != null && !scope.includes(key)) continue;
                 ObjectId returnId = currentId.isPresent() ? currentId.orElseThrow() : origin(key);
                 ObjectId resolved = targetId.isPresent() ? targetId.orElseThrow() : origin(key);
                 SectionBlob before = objects.readSection(returnId);
@@ -174,6 +192,7 @@ public final class RestoreService {
         if (area == null && includeEntities
                 && !current.entities().equals(target.entities())) {
             EntityChunkKey key = new EntityChunkKey(chunkX, chunkZ);
+            if (scope != null && !scope.includes(key)) return;
             ObjectId resolved = target.entities().isPresent()
                     ? target.entities().orElseThrow()
                     : origin(key);
