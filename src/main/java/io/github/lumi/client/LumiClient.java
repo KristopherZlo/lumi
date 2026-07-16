@@ -37,7 +37,8 @@ public final class LumiClient implements ClientModInitializer {
                                 client.screen, HISTORY,
                                 () -> client.setScreen(new LumiSaveScreen(
                                         client.screen,
-                                        new SaveScreenController(NETWORKING::save))),
+                                        new SaveScreenController(
+                                                NETWORKING::save, NETWORKING::amend))),
                                 () -> client.setScreen(new LumiBranchScreen(
                                         client.screen,
                                         currentBranch(),
@@ -68,7 +69,8 @@ public final class LumiClient implements ClientModInitializer {
                     @Override public void openSave() {
                         Minecraft client = Minecraft.getInstance();
                         client.setScreen(new LumiSaveScreen(
-                                client.screen, new SaveScreenController(NETWORKING::save)));
+                                client.screen, new SaveScreenController(
+                                        NETWORKING::save, NETWORKING::amend)));
                     }
 
                     @Override public boolean undoSelection() { return SELECTION.undo(); }

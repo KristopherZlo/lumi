@@ -89,6 +89,30 @@ class SaveServiceTest {
     }
 
     @Test
+    void amendReplacesHeadWithItsParents() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        var root = commits.write(commit(tree, List.of(), "Initial"));
+        var previous = commits.write(commit(tree, List.of(root), "Previous"));
+        var ref = refs.create(new BranchName("main"), previous);
+        SaveService service = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
+                new OperationJournalRepository(repositoryRoot));
+
+        SaveResult result = service.save(new SaveRequest(
+                ref, author(), "Replacement", Instant.parse("2026-07-15T12:00:00Z"),
+                UUID.fromString("20000000-0000-0000-0000-000000000002"),
+                Optional.empty(), CommitKind.AMEND),
+                new CapturedWorldState(Map.of(), Map.of(), WorkingIndexSnapshot.empty(),
+                        new CommitStatistics(0, 0, 0, 0)));
+
+        assertEquals(List.of(root), commits.read(result.commitId()).parents());
+        assertNotEquals(previous, result.commitId());
+        assertEquals(result.commitId(), refs.read(new BranchName("main")).orElseThrow().commit());
+    }
+
+    @Test
     void createsHiddenCheckpointWithoutMovingTheSourceBranch() throws IOException {
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
         CommitRepository commits = new CommitRepository(repositoryRoot);

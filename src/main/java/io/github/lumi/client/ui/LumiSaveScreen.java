@@ -16,6 +16,7 @@ public final class LumiSaveScreen extends Screen {
     private final SaveScreenController controller;
     private EditBox message;
     private Button save;
+    private Button amend;
     private String error = "";
     private int panelX;
     private int panelY;
@@ -38,17 +39,28 @@ public final class LumiSaveScreen extends Screen {
                 Component.translatable("luma.save.name_input"));
         message.setMaxLength(SaveScreenController.MAX_NAME_LENGTH);
         message.setHint(Component.translatable("luma.save.name_input"));
-        message.setResponder(value -> save.active = !value.trim().isEmpty());
+        message.setResponder(value -> {
+            boolean active = !value.trim().isEmpty();
+            save.active = active;
+            amend.active = active;
+        });
         addRenderableWidget(message);
 
-        int buttonWidth = (contentWidth - 8) / 2;
+        int buttonWidth = (contentWidth - 16) / 3;
         save = addRenderableWidget(Button.builder(
-                Component.translatable("luma.action.save_build"), ignored -> submit())
+                Component.translatable("luma.action.save_build"),
+                ignored -> submit(SaveScreenController.Intent.SAVE))
                 .bounds(contentX, panelY + 116, buttonWidth, 20).build());
         save.active = false;
+        amend = addRenderableWidget(Button.builder(
+                Component.translatable("luma.action.amend_version"),
+                ignored -> submit(SaveScreenController.Intent.AMEND))
+                .bounds(contentX + buttonWidth + 8, panelY + 116, buttonWidth, 20).build());
+        amend.active = false;
         addRenderableWidget(Button.builder(
                 Component.translatable("luma.action.cancel"), ignored -> onClose())
-                .bounds(contentX + buttonWidth + 8, panelY + 116, buttonWidth, 20).build());
+                .bounds(contentX + (buttonWidth + 8) * 2,
+                        panelY + 116, buttonWidth, 20).build());
     }
 
     @Override
@@ -63,14 +75,15 @@ public final class LumiSaveScreen extends Screen {
     public boolean keyPressed(KeyEvent event) {
         if ((event.key() == InputConstants.KEY_RETURN
                 || event.key() == InputConstants.KEY_NUMPADENTER) && save.active) {
-            submit();
+            submit(SaveScreenController.Intent.SAVE);
             return true;
         }
         return super.keyPressed(event);
     }
 
-    private void submit() {
-        SaveScreenController.Submission submission = controller.submit(message.getValue());
+    private void submit(SaveScreenController.Intent intent) {
+        SaveScreenController.Submission submission =
+                controller.submit(message.getValue(), intent);
         error = submission.error();
         if (submission.accepted()) {
             if (minecraft.player != null) {

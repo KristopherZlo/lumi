@@ -3,6 +3,7 @@ package io.github.lumi.domain.service;
 import io.github.lumi.domain.model.Commit;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.OperationJournal;
@@ -92,9 +93,11 @@ public final class SaveService implements SavePublisher {
             changes.put(entities.getKey(), objects.write(entities.getValue()));
         }
         ObjectId tree = trees.update(Optional.of(parent.tree()), changes);
+        List<CommitId> parents = request.kind() == CommitKind.AMEND
+                ? parent.parents() : List.of(request.expectedRef().commit());
         Commit commit = new Commit(
                 tree,
-                List.of(request.expectedRef().commit()),
+                parents,
                 request.author(),
                 request.message(),
                 request.timestamp(),

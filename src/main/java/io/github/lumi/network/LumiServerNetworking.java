@@ -208,6 +208,9 @@ public final class LumiServerNetworking {
             case SAVE -> runtime.startSave(new SaveRequest(
                     expected, author, payload.argument(), Instant.now(),
                     runtime.activeWorkspaceId(), Optional.empty(), CommitKind.MANUAL), terminal);
+            case AMEND -> runtime.startSave(new SaveRequest(
+                    expected, author, payload.argument(), Instant.now(),
+                    runtime.activeWorkspaceId(), Optional.empty(), CommitKind.AMEND), terminal);
             case RESTORE -> runtime.startRestore(
                     new CommitId(new ObjectId(payload.argument())), author, terminal);
             case RESTORE_NO_ENTITIES -> runtime.startRestore(

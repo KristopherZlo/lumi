@@ -56,6 +56,11 @@ public final class LumiClientNetworking {
                 Objects.requireNonNull(message, "message"));
     }
 
+    public UUID amend(String message) {
+        return send(HistoryCommandPayload.Kind.AMEND,
+                Objects.requireNonNull(message, "message"));
+    }
+
     public UUID restore(CommitId target) {
         return send(HistoryCommandPayload.Kind.RESTORE,
                 Objects.requireNonNull(target, "target").hex());
