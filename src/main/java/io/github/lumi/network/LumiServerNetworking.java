@@ -45,6 +45,7 @@ public final class LumiServerNetworking {
             new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, PendingPackage> PACKAGE_INSPECTIONS =
             new ConcurrentHashMap<>();
+    private static final HistorySnapshotFactory SNAPSHOTS = new HistorySnapshotFactory();
 
     private LumiServerNetworking() { }
 
@@ -716,61 +717,7 @@ public final class LumiServerNetworking {
 
     private static void sendSnapshot(ServerPlayer player, FabricDimensionRuntime runtime) {
         try {
-            BranchRef head = runtime.activeRef();
-            var workspace = runtime.activeWorkspace();
-            var pending = runtime.pendingPreview(512);
-            var workspaceViews = runtime.visibleWorkspaces().stream()
-                    .map(visible -> new HistorySnapshotPayload.WorkspaceView(
-                            visible.id(), visible.name(), visible.id().equals(workspace.id()),
-                            visible.bounds().isPresent(),
-                            visible.settings().hideZoneCommits(),
-                            visible.settings().includeEntitiesOnRestore()))
-                    .toList();
-            var versions = runtime.history(32).stream()
-                    .map(entry -> new HistorySnapshotPayload.Version(
-                            entry.id(), entry.commit().message(),
-                            entry.commit().author().name(),
-                            entry.commit().timestamp().toEpochMilli(),
-                            entry.commit().kind()))
-                    .toList();
-            var branchViews = runtime.visibleBranches().stream()
-                    .map(ref -> new HistorySnapshotPayload.Branch(
-                            ref.name().value(), ref.commit(), ref.name().equals(head.name())))
-                    .toList();
-            var visibleZones = runtime.visibleZones().stream().limit(64).toList();
-            var zoneHistories = runtime.zoneHistories(
-                    visibleZones.stream().map(io.github.lumi.domain.model.Zone::id)
-                            .collect(java.util.stream.Collectors.toSet()),
-                    8);
-            var zoneViews = visibleZones.stream()
-                    .map(zone -> new HistorySnapshotPayload.ZoneView(
-                            zone.id(), zone.name(), zone.color(), zone.cells().size(),
-                            zone.revision(), zone.activeActors().contains(player.getUUID()),
-                            zoneHistories.getOrDefault(zone.id(), java.util.List.of()).stream()
-                                    .map(entry -> new HistorySnapshotPayload.Version(
-                                            entry.id(), entry.commit().message(),
-                                            entry.commit().author().name(),
-                                            entry.commit().timestamp().toEpochMilli(),
-                                            entry.commit().kind()))
-                                    .toList()))
-                    .toList();
-            var deleted = runtime.deletedVersions(64).stream()
-                    .map(entry -> new HistorySnapshotPayload.Version(
-                            entry.id(), entry.commit().message(),
-                            entry.commit().author().name(),
-                            entry.commit().timestamp().toEpochMilli(),
-                            entry.commit().kind()))
-                    .toList();
-            send(player, new HistorySnapshotPayload(
-                    dimension(runtime), head.commit(), head.revision(), pending.totalKeys(),
-                    pending.sections().stream()
-                            .map(section -> new HistorySnapshotPayload.PendingSection(
-                                    section.chunkX(), section.sectionY(), section.chunkZ()))
-                            .toList(),
-                    runtime.operations().hasActiveOperation(),
-                    runtime.recoveryJournal().isPresent(),
-                    workspace.id(), workspace.name(), head.name().value(),
-                    workspaceViews, versions, branchViews, zoneViews, deleted));
+            send(player, SNAPSHOTS.create(player, runtime));
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi history snapshot", failed);
         }
