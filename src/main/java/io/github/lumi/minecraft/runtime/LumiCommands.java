@@ -20,6 +20,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.LiveActionJournal;
+import io.github.lumi.domain.service.RecoveryChoice;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
@@ -53,6 +54,12 @@ public final class LumiCommands {
             var rollback = literal("rollback")
                     .requires(LumiCommands::mayUse)
                     .executes(command -> quickRollback(command.getSource()));
+            var recover = literal("recover")
+                    .requires(LumiCommands::mayUse)
+                    .then(literal("resume").executes(command -> recovery(
+                            command.getSource(), RecoveryChoice.RESUME_TARGET)))
+                    .then(literal("return").executes(command -> recovery(
+                            command.getSource(), RecoveryChoice.RETURN_CHECKPOINT)));
             var undo = literal("undo").requires(LumiCommands::mayUse)
                     .executes(command -> liveAction(command.getSource(), LiveActionJournal.Direction.UNDO));
             var redo = literal("redo").requires(LumiCommands::mayUse)
@@ -105,7 +112,7 @@ public final class LumiCommands {
                     .then(argument("commit", word()).then(x1Arg));
             dispatcher.register(literal("lumi").then(save).then(restore)
                     .then(restoreArea).then(rollback).then(undo).then(redo)
-                    .then(debugActionSet).then(debugActionSummon).then(branch));
+                    .then(recover).then(debugActionSet).then(debugActionSummon).then(branch));
         });
     }
 
@@ -216,6 +223,26 @@ public final class LumiCommands {
         } catch (IOException | IllegalStateException failed) {
             source.sendFailure(Component.literal("Lumi Quick Rollback could not start: "
                     + failed.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int recovery(CommandSourceStack source, RecoveryChoice choice) {
+        var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
+        if (runtime == null) {
+            source.sendFailure(Component.literal("Lumi recovery requires a ready dimension"));
+            return 0;
+        }
+        try {
+            runtime.startRecovery(choice, ignored -> { });
+            source.sendSuccess(() -> Component.literal(
+                    choice == RecoveryChoice.RESUME_TARGET
+                            ? "Lumi recovery is resuming the target"
+                            : "Lumi recovery is returning to the checkpoint"), false);
+            return 1;
+        } catch (IOException | IllegalStateException failed) {
+            source.sendFailure(Component.literal(
+                    "Lumi recovery could not start: " + failed.getMessage()));
             return 0;
         }
     }

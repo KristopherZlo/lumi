@@ -9,18 +9,22 @@ import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
 import io.github.lumi.minecraft.operation.BranchRefRestorePublication;
 import io.github.lumi.minecraft.operation.PendingRestorePublication;
 import io.github.lumi.minecraft.operation.RestoreOperation;
+import io.github.lumi.minecraft.operation.RestorePublication;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestoreOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestorePreparation;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.BranchSwitchPlan;
+import io.github.lumi.domain.model.ActiveBranch;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.OperationJournal;
+import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
 import io.github.lumi.domain.service.LiveActionJournal;
@@ -30,6 +34,9 @@ import io.github.lumi.domain.service.BranchService;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveService;
 import io.github.lumi.domain.service.RestoreService;
+import io.github.lumi.domain.service.RecoveryChoice;
+import io.github.lumi.domain.service.RecoveryService;
+import io.github.lumi.domain.service.SaveJournalRecovery;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.BatchedWorldStateCapture;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
@@ -88,6 +95,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final OperationJournalRepository journals;
     private final BranchService branches;
     private final MergeService merges;
+    private final RecoveryService recoveries;
     private final ReturnPointRestorePreparation returnPointRestores;
     private final Executor background;
     private final BranchRefRepository refs;
@@ -103,6 +111,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final MinecraftBlockEntityBaselineCapture baselineCapture =
             new MinecraftBlockEntityBaselineCapture();
     private final MinecraftEntityChunkCapture entityCapture = new MinecraftEntityChunkCapture();
+    private OperationJournal pendingRecovery;
+    private io.github.lumi.minecraft.world.DimensionFreeze.Lease recoveryLease;
 
     private FabricDimensionRuntime(
             ServerLevel level,
@@ -119,7 +129,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             ActiveBranchRepository active,
             BranchService branches,
             MergeService merges,
-            UUID defaultWorkspaceId) {
+            UUID defaultWorkspaceId,
+            OperationJournal pendingRecovery,
+            io.github.lumi.minecraft.world.DimensionFreeze.Lease recoveryLease) {
         this.level = level;
         this.repository = repository;
         this.freeze = freeze;
@@ -131,10 +143,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.journals = journals;
         this.branches = branches;
         this.merges = merges;
+        recoveries = new RecoveryService(restores);
         this.background = background;
         this.refs = refs;
         this.active = active;
         this.defaultWorkspaceId = defaultWorkspaceId;
+        this.pendingRecovery = pendingRecovery;
+        this.recoveryLease = recoveryLease;
         liveWorld = new MinecraftLiveBlockWorldAccess(level, freeze);
         liveEntityWorld = new MinecraftLiveEntityWorldAccess(level, freeze);
         liveEntities = new MinecraftLiveEntityTracker(liveActions, liveEntityWorld);
@@ -166,6 +181,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var origins = new OriginStore(repository);
         new DimensionHistoryInitializer(objects, commits, refs, active)
                 .initialize(UUID.randomUUID());
+        var interrupted = journals.read();
+        if (interrupted.filter(journal -> journal.kind() == OperationKind.SAVE).isPresent()) {
+            new SaveJournalRecovery(commits, refs, journals)
+                    .recover(interrupted.orElseThrow());
+            interrupted = Optional.empty();
+        }
+        var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
         BranchRef selected = refs.read(active.read().orElseThrow().name()).orElseThrow();
         UUID workspaceId = commits.read(selected.commit()).workspaceId();
         var working = new WorkingIndexRepository(repository);
@@ -173,15 +195,17 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 objects, origins, working, background);
         var branches = new BranchService(commits, refs, active, working);
         var trees = new MerkleTreeEditor(objects);
+        var restoreService = new RestoreService(objects, commits, origins);
         return new FabricDimensionRuntime(
                 level, repository, freeze, new DimensionOperationCoordinator(
                         freeze, operation -> logTerminal(level, operation)),
                 mutations,
                 new SaveService(objects, trees, commits, refs, journals),
-                new RestoreService(objects, commits, origins),
+                restoreService,
                 new MinecraftWorldStateApply(level, freeze), journals,
                 background, refs, active, branches,
-                new MergeService(objects, commits, origins, trees), workspaceId);
+                new MergeService(objects, commits, origins, trees), workspaceId,
+                interrupted.orElse(null), recoveryLease);
     }
 
     private static void logTerminal(ServerLevel level, DimensionMutation operation) {
@@ -207,6 +231,86 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public void tick() throws IOException {
         operations.tick();
+    }
+
+    public synchronized Optional<OperationJournal> recoveryJournal() {
+        return Optional.ofNullable(pendingRecovery);
+    }
+
+    public synchronized BackgroundPreparedMutation<RestoreOperation> startRecovery(
+            RecoveryChoice choice,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        Objects.requireNonNull(choice, "choice");
+        Objects.requireNonNull(terminalObserver, "terminalObserver");
+        if (pendingRecovery == null || recoveryLease == null) {
+            throw new IllegalStateException("This dimension has no pending recovery");
+        }
+        if (operations.hasActiveOperation()) {
+            throw new IllegalStateException("A dimension operation is already active");
+        }
+        OperationJournal journal = pendingRecovery;
+        RestorePublication publication = recoveryPublication(journal, choice);
+        CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
+            try {
+                var restore = recoveries.prepare(journal, choice);
+                return RestoreOperation.resume(
+                        restore, worldApply, publication, journals, journal,
+                        restoreStateListener);
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+        var operation = new BackgroundPreparedMutation<>(
+                preparation,
+                () -> {
+                    if (!journals.read().filter(journal::equals).isPresent()) {
+                        throw new IOException("Recovery journal changed during preparation");
+                    }
+                },
+                ignored -> { }, true, true);
+        var lease = recoveryLease;
+        recoveryLease = null;
+        operations.startWithLease(operation, lease, completed -> {
+            synchronized (FabricDimensionRuntime.this) {
+                if (completed.terminalState()
+                        != io.github.lumi.minecraft.operation.MutationTerminalState.DEGRADED) {
+                    pendingRecovery = null;
+                }
+            }
+            terminalObserver.accept(completed);
+        });
+        return operation;
+    }
+
+    private RestorePublication recoveryPublication(
+            OperationJournal journal, RecoveryChoice choice) throws IOException {
+        if (choice == RecoveryChoice.RETURN_CHECKPOINT) {
+            return ignored -> { };
+        }
+        if (journal.kind() == OperationKind.BRANCH_SWITCH) {
+            var target = journal.target();
+            var switchTarget = target.branchSwitch().orElseThrow(
+                    () -> new IOException("Branch-switch recovery target is missing"));
+            BranchRef source = new BranchRef(
+                    target.branch(), target.expectedHead(), target.expectedRevision());
+            BranchRef destination = refs.read(switchTarget.branch()).orElseThrow(
+                    () -> new IOException("Branch-switch recovery branch is missing"));
+            if (destination.revision() != switchTarget.targetRevision()
+                    || !destination.commit().equals(target.target().orElseThrow())) {
+                throw new IOException("Branch-switch recovery target changed");
+            }
+            var plan = new BranchSwitchPlan(
+                    new ActiveBranch(source.name(), switchTarget.expectedActiveRevision()),
+                    source, destination);
+            return new BranchSwitchRestorePublication(branches, plan);
+        }
+        if (journal.target().blockArea().isPresent()) {
+            return new PendingRestorePublication(mutations);
+        }
+        if (journal.kind() == OperationKind.QUICK_ROLLBACK) {
+            return ignored -> mutations.clear(mutations.snapshot());
+        }
+        return new BranchRefRestorePublication(refs);
     }
 
     public void chunkLoaded(LevelChunk chunk) throws IOException {
@@ -240,6 +344,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public synchronized SaveCaptureOperation startSave(
             SaveRequest request, Consumer<DimensionMutation> terminalObserver) {
+        requireNoRecovery();
         SaveCaptureOperation operation = createSave(request);
         operations.start(operation, terminalObserver);
         return operation;
@@ -260,6 +365,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             CommitId target,
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        requireNoRecovery();
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(author, "author");
         if (operations.hasActiveOperation()) {
@@ -282,6 +388,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             UUID player,
             LiveActionJournal.Direction direction,
             Consumer<DimensionMutation> terminalObserver) {
+        requireNoRecovery();
         var operation = new LiveActionOperation(
                 liveActions, player, direction, liveWorld,
                 liveEntityWorld, this::cancelLiveAction, this::publishLiveAction);
@@ -359,6 +466,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public synchronized BackgroundPreparedMutation<RestoreOperation> startBranchSwitch(
             BranchName target,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        requireNoRecovery();
         if (operations.hasActiveOperation()) {
             throw new IllegalStateException("A dimension operation is already active");
         }
@@ -383,6 +491,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public BranchRef createBranch(BranchName name) throws IOException {
+        requireNoRecovery();
         return branches.create(name, activeRef().commit());
     }
 
@@ -390,6 +499,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             BranchName source,
             CommitAuthor author,
             String message) throws IOException {
+        requireNoRecovery();
         BranchRef current = activeRef();
         requireCleanMerge();
         BranchRef sourceRef = refs.read(Objects.requireNonNull(source, "source"))
@@ -409,6 +519,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public synchronized BackgroundPreparedMutation<RestoreOperation> startMerge(
             PreparedMerge plan,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        requireNoRecovery();
         Objects.requireNonNull(plan, "plan");
         if (operations.hasActiveOperation()) {
             throw new IllegalStateException("A dimension operation is already active");
@@ -456,6 +567,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             BlockAreaTarget area,
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        requireNoRecovery();
         if (operations.hasActiveOperation()) {
             throw new IllegalStateException("A dimension operation is already active");
         }
@@ -493,6 +605,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public synchronized ReturnPointRestoreOperation startQuickRollback(
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        requireNoRecovery();
         if (operations.hasActiveOperation()) {
             throw new IllegalStateException("A dimension operation is already active");
         }
@@ -545,8 +658,19 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public UUID defaultWorkspaceId() { return defaultWorkspaceId; }
     public BlockEntityBaselineStore blockEntityBaselines() { return blockEntityBaselines; }
 
+    private synchronized void requireNoRecovery() {
+        if (pendingRecovery != null) {
+            throw new IllegalStateException(
+                    "Dimension recovery must Resume target or Return checkpoint first");
+        }
+    }
+
     @Override
     public void close() {
+        if (recoveryLease != null) {
+            recoveryLease.release();
+            recoveryLease = null;
+        }
         causalTicks.close();
         // Repository state has no open handles; background work is owned by the server session.
     }
