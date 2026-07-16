@@ -65,6 +65,24 @@ public final class DimensionOperationCoordinator {
         terminalReported = false;
     }
 
+    /** Transfers an already-held startup recovery freeze without releasing the dimension. */
+    public synchronized void startWithLease(
+            DimensionMutation operation, DimensionFreeze.Lease existingLease) {
+        startWithLease(operation, existingLease, ignored -> { });
+    }
+
+    public synchronized void startWithLease(
+            DimensionMutation operation,
+            DimensionFreeze.Lease existingLease,
+            Consumer<DimensionMutation> operationObserver) {
+        Objects.requireNonNull(existingLease, "existingLease");
+        if (!Objects.requireNonNull(operation, "operation").requiresFreeze()) {
+            throw new IllegalArgumentException("A recovery operation must retain the dimension freeze");
+        }
+        start(operation, operationObserver);
+        lease = existingLease;
+    }
+
     public synchronized void tick() throws IOException {
         if (active == null) {
             return;

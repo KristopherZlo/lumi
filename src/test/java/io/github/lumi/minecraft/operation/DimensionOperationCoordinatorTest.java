@@ -120,6 +120,21 @@ class DimensionOperationCoordinatorTest {
         assertEquals(java.util.List.of(mutation), request);
     }
 
+    @Test
+    void adoptsRecoveryFreezeWithoutAnUnfrozenGap() throws IOException {
+        RecordingFreeze freeze = new RecordingFreeze();
+        DimensionFreeze.Lease recoveryLease = freeze.acquire();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L);
+
+        coordinator.startWithLease(new TwoTickMutation(false), recoveryLease);
+        coordinator.tick();
+        coordinator.tick();
+
+        assertEquals(1, freeze.acquireCalls);
+        assertEquals(1, freeze.releaseCalls);
+    }
+
     private static final class TwoTickMutation implements DimensionMutation {
         private final boolean degraded;
         private int ticks;
