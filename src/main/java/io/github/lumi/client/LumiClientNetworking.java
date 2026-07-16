@@ -14,6 +14,8 @@ import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
 import io.github.lumi.network.PartialRestoreArgument;
 import io.github.lumi.network.ZoneCreateArgument;
+import io.github.lumi.network.ZoneRestoreArgument;
+import io.github.lumi.network.ZoneSaveArgument;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -118,6 +120,20 @@ public final class LumiClientNetworking {
     public UUID leaveZone(UUID zoneId) {
         return send(HistoryCommandPayload.Kind.ZONE_LEAVE,
                 Objects.requireNonNull(zoneId, "zoneId").toString());
+    }
+
+    public UUID saveZone(UUID zoneId, String message) {
+        return send(HistoryCommandPayload.Kind.ZONE_SAVE,
+                new ZoneSaveArgument(
+                        Objects.requireNonNull(zoneId, "zoneId"),
+                        Objects.requireNonNull(message, "message")).encode());
+    }
+
+    public UUID restoreZone(UUID zoneId, CommitId target) {
+        return send(HistoryCommandPayload.Kind.ZONE_RESTORE,
+                new ZoneRestoreArgument(
+                        Objects.requireNonNull(zoneId, "zoneId"),
+                        Objects.requireNonNull(target, "target")).encode());
     }
 
     public UUID merge(String sourceBranch) {
