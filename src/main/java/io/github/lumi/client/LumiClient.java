@@ -36,7 +36,14 @@ public final class LumiClient implements ClientModInitializer {
                                         client.screen,
                                         currentBranch(),
                                         new BranchNameController(NETWORKING::createBranch))),
-                                NETWORKING::quickRollback, NETWORKING::restore));
+                                NETWORKING::quickRollback,
+                                (target, includeEntities) -> {
+                                    if (includeEntities) {
+                                        NETWORKING.restore(target);
+                                    } else {
+                                        NETWORKING.restoreWithoutEntities(target);
+                                    }
+                                }));
                     }
 
                     @Override public void openSave() {

@@ -34,7 +34,7 @@ public record HistoryCommandPayload(
         if (expectedRevision < 0) {
             throw new IllegalArgumentException("Expected ref revision cannot be negative");
         }
-        if (kind == Kind.RESTORE) {
+        if (kind == Kind.RESTORE || kind == Kind.RESTORE_NO_ENTITIES) {
             new ObjectId(argument);
         }
         if ((kind == Kind.QUICK_ROLLBACK || kind == Kind.UNDO || kind == Kind.REDO
@@ -68,7 +68,8 @@ public record HistoryCommandPayload(
 
     public enum Kind {
         SAVE(0), RESTORE(1), QUICK_ROLLBACK(2), UNDO(3), REDO(4), BRANCH_SWITCH(5),
-        RECOVER_RESUME(6), RECOVER_RETURN(7), BRANCH_CREATE(8);
+        RECOVER_RESUME(6), RECOVER_RETURN(7), BRANCH_CREATE(8),
+        RESTORE_NO_ENTITIES(9);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

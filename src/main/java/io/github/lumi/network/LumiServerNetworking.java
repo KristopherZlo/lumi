@@ -117,6 +117,8 @@ public final class LumiServerNetworking {
                     runtime.activeWorkspaceId(), Optional.empty(), CommitKind.MANUAL), terminal);
             case RESTORE -> runtime.startRestore(
                     new CommitId(new ObjectId(payload.argument())), author, terminal);
+            case RESTORE_NO_ENTITIES -> runtime.startRestore(
+                    new CommitId(new ObjectId(payload.argument())), author, false, terminal);
             case QUICK_ROLLBACK -> runtime.startQuickRollback(author, terminal);
             case UNDO -> runtime.startLiveAction(
                     player.getUUID(), LiveActionJournal.Direction.UNDO, terminal);

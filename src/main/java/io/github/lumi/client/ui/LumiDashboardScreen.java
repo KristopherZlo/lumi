@@ -4,10 +4,9 @@ import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Objects;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -19,7 +18,7 @@ public final class LumiDashboardScreen extends Screen {
     private final Runnable openSave;
     private final Runnable openBranch;
     private final Runnable quickRollback;
-    private final Consumer<CommitId> restore;
+    private final BiConsumer<CommitId, Boolean> restore;
     private HistorySnapshotPayload snapshot;
     private int panelX;
     private int panelY;
@@ -31,7 +30,7 @@ public final class LumiDashboardScreen extends Screen {
             Runnable openSave,
             Runnable openBranch,
             Runnable quickRollback,
-            Consumer<CommitId> restore) {
+            BiConsumer<CommitId, Boolean> restore) {
         super(Component.translatable("luma.screen.dashboard.title"));
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
@@ -72,32 +71,14 @@ public final class LumiDashboardScreen extends Screen {
             HistorySnapshotPayload.Version version = snapshot.versions().get(index);
             addRenderableWidget(Button.builder(
                     Component.translatable("luma.action.restore"),
-                    ignored -> confirmRestore(version))
+                    ignored -> openRestore(version))
                     .bounds(panelX + panelWidth - 88, rowY + 4, 72, 20).build());
         }
     }
 
-    private void confirmRestore(HistorySnapshotPayload.Version version) {
-        minecraft.setScreen(new ConfirmScreen(confirmed -> {
-            if (!confirmed) {
-                minecraft.setScreen(this);
-                return;
-            }
-            try {
-                restore.accept(version.id());
-                minecraft.setScreen(parent);
-            } catch (RuntimeException failed) {
-                minecraft.setScreen(this);
-                if (minecraft.player != null) {
-                    minecraft.player.displayClientMessage(Component.literal(
-                            failed.getMessage() == null
-                                    ? "Lumi Restore could not start" : failed.getMessage()), true);
-                }
-            }
-        }, Component.translatable("luma.action.restore_this_save"),
-                Component.literal(version.message()),
-                Component.translatable("luma.action.restore"),
-                Component.translatable("luma.action.cancel")));
+    private void openRestore(HistorySnapshotPayload.Version version) {
+        minecraft.setScreen(new LumiRestoreScreen(
+                this, version.id(), version.message(), restore));
     }
 
     @Override

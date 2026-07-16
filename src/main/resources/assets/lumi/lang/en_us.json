@@ -68,6 +68,7 @@
   "luma.action.delete_save": "Delete save",
   "luma.action.restore_selected_area": "Restore part of save",
   "luma.action.restore_whole_save": "Restore whole save",
+  "luma.action.restore_without_entities": "Restore without entities",
   "luma.action.restore_only_selected_area": "Only selected area",
   "luma.action.restore_everything_except_selection": "Everything except selection",
   "luma.action.advanced_info": "Advanced info",

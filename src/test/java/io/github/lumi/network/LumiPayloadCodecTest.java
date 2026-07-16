@@ -43,6 +43,11 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), HistoryCommandPayload.Kind.BRANCH_CREATE,
                 "idea", id('2'), 43);
         assertEquals(createBranch, roundTrip(HistoryCommandPayload.CODEC, createBranch));
+        HistoryCommandPayload restoreWithoutEntities = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.RESTORE_NO_ENTITIES,
+                id('3').hex(), id('2'), 43);
+        assertEquals(restoreWithoutEntities,
+                roundTrip(HistoryCommandPayload.CODEC, restoreWithoutEntities));
     }
 
     @Test
@@ -50,6 +55,9 @@ class LumiPayloadCodecTest {
         UUID request = UUID.randomUUID();
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.RESTORE, "not-a-commit", id('1'), 0));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.RESTORE_NO_ENTITIES,
+                "not-a-commit", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.SAVE, "Save", id('1'), -1));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
