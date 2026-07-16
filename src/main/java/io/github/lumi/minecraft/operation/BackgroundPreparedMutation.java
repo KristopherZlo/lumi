@@ -116,6 +116,14 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
                 || delegate != null && delegate.isSafeToRelease();
     }
 
+    @Override
+    public MutationTerminalState unhandledFailureState() {
+        return delegate == null
+                ? (degradeOnFailure ? MutationTerminalState.DEGRADED
+                        : MutationTerminalState.FAILED)
+                : delegate.unhandledFailureState();
+    }
+
     @FunctionalInterface
     public interface FrozenValidation {
         void validate() throws IOException;

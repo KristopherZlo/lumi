@@ -107,6 +107,12 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
         };
     }
 
+    @Override
+    public MutationTerminalState unhandledFailureState() {
+        return phase == Phase.RESTORING
+                ? restore.unhandledFailureState() : MutationTerminalState.FAILED;
+    }
+
     @FunctionalInterface
     public interface RestorePreparation {
         CompletableFuture<? extends DimensionMutation> prepare(SaveResult returnPoint);

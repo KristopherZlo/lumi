@@ -43,5 +43,8 @@ public final class LiveRecordedMutation implements DimensionMutation {
     @Override public boolean requiresFreeze() { return delegate.requiresFreeze(); }
     @Override public MutationTerminalState terminalState() { return delegate.terminalState(); }
     @Override public Optional<Throwable> failure() { return delegate.failure(); }
+    @Override public MutationTerminalState unhandledFailureState() {
+        return delegate.unhandledFailureState();
+    }
     @Override public OperationProgress progress() { return delegate.progress(); }
 }

@@ -158,6 +158,45 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
+    void containsUnhandledFailureAsDegradedAndRetainsFreeze() throws IOException {
+        RecordingFreeze freeze = new RecordingFreeze();
+        var outcomes = new ArrayList<DimensionMutation>();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L, outcomes::add);
+
+        coordinator.start(new ThrowingMutation(MutationTerminalState.DEGRADED));
+        coordinator.tick();
+        coordinator.tick();
+
+        assertEquals(1, outcomes.size());
+        assertEquals(MutationTerminalState.DEGRADED, outcomes.getFirst().terminalState());
+        assertEquals("advance failed", outcomes.getFirst().failure().orElseThrow().getMessage());
+        assertTrue(coordinator.hasActiveOperation());
+        assertEquals(0, freeze.releaseCalls);
+    }
+
+    @Test
+    void containsSafeUnhandledFailureAndContinuesWithQueuedWork() throws IOException {
+        RecordingFreeze freeze = new RecordingFreeze();
+        var outcomes = new ArrayList<MutationTerminalState>();
+        var order = new ArrayList<String>();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L,
+                mutation -> outcomes.add(mutation.terminalState()));
+
+        coordinator.start(new ThrowingMutation(MutationTerminalState.FAILED));
+        coordinator.start(new NamedMutation("next", order, 1));
+        coordinator.tick();
+        coordinator.tick();
+
+        assertEquals(java.util.List.of(
+                MutationTerminalState.FAILED, MutationTerminalState.SUCCEEDED), outcomes);
+        assertEquals(java.util.List.of("next"), order);
+        assertEquals(2, freeze.releaseCalls);
+        assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
     void reportsTerminalOutcomeToGlobalAndRequestObserver() throws IOException {
         var global = new ArrayList<DimensionMutation>();
         var request = new ArrayList<DimensionMutation>();
@@ -286,6 +325,22 @@ class DimensionOperationCoordinatorTest {
         @Override public void advance(long deadlineNanos) { }
         @Override public boolean isTerminal() { return true; }
         @Override public boolean isSafeToRelease() { return true; }
+    }
+
+    private static final class ThrowingMutation implements DimensionMutation {
+        private final MutationTerminalState failureState;
+
+        private ThrowingMutation(MutationTerminalState failureState) {
+            this.failureState = failureState;
+        }
+
+        @Override public void advance(long deadlineNanos) throws IOException {
+            throw new IOException("advance failed");
+        }
+
+        @Override public boolean isTerminal() { return false; }
+        @Override public boolean isSafeToRelease() { return false; }
+        @Override public MutationTerminalState unhandledFailureState() { return failureState; }
     }
 
     private static final class RecordingFreeze implements DimensionFreeze {

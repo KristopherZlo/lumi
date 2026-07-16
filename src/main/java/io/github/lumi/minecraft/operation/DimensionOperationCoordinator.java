@@ -26,7 +26,7 @@ public final class DimensionOperationCoordinator {
     private final HashMap<OperationTicket, Consumer<OperationProgress>> progressObservers =
             new HashMap<>();
     private final HashMap<OperationTicket, OperationProgress> publishedProgress = new HashMap<>();
-    private DimensionMutation active;
+    private FailureContainedMutation active;
     private OperationTicket activeTicket;
     private Consumer<DimensionMutation> activeObserver = ignored -> { };
     private DimensionFreeze.Lease lease;
@@ -97,7 +97,7 @@ public final class DimensionOperationCoordinator {
     }
 
     private void activate(QueuedOperation entry) {
-        active = entry.operation();
+        active = new FailureContainedMutation(entry.operation());
         activeTicket = entry.ticket();
         activeObserver = entry.observer();
         freezeReleased = false;
@@ -187,8 +187,9 @@ public final class DimensionOperationCoordinator {
 
     private void reportTerminal() {
         if (active.isTerminal() && !terminalReported) {
-            terminalObserver.accept(active);
-            activeObserver.accept(active);
+            DimensionMutation outcome = active.outcome();
+            terminalObserver.accept(outcome);
+            activeObserver.accept(outcome);
             terminalReported = true;
         }
     }
@@ -216,7 +217,7 @@ public final class DimensionOperationCoordinator {
 
     public synchronized Optional<OperationTicket> ticketOf(DimensionMutation operation) {
         Objects.requireNonNull(operation, "operation");
-        if (active == operation) {
+        if (active != null && active.source() == operation) {
             return Optional.of(activeTicket);
         }
         return queued.stream().filter(entry -> entry.operation() == operation)

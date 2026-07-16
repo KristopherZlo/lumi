@@ -27,6 +27,14 @@ public interface DimensionMutation {
         return Optional.empty();
     }
 
+    /**
+     * Fail-closed state used when {@link #advance(long)} unexpectedly escapes.
+     * Operations that cannot mutate the world may return {@link MutationTerminalState#FAILED}.
+     */
+    default MutationTerminalState unhandledFailureState() {
+        return MutationTerminalState.DEGRADED;
+    }
+
     default OperationProgress progress() {
         return OperationProgress.indeterminate(getClass().getSimpleName());
     }

@@ -147,6 +147,10 @@ public final class SaveCaptureOperation implements DimensionMutation {
         return status == SaveOperationStatus.WRITING || isTerminal();
     }
 
+    @Override public MutationTerminalState unhandledFailureState() {
+        return MutationTerminalState.FAILED;
+    }
+
     @Override public OperationProgress progress() {
         return OperationProgress.indeterminate("Save: " + status.name().toLowerCase());
     }

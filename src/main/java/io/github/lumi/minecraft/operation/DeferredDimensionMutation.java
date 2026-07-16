@@ -67,6 +67,12 @@ public final class DeferredDimensionMutation implements DimensionMutation {
                 : delegate.progress();
     }
 
+    @Override
+    public MutationTerminalState unhandledFailureState() {
+        return delegate == null
+                ? MutationTerminalState.FAILED : delegate.unhandledFailureState();
+    }
+
     @FunctionalInterface
     public interface Factory {
         DimensionMutation create() throws IOException;
