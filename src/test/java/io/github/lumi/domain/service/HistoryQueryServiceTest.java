@@ -44,6 +44,26 @@ class HistoryQueryServiceTest {
                 history.stream().map(entry -> entry.commit().message()).toList());
     }
 
+    @Test
+    void stopsBeforeParentFromAnotherWorkspace() throws Exception {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        UUID sourceWorkspace = new UUID(0, 2);
+        UUID namedWorkspace = new UUID(0, 3);
+        CommitId source = commits.write(commit(
+                tree, List.of(), "Source", 1, sourceWorkspace));
+        CommitId root = commits.write(commit(
+                tree, List.of(source), "Initial workspace", 2, namedWorkspace));
+        refs.create(new BranchName("workspace/named/main"), root);
+
+        List<HistoryEntry> history = new HistoryQueryService(commits, refs)
+                .firstParent(new BranchName("workspace/named/main"), namedWorkspace, 10);
+
+        assertEquals(List.of(root), history.stream().map(HistoryEntry::id).toList());
+    }
+
     private static Commit commit(
             io.github.lumi.domain.model.ObjectId tree,
             List<CommitId> parents,
@@ -52,6 +72,18 @@ class HistoryQueryServiceTest {
         return new Commit(
                 tree, parents, new CommitAuthor(new UUID(0, 1), "Builder"), message,
                 Instant.ofEpochSecond(second), new UUID(0, 2), Optional.empty(),
+                CommitKind.MANUAL, new CommitStatistics(0, 0, 0, 0));
+    }
+
+    private static Commit commit(
+            io.github.lumi.domain.model.ObjectId tree,
+            List<CommitId> parents,
+            String message,
+            long second,
+            UUID workspace) {
+        return new Commit(
+                tree, parents, new CommitAuthor(new UUID(0, 1), "Builder"), message,
+                Instant.ofEpochSecond(second), workspace, Optional.empty(),
                 CommitKind.MANUAL, new CommitStatistics(0, 0, 0, 0));
     }
 }
