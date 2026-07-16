@@ -37,6 +37,7 @@ import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.domain.service.RecoveryChoice;
 import io.github.lumi.domain.service.RecoveryService;
 import io.github.lumi.domain.service.SaveJournalRecovery;
+import io.github.lumi.domain.service.PublishedApplyRecovery;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.BatchedWorldStateCapture;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
@@ -185,6 +186,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         if (interrupted.filter(journal -> journal.kind() == OperationKind.SAVE).isPresent()) {
             new SaveJournalRecovery(commits, refs, journals)
                     .recover(interrupted.orElseThrow());
+            interrupted = Optional.empty();
+        }
+        if (interrupted.isPresent()
+                && new PublishedApplyRecovery(refs, active, journals)
+                        .finalizeIfPublished(interrupted.orElseThrow())) {
             interrupted = Optional.empty();
         }
         var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
