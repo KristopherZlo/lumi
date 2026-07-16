@@ -1,6 +1,10 @@
 package io.github.lumi.minecraft.runtime;
 
+import io.github.lumi.domain.service.LumiPermissionService;
+import io.github.lumi.domain.service.PermissionDecision;
+import io.github.lumi.domain.service.PermissionSubject;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
+import io.github.lumi.storage.repository.SurvivalOptInRepository;
 import java.io.IOException;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -10,6 +14,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.storage.LevelResource;
 
 /** Owns all dimension runtimes and bounded background workers for one server. */
@@ -18,13 +24,16 @@ final class FabricServerSession implements AutoCloseable {
     private static final int BACKGROUND_QUEUE = 256;
     private final MinecraftServer server;
     private final DimensionRepositoryLayout layout;
+    private final LumiPermissionService permissions;
     private final ExecutorService background;
     private final LoadedDimensionRegistry<ServerLevel, FabricDimensionRuntime> dimensions =
             new LoadedDimensionRegistry<>();
 
     FabricServerSession(MinecraftServer server) {
         this.server = server;
-        layout = new DimensionRepositoryLayout(server.getWorldPath(LevelResource.ROOT));
+        var worldRoot = server.getWorldPath(LevelResource.ROOT);
+        layout = new DimensionRepositoryLayout(worldRoot);
+        permissions = new LumiPermissionService(new SurvivalOptInRepository(worldRoot));
         AtomicInteger threadNumber = new AtomicInteger();
         background = new ThreadPoolExecutor(
                 BACKGROUND_THREADS, BACKGROUND_THREADS, 0L, TimeUnit.MILLISECONDS,
@@ -71,6 +80,18 @@ final class FabricServerSession implements AutoCloseable {
         return dimensions.find(level);
     }
 
+    PermissionDecision permission(ServerPlayer player) throws IOException {
+        return permissions.evaluate(subject(player));
+    }
+
+    void setSurvivalEnabled(ServerPlayer player, boolean enabled) throws IOException {
+        permissions.setSurvivalEnabled(subject(player), enabled);
+    }
+
+    boolean mayConfigure(ServerPlayer player) {
+        return server.getPlayerList().isOp(player.nameAndId());
+    }
+
     @Override
     public void close() throws Exception {
         dimensions.close();
@@ -84,5 +105,11 @@ final class FabricServerSession implements AutoCloseable {
         if (level.getServer() != server) {
             throw new IllegalArgumentException("Dimension belongs to another Minecraft server");
         }
+    }
+
+    private PermissionSubject subject(ServerPlayer player) {
+        return new PermissionSubject(
+                player.getUUID(), mayConfigure(player),
+                player.gameMode.getGameModeForPlayer() == GameType.SURVIVAL);
     }
 }

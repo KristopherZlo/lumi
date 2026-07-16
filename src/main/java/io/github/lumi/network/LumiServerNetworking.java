@@ -7,6 +7,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.service.SaveRequest;
+import io.github.lumi.domain.service.PermissionDecision;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.operation.OperationTicket;
@@ -55,11 +56,12 @@ public final class LumiServerNetworking {
             reject(player, payload, null, "Lumi is not ready for this dimension");
             return;
         }
-        if (!context.server().getPlayerList().isOp(player.nameAndId())) {
-            reject(player, payload, runtime, "Lumi permission denied");
-            return;
-        }
         try {
+            PermissionDecision permission = LumiMod.serverRuntime().permission(player);
+            if (permission != PermissionDecision.ALLOWED) {
+                reject(player, payload, runtime, permissionMessage(permission));
+                return;
+            }
             BranchRef actual = runtime.activeRef();
             if (!actual.commit().equals(payload.expectedCommit())
                     || actual.revision() != payload.expectedRevision()) {
@@ -122,7 +124,15 @@ public final class LumiServerNetworking {
         ServerPlayer player = context.player();
         FabricDimensionRuntime runtime = LumiMod.serverRuntime()
                 .find(player.level()).orElse(null);
-        if (runtime == null || !context.server().getPlayerList().isOp(player.nameAndId())) {
+        if (runtime == null) {
+            return;
+        }
+        try {
+            if (LumiMod.serverRuntime().permission(player) != PermissionDecision.ALLOWED) {
+                return;
+            }
+        } catch (IOException unavailable) {
+            LumiMod.LOGGER.error("Cannot read Lumi permissions", unavailable);
             return;
         }
         TicketOwner owner = TICKET_OWNERS.get(payload.ticketId());
@@ -159,6 +169,14 @@ public final class LumiServerNetworking {
             case CANCELLED -> "Operation cancelled";
             case RETURNED -> "Target failed verification; returned safely";
             case DEGRADED -> "Dimension degraded; recovery is required";
+        };
+    }
+
+    private static String permissionMessage(PermissionDecision decision) {
+        return switch (decision) {
+            case ALLOWED -> "Operation allowed";
+            case OPERATOR_REQUIRED -> "Lumi requires operator permission";
+            case SURVIVAL_OPT_IN_REQUIRED -> "Enable Lumi in Survival before using it";
         };
     }
 

@@ -20,6 +20,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.LiveActionJournal;
+import io.github.lumi.domain.service.PermissionDecision;
 import io.github.lumi.domain.service.RecoveryChoice;
 import java.io.IOException;
 import java.time.Instant;
@@ -99,6 +100,10 @@ public final class LumiCommands {
                     .then(literal("switch")
                             .then(argument("name", greedyString()).executes(command ->
                                     switchBranch(command.getSource(), getString(command, "name")))));
+            var survival = literal("survival")
+                    .requires(LumiCommands::mayConfigure)
+                    .then(argument("enabled", bool()).executes(command ->
+                            configureSurvival(command.getSource(), getBool(command, "enabled"))));
             var outsideArg = argument("outside", bool()).executes(command ->
                     restoreArea(command.getSource(), getString(command, "commit"),
                             new BlockBox(
@@ -118,13 +123,45 @@ public final class LumiCommands {
             dispatcher.register(literal("lumi").then(save).then(restore)
                     .then(restoreWithoutEntities).then(restoreArea)
                     .then(rollback).then(undo).then(redo)
-                    .then(recover).then(debugActionSet).then(debugActionSummon).then(branch));
+                    .then(recover).then(debugActionSet).then(debugActionSummon)
+                    .then(branch).then(survival));
         });
     }
 
     private static boolean mayUse(CommandSourceStack source) {
         var player = source.getPlayer();
-        return player == null || source.getServer().getPlayerList().isOp(player.nameAndId());
+        if (player == null) {
+            return true;
+        }
+        try {
+            return LumiMod.serverRuntime().permission(player) == PermissionDecision.ALLOWED;
+        } catch (IOException unavailable) {
+            LumiMod.LOGGER.error("Cannot read Lumi permissions", unavailable);
+            return false;
+        }
+    }
+
+    private static boolean mayConfigure(CommandSourceStack source) {
+        var player = source.getPlayer();
+        return player == null || LumiMod.serverRuntime().mayConfigure(player);
+    }
+
+    private static int configureSurvival(CommandSourceStack source, boolean enabled) {
+        var player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("A player must choose their own Survival setting"));
+            return 0;
+        }
+        try {
+            LumiMod.serverRuntime().setSurvivalEnabled(player, enabled);
+            source.sendSuccess(() -> Component.literal(
+                    "Lumi in Survival is now " + (enabled ? "enabled" : "disabled")), false);
+            return 1;
+        } catch (IOException | SecurityException failed) {
+            source.sendFailure(Component.literal("Cannot change Lumi Survival access: "
+                    + failed.getMessage()));
+            return 0;
+        }
     }
 
     private static int save(CommandSourceStack source, String message) {

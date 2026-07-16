@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.runtime;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.service.PermissionDecision;
 import java.io.IOException;
 import java.util.Optional;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -9,6 +10,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.chunk.LevelChunk;
 
 /** Binds the same dimension runtime lifecycle to integrated and dedicated servers. */
@@ -27,6 +29,18 @@ public final class LumiServerRuntime {
 
     public synchronized Optional<FabricDimensionRuntime> find(ServerLevel level) {
         return session == null ? Optional.empty() : session.find(level);
+    }
+
+    public PermissionDecision permission(ServerPlayer player) throws IOException {
+        return requireSession().permission(player);
+    }
+
+    public boolean mayConfigure(ServerPlayer player) {
+        return requireSession().mayConfigure(player);
+    }
+
+    public void setSurvivalEnabled(ServerPlayer player, boolean enabled) throws IOException {
+        requireSession().setSurvivalEnabled(player, enabled);
     }
 
     private synchronized void starting(MinecraftServer server) {
