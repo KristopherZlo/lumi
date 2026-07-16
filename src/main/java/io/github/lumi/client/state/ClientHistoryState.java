@@ -19,4 +19,11 @@ public record ClientHistoryState(
     public static ClientHistoryState empty() {
         return new ClientHistoryState(Optional.empty(), Map.of());
     }
+
+    public Optional<OperationEventPayload> activeOperation() {
+        return events.values().stream()
+                .filter(event -> event.state() == OperationEventPayload.State.ACCEPTED
+                        || event.state() == OperationEventPayload.State.PROGRESS)
+                .min(java.util.Comparator.comparingInt(OperationEventPayload::queuePosition));
+    }
 }

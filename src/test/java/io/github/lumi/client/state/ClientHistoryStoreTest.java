@@ -84,6 +84,23 @@ class ClientHistoryStoreTest {
         assertEquals(true, store.state().snapshot().orElseThrow().operationActive());
     }
 
+    @Test
+    void selectsActiveOperationBeforeQueuedWorkForHud() {
+        ClientHistoryStore store = new ClientHistoryStore();
+        store.accept(new HistorySnapshotPayload(
+                "minecraft:overworld", id('1'), 0, 0, false));
+        store.accept(new OperationEventPayload(
+                UUID.randomUUID(), "minecraft:overworld", OperationEventPayload.State.ACCEPTED,
+                "Queued", id('1'), 0, Optional.of(UUID.randomUUID()), 2));
+        UUID active = UUID.randomUUID();
+        store.accept(new OperationEventPayload(
+                active, "minecraft:overworld", OperationEventPayload.State.PROGRESS,
+                "Save: writing", id('1'), 0, Optional.of(UUID.randomUUID()), 0,
+                Optional.of(OperationProgress.indeterminate("Save: writing"))));
+
+        assertEquals(active, store.state().activeOperation().orElseThrow().requestId());
+    }
+
     private static CommitId id(char digit) {
         return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
     }

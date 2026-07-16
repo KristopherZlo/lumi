@@ -3,6 +3,7 @@ package io.github.lumi.client;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.ui.LumiSaveScreen;
+import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.SaveScreenController;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
@@ -28,6 +29,7 @@ public final class LumiClient implements ClientModInitializer {
                     @Override public void redo() { NETWORKING.redo(); }
                     @Override public void quickRollback() { NETWORKING.quickRollback(); }
                 }, LumiClient::showFeedback)).register();
+        new LumiOperationHud(HISTORY).register();
         LumiMod.LOGGER.info("Lumi V2 client initialized");
     }
 
