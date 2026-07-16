@@ -11,7 +11,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import net.jpountz.lz4.LZ4Exception;
@@ -23,10 +25,13 @@ public final class ObjectStore {
     private static final int MAX_PAYLOAD_BYTES = 256 * 1024 * 1024;
 
     private final Path objectsDirectory;
+    private final Path packsDirectory;
     private final LZ4Factory lz4 = LZ4Factory.fastestInstance();
+    private Map<ObjectId, PackedObject> packedObjects;
 
     public ObjectStore(Path objectsDirectory) {
         this.objectsDirectory = Objects.requireNonNull(objectsDirectory, "objectsDirectory");
+        packsDirectory = objectsDirectory.resolve("packs");
     }
 
     public ObjectId write(byte[] canonicalPayload) throws IOException {
@@ -37,7 +42,7 @@ public final class ObjectStore {
 
         ObjectId id = ObjectId.hash(canonicalPayload);
         Path target = pathFor(id);
-        if (Files.exists(target)) {
+        if (Files.exists(target) || packedObject(id) != null) {
             verifyExisting(id, canonicalPayload);
             return id;
         }
@@ -64,6 +69,17 @@ public final class ObjectStore {
     public byte[] read(ObjectId id) throws IOException {
         Objects.requireNonNull(id, "id");
         Path path = pathFor(id);
+        if (!Files.exists(path)) {
+            PackedObject packed = packedObject(id);
+            if (packed == null) {
+                throw new java.nio.file.NoSuchFileException(path.toString());
+            }
+            return ObjectPack.read(packed);
+        }
+        return readLoose(id, path);
+    }
+
+    private byte[] readLoose(ObjectId id, Path path) throws IOException {
         long fileSize = Files.size(path);
         if (fileSize < HEADER_BYTES || fileSize > HEADER_BYTES + (long) MAX_PAYLOAD_BYTES + 1024 * 1024) {
             throw corrupt(id, "invalid file size");
@@ -101,33 +117,45 @@ public final class ObjectStore {
     }
 
     public Set<ObjectId> listIds() throws IOException {
-        if (!Files.exists(objectsDirectory)) {
-            return Set.of();
-        }
-        Set<ObjectId> ids = new HashSet<>();
-        try (var files = Files.walk(objectsDirectory)) {
-            for (Path file : files.filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().endsWith(".lz4")).toList()) {
-                Path relative = objectsDirectory.relativize(file);
-                String directory = relative.getName(0).toString();
-                String filename = relative.getFileName().toString();
-                if (relative.getNameCount() != 2 || directory.length() != 2 || filename.length() != 66) {
-                    throw new IOException("Invalid object path: " + file);
+        Set<ObjectId> ids = new HashSet<>(packedObjects().keySet());
+        if (Files.exists(objectsDirectory)) {
+            try (var files = Files.walk(objectsDirectory)) {
+                for (Path file : files.filter(Files::isRegularFile)
+                        .filter(path -> path.getFileName().toString().endsWith(".lz4")).toList()) {
+                    Path relative = objectsDirectory.relativize(file);
+                    String directory = relative.getName(0).toString();
+                    String filename = relative.getFileName().toString();
+                    if (relative.getNameCount() != 2 || directory.length() != 2
+                            || filename.length() != 66) {
+                        throw new IOException("Invalid object path: " + file);
+                    }
+                    ids.add(new ObjectId(directory + filename.substring(0, 62)));
                 }
-                ids.add(new ObjectId(directory + filename.substring(0, 62)));
+            } catch (IllegalArgumentException invalid) {
+                throw new IOException("Invalid object filename", invalid);
             }
-        } catch (IllegalArgumentException invalid) {
-            throw new IOException("Invalid object filename", invalid);
         }
         return Set.copyOf(ids);
     }
 
     public java.time.Instant modifiedAt(ObjectId id) throws IOException {
-        return Files.getLastModifiedTime(pathFor(id)).toInstant();
+        Path loose = pathFor(id);
+        if (Files.exists(loose)) {
+            return Files.getLastModifiedTime(loose).toInstant();
+        }
+        PackedObject packed = packedObject(id);
+        if (packed == null) {
+            throw new java.nio.file.NoSuchFileException(loose.toString());
+        }
+        return Files.getLastModifiedTime(packed.pack()).toInstant();
     }
 
     public void delete(ObjectId id) throws IOException {
         Files.deleteIfExists(pathFor(id));
+    }
+
+    public WriteBatch beginBatch() throws IOException {
+        return new WriteBatch(ObjectPack.writer(packsDirectory));
     }
 
     private byte[] compress(byte[] payload) {
@@ -162,6 +190,27 @@ public final class ObjectStore {
         return objectsDirectory.resolve(hex.substring(0, 2)).resolve(hex.substring(2) + ".lz4");
     }
 
+    private synchronized PackedObject packedObject(ObjectId id) throws IOException {
+        return packedObjects().get(id);
+    }
+
+    private synchronized Map<ObjectId, PackedObject> packedObjects() throws IOException {
+        if (packedObjects == null) {
+            packedObjects = ObjectPack.load(packsDirectory);
+        }
+        return packedObjects;
+    }
+
+    private synchronized void register(ObjectPack.Published published) {
+        if (published.entries().isEmpty()) {
+            return;
+        }
+        Map<ObjectId, PackedObject> updated = new HashMap<>(
+                packedObjects == null ? Map.of() : packedObjects);
+        published.entries().forEach(updated::putIfAbsent);
+        packedObjects = Map.copyOf(updated);
+    }
+
     private static void readFully(FileChannel channel, ByteBuffer target, ObjectId id) throws IOException {
         while (target.hasRemaining()) {
             if (channel.read(target) < 0) {
@@ -178,5 +227,38 @@ public final class ObjectStore {
 
     private static CorruptObjectException corrupt(ObjectId id, String reason) {
         return new CorruptObjectException("Corrupt object " + id + ": " + reason);
+    }
+
+    public final class WriteBatch implements AutoCloseable {
+        private final ObjectPack.Writer writer;
+        private boolean published;
+
+        private WriteBatch(ObjectPack.Writer writer) {
+            this.writer = writer;
+        }
+
+        public ObjectId write(byte[] canonicalPayload) throws IOException {
+            Objects.requireNonNull(canonicalPayload, "canonicalPayload");
+            ObjectId id = ObjectId.hash(canonicalPayload);
+            if (Files.exists(pathFor(id)) || packedObject(id) != null) {
+                verifyExisting(id, canonicalPayload);
+                return id;
+            }
+            return writer.write(canonicalPayload);
+        }
+
+        public void publish() throws IOException {
+            if (published) {
+                throw new IllegalStateException("Object batch is already published");
+            }
+            ObjectPack.Published completed = writer.publish();
+            register(completed);
+            published = true;
+        }
+
+        @Override
+        public void close() throws IOException {
+            writer.close();
+        }
     }
 }

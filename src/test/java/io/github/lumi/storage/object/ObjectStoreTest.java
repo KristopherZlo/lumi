@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -50,5 +52,31 @@ class ObjectStoreTest {
         Files.write(objectFile, java.util.Arrays.copyOf(stored, stored.length - 1));
 
         assertThrows(CorruptObjectException.class, () -> store.read(id));
+    }
+
+    @Test
+    void batchPublishesPackedObjectsWithoutOneFilePerPayload() throws IOException {
+        ObjectStore store = new ObjectStore(tempDir);
+        byte[] loose = "loose".getBytes(StandardCharsets.UTF_8);
+        ObjectId looseId = store.write(loose);
+        Map<ObjectId, byte[]> expected = new LinkedHashMap<>();
+        expected.put(looseId, loose);
+
+        try (ObjectStore.WriteBatch batch = store.beginBatch()) {
+            assertEquals(looseId, batch.write(loose));
+            for (int index = 0; index < 128; index++) {
+                byte[] payload = ("packed-" + index).getBytes(StandardCharsets.UTF_8);
+                expected.put(batch.write(payload), payload);
+            }
+            batch.publish();
+        }
+
+        assertEquals(expected.keySet(), store.listIds());
+        for (var entry : expected.entrySet()) {
+            assertArrayEquals(entry.getValue(), store.read(entry.getKey()));
+        }
+        try (var files = Files.walk(tempDir)) {
+            assertEquals(3, files.filter(Files::isRegularFile).count());
+        }
     }
 }
