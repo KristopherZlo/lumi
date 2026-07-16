@@ -13,6 +13,9 @@ import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.OperationPhase;
+import io.github.lumi.domain.model.OperationJournal;
+import io.github.lumi.domain.model.OperationKind;
+import io.github.lumi.domain.model.OperationTarget;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.storage.repository.BranchRefRepository;
@@ -249,6 +252,30 @@ class RestoreOperationTest {
         assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
     }
 
+    @Test
+    void resumesAnExistingApplyJournalWithoutReplacingIt() throws IOException {
+        CommitId current = id('b');
+        CommitId target = id('c');
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var expected = refs.create(new BranchName("main"), current);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        OperationJournal journal = journals.create(new OperationJournal(
+                UUID.randomUUID(), OperationKind.RESTORE, OperationPhase.APPLYING,
+                new OperationTarget(expected.name(), expected.commit(), expected.revision(),
+                        Optional.of(target), Optional.of(current))));
+
+        RestoreOperation operation = RestoreOperation.resume(
+                new PreparedRestore(expected, target, Map.of(), Map.of(), Map.of(), Map.of()),
+                new ImmediatelyVerified(), new BranchRefRestorePublication(refs),
+                journals, journal, RestoreStateListener.NONE);
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+
+        assertEquals(RestoreStatus.COMPLETE, operation.status());
+        assertEquals(target, refs.read(expected.name()).orElseThrow().commit());
+        assertTrue(journals.read().isEmpty());
+    }
+
     private static CommitId id(char digit) {
         return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
     }
@@ -258,6 +285,19 @@ class RestoreOperationTest {
         private int returned;
         @Override public void restored(PreparedRestore restore) { restored++; }
         @Override public void returned(PreparedRestore restore) { returned++; }
+    }
+
+    private static final class ImmediatelyVerified implements TestWorldApply {
+        @Override public ApplySession begin(PreparedState target) {
+            return new ApplySession() {
+                @Override public boolean applyUntil(long deadlineNanos) { return true; }
+                @Override public Verification verifyUntil(long deadlineNanos) {
+                    return Verification.VERIFIED;
+                }
+                @Override public boolean repairUntil(long deadlineNanos) { return true; }
+                @Override public void restartVerification() { }
+            };
+        }
     }
 
     private static final class TwoStepApply implements TestWorldApply {

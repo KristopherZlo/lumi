@@ -160,6 +160,25 @@ public final class RestoreOperation implements DimensionMutation {
         return start(restore, world, publication, journals, operationId, RestoreStateListener.NONE);
     }
 
+    /** Rebuilds idempotent apply cursors around an already durable crash journal. */
+    public static RestoreOperation resume(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            OperationJournal journal,
+            RestoreStateListener stateListener) throws IOException {
+        Objects.requireNonNull(journals, "journals");
+        Objects.requireNonNull(journal, "journal");
+        if (journal.kind() == OperationKind.SAVE) {
+            throw new IllegalArgumentException("Save journals cannot resume as Restore");
+        }
+        if (!journals.read().filter(journal::equals).isPresent()) {
+            throw new IOException("Recovery journal changed before Resume");
+        }
+        return prepare(restore, world, publication, journals, journal, stateListener);
+    }
+
     public static RestoreOperation start(
             PreparedRestore restore,
             WorldStateApply world,
@@ -191,6 +210,24 @@ public final class RestoreOperation implements DimensionMutation {
         Objects.requireNonNull(publication, "publication");
         Objects.requireNonNull(journals, "journals");
         Objects.requireNonNull(stateListener, "stateListener");
+        OperationJournal journal = journals.create(new OperationJournal(
+                Objects.requireNonNull(operationId, "operationId"),
+                Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
+                Objects.requireNonNull(target, "target")));
+        return prepare(restore, world, publication, journals, journal, stateListener);
+    }
+
+    private static RestoreOperation prepare(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            OperationJournal journal,
+            RestoreStateListener stateListener) throws IOException {
+        Objects.requireNonNull(restore, "restore");
+        Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(publication, "publication");
+        Objects.requireNonNull(stateListener, "stateListener");
         WorldStateApply.PreparedState preparedTarget = world.prepare(
                 new WorldStateApply.State(
                         restore.sections(), restore.entities(), restore.playerSpawns()));
@@ -198,10 +235,6 @@ public final class RestoreOperation implements DimensionMutation {
                 new WorldStateApply.State(
                         restore.returnSections(), restore.returnEntities(),
                         restore.returnPlayerSpawns()));
-        OperationJournal journal = journals.create(new OperationJournal(
-                Objects.requireNonNull(operationId, "operationId"),
-                Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
-                Objects.requireNonNull(target, "target")));
         return new RestoreOperation(
                 restore, world, publication, journals, journal,
                 preparedTarget, preparedReturn, stateListener);
