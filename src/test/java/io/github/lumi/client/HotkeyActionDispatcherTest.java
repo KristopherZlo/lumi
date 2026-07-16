@@ -14,6 +14,8 @@ class HotkeyActionDispatcherTest {
                 new HotkeyActionDispatcher.Actions() {
                     @Override public void openDashboard() { calls.add("dashboard"); }
                     @Override public void openSave() { calls.add("save"); }
+                    @Override public boolean undoSelection() { return false; }
+                    @Override public boolean redoSelection() { return false; }
                     @Override public void undo() { calls.add("undo"); }
                     @Override public void redo() { calls.add("redo"); }
                     @Override public void quickRollback() { calls.add("rollback"); }
@@ -34,5 +36,29 @@ class HotkeyActionDispatcherTest {
 
         dispatcher.switchBranch(9);
         assertEquals("branch-9", calls.getLast());
+    }
+
+    @Test
+    void selectionHistoryPrecedesWorldUndoRedo() {
+        var calls = new ArrayList<String>();
+        var statuses = new ArrayList<String>();
+        HotkeyActionDispatcher dispatcher = new HotkeyActionDispatcher(
+                new HotkeyActionDispatcher.Actions() {
+                    @Override public void openDashboard() { }
+                    @Override public void openSave() { }
+                    @Override public boolean undoSelection() { return true; }
+                    @Override public boolean redoSelection() { return true; }
+                    @Override public void undo() { calls.add("world-undo"); }
+                    @Override public void redo() { calls.add("world-redo"); }
+                    @Override public void quickRollback() { }
+                    @Override public void switchBranch(int slot) { }
+                }, statuses::add);
+
+        dispatcher.dispatch(HotkeyActionDispatcher.Action.UNDO);
+        dispatcher.dispatch(HotkeyActionDispatcher.Action.REDO);
+
+        assertEquals(java.util.List.of(), calls);
+        assertEquals(java.util.List.of(
+                "luma.selection.undo", "luma.selection.redo"), statuses);
     }
 }

@@ -2,6 +2,7 @@ package io.github.lumi.client;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
+import io.github.lumi.client.state.ClientSelection;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
@@ -17,6 +18,7 @@ import net.minecraft.network.chat.Component;
 /** Client entrypoint; retained UI controllers consume this single networking facade. */
 public final class LumiClient implements ClientModInitializer {
     private static final ClientHistoryStore HISTORY = new ClientHistoryStore();
+    private static final ClientSelection SELECTION = new ClientSelection();
     private static final LumiClientNetworking NETWORKING =
             new LumiClientNetworking(HISTORY, LumiClient::showRecovery);
 
@@ -52,6 +54,8 @@ public final class LumiClient implements ClientModInitializer {
                                 client.screen, new SaveScreenController(NETWORKING::save)));
                     }
 
+                    @Override public boolean undoSelection() { return SELECTION.undo(); }
+                    @Override public boolean redoSelection() { return SELECTION.redo(); }
                     @Override public void undo() { NETWORKING.undo(); }
                     @Override public void redo() { NETWORKING.redo(); }
                     @Override public void quickRollback() { NETWORKING.quickRollback(); }
@@ -69,6 +73,7 @@ public final class LumiClient implements ClientModInitializer {
                         }
                     }
                 }, LumiClient::showFeedback)).register();
+        new LumiSelectionTool(SELECTION, LumiClient::showFeedback).register();
         new LumiOperationHud(HISTORY).register();
         LumiMod.LOGGER.info("Lumi V2 client initialized");
     }
@@ -108,5 +113,9 @@ public final class LumiClient implements ClientModInitializer {
 
     public static LumiClientNetworking networking() {
         return NETWORKING;
+    }
+
+    public static ClientSelection selection() {
+        return SELECTION;
     }
 }

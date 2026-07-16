@@ -20,12 +20,20 @@ public final class HotkeyActionDispatcher {
                 case DASHBOARD -> actions.openDashboard();
                 case SAVE -> actions.openSave();
                 case UNDO -> {
-                    actions.undo();
-                    feedback.accept("luma.status.undo_started");
+                    if (actions.undoSelection()) {
+                        feedback.accept("luma.selection.undo");
+                    } else {
+                        actions.undo();
+                        feedback.accept("luma.status.undo_started");
+                    }
                 }
                 case REDO -> {
-                    actions.redo();
-                    feedback.accept("luma.status.redo_started");
+                    if (actions.redoSelection()) {
+                        feedback.accept("luma.selection.redo");
+                    } else {
+                        actions.redo();
+                        feedback.accept("luma.status.redo_started");
+                    }
                 }
                 case QUICK_ROLLBACK -> {
                     actions.quickRollback();
@@ -55,6 +63,8 @@ public final class HotkeyActionDispatcher {
     public interface Actions {
         void openDashboard();
         void openSave();
+        boolean undoSelection();
+        boolean redoSelection();
         void undo();
         void redo();
         void quickRollback();
