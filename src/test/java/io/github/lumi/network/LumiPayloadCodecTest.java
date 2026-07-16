@@ -17,6 +17,17 @@ import org.junit.jupiter.api.Test;
 
 class LumiPayloadCodecTest {
     @Test
+    void workspaceCreateArgumentRoundTripsWholeAndBoundedScopes() {
+        var whole = new WorkspaceCreateArgument("Whole world", Optional.empty());
+        var bounded = new WorkspaceCreateArgument(
+                "Castle", Optional.of(
+                        new io.github.lumi.domain.model.BlockBox(6, 5, 4, 3, 2, 1)));
+
+        assertEquals(whole, WorkspaceCreateArgument.parse(whole.encode()));
+        assertEquals(bounded, WorkspaceCreateArgument.parse(bounded.encode()));
+    }
+
+    @Test
     void commandRoundTripsExpectedRefAndArgument() {
         HistoryCommandPayload command = new HistoryCommandPayload(
                 UUID.fromString("10000000-0000-0000-0000-000000000001"),
@@ -98,6 +109,19 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), HistoryCommandPayload.Kind.BRANCH_CREATE,
                 "idea", id('2'), 43);
         assertEquals(createBranch, roundTrip(HistoryCommandPayload.CODEC, createBranch));
+        var boundedWorkspace = new WorkspaceCreateArgument(
+                "Castle", Optional.of(
+                        new io.github.lumi.domain.model.BlockBox(1, 2, 3, 4, 5, 6)));
+        HistoryCommandPayload createWorkspace = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.WORKSPACE_CREATE,
+                boundedWorkspace.encode(), id('2'), 43);
+        assertEquals(createWorkspace,
+                roundTrip(HistoryCommandPayload.CODEC, createWorkspace));
+        HistoryCommandPayload switchWorkspace = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.WORKSPACE_SWITCH,
+                UUID.randomUUID().toString(), id('2'), 43);
+        assertEquals(switchWorkspace,
+                roundTrip(HistoryCommandPayload.CODEC, switchWorkspace));
         HistoryCommandPayload restoreWithoutEntities = new HistoryCommandPayload(
                 UUID.randomUUID(), HistoryCommandPayload.Kind.RESTORE_NO_ENTITIES,
                 id('3').hex(), id('2'), 43);
@@ -139,6 +163,11 @@ class LumiPayloadCodecTest {
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.BRANCH_CREATE, " ", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.WORKSPACE_CREATE, "bad", id('1'), 0));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.WORKSPACE_SWITCH,
+                "not-a-workspace", id('1'), 0));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.COMPARE_CANCEL, "not-a-uuid", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.PACKAGE_EXPORT,
@@ -153,6 +182,13 @@ class LumiPayloadCodecTest {
         HistorySnapshotPayload snapshot = new HistorySnapshotPayload(
                 "minecraft:overworld", id('a'), 7, 3, true, true,
                 new UUID(0, 7), "Redstone lab", "workspace/lab/main",
+                java.util.List.of(
+                        new HistorySnapshotPayload.WorkspaceView(
+                                new UUID(0, 7), "Redstone lab", true,
+                                true, true, false),
+                        new HistorySnapshotPayload.WorkspaceView(
+                                new UUID(0, 9), "Whole world", false,
+                                false, false, true)),
                 java.util.List.of(new HistorySnapshotPayload.Version(
                         id('a'), "Clock works", "Builder", 1234,
                         CommitKind.MANUAL)),

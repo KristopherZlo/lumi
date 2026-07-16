@@ -23,6 +23,7 @@ public record HistorySnapshotPayload(
         UUID workspaceId,
         String workspaceName,
         String branchName,
+        List<WorkspaceView> workspaces,
         List<Version> versions,
         List<Branch> branches,
         List<ZoneView> zones,
@@ -30,6 +31,7 @@ public record HistorySnapshotPayload(
     private static final int MAX_DIMENSION_BYTES = 256;
     private static final int MAX_TEXT_BYTES = 4096;
     private static final int MAX_VERSIONS = 32;
+    private static final int MAX_WORKSPACES = 64;
     private static final int MAX_ZONES = 64;
     private static final int MAX_ZONE_VERSIONS = 8;
     private static final int MAX_DELETED_VERSIONS = 64;
@@ -44,6 +46,7 @@ public record HistorySnapshotPayload(
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(workspaceName, "workspaceName");
         Objects.requireNonNull(branchName, "branchName");
+        workspaces = List.copyOf(Objects.requireNonNull(workspaces, "workspaces"));
         versions = List.copyOf(Objects.requireNonNull(versions, "versions"));
         branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
         zones = List.copyOf(Objects.requireNonNull(zones, "zones"));
@@ -58,7 +61,8 @@ public record HistorySnapshotPayload(
         if (workspaceName.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
                 > MAX_TEXT_BYTES || branchName.isBlank()
                 || branchName.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                > MAX_TEXT_BYTES || versions.size() > MAX_VERSIONS
+                > MAX_TEXT_BYTES || workspaces.size() > MAX_WORKSPACES
+                || versions.size() > MAX_VERSIONS
                 || branches.size() > 64 || zones.size() > MAX_ZONES
                 || deletedVersions.size() > MAX_DELETED_VERSIONS) {
             throw new IllegalArgumentException("Invalid workspace history snapshot");
@@ -77,9 +81,28 @@ public record HistorySnapshotPayload(
             String branchName,
             List<Version> versions,
             List<Branch> branches,
+            List<ZoneView> zones,
+            List<Version> deletedVersions) {
+        this(dimensionId, head, revision, pendingKeys, operationActive,
+                recoveryPending, workspaceId, workspaceName, branchName, List.of(),
+                versions, branches, zones, deletedVersions);
+    }
+
+    public HistorySnapshotPayload(
+            String dimensionId,
+            CommitId head,
+            long revision,
+            int pendingKeys,
+            boolean operationActive,
+            boolean recoveryPending,
+            UUID workspaceId,
+            String workspaceName,
+            String branchName,
+            List<Version> versions,
+            List<Branch> branches,
             List<ZoneView> zones) {
         this(dimensionId, head, revision, pendingKeys, operationActive,
-                recoveryPending, workspaceId, workspaceName, branchName,
+                recoveryPending, workspaceId, workspaceName, branchName, List.of(),
                 versions, branches, zones, List.of());
     }
 
@@ -96,7 +119,7 @@ public record HistorySnapshotPayload(
             List<Version> versions,
             List<Branch> branches) {
         this(dimensionId, head, revision, pendingKeys, operationActive,
-                recoveryPending, workspaceId, workspaceName, branchName,
+                recoveryPending, workspaceId, workspaceName, branchName, List.of(),
                 versions, branches, List.of(), List.of());
     }
 
@@ -107,7 +130,7 @@ public record HistorySnapshotPayload(
             int pendingKeys,
             boolean operationActive) {
         this(dimensionId, head, revision, pendingKeys, operationActive,
-                false, new UUID(0, 0), "", "unknown",
+                false, new UUID(0, 0), "", "unknown", List.of(),
                 List.of(), List.of(), List.of(), List.of());
     }
 
@@ -121,6 +144,8 @@ public record HistorySnapshotPayload(
         buffer.writeUUID(workspaceId);
         buffer.writeUtf(workspaceName, MAX_TEXT_BYTES);
         buffer.writeUtf(branchName, MAX_TEXT_BYTES);
+        buffer.writeVarInt(workspaces.size());
+        workspaces.forEach(workspace -> workspace.write(buffer));
         buffer.writeVarInt(versions.size());
         versions.forEach(version -> version.write(buffer));
         buffer.writeVarInt(branches.size());
@@ -141,6 +166,15 @@ public record HistorySnapshotPayload(
         UUID workspace = buffer.readUUID();
         String workspaceName = buffer.readUtf(MAX_TEXT_BYTES);
         String branch = buffer.readUtf(MAX_TEXT_BYTES);
+        int workspaceCount = buffer.readVarInt();
+        if (workspaceCount < 0 || workspaceCount > MAX_WORKSPACES) {
+            throw new IllegalArgumentException("Invalid workspace count");
+        }
+        java.util.ArrayList<WorkspaceView> workspaces =
+                new java.util.ArrayList<>(workspaceCount);
+        for (int index = 0; index < workspaceCount; index++) {
+            workspaces.add(WorkspaceView.read(buffer));
+        }
         int count = buffer.readVarInt();
         if (count < 0 || count > MAX_VERSIONS) {
             throw new IllegalArgumentException("Invalid history version count");
@@ -175,10 +209,45 @@ public record HistorySnapshotPayload(
         }
         return new HistorySnapshotPayload(
                 dimension, head, revision, pending, active, recovery,
-                workspace, workspaceName, branch, versions, branches, zones, deleted);
+                workspace, workspaceName, branch, workspaces,
+                versions, branches, zones, deleted);
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+
+    public record WorkspaceView(
+            UUID id,
+            String name,
+            boolean active,
+            boolean bounded,
+            boolean hideZoneCommits,
+            boolean includeEntitiesOnRestore) {
+        public WorkspaceView {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(name, "name");
+            if (name.isBlank()
+                    || name.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+                    > MAX_TEXT_BYTES) {
+                throw new IllegalArgumentException("Invalid workspace metadata");
+            }
+        }
+
+        private void write(FriendlyByteBuf buffer) {
+            buffer.writeUUID(id);
+            buffer.writeUtf(name, MAX_TEXT_BYTES);
+            buffer.writeBoolean(active);
+            buffer.writeBoolean(bounded);
+            buffer.writeBoolean(hideZoneCommits);
+            buffer.writeBoolean(includeEntitiesOnRestore);
+        }
+
+        private static WorkspaceView read(FriendlyByteBuf buffer) {
+            return new WorkspaceView(
+                    buffer.readUUID(), buffer.readUtf(MAX_TEXT_BYTES),
+                    buffer.readBoolean(), buffer.readBoolean(),
+                    buffer.readBoolean(), buffer.readBoolean());
+        }
+    }
 
     public record Version(
             CommitId id, String message, String author, long timestampMillis, CommitKind kind) {

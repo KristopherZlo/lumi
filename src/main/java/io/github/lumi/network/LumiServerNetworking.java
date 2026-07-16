@@ -458,6 +458,8 @@ public final class LumiServerNetworking {
             case PACKAGE_EXPORT, PACKAGE_INSPECT, PACKAGE_IMPORT ->
                     throw new IllegalStateException(
                             "Package commands do not use the mutation queue");
+            case WORKSPACE_CREATE, WORKSPACE_SWITCH -> throw new IllegalStateException(
+                    "Workspace commands are not registered yet");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
