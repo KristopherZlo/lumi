@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.CommitId;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -47,6 +48,19 @@ class BranchRefRepositoryTest {
         repository.create(name, id("first"));
 
         assertThrows(RefConflictException.class, () -> repository.create(name, id("second")));
+    }
+
+    @Test
+    void deletesOnlyTheExpectedRefRevision() throws IOException {
+        BranchRefRepository repository = new BranchRefRepository(repositoryRoot);
+        BranchName name = new BranchName("hidden/return/test");
+        var created = repository.create(name, id("first"));
+        var changed = repository.compareAndSet(created, id("second"));
+
+        assertThrows(RefConflictException.class, () -> repository.delete(created));
+        repository.delete(changed);
+
+        assertEquals(Optional.empty(), repository.read(name));
     }
 
     private static CommitId id(String value) {

@@ -79,6 +79,7 @@ public final class SaveService implements SavePublisher {
         CommitId commitId = writeCommit(request, captured);
         requireCurrent(request);
         var branch = refs.create(hiddenRef, commitId);
+        new RetentionService(commits, refs).pruneHiddenRefs(16);
         return new SaveResult(commitId, branch, captured.generations());
     }
 

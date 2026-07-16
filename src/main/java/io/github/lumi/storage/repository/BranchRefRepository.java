@@ -51,6 +51,16 @@ public final class BranchRefRepository {
         return advanced;
     }
 
+    public synchronized void delete(BranchRef expected) throws IOException {
+        Objects.requireNonNull(expected, "expected");
+        BranchRef current = read(expected.name()).orElseThrow(
+                () -> new RefConflictException("Branch no longer exists: " + expected.name()));
+        if (!current.equals(expected)) {
+            throw new RefConflictException("Branch changed since operation started: " + expected.name());
+        }
+        Files.delete(path(expected.name()));
+    }
+
     public synchronized Optional<BranchRef> read(BranchName name) throws IOException {
         Path path = path(name);
         if (!Files.exists(path)) {
