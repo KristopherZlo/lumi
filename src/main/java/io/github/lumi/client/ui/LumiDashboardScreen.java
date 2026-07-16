@@ -20,6 +20,7 @@ public final class LumiDashboardScreen extends Screen {
     private final Runnable openZones;
     private final Runnable quickRollback;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
+    private final Consumer<HistorySnapshotPayload.Version> openDelete;
     private final Consumer<VersionCompareController.Target> openCompare;
     private final VersionCompareController compareController = new VersionCompareController();
     private HistorySnapshotPayload snapshot;
@@ -36,6 +37,7 @@ public final class LumiDashboardScreen extends Screen {
             Runnable openZones,
             Runnable quickRollback,
             Consumer<HistorySnapshotPayload.Version> openRestore,
+            Consumer<HistorySnapshotPayload.Version> openDelete,
             Consumer<VersionCompareController.Target> openCompare) {
         super(Component.translatable("luma.screen.dashboard.title"));
         this.parent = parent;
@@ -46,6 +48,7 @@ public final class LumiDashboardScreen extends Screen {
         this.openZones = Objects.requireNonNull(openZones, "openZones");
         this.quickRollback = Objects.requireNonNull(quickRollback, "quickRollback");
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
+        this.openDelete = Objects.requireNonNull(openDelete, "openDelete");
         this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
     }
 
@@ -89,11 +92,15 @@ public final class LumiDashboardScreen extends Screen {
                     addRenderableWidget(Button.builder(
                             Component.translatable("luma.action.compare"),
                             ignored -> openCompare.accept(target))
-                            .bounds(panelX + panelWidth - 168, rowY + 4, 72, 20).build()));
+                            .bounds(panelX + panelWidth - 220, rowY + 4, 60, 20).build()));
             addRenderableWidget(Button.builder(
                     Component.translatable("luma.action.restore"),
                     ignored -> openRestore.accept(version))
-                    .bounds(panelX + panelWidth - 88, rowY + 4, 72, 20).build());
+                    .bounds(panelX + panelWidth - 152, rowY + 4, 60, 20).build());
+            addRenderableWidget(Button.builder(
+                    Component.translatable("luma.action.delete"),
+                    ignored -> openDelete.accept(version))
+                    .bounds(panelX + panelWidth - 84, rowY + 4, 60, 20).build());
         }
     }
 

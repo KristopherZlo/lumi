@@ -7,6 +7,7 @@ import io.github.lumi.client.state.ClientSelection;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
+import io.github.lumi.client.ui.LumiDeleteVersionScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiCompareScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
@@ -73,6 +74,8 @@ public final class LumiClient implements ClientModInitializer {
                                             }
                                         },
                                         NETWORKING::restoreArea)),
+                                version -> client.setScreen(new LumiDeleteVersionScreen(
+                                        client.screen, version, NETWORKING::deleteVersion)),
                                 target -> client.setScreen(new LumiCompareScreen(
                                         client.screen,
                                         COMPARISONS,
