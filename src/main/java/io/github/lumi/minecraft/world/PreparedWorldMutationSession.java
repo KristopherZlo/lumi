@@ -11,7 +11,7 @@ import java.util.Objects;
 import java.util.function.LongSupplier;
 import java.util.UUID;
 
-/** Applies and verifies prepared sections one mutation at a time. */
+/** Applies and verifies prepared world objects one section or entity mutation at a time. */
 public final class PreparedWorldMutationSession implements WorldStateApply.ApplySession {
     private final PreparedMinecraftState target;
     private final PreparedWorldAccess world;
@@ -120,7 +120,6 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         private final List<Map.Entry<EntityChunkKey, DecodedEntityChunk>> entities =
                 new ArrayList<>(target.entities().entrySet());
         private int sectionIndex;
-        private int blockIndex;
         private List<Integer> removals = List.of();
         private int removalIndex;
         private List<Map.Entry<Integer, net.minecraft.nbt.CompoundTag>> blockEntities = List.of();
@@ -155,14 +154,11 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         private void stepSection() throws IOException {
             var section = sections.get(sectionIndex);
             if (phase == Phase.BLOCKS) {
-                world.setBlock(section.getKey(), blockIndex,
-                        section.getValue().blockStates().get(blockIndex++));
-                if (blockIndex == io.github.lumi.domain.model.SectionBlob.BLOCK_COUNT) {
-                    removals = world.blockEntityIndexes(section.getKey()).stream()
-                            .filter(index -> !section.getValue().blockEntities().containsKey(index))
-                            .toList();
-                    phase = Phase.REMOVE_BLOCK_ENTITIES;
-                }
+                world.applySection(section.getKey(), section.getValue());
+                removals = world.blockEntityIndexes(section.getKey()).stream()
+                        .filter(index -> !section.getValue().blockEntities().containsKey(index))
+                        .toList();
+                phase = Phase.REMOVE_BLOCK_ENTITIES;
             } else if (phase == Phase.REMOVE_BLOCK_ENTITIES) {
                 if (removalIndex < removals.size()) {
                     world.removeBlockEntity(section.getKey(), removals.get(removalIndex++));
@@ -177,7 +173,6 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                         section.getKey(), blockEntity.getKey(), blockEntity.getValue());
             } else {
                 sectionIndex++;
-                blockIndex = 0;
                 removals = List.of();
                 removalIndex = 0;
                 blockEntities = List.of();

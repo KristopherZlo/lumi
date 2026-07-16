@@ -17,26 +17,20 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityProcessor;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.LevelData;
 
 /** Minecraft adapter for authorized, loaded-chunk Restore mutation and reread. */
 public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
-    private static final int UPDATE_FLAGS =
-            Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
-
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
+    private final MinecraftSectionRewriter sectionRewriter;
     private final MinecraftSectionCapture sections = new MinecraftSectionCapture();
     private final MinecraftEntityChunkCapture entities = new MinecraftEntityChunkCapture();
     private final ChunkEntityLookup entityLookup;
@@ -44,14 +38,14 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     public MinecraftPreparedWorldAccess(ServerLevel level, DimensionFreezeState freeze) {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
+        sectionRewriter = new MinecraftSectionRewriter(level);
         entityLookup = ChunkEntityLookup.forLevel(level);
     }
 
     @Override
-    public void setBlock(SectionKey key, int localIndex, BlockState state) throws IOException {
-        requireChunk(key.chunkX(), key.chunkZ());
-        BlockPos position = position(key, localIndex);
-        freeze.runAuthorized(() -> level.setBlock(position, state, UPDATE_FLAGS));
+    public void applySection(SectionKey key, DecodedSection section) throws IOException {
+        LevelChunk chunk = requireChunk(key.chunkX(), key.chunkZ());
+        freeze.runAuthorized(() -> sectionRewriter.apply(chunk, key, section));
     }
 
     @Override
@@ -82,22 +76,14 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
         full.putInt("x", position.getX());
         full.putInt("y", position.getY());
         full.putInt("z", position.getZ());
-        BlockEntity existing = chunk.getBlockEntity(position);
-        BlockEntity replacement = existing == null
-                ? BlockEntity.loadStatic(
-                        position, chunk.getBlockState(position), full, level.registryAccess())
-                : null;
-        if (existing == null && replacement == null) {
+        BlockEntity replacement = BlockEntity.loadStatic(
+                position, chunk.getBlockState(position), full, level.registryAccess());
+        if (replacement == null) {
             throw new IOException("Cannot create restored block entity at " + position);
         }
         freeze.runAuthorized(() -> {
-            if (existing == null) {
-                chunk.setBlockEntity(replacement);
-            } else {
-                existing.loadWithComponents(TagValueInput.create(
-                        ProblemReporter.DISCARDING, level.registryAccess(), full));
-                existing.setChanged();
-            }
+            chunk.removeBlockEntity(position);
+            chunk.setBlockEntity(replacement);
         });
     }
 

@@ -10,11 +10,10 @@ import java.util.List;
 import java.util.UUID;
 import java.util.Map;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.level.block.state.BlockState;
 
 /** Minimal Minecraft mutation/readback port used by the deadline-bounded apply cursor. */
 public interface PreparedWorldAccess {
-    void setBlock(SectionKey key, int localIndex, BlockState state) throws IOException;
+    void applySection(SectionKey key, DecodedSection section) throws IOException;
 
     List<Integer> blockEntityIndexes(SectionKey key) throws IOException;
 

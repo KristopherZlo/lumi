@@ -31,7 +31,7 @@ class PreparedWorldMutationSessionTest {
     }
 
     @Test
-    void appliesBlocksIncrementallyThenVerifiesExactSection() throws Exception {
+    void appliesOnePreparedSectionMutationThenVerifiesExactSection() throws Exception {
         SectionKey key = new SectionKey(1, 2, 3);
         SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
@@ -45,10 +45,10 @@ class PreparedWorldMutationSessionTest {
         PreparedWorldMutationSession session =
                 new PreparedWorldMutationSession(target, world, clock::get);
 
-        assertFalse(session.applyUntil(3));
-        assertEquals(3, world.blockWrites);
+        assertFalse(session.applyUntil(1));
+        assertEquals(1, world.sectionWrites);
         assertTrue(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(SectionBlob.BLOCK_COUNT, world.blockWrites);
+        assertEquals(1, world.sectionWrites);
         assertEquals(WorldStateApply.Verification.VERIFIED,
                 session.verifyUntil(Long.MAX_VALUE));
     }
@@ -115,7 +115,7 @@ class PreparedWorldMutationSessionTest {
                 new PreparedWorldMutationSession(target, world, clock::get, chunks);
 
         assertFalse(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(0, world.blockWrites);
+        assertEquals(0, world.sectionWrites);
         assertEquals(List.of(new ChunkCoordinate(7, -3)), access.retained);
 
         access.loaded.complete(null);
@@ -128,7 +128,7 @@ class PreparedWorldMutationSessionTest {
     private static final class FakeWorld implements PreparedWorldAccess {
         private final AtomicLong clock;
         private final SectionBlob captured;
-        private int blockWrites;
+        private int sectionWrites;
         private List<UUID> entityIds = List.of();
         private EntityChunkBlob capturedEntities = new EntityChunkBlob(List.of());
         private final List<UUID> removedEntities = new ArrayList<>();
@@ -140,10 +140,8 @@ class PreparedWorldMutationSessionTest {
             this.captured = captured;
         }
 
-        @Override public void setBlock(
-                SectionKey key, int localIndex,
-                net.minecraft.world.level.block.state.BlockState state) {
-            blockWrites++;
+        @Override public void applySection(SectionKey key, DecodedSection section) {
+            sectionWrites++;
             clock.incrementAndGet();
         }
         @Override public List<Integer> blockEntityIndexes(SectionKey key) { return List.of(); }
