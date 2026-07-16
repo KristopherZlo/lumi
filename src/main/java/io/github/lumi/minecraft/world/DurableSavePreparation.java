@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.world;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
+import io.github.lumi.minecraft.operation.OperationProgress;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -93,6 +94,22 @@ public final class DurableSavePreparation implements SavePreparation {
                 throw new IllegalStateException("Save preparation is not durable");
             }
             return boundary;
+        }
+
+        @Override
+        public OperationProgress progress() {
+            if (next < keys.size()) {
+                return new OperationProgress(
+                        "Save: checking loaded entities", next, keys.size());
+            }
+            if (boundary == null || boundary.generations().isEmpty()) {
+                return OperationProgress.indeterminate(
+                        "Save: establishing durable boundary");
+            }
+            return new OperationProgress(
+                    "Save: waiting for pending writes",
+                    mutations.durableKeyCount(boundary),
+                    boundary.generations().size());
         }
     }
 }

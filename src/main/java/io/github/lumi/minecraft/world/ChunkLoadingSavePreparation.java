@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
+import io.github.lumi.minecraft.operation.OperationProgress;
 import java.io.IOException;
 import java.util.Objects;
 
@@ -46,6 +47,19 @@ public final class ChunkLoadingSavePreparation implements SavePreparation {
                 throw new IllegalStateException("Chunk loading preparation is not complete");
             }
             return boundary;
+        }
+
+        @Override
+        public OperationProgress progress() {
+            if (boundary == null) {
+                return delegateSession.progress();
+            }
+            return chunks.totalChunks() == 0
+                    ? OperationProgress.indeterminate("Save: loading dirty chunks")
+                    : new OperationProgress(
+                            "Save: loading dirty chunks",
+                            chunks.completedChunks(),
+                            chunks.totalChunks());
         }
 
         @Override

@@ -58,6 +58,14 @@ public final class ChunkLoadSession implements AutoCloseable {
         return next == chunks.size();
     }
 
+    public int completedChunks() {
+        return next;
+    }
+
+    public int totalChunks() {
+        return retained.size();
+    }
+
     @Override
     public void close() {
         if (closed) {

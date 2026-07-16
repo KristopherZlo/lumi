@@ -178,9 +178,15 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
 
     public synchronized boolean isDurable(WorkingIndexSnapshot captured) {
         Objects.requireNonNull(captured, "captured");
-        return captured.generations().entrySet().stream().allMatch(entry ->
+        return durableKeyCount(captured) == captured.generations().size();
+    }
+
+    public synchronized int durableKeyCount(WorkingIndexSnapshot captured) {
+        Objects.requireNonNull(captured, "captured");
+        return (int) captured.generations().entrySet().stream().filter(entry ->
                 durableOrigins.contains(entry.getKey())
-                        && durableGenerations.getOrDefault(entry.getKey(), 0L) >= entry.getValue());
+                        && durableGenerations.getOrDefault(entry.getKey(), 0L)
+                        >= entry.getValue()).count();
     }
 
     @Override

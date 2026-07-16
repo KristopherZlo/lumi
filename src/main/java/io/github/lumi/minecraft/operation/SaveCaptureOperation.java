@@ -1,5 +1,6 @@
 package io.github.lumi.minecraft.operation;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.CapturedWorldState;
 import io.github.lumi.domain.service.SavePublicationProgress;
@@ -31,6 +32,8 @@ public final class SaveCaptureOperation implements DimensionMutation {
     private SaveResult result;
     private Throwable failure;
     private boolean resourcesClosed;
+    private long startedNanos;
+    private volatile String loggedPublicationPhase = "";
     private volatile OperationProgress publicationProgress =
             OperationProgress.indeterminate("Save: starting publication");
 
@@ -61,6 +64,7 @@ public final class SaveCaptureOperation implements DimensionMutation {
 
     @Override
     public void advance(long deadlineNanos) throws IOException {
+        startIfNeeded();
         if (status == SaveOperationStatus.PREPARING) {
             prepare(deadlineNanos);
         } else if (status == SaveOperationStatus.CAPTURING) {
@@ -79,6 +83,9 @@ public final class SaveCaptureOperation implements DimensionMutation {
             return;
         }
         dirty = Objects.requireNonNull(preparationSession.finish(), "prepared generations");
+        LumiMod.LOGGER.info(
+                "Lumi Save prepared {} dirty keys in {} ms",
+                dirty.generations().size(), elapsedMillis());
         status = SaveOperationStatus.CAPTURING;
         capture(deadlineNanos);
     }
@@ -95,6 +102,9 @@ public final class SaveCaptureOperation implements DimensionMutation {
             throw new IllegalStateException("Capture generations changed during frozen capture");
         }
         closeSessions();
+        LumiMod.LOGGER.info(
+                "Lumi Save captured {} sections and {} entity chunks in {} ms",
+                captured.sections().size(), captured.entities().size(), elapsedMillis());
         status = SaveOperationStatus.WRITING;
         background = CompletableFuture.supplyAsync(() -> publish(captured), backgroundExecutor);
     }
@@ -116,9 +126,14 @@ public final class SaveCaptureOperation implements DimensionMutation {
         try {
             result = background.join();
             status = SaveOperationStatus.COMPLETE;
+            LumiMod.LOGGER.info(
+                    "Lumi Save published commit {} in {} ms",
+                    result.commitId(), elapsedMillis());
         } catch (CompletionException failed) {
             failure = failed.getCause();
             status = SaveOperationStatus.FAILED;
+            LumiMod.LOGGER.error(
+                    "Lumi Save failed after " + elapsedMillis() + " ms", failure);
         }
     }
 
@@ -163,6 +178,9 @@ public final class SaveCaptureOperation implements DimensionMutation {
     }
 
     @Override public OperationProgress progress() {
+        if (status == SaveOperationStatus.PREPARING && preparationSession != null) {
+            return preparationSession.progress();
+        }
         if (status == SaveOperationStatus.CAPTURING && session != null
                 && session.totalKeys() > 0) {
             return new OperationProgress(
@@ -179,6 +197,13 @@ public final class SaveCaptureOperation implements DimensionMutation {
     private void recordProgress(SavePublicationProgress progress) {
         publicationProgress = new OperationProgress(
                 progress.phase(), progress.completed(), progress.total());
+        if (!progress.phase().equals(loggedPublicationPhase)) {
+            loggedPublicationPhase = progress.phase();
+            LumiMod.LOGGER.info(
+                    "Lumi Save phase '{}' started at {} ms ({}/{})",
+                    progress.phase(), elapsedMillis(),
+                    progress.completed(), progress.total());
+        }
     }
 
     @Override
@@ -189,6 +214,7 @@ public final class SaveCaptureOperation implements DimensionMutation {
         }
         closeSessions();
         status = SaveOperationStatus.CANCELLED;
+        LumiMod.LOGGER.warn("Lumi Save cancelled after {} ms", elapsedMillis());
         return true;
     }
 
@@ -239,5 +265,22 @@ public final class SaveCaptureOperation implements DimensionMutation {
             @Override public boolean prepareUntil(long deadlineNanos) { return true; }
             @Override public WorkingIndexSnapshot finish() { return fixed; }
         };
+    }
+
+    private void startIfNeeded() {
+        if (startedNanos != 0) {
+            return;
+        }
+        startedNanos = System.nanoTime();
+        LumiMod.LOGGER.info(
+                "Lumi Save started: kind={}, branch={}, workspace={}, zone={}",
+                request.kind(), request.expectedRef().name(),
+                request.workspaceId(), request.zoneId().orElse(null));
+    }
+
+    private long elapsedMillis() {
+        return startedNanos == 0
+                ? 0 : java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                        System.nanoTime() - startedNanos);
     }
 }

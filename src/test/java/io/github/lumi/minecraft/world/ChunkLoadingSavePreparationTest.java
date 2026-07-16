@@ -25,12 +25,15 @@ class ChunkLoadingSavePreparationTest {
 
         assertFalse(session.prepareUntil(50));
         assertEquals(java.util.List.of(new ChunkCoordinate(4, 6)), access.retained);
+        assertEquals(new io.github.lumi.minecraft.operation.OperationProgress(
+                "Save: loading dirty chunks", 0, 1), session.progress());
 
         access.loaded.complete(null);
         assertFalse(session.prepareUntil(50));
 
         access.ready = true;
         assertTrue(session.prepareUntil(50));
+        assertEquals(1, session.progress().completed());
         assertEquals(boundary, session.finish());
         session.close();
         assertEquals(java.util.List.of(new ChunkCoordinate(4, 6)), access.released);

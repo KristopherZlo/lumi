@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
+import io.github.lumi.minecraft.operation.OperationProgress;
 import java.util.LinkedHashMap;
 import java.util.Objects;
 import java.util.function.Predicate;
@@ -42,6 +43,11 @@ public final class ScopedSavePreparation implements SavePreparation {
                 }
             });
             return new WorkingIndexSnapshot(selected);
+        }
+
+        @Override
+        public OperationProgress progress() {
+            return sourceSession.progress();
         }
 
         @Override

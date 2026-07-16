@@ -51,11 +51,15 @@ class DurableSavePreparationTest {
 
         assertFalse(session.prepareUntil(50));
         assertEquals(1L, mutations.snapshot().generations().get(key));
+        assertEquals("Save: waiting for pending writes", session.progress().phase());
+        assertEquals(0, session.progress().completed());
+        assertEquals(1, session.progress().total());
 
         background.runNext();
         background.runNext();
 
         assertTrue(session.prepareUntil(110));
+        assertEquals(1, session.progress().completed());
         assertEquals(mutations.snapshot(), session.finish());
     }
 
