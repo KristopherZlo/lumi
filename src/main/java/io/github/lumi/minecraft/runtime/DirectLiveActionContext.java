@@ -18,7 +18,7 @@ public final class DirectLiveActionContext {
         Objects.requireNonNull(player, "player");
         Active active = CURRENT.get();
         if (active == null) {
-            active = new Active(journal, player, journal.begin(player), true);
+            active = new Active(journal, player, journal.begin(player), 0, true);
             CURRENT.set(active);
         } else if (active.journal != journal || active.player == null
                 || !active.player.equals(player)) {
@@ -28,13 +28,21 @@ public final class DirectLiveActionContext {
     }
 
     public static Scope resume(LiveActionJournal journal, UUID action) {
+        return resume(journal, action, 0);
+    }
+
+    public static Scope resume(LiveActionJournal journal, UUID action, int causalDepth) {
         Objects.requireNonNull(journal, "journal");
         Objects.requireNonNull(action, "action");
+        if (causalDepth < 0) {
+            throw new IllegalArgumentException("Causal depth cannot be negative");
+        }
         Active active = CURRENT.get();
         if (active == null) {
-            active = new Active(journal, null, action, false);
+            active = new Active(journal, null, action, causalDepth, false);
             CURRENT.set(active);
-        } else if (active.journal != journal || !active.action.equals(action)) {
+        } else if (active.journal != journal || !active.action.equals(action)
+                || active.causalDepth != causalDepth) {
             throw new IllegalStateException("Cannot nest different causal action roots on one thread");
         }
         return addScope(active);
@@ -50,6 +58,31 @@ public final class DirectLiveActionContext {
         Active active = CURRENT.get();
         return active != null && active.journal == journal
                 ? Optional.of(active.action) : Optional.empty();
+    }
+
+    public static Optional<CausalRoot> currentRoot(LiveActionJournal journal) {
+        Active active = CURRENT.get();
+        return active != null && active.journal == journal
+                ? Optional.of(new CausalRoot(active.action, active.causalDepth))
+                : Optional.empty();
+    }
+
+    public record CausalRoot(UUID action, int depth) {
+        public CausalRoot {
+            Objects.requireNonNull(action, "action");
+            if (depth < 0) {
+                throw new IllegalArgumentException("Causal depth cannot be negative");
+            }
+        }
+
+        public Optional<CausalRoot> child(int maximumDepth) {
+            if (maximumDepth < 1) {
+                throw new IllegalArgumentException("Maximum causal depth must be positive");
+            }
+            return depth >= maximumDepth
+                    ? Optional.empty()
+                    : Optional.of(new CausalRoot(action, depth + 1));
+        }
     }
 
     public static final class Scope implements AutoCloseable {
@@ -89,15 +122,18 @@ public final class DirectLiveActionContext {
         private final LiveActionJournal journal;
         private final UUID player;
         private final UUID action;
+        private final int causalDepth;
         private final boolean closeAction;
         private final Deque<Long> scopes = new ArrayDeque<>();
         private long nextScopeId;
 
         private Active(
-                LiveActionJournal journal, UUID player, UUID action, boolean closeAction) {
+                LiveActionJournal journal, UUID player, UUID action,
+                int causalDepth, boolean closeAction) {
             this.journal = journal;
             this.player = player;
             this.action = action;
+            this.causalDepth = causalDepth;
             this.closeAction = closeAction;
         }
     }

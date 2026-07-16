@@ -20,7 +20,7 @@ class CausalTokenRegistryTest {
             action = DirectLiveActionContext.current(journal).orElseThrow();
             journal.record(action, new BlockPosition(1, 0, 0), block("air"), block("stone"));
         }
-        CausalTokenRegistry<String> tokens = new CausalTokenRegistry<>();
+        CausalTokenRegistry<String, UUID> tokens = new CausalTokenRegistry<>();
         tokens.remember("redstone-tick", action);
 
         try (var resumed = DirectLiveActionContext.resume(
@@ -30,7 +30,7 @@ class CausalTokenRegistryTest {
         }
 
         assertEquals(2, journal.prepareUndo(player).orElseThrow().expected().size());
-        assertEquals(Set.of("piston-event"), tokens.cancel(action));
+        assertEquals(Set.of("piston-event"), tokens.cancel(action::equals));
     }
 
     private static BlockSnapshot block(String id) {

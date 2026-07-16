@@ -6,34 +6,33 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 
 /** Session-only ownership of delayed Minecraft work by a live root action. */
-public final class CausalTokenRegistry<K> {
-    private final Map<K, UUID> owners = new HashMap<>();
+public final class CausalTokenRegistry<K, O> {
+    private final Map<K, O> owners = new HashMap<>();
 
-    public synchronized Optional<UUID> remember(K work, UUID action) {
+    public synchronized Optional<O> remember(K work, O owner) {
         return Optional.ofNullable(owners.put(Objects.requireNonNull(work, "work"),
-                Objects.requireNonNull(action, "action")));
+                Objects.requireNonNull(owner, "owner")));
     }
 
-    public synchronized Optional<UUID> take(K work) {
+    public synchronized Optional<O> take(K work) {
         return Optional.ofNullable(owners.remove(Objects.requireNonNull(work, "work")));
     }
 
-    public synchronized Optional<UUID> owner(K work) {
+    public synchronized Optional<O> owner(K work) {
         return Optional.ofNullable(owners.get(Objects.requireNonNull(work, "work")));
     }
 
-    public synchronized Optional<UUID> forget(K work) {
+    public synchronized Optional<O> forget(K work) {
         return Optional.ofNullable(owners.remove(Objects.requireNonNull(work, "work")));
     }
 
-    public synchronized Set<K> cancel(UUID action) {
-        Objects.requireNonNull(action, "action");
+    public synchronized Set<K> cancel(java.util.function.Predicate<O> matches) {
+        Objects.requireNonNull(matches, "matches");
         Set<K> cancelled = new HashSet<>();
         owners.entrySet().removeIf(entry -> {
-            if (entry.getValue().equals(action)) {
+            if (matches.test(entry.getValue())) {
                 cancelled.add(entry.getKey());
                 return true;
             }

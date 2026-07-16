@@ -1,12 +1,15 @@
 package io.github.lumi.minecraft.runtime;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.world.OwnedTickAccess;
 import io.github.lumi.minecraft.world.OwnedBlockEventAccess;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.WeakHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
@@ -23,17 +26,23 @@ import net.minecraft.world.ticks.ScheduledTick;
 
 /** Associates accepted vanilla block/fluid ticks with their live root action. */
 public final class MinecraftCausalTickTracker {
+    static final int MAX_CAUSAL_DEPTH = 32;
     private static final Map<LevelTicks<?>, Binding> BINDINGS = new WeakHashMap<>();
 
     private final LiveActionJournal journal;
     private final LevelTicks<Block> blockTicks;
     private final LevelTicks<Fluid> fluidTicks;
-    private final CausalTokenRegistry<TickKey> tokens = new CausalTokenRegistry<>();
-    private final CausalTokenRegistry<BlockEventData> blockEvents = new CausalTokenRegistry<>();
+    private final CausalTokenRegistry<TickKey, DirectLiveActionContext.CausalRoot> tokens =
+            new CausalTokenRegistry<>();
+    private final CausalTokenRegistry<BlockEventData, DirectLiveActionContext.CausalRoot>
+            blockEvents = new CausalTokenRegistry<>();
     private final OwnedBlockEventAccess eventAccess;
-    private final CausalTokenRegistry<BlockEntity> blockCarriers = new CausalTokenRegistry<>();
+    private final CausalTokenRegistry<BlockEntity, DirectLiveActionContext.CausalRoot>
+            blockCarriers = new CausalTokenRegistry<>();
     private final DimensionFreezeState freeze;
-    private final CausalTokenRegistry<Entity> entityCarriers = new CausalTokenRegistry<>();
+    private final CausalTokenRegistry<Entity, DirectLiveActionContext.CausalRoot> entityCarriers =
+            new CausalTokenRegistry<>();
+    private final Set<java.util.UUID> depthLimitLogged = new HashSet<>();
 
     public MinecraftCausalTickTracker(
             LiveActionJournal journal,
@@ -58,9 +67,9 @@ public final class MinecraftCausalTickTracker {
             binding = BINDINGS.get(owner);
         }
         if (binding != null) {
-            DirectLiveActionContext.current(binding.tracker.journal).ifPresent(action ->
-                    binding.tracker.remember(binding.tracker.tokens,
-                            new TickKey(binding.kind, tick.pos(), tick.type()), action));
+            binding.tracker.rememberCurrent(
+                    binding.tracker.tokens,
+                    new TickKey(binding.kind, tick.pos(), tick.type()));
         }
     }
 
@@ -74,8 +83,7 @@ public final class MinecraftCausalTickTracker {
 
     public void scheduledBlockEvent(BlockEventData event) {
         if (!eventAccess.lumi$hasBlockEvent(event)) {
-            DirectLiveActionContext.current(journal).ifPresent(action ->
-                    remember(blockEvents, event, action));
+            rememberCurrent(blockEvents, event);
         }
     }
 
@@ -85,50 +93,48 @@ public final class MinecraftCausalTickTracker {
 
     public void rememberCarrier(BlockEntity carrier) {
         if (carrier instanceof PistonMovingBlockEntity) {
-            DirectLiveActionContext.current(journal).ifPresent(action ->
-                    remember(blockCarriers, carrier, action));
+            rememberCurrent(blockCarriers, carrier);
         }
     }
 
     public Optional<CausalExecution> resumeCarrier(BlockEntity carrier) {
-        return blockCarriers.owner(carrier).map(action -> new CausalExecution(
-                DirectLiveActionContext.resume(journal, action), () -> { }));
+        return blockCarriers.owner(carrier).map(root -> new CausalExecution(
+                DirectLiveActionContext.resume(journal, root.action(), root.depth()), () -> { }));
     }
 
     public void finishedCarrier(BlockEntity carrier) {
         if (carrier.isRemoved()) {
-            blockCarriers.forget(carrier).ifPresent(journal::release);
+            blockCarriers.forget(carrier).ifPresent(root -> journal.release(root.action()));
         }
     }
 
     public void rememberCarrier(Entity carrier) {
         if (carrier instanceof FallingBlockEntity || carrier instanceof PrimedTnt) {
-            DirectLiveActionContext.current(journal).ifPresent(action ->
-                    remember(entityCarriers, carrier, action));
+            rememberCurrent(entityCarriers, carrier);
         }
     }
 
     public Optional<CausalExecution> resumeCarrier(Entity carrier) {
-        return entityCarriers.owner(carrier).map(action -> new CausalExecution(
-                DirectLiveActionContext.resume(journal, action), () -> { }));
+        return entityCarriers.owner(carrier).map(root -> new CausalExecution(
+                DirectLiveActionContext.resume(journal, root.action(), root.depth()), () -> { }));
     }
 
     public void finishedCarrier(Entity carrier) {
         if (carrier.isRemoved()) {
-            entityCarriers.forget(carrier).ifPresent(journal::release);
+            entityCarriers.forget(carrier).ifPresent(root -> journal.release(root.action()));
         }
     }
 
     public void cancel(java.util.UUID action) {
-        tokens.cancel(action).forEach(key -> {
+        tokens.cancel(root -> root.action().equals(action)).forEach(key -> {
             remove(key);
             journal.release(action);
         });
-        blockEvents.cancel(action).forEach(event -> {
+        blockEvents.cancel(root -> root.action().equals(action)).forEach(event -> {
             eventAccess.lumi$removeBlockEvent(event);
             journal.release(action);
         });
-        blockCarriers.cancel(action).forEach(carrier -> {
+        blockCarriers.cancel(root -> root.action().equals(action)).forEach(carrier -> {
             if (carrier instanceof PistonMovingBlockEntity piston) {
                 try {
                     try (var ignored = DirectLiveActionContext.resume(journal, action)) {
@@ -139,13 +145,14 @@ public final class MinecraftCausalTickTracker {
                 }
             }
         });
-        entityCarriers.cancel(action).forEach(carrier -> {
+        entityCarriers.cancel(root -> root.action().equals(action)).forEach(carrier -> {
             try {
                 freeze.runAuthorized(carrier::discard);
             } finally {
                 journal.release(action);
             }
         });
+        depthLimitLogged.remove(action);
     }
 
     public void cancelAll() {
@@ -153,6 +160,7 @@ public final class MinecraftCausalTickTracker {
         blockEvents.drain().forEach(eventAccess::lumi$removeBlockEvent);
         blockCarriers.clear();
         entityCarriers.clear();
+        depthLimitLogged.clear();
     }
 
     public void close() {
@@ -164,24 +172,46 @@ public final class MinecraftCausalTickTracker {
         blockEvents.clear();
         blockCarriers.clear();
         entityCarriers.clear();
+        depthLimitLogged.clear();
     }
 
     private Optional<CausalExecution> resume(TickKey key) {
         return consume(tokens, key);
     }
 
-    private <K> void remember(CausalTokenRegistry<K> registry, K key, java.util.UUID action) {
-        Optional<java.util.UUID> previous = registry.remember(key, action);
-        if (previous.filter(action::equals).isPresent()) {
-            return;
-        }
-        previous.ifPresent(journal::release);
-        journal.retain(action);
+    private <K> void rememberCurrent(
+            CausalTokenRegistry<K, DirectLiveActionContext.CausalRoot> registry, K key) {
+        DirectLiveActionContext.currentRoot(journal).ifPresent(root ->
+                root.child(MAX_CAUSAL_DEPTH).ifPresentOrElse(
+                        child -> remember(registry, key, child),
+                        () -> logDepthLimit(root.action())));
     }
 
-    private <K> Optional<CausalExecution> consume(CausalTokenRegistry<K> registry, K key) {
-        return registry.take(key).map(action -> new CausalExecution(
-                DirectLiveActionContext.resume(journal, action), () -> journal.release(action)));
+    private <K> void remember(
+            CausalTokenRegistry<K, DirectLiveActionContext.CausalRoot> registry,
+            K key,
+            DirectLiveActionContext.CausalRoot root) {
+        Optional<DirectLiveActionContext.CausalRoot> previous = registry.remember(key, root);
+        if (previous.filter(root::equals).isPresent()) {
+            return;
+        }
+        previous.ifPresent(value -> journal.release(value.action()));
+        journal.retain(root.action());
+    }
+
+    private <K> Optional<CausalExecution> consume(
+            CausalTokenRegistry<K, DirectLiveActionContext.CausalRoot> registry, K key) {
+        return registry.take(key).map(root -> new CausalExecution(
+                DirectLiveActionContext.resume(journal, root.action(), root.depth()),
+                () -> journal.release(root.action())));
+    }
+
+    private void logDepthLimit(java.util.UUID action) {
+        if (depthLimitLogged.add(action)) {
+            LumiMod.LOGGER.info(
+                    "Lumi live action {} stopped inheriting delayed work after {} generations",
+                    action, MAX_CAUSAL_DEPTH);
+        }
     }
 
     @SuppressWarnings("unchecked")

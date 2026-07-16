@@ -29,6 +29,18 @@ class DirectLiveActionContextTest {
         assertTrue(journal.prepareUndo(player).isPresent());
     }
 
+    @Test
+    void delayedRootsStopCreatingChildrenAtTheConfiguredDepth() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID action = journal.begin(new UUID(0, 12));
+
+        try (var ignored = DirectLiveActionContext.resume(journal, action, 32)) {
+            var root = DirectLiveActionContext.currentRoot(journal).orElseThrow();
+            assertEquals(32, root.depth());
+            assertEquals(Optional.empty(), root.child(32));
+        }
+    }
+
     private static BlockSnapshot block(String id) {
         return new BlockSnapshot("minecraft:" + id, Optional.empty());
     }
