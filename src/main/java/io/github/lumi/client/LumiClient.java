@@ -6,6 +6,7 @@ import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientSelection;
 import io.github.lumi.client.onboarding.ClientOnboardingStateRepository;
 import io.github.lumi.client.ui.LumiSaveScreen;
+import io.github.lumi.client.ui.LumiSettingsScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.LumiDiagnosticsScreen;
@@ -31,6 +32,7 @@ import io.github.lumi.client.ui.ZoneScreenController;
 import io.github.lumi.client.ui.ZoneDetailsController;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.PackageInspectionPayload;
+import io.github.lumi.telemetry.TelemetryService;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -44,6 +46,7 @@ public final class LumiClient implements ClientModInitializer {
     private static final ClientSelection SELECTION = new ClientSelection();
     private static final ClientOnboardingStateRepository ONBOARDING =
             new ClientOnboardingStateRepository();
+    private static final TelemetryService TELEMETRY = TelemetryService.getInstance();
     private static boolean onboardingShown;
     private static final LumiClientNetworking NETWORKING =
             new LumiClientNetworking(
@@ -171,12 +174,13 @@ public final class LumiClient implements ClientModInitializer {
         client.setScreen(new LumiMoreScreen(
                 parent,
                 () -> client.setScreen(new LumiOnboardingScreen(
-                        client.screen, ONBOARDING::markCompleted)),
+                        client.screen, LumiClient::completeOnboarding)),
                 () -> client.setScreen(new LumiHotkeyScreen(
                         client.screen,
                         LumiHotkeys.shortcuts(client.options.keyMappings))),
                 () -> client.setScreen(new LumiSpecialThanksScreen(client.screen)),
-                () -> client.setScreen(new LumiDiagnosticsScreen(client.screen, HISTORY))));
+                () -> client.setScreen(new LumiDiagnosticsScreen(client.screen, HISTORY)),
+                () -> client.setScreen(new LumiSettingsScreen(client.screen, TELEMETRY))));
     }
 
     private static void openZoneDetails(
@@ -202,16 +206,28 @@ public final class LumiClient implements ClientModInitializer {
     private static void acceptSnapshot(HistorySnapshotPayload snapshot) {
         showRecovery(snapshot);
         Minecraft client = Minecraft.getInstance();
-        if (snapshot.recoveryPending()
-                || snapshot.operationActive()
-                || onboardingShown
-                || ONBOARDING.completed()
-                || client.player == null
-                || client.screen != null) {
+        if (snapshot.recoveryPending() || snapshot.operationActive()
+                || client.player == null || client.screen != null) {
             return;
         }
-        onboardingShown = true;
-        client.setScreen(new LumiOnboardingScreen(null, ONBOARDING::markCompleted));
+        if (!onboardingShown && !ONBOARDING.completed()) {
+            onboardingShown = true;
+            client.setScreen(new LumiOnboardingScreen(null, LumiClient::completeOnboarding));
+            return;
+        }
+        showTelemetryNotice();
+    }
+
+    private static void completeOnboarding() {
+        ONBOARDING.markCompleted();
+        showTelemetryNotice();
+    }
+
+    private static void showTelemetryNotice() {
+        var player = Minecraft.getInstance().player;
+        if (player != null && TELEMETRY.consumeNotice()) {
+            player.displayClientMessage(Component.translatable("luma.telemetry.notice"), false);
+        }
     }
 
     private static void showPackageInspection(PackageInspectionPayload inspection) {

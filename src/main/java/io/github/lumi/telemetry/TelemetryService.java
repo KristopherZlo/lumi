@@ -91,6 +91,14 @@ public final class TelemetryService {
         settingsRepository.save(settings);
     }
 
+    public synchronized boolean consumeNotice() {
+        if (!settings.enabled() || settings.noticeSeen()) {
+            return false;
+        }
+        markNoticeSeen();
+        return true;
+    }
+
     public synchronized void clearLocalQueue() {
         queue = List.of();
         spoolRepository.clear();

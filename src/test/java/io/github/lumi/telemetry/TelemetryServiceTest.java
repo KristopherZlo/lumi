@@ -2,6 +2,7 @@ package io.github.lumi.telemetry;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -41,6 +42,15 @@ class TelemetryServiceTest {
         service.setEnabled(false);
         assertEquals(0, service.pendingEventCount());
         assertFalse(service.settings().enabled());
+    }
+
+    @Test
+    void enabledNoticeIsConsumedExactlyOnce() {
+        TelemetryService service = service(events -> true);
+
+        assertTrue(service.consumeNotice());
+        assertFalse(service.consumeNotice());
+        assertTrue(service.settings().noticeSeen());
     }
 
     private TelemetryService service(
