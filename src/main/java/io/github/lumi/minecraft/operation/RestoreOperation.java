@@ -371,11 +371,13 @@ public final class RestoreOperation implements DimensionMutation {
         journal = journals.advance(journal, OperationPhase.REF_PUBLISHED);
         journal = journals.advance(journal, OperationPhase.COMPLETE);
         journals.clear(journal);
+        targetSession.close();
         status = RestoreStatus.COMPLETE;
         stateListener.restored(restore);
     }
 
     private void beginReturn() throws IOException {
+        targetSession.close();
         journal = journals.advance(journal, OperationPhase.ROLLING_BACK);
         returnSession = world.begin(preparedReturn);
         returnPhase = ReturnPhase.APPLYING;
@@ -390,6 +392,7 @@ public final class RestoreOperation implements DimensionMutation {
             if (verification == WorldStateApply.Verification.VERIFIED) {
                 journal = journals.advance(journal, OperationPhase.COMPLETE);
                 journals.clear(journal);
+                returnSession.close();
                 status = RestoreStatus.RETURNED;
                 stateListener.returned(restore);
             } else if (verification == WorldStateApply.Verification.MISMATCH) {
@@ -428,6 +431,7 @@ public final class RestoreOperation implements DimensionMutation {
             throw new IllegalStateException("Restore has already started mutating the world");
         }
         journals.clear(journal);
+        targetSession.close();
         status = RestoreStatus.CANCELLED;
     }
 

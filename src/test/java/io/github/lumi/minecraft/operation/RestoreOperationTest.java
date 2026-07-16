@@ -343,6 +343,53 @@ class RestoreOperationTest {
         assertTrue(journals.read().isEmpty());
     }
 
+    @Test
+    void closesPreparedWorldSessionAfterSuccessfulRestore() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('e'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        CloseTrackingWorld world = new CloseTrackingWorld();
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('f'), Map.of(), Map.of(), Map.of(), Map.of()),
+                world, ignored -> { }, journals, UUID.randomUUID());
+
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+
+        assertEquals(RestoreStatus.COMPLETE, operation.status());
+        assertEquals(1, world.closes);
+    }
+
+    @Test
+    void closesPreparedWorldSessionWhenRestoreIsCancelled() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('1'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        CloseTrackingWorld world = new CloseTrackingWorld();
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('2'), Map.of(), Map.of(), Map.of(), Map.of()),
+                world, ignored -> { }, journals, UUID.randomUUID());
+
+        operation.cancelBeforeApply();
+
+        assertEquals(1, world.closes);
+    }
+
+    @Test
+    void closesTargetAndReturnSessionsAfterSafeReturn() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('3'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        CloseTrackingReturnWorld world = new CloseTrackingReturnWorld();
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('4'), Map.of(), Map.of(), Map.of(), Map.of()),
+                world, ignored -> { }, journals, UUID.randomUUID());
+
+        for (int tick = 0; tick < 6; tick++) {
+            operation.tick(Long.MAX_VALUE);
+        }
+
+        assertEquals(RestoreStatus.RETURNED, operation.status());
+        assertEquals(2, world.closes);
+    }
+
     private static CommitId id(char digit) {
         return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
     }
@@ -363,6 +410,40 @@ class RestoreOperationTest {
                 }
                 @Override public boolean repairUntil(long deadlineNanos) { return true; }
                 @Override public void restartVerification() { }
+            };
+        }
+    }
+
+    private static final class CloseTrackingWorld implements TestWorldApply {
+        private int closes;
+
+        @Override public ApplySession begin(PreparedState target) {
+            return new ApplySession() {
+                @Override public boolean applyUntil(long deadlineNanos) { return true; }
+                @Override public Verification verifyUntil(long deadlineNanos) {
+                    return Verification.VERIFIED;
+                }
+                @Override public boolean repairUntil(long deadlineNanos) { return true; }
+                @Override public void restartVerification() { }
+                @Override public void close() { closes++; }
+            };
+        }
+    }
+
+    private static final class CloseTrackingReturnWorld implements TestWorldApply {
+        private int begins;
+        private int closes;
+
+        @Override public ApplySession begin(PreparedState target) {
+            boolean targetSession = ++begins == 1;
+            return new ApplySession() {
+                @Override public boolean applyUntil(long deadlineNanos) { return true; }
+                @Override public Verification verifyUntil(long deadlineNanos) {
+                    return targetSession ? Verification.MISMATCH : Verification.VERIFIED;
+                }
+                @Override public boolean repairUntil(long deadlineNanos) { return true; }
+                @Override public void restartVerification() { }
+                @Override public void close() { closes++; }
             };
         }
     }

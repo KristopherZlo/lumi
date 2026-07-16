@@ -37,7 +37,7 @@ public interface WorldStateApply {
         }
     }
 
-    interface ApplySession {
+    interface ApplySession extends AutoCloseable {
         boolean applyUntil(long deadlineNanos) throws IOException;
 
         Verification verifyUntil(long deadlineNanos) throws IOException;
@@ -45,6 +45,9 @@ public interface WorldStateApply {
         boolean repairUntil(long deadlineNanos) throws IOException;
 
         void restartVerification();
+
+        @Override
+        default void close() { }
     }
 
     enum Verification {

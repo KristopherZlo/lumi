@@ -10,9 +10,10 @@ import net.minecraft.server.level.ServerLevel;
 public final class MinecraftWorldStateApply implements WorldStateApply {
     private final MinecraftRestorePreparation preparation;
     private final PreparedWorldAccess world;
+    private final ServerLevel level;
 
     public MinecraftWorldStateApply(ServerLevel level, DimensionFreezeState freeze) {
-        Objects.requireNonNull(level, "level");
+        this.level = Objects.requireNonNull(level, "level");
         preparation = new MinecraftRestorePreparation(
                 new MinecraftBlockStateDecoder(
                         level.registryAccess().lookupOrThrow(Registries.BLOCK)),
@@ -30,6 +31,8 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         if (!(target instanceof PreparedMinecraftState minecraft)) {
             throw new IllegalArgumentException("Restore state was not prepared for Minecraft");
         }
-        return new PreparedWorldMutationSession(minecraft, world, System::nanoTime);
+        return new PreparedWorldMutationSession(
+                minecraft, world, System::nanoTime,
+                new ChunkLoadSession(new MinecraftChunkLoadAccess(level)));
     }
 }

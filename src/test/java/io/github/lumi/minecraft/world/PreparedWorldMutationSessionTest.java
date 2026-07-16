@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.UUID;
 import net.minecraft.SharedConstants;
@@ -96,6 +97,34 @@ class PreparedWorldMutationSessionTest {
                 session.verifyUntil(Long.MAX_VALUE));
     }
 
+    @Test
+    void loadsRequiredChunkBeforeTheFirstWorldMutation() throws Exception {
+        SectionKey key = new SectionKey(7, 0, -3);
+        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
+        DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
+                .decode(source);
+        PreparedMinecraftState target = new PreparedMinecraftState(
+                new WorldStateApply.State(Map.of(key, source), Map.of()),
+                Map.of(key, decoded), Map.of());
+        AtomicLong clock = new AtomicLong();
+        FakeWorld world = new FakeWorld(clock, source);
+        RecordingChunkAccess access = new RecordingChunkAccess();
+        ChunkLoadSession chunks = new ChunkLoadSession(access, clock::get);
+        PreparedWorldMutationSession session =
+                new PreparedWorldMutationSession(target, world, clock::get, chunks);
+
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(0, world.blockWrites);
+        assertEquals(List.of(new ChunkCoordinate(7, -3)), access.retained);
+
+        access.loaded.complete(null);
+        access.ready = true;
+        assertTrue(session.applyUntil(Long.MAX_VALUE));
+        session.close();
+        assertEquals(List.of(new ChunkCoordinate(7, -3)), access.released);
+    }
+
     private static final class FakeWorld implements PreparedWorldAccess {
         private final AtomicLong clock;
         private final SectionBlob captured;
@@ -140,5 +169,19 @@ class PreparedWorldMutationSessionTest {
         @Override public boolean matchesPlayerSpawns(Map<UUID, PlayerSpawn> spawns) {
             return playerSpawns.equals(spawns);
         }
+    }
+
+    private static final class RecordingChunkAccess implements ChunkLoadAccess {
+        private final CompletableFuture<Void> loaded = new CompletableFuture<>();
+        private final List<ChunkCoordinate> retained = new ArrayList<>();
+        private final List<ChunkCoordinate> released = new ArrayList<>();
+        private boolean ready;
+
+        @Override public CompletableFuture<Void> retain(ChunkCoordinate chunk) {
+            retained.add(chunk);
+            return loaded;
+        }
+        @Override public boolean isReady(ChunkCoordinate chunk) { return ready; }
+        @Override public void release(ChunkCoordinate chunk) { released.add(chunk); }
     }
 }

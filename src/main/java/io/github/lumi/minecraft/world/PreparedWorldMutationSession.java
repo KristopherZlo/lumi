@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.HistoryKey;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,23 +16,48 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private final PreparedMinecraftState target;
     private final PreparedWorldAccess world;
     private final LongSupplier nanoTime;
+    private final ChunkLoadSession chunks;
     private MutationCursor apply;
     private MutationCursor repair;
     private int sectionVerificationIndex;
     private int entityVerificationIndex;
     private boolean playerSpawnsVerified;
+    private boolean chunksRetained;
 
     public PreparedWorldMutationSession(
             PreparedMinecraftState target, PreparedWorldAccess world, LongSupplier nanoTime) {
+        this(target, world, nanoTime, null);
+    }
+
+    public PreparedWorldMutationSession(
+            PreparedMinecraftState target,
+            PreparedWorldAccess world,
+            LongSupplier nanoTime,
+            ChunkLoadSession chunks) {
         this.target = Objects.requireNonNull(target, "target");
         this.world = Objects.requireNonNull(world, "world");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
+        this.chunks = chunks;
         apply = new MutationCursor();
     }
 
     @Override
     public boolean applyUntil(long deadlineNanos) throws IOException {
+        if (chunks != null && !prepareChunksUntil(deadlineNanos)) {
+            return false;
+        }
         return apply.advance(deadlineNanos);
+    }
+
+    private boolean prepareChunksUntil(long deadlineNanos) throws IOException {
+        if (!chunksRetained) {
+            var keys = new ArrayList<HistoryKey>();
+            keys.addAll(target.source().sections().keySet());
+            keys.addAll(target.source().entities().keySet());
+            chunks.retain(keys);
+            chunksRetained = true;
+        }
+        return chunks.loadUntil(deadlineNanos);
     }
 
     @Override
@@ -79,6 +105,13 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         sectionVerificationIndex = 0;
         entityVerificationIndex = 0;
         playerSpawnsVerified = false;
+    }
+
+    @Override
+    public void close() {
+        if (chunks != null) {
+            chunks.close();
+        }
     }
 
     private final class MutationCursor {
