@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -95,6 +96,30 @@ class MutationDurabilityTrackerTest {
 
         assertTrue(tracker.canPublishChunk(7, 9));
         assertTrue(new WorkingIndexRepository(repositoryRoot).read().generations().isEmpty());
+    }
+
+    @Test
+    void previewsBlocksAndKeepsOnlyMutationsNewerThanTheCapturedGeneration()
+            throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        SectionKey key = new SectionKey(0, 0, 0);
+        BlockPosition saved = new BlockPosition(1, 2, 3);
+        BlockPosition newer = new BlockPosition(4, 5, 6);
+        long first = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBlockMutation(saved, first);
+        var captured = tracker.snapshot();
+        long second = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBlockMutation(newer, second);
+
+        tracker.clear(captured);
+
+        assertEquals(List.of(newer),
+                tracker.preview(ignored -> true, 16).blocks());
     }
 
     @Test

@@ -52,11 +52,12 @@ abstract class AxiomSetBufferMixin {
                 runtime.liveActions(), player.getUUID())) {
             UUID action = DirectLiveActionContext.current(runtime.liveActions()).orElseThrow();
             captureBefore(buffer, mask, runtime, action, before, sections);
-            registerDurability(level, runtime, sections);
+            Map<SectionKey, Long> generations =
+                    registerDurability(level, runtime, sections);
             try {
                 original.call(buffer, level, mask, player);
             } finally {
-                recordAfter(runtime, action, before);
+                recordAfter(runtime, action, before, generations);
             }
         }
     }
@@ -102,37 +103,49 @@ abstract class AxiomSetBufferMixin {
         });
     }
 
-    private static void registerDurability(
+    private static Map<SectionKey, Long> registerDurability(
             ServerLevel level,
             FabricDimensionRuntime runtime,
             Set<SectionKey> sections) {
+        Map<SectionKey, Long> generations = new LinkedHashMap<>();
         for (SectionKey key : sections) {
-            runtime.mutations().registerSectionMutation(key, () -> {
+            generations.put(key, runtime.mutations().registerSectionMutation(key, () -> {
                 try {
                     return LUMI_SECTIONS.capture(
                             level, level.getChunk(key.chunkX(), key.chunkZ()), key.sectionY());
                 } catch (IOException failed) {
                     throw new UncheckedIOException("Cannot capture Axiom section origin", failed);
                 }
-            });
+            }));
             runtime.blockEntityBaselines().discard(key);
         }
+        return generations;
     }
 
     private static void recordAfter(
             FabricDimensionRuntime runtime,
             UUID action,
-            Map<BlockPosition, BlockSnapshot> before) {
+            Map<BlockPosition, BlockSnapshot> before,
+            Map<SectionKey, Long> generations) {
         before.forEach((position, snapshot) -> {
             try {
                 BlockSnapshot after = runtime.liveWorld().read(position);
                 if (!snapshot.equals(after)) {
                     runtime.liveActions().record(action, position, snapshot, after);
                     runtime.recordCausalZoneGrowth(action, position);
+                    runtime.mutations().recordBlockMutation(
+                            position, generations.get(section(position)));
                 }
             } catch (IOException failed) {
                 throw new UncheckedIOException("Cannot capture Axiom block after mutation", failed);
             }
         });
+    }
+
+    private static SectionKey section(BlockPosition position) {
+        return new SectionKey(
+                Math.floorDiv(position.x(), 16),
+                Math.floorDiv(position.y(), 16),
+                Math.floorDiv(position.z(), 16));
     }
 }

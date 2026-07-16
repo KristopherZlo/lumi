@@ -13,8 +13,9 @@ import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/** Renders bounded pending section outlines while Alt is held in normal play. */
+/** Renders bounded changed-block outlines while Alt is held in normal play. */
 public final class LumiPendingChangeOverlay {
+    private static final VoxelShape BLOCK = Shapes.block();
     private static final VoxelShape SECTION = Shapes.box(0, 0, 0, 16, 16, 16);
     private static final double MAX_DISTANCE_SQUARED = 256.0 * 256.0;
     private final ClientHistoryStore history;
@@ -47,7 +48,7 @@ public final class LumiPendingChangeOverlay {
         var comparison = comparisons.result()
                 .filter(result -> result.error().isEmpty()).orElse(null);
         boolean showPending = snapshot != null && client.screen == null
-                && altDown(client) && !snapshot.pendingSections().isEmpty();
+                && altDown(client) && !snapshot.pendingBlocks().isEmpty();
         if (client.player == null || (!showPending
                 && (comparison == null || comparison.sectionPreview().isEmpty()))) {
             return;
@@ -55,10 +56,10 @@ public final class LumiPendingChangeOverlay {
         var camera = context.worldState().cameraRenderState.pos;
         var lines = context.consumers().getBuffer(RenderTypes.linesTranslucent());
         if (showPending) {
-            for (var section : snapshot.pendingSections()) {
-                renderSection(
+            for (var block : snapshot.pendingBlocks()) {
+                renderBlock(
                         context, lines, camera,
-                        section.chunkX(), section.sectionY(), section.chunkZ(),
+                        block.x(), block.y(), block.z(),
                         0xffffd166);
             }
         }
@@ -70,6 +71,27 @@ public final class LumiPendingChangeOverlay {
                         0xff68c7ff);
             }
         }
+    }
+
+    private static void renderBlock(
+            WorldRenderContext context,
+            com.mojang.blaze3d.vertex.VertexConsumer lines,
+            net.minecraft.world.phys.Vec3 camera,
+            int x,
+            int y,
+            int z,
+            int color) {
+        double centerX = x + 0.5 - camera.x;
+        double centerY = y + 0.5 - camera.y;
+        double centerZ = z + 0.5 - camera.z;
+        if (centerX * centerX + centerY * centerY + centerZ * centerZ
+                > MAX_DISTANCE_SQUARED) {
+            return;
+        }
+        ShapeRenderer.renderShape(
+                context.matrices(), lines, BLOCK,
+                x - camera.x, y - camera.y, z - camera.z,
+                color, 1.0F);
     }
 
     private static void renderSection(

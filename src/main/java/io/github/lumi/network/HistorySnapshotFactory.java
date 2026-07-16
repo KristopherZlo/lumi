@@ -57,9 +57,9 @@ final class HistorySnapshotFactory {
         return new HistorySnapshotPayload(
                 runtime.level().dimension().identifier().toString(),
                 head.commit(), head.revision(), pending.totalKeys(),
-                pending.sections().stream()
-                        .map(section -> new HistorySnapshotPayload.PendingSection(
-                                section.chunkX(), section.sectionY(), section.chunkZ()))
+                pending.blocks().stream()
+                        .map(block -> new HistorySnapshotPayload.PendingBlock(
+                                block.x(), block.y(), block.z()))
                         .toList(),
                 runtime.operations().hasActiveOperation(),
                 runtime.recoveryJournal().isPresent(),

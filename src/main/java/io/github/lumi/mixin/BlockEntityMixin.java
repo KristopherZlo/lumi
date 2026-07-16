@@ -1,6 +1,7 @@
 package io.github.lumi.mixin;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -32,7 +33,7 @@ abstract class BlockEntityMixin {
                 return;
             }
             LevelChunk chunk = level.getChunkAt(blockEntity.getBlockPos());
-            runtime.mutations().registerSectionMutation(key, () -> {
+            long generation = runtime.mutations().registerSectionMutation(key, () -> {
                 try {
                     var current = LUMI_SECTION_CAPTURE.capture(level, chunk, key.sectionY());
                     return runtime.blockEntityBaselines().takeOrigin(key, current)
@@ -42,6 +43,10 @@ abstract class BlockEntityMixin {
                     throw new UncheckedIOException("Cannot capture Lumi block-entity mutation", failed);
                 }
             });
+            var position = blockEntity.getBlockPos();
+            runtime.mutations().recordBlockMutation(
+                    new BlockPosition(position.getX(), position.getY(), position.getZ()),
+                    generation);
         });
     }
 }

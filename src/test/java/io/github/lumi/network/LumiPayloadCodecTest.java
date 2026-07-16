@@ -189,8 +189,8 @@ class LumiPayloadCodecTest {
         HistorySnapshotPayload snapshot = new HistorySnapshotPayload(
                 "minecraft:overworld", id('a'), 7, 3,
                 java.util.List.of(
-                        new HistorySnapshotPayload.PendingSection(1, 2, 3),
-                        new HistorySnapshotPayload.PendingSection(-4, -5, -6)),
+                        new HistorySnapshotPayload.PendingBlock(1, 2, 3),
+                        new HistorySnapshotPayload.PendingBlock(-4, -5, -6)),
                 true, true,
                 new UUID(0, 7), "Redstone lab", "workspace/lab/main",
                 java.util.List.of(

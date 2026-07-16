@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionBlob;
@@ -17,6 +18,8 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -28,6 +31,7 @@ import java.util.logging.Logger;
 
 /** Coalesces dirty persistence and gates vanilla chunk publication until it is durable. */
 public final class MutationDurabilityTracker implements CapturedGenerationCompletion {
+    private static final int MAX_PENDING_BLOCKS = 16_384;
     private static final Logger LOGGER = Logger.getLogger(MutationDurabilityTracker.class.getName());
 
     private final WorldObjectRepository objects;
@@ -40,6 +44,8 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private final Map<HistoryKey, Long> durableGenerations;
     private final Map<HistoryKey, Long> committedGenerations = new HashMap<>();
     private final Map<HistoryKey, Long> publicationRequirements = new HashMap<>();
+    private final LinkedHashMap<BlockPosition, PendingBlock> pendingBlocks =
+            new LinkedHashMap<>();
     private final Map<ChunkCoordinate, Integer> blockedChunks = new HashMap<>();
     private final Set<HistoryKey> pendingOrigins = new HashSet<>();
     private final ArrayDeque<PendingOriginWrite> originWrites = new ArrayDeque<>();
@@ -172,8 +178,40 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     }
 
     public synchronized WorkingIndexPreview preview(
-            Predicate<HistoryKey> scope, int maximumSections) {
-        return working.preview(scope, maximumSections);
+            Predicate<HistoryKey> scope, int maximumBlocks) {
+        if (maximumBlocks < 0) {
+            throw new IllegalArgumentException("maximumBlocks must be non-negative");
+        }
+        WorkingIndexPreview keys = working.preview(scope, 0);
+        var blocks = new java.util.ArrayList<BlockPosition>(
+                Math.min(maximumBlocks, pendingBlocks.size()));
+        var entries = List.copyOf(pendingBlocks.values());
+        for (int index = entries.size() - 1;
+                index >= 0 && blocks.size() < maximumBlocks; index--) {
+            PendingBlock pending = entries.get(index);
+            Long generation = working.generation(pending.section());
+            if (generation != null && generation >= pending.generation()
+                    && scope.test(pending.section())) {
+                blocks.add(pending.position());
+            }
+        }
+        return new WorkingIndexPreview(keys.totalKeys(), List.of(), blocks);
+    }
+
+    public synchronized void recordBlockMutation(
+            BlockPosition position, long generation) {
+        Objects.requireNonNull(position, "position");
+        SectionKey section = section(position);
+        Long current = working.generation(section);
+        if (generation < 1 || current == null || generation > current) {
+            throw new IllegalArgumentException(
+                    "Pending block generation is outside its dirty section");
+        }
+        pendingBlocks.remove(position);
+        pendingBlocks.put(position, new PendingBlock(position, section, generation));
+        while (pendingBlocks.size() > MAX_PENDING_BLOCKS) {
+            pendingBlocks.remove(pendingBlocks.keySet().iterator().next());
+        }
     }
 
     public synchronized boolean isDurable(WorkingIndexSnapshot captured) {
@@ -202,6 +240,10 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                     committedGenerations.put(key, generation);
                     releaseSatisfied(key);
                 }
+            });
+            pendingBlocks.entrySet().removeIf(entry -> {
+                Long generation = captured.generations().get(entry.getValue().section());
+                return generation != null && entry.getValue().generation() <= generation;
             });
             indexRevision++;
             scheduleIndex = !indexWriterScheduled;
@@ -346,6 +388,13 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 : new ChunkCoordinate(((EntityChunkKey) key).chunkX(), ((EntityChunkKey) key).chunkZ());
     }
 
+    private static SectionKey section(BlockPosition position) {
+        return new SectionKey(
+                Math.floorDiv(position.x(), 16),
+                Math.floorDiv(position.y(), 16),
+                Math.floorDiv(position.z(), 16));
+    }
+
     @FunctionalInterface
     private interface OriginWriter<T> {
         ObjectId write(T origin) throws IOException;
@@ -357,6 +406,9 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     }
 
     private record PendingOriginWrite(HistoryKey key, OriginPersistence persistence) { }
+
+    private record PendingBlock(
+            BlockPosition position, SectionKey section, long generation) { }
 
     private record ChunkCoordinate(int x, int z) { }
 }

@@ -18,7 +18,7 @@ public record HistorySnapshotPayload(
         CommitId head,
         long revision,
         int pendingKeys,
-        List<PendingSection> pendingSections,
+        List<PendingBlock> pendingBlocks,
         boolean operationActive,
         boolean recoveryPending,
         UUID workspaceId,
@@ -32,7 +32,7 @@ public record HistorySnapshotPayload(
     private static final int MAX_DIMENSION_BYTES = 256;
     private static final int MAX_TEXT_BYTES = 4096;
     private static final int MAX_VERSIONS = 32;
-    private static final int MAX_PENDING_SECTIONS = 512;
+    private static final int MAX_PENDING_BLOCKS = 512;
     private static final int MAX_WORKSPACES = 64;
     private static final int MAX_ZONES = 64;
     private static final int MAX_ZONE_VERSIONS = 8;
@@ -45,8 +45,8 @@ public record HistorySnapshotPayload(
     public HistorySnapshotPayload {
         Objects.requireNonNull(dimensionId, "dimensionId");
         Objects.requireNonNull(head, "head");
-        pendingSections = List.copyOf(
-                Objects.requireNonNull(pendingSections, "pendingSections"));
+        pendingBlocks = List.copyOf(
+                Objects.requireNonNull(pendingBlocks, "pendingBlocks"));
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(workspaceName, "workspaceName");
         Objects.requireNonNull(branchName, "branchName");
@@ -60,8 +60,7 @@ public record HistorySnapshotPayload(
             throw new IllegalArgumentException("Invalid dimension ID");
         }
         if (revision < 0 || pendingKeys < 0
-                || pendingSections.size() > MAX_PENDING_SECTIONS
-                || pendingSections.size() > pendingKeys) {
+                || pendingBlocks.size() > MAX_PENDING_BLOCKS) {
             throw new IllegalArgumentException("Snapshot counters cannot be negative");
         }
         if (workspaceName.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
@@ -165,8 +164,8 @@ public record HistorySnapshotPayload(
         buffer.writeUtf(head.hex(), ObjectId.HEX_LENGTH);
         buffer.writeVarLong(revision);
         buffer.writeVarInt(pendingKeys);
-        buffer.writeVarInt(pendingSections.size());
-        pendingSections.forEach(section -> section.write(buffer));
+        buffer.writeVarInt(pendingBlocks.size());
+        pendingBlocks.forEach(block -> block.write(buffer));
         buffer.writeBoolean(operationActive);
         buffer.writeBoolean(recoveryPending);
         buffer.writeUUID(workspaceId);
@@ -189,14 +188,14 @@ public record HistorySnapshotPayload(
         CommitId head = new CommitId(new ObjectId(buffer.readUtf(ObjectId.HEX_LENGTH)));
         long revision = buffer.readVarLong();
         int pending = buffer.readVarInt();
-        int pendingSectionCount = buffer.readVarInt();
-        if (pendingSectionCount < 0 || pendingSectionCount > MAX_PENDING_SECTIONS) {
-            throw new IllegalArgumentException("Invalid pending section count");
+        int pendingBlockCount = buffer.readVarInt();
+        if (pendingBlockCount < 0 || pendingBlockCount > MAX_PENDING_BLOCKS) {
+            throw new IllegalArgumentException("Invalid pending block count");
         }
-        java.util.ArrayList<PendingSection> pendingSections =
-                new java.util.ArrayList<>(pendingSectionCount);
-        for (int index = 0; index < pendingSectionCount; index++) {
-            pendingSections.add(PendingSection.read(buffer));
+        java.util.ArrayList<PendingBlock> pendingBlocks =
+                new java.util.ArrayList<>(pendingBlockCount);
+        for (int index = 0; index < pendingBlockCount; index++) {
+            pendingBlocks.add(PendingBlock.read(buffer));
         }
         boolean active = buffer.readBoolean();
         boolean recovery = buffer.readBoolean();
@@ -245,22 +244,22 @@ public record HistorySnapshotPayload(
             deleted.add(Version.read(buffer));
         }
         return new HistorySnapshotPayload(
-                dimension, head, revision, pending, pendingSections, active, recovery,
+                dimension, head, revision, pending, pendingBlocks, active, recovery,
                 workspace, workspaceName, branch, workspaces,
                 versions, branches, zones, deleted);
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
 
-    public record PendingSection(int chunkX, int sectionY, int chunkZ) {
+    public record PendingBlock(int x, int y, int z) {
         private void write(FriendlyByteBuf buffer) {
-            buffer.writeInt(chunkX);
-            buffer.writeInt(sectionY);
-            buffer.writeInt(chunkZ);
+            buffer.writeInt(x);
+            buffer.writeInt(y);
+            buffer.writeInt(z);
         }
 
-        private static PendingSection read(FriendlyByteBuf buffer) {
-            return new PendingSection(
+        private static PendingBlock read(FriendlyByteBuf buffer) {
+            return new PendingBlock(
                     buffer.readInt(), buffer.readInt(), buffer.readInt());
         }
     }

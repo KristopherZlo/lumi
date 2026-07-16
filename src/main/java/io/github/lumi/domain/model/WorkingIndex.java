@@ -31,6 +31,10 @@ public final class WorkingIndex {
         return new WorkingIndexSnapshot(generations);
     }
 
+    public synchronized Long generation(HistoryKey key) {
+        return generations.get(Objects.requireNonNull(key, "key"));
+    }
+
     public synchronized WorkingIndexPreview preview(
             Predicate<HistoryKey> scope, int maximumSections) {
         Objects.requireNonNull(scope, "scope");

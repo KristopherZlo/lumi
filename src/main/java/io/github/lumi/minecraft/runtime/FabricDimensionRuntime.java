@@ -96,6 +96,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -700,13 +701,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private void publishLiveAction(LiveActionJournal.Plan plan) {
-        plan.expected().keySet().stream()
-                .map(position -> new SectionKey(
-                        Math.floorDiv(position.x(), 16),
-                        Math.floorDiv(position.y(), 16),
-                        Math.floorDiv(position.z(), 16)))
-                .distinct()
-                .forEach(mutations::markTrackedSection);
+        Map<SectionKey, Long> generations = new HashMap<>();
+        plan.expected().keySet().forEach(position -> {
+            SectionKey section = new SectionKey(
+                    Math.floorDiv(position.x(), 16),
+                    Math.floorDiv(position.y(), 16),
+                    Math.floorDiv(position.z(), 16));
+            long generation = generations.computeIfAbsent(
+                    section, mutations::markTrackedSection);
+            mutations.recordBlockMutation(position, generation);
+        });
         Stream.concat(
                         plan.expectedEntities().values().stream(),
                         plan.replacementEntities().values().stream())
