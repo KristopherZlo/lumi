@@ -241,7 +241,7 @@ public final class LumiCommands {
             return 0;
         }
         try {
-            runtime.startBranchSwitch(new BranchName(name));
+            runtime.startBranchSwitch(runtime.visibleBranchName(new BranchName(name)));
             source.sendSuccess(() -> Component.literal("Lumi branch switch started: " + name), false);
             return 1;
         } catch (IOException | IllegalStateException | IllegalArgumentException failed) {

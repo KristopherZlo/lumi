@@ -137,6 +137,22 @@ public final class WorkspaceService {
                 + "/main");
     }
 
+    public static BranchName branchName(UUID workspaceId, BranchName visibleName) {
+        return new BranchName("workspace/" + Objects.requireNonNull(workspaceId, "workspaceId")
+                + "/" + Objects.requireNonNull(visibleName, "visibleName").value());
+    }
+
+    public static BranchName visibleBranchName(
+            UUID workspaceId,
+            UUID defaultWorkspaceId,
+            BranchName visibleName) {
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        Objects.requireNonNull(defaultWorkspaceId, "defaultWorkspaceId");
+        Objects.requireNonNull(visibleName, "visibleName");
+        return workspaceId.equals(defaultWorkspaceId) && visibleName.value().equals("main")
+                ? visibleName : branchName(workspaceId, visibleName);
+    }
+
     private BranchRef createInitialCommit(
             Workspace workspace,
             BranchRef from,

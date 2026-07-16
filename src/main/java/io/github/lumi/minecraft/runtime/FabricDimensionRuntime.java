@@ -560,7 +560,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private BackgroundPreparedMutation<RestoreOperation> createBranchSwitch(
             BranchName target) throws IOException {
-        BranchSwitchPlan plan = branches.prepareSwitch(target);
+        BranchSwitchPlan plan = branches.prepareSwitch(target, activeWorkspaceId());
         UUID operationId = UUID.randomUUID();
         CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
             try {
@@ -621,7 +621,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public BranchRef createBranch(BranchName name) throws IOException {
         requireNoRecovery();
-        return branches.create(name, activeRef().commit());
+        return branches.create(
+                WorkspaceService.branchName(activeWorkspaceId(), name),
+                activeRef().commit());
+    }
+
+    public BranchName visibleBranchName(BranchName name) throws IOException {
+        return WorkspaceService.visibleBranchName(
+                activeWorkspaceId(), defaultWorkspaceId, name);
     }
 
     public WorkspaceService.Creation createWorkspace(

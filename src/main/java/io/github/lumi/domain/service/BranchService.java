@@ -12,6 +12,7 @@ import io.github.lumi.storage.repository.WorkingIndexRepository;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 /** Branch rules over immutable commits; branches never copy world payloads. */
 public final class BranchService {
@@ -67,6 +68,15 @@ public final class BranchService {
         commits.read(sourceRef.commit());
         commits.read(targetRef.commit());
         return new BranchSwitchPlan(expectedActive, sourceRef, targetRef);
+    }
+
+    public BranchSwitchPlan prepareSwitch(BranchName target, UUID workspaceId) throws IOException {
+        BranchSwitchPlan plan = prepareSwitch(target);
+        if (!commits.read(plan.target().commit()).workspaceId().equals(
+                Objects.requireNonNull(workspaceId, "workspaceId"))) {
+            throw new IOException("Target branch belongs to another workspace");
+        }
+        return plan;
     }
 
     public void completeSwitch(BranchSwitchPlan plan) throws IOException {

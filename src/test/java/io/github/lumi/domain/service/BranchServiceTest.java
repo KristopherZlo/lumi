@@ -4,7 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.Commit;
+import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
@@ -15,8 +19,10 @@ import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,10 +36,12 @@ class BranchServiceTest {
         BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
         ActiveBranchRepository active = new ActiveBranchRepository(repositoryRoot);
         WorkingIndexRepository working = new WorkingIndexRepository(repositoryRoot);
+        UUID mainWorkspace =
+                UUID.fromString("10000000-0000-0000-0000-000000000001");
         var main = new DimensionHistoryInitializer(
                 new WorldObjectRepository(repositoryRoot), commits, refs,
                 active)
-                .initialize(UUID.fromString("10000000-0000-0000-0000-000000000001"));
+                .initialize(mainWorkspace);
         BranchService branches = new BranchService(commits, refs, active, working);
 
         var created = branches.create(new BranchName("redstone-test"), main.commit());
@@ -55,6 +63,18 @@ class BranchServiceTest {
         branches.validateSwitch(switchPlan);
         branches.completeSwitch(switchPlan);
         assertEquals(created, branches.active());
+
+        var source = commits.read(main.commit());
+        UUID foreignWorkspace = new UUID(0, 9);
+        CommitId foreignCommit = commits.write(new Commit(
+                source.tree(), List.of(main.commit()),
+                new CommitAuthor(new UUID(0, 8), "Builder"), "Other workspace",
+                Instant.EPOCH, foreignWorkspace, Optional.empty(),
+                CommitKind.MANUAL, new CommitStatistics(0, 0, 0, 0)));
+        var foreign = refs.create(new BranchName("workspace/other/main"), foreignCommit);
+
+        assertThrows(IOException.class,
+                () -> branches.prepareSwitch(foreign.name(), mainWorkspace));
     }
 
     @Test
