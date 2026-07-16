@@ -58,6 +58,11 @@ class LumiPayloadCodecTest {
                 id('2').hex(), id('1'), 42);
         assertEquals(deleteVersion,
                 roundTrip(HistoryCommandPayload.CODEC, deleteVersion));
+        HistoryCommandPayload cleanupVersion = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.CLEANUP_VERSION,
+                id('2').hex(), id('1'), 42);
+        assertEquals(cleanupVersion,
+                roundTrip(HistoryCommandPayload.CODEC, cleanupVersion));
         OperationCancelPayload cancel = new OperationCancelPayload(
                 UUID.randomUUID(), UUID.randomUUID());
         assertEquals(cancel, roundTrip(OperationCancelPayload.CODEC, cancel));
@@ -138,7 +143,10 @@ class LumiPayloadCodecTest {
                         new UUID(0, 8), "Clock", 0xff336699, 4, 2, true,
                         java.util.List.of(new HistorySnapshotPayload.Version(
                                 id('b'), "Clock v1", "Builder", 1235,
-                                CommitKind.ZONE)))));
+                                CommitKind.ZONE)))),
+                java.util.List.of(new HistorySnapshotPayload.Version(
+                        id('c'), "Old clock", "Builder", 1200,
+                        CommitKind.MANUAL)));
         OperationEventPayload event = new OperationEventPayload(
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 "minecraft:overworld", OperationEventPayload.State.ACCEPTED,

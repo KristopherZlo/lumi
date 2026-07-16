@@ -38,7 +38,8 @@ public final class ClientHistoryStore {
                                 || value.state() == OperationEventPayload.State.PROGRESS),
                 snapshot.recoveryPending(),
                 snapshot.workspaceId(), snapshot.workspaceName(), snapshot.branchName(),
-                snapshot.versions(), snapshot.branches(), snapshot.zones());
+                snapshot.versions(), snapshot.branches(), snapshot.zones(),
+                snapshot.deletedVersions());
     }
 
     public synchronized ClientHistoryState state() {

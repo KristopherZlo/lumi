@@ -785,6 +785,22 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 .softDelete(target, activeWorkspaceId(), author, Instant.now());
     }
 
+    public List<io.github.lumi.domain.model.HistoryEntry> deletedVersions(int limit)
+            throws IOException {
+        return new TombstoneService(
+                new CommitRepository(repository), refs,
+                new TombstoneRepository(repository))
+                .deleted(activeWorkspaceId(), limit);
+    }
+
+    public void cleanupTombstone(CommitId target) throws IOException {
+        requireHistoryMetadataMutable();
+        new TombstoneService(
+                new CommitRepository(repository), refs,
+                new TombstoneRepository(repository))
+                .cleanup(target, activeWorkspaceId());
+    }
+
     public List<BranchRef> visibleBranches() throws IOException {
         UUID workspace = activeWorkspaceId();
         CommitRepository commits = new CommitRepository(repository);
@@ -888,7 +904,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private void requireHistoryMetadataMutable() {
         requireNoRecovery();
-        if (operations.hasActiveOperation()) {
+        if (operations.hasActiveOperation() || operations.queuedCount() > 0) {
             throw new IllegalStateException("History metadata cannot change during an operation");
         }
     }

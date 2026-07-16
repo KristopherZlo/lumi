@@ -107,6 +107,15 @@ public final class LumiServerNetworking {
                 sendSnapshot(player, runtime);
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.CLEANUP_VERSION) {
+                runtime.cleanupTombstone(
+                        new CommitId(new ObjectId(payload.argument())));
+                sendEvent(player, payload, runtime,
+                        OperationEventPayload.State.SUCCEEDED,
+                        "Deleted version released for cleanup");
+                sendSnapshot(player, runtime);
+                return;
+            }
             if (isZoneMetadata(payload.kind())) {
                 updateZoneMetadata(player, runtime, payload);
                 return;
@@ -336,6 +345,8 @@ public final class LumiServerNetworking {
                     "Zone metadata does not use the mutation queue");
             case DELETE_VERSION -> throw new IllegalStateException(
                     "Version deletion does not use the mutation queue");
+            case CLEANUP_VERSION -> throw new IllegalStateException(
+                    "Version cleanup does not use the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
@@ -561,13 +572,20 @@ public final class LumiServerNetworking {
                                             entry.commit().kind()))
                                     .toList()))
                     .toList();
+            var deleted = runtime.deletedVersions(64).stream()
+                    .map(entry -> new HistorySnapshotPayload.Version(
+                            entry.id(), entry.commit().message(),
+                            entry.commit().author().name(),
+                            entry.commit().timestamp().toEpochMilli(),
+                            entry.commit().kind()))
+                    .toList();
             send(player, new HistorySnapshotPayload(
                     dimension(runtime), head.commit(), head.revision(),
                     runtime.mutations().snapshot().generations().size(),
                     runtime.operations().hasActiveOperation(),
                     runtime.recoveryJournal().isPresent(),
                     workspace.id(), workspace.name(), head.name().value(),
-                    versions, branchViews, zoneViews));
+                    versions, branchViews, zoneViews, deleted));
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi history snapshot", failed);
         }

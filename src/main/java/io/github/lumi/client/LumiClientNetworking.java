@@ -141,6 +141,11 @@ public final class LumiClientNetworking {
                 Objects.requireNonNull(target, "target").hex());
     }
 
+    public UUID cleanupVersion(CommitId target) {
+        return send(HistoryCommandPayload.Kind.CLEANUP_VERSION,
+                Objects.requireNonNull(target, "target").hex());
+    }
+
     public UUID merge(String sourceBranch) {
         String source = Objects.requireNonNull(sourceBranch, "sourceBranch");
         int slash = source.lastIndexOf('/');

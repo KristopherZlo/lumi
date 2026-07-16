@@ -51,10 +51,34 @@ class TombstoneServiceTest {
         assertEquals(parent, refs.read(new BranchName("idea")).orElseThrow().commit());
         assertTrue(refs.read(auto).isEmpty());
         assertTrue(tombstones.contains(deleted));
+        assertEquals(List.of(deleted), service.deleted(workspace, 10).stream()
+                .map(io.github.lumi.domain.model.HistoryEntry::id).toList());
 
-        service.cleanup(deleted);
+        service.cleanup(deleted, workspace);
 
         assertEquals(false, tombstones.contains(deleted));
+    }
+
+    @Test
+    void refusesCleanupWhileAVisibleDescendantStillRequiresTheCommit() throws Exception {
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        TombstoneRepository tombstones = new TombstoneRepository(repositoryRoot);
+        UUID workspace = new UUID(0, 2);
+        var tree = new WorldObjectRepository(repositoryRoot)
+                .write(new DimensionTree(Map.of()));
+        CommitId root = commits.write(commit(tree, List.of(), workspace, "Root"));
+        CommitId deleted = commits.write(commit(tree, List.of(root), workspace, "Deleted"));
+        CommitId child = commits.write(commit(tree, List.of(deleted), workspace, "Child"));
+        refs.create(new BranchName("main"), child);
+        TombstoneService service = new TombstoneService(commits, refs, tombstones);
+        service.softDelete(
+                deleted, workspace, new CommitAuthor(new UUID(0, 7), "Builder"),
+                Instant.EPOCH);
+
+        assertThrows(IllegalStateException.class,
+                () -> service.cleanup(deleted, workspace));
+        assertTrue(tombstones.contains(deleted));
     }
 
     @Test

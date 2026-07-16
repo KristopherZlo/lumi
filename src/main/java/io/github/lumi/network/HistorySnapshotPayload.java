@@ -25,12 +25,14 @@ public record HistorySnapshotPayload(
         String branchName,
         List<Version> versions,
         List<Branch> branches,
-        List<ZoneView> zones) implements CustomPacketPayload {
+        List<ZoneView> zones,
+        List<Version> deletedVersions) implements CustomPacketPayload {
     private static final int MAX_DIMENSION_BYTES = 256;
     private static final int MAX_TEXT_BYTES = 4096;
     private static final int MAX_VERSIONS = 32;
     private static final int MAX_ZONES = 64;
     private static final int MAX_ZONE_VERSIONS = 8;
+    private static final int MAX_DELETED_VERSIONS = 64;
     public static final Type<HistorySnapshotPayload> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "history_snapshot"));
     public static final StreamCodec<FriendlyByteBuf, HistorySnapshotPayload> CODEC =
@@ -45,6 +47,8 @@ public record HistorySnapshotPayload(
         versions = List.copyOf(Objects.requireNonNull(versions, "versions"));
         branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
         zones = List.copyOf(Objects.requireNonNull(zones, "zones"));
+        deletedVersions = List.copyOf(
+                Objects.requireNonNull(deletedVersions, "deletedVersions"));
         if (dimensionId.isBlank() || dimensionId.length() > MAX_DIMENSION_BYTES) {
             throw new IllegalArgumentException("Invalid dimension ID");
         }
@@ -55,9 +59,28 @@ public record HistorySnapshotPayload(
                 > MAX_TEXT_BYTES || branchName.isBlank()
                 || branchName.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
                 > MAX_TEXT_BYTES || versions.size() > MAX_VERSIONS
-                || branches.size() > 64 || zones.size() > MAX_ZONES) {
+                || branches.size() > 64 || zones.size() > MAX_ZONES
+                || deletedVersions.size() > MAX_DELETED_VERSIONS) {
             throw new IllegalArgumentException("Invalid workspace history snapshot");
         }
+    }
+
+    public HistorySnapshotPayload(
+            String dimensionId,
+            CommitId head,
+            long revision,
+            int pendingKeys,
+            boolean operationActive,
+            boolean recoveryPending,
+            UUID workspaceId,
+            String workspaceName,
+            String branchName,
+            List<Version> versions,
+            List<Branch> branches,
+            List<ZoneView> zones) {
+        this(dimensionId, head, revision, pendingKeys, operationActive,
+                recoveryPending, workspaceId, workspaceName, branchName,
+                versions, branches, zones, List.of());
     }
 
     public HistorySnapshotPayload(
@@ -74,7 +97,7 @@ public record HistorySnapshotPayload(
             List<Branch> branches) {
         this(dimensionId, head, revision, pendingKeys, operationActive,
                 recoveryPending, workspaceId, workspaceName, branchName,
-                versions, branches, List.of());
+                versions, branches, List.of(), List.of());
     }
 
     public HistorySnapshotPayload(
@@ -84,7 +107,8 @@ public record HistorySnapshotPayload(
             int pendingKeys,
             boolean operationActive) {
         this(dimensionId, head, revision, pendingKeys, operationActive,
-                false, new UUID(0, 0), "", "unknown", List.of(), List.of(), List.of());
+                false, new UUID(0, 0), "", "unknown",
+                List.of(), List.of(), List.of(), List.of());
     }
 
     private void write(FriendlyByteBuf buffer) {
@@ -103,6 +127,8 @@ public record HistorySnapshotPayload(
         branches.forEach(branch -> branch.write(buffer));
         buffer.writeVarInt(zones.size());
         zones.forEach(zone -> zone.write(buffer));
+        buffer.writeVarInt(deletedVersions.size());
+        deletedVersions.forEach(version -> version.write(buffer));
     }
 
     private static HistorySnapshotPayload read(FriendlyByteBuf buffer) {
@@ -139,9 +165,17 @@ public record HistorySnapshotPayload(
         for (int index = 0; index < zoneCount; index++) {
             zones.add(ZoneView.read(buffer));
         }
+        int deletedCount = buffer.readVarInt();
+        if (deletedCount < 0 || deletedCount > MAX_DELETED_VERSIONS) {
+            throw new IllegalArgumentException("Invalid deleted version count");
+        }
+        java.util.ArrayList<Version> deleted = new java.util.ArrayList<>(deletedCount);
+        for (int index = 0; index < deletedCount; index++) {
+            deleted.add(Version.read(buffer));
+        }
         return new HistorySnapshotPayload(
                 dimension, head, revision, pending, active, recovery,
-                workspace, workspaceName, branch, versions, branches, zones);
+                workspace, workspaceName, branch, versions, branches, zones, deleted);
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
