@@ -17,6 +17,7 @@ public final class LumiDashboardScreen extends Screen {
     private final Runnable openSave;
     private final Runnable openBranch;
     private final Runnable openMerge;
+    private final Runnable openWorkspaces;
     private final Runnable openZones;
     private final Runnable openDeleted;
     private final Runnable openPackages;
@@ -37,6 +38,7 @@ public final class LumiDashboardScreen extends Screen {
             Runnable openSave,
             Runnable openBranch,
             Runnable openMerge,
+            Runnable openWorkspaces,
             Runnable openZones,
             Runnable openDeleted,
             Runnable openPackages,
@@ -51,6 +53,7 @@ public final class LumiDashboardScreen extends Screen {
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openBranch = Objects.requireNonNull(openBranch, "openBranch");
         this.openMerge = Objects.requireNonNull(openMerge, "openMerge");
+        this.openWorkspaces = Objects.requireNonNull(openWorkspaces, "openWorkspaces");
         this.openZones = Objects.requireNonNull(openZones, "openZones");
         this.openDeleted = Objects.requireNonNull(openDeleted, "openDeleted");
         this.openPackages = Objects.requireNonNull(openPackages, "openPackages");
@@ -94,6 +97,10 @@ public final class LumiDashboardScreen extends Screen {
                 Component.translatable("luma.more.deleted_saves_title"),
                 ignored -> openDeleted.run())
                 .bounds(panelX + panelWidth - 184, panelY + 14, 88, 20).build());
+        addRenderableWidget(Button.builder(
+                Component.translatable("luma.action.workspaces"),
+                ignored -> openWorkspaces.run())
+                .bounds(panelX + panelWidth - 376, panelY + 14, 88, 20).build());
         addRenderableWidget(Button.builder(
                 Component.translatable("luma.simple.share_button"),
                 ignored -> openPackages.run())

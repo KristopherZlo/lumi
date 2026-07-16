@@ -22,6 +22,7 @@ import io.github.lumi.client.ui.LumiPackageScreen;
 import io.github.lumi.client.ui.LumiSpecialThanksScreen;
 import io.github.lumi.client.ui.LumiHotkeyScreen;
 import io.github.lumi.client.ui.LumiZonesScreen;
+import io.github.lumi.client.ui.LumiWorkspacesScreen;
 import io.github.lumi.client.ui.LumiZoneDetailsScreen;
 import io.github.lumi.client.ui.LumiZoneRestoreScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
@@ -31,6 +32,7 @@ import io.github.lumi.client.ui.SaveScreenController;
 import io.github.lumi.client.ui.PackageScreenController;
 import io.github.lumi.client.ui.ZoneScreenController;
 import io.github.lumi.client.ui.ZoneDetailsController;
+import io.github.lumi.client.ui.WorkspaceScreenController;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.telemetry.TelemetryService;
@@ -81,6 +83,7 @@ public final class LumiClient implements ClientModInitializer {
                                             client.screen, snapshot.branchName(),
                                             snapshot.branches(), NETWORKING::merge));
                                 },
+                                () -> openWorkspaces(client.screen),
                                 () -> openZones(client.screen),
                                 () -> client.setScreen(new LumiDeletedVersionsScreen(
                                         client.screen, HISTORY, NETWORKING::cleanupVersion)),
@@ -170,6 +173,14 @@ public final class LumiClient implements ClientModInitializer {
                 new ZoneScreenController(NETWORKING::createZone),
                 zone -> openZoneDetails(client.screen, zone),
                 NETWORKING::enterZone, NETWORKING::leaveZone));
+    }
+
+    private static void openWorkspaces(Screen parent) {
+        Minecraft client = Minecraft.getInstance();
+        client.setScreen(new LumiWorkspacesScreen(
+                parent, HISTORY, SELECTION::bounds,
+                new WorkspaceScreenController(NETWORKING::createWorkspace),
+                NETWORKING::switchWorkspace));
     }
 
     private static void openMore(Screen parent) {
