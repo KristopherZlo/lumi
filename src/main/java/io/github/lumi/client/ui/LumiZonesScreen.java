@@ -25,6 +25,7 @@ public final class LumiZonesScreen extends Screen {
     private final ClientHistoryStore history;
     private final Supplier<Optional<BlockBox>> selection;
     private final ZoneScreenController controller;
+    private final Consumer<HistorySnapshotPayload.ZoneView> openDetails;
     private final Consumer<UUID> enter;
     private final Consumer<UUID> leave;
     private HistorySnapshotPayload snapshot;
@@ -40,6 +41,7 @@ public final class LumiZonesScreen extends Screen {
             ClientHistoryStore history,
             Supplier<Optional<BlockBox>> selection,
             ZoneScreenController controller,
+            Consumer<HistorySnapshotPayload.ZoneView> openDetails,
             Consumer<UUID> enter,
             Consumer<UUID> leave) {
         super(Component.translatable("luma.tab.zones"));
@@ -47,6 +49,7 @@ public final class LumiZonesScreen extends Screen {
         this.history = Objects.requireNonNull(history, "history");
         this.selection = Objects.requireNonNull(selection, "selection");
         this.controller = Objects.requireNonNull(controller, "controller");
+        this.openDetails = Objects.requireNonNull(openDetails, "openDetails");
         this.enter = Objects.requireNonNull(enter, "enter");
         this.leave = Objects.requireNonNull(leave, "leave");
     }
@@ -90,6 +93,10 @@ public final class LumiZonesScreen extends Screen {
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.ZoneView zone = snapshot.zones().get(index);
             int rowY = panelY + 126 + (index - start) * 32;
+            addRenderableWidget(Button.builder(
+                    Component.translatable("luma.action.open_details"),
+                    ignored -> openDetails.accept(zone))
+                    .bounds(panelX + panelWidth - 196, rowY + 4, 72, 20).build());
             addRenderableWidget(Button.builder(
                     Component.translatable(zone.active()
                             ? "luma.zones.leave" : "luma.zones.enter"),
@@ -205,7 +212,8 @@ public final class LumiZonesScreen extends Screen {
             int rowY = panelY + 126 + (index - start) * 32;
             graphics.fill(panelX + 20, rowY,
                     panelX + panelWidth - 20, rowY + 28, 0xff20252c);
-            graphics.drawString(font, zone.name(),
+            graphics.drawString(font,
+                    font.plainSubstrByWidth(zone.name(), panelWidth - 250),
                     panelX + 28, rowY + 5, zone.color(), false);
             graphics.drawString(font, Component.translatable(
                             "luma.zones.zone_meta",

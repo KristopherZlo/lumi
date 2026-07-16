@@ -11,14 +11,18 @@ import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiCompareScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
 import io.github.lumi.client.ui.LumiZonesScreen;
+import io.github.lumi.client.ui.LumiZoneDetailsScreen;
+import io.github.lumi.client.ui.LumiZoneRestoreScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.client.ui.LumiRestoreScreen;
 import io.github.lumi.client.ui.BranchNameController;
 import io.github.lumi.client.ui.SaveScreenController;
 import io.github.lumi.client.ui.ZoneScreenController;
+import io.github.lumi.client.ui.ZoneDetailsController;
 import io.github.lumi.network.HistorySnapshotPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Client entrypoint; retained UI controllers consume this single networking facade. */
@@ -54,10 +58,7 @@ public final class LumiClient implements ClientModInitializer {
                                             client.screen, snapshot.branchName(),
                                             snapshot.branches(), NETWORKING::merge));
                                 },
-                                () -> client.setScreen(new LumiZonesScreen(
-                                        client.screen, HISTORY, SELECTION::bounds,
-                                        new ZoneScreenController(NETWORKING::createZone),
-                                        NETWORKING::enterZone, NETWORKING::leaveZone)),
+                                () -> openZones(client.screen),
                                 NETWORKING::quickRollback,
                                 version -> client.setScreen(new LumiRestoreScreen(
                                         client.screen,
@@ -120,6 +121,24 @@ public final class LumiClient implements ClientModInitializer {
         Component message = value.startsWith("luma.")
                 ? Component.translatable(value) : Component.literal(value);
         player.displayClientMessage(message, true);
+    }
+
+    private static void openZones(Screen parent) {
+        Minecraft client = Minecraft.getInstance();
+        client.setScreen(new LumiZonesScreen(
+                parent, HISTORY, SELECTION::bounds,
+                new ZoneScreenController(NETWORKING::createZone),
+                zone -> openZoneDetails(client.screen, zone),
+                NETWORKING::enterZone, NETWORKING::leaveZone));
+    }
+
+    private static void openZoneDetails(
+            Screen zones, HistorySnapshotPayload.ZoneView zone) {
+        Minecraft client = Minecraft.getInstance();
+        client.setScreen(new LumiZoneDetailsScreen(
+                zones, zone, new ZoneDetailsController(NETWORKING::saveZone),
+                version -> client.setScreen(new LumiZoneRestoreScreen(
+                        client.screen, zones, zone, version, NETWORKING::restoreZone))));
     }
 
     private static void showRecovery(HistorySnapshotPayload snapshot) {
