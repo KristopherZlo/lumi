@@ -33,6 +33,7 @@ public final class ClientHistoryStore {
         }
         snapshot = new HistorySnapshotPayload(
                 snapshot.dimensionId(), event.head(), event.revision(), snapshot.pendingKeys(),
+                snapshot.pendingSections(),
                 events.values().stream().anyMatch(value ->
                         value.state() == OperationEventPayload.State.ACCEPTED
                                 || value.state() == OperationEventPayload.State.PROGRESS),

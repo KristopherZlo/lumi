@@ -486,6 +486,8 @@ public final class LumiServerNetworking {
                             "Package commands do not use the mutation queue");
             case WORKSPACE_CREATE -> throw new IllegalStateException(
                     "Workspace creation does not use the mutation queue");
+            case SNAPSHOT_REFRESH -> throw new IllegalStateException(
+                    "Snapshot refresh does not use the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));

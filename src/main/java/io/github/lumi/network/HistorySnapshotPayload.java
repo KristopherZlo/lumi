@@ -18,6 +18,7 @@ public record HistorySnapshotPayload(
         CommitId head,
         long revision,
         int pendingKeys,
+        List<PendingSection> pendingSections,
         boolean operationActive,
         boolean recoveryPending,
         UUID workspaceId,
@@ -31,6 +32,7 @@ public record HistorySnapshotPayload(
     private static final int MAX_DIMENSION_BYTES = 256;
     private static final int MAX_TEXT_BYTES = 4096;
     private static final int MAX_VERSIONS = 32;
+    private static final int MAX_PENDING_SECTIONS = 512;
     private static final int MAX_WORKSPACES = 64;
     private static final int MAX_ZONES = 64;
     private static final int MAX_ZONE_VERSIONS = 8;
@@ -43,6 +45,8 @@ public record HistorySnapshotPayload(
     public HistorySnapshotPayload {
         Objects.requireNonNull(dimensionId, "dimensionId");
         Objects.requireNonNull(head, "head");
+        pendingSections = List.copyOf(
+                Objects.requireNonNull(pendingSections, "pendingSections"));
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(workspaceName, "workspaceName");
         Objects.requireNonNull(branchName, "branchName");
@@ -55,7 +59,9 @@ public record HistorySnapshotPayload(
         if (dimensionId.isBlank() || dimensionId.length() > MAX_DIMENSION_BYTES) {
             throw new IllegalArgumentException("Invalid dimension ID");
         }
-        if (revision < 0 || pendingKeys < 0) {
+        if (revision < 0 || pendingKeys < 0
+                || pendingSections.size() > MAX_PENDING_SECTIONS
+                || pendingSections.size() > pendingKeys) {
             throw new IllegalArgumentException("Snapshot counters cannot be negative");
         }
         if (workspaceName.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
@@ -79,11 +85,31 @@ public record HistorySnapshotPayload(
             UUID workspaceId,
             String workspaceName,
             String branchName,
+            List<WorkspaceView> workspaces,
             List<Version> versions,
             List<Branch> branches,
             List<ZoneView> zones,
             List<Version> deletedVersions) {
-        this(dimensionId, head, revision, pendingKeys, operationActive,
+        this(dimensionId, head, revision, pendingKeys, List.of(), operationActive,
+                recoveryPending, workspaceId, workspaceName, branchName, workspaces,
+                versions, branches, zones, deletedVersions);
+    }
+
+    public HistorySnapshotPayload(
+            String dimensionId,
+            CommitId head,
+            long revision,
+            int pendingKeys,
+            boolean operationActive,
+            boolean recoveryPending,
+            UUID workspaceId,
+            String workspaceName,
+            String branchName,
+            List<Version> versions,
+            List<Branch> branches,
+            List<ZoneView> zones,
+            List<Version> deletedVersions) {
+        this(dimensionId, head, revision, pendingKeys, List.of(), operationActive,
                 recoveryPending, workspaceId, workspaceName, branchName, List.of(),
                 versions, branches, zones, deletedVersions);
     }
@@ -101,7 +127,7 @@ public record HistorySnapshotPayload(
             List<Version> versions,
             List<Branch> branches,
             List<ZoneView> zones) {
-        this(dimensionId, head, revision, pendingKeys, operationActive,
+        this(dimensionId, head, revision, pendingKeys, List.of(), operationActive,
                 recoveryPending, workspaceId, workspaceName, branchName, List.of(),
                 versions, branches, zones, List.of());
     }
@@ -118,7 +144,7 @@ public record HistorySnapshotPayload(
             String branchName,
             List<Version> versions,
             List<Branch> branches) {
-        this(dimensionId, head, revision, pendingKeys, operationActive,
+        this(dimensionId, head, revision, pendingKeys, List.of(), operationActive,
                 recoveryPending, workspaceId, workspaceName, branchName, List.of(),
                 versions, branches, List.of(), List.of());
     }
@@ -129,7 +155,7 @@ public record HistorySnapshotPayload(
             long revision,
             int pendingKeys,
             boolean operationActive) {
-        this(dimensionId, head, revision, pendingKeys, operationActive,
+        this(dimensionId, head, revision, pendingKeys, List.of(), operationActive,
                 false, new UUID(0, 0), "", "unknown", List.of(),
                 List.of(), List.of(), List.of(), List.of());
     }
@@ -139,6 +165,8 @@ public record HistorySnapshotPayload(
         buffer.writeUtf(head.hex(), ObjectId.HEX_LENGTH);
         buffer.writeVarLong(revision);
         buffer.writeVarInt(pendingKeys);
+        buffer.writeVarInt(pendingSections.size());
+        pendingSections.forEach(section -> section.write(buffer));
         buffer.writeBoolean(operationActive);
         buffer.writeBoolean(recoveryPending);
         buffer.writeUUID(workspaceId);
@@ -161,6 +189,15 @@ public record HistorySnapshotPayload(
         CommitId head = new CommitId(new ObjectId(buffer.readUtf(ObjectId.HEX_LENGTH)));
         long revision = buffer.readVarLong();
         int pending = buffer.readVarInt();
+        int pendingSectionCount = buffer.readVarInt();
+        if (pendingSectionCount < 0 || pendingSectionCount > MAX_PENDING_SECTIONS) {
+            throw new IllegalArgumentException("Invalid pending section count");
+        }
+        java.util.ArrayList<PendingSection> pendingSections =
+                new java.util.ArrayList<>(pendingSectionCount);
+        for (int index = 0; index < pendingSectionCount; index++) {
+            pendingSections.add(PendingSection.read(buffer));
+        }
         boolean active = buffer.readBoolean();
         boolean recovery = buffer.readBoolean();
         UUID workspace = buffer.readUUID();
@@ -208,12 +245,25 @@ public record HistorySnapshotPayload(
             deleted.add(Version.read(buffer));
         }
         return new HistorySnapshotPayload(
-                dimension, head, revision, pending, active, recovery,
+                dimension, head, revision, pending, pendingSections, active, recovery,
                 workspace, workspaceName, branch, workspaces,
                 versions, branches, zones, deleted);
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+
+    public record PendingSection(int chunkX, int sectionY, int chunkZ) {
+        private void write(FriendlyByteBuf buffer) {
+            buffer.writeInt(chunkX);
+            buffer.writeInt(sectionY);
+            buffer.writeInt(chunkZ);
+        }
+
+        private static PendingSection read(FriendlyByteBuf buffer) {
+            return new PendingSection(
+                    buffer.readInt(), buffer.readInt(), buffer.readInt());
+        }
+    }
 
     public record WorkspaceView(
             UUID id,
