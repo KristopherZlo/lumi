@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.operation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.minecraft.world.DimensionFreeze;
@@ -96,11 +97,37 @@ class BackgroundPreparedMutationTest {
         assertTrue(coordinator.hasActiveOperation());
     }
 
+    @Test
+    void cancelsAndDiscardsCompletedPreparationBeforeActivation() throws Exception {
+        TestMutation delegate = new TestMutation();
+        AtomicInteger discards = new AtomicInteger();
+        BackgroundPreparedMutation<TestMutation> prepared = new BackgroundPreparedMutation<>(
+                CompletableFuture.completedFuture(delegate),
+                () -> { }, ignored -> discards.incrementAndGet());
+
+        assertTrue(prepared.cancel());
+
+        assertEquals(1, discards.get());
+        assertEquals(1, delegate.closeCalls);
+        assertEquals(MutationTerminalState.CANCELLED, prepared.terminalState());
+    }
+
+    @Test
+    void refusesCancellationOfRecoveryPreparation() throws Exception {
+        BackgroundPreparedMutation<TestMutation> prepared = new BackgroundPreparedMutation<>(
+                CompletableFuture.completedFuture(new TestMutation()),
+                () -> { }, ignored -> { }, true, true);
+
+        assertFalse(prepared.cancel());
+    }
+
     private static final class TestMutation implements DimensionMutation {
         private int advances;
+        private int closeCalls;
         @Override public void advance(long deadlineNanos) { advances++; }
         @Override public boolean isTerminal() { return advances == 1; }
         @Override public boolean isSafeToRelease() { return advances == 1; }
+        @Override public void close() { closeCalls++; }
     }
 
     private static final class RecordingFreeze implements DimensionFreeze {

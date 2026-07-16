@@ -9,6 +9,7 @@ public final class DeferredDimensionMutation implements DimensionMutation {
     private final Factory factory;
     private DimensionMutation delegate;
     private Throwable failure;
+    private boolean cancelled;
 
     public DeferredDimensionMutation(Factory factory) {
         this.factory = Objects.requireNonNull(factory, "factory");
@@ -21,7 +22,7 @@ public final class DeferredDimensionMutation implements DimensionMutation {
 
     @Override
     public void advance(long deadlineNanos) throws IOException {
-        if (failure != null) {
+        if (failure != null || cancelled) {
             return;
         }
         if (delegate == null) {
@@ -37,16 +38,19 @@ public final class DeferredDimensionMutation implements DimensionMutation {
 
     @Override
     public boolean isTerminal() {
-        return failure != null || delegate != null && delegate.isTerminal();
+        return cancelled || failure != null || delegate != null && delegate.isTerminal();
     }
 
     @Override
     public boolean isSafeToRelease() {
-        return failure != null || delegate != null && delegate.isSafeToRelease();
+        return cancelled || failure != null || delegate != null && delegate.isSafeToRelease();
     }
 
     @Override
     public MutationTerminalState terminalState() {
+        if (cancelled) {
+            return MutationTerminalState.CANCELLED;
+        }
         if (failure != null) {
             return MutationTerminalState.FAILED;
         }
@@ -63,7 +67,8 @@ public final class DeferredDimensionMutation implements DimensionMutation {
     }
 
     @Override public OperationProgress progress() {
-        return delegate == null ? OperationProgress.indeterminate("Resolving request")
+        return cancelled ? OperationProgress.indeterminate("Cancelled")
+                : delegate == null ? OperationProgress.indeterminate("Resolving request")
                 : delegate.progress();
     }
 
@@ -71,6 +76,26 @@ public final class DeferredDimensionMutation implements DimensionMutation {
     public MutationTerminalState unhandledFailureState() {
         return delegate == null
                 ? MutationTerminalState.FAILED : delegate.unhandledFailureState();
+    }
+
+    @Override
+    public boolean cancel() throws IOException {
+        if (isTerminal()) {
+            return false;
+        }
+        if (delegate == null) {
+            cancelled = true;
+            return true;
+        }
+        return delegate.cancel();
+    }
+
+    @Override
+    public void close() throws IOException {
+        cancelled = true;
+        if (delegate != null) {
+            delegate.close();
+        }
     }
 
     @FunctionalInterface
