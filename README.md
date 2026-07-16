@@ -16,6 +16,7 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - Singleplayer and multiplayer use the same server-authoritative path.
 - Idle play performs no history work when nothing is dirty.
 - Alt+Z/Y is session-only and separate from durable commits.
+- Alt+S opens the Save form; Alt+R starts Quick Rollback through the same server path.
 
 The implementation grows only through tested vertical slices. See
 [`modules.md`](modules.md) for code ownership and `docs/architecture.md` for
