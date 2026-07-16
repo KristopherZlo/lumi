@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.ComparisonSummary;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.PermissionDecision;
@@ -20,6 +21,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -47,6 +49,8 @@ public final class LumiServerNetworking {
                 HistorySnapshotPayload.TYPE, HistorySnapshotPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 OperationEventPayload.TYPE, OperationEventPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                CompareResultPayload.TYPE, CompareResultPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(
                 HistoryCommandPayload.TYPE, LumiServerNetworking::receive);
         ServerPlayNetworking.registerGlobalReceiver(
@@ -84,6 +88,10 @@ public final class LumiServerNetworking {
                 sendSnapshot(player, runtime);
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.COMPARE) {
+                compare(player, runtime, payload, context);
+                return;
+            }
             Started started = start(player, runtime, actual, payload);
             TICKET_OWNERS.put(started.ticket().id(),
                     new TicketOwner(player.getUUID(), payload.requestId()));
@@ -101,6 +109,48 @@ public final class LumiServerNetworking {
         } catch (IOException | IllegalArgumentException | IllegalStateException failed) {
             reject(player, payload, runtime, failed.getMessage());
         }
+    }
+
+    private static void compare(
+            ServerPlayer player,
+            FabricDimensionRuntime runtime,
+            HistoryCommandPayload payload,
+            ServerPlayNetworking.Context context) throws IOException {
+        CompareArgument argument = CompareArgument.parse(payload.argument());
+        String dimension = dimension(runtime);
+        runtime.compare(argument.before(), argument.after())
+                .whenComplete((summary, failure) -> context.server().execute(() -> {
+                    if (failure == null) {
+                        send(player, success(payload.requestId(), dimension, summary));
+                    } else {
+                        send(player, new CompareResultPayload(
+                                payload.requestId(), dimension,
+                                argument.before(), argument.after(), 0, 0,
+                                java.util.List.of(), failureMessage(failure)));
+                    }
+                }));
+    }
+
+    private static CompareResultPayload success(
+            UUID requestId, String dimension, ComparisonSummary summary) {
+        var materials = summary.materials().entrySet().stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .limit(128)
+                .map(entry -> new CompareResultPayload.Material(
+                        entry.getKey(), entry.getValue().before(), entry.getValue().after()))
+                .toList();
+        return new CompareResultPayload(
+                requestId, dimension, summary.before(), summary.after(),
+                summary.changedSections(), summary.changedEntityChunks(), materials, "");
+    }
+
+    private static String failureMessage(Throwable failure) {
+        Throwable cause = failure;
+        while (cause instanceof CompletionException && cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        String message = cause.getMessage();
+        return message == null || message.isBlank() ? "Compare failed" : message;
     }
 
     private static Started start(
@@ -137,6 +187,8 @@ public final class LumiServerNetworking {
                     RecoveryChoice.RETURN_CHECKPOINT, terminal);
             case BRANCH_CREATE -> throw new IllegalStateException(
                     "Branch creation does not use the mutation queue");
+            case COMPARE -> throw new IllegalStateException(
+                    "Compare does not use the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));

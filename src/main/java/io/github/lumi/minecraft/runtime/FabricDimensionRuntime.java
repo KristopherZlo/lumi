@@ -26,6 +26,7 @@ import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.ComparisonSummary;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.OperationJournal;
@@ -33,9 +34,11 @@ import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
+import io.github.lumi.domain.service.CompareService;
 import io.github.lumi.domain.service.HistoryQueryService;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.MergeService;
+import io.github.lumi.domain.service.MaterialCountService;
 import io.github.lumi.domain.service.PreparedMerge;
 import io.github.lumi.domain.service.BranchService;
 import io.github.lumi.domain.service.SaveRequest;
@@ -663,6 +666,34 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             }
         }
         return List.copyOf(visible);
+    }
+
+    public CompletableFuture<ComparisonSummary> compare(
+            CommitId before, CommitId after) throws IOException {
+        Objects.requireNonNull(before, "before");
+        Objects.requireNonNull(after, "after");
+        UUID workspace = activeWorkspaceId();
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                WorldObjectRepository objects = new WorldObjectRepository(repository);
+                CommitRepository commits = new CommitRepository(repository);
+                if (!commits.read(before).workspaceId().equals(workspace)
+                        || !commits.read(after).workspaceId().equals(workspace)) {
+                    throw new IOException(
+                            "Compare commits do not belong to the active workspace");
+                }
+                var difference = new CompareService(
+                        objects, commits, new OriginStore(repository))
+                        .compare(before, after);
+                return new ComparisonSummary(
+                        before, after,
+                        difference.sections().size(),
+                        difference.entities().size(),
+                        new MaterialCountService(objects).count(difference));
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
     }
 
     public io.github.lumi.domain.model.Zone createZone(

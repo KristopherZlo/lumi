@@ -55,6 +55,11 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), HistoryCommandPayload.Kind.RESTORE_AREA,
                 partial.encode(), id('2'), 43);
         assertEquals(restoreArea, roundTrip(HistoryCommandPayload.CODEC, restoreArea));
+        CompareArgument compare = new CompareArgument(id('1'), id('2'));
+        HistoryCommandPayload compareCommand = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.COMPARE,
+                compare.encode(), id('2'), 43);
+        assertEquals(compareCommand, roundTrip(HistoryCommandPayload.CODEC, compareCommand));
     }
 
     @Test
