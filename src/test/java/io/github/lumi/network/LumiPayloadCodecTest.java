@@ -7,6 +7,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.netty.buffer.Unpooled;
 import java.util.UUID;
+import java.util.Optional;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import org.junit.jupiter.api.Test;
@@ -36,8 +37,9 @@ class LumiPayloadCodecTest {
                 "minecraft:overworld", id('a'), 7, 3, true);
         OperationEventPayload event = new OperationEventPayload(
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
-                "minecraft:overworld", OperationEventPayload.State.RETURNED,
-                "Target failed verification; returned safely", id('b'), 8);
+                "minecraft:overworld", OperationEventPayload.State.ACCEPTED,
+                "Queued", id('b'), 8,
+                Optional.of(UUID.fromString("30000000-0000-0000-0000-000000000003")), 2);
 
         assertEquals(snapshot, roundTrip(HistorySnapshotPayload.CODEC, snapshot));
         assertEquals(event, roundTrip(OperationEventPayload.CODEC, event));

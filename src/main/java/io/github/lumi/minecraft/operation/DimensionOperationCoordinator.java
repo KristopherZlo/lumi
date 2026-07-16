@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Objects;
 import java.util.OptionalInt;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
@@ -187,6 +188,15 @@ public final class DimensionOperationCoordinator {
             }
         }
         return OptionalInt.empty();
+    }
+
+    public synchronized Optional<OperationTicket> ticketOf(DimensionMutation operation) {
+        Objects.requireNonNull(operation, "operation");
+        if (active == operation) {
+            return Optional.of(activeTicket);
+        }
+        return queued.stream().filter(entry -> entry.operation() == operation)
+                .map(QueuedOperation::ticket).findFirst();
     }
 
     public synchronized boolean cancelQueued(OperationTicket ticket) {

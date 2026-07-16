@@ -9,6 +9,7 @@ import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
+import io.github.lumi.minecraft.operation.OperationTicket;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import java.io.IOException;
 import java.time.Instant;
@@ -56,15 +57,17 @@ public final class LumiServerNetworking {
                 reject(player, payload, runtime, "History changed; refresh and try again");
                 return;
             }
-            start(player, runtime, actual, payload);
+            Started started = start(player, runtime, actual, payload);
+            String message = started.position() == 0
+                    ? "Operation accepted" : "Queued at position " + started.position();
             sendEvent(player, payload, runtime, OperationEventPayload.State.ACCEPTED,
-                    "Operation accepted");
+                    message, Optional.of(started.ticket()), started.position());
         } catch (IOException | IllegalArgumentException | IllegalStateException failed) {
             reject(player, payload, runtime, failed.getMessage());
         }
     }
 
-    private static void start(
+    private static Started start(
             ServerPlayer player,
             FabricDimensionRuntime runtime,
             BranchRef expected,
@@ -72,14 +75,19 @@ public final class LumiServerNetworking {
         CommitAuthor author = new CommitAuthor(player.getUUID(), player.getName().getString());
         java.util.function.Consumer<DimensionMutation> terminal = operation ->
                 terminal(player, runtime, payload, operation);
+        DimensionMutation operation;
         if (payload.kind() == HistoryCommandPayload.Kind.SAVE) {
-            runtime.startSave(new SaveRequest(
+            operation = runtime.startSave(new SaveRequest(
                     expected, author, payload.argument(), Instant.now(),
                     runtime.activeWorkspaceId(), Optional.empty(), CommitKind.MANUAL), terminal);
         } else {
-            runtime.startRestore(
+            operation = runtime.startRestore(
                     new CommitId(new ObjectId(payload.argument())), author, terminal);
         }
+        OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
+                () -> new IllegalStateException("Accepted operation has no queue ticket"));
+        int position = runtime.operations().queuePosition(ticket).orElseThrow();
+        return new Started(ticket, position);
     }
 
     private static void terminal(
@@ -134,12 +142,24 @@ public final class LumiServerNetworking {
             FabricDimensionRuntime runtime,
             OperationEventPayload.State state,
             String message) {
+        sendEvent(player, request, runtime, state, message, Optional.empty(), -1);
+    }
+
+    private static void sendEvent(
+            ServerPlayer player,
+            HistoryCommandPayload request,
+            FabricDimensionRuntime runtime,
+            OperationEventPayload.State state,
+            String message,
+            Optional<OperationTicket> ticket,
+            int queuePosition) {
         try {
             BranchRef head = runtime.activeRef();
             send(player, new OperationEventPayload(
                     request.requestId(), dimension(runtime), state,
                     message == null ? "Operation failed" : message,
-                    head.commit(), head.revision()));
+                    head.commit(), head.revision(), ticket.map(OperationTicket::id),
+                    queuePosition));
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi operation event", failed);
         }
@@ -168,4 +188,6 @@ public final class LumiServerNetworking {
     private static String dimension(FabricDimensionRuntime runtime) {
         return runtime.level().dimension().identifier().toString();
     }
+
+    private record Started(OperationTicket ticket, int position) { }
 }

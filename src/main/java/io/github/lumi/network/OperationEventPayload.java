@@ -4,6 +4,7 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -17,7 +18,9 @@ public record OperationEventPayload(
         State state,
         String message,
         CommitId head,
-        long revision) implements CustomPacketPayload {
+        long revision,
+        Optional<UUID> ticketId,
+        int queuePosition) implements CustomPacketPayload {
     private static final int MAX_DIMENSION_BYTES = 256;
     private static final int MAX_MESSAGE_BYTES = 4096;
     public static final Type<OperationEventPayload> TYPE = new Type<>(
@@ -31,6 +34,7 @@ public record OperationEventPayload(
         Objects.requireNonNull(state, "state");
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(head, "head");
+        ticketId = Objects.requireNonNull(ticketId, "ticketId");
         if (dimensionId.isBlank() || dimensionId.length() > MAX_DIMENSION_BYTES) {
             throw new IllegalArgumentException("Invalid dimension ID");
         }
@@ -40,6 +44,19 @@ public record OperationEventPayload(
         if (revision < 0) {
             throw new IllegalArgumentException("Ref revision cannot be negative");
         }
+        if (ticketId.isPresent() != (queuePosition >= 0)) {
+            throw new IllegalArgumentException("Queue position requires an operation ticket");
+        }
+    }
+
+    public OperationEventPayload(
+            UUID requestId,
+            String dimensionId,
+            State state,
+            String message,
+            CommitId head,
+            long revision) {
+        this(requestId, dimensionId, state, message, head, revision, Optional.empty(), -1);
     }
 
     private void write(FriendlyByteBuf buffer) {
@@ -49,14 +66,23 @@ public record OperationEventPayload(
         buffer.writeUtf(message, MAX_MESSAGE_BYTES);
         buffer.writeUtf(head.hex(), ObjectId.HEX_LENGTH);
         buffer.writeVarLong(revision);
+        buffer.writeBoolean(ticketId.isPresent());
+        ticketId.ifPresent(buffer::writeUUID);
+        buffer.writeVarInt(queuePosition + 1);
     }
 
     private static OperationEventPayload read(FriendlyByteBuf buffer) {
+        UUID request = buffer.readUUID();
+        String dimension = buffer.readUtf(MAX_DIMENSION_BYTES);
+        State state = State.fromCode(buffer.readUnsignedByte());
+        String message = buffer.readUtf(MAX_MESSAGE_BYTES);
+        CommitId head = new CommitId(new ObjectId(buffer.readUtf(ObjectId.HEX_LENGTH)));
+        long revision = buffer.readVarLong();
+        Optional<UUID> ticket = buffer.readBoolean()
+                ? Optional.of(buffer.readUUID()) : Optional.empty();
         return new OperationEventPayload(
-                buffer.readUUID(), buffer.readUtf(MAX_DIMENSION_BYTES),
-                State.fromCode(buffer.readUnsignedByte()), buffer.readUtf(MAX_MESSAGE_BYTES),
-                new CommitId(new ObjectId(buffer.readUtf(ObjectId.HEX_LENGTH))),
-                buffer.readVarLong());
+                request, dimension, state, message, head, revision,
+                ticket, buffer.readVarInt() - 1);
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
