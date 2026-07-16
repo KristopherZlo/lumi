@@ -28,6 +28,8 @@ final class MinecraftSectionRewriter {
         }
         LevelChunkSection section = chunk.getSection(sectionIndex);
         ShortSet changedCells = new ShortOpenHashSet();
+        short[] changedLightColumns = new short[16 * 16];
+        boolean lightChanged = false;
         int[] highestChangedByColumn = new int[16 * 16];
         Arrays.fill(highestChangedByColumn, -1);
         BlockPos.MutableBlockPos position = new BlockPos.MutableBlockPos();
@@ -52,7 +54,8 @@ final class MinecraftSectionRewriter {
                 highestChangedByColumn[column] = localIndex;
             }
             if (requiresLightCheck(current, replacement)) {
-                level.getLightEngine().checkBlock(position);
+                markLightChange(changedLightColumns, x, y, z);
+                lightChanged = true;
             }
         }
         if (changedCells.isEmpty()) {
@@ -61,8 +64,18 @@ final class MinecraftSectionRewriter {
 
         section.recalcBlockCounts();
         updateHeightmaps(chunk, key, section, highestChangedByColumn);
+        if (lightChanged) {
+            ((SectionLightBatchScheduler) level.getLightEngine())
+                    .lumi$scheduleSectionChecks(
+                            key.chunkX(), key.sectionY(), key.chunkZ(),
+                            changedLightColumns);
+        }
         chunk.markUnsaved();
         broadcast(chunk, key, changedCells, section);
+    }
+
+    static void markLightChange(short[] updates, int x, int y, int z) {
+        updates[(z << 4) | y] |= (short) (1 << x);
     }
 
     private static void updateHeightmaps(
