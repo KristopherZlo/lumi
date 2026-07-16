@@ -61,6 +61,9 @@ public record HistoryCommandPayload(
         if (kind == Kind.ZONE_RESTORE) {
             ZoneRestoreArgument.parse(argument);
         }
+        if (kind == Kind.DELETE_VERSION) {
+            new ObjectId(argument);
+        }
         if ((kind == Kind.QUICK_ROLLBACK || kind == Kind.UNDO || kind == Kind.REDO
                 || kind == Kind.RECOVER_RESUME || kind == Kind.RECOVER_RETURN)
                 && !argument.isEmpty()) {
@@ -95,7 +98,7 @@ public record HistoryCommandPayload(
         RECOVER_RESUME(6), RECOVER_RETURN(7), BRANCH_CREATE(8),
         RESTORE_NO_ENTITIES(9), RESTORE_AREA(10), COMPARE(11), COMPARE_CANCEL(12),
         AMEND(13), MERGE(14), ZONE_CREATE(15), ZONE_ENTER(16), ZONE_LEAVE(17),
-        ZONE_SAVE(18), ZONE_RESTORE(19);
+        ZONE_SAVE(18), ZONE_RESTORE(19), DELETE_VERSION(20);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

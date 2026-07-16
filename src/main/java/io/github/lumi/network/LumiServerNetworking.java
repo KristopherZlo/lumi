@@ -98,6 +98,15 @@ public final class LumiServerNetworking {
                 sendSnapshot(player, runtime);
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.DELETE_VERSION) {
+                runtime.softDelete(
+                        new CommitId(new ObjectId(payload.argument())),
+                        new CommitAuthor(player.getUUID(), player.getName().getString()));
+                sendEvent(player, payload, runtime,
+                        OperationEventPayload.State.SUCCEEDED, "Version deleted");
+                sendSnapshot(player, runtime);
+                return;
+            }
             if (isZoneMetadata(payload.kind())) {
                 updateZoneMetadata(player, runtime, payload);
                 return;
@@ -325,6 +334,8 @@ public final class LumiServerNetworking {
                     "Merge preparation starts before the mutation queue");
             case ZONE_CREATE, ZONE_ENTER, ZONE_LEAVE -> throw new IllegalStateException(
                     "Zone metadata does not use the mutation queue");
+            case DELETE_VERSION -> throw new IllegalStateException(
+                    "Version deletion does not use the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));

@@ -51,6 +51,7 @@ import io.github.lumi.domain.service.PublishedApplyRecovery;
 import io.github.lumi.domain.service.WorkspaceService;
 import io.github.lumi.domain.service.ZoneScope;
 import io.github.lumi.domain.service.ZoneService;
+import io.github.lumi.domain.service.TombstoneService;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.BatchedWorldStateCapture;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
@@ -687,6 +688,15 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 .firstParentByZone(activeRef().name(), workspace, requested, limit);
     }
 
+    public io.github.lumi.domain.model.CommitTombstone softDelete(
+            CommitId target, CommitAuthor author) throws IOException {
+        requireHistoryMetadataMutable();
+        return new TombstoneService(
+                new CommitRepository(repository), refs,
+                new TombstoneRepository(repository))
+                .softDelete(target, activeWorkspaceId(), author, Instant.now());
+    }
+
     public List<BranchRef> visibleBranches() throws IOException {
         UUID workspace = activeWorkspaceId();
         CommitRepository commits = new CommitRepository(repository);
@@ -785,6 +795,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         requireNoRecovery();
         if (operations.hasActiveOperation()) {
             throw new IllegalStateException("Zone metadata cannot change during an operation");
+        }
+    }
+
+    private void requireHistoryMetadataMutable() {
+        requireNoRecovery();
+        if (operations.hasActiveOperation()) {
+            throw new IllegalStateException("History metadata cannot change during an operation");
         }
     }
 

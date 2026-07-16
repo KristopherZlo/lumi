@@ -53,6 +53,11 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_RESTORE,
                 new ZoneRestoreArgument(zoneId, id('2')).encode(), id('1'), 42);
         assertEquals(zoneRestore, roundTrip(HistoryCommandPayload.CODEC, zoneRestore));
+        HistoryCommandPayload deleteVersion = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.DELETE_VERSION,
+                id('2').hex(), id('1'), 42);
+        assertEquals(deleteVersion,
+                roundTrip(HistoryCommandPayload.CODEC, deleteVersion));
         OperationCancelPayload cancel = new OperationCancelPayload(
                 UUID.randomUUID(), UUID.randomUUID());
         assertEquals(cancel, roundTrip(OperationCancelPayload.CODEC, cancel));
