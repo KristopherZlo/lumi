@@ -19,7 +19,9 @@ import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.MerkleTreeEditor;
 import io.github.lumi.storage.repository.OperationJournalRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
+import io.github.lumi.storage.object.ObjectStore;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -141,6 +143,40 @@ class SaveServiceTest {
         assertEquals(captured.generations(), result.capturedGenerations());
     }
 
+    @Test
+    void oneHundredOneBlockSavesGrowByUniqueStatesNotSaveCount() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var rootTree = objects.write(new DimensionTree(Map.of()));
+        var initialId = commits.write(commit(rootTree, List.of(), "Initial"));
+        var current = refs.create(new BranchName("main"), initialId);
+        SaveService service = new SaveService(
+                objects, new MerkleTreeEditor(objects), commits, refs,
+                new OperationJournalRepository(repositoryRoot));
+        SectionKey key = new SectionKey(0, 0, 0);
+        UUID workspace = UUID.fromString("20000000-0000-0000-0000-000000000002");
+
+        for (int index = 0; index < 100; index++) {
+            SectionBlob section = oneBlockSection("test:state_" + index % 10);
+            long generation = index + 1L;
+            var captured = new CapturedWorldState(
+                    Map.of(key, section), Map.of(),
+                    new WorkingIndexSnapshot(Map.of(key, generation)),
+                    new CommitStatistics(1, 0, 1, 0));
+            current = service.save(new SaveRequest(
+                    current, author(), "Save " + index,
+                    Instant.EPOCH.plusSeconds(index + 1L), workspace,
+                    Optional.empty(), CommitKind.MANUAL), captured).branchRef();
+        }
+
+        assertEquals(41, new ObjectStore(repositoryRoot.resolve("objects"))
+                .listIds().size());
+        try (var files = Files.walk(repositoryRoot.resolve("commits"))) {
+            assertEquals(101, files.filter(Files::isRegularFile).count());
+        }
+    }
+
     private static Commit commit(io.github.lumi.domain.model.ObjectId tree,
             List<io.github.lumi.domain.model.CommitId> parents, String message) {
         return new Commit(tree, parents, author(), message, Instant.EPOCH,
@@ -155,5 +191,12 @@ class SaveServiceTest {
     private static SectionBlob airSection() {
         return new SectionBlob(
                 new ArrayList<>(Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:air")), Map.of());
+    }
+
+    private static SectionBlob oneBlockSection(String state) {
+        var states = new ArrayList<>(
+                Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:air"));
+        states.set(0, state);
+        return new SectionBlob(states, Map.of());
     }
 }
