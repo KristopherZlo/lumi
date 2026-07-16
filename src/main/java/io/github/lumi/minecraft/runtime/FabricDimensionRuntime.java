@@ -810,6 +810,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return workspaces.list();
     }
 
+    public io.github.lumi.domain.model.WorkingIndexPreview pendingPreview(
+            int maximumSections) throws IOException {
+        var workspace = activeWorkspace();
+        return mutations.preview(workspace::includes, maximumSections);
+    }
+
     public List<io.github.lumi.domain.model.HistoryEntry> history(int limit)
             throws IOException {
         BranchRef ref = activeRef();

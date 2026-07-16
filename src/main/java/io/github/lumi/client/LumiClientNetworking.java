@@ -243,6 +243,10 @@ public final class LumiClientNetworking {
         return send(HistoryCommandPayload.Kind.RECOVER_RETURN, "");
     }
 
+    public UUID refreshSnapshot() {
+        return send(HistoryCommandPayload.Kind.SNAPSHOT_REFRESH, "");
+    }
+
     public UUID cancel(UUID originalRequest) {
         var event = history.state().events().get(
                 Objects.requireNonNull(originalRequest, "originalRequest"));

@@ -89,6 +89,10 @@ public final class LumiServerNetworking {
                 reject(player, payload, runtime, permissionMessage(permission));
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.SNAPSHOT_REFRESH) {
+                sendSnapshot(player, runtime);
+                return;
+            }
             if (payload.kind() == HistoryCommandPayload.Kind.COMPARE_CANCEL) {
                 cancelCompare(player, payload);
                 return;
@@ -685,6 +689,7 @@ public final class LumiServerNetworking {
         try {
             BranchRef head = runtime.activeRef();
             var workspace = runtime.activeWorkspace();
+            var pending = runtime.pendingPreview(512);
             var workspaceViews = runtime.visibleWorkspaces().stream()
                     .map(visible -> new HistorySnapshotPayload.WorkspaceView(
                             visible.id(), visible.name(), visible.id().equals(workspace.id()),
@@ -728,8 +733,11 @@ public final class LumiServerNetworking {
                             entry.commit().kind()))
                     .toList();
             send(player, new HistorySnapshotPayload(
-                    dimension(runtime), head.commit(), head.revision(),
-                    runtime.mutations().snapshot().generations().size(),
+                    dimension(runtime), head.commit(), head.revision(), pending.totalKeys(),
+                    pending.sections().stream()
+                            .map(section -> new HistorySnapshotPayload.PendingSection(
+                                    section.chunkX(), section.sectionY(), section.chunkZ()))
+                            .toList(),
                     runtime.operations().hasActiveOperation(),
                     runtime.recoveryJournal().isPresent(),
                     workspace.id(), workspace.name(), head.name().value(),
