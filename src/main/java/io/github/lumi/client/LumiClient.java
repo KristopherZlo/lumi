@@ -205,7 +205,12 @@ public final class LumiClient implements ClientModInitializer {
         client.setScreen(new LumiZoneDetailsScreen(
                 zones, zone, new ZoneDetailsController(NETWORKING::saveZone),
                 version -> client.setScreen(new LumiZoneRestoreScreen(
-                        client.screen, zones, zone, version, NETWORKING::restoreZone))));
+                        client.screen, zones, zone, version, NETWORKING::restoreZone)),
+                target -> client.setScreen(new LumiCompareScreen(
+                        client.screen, COMPARISONS, target.label(),
+                        () -> NETWORKING.compareZone(
+                                zone.id(), target.before(), target.after()),
+                        NETWORKING::cancelCompare))));
     }
 
     private static void showRecovery(HistorySnapshotPayload snapshot) {

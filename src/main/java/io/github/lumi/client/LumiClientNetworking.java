@@ -15,6 +15,7 @@ import io.github.lumi.network.OperationCancelPayload;
 import io.github.lumi.network.PartialRestoreArgument;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.network.ZoneCreateArgument;
+import io.github.lumi.network.ZoneCompareArgument;
 import io.github.lumi.network.ZoneRestoreArgument;
 import io.github.lumi.network.ZoneSaveArgument;
 import io.github.lumi.network.WorkspaceCreateArgument;
@@ -194,6 +195,26 @@ public final class LumiClientNetworking {
         CompareArgument argument = new CompareArgument(
                 Objects.requireNonNull(before, "before"),
                 Objects.requireNonNull(after, "after"));
+        return beginCompare(
+                HistoryCommandPayload.Kind.COMPARE, argument.encode(),
+                argument.before(), argument.after());
+    }
+
+    public UUID compareZone(UUID zoneId, CommitId before, CommitId after) {
+        ZoneCompareArgument argument = new ZoneCompareArgument(
+                Objects.requireNonNull(zoneId, "zoneId"),
+                Objects.requireNonNull(before, "before"),
+                Objects.requireNonNull(after, "after"));
+        return beginCompare(
+                HistoryCommandPayload.Kind.ZONE_COMPARE, argument.encode(),
+                argument.before(), argument.after());
+    }
+
+    private UUID beginCompare(
+            HistoryCommandPayload.Kind kind,
+            String argument,
+            CommitId before,
+            CommitId after) {
         var snapshot = history.state().snapshot().orElseThrow(
                 () -> new IllegalStateException("Lumi history has not synchronized yet"));
         if (!ClientPlayNetworking.canSend(HistoryCommandPayload.TYPE)) {
@@ -201,9 +222,9 @@ public final class LumiClientNetworking {
         }
         UUID requestId = UUID.randomUUID();
         comparisons.begin(
-                requestId, snapshot.dimensionId(), argument.before(), argument.after());
+                requestId, snapshot.dimensionId(), before, after);
         ClientPlayNetworking.send(new HistoryCommandPayload(
-                requestId, HistoryCommandPayload.Kind.COMPARE, argument.encode(),
+                requestId, kind, argument,
                 snapshot.head(), snapshot.revision()));
         return requestId;
     }

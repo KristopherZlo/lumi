@@ -20,6 +20,8 @@ public final class LumiZoneDetailsScreen extends Screen {
     private final HistorySnapshotPayload.ZoneView zone;
     private final ZoneDetailsController controller;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
+    private final Consumer<VersionCompareController.Target> openCompare;
+    private final VersionCompareController compareController = new VersionCompareController();
     private EditBox message;
     private Button save;
     private int panelX;
@@ -31,12 +33,14 @@ public final class LumiZoneDetailsScreen extends Screen {
             Screen parent,
             HistorySnapshotPayload.ZoneView zone,
             ZoneDetailsController controller,
-            Consumer<HistorySnapshotPayload.Version> openRestore) {
+            Consumer<HistorySnapshotPayload.Version> openRestore,
+            Consumer<VersionCompareController.Target> openCompare) {
         super(Component.translatable("luma.zones.details_title", zone.name()));
         this.parent = parent;
         this.zone = Objects.requireNonNull(zone, "zone");
         this.controller = Objects.requireNonNull(controller, "controller");
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
+        this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
     }
 
     @Override
@@ -74,6 +78,11 @@ public final class LumiZoneDetailsScreen extends Screen {
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.Version version = zone.versions().get(index);
             int rowY = panelY + 132 + (index - start) * 38;
+            compareController.target(zone.versions(), index).ifPresent(target ->
+                    addRenderableWidget(Button.builder(
+                            Component.translatable("luma.action.compare"),
+                            ignored -> openCompare.accept(target))
+                            .bounds(panelX + panelWidth - 176, rowY + 7, 60, 20).build()));
             addRenderableWidget(Button.builder(
                     Component.translatable("luma.action.restore"),
                     ignored -> openRestore.accept(version))
