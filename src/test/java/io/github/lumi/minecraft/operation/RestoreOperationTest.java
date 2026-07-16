@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.ActiveBranch;
+import io.github.lumi.domain.model.ActiveWorkspace;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.BranchSwitchTarget;
@@ -16,6 +17,8 @@ import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationTarget;
+import io.github.lumi.domain.model.WorkspaceSwitchPlan;
+import io.github.lumi.domain.model.WorkspaceSwitchTarget;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.storage.repository.BranchRefRepository;
@@ -75,6 +78,26 @@ class RestoreOperationTest {
         assertEquals(io.github.lumi.domain.model.OperationKind.BRANCH_SWITCH, journal.kind());
         assertEquals(Optional.of(new BranchSwitchTarget(target.name(), 4, 6)),
                 journal.target().branchSwitch());
+    }
+
+    @Test
+    void appendsWorkspacePointerTargetToBranchSwitchJournal() throws IOException {
+        BranchRef source = new BranchRef(new BranchName("main"), id('a'), 2);
+        BranchRef target = new BranchRef(new BranchName("workspace/next/main"), id('b'), 4);
+        var branch = new BranchSwitchPlan(new ActiveBranch(source.name(), 6), source, target);
+        var plan = new WorkspaceSwitchPlan(new ActiveWorkspace(new UUID(0, 1), 8),
+                new UUID(0, 2), branch);
+        var restore = new PreparedRestore(
+                source, target.commit(), Map.of(), Map.of(), Map.of(), Map.of());
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+
+        RestoreOperation.startWorkspaceSwitch(
+                restore, new RepairThenVerify(), ignored -> { }, journals, UUID.randomUUID(),
+                RestoreStateListener.NONE, plan);
+
+        assertEquals(Optional.of(new WorkspaceSwitchTarget(
+                        new UUID(0, 1), new UUID(0, 2), 8)),
+                journals.read().orElseThrow().target().workspaceSwitch());
     }
 
     @Test

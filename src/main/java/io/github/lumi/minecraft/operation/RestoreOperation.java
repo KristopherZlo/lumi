@@ -8,6 +8,8 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
+import io.github.lumi.domain.model.WorkspaceSwitchPlan;
+import io.github.lumi.domain.model.WorkspaceSwitchTarget;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.storage.repository.BranchRefRepository;
@@ -91,6 +93,34 @@ public final class RestoreOperation implements DimensionMutation {
                 Optional.of(plan.target().commit()), Optional.of(plan.source().commit()),
                 Optional.of(new BranchSwitchTarget(
                         plan.target().name(), plan.target().revision(),
+                        plan.expectedActive().revision())));
+        return start(restore, world, publication, journals, operationId,
+                stateListener, OperationKind.BRANCH_SWITCH, target);
+    }
+
+    public static RestoreOperation startWorkspaceSwitch(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            WorkspaceSwitchPlan plan) throws IOException {
+        Objects.requireNonNull(plan, "plan");
+        BranchSwitchPlan branch = plan.branch();
+        if (!restore.expectedRef().equals(branch.source())
+                || !restore.targetCommit().equals(branch.target().commit())) {
+            throw new IOException("Prepared Restore does not match workspace switch plan");
+        }
+        OperationTarget target = new OperationTarget(
+                branch.source().name(), branch.source().commit(), branch.source().revision(),
+                Optional.of(branch.target().commit()), Optional.of(branch.source().commit()),
+                Optional.of(new BranchSwitchTarget(
+                        branch.target().name(), branch.target().revision(),
+                        branch.expectedActive().revision())),
+                Optional.empty(), false,
+                Optional.of(new WorkspaceSwitchTarget(
+                        plan.expectedActive().id(), plan.targetWorkspace(),
                         plan.expectedActive().revision())));
         return start(restore, world, publication, journals, operationId,
                 stateListener, OperationKind.BRANCH_SWITCH, target);

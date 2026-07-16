@@ -70,7 +70,23 @@ public final class BranchService {
     }
 
     public void completeSwitch(BranchSwitchPlan plan) throws IOException {
-        validateSwitch(plan);
+        completeSwitchIdempotent(plan);
+    }
+
+    public void completeSwitchIdempotent(BranchSwitchPlan plan) throws IOException {
+        Objects.requireNonNull(plan, "plan");
+        ensureClean();
+        validateRefs(plan);
+        var selected = active.read().orElseThrow(
+                () -> new RefConflictException("Active branch no longer exists"));
+        var published = new io.github.lumi.domain.model.ActiveBranch(
+                plan.target().name(), Math.addExact(plan.expectedActive().revision(), 1));
+        if (selected.equals(published)) {
+            return;
+        }
+        if (!selected.equals(plan.expectedActive())) {
+            throw new RefConflictException("Active branch changed during switch");
+        }
         active.compareAndSet(plan.expectedActive(), plan.target().name());
     }
 
@@ -82,6 +98,10 @@ public final class BranchService {
         if (!selected.equals(plan.expectedActive())) {
             throw new RefConflictException("Active branch changed during switch");
         }
+        validateRefs(plan);
+    }
+
+    private void validateRefs(BranchSwitchPlan plan) throws IOException {
         BranchRef source = refs.read(plan.source().name()).orElseThrow(
                 () -> new RefConflictException("Source branch no longer exists"));
         BranchRef target = refs.read(plan.target().name()).orElseThrow(
