@@ -22,7 +22,7 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - The same form can replace the latest version with a crash-safe Amend.
 - Another branch can be merged through the same verified apply pipeline;
   overlapping conflicts explicitly use the source branch.
-- Alt+L opens the current workspace history from the immutable server snapshot.
+- U opens the current workspace history from the immutable server snapshot.
 - First-run onboarding opens once per client installation and remains replayable
   from More; Alt+I opens the live hotkey guide.
 - Diagnostic telemetry is bounded to an explicit technical allowlist, disclosed

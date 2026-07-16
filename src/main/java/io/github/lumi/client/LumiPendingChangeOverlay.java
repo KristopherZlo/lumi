@@ -32,7 +32,7 @@ public final class LumiPendingChangeOverlay {
 
     public void register() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
-        WorldRenderEvents.BEFORE_DEBUG_RENDER.register(this::render);
+        WorldRenderEvents.END_MAIN.register(this::render);
     }
 
     private void tick(Minecraft client) {

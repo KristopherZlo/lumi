@@ -77,7 +77,7 @@ public final class LumiOperationHud {
         if (expanded) {
             graphics.drawString(client.font, "Alt+S save · Alt+Z/Y undo/redo",
                     x + 6, 35, 0xfff0f3f6, false);
-            graphics.drawString(client.font, "Alt+L history · Alt+R rollback",
+            graphics.drawString(client.font, "U history · Alt+R rollback",
                     x + 6, 48, 0xfff0f3f6, false);
             graphics.drawString(client.font, "Alt+1..0 switch branch",
                     x + 6, 61, 0xff8f9aa8, false);

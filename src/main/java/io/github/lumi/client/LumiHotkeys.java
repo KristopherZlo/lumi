@@ -10,13 +10,13 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 
-/** Registers retained Alt chords and dispatches them only during normal play. */
+/** Registers the retained U dashboard key and Alt action chords. */
 public final class LumiHotkeys {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "general"));
     private final HotkeyActionDispatcher dispatcher;
     private final KeyMapping dashboard = mapping(
-            "key.lumi.open_dashboard", InputConstants.KEY_L);
+            "key.lumi.open_dashboard", defaultDashboardKey());
     private final KeyMapping save = mapping("key.lumi.quick_save", InputConstants.KEY_S);
     private final KeyMapping undo = mapping("key.lumi.undo", InputConstants.KEY_Z);
     private final KeyMapping redo = mapping("key.lumi.redo", InputConstants.KEY_Y);
@@ -54,18 +54,29 @@ public final class LumiHotkeys {
     }
 
     private void tick(Minecraft client) {
-        boolean canAct = client.player != null && client.screen == null && altDown(client);
-        consume(dashboard, canAct, HotkeyActionDispatcher.Action.DASHBOARD);
-        consume(save, canAct, HotkeyActionDispatcher.Action.SAVE);
-        consume(undo, canAct, HotkeyActionDispatcher.Action.UNDO);
-        consume(redo, canAct, HotkeyActionDispatcher.Action.REDO);
-        consume(rollback, canAct, HotkeyActionDispatcher.Action.QUICK_ROLLBACK);
-        consume(info, canAct, HotkeyActionDispatcher.Action.HOTKEYS);
+        boolean normalPlay = client.player != null && client.screen == null;
+        boolean altDown = altDown(client);
+        consume(dashboard, canOpenDashboard(normalPlay, altDown),
+                HotkeyActionDispatcher.Action.DASHBOARD);
+        boolean canUseChord = normalPlay && altDown;
+        consume(save, canUseChord, HotkeyActionDispatcher.Action.SAVE);
+        consume(undo, canUseChord, HotkeyActionDispatcher.Action.UNDO);
+        consume(redo, canUseChord, HotkeyActionDispatcher.Action.REDO);
+        consume(rollback, canUseChord, HotkeyActionDispatcher.Action.QUICK_ROLLBACK);
+        consume(info, canUseChord, HotkeyActionDispatcher.Action.HOTKEYS);
         for (int slot = 0; slot < branches.length; slot++) {
-            if (consume(branches[slot]) && canAct) {
+            if (consume(branches[slot]) && canUseChord) {
                 dispatcher.switchBranch(slot);
             }
         }
+    }
+
+    static int defaultDashboardKey() {
+        return InputConstants.KEY_U;
+    }
+
+    static boolean canOpenDashboard(boolean normalPlay, boolean altDown) {
+        return normalPlay;
     }
 
     private void consume(
