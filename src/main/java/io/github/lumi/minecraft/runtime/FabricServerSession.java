@@ -1,11 +1,13 @@
 package io.github.lumi.minecraft.runtime;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.domain.service.LumiPermissionService;
 import io.github.lumi.domain.service.PermissionDecision;
 import io.github.lumi.domain.service.PermissionSubject;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
 import io.github.lumi.storage.repository.SurvivalOptInRepository;
 import java.io.IOException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -22,6 +24,7 @@ import net.minecraft.world.level.storage.LevelResource;
 final class FabricServerSession implements AutoCloseable {
     private static final int BACKGROUND_THREADS = 2;
     private static final int BACKGROUND_QUEUE = 256;
+    private static final int DURABILITY_SHUTDOWN_SECONDS = 5;
     private final MinecraftServer server;
     private final DimensionRepositoryLayout layout;
     private final LumiPermissionService permissions;
@@ -101,19 +104,48 @@ final class FabricServerSession implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        dimensions.close();
-        operationBackground.shutdown();
-        durabilityBackground.shutdown();
-        boolean operationsFinished =
-                operationBackground.awaitTermination(30, TimeUnit.SECONDS);
-        boolean durabilityFinished =
-                durabilityBackground.awaitTermination(30, TimeUnit.SECONDS);
-        if (!operationsFinished || !durabilityFinished) {
-            throw new IllegalStateException(
-                    "Lumi background work did not finish in 30 seconds"
-                            + " (operations=" + operationsFinished
-                            + ", durability=" + durabilityFinished + ")");
+        Exception failure = null;
+        try {
+            dimensions.close();
+        } catch (Exception closeFailure) {
+            failure = closeFailure;
+        } finally {
+            boolean durabilityFinished = stopBackgroundWorkers(
+                    operationBackground,
+                    durabilityBackground,
+                    DURABILITY_SHUTDOWN_SECONDS,
+                    TimeUnit.SECONDS);
+            if (!durabilityFinished) {
+                LumiMod.LOGGER.warn(
+                        "Lumi durability work exceeded the {} second shutdown window; "
+                                + "remaining daemon work was interrupted",
+                        DURABILITY_SHUTDOWN_SECONDS);
+            }
         }
+        if (failure != null) {
+            throw failure;
+        }
+    }
+
+    static boolean stopBackgroundWorkers(
+            ExecutorService operations,
+            ExecutorService durability,
+            long timeout,
+            TimeUnit unit) {
+        Objects.requireNonNull(operations, "operations");
+        Objects.requireNonNull(durability, "durability");
+        Objects.requireNonNull(unit, "unit");
+        operations.shutdownNow();
+        durability.shutdown();
+        try {
+            if (durability.awaitTermination(timeout, unit)) {
+                return true;
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        durability.shutdownNow();
+        return false;
     }
 
     private void requireServer(ServerLevel level) {
