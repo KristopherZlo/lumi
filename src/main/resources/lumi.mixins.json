@@ -18,6 +18,7 @@
     "ServerPlayerGameModeMixin",
     "ServerLevelMixin",
     "ServerGamePacketListenerImplMixin",
+    "ServerLevelEntityManagerAccessor",
     "TransientCarrierEntityMixin"
   ],
   "injectors": {

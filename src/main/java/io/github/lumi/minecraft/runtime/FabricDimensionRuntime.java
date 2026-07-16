@@ -8,6 +8,7 @@ import io.github.lumi.minecraft.operation.LiveActionOperation;
 import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
 import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
 import io.github.lumi.minecraft.operation.BranchRefRestorePublication;
+import io.github.lumi.minecraft.operation.CapturedGenerationCompletion;
 import io.github.lumi.minecraft.operation.PendingRestorePublication;
 import io.github.lumi.minecraft.operation.OperationPriority;
 import io.github.lumi.minecraft.operation.RestoreOperation;
@@ -45,6 +46,7 @@ import io.github.lumi.domain.service.MaterialCountService;
 import io.github.lumi.domain.service.PreparedMerge;
 import io.github.lumi.domain.service.BranchService;
 import io.github.lumi.domain.service.SaveRequest;
+import io.github.lumi.domain.service.SavePublisher;
 import io.github.lumi.domain.service.SaveService;
 import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.domain.service.RecoveryChoice;
@@ -57,6 +59,8 @@ import io.github.lumi.domain.service.ZoneService;
 import io.github.lumi.domain.service.TombstoneService;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.BatchedWorldStateCapture;
+import io.github.lumi.minecraft.world.ChunkLoadingSavePreparation;
+import io.github.lumi.minecraft.world.ChunkLoadSession;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
 import io.github.lumi.minecraft.world.DurableSavePreparation;
 import io.github.lumi.minecraft.world.EntityChunkDurabilityGate;
@@ -64,13 +68,13 @@ import io.github.lumi.minecraft.world.MinecraftBlockEntityBaselineCapture;
 import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
 import io.github.lumi.minecraft.world.MinecraftLiveBlockWorldAccess;
 import io.github.lumi.minecraft.world.MinecraftLiveEntityWorldAccess;
+import io.github.lumi.minecraft.world.MinecraftChunkLoadAccess;
 import io.github.lumi.minecraft.world.MinecraftWorldStateReader;
 import io.github.lumi.minecraft.world.MinecraftWorldStateApply;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
 import io.github.lumi.minecraft.world.RestoreBaselineReconciler;
 import io.github.lumi.minecraft.world.SavePreparation;
 import io.github.lumi.minecraft.world.ScopedSavePreparation;
-import io.github.lumi.minecraft.world.WorldStateCapture;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
 import io.github.lumi.storage.repository.ActiveBranchRepository;
 import io.github.lumi.storage.repository.ActiveWorkspaceRepository;
@@ -125,7 +129,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final MutationDurabilityTracker mutations;
     private final EntityChunkDurabilityGate entityDurability;
     private final SavePreparation savePreparation;
-    private final WorldStateCapture worldCapture;
     private final MinecraftWorldStateReader worldReader;
     private final SaveService saves;
     private final RestoreService restores;
@@ -239,7 +242,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         "Lumi background garbage collection failed", failure));
         worldReader = new MinecraftWorldStateReader(level);
         savePreparation = new DurableSavePreparation(worldReader, entityDurability, mutations);
-        worldCapture = new BatchedWorldStateCapture(worldReader);
     }
 
     public static FabricDimensionRuntime open(
@@ -381,14 +383,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     expected, AUTO_AUTHOR, "Automatic version", Instant.now(),
                     workspaceId, Optional.empty(), CommitKind.AUTO);
             BranchName hidden = autoVersions.refName(expected.name(), UUID.randomUUID());
-            SaveCaptureOperation operation = new SaveCaptureOperation(
-                    request, scopedSavePreparation(request), worldCapture,
+            SaveCaptureOperation operation = createChunkReadySave(
+                    request, scopedSavePreparation(request),
                     (save, captured) -> {
                         var result = saves.checkpoint(save, captured, hidden);
                         autoVersions.prune(expected.name(), 64);
                         return result;
                     },
-                    ignored -> { }, background);
+                    ignored -> { });
             operations.enqueue(operation, OperationPriority.NORMAL, completed -> {
                 operation.result().ifPresent(result -> lastAutoVersion =
                         new AutoVersionFingerprint(expected.commit(),
@@ -543,10 +545,21 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private SaveCaptureOperation createSave(SaveRequest request) throws IOException {
+        return createChunkReadySave(
+                request, scopedSavePreparation(request), saves, mutations);
+    }
+
+    private SaveCaptureOperation createChunkReadySave(
+            SaveRequest request,
+            SavePreparation preparation,
+            SavePublisher publisher,
+            CapturedGenerationCompletion completion) {
+        ChunkLoadSession chunks = new ChunkLoadSession(new MinecraftChunkLoadAccess(level));
         return new SaveCaptureOperation(
                 Objects.requireNonNull(request, "request"),
-                scopedSavePreparation(request), worldCapture,
-                saves, mutations, background);
+                new ChunkLoadingSavePreparation(preparation, chunks),
+                new BatchedWorldStateCapture(worldReader, chunks::close),
+                publisher, completion, background);
     }
 
     private SavePreparation scopedSavePreparation(SaveRequest request) throws IOException {
@@ -1103,10 +1116,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 expected, author,
                 "Checkpoint before partial Restore", Instant.now(), workspaceId,
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
-        SaveCaptureOperation checkpoint = new SaveCaptureOperation(
-                checkpointRequest, savePreparation, worldCapture,
+        SaveCaptureOperation checkpoint = createChunkReadySave(
+                checkpointRequest, savePreparation,
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
-                ignored -> { }, background);
+                ignored -> { });
         var operation = new ReturnPointRestoreOperation(checkpoint, saved ->
                 CompletableFuture.supplyAsync(() -> {
                     try {
@@ -1162,10 +1175,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 Optional.of(zone.id()), CommitKind.HIDDEN_RETURN);
         SavePreparation scoped = new ScopedSavePreparation(
                 savePreparation, key -> workspace.includes(key) && scope.includes(key));
-        SaveCaptureOperation checkpoint = new SaveCaptureOperation(
-                checkpointRequest, scoped, worldCapture,
+        SaveCaptureOperation checkpoint = createChunkReadySave(
+                checkpointRequest, scoped,
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
-                ignored -> { }, background);
+                ignored -> { });
         var operation = new ReturnPointRestoreOperation(checkpoint, saved ->
                 CompletableFuture.supplyAsync(() -> {
                     try {
@@ -1209,10 +1222,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 expected, author,
                 "Checkpoint before Quick Rollback", Instant.now(), activeWorkspaceId(),
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
-        SaveCaptureOperation checkpoint = new SaveCaptureOperation(
-                checkpointRequest, savePreparation, worldCapture,
+        SaveCaptureOperation checkpoint = createChunkReadySave(
+                checkpointRequest, savePreparation,
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
-                ignored -> { }, background);
+                ignored -> { });
         var operation = new ReturnPointRestoreOperation(checkpoint, saved ->
                 CompletableFuture.supplyAsync(() -> {
                     try {
@@ -1239,7 +1252,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public DimensionOperationCoordinator operations() { return operations; }
     public MutationDurabilityTracker mutations() { return mutations; }
     public SavePreparation savePreparation() { return savePreparation; }
-    public WorldStateCapture worldCapture() { return worldCapture; }
     public BranchRef activeRef() throws IOException {
         BranchName name = active.read().orElseThrow(
                 () -> new IOException("Active Lumi branch is missing")).name();
