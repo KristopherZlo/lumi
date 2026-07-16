@@ -12,7 +12,10 @@ import io.github.lumi.client.ui.LumiDeletedVersionsScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiCompareScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
+import io.github.lumi.client.ui.LumiMoreScreen;
+import io.github.lumi.client.ui.LumiOnboardingScreen;
 import io.github.lumi.client.ui.LumiPackageScreen;
+import io.github.lumi.client.ui.LumiSpecialThanksScreen;
 import io.github.lumi.client.ui.LumiHotkeyScreen;
 import io.github.lumi.client.ui.LumiZonesScreen;
 import io.github.lumi.client.ui.LumiZoneDetailsScreen;
@@ -74,6 +77,7 @@ public final class LumiClient implements ClientModInitializer {
                                         client.screen, new PackageScreenController(
                                                 NETWORKING::exportPackage,
                                                 NETWORKING::inspectPackage))),
+                                () -> openMore(client.screen),
                                 NETWORKING::quickRollback,
                                 version -> client.setScreen(new LumiRestoreScreen(
                                         client.screen,
@@ -155,6 +159,17 @@ public final class LumiClient implements ClientModInitializer {
                 new ZoneScreenController(NETWORKING::createZone),
                 zone -> openZoneDetails(client.screen, zone),
                 NETWORKING::enterZone, NETWORKING::leaveZone));
+    }
+
+    private static void openMore(Screen parent) {
+        Minecraft client = Minecraft.getInstance();
+        client.setScreen(new LumiMoreScreen(
+                parent,
+                () -> client.setScreen(new LumiOnboardingScreen(client.screen)),
+                () -> client.setScreen(new LumiHotkeyScreen(
+                        client.screen,
+                        LumiHotkeys.shortcuts(client.options.keyMappings))),
+                () -> client.setScreen(new LumiSpecialThanksScreen(client.screen))));
     }
 
     private static void openZoneDetails(

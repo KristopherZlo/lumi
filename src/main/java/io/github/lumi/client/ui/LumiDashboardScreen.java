@@ -20,6 +20,7 @@ public final class LumiDashboardScreen extends Screen {
     private final Runnable openZones;
     private final Runnable openDeleted;
     private final Runnable openPackages;
+    private final Runnable openMore;
     private final Runnable quickRollback;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
     private final Consumer<HistorySnapshotPayload.Version> openDelete;
@@ -39,6 +40,7 @@ public final class LumiDashboardScreen extends Screen {
             Runnable openZones,
             Runnable openDeleted,
             Runnable openPackages,
+            Runnable openMore,
             Runnable quickRollback,
             Consumer<HistorySnapshotPayload.Version> openRestore,
             Consumer<HistorySnapshotPayload.Version> openDelete,
@@ -52,6 +54,7 @@ public final class LumiDashboardScreen extends Screen {
         this.openZones = Objects.requireNonNull(openZones, "openZones");
         this.openDeleted = Objects.requireNonNull(openDeleted, "openDeleted");
         this.openPackages = Objects.requireNonNull(openPackages, "openPackages");
+        this.openMore = Objects.requireNonNull(openMore, "openMore");
         this.quickRollback = Objects.requireNonNull(quickRollback, "quickRollback");
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
         this.openDelete = Objects.requireNonNull(openDelete, "openDelete");
@@ -82,7 +85,7 @@ public final class LumiDashboardScreen extends Screen {
                     onClose();
                 }).bounds(panelX + 40 + buttonWidth * 3, buttonY, buttonWidth, 20).build());
         addRenderableWidget(Button.builder(
-                Component.translatable("luma.action.close"), ignored -> onClose())
+                Component.translatable("luma.action.more"), ignored -> openMore.run())
                 .bounds(panelX + 48 + buttonWidth * 4, buttonY, buttonWidth, 20).build());
         addRenderableWidget(Button.builder(
                 Component.translatable("luma.tab.zones"), ignored -> openZones.run())
