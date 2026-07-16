@@ -2,21 +2,20 @@ package io.github.lumi.client.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** One logical-name form for world-local package export and trust inspection. */
-public final class LumiPackageScreen extends Screen {
+public final class LumiPackageScreen extends LumiLegacyModalScreen {
     private static final int PANEL_WIDTH = 400;
     private static final int PANEL_HEIGHT = 174;
     private final Screen parent;
     private final PackageScreenController controller;
     private EditBox name;
-    private Button export;
-    private Button inspect;
+    private LumiLegacyButton export;
+    private LumiLegacyButton inspect;
     private String status = "";
     private boolean failed;
     private int panelX;
@@ -39,6 +38,8 @@ public final class LumiPackageScreen extends Screen {
                 Component.translatable("luma.share.package_name"));
         name.setMaxLength(PackageScreenController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.share.package_name"));
+        name.setBordered(false);
+        name.setTextColor(LegacyLumiTheme.TEXT);
         name.setResponder(value -> {
             boolean active = !value.trim().isEmpty();
             export.active = active;
@@ -47,19 +48,19 @@ public final class LumiPackageScreen extends Screen {
         addRenderableWidget(name);
 
         int buttonWidth = (contentWidth - 16) / 3;
-        export = addRenderableWidget(Button.builder(
+        export = addLegacyButton(contentX, panelY + 126, buttonWidth,
                 Component.translatable("luma.action.export_package"),
-                ignored -> submit(PackageScreenController.Action.EXPORT))
-                .bounds(contentX, panelY + 126, buttonWidth, 20).build());
-        inspect = addRenderableWidget(Button.builder(
+                () -> submit(PackageScreenController.Action.EXPORT),
+                LumiLegacyButton.Kind.PRIMARY);
+        inspect = addLegacyButton(contentX + buttonWidth + 8,
+                panelY + 126, buttonWidth,
                 Component.translatable("luma.action.import_package"),
-                ignored -> submit(PackageScreenController.Action.INSPECT))
-                .bounds(contentX + buttonWidth + 8,
-                        panelY + 126, buttonWidth, 20).build());
-        addRenderableWidget(Button.builder(
-                Component.translatable("luma.action.close"), ignored -> onClose())
-                .bounds(contentX + (buttonWidth + 8) * 2,
-                        panelY + 126, buttonWidth, 20).build());
+                () -> submit(PackageScreenController.Action.INSPECT),
+                LumiLegacyButton.Kind.NORMAL);
+        addLegacyButton(contentX + (buttonWidth + 8) * 2,
+                panelY + 126, buttonWidth,
+                Component.translatable("luma.action.close"),
+                this::onClose, LumiLegacyButton.Kind.NORMAL);
         export.active = false;
         inspect.active = false;
     }
@@ -91,20 +92,22 @@ public final class LumiPackageScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderTransparentBackground(graphics);
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        graphics.fill(panelX, panelY, panelX + panelWidth,
-                panelY + PANEL_HEIGHT, 0xee15181d);
-        graphics.drawCenteredString(font, title, width / 2, panelY + 17, 0xffffffff);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+        graphics.drawCenteredString(font, title, width / 2, panelY + 17,
+                LegacyLumiTheme.TEXT);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.simple.share_help"),
-                width / 2, panelY + 37, 0xffaeb6c2);
+                width / 2, panelY + 37, LegacyLumiTheme.MUTED);
         graphics.drawString(font, Component.translatable("luma.share.package_name"),
-                panelX + 20, panelY + 55, 0xffdbe2ea, false);
+                panelX + 20, panelY + 55, LegacyLumiTheme.TEXT, false);
+        LegacyLumiTheme.outlined(graphics, panelX + 18, panelY + 66,
+                panelWidth - 36, 24,
+                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         if (!status.isEmpty()) {
             graphics.drawString(font, Component.literal(status),
                     panelX + 20, panelY + 97,
-                    failed ? 0xffff6b6b : 0xff8fca9a, false);
+                    failed ? LegacyLumiTheme.DANGER : LegacyLumiTheme.ACCENT, false);
         }
         super.render(graphics, mouseX, mouseY, partialTick);
     }
