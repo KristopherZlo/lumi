@@ -10,6 +10,7 @@ import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.PermissionDecision;
 import io.github.lumi.domain.service.LiveActionJournal;
+import io.github.lumi.domain.service.RecoveryChoice;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.operation.OperationTicket;
@@ -116,6 +117,10 @@ public final class LumiServerNetworking {
                     player.getUUID(), LiveActionJournal.Direction.REDO, terminal);
             case BRANCH_SWITCH -> runtime.startBranchSwitch(
                     new BranchName(payload.argument()), terminal);
+            case RECOVER_RESUME -> runtime.startRecovery(
+                    RecoveryChoice.RESUME_TARGET, terminal);
+            case RECOVER_RETURN -> runtime.startRecovery(
+                    RecoveryChoice.RETURN_CHECKPOINT, terminal);
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
@@ -328,6 +333,7 @@ public final class LumiServerNetworking {
                     dimension(runtime), head.commit(), head.revision(),
                     runtime.mutations().snapshot().generations().size(),
                     runtime.operations().hasActiveOperation(),
+                    runtime.recoveryJournal().isPresent(),
                     workspace.id(), workspace.name(), head.name().value(),
                     versions, branchViews));
         } catch (IOException failed) {

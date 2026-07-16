@@ -5,7 +5,9 @@ import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
+import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.client.ui.SaveScreenController;
+import io.github.lumi.network.HistorySnapshotPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -13,7 +15,8 @@ import net.minecraft.network.chat.Component;
 /** Client entrypoint; retained UI controllers consume this single networking facade. */
 public final class LumiClient implements ClientModInitializer {
     private static final ClientHistoryStore HISTORY = new ClientHistoryStore();
-    private static final LumiClientNetworking NETWORKING = new LumiClientNetworking(HISTORY);
+    private static final LumiClientNetworking NETWORKING =
+            new LumiClientNetworking(HISTORY, LumiClient::showRecovery);
 
     @Override
     public void onInitializeClient() {
@@ -65,6 +68,17 @@ public final class LumiClient implements ClientModInitializer {
         Component message = value.startsWith("luma.")
                 ? Component.translatable(value) : Component.literal(value);
         player.displayClientMessage(message, true);
+    }
+
+    private static void showRecovery(HistorySnapshotPayload snapshot) {
+        Minecraft client = Minecraft.getInstance();
+        if (!snapshot.recoveryPending()
+                || snapshot.operationActive()
+                || client.screen instanceof LumiRecoveryScreen) {
+            return;
+        }
+        client.setScreen(new LumiRecoveryScreen(
+                client.screen, NETWORKING::resumeRecovery, NETWORKING::returnRecovery));
     }
 
     public static ClientHistoryStore history() {

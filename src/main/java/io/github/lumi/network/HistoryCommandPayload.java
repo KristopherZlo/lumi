@@ -37,7 +37,8 @@ public record HistoryCommandPayload(
         if (kind == Kind.RESTORE) {
             new ObjectId(argument);
         }
-        if ((kind == Kind.QUICK_ROLLBACK || kind == Kind.UNDO || kind == Kind.REDO)
+        if ((kind == Kind.QUICK_ROLLBACK || kind == Kind.UNDO || kind == Kind.REDO
+                || kind == Kind.RECOVER_RESUME || kind == Kind.RECOVER_RETURN)
                 && !argument.isEmpty()) {
             throw new IllegalArgumentException(kind + " does not accept an argument");
         }
@@ -65,7 +66,8 @@ public record HistoryCommandPayload(
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
 
     public enum Kind {
-        SAVE(0), RESTORE(1), QUICK_ROLLBACK(2), UNDO(3), REDO(4), BRANCH_SWITCH(5);
+        SAVE(0), RESTORE(1), QUICK_ROLLBACK(2), UNDO(3), REDO(4), BRANCH_SWITCH(5),
+        RECOVER_RESUME(6), RECOVER_RETURN(7);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

@@ -28,7 +28,9 @@ class LumiPayloadCodecTest {
         for (HistoryCommandPayload.Kind kind : java.util.List.of(
                 HistoryCommandPayload.Kind.QUICK_ROLLBACK,
                 HistoryCommandPayload.Kind.UNDO,
-                HistoryCommandPayload.Kind.REDO)) {
+                HistoryCommandPayload.Kind.REDO,
+                HistoryCommandPayload.Kind.RECOVER_RESUME,
+                HistoryCommandPayload.Kind.RECOVER_RETURN)) {
             HistoryCommandPayload live = new HistoryCommandPayload(
                     UUID.randomUUID(), kind, "", id('2'), 43);
             assertEquals(live, roundTrip(HistoryCommandPayload.CODEC, live));
@@ -53,7 +55,7 @@ class LumiPayloadCodecTest {
     @Test
     void snapshotAndTerminalEventRoundTrip() {
         HistorySnapshotPayload snapshot = new HistorySnapshotPayload(
-                "minecraft:overworld", id('a'), 7, 3, true,
+                "minecraft:overworld", id('a'), 7, 3, true, true,
                 new UUID(0, 7), "Redstone lab", "workspace/lab/main",
                 java.util.List.of(new HistorySnapshotPayload.Version(
                         id('a'), "Clock works", "Builder", 1234,

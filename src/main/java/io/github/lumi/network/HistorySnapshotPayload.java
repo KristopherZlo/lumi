@@ -19,6 +19,7 @@ public record HistorySnapshotPayload(
         long revision,
         int pendingKeys,
         boolean operationActive,
+        boolean recoveryPending,
         UUID workspaceId,
         String workspaceName,
         String branchName,
@@ -62,7 +63,7 @@ public record HistorySnapshotPayload(
             int pendingKeys,
             boolean operationActive) {
         this(dimensionId, head, revision, pendingKeys, operationActive,
-                new UUID(0, 0), "", "unknown", List.of(), List.of());
+                false, new UUID(0, 0), "", "unknown", List.of(), List.of());
     }
 
     private void write(FriendlyByteBuf buffer) {
@@ -71,6 +72,7 @@ public record HistorySnapshotPayload(
         buffer.writeVarLong(revision);
         buffer.writeVarInt(pendingKeys);
         buffer.writeBoolean(operationActive);
+        buffer.writeBoolean(recoveryPending);
         buffer.writeUUID(workspaceId);
         buffer.writeUtf(workspaceName, MAX_TEXT_BYTES);
         buffer.writeUtf(branchName, MAX_TEXT_BYTES);
@@ -86,6 +88,7 @@ public record HistorySnapshotPayload(
         long revision = buffer.readVarLong();
         int pending = buffer.readVarInt();
         boolean active = buffer.readBoolean();
+        boolean recovery = buffer.readBoolean();
         UUID workspace = buffer.readUUID();
         String workspaceName = buffer.readUtf(MAX_TEXT_BYTES);
         String branch = buffer.readUtf(MAX_TEXT_BYTES);
@@ -106,7 +109,7 @@ public record HistorySnapshotPayload(
             branches.add(Branch.read(buffer));
         }
         return new HistorySnapshotPayload(
-                dimension, head, revision, pending, active,
+                dimension, head, revision, pending, active, recovery,
                 workspace, workspaceName, branch, versions, branches);
     }
 

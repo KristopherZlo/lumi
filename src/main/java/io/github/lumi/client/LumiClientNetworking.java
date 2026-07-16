@@ -8,21 +8,29 @@ import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 
 /** Thin client sender/receiver; all history decisions stay on the server. */
 public final class LumiClientNetworking {
     private final ClientHistoryStore history;
+    private final Consumer<HistorySnapshotPayload> snapshotListener;
 
-    public LumiClientNetworking(ClientHistoryStore history) {
+    public LumiClientNetworking(
+            ClientHistoryStore history,
+            Consumer<HistorySnapshotPayload> snapshotListener) {
         this.history = Objects.requireNonNull(history, "history");
+        this.snapshotListener = Objects.requireNonNull(snapshotListener, "snapshotListener");
     }
 
     public void register() {
         ClientPlayNetworking.registerGlobalReceiver(
                 HistorySnapshotPayload.TYPE, (payload, context) ->
-                        context.client().execute(() -> history.accept(payload)));
+                        context.client().execute(() -> {
+                            history.accept(payload);
+                            snapshotListener.accept(payload);
+                        }));
         ClientPlayNetworking.registerGlobalReceiver(
                 OperationEventPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> history.accept(payload)));
@@ -54,6 +62,14 @@ public final class LumiClientNetworking {
     public UUID switchBranch(String branchName) {
         return send(HistoryCommandPayload.Kind.BRANCH_SWITCH,
                 Objects.requireNonNull(branchName, "branchName"));
+    }
+
+    public UUID resumeRecovery() {
+        return send(HistoryCommandPayload.Kind.RECOVER_RESUME, "");
+    }
+
+    public UUID returnRecovery() {
+        return send(HistoryCommandPayload.Kind.RECOVER_RETURN, "");
     }
 
     public UUID cancel(UUID originalRequest) {
