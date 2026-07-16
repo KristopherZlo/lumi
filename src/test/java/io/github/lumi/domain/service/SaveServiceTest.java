@@ -54,11 +54,12 @@ class SaveServiceTest {
                 new CommitStatistics(1, 0, 1, 0), Map.of(player, spawn));
         SaveService service = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
                 new OperationJournalRepository(repositoryRoot));
+        var progress = new ArrayList<SavePublicationProgress>();
 
         SaveResult result = service.save(new SaveRequest(
                 initialRef, author(), "Tower", Instant.parse("2026-07-15T12:00:00Z"),
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
-                Optional.empty(), CommitKind.MANUAL), captured);
+                Optional.empty(), CommitKind.MANUAL), captured, progress::add);
 
         Commit saved = commits.read(result.commitId());
         assertEquals(List.of(initialId), saved.parents());
@@ -66,6 +67,11 @@ class SaveServiceTest {
         assertEquals(captured.generations(), result.capturedGenerations());
         assertEquals(Map.of(player, spawn), saved.playerSpawns());
         assertTrue(new OperationJournalRepository(repositoryRoot).read().isEmpty());
+        assertTrue(progress.contains(new SavePublicationProgress(
+                "Save: writing captured state", 1, 1)));
+        assertTrue(progress.contains(new SavePublicationProgress(
+                "Save: building history tree", 3, 3)));
+        assertEquals("Save: publishing branch", progress.getLast().phase());
         try (var files = Files.walk(repositoryRoot.resolve("objects").resolve("packs"))) {
             assertEquals(1, files.filter(path -> path.toString().endsWith(".pack")).count());
         }

@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 
 public final class MerkleTreeEditor {
     private static final int REGION_SIZE = 32;
@@ -40,10 +41,20 @@ public final class MerkleTreeEditor {
             Optional<ObjectId> baseRoot,
             Map<HistoryKey, ObjectId> changes,
             WorldObjectRepository.WriteBatch batch) throws IOException {
+        return update(baseRoot, changes, batch, (completed, total) -> { });
+    }
+
+    public ObjectId update(
+            Optional<ObjectId> baseRoot,
+            Map<HistoryKey, ObjectId> changes,
+            WorldObjectRepository.WriteBatch batch,
+            BiConsumer<Long, Long> progress) throws IOException {
         Objects.requireNonNull(baseRoot, "baseRoot");
         Objects.requireNonNull(changes, "changes");
         Objects.requireNonNull(batch, "batch");
+        Objects.requireNonNull(progress, "progress");
         if (changes.isEmpty() && baseRoot.isPresent()) {
+            progress.accept(1L, 1L);
             return baseRoot.orElseThrow();
         }
         DimensionTree base = baseRoot.isPresent()
@@ -51,6 +62,10 @@ public final class MerkleTreeEditor {
                 : new DimensionTree(Map.of());
         Map<RegionCoordinate, Map<ChunkInRegion, Map<HistoryKey, ObjectId>>> grouped = group(changes);
         Map<RegionCoordinate, ObjectId> regions = new HashMap<>(base.regions());
+        long total = grouped.values().stream().mapToLong(Map::size).sum()
+                + grouped.size() + 1L;
+        long completed = 0;
+        progress.accept(completed, total);
 
         for (var regionChange : grouped.entrySet()) {
             RegionTree oldRegion = regions.containsKey(regionChange.getKey())
@@ -71,10 +86,14 @@ public final class MerkleTreeEditor {
                     }
                 }
                 chunks.put(chunkChange.getKey(), batch.write(new ChunkTree(sections, entities)));
+                progress.accept(++completed, total);
             }
             regions.put(regionChange.getKey(), batch.write(new RegionTree(chunks)));
+            progress.accept(++completed, total);
         }
-        return batch.write(new DimensionTree(regions));
+        ObjectId root = batch.write(new DimensionTree(regions));
+        progress.accept(++completed, total);
+        return root;
     }
 
     private static Map<RegionCoordinate, Map<ChunkInRegion, Map<HistoryKey, ObjectId>>> group(

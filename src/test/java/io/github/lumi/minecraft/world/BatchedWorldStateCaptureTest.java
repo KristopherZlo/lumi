@@ -58,7 +58,10 @@ class BatchedWorldStateCaptureTest {
 
         assertFalse(session.captureUntil(50));
         assertEquals(1, reads.size());
+        assertEquals(1, session.completedKeys());
+        assertEquals(2, session.totalKeys());
         assertTrue(session.captureUntil(110));
+        assertEquals(2, session.completedKeys());
 
         var captured = session.finish();
         assertEquals(Map.of(sectionKey, section), captured.sections());

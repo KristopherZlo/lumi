@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public final class SaveService implements SavePublisher {
     private final WorldObjectRepository objects;
@@ -45,9 +46,19 @@ public final class SaveService implements SavePublisher {
 
     @Override
     public SaveResult save(SaveRequest request, CapturedWorldState captured) throws IOException {
+        return save(request, captured, ignored -> { });
+    }
+
+    @Override
+    public SaveResult save(
+            SaveRequest request,
+            CapturedWorldState captured,
+            Consumer<SavePublicationProgress> progress) throws IOException {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(captured, "captured");
-        CommitId commitId = writeCommit(request, captured);
+        Objects.requireNonNull(progress, "progress");
+        CommitId commitId = writeCommit(request, captured, progress);
+        progress.accept(SavePublicationProgress.indeterminate("Save: publishing branch"));
         OperationJournal journal = journals.create(new OperationJournal(
                 UUID.randomUUID(),
                 OperationKind.SAVE,
@@ -84,14 +95,31 @@ public final class SaveService implements SavePublisher {
 
     private CommitId writeCommit(SaveRequest request, CapturedWorldState captured)
             throws IOException {
+        return writeCommit(request, captured, ignored -> { });
+    }
+
+    private CommitId writeCommit(
+            SaveRequest request,
+            CapturedWorldState captured,
+            Consumer<SavePublicationProgress> progress) throws IOException {
         Commit parent = commits.read(request.expectedRef().commit());
         ObjectId tree;
         try (WorldObjectRepository.WriteBatch batch = objects.beginBatch()) {
+            long capturedTotal = captured.sections().size() + (long) captured.entities().size();
+            progress.accept(new SavePublicationProgress(
+                    "Save: writing captured state", 0, capturedTotal));
             Map<HistoryKey, ObjectId> changes = batch.writeCaptured(
-                    captured.sections(), captured.entities());
-            tree = trees.update(Optional.of(parent.tree()), changes, batch);
+                    captured.sections(), captured.entities(),
+                    completed -> progress.accept(new SavePublicationProgress(
+                            "Save: writing captured state", completed, capturedTotal)));
+            tree = trees.update(Optional.of(parent.tree()), changes, batch,
+                    (completed, total) -> progress.accept(new SavePublicationProgress(
+                            "Save: building history tree", completed, total)));
+            progress.accept(SavePublicationProgress.indeterminate(
+                    "Save: publishing object pack"));
             batch.publish();
         }
+        progress.accept(SavePublicationProgress.indeterminate("Save: writing commit"));
         List<CommitId> parents = request.kind() == CommitKind.AMEND
                 ? parent.parents() : List.of(request.expectedRef().commit());
         Commit commit = new Commit(

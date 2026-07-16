@@ -95,7 +95,15 @@ public final class BatchedWorldStateCapture implements WorldStateCapture {
                     new CommitStatistics(
                             sections.size(), entities.size(),
                             Math.multiplyExact((long) sections.size(), SectionBlob.BLOCK_COUNT),
-                            entityCount), playerSpawns);
+                    entityCount), playerSpawns);
+        }
+
+        @Override public long completedKeys() {
+            return next;
+        }
+
+        @Override public long totalKeys() {
+            return keys.size();
         }
     }
 }

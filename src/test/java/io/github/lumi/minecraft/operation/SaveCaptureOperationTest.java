@@ -15,6 +15,8 @@ import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndex;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.CapturedWorldState;
+import io.github.lumi.domain.service.SavePublicationProgress;
+import io.github.lumi.domain.service.SavePublisher;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveResult;
 import io.github.lumi.minecraft.world.WorldStateCapture;
@@ -71,9 +73,22 @@ class SaveCaptureOperationTest {
         ManualExecutor background = new ManualExecutor();
         CommitId savedId = id('2');
         BranchRef published = new BranchRef(new BranchName("main"), savedId, 1);
+        SavePublisher publisher = new SavePublisher() {
+            @Override public SaveResult save(SaveRequest request, CapturedWorldState state) {
+                return new SaveResult(savedId, published, state.generations());
+            }
+
+            @Override public SaveResult save(
+                    SaveRequest request,
+                    CapturedWorldState state,
+                    java.util.function.Consumer<SavePublicationProgress> progress) {
+                progress.accept(new SavePublicationProgress(
+                        "Save: publishing object pack", 5, 8));
+                return save(request, state);
+            }
+        };
         SaveCaptureOperation operation = new SaveCaptureOperation(
-                request(), dirty, world,
-                (request, state) -> new SaveResult(savedId, published, state.generations()),
+                request(), dirty, world, publisher,
                 generations -> working.clearCaptured(generations), background);
 
         operation.advance(50L);
@@ -87,6 +102,8 @@ class SaveCaptureOperationTest {
 
         working.markDirty(key);
         background.runNext();
+        assertEquals(new OperationProgress(
+                "Save: publishing object pack", 5, 8), operation.progress());
         operation.advance(150L);
 
         assertEquals(SaveOperationStatus.COMPLETE, operation.status());

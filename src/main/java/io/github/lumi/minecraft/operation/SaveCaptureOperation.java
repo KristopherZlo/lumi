@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.operation;
 
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.CapturedWorldState;
+import io.github.lumi.domain.service.SavePublicationProgress;
 import io.github.lumi.domain.service.SavePublisher;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveResult;
@@ -29,6 +30,8 @@ public final class SaveCaptureOperation implements DimensionMutation {
     private SaveOperationStatus status = SaveOperationStatus.PREPARING;
     private SaveResult result;
     private Throwable failure;
+    private volatile OperationProgress publicationProgress =
+            OperationProgress.indeterminate("Save: starting publication");
 
     public SaveCaptureOperation(
             SaveRequest request,
@@ -96,7 +99,7 @@ public final class SaveCaptureOperation implements DimensionMutation {
 
     private SaveResult publish(CapturedWorldState captured) {
         try {
-            SaveResult saved = publisher.save(request, captured);
+            SaveResult saved = publisher.save(request, captured, this::recordProgress);
             if (!saved.capturedGenerations().equals(dirty)) {
                 throw new IOException("Save result generations differ from capture");
             }
@@ -152,7 +155,22 @@ public final class SaveCaptureOperation implements DimensionMutation {
     }
 
     @Override public OperationProgress progress() {
+        if (status == SaveOperationStatus.CAPTURING && session != null
+                && session.totalKeys() > 0) {
+            return new OperationProgress(
+                    "Save: capturing visible world",
+                    session.completedKeys(),
+                    session.totalKeys());
+        }
+        if (status == SaveOperationStatus.WRITING) {
+            return publicationProgress;
+        }
         return OperationProgress.indeterminate("Save: " + status.name().toLowerCase());
+    }
+
+    private void recordProgress(SavePublicationProgress progress) {
+        publicationProgress = new OperationProgress(
+                progress.phase(), progress.completed(), progress.total());
     }
 
     private static SavePreparation fixedPreparation(WorkingIndexSnapshot dirty) {

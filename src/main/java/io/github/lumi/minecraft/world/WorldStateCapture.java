@@ -12,5 +12,13 @@ public interface WorldStateCapture {
         boolean captureUntil(long deadlineNanos) throws IOException;
 
         CapturedWorldState finish();
+
+        default long completedKeys() {
+            return 0;
+        }
+
+        default long totalKeys() {
+            return 0;
+        }
     }
 }

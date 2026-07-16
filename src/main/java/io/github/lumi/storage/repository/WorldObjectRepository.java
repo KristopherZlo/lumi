@@ -15,9 +15,10 @@ import io.github.lumi.storage.object.ObjectStore;
 import io.github.lumi.storage.object.SectionBlobCodec;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Objects;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.LongConsumer;
 
 public final class WorldObjectRepository {
     private final ObjectStore store;
@@ -111,12 +112,24 @@ public final class WorldObjectRepository {
         public Map<HistoryKey, ObjectId> writeCaptured(
                 Map<SectionKey, SectionBlob> sections,
                 Map<EntityChunkKey, EntityChunkBlob> entities) throws IOException {
+            return writeCaptured(sections, entities, ignored -> { });
+        }
+
+        public Map<HistoryKey, ObjectId> writeCaptured(
+                Map<SectionKey, SectionBlob> sections,
+                Map<EntityChunkKey, EntityChunkBlob> entities,
+                LongConsumer progress) throws IOException {
+            Objects.requireNonNull(sections, "sections");
+            Objects.requireNonNull(entities, "entities");
+            Objects.requireNonNull(progress, "progress");
             Map<HistoryKey, ObjectId> written = new LinkedHashMap<>();
             for (var section : sections.entrySet()) {
                 written.put(section.getKey(), write(section.getValue()));
+                progress.accept(written.size());
             }
             for (var entityChunk : entities.entrySet()) {
                 written.put(entityChunk.getKey(), write(entityChunk.getValue()));
+                progress.accept(written.size());
             }
             return Map.copyOf(written);
         }
