@@ -6,12 +6,15 @@ import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.ChunkInRegion;
 import io.github.lumi.domain.model.ChunkTree;
+import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.Commit;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
+import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.RegionCoordinate;
 import io.github.lumi.domain.model.RegionTree;
 import io.github.lumi.domain.model.SectionBlob;
@@ -64,6 +67,34 @@ class MergeServiceTest {
         assertEquals(new CommitStatistics(1, 0, 2, 0), result.statistics());
     }
 
+    @Test
+    void sourceWinsConflictingEntityMoveWithoutDuplicatingUuid() throws Exception {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        OriginStore origins = new OriginStore(repositoryRoot);
+        UUID entityId = new UUID(0, 9);
+        CommitId base = commits.write(entityCommit(objects, List.of(), entityId, 0, 0));
+        CommitId current = commits.write(entityCommit(objects, List.of(base), entityId, 1, 1));
+        CommitId source = commits.write(entityCommit(objects, List.of(base), entityId, 2, 2));
+        var service = new MergeService(objects, commits, origins, new MerkleTreeEditor(objects));
+
+        var result = service.prepare(new MergeService.Request(
+                new BranchRef(new BranchName("main"), current, 1),
+                new BranchRef(new BranchName("idea"), source, 1),
+                new CommitAuthor(new UUID(0, 1), "Builder"), "Merge move",
+                Instant.EPOCH, new UUID(0, 2), Optional.empty()));
+
+        var dimension = objects.readDimension(commits.read(result.commit()).tree());
+        var region = objects.readRegion(dimension.regions().get(new RegionCoordinate(0, 0)));
+        List<EntityState> merged = new ArrayList<>();
+        for (int chunkX = 0; chunkX < 3; chunkX++) {
+            var chunk = objects.readChunk(region.chunks().get(new ChunkInRegion(chunkX, 0)));
+            merged.addAll(objects.readEntities(chunk.entities().orElseThrow()).entities());
+        }
+        assertEquals(List.of(entity(entityId, 2)), merged);
+        assertEquals(1, result.conflicts());
+    }
+
     private static Commit commit(
             WorldObjectRepository objects,
             List<CommitId> parents,
@@ -84,6 +115,28 @@ class MergeServiceTest {
         var region = objects.readRegion(dimension.regions().get(new RegionCoordinate(0, 0)));
         var chunk = objects.readChunk(region.chunks().get(new ChunkInRegion(0, 0)));
         return objects.readSection(chunk.sections().get(0));
+    }
+
+    private static Commit entityCommit(
+            WorldObjectRepository objects, List<CommitId> parents,
+            UUID id, int entityChunk, int state) throws Exception {
+        Map<ChunkInRegion, io.github.lumi.domain.model.ObjectId> chunks = new java.util.HashMap<>();
+        for (int chunkX = 0; chunkX < 3; chunkX++) {
+            EntityChunkBlob entities = new EntityChunkBlob(chunkX == entityChunk
+                    ? List.of(entity(id, state)) : List.of());
+            chunks.put(new ChunkInRegion(chunkX, 0), objects.write(
+                    new ChunkTree(Map.of(), Optional.of(objects.write(entities)))));
+        }
+        var region = objects.write(new RegionTree(chunks));
+        var tree = objects.write(new DimensionTree(Map.of(new RegionCoordinate(0, 0), region)));
+        return new Commit(tree, parents, new CommitAuthor(new UUID(0, 1), "Builder"),
+                "Move", Instant.EPOCH, new UUID(0, 2), Optional.empty(),
+                CommitKind.MANUAL, new CommitStatistics(0, 3, 0, 1));
+    }
+
+    private static EntityState entity(UUID id, int state) {
+        return new EntityState(id, "minecraft:armor_stand",
+                new CanonicalNbt(new byte[] {(byte) state}));
     }
 
     private static SectionBlob section(String... firstStates) {

@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
+import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.ObjectChange;
@@ -18,6 +19,7 @@ import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -74,25 +76,35 @@ public final class MergeService {
                 totals.conflicts = Math.addExact(totals.conflicts, merged.conflicts());
             }
         }
-        for (var entry : sourceDifference.entities().entrySet()) {
-            EntityChunkKey key = entry.getKey();
-            ObjectChange sourceChange = entry.getValue();
-            ObjectChange currentChange = currentDifference.entities().get(key);
-            ObjectId currentId = currentId(sourceChange, currentChange);
-            if (currentId.equals(sourceChange.after())) {
-                continue;
+        if (!sourceDifference.entities().isEmpty()) {
+            var keys = new HashSet<EntityChunkKey>();
+            keys.addAll(currentDifference.entities().keySet());
+            keys.addAll(sourceDifference.entities().keySet());
+            Map<EntityChunkKey, EntityChunkBlob> baseEntities = new HashMap<>();
+            Map<EntityChunkKey, EntityChunkBlob> currentEntities = new HashMap<>();
+            Map<EntityChunkKey, EntityChunkBlob> sourceEntities = new HashMap<>();
+            Map<EntityChunkKey, ObjectId> currentIds = new HashMap<>();
+            for (EntityChunkKey key : keys) {
+                ObjectChange currentChange = currentDifference.entities().get(key);
+                ObjectChange sourceChange = sourceDifference.entities().get(key);
+                ObjectId baseId = baseId(currentChange, sourceChange);
+                ObjectId currentId = currentChange == null ? baseId : currentChange.after();
+                ObjectId sourceId = sourceChange == null ? baseId : sourceChange.after();
+                baseEntities.put(key, objects.readEntities(baseId));
+                currentEntities.put(key, objects.readEntities(currentId));
+                sourceEntities.put(key, objects.readEntities(sourceId));
+                currentIds.put(key, currentId);
             }
-            var merged = merge.entities(
-                    objects.readEntities(sourceChange.before()),
-                    objects.readEntities(currentId),
-                    objects.readEntities(sourceChange.after()));
-            ObjectId mergedId = objects.write(merged.value());
-            if (!mergedId.equals(currentId)) {
-                changes.put(key, mergedId);
-                totals.entityChunks++;
-                totals.entities = Math.addExact(totals.entities, merged.changedEntities());
-                totals.conflicts = Math.addExact(totals.conflicts, merged.conflicts());
+            var merged = merge.entityChunks(baseEntities, currentEntities, sourceEntities);
+            for (EntityChunkKey key : keys) {
+                ObjectId mergedId = objects.write(merged.value().get(key));
+                if (!mergedId.equals(currentIds.get(key))) {
+                    changes.put(key, mergedId);
+                    totals.entityChunks++;
+                }
             }
+            totals.entities = Math.addExact(totals.entities, merged.changedEntities());
+            totals.conflicts = Math.addExact(totals.conflicts, merged.conflicts());
         }
 
         Commit current = commits.read(request.current.commit());
@@ -115,6 +127,15 @@ public final class MergeService {
             throw new IOException("Merge comparisons resolved different base objects");
         }
         return current.after();
+    }
+
+    private static ObjectId baseId(ObjectChange current, ObjectChange source)
+            throws IOException {
+        ObjectId base = current == null ? source.before() : current.before();
+        if (source != null && !source.before().equals(base)) {
+            throw new IOException("Merge comparisons resolved different base objects");
+        }
+        return base;
     }
 
     public record Request(

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.SectionBlob;
 import java.util.ArrayList;
@@ -45,6 +46,25 @@ class ThreeWayMergeTest {
         assertEquals(entity(conflict, 2), merged.value().entities().get(2));
         assertEquals(1, merged.conflicts());
         assertEquals(2, merged.changedEntities());
+    }
+
+    @Test
+    void conflictingCrossChunkMoveKeepsOnlySourcePlacement() {
+        UUID entity = new UUID(0, 4);
+        EntityChunkKey origin = new EntityChunkKey(0, 0);
+        EntityChunkKey currentChunk = new EntityChunkKey(1, 0);
+        EntityChunkKey sourceChunk = new EntityChunkKey(2, 0);
+        EntityChunkBlob empty = entities();
+
+        var merged = new ThreeWayMerge().entityChunks(
+                Map.of(origin, entities(entity(entity, 0)), currentChunk, empty, sourceChunk, empty),
+                Map.of(origin, empty, currentChunk, entities(entity(entity, 1)), sourceChunk, empty),
+                Map.of(origin, empty, currentChunk, empty, sourceChunk, entities(entity(entity, 2))));
+
+        assertEquals(List.of(), merged.value().get(currentChunk).entities());
+        assertEquals(List.of(entity(entity, 2)), merged.value().get(sourceChunk).entities());
+        assertEquals(1, merged.conflicts());
+        assertEquals(1, merged.changedEntities());
     }
 
     private static SectionBlob section(String... firstStates) {
