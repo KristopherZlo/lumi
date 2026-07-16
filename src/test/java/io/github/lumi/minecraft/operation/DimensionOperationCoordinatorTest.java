@@ -31,19 +31,69 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
-    void rejectsConcurrentMutationAndKeepsDegradedDimensionFrozen() throws IOException {
+    void queuesConcurrentMutationAndKeepsDegradedDimensionFrozen() throws IOException {
         RecordingFreeze freeze = new RecordingFreeze();
         DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
                 freeze, () -> 0L, 1L);
         coordinator.start(new TwoTickMutation(true));
 
-        assertThrows(IllegalStateException.class,
-                () -> coordinator.start(new TwoTickMutation(false)));
+        coordinator.start(new TwoTickMutation(false));
         coordinator.tick();
         coordinator.tick();
 
         assertTrue(coordinator.hasActiveOperation());
+        assertEquals(1, coordinator.queuedCount());
         assertEquals(0, freeze.releaseCalls);
+    }
+
+    @Test
+    void urgentUndoRunsBeforeQueuedNormalSaveWithoutInterruptingActiveApply()
+            throws IOException {
+        var order = new ArrayList<String>();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                new RecordingFreeze(), () -> 0L, 1L);
+        coordinator.start(new NamedMutation("active", order, 2));
+        OperationTicket save = coordinator.enqueue(
+                new NamedMutation("save", order, 1), OperationPriority.NORMAL, ignored -> { });
+        OperationTicket undo = coordinator.enqueue(
+                new NamedMutation("undo", order, 1), OperationPriority.URGENT, ignored -> { });
+
+        assertEquals(2, coordinator.queuePosition(save).orElseThrow());
+        assertEquals(1, coordinator.queuePosition(undo).orElseThrow());
+        coordinator.tick();
+        coordinator.tick();
+        coordinator.tick();
+        coordinator.tick();
+
+        assertEquals(java.util.List.of("active", "active", "undo", "save"), order);
+        assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
+    void queuedOperationCanBeCancelledBeforeItStarts() {
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                new RecordingFreeze(), () -> 0L, 1L);
+        coordinator.start(new TwoTickMutation(false));
+        OperationTicket queued = coordinator.enqueue(
+                new TwoTickMutation(false), OperationPriority.NORMAL, ignored -> { });
+
+        assertTrue(coordinator.cancelQueued(queued));
+        assertEquals(0, coordinator.queuedCount());
+        assertTrue(!coordinator.cancelQueued(queued));
+    }
+
+    @Test
+    void rejectsWorkBeyondTheBoundedQueue() {
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                new RecordingFreeze(), () -> 0L, 1L);
+        coordinator.start(new TwoTickMutation(false));
+        for (int index = 0; index < DimensionOperationCoordinator.MAX_QUEUED_OPERATIONS; index++) {
+            coordinator.enqueue(
+                    new TwoTickMutation(false), OperationPriority.NORMAL, ignored -> { });
+        }
+
+        assertThrows(IllegalStateException.class, () -> coordinator.enqueue(
+                new TwoTickMutation(false), OperationPriority.NORMAL, ignored -> { }));
     }
 
     @Test
@@ -170,6 +220,27 @@ class DimensionOperationCoordinatorTest {
         @Override public void advance(long deadlineNanos) { complete = ready; }
         @Override public boolean isTerminal() { return complete; }
         @Override public boolean isSafeToRelease() { return complete; }
+    }
+
+    private static final class NamedMutation implements DimensionMutation {
+        private final String name;
+        private final ArrayList<String> order;
+        private final int requiredTicks;
+        private int ticks;
+
+        private NamedMutation(String name, ArrayList<String> order, int requiredTicks) {
+            this.name = name;
+            this.order = order;
+            this.requiredTicks = requiredTicks;
+        }
+
+        @Override public void advance(long deadlineNanos) {
+            order.add(name);
+            ticks++;
+        }
+
+        @Override public boolean isTerminal() { return ticks >= requiredTicks; }
+        @Override public boolean isSafeToRelease() { return isTerminal(); }
     }
 
     private static final class RecordingFreeze implements DimensionFreeze {

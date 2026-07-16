@@ -2,19 +2,25 @@ package io.github.lumi.minecraft.operation;
 
 import io.github.lumi.minecraft.world.DimensionFreeze;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Objects;
+import java.util.OptionalInt;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
 /** Serializes mutation and enforces the global 50 ms server-tick work limit. */
 public final class DimensionOperationCoordinator {
     public static final long MAX_TICK_WORK_NANOS = 50_000_000L;
+    public static final int MAX_QUEUED_OPERATIONS = 64;
 
     private final DimensionFreeze freeze;
     private final LongSupplier nanoTime;
     private final long tickBudgetNanos;
     private final Consumer<DimensionMutation> terminalObserver;
+    private final ArrayList<QueuedOperation> queued = new ArrayList<>();
     private DimensionMutation active;
+    private OperationTicket activeTicket;
     private Consumer<DimensionMutation> activeObserver = ignored -> { };
     private DimensionFreeze.Lease lease;
     private boolean freezeReleased;
@@ -54,13 +60,38 @@ public final class DimensionOperationCoordinator {
 
     public synchronized void start(
             DimensionMutation operation, Consumer<DimensionMutation> operationObserver) {
-        Objects.requireNonNull(operation, "operation");
-        Objects.requireNonNull(operationObserver, "operationObserver");
-        if (active != null) {
-            throw new IllegalStateException("A dimension mutation is already active");
+        enqueue(operation, OperationPriority.NORMAL, operationObserver);
+    }
+
+    public synchronized OperationTicket enqueue(
+            DimensionMutation operation,
+            OperationPriority priority,
+            Consumer<DimensionMutation> operationObserver) {
+        var entry = new QueuedOperation(
+                new OperationTicket(UUID.randomUUID()),
+                Objects.requireNonNull(operation, "operation"),
+                Objects.requireNonNull(priority, "priority"),
+                Objects.requireNonNull(operationObserver, "operationObserver"));
+        if (active == null && queued.isEmpty()) {
+            activate(entry);
+            return entry.ticket();
         }
-        active = operation;
-        activeObserver = operationObserver;
+        if (queued.size() >= MAX_QUEUED_OPERATIONS) {
+            throw new IllegalStateException("Dimension operation queue is full");
+        }
+        int position = 0;
+        while (position < queued.size()
+                && queued.get(position).priority().ordinal() <= priority.ordinal()) {
+            position++;
+        }
+        queued.add(position, entry);
+        return entry.ticket();
+    }
+
+    private void activate(QueuedOperation entry) {
+        active = entry.operation();
+        activeTicket = entry.ticket();
+        activeObserver = entry.observer();
         freezeReleased = false;
         terminalReported = false;
     }
@@ -79,11 +110,20 @@ public final class DimensionOperationCoordinator {
         if (!Objects.requireNonNull(operation, "operation").requiresFreeze()) {
             throw new IllegalArgumentException("A recovery operation must retain the dimension freeze");
         }
-        start(operation, operationObserver);
+        if (active != null || !queued.isEmpty()) {
+            throw new IllegalStateException("Recovery requires an empty operation queue");
+        }
+        activate(new QueuedOperation(
+                new OperationTicket(UUID.randomUUID()), operation,
+                OperationPriority.URGENT,
+                Objects.requireNonNull(operationObserver, "operationObserver")));
         lease = existingLease;
     }
 
     public synchronized void tick() throws IOException {
+        if (active == null) {
+            activateNext();
+        }
         if (active == null) {
             return;
         }
@@ -106,9 +146,17 @@ public final class DimensionOperationCoordinator {
         }
         if (active.isTerminal() && active.isSafeToRelease()) {
             active = null;
+            activeTicket = null;
             activeObserver = ignored -> { };
             freezeReleased = false;
             terminalReported = false;
+            activateNext();
+        }
+    }
+
+    private void activateNext() {
+        if (active == null && !queued.isEmpty()) {
+            activate(queued.removeFirst());
         }
     }
 
@@ -123,4 +171,32 @@ public final class DimensionOperationCoordinator {
     public synchronized boolean hasActiveOperation() {
         return active != null;
     }
+
+    public synchronized int queuedCount() {
+        return queued.size();
+    }
+
+    public synchronized OptionalInt queuePosition(OperationTicket ticket) {
+        Objects.requireNonNull(ticket, "ticket");
+        if (ticket.equals(activeTicket)) {
+            return OptionalInt.of(0);
+        }
+        for (int index = 0; index < queued.size(); index++) {
+            if (queued.get(index).ticket().equals(ticket)) {
+                return OptionalInt.of(index + 1);
+            }
+        }
+        return OptionalInt.empty();
+    }
+
+    public synchronized boolean cancelQueued(OperationTicket ticket) {
+        Objects.requireNonNull(ticket, "ticket");
+        return queued.removeIf(entry -> entry.ticket().equals(ticket));
+    }
+
+    private record QueuedOperation(
+            OperationTicket ticket,
+            DimensionMutation operation,
+            OperationPriority priority,
+            Consumer<DimensionMutation> observer) { }
 }
