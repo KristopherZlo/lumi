@@ -55,6 +55,8 @@ class DimensionOperationCoordinatorTest {
         coordinator.start(new NamedMutation("active", order, 2));
         OperationTicket save = coordinator.enqueue(
                 new NamedMutation("save", order, 1), OperationPriority.NORMAL, ignored -> { });
+        var savePositions = new ArrayList<Integer>();
+        coordinator.observeQueuePosition(save, savePositions::add);
         OperationTicket undo = coordinator.enqueue(
                 new NamedMutation("undo", order, 1), OperationPriority.URGENT, ignored -> { });
 
@@ -66,6 +68,7 @@ class DimensionOperationCoordinatorTest {
         coordinator.tick();
 
         assertEquals(java.util.List.of("active", "active", "undo", "save"), order);
+        assertEquals(java.util.List.of(1, 2, 1, 0), savePositions);
         assertTrue(!coordinator.hasActiveOperation());
     }
 

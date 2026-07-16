@@ -3,12 +3,14 @@ package io.github.lumi.minecraft.operation;
 import io.github.lumi.minecraft.world.DimensionFreeze;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
+import java.util.function.IntConsumer;
 
 /** Serializes mutation and enforces the global 50 ms server-tick work limit. */
 public final class DimensionOperationCoordinator {
@@ -20,6 +22,7 @@ public final class DimensionOperationCoordinator {
     private final long tickBudgetNanos;
     private final Consumer<DimensionMutation> terminalObserver;
     private final ArrayList<QueuedOperation> queued = new ArrayList<>();
+    private final HashMap<OperationTicket, IntConsumer> positionObservers = new HashMap<>();
     private DimensionMutation active;
     private OperationTicket activeTicket;
     private Consumer<DimensionMutation> activeObserver = ignored -> { };
@@ -86,6 +89,7 @@ public final class DimensionOperationCoordinator {
             position++;
         }
         queued.add(position, entry);
+        notifyPositions();
         return entry.ticket();
     }
 
@@ -146,6 +150,7 @@ public final class DimensionOperationCoordinator {
             freezeReleased = true;
         }
         if (active.isTerminal() && active.isSafeToRelease()) {
+            positionObservers.remove(activeTicket);
             active = null;
             activeTicket = null;
             activeObserver = ignored -> { };
@@ -158,6 +163,7 @@ public final class DimensionOperationCoordinator {
     private void activateNext() {
         if (active == null && !queued.isEmpty()) {
             activate(queued.removeFirst());
+            notifyPositions();
         }
     }
 
@@ -201,7 +207,31 @@ public final class DimensionOperationCoordinator {
 
     public synchronized boolean cancelQueued(OperationTicket ticket) {
         Objects.requireNonNull(ticket, "ticket");
-        return queued.removeIf(entry -> entry.ticket().equals(ticket));
+        boolean removed = queued.removeIf(entry -> entry.ticket().equals(ticket));
+        if (removed) {
+            positionObservers.remove(ticket);
+            notifyPositions();
+        }
+        return removed;
+    }
+
+    public synchronized void observeQueuePosition(
+            OperationTicket ticket, IntConsumer observer) {
+        int position = queuePosition(Objects.requireNonNull(ticket, "ticket"))
+                .orElseThrow(() -> new IllegalArgumentException("Unknown operation ticket"));
+        positionObservers.put(ticket, Objects.requireNonNull(observer, "observer"));
+        observer.accept(position);
+    }
+
+    private void notifyPositions() {
+        positionObservers.entrySet().removeIf(entry -> {
+            OptionalInt position = queuePosition(entry.getKey());
+            if (position.isEmpty()) {
+                return true;
+            }
+            entry.getValue().accept(position.orElseThrow());
+            return false;
+        });
     }
 
     private record QueuedOperation(

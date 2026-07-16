@@ -69,10 +69,12 @@ public final class LumiServerNetworking {
             Started started = start(player, runtime, actual, payload);
             TICKET_OWNERS.put(started.ticket().id(),
                     new TicketOwner(player.getUUID(), payload.requestId()));
-            String message = started.position() == 0
-                    ? "Operation accepted" : "Queued at position " + started.position();
-            sendEvent(player, payload, runtime, OperationEventPayload.State.ACCEPTED,
-                    message, Optional.of(started.ticket()), started.position());
+            runtime.operations().observeQueuePosition(started.ticket(), position -> {
+                String message = position == 0
+                        ? "Operation accepted" : "Queued at position " + position;
+                sendEvent(player, payload, runtime, OperationEventPayload.State.ACCEPTED,
+                        message, Optional.of(started.ticket()), position);
+            });
         } catch (IOException | IllegalArgumentException | IllegalStateException failed) {
             reject(player, payload, runtime, failed.getMessage());
         }
@@ -97,8 +99,7 @@ public final class LumiServerNetworking {
         }
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
-        int position = runtime.operations().queuePosition(ticket).orElseThrow();
-        return new Started(ticket, position);
+        return new Started(ticket);
     }
 
     private static void terminal(
@@ -247,6 +248,6 @@ public final class LumiServerNetworking {
         return runtime.level().dimension().identifier().toString();
     }
 
-    private record Started(OperationTicket ticket, int position) { }
+    private record Started(OperationTicket ticket) { }
     private record TicketOwner(UUID playerId, UUID requestId) { }
 }
