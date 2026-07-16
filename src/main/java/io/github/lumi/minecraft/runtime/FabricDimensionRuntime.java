@@ -184,6 +184,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             WorkspaceService workspaces,
             ZoneService zones,
             UUID defaultWorkspaceId,
+            UUID activeWorkspaceId,
             OperationJournal pendingRecovery,
             io.github.lumi.minecraft.world.DimensionFreeze.Lease recoveryLease) {
         this.level = level;
@@ -200,7 +201,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.workspaces = workspaces;
         this.zones = zones;
         autoVersions = new AutoVersionService(new CommitRepository(repository), refs);
-        selectedWorkspaceId = defaultWorkspaceId;
+        selectedWorkspaceId = activeWorkspaceId;
         nextAutoVersionTick = level.getGameTime() + AUTO_VERSION_INTERVAL_TICKS;
         zoneGrowth = new CausalZoneGrowthTracker(zones, background,
                 failure -> LumiMod.LOGGER.error("Cannot persist causal zone growth", failure));
@@ -266,17 +267,17 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             interrupted = Optional.empty();
         }
         BranchRef selected = refs.read(active.read().orElseThrow().name()).orElseThrow();
-        UUID workspaceId = commits.read(selected.commit()).workspaceId();
         var activeWorkspaces = new ActiveWorkspaceRepository(repository);
         var workspaceService = new WorkspaceService(
                 new WorkspaceRepository(repository), activeWorkspaces, commits, refs);
-        workspaceService.initializeDefault(workspaceId);
+        UUID defaultWorkspaceId = workspaceService.defaultWorkspaceId();
+        workspaceService.initializeDefault(defaultWorkspaceId);
         if (interrupted.isPresent()
                 && new PublishedApplyRecovery(refs, active, activeWorkspaces, journals)
                         .finalizeIfPublished(interrupted.orElseThrow())) {
             interrupted = Optional.empty();
         }
-        workspaceId = workspaceService.active().id();
+        UUID activeWorkspaceId = workspaceService.active().id();
         var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
         var working = new WorkingIndexRepository(repository);
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
@@ -293,7 +294,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 new MinecraftWorldStateApply(level, freeze), journals,
                 background, refs, active, branches,
                 new MergeService(objects, commits, origins, trees), workspaceService,
-                new ZoneService(new ZoneRepository(repository)), workspaceId,
+                new ZoneService(new ZoneRepository(repository)),
+                defaultWorkspaceId, activeWorkspaceId,
                 interrupted.orElse(null), recoveryLease);
     }
 

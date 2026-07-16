@@ -88,6 +88,12 @@ public final class WorkspaceService {
         return workspaces.list();
     }
 
+    public UUID defaultWorkspaceId() throws IOException {
+        BranchRef main = refs.read(new BranchName("main")).orElseThrow(
+                () -> new IOException("Default workspace main branch is missing"));
+        return commits.read(main.commit()).workspaceId();
+    }
+
     public Workspace require(UUID id) throws IOException {
         return workspaces.read(Objects.requireNonNull(id, "id")).orElseThrow(
                 () -> new IOException("Active workspace metadata is missing"));

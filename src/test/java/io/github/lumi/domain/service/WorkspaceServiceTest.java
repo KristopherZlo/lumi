@@ -62,6 +62,10 @@ class WorkspaceServiceTest {
                         projectId, defaultId, new BranchName("main")));
         assertEquals(List.of(defaultId, projectId),
                 service.list().stream().map(workspace -> workspace.id()).toList());
+        active.compareAndSet(active.read().orElseThrow(), projectId);
+
+        assertEquals(defaultId, service.defaultWorkspaceId());
+        assertEquals(projectId, service.active().id());
     }
 
     private static Commit commit(io.github.lumi.domain.model.ObjectId tree, UUID workspace) {
