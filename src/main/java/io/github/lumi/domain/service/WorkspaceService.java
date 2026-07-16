@@ -122,6 +122,16 @@ public final class WorkspaceService {
         active.compareAndSet(plan.expectedActive(), plan.targetWorkspace());
     }
 
+    public void validateSwitch(WorkspaceSwitchPlan plan) throws IOException {
+        Objects.requireNonNull(plan, "plan");
+        require(plan.targetWorkspace());
+        var selected = active.read().orElseThrow(
+                () -> new RefConflictException("Active workspace no longer exists"));
+        if (!selected.equals(plan.expectedActive())) {
+            throw new RefConflictException("Active workspace changed during switch");
+        }
+    }
+
     public static BranchName mainBranch(UUID workspaceId) {
         return new BranchName("workspace/" + Objects.requireNonNull(workspaceId, "workspaceId")
                 + "/main");

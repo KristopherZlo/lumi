@@ -13,10 +13,12 @@ import io.github.lumi.minecraft.operation.RestorePublication;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestoreOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestorePreparation;
+import io.github.lumi.minecraft.operation.WorkspaceSwitchRestorePublication;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.ActiveBranch;
+import io.github.lumi.domain.model.ActiveWorkspace;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
@@ -26,6 +28,7 @@ import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.MergeService;
@@ -195,18 +198,18 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     .recover(interrupted.orElseThrow());
             interrupted = Optional.empty();
         }
+        BranchRef selected = refs.read(active.read().orElseThrow().name()).orElseThrow();
+        UUID workspaceId = commits.read(selected.commit()).workspaceId();
+        var activeWorkspaces = new ActiveWorkspaceRepository(repository);
+        var workspaceService = new WorkspaceService(
+                new WorkspaceRepository(repository), activeWorkspaces, commits, refs);
+        workspaceService.initializeDefault(workspaceId);
         if (interrupted.isPresent()
-                && new PublishedApplyRecovery(refs, active, journals)
+                && new PublishedApplyRecovery(refs, active, activeWorkspaces, journals)
                         .finalizeIfPublished(interrupted.orElseThrow())) {
             interrupted = Optional.empty();
         }
         var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
-        BranchRef selected = refs.read(active.read().orElseThrow().name()).orElseThrow();
-        UUID workspaceId = commits.read(selected.commit()).workspaceId();
-        var workspaceService = new WorkspaceService(
-                new WorkspaceRepository(repository),
-                new ActiveWorkspaceRepository(repository), commits, refs);
-        workspaceService.initializeDefault(workspaceId);
         var working = new WorkingIndexRepository(repository);
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
                 objects, origins, working, background);
@@ -319,6 +322,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             var plan = new BranchSwitchPlan(
                     new ActiveBranch(source.name(), switchTarget.expectedActiveRevision()),
                     source, destination);
+            if (target.workspaceSwitch().isPresent()) {
+                var workspaceTarget = target.workspaceSwitch().orElseThrow();
+                var workspacePlan = new WorkspaceSwitchPlan(
+                        new ActiveWorkspace(
+                                workspaceTarget.expectedWorkspace(),
+                                workspaceTarget.expectedRevision()),
+                        workspaceTarget.targetWorkspace(), plan);
+                return new WorkspaceSwitchRestorePublication(
+                        branches, workspaces, workspacePlan);
+            }
             return new BranchSwitchRestorePublication(branches, plan);
         }
         if (journal.target().blockArea().isPresent()) {
@@ -516,6 +529,41 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var operation = new BackgroundPreparedMutation<>(
                 preparation, () -> branches.validateSwitch(plan),
                 RestoreOperation::cancelBeforeApply, true);
+        operations.start(operation, clearingLiveHistory(terminalObserver));
+        return operation;
+    }
+
+    public synchronized BackgroundPreparedMutation<RestoreOperation> startWorkspaceSwitch(
+            UUID targetWorkspace) throws IOException {
+        return startWorkspaceSwitch(targetWorkspace, ignored -> { });
+    }
+
+    public synchronized BackgroundPreparedMutation<RestoreOperation> startWorkspaceSwitch(
+            UUID targetWorkspace,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        requireNoRecovery();
+        if (operations.hasActiveOperation()) {
+            throw new IllegalStateException("A dimension operation is already active");
+        }
+        BranchSwitchPlan branch = branches.prepareSwitch(
+                WorkspaceService.mainBranch(targetWorkspace));
+        WorkspaceSwitchPlan plan = workspaces.prepareSwitch(targetWorkspace, branch);
+        UUID operationId = UUID.randomUUID();
+        CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
+            try {
+                var prepared = restores.prepare(branch.source(), branch.target().commit());
+                return RestoreOperation.startWorkspaceSwitch(
+                        prepared, worldApply,
+                        new WorkspaceSwitchRestorePublication(branches, workspaces, plan),
+                        journals, operationId, restoreStateListener, plan);
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+        var operation = new BackgroundPreparedMutation<>(preparation, () -> {
+            branches.validateSwitch(branch);
+            workspaces.validateSwitch(plan);
+        }, RestoreOperation::cancelBeforeApply, true);
         operations.start(operation, clearingLiveHistory(terminalObserver));
         return operation;
     }
