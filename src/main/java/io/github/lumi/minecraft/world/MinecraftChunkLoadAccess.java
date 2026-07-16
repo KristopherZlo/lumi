@@ -11,7 +11,9 @@ import net.minecraft.world.level.ChunkPos;
 public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
     private static final int RADIUS = 0;
     private static final TicketType LUMI_TICKET =
-            new TicketType(200, TicketType.FLAG_LOADING);
+            new TicketType(
+                    TicketType.NO_TIMEOUT,
+                    TicketType.FLAG_LOADING | TicketType.FLAG_KEEP_DIMENSION_ACTIVE);
     private final ServerLevel level;
 
     public MinecraftChunkLoadAccess(ServerLevel level) {
@@ -27,9 +29,10 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
     @Override
     public boolean isReady(ChunkCoordinate chunk) {
         ChunkPos position = position(chunk);
+        var entities = ((ServerLevelEntityManagerAccessor) level).lumi$entityManager();
+        entities.processPendingLoads();
         return level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) != null
-                && ((ServerLevelEntityManagerAccessor) level)
-                        .lumi$entityManager().areEntitiesLoaded(position.toLong());
+                && entities.areEntitiesLoaded(position.toLong());
     }
 
     @Override

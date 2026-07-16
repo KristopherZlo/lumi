@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.Executor;
@@ -30,10 +31,11 @@ class MutationDurabilityTrackerTest {
     void coalescesRepeatedMutationAndBlocksChunkUntilOriginAndLatestGenerationAreDurable()
             throws Exception {
         ManualExecutor background = new ManualExecutor();
+        RecordingChunkRetention retention = new RecordingChunkRetention();
         MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
                 new WorldObjectRepository(repositoryRoot),
                 new OriginStore(repositoryRoot),
-                new WorkingIndexRepository(repositoryRoot), background);
+                new WorkingIndexRepository(repositoryRoot), background, retention);
         SectionKey key = new SectionKey(3, 4, 5);
         AtomicInteger captures = new AtomicInteger();
 
@@ -51,12 +53,14 @@ class MutationDurabilityTrackerTest {
         assertFalse(tracker.needsOrigin(key));
         assertEquals(2, background.size());
         assertFalse(tracker.canPublishChunk(3, 5));
+        assertEquals(List.of("retain 3,5"), retention.events);
 
         background.runNext();
         assertFalse(tracker.canPublishChunk(3, 5));
         background.runNext();
 
         assertTrue(tracker.canPublishChunk(3, 5));
+        assertEquals(List.of("retain 3,5", "release 3,5"), retention.events);
         assertEquals(2L, new WorkingIndexRepository(repositoryRoot).read()
                 .generations().get(key));
         assertTrue(new OriginStore(repositoryRoot).read(key).isPresent());
@@ -68,6 +72,9 @@ class MutationDurabilityTrackerTest {
         assertEquals(1, background.size());
         background.runNext();
         assertTrue(tracker.canPublishChunk(3, 5));
+        assertEquals(List.of(
+                "retain 3,5", "release 3,5",
+                "retain 3,5", "release 3,5"), retention.events);
     }
 
     @Test
@@ -187,5 +194,19 @@ class MutationDurabilityTrackerTest {
         @Override public void execute(Runnable command) { tasks.add(command); }
         private int size() { return tasks.size(); }
         private void runNext() { tasks.remove().run(); }
+    }
+
+    private static final class RecordingChunkRetention implements ChunkDurabilityRetention {
+        private final List<String> events = new ArrayList<>();
+
+        @Override
+        public void retain(int chunkX, int chunkZ) {
+            events.add("retain " + chunkX + "," + chunkZ);
+        }
+
+        @Override
+        public void release(int chunkX, int chunkZ) {
+            events.add("release " + chunkX + "," + chunkZ);
+        }
     }
 }

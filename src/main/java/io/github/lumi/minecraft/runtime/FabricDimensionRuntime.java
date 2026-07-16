@@ -70,6 +70,7 @@ import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
 import io.github.lumi.minecraft.world.MinecraftLiveBlockWorldAccess;
 import io.github.lumi.minecraft.world.MinecraftLiveEntityWorldAccess;
 import io.github.lumi.minecraft.world.MinecraftChunkLoadAccess;
+import io.github.lumi.minecraft.world.MinecraftChunkDurabilityRetention;
 import io.github.lumi.minecraft.world.MinecraftWorldStateReader;
 import io.github.lumi.minecraft.world.MinecraftWorldStateApply;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
@@ -292,7 +293,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
         var working = new WorkingIndexRepository(repository);
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
-                objects, origins, working, durabilityBackground);
+                objects, origins, working, durabilityBackground,
+                new MinecraftChunkDurabilityRetention(level));
         var branches = new BranchService(commits, refs, active, working);
         var trees = new MerkleTreeEditor(objects);
         var restoreService = new RestoreService(objects, commits, origins);

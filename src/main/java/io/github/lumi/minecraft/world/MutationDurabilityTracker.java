@@ -34,6 +34,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private final OriginStore origins;
     private final WorkingIndexRepository indexRepository;
     private final Executor background;
+    private final ChunkDurabilityRetention chunkRetention;
     private final WorkingIndex working;
     private final Set<HistoryKey> durableOrigins;
     private final Map<HistoryKey, Long> durableGenerations;
@@ -52,12 +53,14 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             OriginStore origins,
             WorkingIndexRepository indexRepository,
             Executor background,
+            ChunkDurabilityRetention chunkRetention,
             WorkingIndexSnapshot persisted,
             Set<HistoryKey> durableOrigins) {
         this.objects = objects;
         this.origins = origins;
         this.indexRepository = indexRepository;
         this.background = background;
+        this.chunkRetention = chunkRetention;
         working = new WorkingIndex(persisted);
         this.durableOrigins = new HashSet<>(durableOrigins);
         durableGenerations = new HashMap<>(persisted.generations());
@@ -69,11 +72,24 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             OriginStore origins,
             WorkingIndexRepository indexRepository,
             Executor background) throws IOException {
+        return open(objects, origins, indexRepository, background,
+                ChunkDurabilityRetention.NONE);
+    }
+
+    /** Must be called off the server thread because it reads repository indexes. */
+    public static MutationDurabilityTracker open(
+            WorldObjectRepository objects,
+            OriginStore origins,
+            WorkingIndexRepository indexRepository,
+            Executor background,
+            ChunkDurabilityRetention chunkRetention) throws IOException {
         Objects.requireNonNull(objects, "objects");
         Objects.requireNonNull(origins, "origins");
         Objects.requireNonNull(indexRepository, "indexRepository");
         Objects.requireNonNull(background, "background");
-        return new MutationDurabilityTracker(objects, origins, indexRepository, background,
+        Objects.requireNonNull(chunkRetention, "chunkRetention");
+        return new MutationDurabilityTracker(
+                objects, origins, indexRepository, background, chunkRetention,
                 indexRepository.read(), origins.entries().keySet());
     }
 
@@ -119,7 +135,11 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 committedGenerations.remove(key);
             }
             if (publicationRequirements.put(key, generation) == null) {
-                blockedChunks.merge(chunk(key), 1, Integer::sum);
+                ChunkCoordinate coordinate = chunk(key);
+                if (!blockedChunks.containsKey(coordinate)) {
+                    chunkRetention.retain(coordinate.x(), coordinate.z());
+                }
+                blockedChunks.merge(coordinate, 1, Integer::sum);
             }
             indexRevision++;
             scheduleIndex = !indexWriterScheduled;
@@ -303,7 +323,15 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             return;
         }
         publicationRequirements.remove(key);
-        blockedChunks.computeIfPresent(chunk(key), (ignored, count) -> count == 1 ? null : count - 1);
+        ChunkCoordinate coordinate = chunk(key);
+        int count = Objects.requireNonNull(
+                blockedChunks.get(coordinate), "blocked chunk count");
+        if (count == 1) {
+            blockedChunks.remove(coordinate);
+            chunkRetention.release(coordinate.x(), coordinate.z());
+        } else {
+            blockedChunks.put(coordinate, count - 1);
+        }
     }
 
     private static ChunkCoordinate chunk(HistoryKey key) {
