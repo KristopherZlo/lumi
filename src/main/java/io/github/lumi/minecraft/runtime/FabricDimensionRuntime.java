@@ -92,7 +92,6 @@ import io.github.lumi.storage.repository.ZoneRepository;
 import io.github.lumi.storage.repository.TombstoneRepository;
 import io.github.lumi.storage.repository.GarbageCollector;
 import io.github.lumi.telemetry.TelemetryService;
-import io.github.lumi.storage.packageformat.LumiPackageDirectory;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -146,8 +145,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final DimensionHistoryViewService historyViews;
     private final CausalZoneGrowthTracker zoneGrowth;
     private final ReturnPointRestorePreparation returnPointRestores;
-    private final ImportExportService packageHistory;
-    private final LumiPackageDirectory packageDirectory;
+    private final DimensionPackageService packages;
     private final GarbageCollectionScheduler garbageCollection;
     private final Executor background;
     private final BranchRefRepository refs;
@@ -232,10 +230,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         returnPointRestores = new ReturnPointRestorePreparation(
                 restores, worldApply, refs, journals,
                 restoreStateListener, background);
-        packageHistory = new ImportExportService(
-                level.dimension().identifier().toString(), repository);
-        packageDirectory = new LumiPackageDirectory(
-                level.getServer().getWorldPath(LevelResource.ROOT));
+        packages = new DimensionPackageService(
+                level.dimension().identifier().toString(), repository,
+                level.getServer().getWorldPath(LevelResource.ROOT),
+                background, this::activeRef);
         garbageCollection = new GarbageCollectionScheduler(
                 level.getGameTime(), background,
                 () -> new GarbageCollector(repository).collect(
@@ -877,31 +875,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public CompletableFuture<ImportExportService.PackageInspection> exportPackage(
             PackageName name, BranchRef expected) {
-        Objects.requireNonNull(name, "name");
-        Objects.requireNonNull(expected, "expected");
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                if (!activeRef().equals(expected)) {
-                    throw new IOException("Active branch changed before package export");
-                }
-                return packageHistory.export(
-                        expected.commit(), packageDirectory.resolve(name));
-            } catch (IOException failed) {
-                throw new CompletionException(failed);
-            }
-        }, background);
+        return packages.exportPackage(name, expected);
     }
 
     public CompletableFuture<ImportExportService.PackageInspection> inspectPackage(
             PackageName name) {
-        Objects.requireNonNull(name, "name");
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return packageHistory.inspect(packageDirectory.resolve(name));
-            } catch (IOException failed) {
-                throw new CompletionException(failed);
-            }
-        }, background);
+        return packages.inspectPackage(name);
     }
 
     public CompletableFuture<ImportExportService.ImportResult> importPackage(
@@ -909,22 +888,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             ImportExportService.PackageInspection inspection,
             BranchRef expected,
             CommitAuthor author) {
-        Objects.requireNonNull(name, "name");
-        Objects.requireNonNull(inspection, "inspection");
-        Objects.requireNonNull(expected, "expected");
-        Objects.requireNonNull(author, "author");
-        String suffix = inspection.manifest().commit().hex().substring(0, 8);
-        BranchName branch = new BranchName(
-                "import/" + name.value() + "-" + suffix);
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return packageHistory.importPackage(
-                        packageDirectory.resolve(name), inspection, expected,
-                        branch, author, Instant.now());
-            } catch (IOException failed) {
-                throw new CompletionException(failed);
-            }
-        }, background);
+        return packages.importPackage(name, inspection, expected, author);
     }
 
     public CompletableFuture<ComparisonSummary> compare(
