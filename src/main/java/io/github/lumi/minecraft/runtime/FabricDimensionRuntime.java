@@ -34,6 +34,7 @@ import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
+import io.github.lumi.domain.service.AutoVersionService;
 import io.github.lumi.domain.service.CompareService;
 import io.github.lumi.domain.service.HistoryQueryService;
 import io.github.lumi.domain.service.LiveActionJournal;
@@ -93,6 +94,7 @@ import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
@@ -105,6 +107,9 @@ import net.minecraft.world.level.entity.EntityAccess;
 
 /** Server-authoritative Lumi state owned by one loaded Minecraft dimension. */
 public final class FabricDimensionRuntime implements AutoCloseable {
+    private static final long AUTO_VERSION_INTERVAL_TICKS = 6_000;
+    private static final CommitAuthor AUTO_AUTHOR =
+            new CommitAuthor(new UUID(0, 0), "Lumi");
     private final ServerLevel level;
     private final Path repository;
     private final DimensionFreezeState freeze;
@@ -123,6 +128,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final RecoveryService recoveries;
     private final WorkspaceService workspaces;
     private final ZoneService zones;
+    private final AutoVersionService autoVersions;
     private final CausalZoneGrowthTracker zoneGrowth;
     private final ReturnPointRestorePreparation returnPointRestores;
     private final Executor background;
@@ -142,6 +148,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private OperationJournal pendingRecovery;
     private io.github.lumi.minecraft.world.DimensionFreeze.Lease recoveryLease;
     private volatile UUID selectedWorkspaceId;
+    private final AtomicBoolean autoVersionScheduled = new AtomicBoolean();
+    private volatile AutoVersionFingerprint lastAutoVersion;
+    private long nextAutoVersionTick;
 
     private FabricDimensionRuntime(
             ServerLevel level,
@@ -176,7 +185,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.merges = merges;
         this.workspaces = workspaces;
         this.zones = zones;
+        autoVersions = new AutoVersionService(new CommitRepository(repository), refs);
         selectedWorkspaceId = defaultWorkspaceId;
+        nextAutoVersionTick = level.getGameTime() + AUTO_VERSION_INTERVAL_TICKS;
         zoneGrowth = new CausalZoneGrowthTracker(zones, background,
                 failure -> LumiMod.LOGGER.error("Cannot persist causal zone growth", failure));
         recoveries = new RecoveryService(restores, zones);
@@ -281,6 +292,67 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             operations.tick();
         } finally {
             zoneGrowth.flush();
+        }
+        scheduleAutoVersion();
+    }
+
+    private void scheduleAutoVersion() {
+        long now = level.getGameTime();
+        if (now < nextAutoVersionTick || autoVersionScheduled.get()) {
+            return;
+        }
+        boolean busy = recoveryJournal().isPresent()
+                || operations.hasActiveOperation() || operations.queuedCount() > 0;
+        nextAutoVersionTick = now + (busy ? 200 : AUTO_VERSION_INTERVAL_TICKS);
+        if (busy || mutations.snapshot().generations().isEmpty()
+                || !autoVersionScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            background.execute(this::enqueueAutoVersion);
+        } catch (RuntimeException rejected) {
+            autoVersionScheduled.set(false);
+            LumiMod.LOGGER.error("Cannot schedule automatic Lumi version", rejected);
+        }
+    }
+
+    private void enqueueAutoVersion() {
+        try {
+            if (recoveryJournal().isPresent()
+                    || operations.hasActiveOperation() || operations.queuedCount() > 0) {
+                autoVersionScheduled.set(false);
+                return;
+            }
+            BranchRef expected = activeRef();
+            var dirty = mutations.snapshot();
+            AutoVersionFingerprint fingerprint =
+                    new AutoVersionFingerprint(expected.commit(), dirty);
+            if (dirty.generations().isEmpty() || fingerprint.equals(lastAutoVersion)) {
+                autoVersionScheduled.set(false);
+                return;
+            }
+            UUID workspaceId = activeWorkspaceId();
+            SaveRequest request = new SaveRequest(
+                    expected, AUTO_AUTHOR, "Automatic version", Instant.now(),
+                    workspaceId, Optional.empty(), CommitKind.AUTO);
+            BranchName hidden = autoVersions.refName(expected.name(), UUID.randomUUID());
+            SaveCaptureOperation operation = new SaveCaptureOperation(
+                    request, scopedSavePreparation(request), worldCapture,
+                    (save, captured) -> {
+                        var result = saves.checkpoint(save, captured, hidden);
+                        autoVersions.prune(expected.name(), 64);
+                        return result;
+                    },
+                    ignored -> { }, background);
+            operations.enqueue(operation, OperationPriority.NORMAL, completed -> {
+                operation.result().ifPresent(result -> lastAutoVersion =
+                        new AutoVersionFingerprint(expected.commit(),
+                                result.capturedGenerations()));
+                autoVersionScheduled.set(false);
+            });
+        } catch (IOException | RuntimeException failed) {
+            autoVersionScheduled.set(false);
+            LumiMod.LOGGER.error("Cannot create automatic Lumi version", failed);
         }
     }
 
@@ -426,6 +498,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private SaveCaptureOperation createSave(SaveRequest request) throws IOException {
+        return new SaveCaptureOperation(
+                Objects.requireNonNull(request, "request"),
+                scopedSavePreparation(request), worldCapture,
+                saves, mutations, background);
+    }
+
+    private SavePreparation scopedSavePreparation(SaveRequest request) throws IOException {
         var workspace = workspaces.require(request.workspaceId());
         if (!workspace.id().equals(workspaces.active().id())) {
             throw new IOException("Save workspace is not active: " + workspace.id());
@@ -441,10 +520,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         } else if (request.kind() == CommitKind.ZONE) {
             throw new IOException("Zone commit requires a zone ID");
         }
-        return new SaveCaptureOperation(
-                Objects.requireNonNull(request, "request"),
-                new ScopedSavePreparation(savePreparation, scope), worldCapture,
-                saves, mutations, background);
+        return new ScopedSavePreparation(savePreparation, scope);
     }
 
     public synchronized DimensionMutation startRestore(
@@ -671,9 +747,21 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public List<io.github.lumi.domain.model.HistoryEntry> history(int limit)
             throws IOException {
         BranchRef ref = activeRef();
-        return new HistoryQueryService(
+        var visible = new HistoryQueryService(
                 new CommitRepository(repository), refs, new TombstoneRepository(repository))
                 .firstParent(ref.name(), activeWorkspaceId(), limit);
+        return java.util.stream.Stream.concat(
+                        visible.stream(),
+                        autoVersions.list(ref.name(), activeWorkspaceId(), limit).stream())
+                .collect(java.util.stream.Collectors.toMap(
+                        io.github.lumi.domain.model.HistoryEntry::id,
+                        entry -> entry, (first, ignored) -> first))
+                .values().stream()
+                .sorted(java.util.Comparator.comparing(
+                        (io.github.lumi.domain.model.HistoryEntry entry) ->
+                                entry.commit().timestamp()).reversed())
+                .limit(limit)
+                .toList();
     }
 
     public Map<UUID, List<io.github.lumi.domain.model.HistoryEntry>> zoneHistories(
@@ -1066,4 +1154,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         causalTicks.close();
         // Repository state has no open handles; background work is owned by the server session.
     }
+
+    private record AutoVersionFingerprint(
+            CommitId base,
+            io.github.lumi.domain.model.WorkingIndexSnapshot generations) { }
 }

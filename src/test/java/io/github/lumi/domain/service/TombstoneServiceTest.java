@@ -39,6 +39,8 @@ class TombstoneServiceTest {
         CommitId deleted = commits.write(commit(tree, List.of(parent), workspace, "Deleted"));
         refs.create(new BranchName("main"), deleted);
         refs.create(new BranchName("idea"), deleted);
+        BranchName auto = new BranchName("hidden/auto/branch/version");
+        refs.create(auto, deleted);
         TombstoneService service = new TombstoneService(commits, refs, tombstones);
 
         service.softDelete(
@@ -47,6 +49,7 @@ class TombstoneServiceTest {
 
         assertEquals(parent, refs.read(new BranchName("main")).orElseThrow().commit());
         assertEquals(parent, refs.read(new BranchName("idea")).orElseThrow().commit());
+        assertTrue(refs.read(auto).isEmpty());
         assertTrue(tombstones.contains(deleted));
 
         service.cleanup(deleted);

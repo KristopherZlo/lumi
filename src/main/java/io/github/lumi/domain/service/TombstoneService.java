@@ -60,7 +60,11 @@ public final class TombstoneService {
             }
         }
         for (var ref : pointing) {
-            refs.compareAndSet(ref, parent);
+            if (ref.name().value().startsWith("hidden/auto/")) {
+                refs.delete(ref);
+            } else {
+                refs.compareAndSet(ref, parent);
+            }
         }
         CommitTombstone tombstone = tombstones.read(target).orElseGet(() ->
                 new CommitTombstone(target, deletedBy, deletedAt));
