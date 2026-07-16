@@ -2,6 +2,7 @@ package io.github.lumi.client;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
+import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientSelection;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
@@ -19,9 +20,10 @@ import net.minecraft.network.chat.Component;
 /** Client entrypoint; retained UI controllers consume this single networking facade. */
 public final class LumiClient implements ClientModInitializer {
     private static final ClientHistoryStore HISTORY = new ClientHistoryStore();
+    private static final ClientCompareStore COMPARISONS = new ClientCompareStore();
     private static final ClientSelection SELECTION = new ClientSelection();
     private static final LumiClientNetworking NETWORKING =
-            new LumiClientNetworking(HISTORY, LumiClient::showRecovery);
+            new LumiClientNetworking(HISTORY, COMPARISONS, LumiClient::showRecovery);
 
     @Override
     public void onInitializeClient() {

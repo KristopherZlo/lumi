@@ -1,10 +1,13 @@
 package io.github.lumi.client;
 
 import io.github.lumi.client.state.ClientHistoryStore;
+import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.network.HistoryCommandPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.CompareArgument;
+import io.github.lumi.network.CompareResultPayload;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
 import io.github.lumi.network.PartialRestoreArgument;
@@ -17,12 +20,15 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 /** Thin client sender/receiver; all history decisions stay on the server. */
 public final class LumiClientNetworking {
     private final ClientHistoryStore history;
+    private final ClientCompareStore comparisons;
     private final Consumer<HistorySnapshotPayload> snapshotListener;
 
     public LumiClientNetworking(
             ClientHistoryStore history,
+            ClientCompareStore comparisons,
             Consumer<HistorySnapshotPayload> snapshotListener) {
         this.history = Objects.requireNonNull(history, "history");
+        this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
         this.snapshotListener = Objects.requireNonNull(snapshotListener, "snapshotListener");
     }
 
@@ -36,7 +42,13 @@ public final class LumiClientNetworking {
         ClientPlayNetworking.registerGlobalReceiver(
                 OperationEventPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> history.accept(payload)));
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> history.clear());
+        ClientPlayNetworking.registerGlobalReceiver(
+                CompareResultPayload.TYPE, (payload, context) ->
+                        context.client().execute(() -> comparisons.accept(payload)));
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            history.clear();
+            comparisons.clear();
+        });
     }
 
     public UUID save(String message) {
@@ -81,6 +93,24 @@ public final class LumiClientNetworking {
     public UUID createBranch(String branchName) {
         return send(HistoryCommandPayload.Kind.BRANCH_CREATE,
                 Objects.requireNonNull(branchName, "branchName"));
+    }
+
+    public UUID compare(CommitId before, CommitId after) {
+        CompareArgument argument = new CompareArgument(
+                Objects.requireNonNull(before, "before"),
+                Objects.requireNonNull(after, "after"));
+        var snapshot = history.state().snapshot().orElseThrow(
+                () -> new IllegalStateException("Lumi history has not synchronized yet"));
+        if (!ClientPlayNetworking.canSend(HistoryCommandPayload.TYPE)) {
+            throw new IllegalStateException("The connected server does not support Lumi history");
+        }
+        UUID requestId = UUID.randomUUID();
+        comparisons.begin(
+                requestId, snapshot.dimensionId(), argument.before(), argument.after());
+        ClientPlayNetworking.send(new HistoryCommandPayload(
+                requestId, HistoryCommandPayload.Kind.COMPARE, argument.encode(),
+                snapshot.head(), snapshot.revision()));
+        return requestId;
     }
 
     public UUID resumeRecovery() {
