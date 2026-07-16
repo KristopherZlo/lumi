@@ -38,12 +38,10 @@ import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
 import io.github.lumi.domain.service.DimensionHistoryViewService;
 import io.github.lumi.domain.service.AutoVersionService;
-import io.github.lumi.domain.service.CompareService;
 import io.github.lumi.domain.service.HistoryQueryService;
 import io.github.lumi.domain.service.ImportExportService;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.MergeService;
-import io.github.lumi.domain.service.MaterialCountService;
 import io.github.lumi.domain.service.PreparedMerge;
 import io.github.lumi.domain.service.BranchService;
 import io.github.lumi.domain.service.SaveRequest;
@@ -146,6 +144,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final CausalZoneGrowthTracker zoneGrowth;
     private final ReturnPointRestorePreparation returnPointRestores;
     private final DimensionPackageService packages;
+    private final DimensionComparisonQueries comparisons;
     private final GarbageCollectionScheduler garbageCollection;
     private final Executor background;
     private final BranchRefRepository refs;
@@ -234,6 +233,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 level.dimension().identifier().toString(), repository,
                 level.getServer().getWorldPath(LevelResource.ROOT),
                 background, this::activeRef);
+        comparisons = new DimensionComparisonQueries(
+                repository, background, zones, this::activeWorkspaceId);
         garbageCollection = new GarbageCollectionScheduler(
                 level.getGameTime(), background,
                 () -> new GarbageCollector(repository).collect(
@@ -893,7 +894,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public CompletableFuture<ComparisonSummary> compare(
             CommitId before, CommitId after, BooleanSupplier cancelled) throws IOException {
-        return compare(before, after, null, cancelled);
+        return comparisons.compare(before, after, cancelled);
     }
 
     public CompletableFuture<ComparisonSummary> compare(
@@ -901,36 +902,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             CommitId after,
             UUID zoneId,
             BooleanSupplier cancelled) throws IOException {
-        Objects.requireNonNull(before, "before");
-        Objects.requireNonNull(after, "after");
-        Objects.requireNonNull(cancelled, "cancelled");
-        UUID workspace = activeWorkspaceId();
-        ZoneScope scope = zoneId == null
-                ? null : new ZoneScope(zones.require(workspace, zoneId));
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                WorldObjectRepository objects = new WorldObjectRepository(repository);
-                CommitRepository commits = new CommitRepository(repository);
-                if (!commits.read(before).workspaceId().equals(workspace)
-                        || !commits.read(after).workspaceId().equals(workspace)) {
-                    throw new IOException(
-                            "Compare commits do not belong to the active workspace");
-                }
-                CompareService compare = new CompareService(
-                        objects, commits, new OriginStore(repository));
-                var difference = scope == null
-                        ? compare.compare(before, after, cancelled)
-                        : compare.compare(before, after, scope, cancelled);
-                return new ComparisonSummary(
-                        before, after,
-                        difference.sections().size(),
-                        difference.entities().size(),
-                        difference.sections().keySet().stream().limit(512).toList(),
-                        new MaterialCountService(objects).count(difference, cancelled));
-            } catch (IOException failed) {
-                throw new CompletionException(failed);
-            }
-        }, background);
+        return comparisons.compare(before, after, zoneId, cancelled);
     }
 
     public io.github.lumi.domain.model.Zone createZone(
