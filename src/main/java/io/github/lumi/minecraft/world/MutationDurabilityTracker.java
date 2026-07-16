@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndex;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
+import io.github.lumi.domain.model.WorkingIndexPreview;
 import io.github.lumi.minecraft.operation.CapturedGenerationCompletion;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
@@ -21,6 +22,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -147,6 +149,11 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
 
     public synchronized WorkingIndexSnapshot snapshot() {
         return working.snapshot();
+    }
+
+    public synchronized WorkingIndexPreview preview(
+            Predicate<HistoryKey> scope, int maximumSections) {
+        return working.preview(scope, maximumSections);
     }
 
     public synchronized boolean isDurable(WorkingIndexSnapshot captured) {
