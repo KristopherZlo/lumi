@@ -85,6 +85,7 @@ import io.github.lumi.storage.repository.WorkspaceRepository;
 import io.github.lumi.storage.repository.ZoneRepository;
 import io.github.lumi.storage.repository.TombstoneRepository;
 import io.github.lumi.storage.repository.GarbageCollector;
+import io.github.lumi.telemetry.TelemetryService;
 import io.github.lumi.storage.packageformat.LumiPackageDirectory;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -296,6 +297,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private static void logTerminal(ServerLevel level, DimensionMutation operation) {
         String description = operation.getClass().getSimpleName()
                 + " in " + level.dimension().identifier();
+        if (operation.terminalState() == io.github.lumi.minecraft.operation.MutationTerminalState.FAILED
+                || operation.terminalState()
+                == io.github.lumi.minecraft.operation.MutationTerminalState.DEGRADED) {
+            TelemetryService.getInstance().recordFailure(
+                    operation.getClass().getSimpleName(),
+                    operation.progress().phase(),
+                    operation.failure().orElse(null));
+        }
         switch (operation.terminalState()) {
             case SUCCEEDED -> LumiMod.LOGGER.info("Lumi operation completed: {}", description);
             case CANCELLED -> LumiMod.LOGGER.warn("Lumi operation cancelled: {}", description);

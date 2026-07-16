@@ -3,6 +3,7 @@ package io.github.lumi;
 import io.github.lumi.minecraft.runtime.LumiServerRuntime;
 import io.github.lumi.minecraft.runtime.LumiCommands;
 import io.github.lumi.network.LumiServerNetworking;
+import io.github.lumi.telemetry.TelemetryService;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +18,7 @@ public final class LumiMod implements ModInitializer {
         SERVER_RUNTIME.registerEvents();
         LumiServerNetworking.register();
         LumiCommands.register();
+        TelemetryService.getInstance().start();
         LOGGER.info("Lumi V2 initialized");
     }
 
