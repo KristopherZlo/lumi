@@ -7,12 +7,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Full Restore confirmation with the retained durable-entity exclusion choice. */
-public final class LumiRestoreScreen extends Screen {
+public final class LumiRestoreScreen extends LumiLegacyModalScreen {
     private static final int PANEL_WIDTH = 520;
     private static final int PANEL_HEIGHT = 166;
     private static final int PANEL_HEIGHT_WITH_SELECTION = 214;
@@ -48,27 +47,24 @@ public final class LumiRestoreScreen extends Screen {
         panelY = (height - panelHeight()) / 2;
         int contentX = panelX + 20;
         int buttonWidth = (panelWidth - 48) / 2;
-        addRenderableWidget(Button.builder(
+        int firstRowY = panelY + (selection.isPresent() ? 116 : 98);
+        addLegacyButton(contentX, firstRowY, buttonWidth,
                 Component.translatable("luma.action.restore_whole_save"),
-                ignored -> submitFull(true))
-                .bounds(contentX, panelY + 124, buttonWidth, 20).build());
-        addRenderableWidget(Button.builder(
+                () -> submitFull(true), LumiLegacyButton.Kind.PRIMARY);
+        addLegacyButton(contentX + buttonWidth + 8, firstRowY, buttonWidth,
                 Component.translatable("luma.action.restore_without_entities"),
-                ignored -> submitFull(false))
-                .bounds(contentX + buttonWidth + 8, panelY + 124, buttonWidth, 20).build());
+                () -> submitFull(false), LumiLegacyButton.Kind.NORMAL);
         if (selection.isPresent()) {
-            addRenderableWidget(Button.builder(
+            addLegacyButton(contentX, firstRowY + 28, buttonWidth,
                     Component.translatable("luma.action.restore_only_selected_area"),
-                    ignored -> submitArea(false))
-                    .bounds(contentX, panelY + 152, buttonWidth, 20).build());
-            addRenderableWidget(Button.builder(
+                    () -> submitArea(false), LumiLegacyButton.Kind.NORMAL);
+            addLegacyButton(contentX + buttonWidth + 8, firstRowY + 28, buttonWidth,
                     Component.translatable("luma.action.restore_everything_except_selection"),
-                    ignored -> submitArea(true))
-                    .bounds(contentX + buttonWidth + 8, panelY + 152, buttonWidth, 20).build());
+                    () -> submitArea(true), LumiLegacyButton.Kind.NORMAL);
         }
-        addRenderableWidget(Button.builder(
-                Component.translatable("luma.action.cancel"), ignored -> onClose())
-                .bounds(width / 2 - 60, panelY + panelHeight() - 30, 120, 20).build());
+        addLegacyButton(width / 2 - 60, panelY + panelHeight() - 28, 120,
+                Component.translatable("luma.action.cancel"),
+                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     private void submitFull(boolean includeEntities) {
@@ -97,20 +93,19 @@ public final class LumiRestoreScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderTransparentBackground(graphics);
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        graphics.fill(panelX, panelY, panelX + panelWidth,
-                panelY + panelHeight(), 0xee15181d);
-        graphics.drawCenteredString(font, title, width / 2, panelY + 17, 0xffffffff);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight());
+        graphics.drawCenteredString(font, title, width / 2, panelY + 17,
+                LegacyLumiTheme.TEXT);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.restore.confirm_help"),
-                width / 2, panelY + 42, 0xffaeb6c2);
+                width / 2, panelY + 42, LegacyLumiTheme.MUTED);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.restore.confirm_safety"),
-                width / 2, panelY + 58, 0xffaeb6c2);
+                width / 2, panelY + 58, LegacyLumiTheme.MUTED);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.restore.entities_help"),
-                width / 2, panelY + 78, 0xff8f9aa8);
+                width / 2, panelY + 78, LegacyLumiTheme.MUTED);
         if (selection.isPresent()) {
             BlockBox box = selection.orElseThrow();
             graphics.drawCenteredString(font,
@@ -119,8 +114,9 @@ public final class LumiRestoreScreen extends Screen {
                     width / 2, panelY + 96, 0xff8f9aa8);
         }
         if (!error.isEmpty()) {
-            graphics.drawCenteredString(font, Component.literal(error),
-                    width / 2, panelY + 110, 0xffff6b6b);
+            graphics.drawCenteredString(font, errorText(error),
+                    width / 2, panelY + (selection.isPresent() ? 104 : 84),
+                    LegacyLumiTheme.DANGER);
         }
         super.render(graphics, mouseX, mouseY, partialTick);
     }

@@ -5,12 +5,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Explicit source-wins confirmation for merging another visible branch. */
-public final class LumiMergeScreen extends Screen {
+public final class LumiMergeScreen extends LumiLegacyModalScreen {
     private static final int MAX_VISIBLE_BRANCHES = 6;
     private static final int PANEL_WIDTH = 520;
     private static final int PANEL_HEIGHT = 270;
@@ -44,15 +43,14 @@ public final class LumiMergeScreen extends Screen {
         for (HistorySnapshotPayload.Branch branch : branches) {
             if (branch.active() || row == MAX_VISIBLE_BRANCHES) continue;
             int rowY = panelY + 92 + row * 28;
-            addRenderableWidget(Button.builder(
+            addLegacyButton(panelX + panelWidth - 168, rowY + 4, 148,
                     Component.translatable("luma.action.merge_into_current"),
-                    ignored -> submit(branch.name()))
-                    .bounds(panelX + panelWidth - 168, rowY + 4, 148, 20).build());
+                    () -> submit(branch.name()), LumiLegacyButton.Kind.PRIMARY);
             row++;
         }
-        addRenderableWidget(Button.builder(
-                Component.translatable("luma.action.cancel"), ignored -> onClose())
-                .bounds(width / 2 - 60, panelY + PANEL_HEIGHT - 28, 120, 20).build());
+        addLegacyButton(width / 2 - 60, panelY + PANEL_HEIGHT - 28, 120,
+                Component.translatable("luma.action.cancel"),
+                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     private void submit(String source) {
@@ -71,35 +69,34 @@ public final class LumiMergeScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderTransparentBackground(graphics);
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        graphics.fill(panelX, panelY, panelX + panelWidth,
-                panelY + PANEL_HEIGHT, 0xee15181d);
-        graphics.drawCenteredString(font, title, width / 2, panelY + 16, 0xffffffff);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+        graphics.drawCenteredString(font, title, width / 2, panelY + 16,
+                LegacyLumiTheme.TEXT);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.merge.current", currentBranch),
-                width / 2, panelY + 34, 0xffaeb6c2);
+                width / 2, panelY + 34, LegacyLumiTheme.MUTED);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.merge.source_wins"),
-                width / 2, panelY + 52, 0xffffc857);
+                width / 2, panelY + 52, LegacyLumiTheme.ACCENT);
         int row = 0;
         for (HistorySnapshotPayload.Branch branch : branches) {
             if (branch.active() || row == MAX_VISIBLE_BRANCHES) continue;
             int rowY = panelY + 92 + row * 28;
-            graphics.fill(panelX + 20, rowY,
-                    panelX + panelWidth - 20, rowY + 28, 0xff20252c);
+            renderLegacyPanel(graphics, panelX + 20, rowY,
+                    panelWidth - 40, 28);
             graphics.drawString(font, shortName(branch.name()),
-                    panelX + 28, rowY + 10, 0xfff0f3f6, false);
+                    panelX + 28, rowY + 10, LegacyLumiTheme.TEXT, false);
             row++;
         }
         if (row == 0) {
             graphics.drawCenteredString(font,
                     Component.translatable("luma.merge.no_sources"),
-                    width / 2, panelY + 108, 0xff8f9aa8);
+                    width / 2, panelY + 108, LegacyLumiTheme.MUTED);
         }
         if (!error.isEmpty()) {
-            graphics.drawCenteredString(font, Component.literal(error),
-                    width / 2, panelY + 72, 0xffff6b6b);
+            graphics.drawCenteredString(font, errorText(error),
+                    width / 2, panelY + 72, LegacyLumiTheme.DANGER);
         }
         super.render(graphics, mouseX, mouseY, partialTick);
     }
