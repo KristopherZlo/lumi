@@ -17,6 +17,7 @@ public final class LumiDashboardScreen extends Screen {
     private final Runnable openSave;
     private final Runnable openBranch;
     private final Runnable openMerge;
+    private final Runnable openZones;
     private final Runnable quickRollback;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
     private final Consumer<VersionCompareController.Target> openCompare;
@@ -32,6 +33,7 @@ public final class LumiDashboardScreen extends Screen {
             Runnable openSave,
             Runnable openBranch,
             Runnable openMerge,
+            Runnable openZones,
             Runnable quickRollback,
             Consumer<HistorySnapshotPayload.Version> openRestore,
             Consumer<VersionCompareController.Target> openCompare) {
@@ -41,6 +43,7 @@ public final class LumiDashboardScreen extends Screen {
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openBranch = Objects.requireNonNull(openBranch, "openBranch");
         this.openMerge = Objects.requireNonNull(openMerge, "openMerge");
+        this.openZones = Objects.requireNonNull(openZones, "openZones");
         this.quickRollback = Objects.requireNonNull(quickRollback, "quickRollback");
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
         this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
@@ -72,6 +75,9 @@ public final class LumiDashboardScreen extends Screen {
         addRenderableWidget(Button.builder(
                 Component.translatable("luma.action.close"), ignored -> onClose())
                 .bounds(panelX + 48 + buttonWidth * 4, buttonY, buttonWidth, 20).build());
+        addRenderableWidget(Button.builder(
+                Component.translatable("luma.tab.zones"), ignored -> openZones.run())
+                .bounds(panelX + panelWidth - 88, panelY + 14, 72, 20).build());
         if (snapshot == null) {
             return;
         }

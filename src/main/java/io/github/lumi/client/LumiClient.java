@@ -10,10 +10,12 @@ import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiCompareScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
+import io.github.lumi.client.ui.LumiZonesScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.client.ui.LumiRestoreScreen;
 import io.github.lumi.client.ui.BranchNameController;
 import io.github.lumi.client.ui.SaveScreenController;
+import io.github.lumi.client.ui.ZoneScreenController;
 import io.github.lumi.network.HistorySnapshotPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
@@ -52,6 +54,10 @@ public final class LumiClient implements ClientModInitializer {
                                             client.screen, snapshot.branchName(),
                                             snapshot.branches(), NETWORKING::merge));
                                 },
+                                () -> client.setScreen(new LumiZonesScreen(
+                                        client.screen, HISTORY, SELECTION::bounds,
+                                        new ZoneScreenController(NETWORKING::createZone),
+                                        NETWORKING::enterZone, NETWORKING::leaveZone)),
                                 NETWORKING::quickRollback,
                                 version -> client.setScreen(new LumiRestoreScreen(
                                         client.screen,

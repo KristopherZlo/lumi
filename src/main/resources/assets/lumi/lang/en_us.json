@@ -262,7 +262,7 @@
   "luma.zones.current_zone": "New changes and zone saves use %s.",
   "luma.zones.no_zone": "No zone",
   "luma.zones.create_title": "New zone",
-  "luma.zones.create_help": "Create a named work context. The first block you place anchors its first 16x16x16 cell.",
+  "luma.zones.create_help": "Create a zone from the current wooden-sword selection.",
   "luma.zones.create_button": "Create zone",
   "luma.zones.list_title": "Zones",
   "luma.zones.list_help": "Enter the zone that describes what you are building now.",
