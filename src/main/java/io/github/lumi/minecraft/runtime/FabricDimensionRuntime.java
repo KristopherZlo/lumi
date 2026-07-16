@@ -53,6 +53,7 @@ import io.github.lumi.minecraft.world.MinecraftWorldStateApply;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
 import io.github.lumi.minecraft.world.RestoreBaselineReconciler;
 import io.github.lumi.minecraft.world.SavePreparation;
+import io.github.lumi.minecraft.world.ScopedSavePreparation;
 import io.github.lumi.minecraft.world.WorldStateCapture;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
 import io.github.lumi.storage.repository.ActiveBranchRepository;
@@ -354,21 +355,26 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         entityDurability.discard(MinecraftEntityChunkCapture.key(position));
     }
 
-    public synchronized SaveCaptureOperation startSave(SaveRequest request) {
+    public synchronized SaveCaptureOperation startSave(SaveRequest request) throws IOException {
         return startSave(request, ignored -> { });
     }
 
     public synchronized SaveCaptureOperation startSave(
-            SaveRequest request, Consumer<DimensionMutation> terminalObserver) {
+            SaveRequest request, Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         SaveCaptureOperation operation = createSave(request);
         operations.start(operation, terminalObserver);
         return operation;
     }
 
-    private SaveCaptureOperation createSave(SaveRequest request) {
+    private SaveCaptureOperation createSave(SaveRequest request) throws IOException {
+        var workspace = workspaces.require(request.workspaceId());
+        if (!workspace.id().equals(workspaces.active().id())) {
+            throw new IOException("Save workspace is not active: " + workspace.id());
+        }
         return new SaveCaptureOperation(
-                Objects.requireNonNull(request, "request"), savePreparation, worldCapture,
+                Objects.requireNonNull(request, "request"),
+                new ScopedSavePreparation(savePreparation, workspace::includes), worldCapture,
                 saves, mutations, background);
     }
 
@@ -399,7 +405,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         UUID operationId = UUID.randomUUID();
         SaveRequest returnPoint = new SaveRequest(
                 expected, author, "Return point before Restore", Instant.now(),
-                defaultWorkspaceId, Optional.empty(), CommitKind.HIDDEN_RETURN);
+                activeWorkspaceId(), Optional.empty(), CommitKind.HIDDEN_RETURN);
         BranchName hiddenRef = new BranchName("hidden/return/" + operationId);
         var operation = new ReturnPointRestoreOperation(
                 createSave(returnPoint), saved -> returnPointRestores.prepare(
@@ -545,7 +551,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 .orElseThrow(() -> new IOException("Merge source branch is missing: " + source));
         var request = new MergeService.Request(
                 current, sourceRef, Objects.requireNonNull(author, "author"), message,
-                Instant.now(), defaultWorkspaceId, Optional.empty());
+                Instant.now(), activeWorkspaceId(), Optional.empty());
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return new PreparedMerge(request, merges.prepare(request));
@@ -615,7 +621,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         BranchName hidden = new BranchName("hidden/partial/" + operationId);
         SaveRequest checkpointRequest = new SaveRequest(
                 expected, Objects.requireNonNull(author, "author"),
-                "Checkpoint before partial Restore", Instant.now(), defaultWorkspaceId,
+                "Checkpoint before partial Restore", Instant.now(), activeWorkspaceId(),
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
         SaveCaptureOperation checkpoint = new SaveCaptureOperation(
                 checkpointRequest, savePreparation, worldCapture,
@@ -653,7 +659,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         BranchName hidden = new BranchName("hidden/rollback/" + operationId);
         SaveRequest checkpointRequest = new SaveRequest(
                 expected, Objects.requireNonNull(author, "author"),
-                "Checkpoint before Quick Rollback", Instant.now(), defaultWorkspaceId,
+                "Checkpoint before Quick Rollback", Instant.now(), activeWorkspaceId(),
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
         SaveCaptureOperation checkpoint = new SaveCaptureOperation(
                 checkpointRequest, savePreparation, worldCapture,
@@ -695,6 +701,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 () -> new IOException("Active Lumi branch ref is missing: " + name));
     }
     public UUID defaultWorkspaceId() { return defaultWorkspaceId; }
+    public UUID activeWorkspaceId() throws IOException { return workspaces.active().id(); }
     public BlockEntityBaselineStore blockEntityBaselines() { return blockEntityBaselines; }
 
     private synchronized void requireNoRecovery() {

@@ -75,7 +75,7 @@ public final class LumiServerNetworking {
         if (payload.kind() == HistoryCommandPayload.Kind.SAVE) {
             runtime.startSave(new SaveRequest(
                     expected, author, payload.argument(), Instant.now(),
-                    runtime.defaultWorkspaceId(), Optional.empty(), CommitKind.MANUAL), terminal);
+                    runtime.activeWorkspaceId(), Optional.empty(), CommitKind.MANUAL), terminal);
         } else {
             runtime.startRestore(
                     new CommitId(new ObjectId(payload.argument())), author, terminal);

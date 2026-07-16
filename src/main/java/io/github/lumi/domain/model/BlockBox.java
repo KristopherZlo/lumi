@@ -28,6 +28,13 @@ public record BlockBox(int minX, int minY, int minZ, int maxX, int maxY, int max
                 && maxZ >= z && minZ <= z + 15;
     }
 
+    public boolean intersects(EntityChunkKey chunk) {
+        long x = (long) chunk.chunkX() * 16;
+        long z = (long) chunk.chunkZ() * 16;
+        return maxX >= x && minX <= x + 15
+                && maxZ >= z && minZ <= z + 15;
+    }
+
     public boolean contains(SectionKey section) {
         long x = (long) section.chunkX() * 16;
         long y = (long) section.sectionY() * 16;

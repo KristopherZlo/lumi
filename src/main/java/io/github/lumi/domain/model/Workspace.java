@@ -21,4 +21,15 @@ public record Workspace(
                     "Workspace name must be 1-256 visible characters");
         }
     }
+
+    public boolean includes(HistoryKey key) {
+        Objects.requireNonNull(key, "key");
+        if (bounds.isEmpty()) {
+            return true;
+        }
+        BlockBox area = bounds.orElseThrow();
+        return key instanceof SectionKey section
+                ? area.intersects(section)
+                : area.intersects((EntityChunkKey) key);
+    }
 }

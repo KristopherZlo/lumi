@@ -136,7 +136,7 @@ public final class LumiCommands {
         try {
             runtime.startSave(new SaveRequest(
                     runtime.activeRef(), author(source), message, Instant.now(),
-                    runtime.defaultWorkspaceId(), Optional.empty(), CommitKind.MANUAL));
+                    runtime.activeWorkspaceId(), Optional.empty(), CommitKind.MANUAL));
             source.sendSuccess(() -> Component.literal("Lumi save started"), false);
             return 1;
         } catch (IOException | IllegalStateException failed) {
