@@ -1,5 +1,6 @@
 package io.github.lumi.storage.repository;
 
+import io.github.lumi.domain.service.SurvivalOptInStore;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -13,7 +14,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 
 /** Atomic world-wide set of operators who explicitly enabled Lumi in Survival. */
-public final class SurvivalOptInRepository {
+public final class SurvivalOptInRepository implements SurvivalOptInStore {
     private static final int MAGIC = 0x4c535032; // LSP2
     private static final int MAX_PLAYERS = 100_000;
     private final Path file;
@@ -24,10 +25,12 @@ public final class SurvivalOptInRepository {
                 .resolve("survival-opt-in.bin");
     }
 
+    @Override
     public synchronized boolean isEnabled(UUID playerId) throws IOException {
         return read().contains(playerId);
     }
 
+    @Override
     public synchronized void setEnabled(UUID playerId, boolean enabled) throws IOException {
         TreeSet<UUID> players = new TreeSet<>(read());
         boolean changed = enabled ? players.add(playerId) : players.remove(playerId);
