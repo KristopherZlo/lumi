@@ -11,6 +11,7 @@ import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
 import io.github.lumi.domain.model.WorkspaceSwitchTarget;
+import io.github.lumi.domain.model.ZoneRestoreTarget;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -87,6 +88,7 @@ public final class OperationJournalRepository {
             writeBlockArea(output, journal.target().blockArea());
             output.writeBoolean(journal.target().excludeEntities());
             writeWorkspaceSwitch(output, journal.target().workspaceSwitch());
+            writeZoneRestore(output, journal.target().zoneRestore());
         }
         return bytes.toByteArray();
     }
@@ -124,9 +126,11 @@ public final class OperationJournalRepository {
             }
             var workspaceSwitch = input.available() == 0
                     ? Optional.<WorkspaceSwitchTarget>empty() : readWorkspaceSwitch(input);
+            var zoneRestore = input.available() == 0
+                    ? Optional.<ZoneRestoreTarget>empty() : readZoneRestore(input);
             OperationTarget target = new OperationTarget(
                     branchName, expected, revision, targetCommit, returnPoint,
-                    branchSwitch, blockArea, excludeEntities, workspaceSwitch);
+                    branchSwitch, blockArea, excludeEntities, workspaceSwitch, zoneRestore);
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in operation journal");
             }
@@ -235,6 +239,24 @@ public final class OperationJournalRepository {
             throw new IOException("Invalid workspace switch target flag");
         }
         return present == 0 ? Optional.empty() : Optional.of(new WorkspaceSwitchTarget(
+                readUuid(input), readUuid(input), input.readLong()));
+    }
+
+    private static void writeZoneRestore(
+            DataOutputStream output, Optional<ZoneRestoreTarget> zoneRestore) throws IOException {
+        output.writeBoolean(zoneRestore.isPresent());
+        if (zoneRestore.isEmpty()) return;
+        ZoneRestoreTarget target = zoneRestore.orElseThrow();
+        writeUuid(output, target.workspaceId());
+        writeUuid(output, target.zoneId());
+        output.writeLong(target.revision());
+    }
+
+    private static Optional<ZoneRestoreTarget> readZoneRestore(
+            DataInputStream input) throws IOException {
+        int present = input.readUnsignedByte();
+        if (present > 1) throw new IOException("Invalid zone Restore target flag");
+        return present == 0 ? Optional.empty() : Optional.of(new ZoneRestoreTarget(
                 readUuid(input), readUuid(input), input.readLong()));
     }
 

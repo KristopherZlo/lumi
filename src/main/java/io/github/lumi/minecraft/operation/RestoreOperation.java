@@ -10,6 +10,8 @@ import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.model.WorkspaceSwitchTarget;
+import io.github.lumi.domain.model.Zone;
+import io.github.lumi.domain.model.ZoneRestoreTarget;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.storage.repository.BranchRefRepository;
@@ -157,6 +159,27 @@ public final class RestoreOperation implements DimensionMutation {
                 restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
                 Optional.of(returnPoint), Optional.empty(),
                 Optional.of(area));
+        return start(restore, world, publication, journals, operationId,
+                stateListener, OperationKind.RESTORE, target);
+    }
+
+    public static RestoreOperation startZone(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            Zone zone,
+            CommitId returnPoint) throws IOException {
+        Objects.requireNonNull(zone, "zone");
+        Objects.requireNonNull(returnPoint, "returnPoint");
+        OperationTarget target = new OperationTarget(
+                restore.expectedRef().name(), restore.expectedRef().commit(),
+                restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
+                Optional.of(returnPoint), Optional.empty(), Optional.empty(), false,
+                Optional.empty(), Optional.of(new ZoneRestoreTarget(
+                        zone.workspaceId(), zone.id(), zone.revision())));
         return start(restore, world, publication, journals, operationId,
                 stateListener, OperationKind.RESTORE, target);
     }

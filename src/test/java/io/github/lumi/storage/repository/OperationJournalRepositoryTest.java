@@ -13,6 +13,7 @@ import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
 import io.github.lumi.domain.model.WorkspaceSwitchTarget;
+import io.github.lumi.domain.model.ZoneRestoreTarget;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -84,6 +85,23 @@ class OperationJournalRepositoryTest {
 
         var created = repository.create(new OperationJournal(
                 UUID.randomUUID(), OperationKind.BRANCH_SWITCH,
+                OperationPhase.PREPARED, target));
+
+        assertEquals(created, new OperationJournalRepository(repositoryRoot)
+                .read().orElseThrow());
+    }
+
+    @Test
+    void persistsImmutableZoneRestoreRevision() throws IOException {
+        OperationJournalRepository repository = new OperationJournalRepository(repositoryRoot);
+        OperationTarget target = new OperationTarget(
+                new BranchName("main"), id("expected"), 7,
+                Optional.of(id("target")), Optional.of(id("return")),
+                Optional.empty(), Optional.empty(), false, Optional.empty(),
+                Optional.of(new ZoneRestoreTarget(new UUID(0, 1), new UUID(0, 2), 5)));
+
+        var created = repository.create(new OperationJournal(
+                UUID.randomUUID(), OperationKind.RESTORE,
                 OperationPhase.PREPARED, target));
 
         assertEquals(created, new OperationJournalRepository(repositoryRoot)

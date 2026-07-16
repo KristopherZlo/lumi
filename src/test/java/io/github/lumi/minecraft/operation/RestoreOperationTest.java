@@ -19,6 +19,8 @@ import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationTarget;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.model.WorkspaceSwitchTarget;
+import io.github.lumi.domain.model.Zone;
+import io.github.lumi.domain.model.ZoneRestoreTarget;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.storage.repository.BranchRefRepository;
@@ -98,6 +100,28 @@ class RestoreOperationTest {
         assertEquals(Optional.of(new WorkspaceSwitchTarget(
                         new UUID(0, 1), new UUID(0, 2), 8)),
                 journals.read().orElseThrow().target().workspaceSwitch());
+    }
+
+    @Test
+    void createsRefNeutralZoneRestoreJournal() throws IOException {
+        BranchRef current = new BranchRef(new BranchName("main"), id('1'), 2);
+        CommitId target = id('2');
+        CommitId checkpoint = id('3');
+        UUID workspace = new UUID(0, 4);
+        Zone zone = new Zone(new UUID(0, 5), workspace, "Cell", 0,
+                java.util.Set.of(), java.util.Set.of(), 7);
+        var restore = new PreparedRestore(
+                current, target, Map.of(), Map.of(), Map.of(), Map.of());
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+
+        RestoreOperation.startZone(
+                restore, new RepairThenVerify(), ignored -> { }, journals, UUID.randomUUID(),
+                RestoreStateListener.NONE, zone, checkpoint);
+
+        var journal = journals.read().orElseThrow();
+        assertEquals(Optional.of(new ZoneRestoreTarget(workspace, zone.id(), 7)),
+                journal.target().zoneRestore());
+        assertEquals(Optional.of(checkpoint), journal.target().returnPoint());
     }
 
     @Test
