@@ -14,6 +14,7 @@ import io.github.lumi.domain.model.RegionCoordinate;
 import io.github.lumi.domain.model.RegionTree;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.Zone;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -92,6 +93,21 @@ public final class RestoreService {
             ZoneScope scope) throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
                 targetCommit, null, false, true, Objects.requireNonNull(scope, "scope"));
+    }
+
+    public PreparedRestore prepareZone(
+            BranchRef expectedRef,
+            CommitId sourceCommit,
+            CommitId targetCommit,
+            Zone zone) throws IOException {
+        Objects.requireNonNull(zone, "zone");
+        Commit target = commits.read(targetCommit);
+        if (!target.workspaceId().equals(zone.workspaceId())
+                || !target.zoneId().filter(zone.id()::equals).isPresent()) {
+            throw new IOException("Restore target does not belong to zone: " + zone.id());
+        }
+        return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
+                targetCommit, null, false, true, new ZoneScope(zone));
     }
 
     private PreparedRestore prepare(

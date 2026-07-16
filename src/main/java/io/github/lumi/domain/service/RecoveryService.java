@@ -10,9 +10,15 @@ import java.util.Objects;
 /** Reconstructs either safe direction from immutable crash-journal targets. */
 public final class RecoveryService {
     private final RestoreService restores;
+    private final ZoneService zones;
 
     public RecoveryService(RestoreService restores) {
+        this(restores, null);
+    }
+
+    public RecoveryService(RestoreService restores, ZoneService zones) {
         this.restores = Objects.requireNonNull(restores, "restores");
+        this.zones = zones;
     }
 
     public PreparedRestore prepare(OperationJournal journal, RecoveryChoice choice)
@@ -36,6 +42,17 @@ public final class RecoveryService {
             var area = target.blockArea().orElseThrow();
             return restores.preparePartial(
                     expected, source, desired, area.area(), area.outside());
+        }
+        if (target.zoneRestore().isPresent()) {
+            if (zones == null) {
+                throw new IOException("Zone recovery service is unavailable");
+            }
+            var zoneTarget = target.zoneRestore().orElseThrow();
+            var zone = zones.require(zoneTarget.workspaceId(), zoneTarget.zoneId());
+            if (zone.revision() != zoneTarget.revision()) {
+                throw new IOException("Zone changed since Restore started: " + zone.id());
+            }
+            return restores.prepareZone(expected, source, desired, zone);
         }
         if (target.excludeEntities()) {
             return restores.prepareWithoutEntities(expected, source, desired);

@@ -161,7 +161,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.merges = merges;
         this.workspaces = workspaces;
         this.zones = zones;
-        recoveries = new RecoveryService(restores);
+        recoveries = new RecoveryService(restores, zones);
         this.background = background;
         this.refs = refs;
         this.active = active;
@@ -342,7 +342,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             }
             return new BranchSwitchRestorePublication(branches, plan);
         }
-        if (journal.target().blockArea().isPresent()) {
+        if (journal.target().blockArea().isPresent()
+                || journal.target().zoneRestore().isPresent()) {
             return new PendingRestorePublication(mutations);
         }
         if (journal.kind() == OperationKind.QUICK_ROLLBACK) {
@@ -609,20 +610,27 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public io.github.lumi.domain.model.Zone createZone(
             String name, int color, java.util.Set<SectionKey> cells) throws IOException {
-        requireNoRecovery();
+        requireZoneMetadataMutable();
         return zones.create(UUID.randomUUID(), activeWorkspaceId(), name, color, cells);
     }
 
     public io.github.lumi.domain.model.Zone setZoneActorActive(
             UUID zoneId, UUID actor, boolean enabled) throws IOException {
-        requireNoRecovery();
+        requireZoneMetadataMutable();
         return zones.setActorActive(activeWorkspaceId(), zoneId, actor, enabled);
     }
 
     public io.github.lumi.domain.model.Zone growZoneForActor(
             UUID zoneId, UUID actor, SectionKey cell) throws IOException {
-        requireNoRecovery();
+        requireZoneMetadataMutable();
         return zones.growForActor(activeWorkspaceId(), zoneId, actor, cell);
+    }
+
+    private void requireZoneMetadataMutable() {
+        requireNoRecovery();
+        if (operations.hasActiveOperation()) {
+            throw new IllegalStateException("Zone metadata cannot change during an operation");
+        }
     }
 
     public CompletableFuture<PreparedMerge> prepareMerge(
@@ -723,6 +731,62 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         return RestoreOperation.startPartial(
                                 prepared, worldApply, new PendingRestorePublication(mutations),
                                 journals, operationId, restoreStateListener, area,
+                                saved.commitId());
+                    } catch (IOException failed) {
+                        throw new CompletionException(failed);
+                    }
+                }, background));
+        operations.start(operation, terminalObserver);
+        return operation;
+    }
+
+    public synchronized ReturnPointRestoreOperation startZoneRestore(
+            CommitId target,
+            UUID zoneId,
+            CommitAuthor author) throws IOException {
+        return startZoneRestore(target, zoneId, author, ignored -> { });
+    }
+
+    public synchronized ReturnPointRestoreOperation startZoneRestore(
+            CommitId target,
+            UUID zoneId,
+            CommitAuthor author,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        requireNoRecovery();
+        if (operations.hasActiveOperation()) {
+            throw new IllegalStateException("A dimension operation is already active");
+        }
+        BranchRef expected = activeRef();
+        var workspace = workspaces.active();
+        var zone = zones.require(workspace.id(), Objects.requireNonNull(zoneId, "zoneId"));
+        ZoneScope scope = new ZoneScope(zone);
+        UUID operationId = UUID.randomUUID();
+        BranchName hidden = new BranchName("hidden/zone/" + operationId);
+        SaveRequest checkpointRequest = new SaveRequest(
+                expected, Objects.requireNonNull(author, "author"),
+                "Checkpoint before zone Restore", Instant.now(), workspace.id(),
+                Optional.of(zone.id()), CommitKind.HIDDEN_RETURN);
+        SavePreparation scoped = new ScopedSavePreparation(
+                savePreparation, key -> workspace.includes(key) && scope.includes(key));
+        SaveCaptureOperation checkpoint = new SaveCaptureOperation(
+                checkpointRequest, scoped, worldCapture,
+                (request, captured) -> saves.checkpoint(request, captured, hidden),
+                ignored -> { }, background);
+        var operation = new ReturnPointRestoreOperation(checkpoint, saved ->
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        if (!activeRef().equals(expected)) {
+                            throw new IOException("Active branch changed during zone Restore");
+                        }
+                        var currentZone = zones.require(workspace.id(), zone.id());
+                        if (currentZone.revision() != zone.revision()) {
+                            throw new IOException("Zone changed during Restore preparation");
+                        }
+                        var prepared = restores.prepareZone(
+                                expected, saved.commitId(), target, zone);
+                        return RestoreOperation.startZone(
+                                prepared, worldApply, new PendingRestorePublication(mutations),
+                                journals, operationId, restoreStateListener, zone,
                                 saved.commitId());
                     } catch (IOException failed) {
                         throw new CompletionException(failed);
