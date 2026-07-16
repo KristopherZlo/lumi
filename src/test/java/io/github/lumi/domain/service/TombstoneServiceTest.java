@@ -1,0 +1,84 @@
+package io.github.lumi.domain.service;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.Commit;
+import io.github.lumi.domain.model.CommitAuthor;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.CommitStatistics;
+import io.github.lumi.domain.model.DimensionTree;
+import io.github.lumi.storage.repository.BranchRefRepository;
+import io.github.lumi.storage.repository.CommitRepository;
+import io.github.lumi.storage.repository.TombstoneRepository;
+import io.github.lumi.storage.repository.WorldObjectRepository;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+class TombstoneServiceTest {
+    @TempDir Path repositoryRoot;
+
+    @Test
+    void softDeleteMovesEveryPointingHeadAndCleanupReleasesMarker() throws Exception {
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        TombstoneRepository tombstones = new TombstoneRepository(repositoryRoot);
+        UUID workspace = new UUID(0, 2);
+        var tree = new WorldObjectRepository(repositoryRoot)
+                .write(new DimensionTree(Map.of()));
+        CommitId parent = commits.write(commit(tree, List.of(), workspace, "Parent"));
+        CommitId deleted = commits.write(commit(tree, List.of(parent), workspace, "Deleted"));
+        refs.create(new BranchName("main"), deleted);
+        refs.create(new BranchName("idea"), deleted);
+        TombstoneService service = new TombstoneService(commits, refs, tombstones);
+
+        service.softDelete(
+                deleted, workspace, new CommitAuthor(new UUID(0, 7), "Builder"),
+                Instant.parse("2026-07-16T12:00:00Z"));
+
+        assertEquals(parent, refs.read(new BranchName("main")).orElseThrow().commit());
+        assertEquals(parent, refs.read(new BranchName("idea")).orElseThrow().commit());
+        assertTrue(tombstones.contains(deleted));
+
+        service.cleanup(deleted);
+
+        assertEquals(false, tombstones.contains(deleted));
+    }
+
+    @Test
+    void refusesToDeleteRootWhileABranchPointsToIt() throws Exception {
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        UUID workspace = new UUID(0, 2);
+        var tree = new WorldObjectRepository(repositoryRoot)
+                .write(new DimensionTree(Map.of()));
+        CommitId root = commits.write(commit(tree, List.of(), workspace, "Root"));
+        refs.create(new BranchName("main"), root);
+        TombstoneService service = new TombstoneService(
+                commits, refs, new TombstoneRepository(repositoryRoot));
+
+        assertThrows(IllegalStateException.class, () -> service.softDelete(
+                root, workspace, new CommitAuthor(new UUID(0, 7), "Builder"),
+                Instant.EPOCH));
+    }
+
+    private static Commit commit(
+            io.github.lumi.domain.model.ObjectId tree,
+            List<CommitId> parents,
+            UUID workspace,
+            String message) {
+        return new Commit(
+                tree, parents, new CommitAuthor(new UUID(0, 1), "Builder"), message,
+                Instant.EPOCH, workspace, Optional.empty(), CommitKind.MANUAL,
+                new CommitStatistics(0, 0, 0, 0));
+    }
+}
