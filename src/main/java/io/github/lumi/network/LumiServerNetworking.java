@@ -347,6 +347,9 @@ public final class LumiServerNetworking {
                     "Version deletion does not use the mutation queue");
             case CLEANUP_VERSION -> throw new IllegalStateException(
                     "Version cleanup does not use the mutation queue");
+            case PACKAGE_EXPORT, PACKAGE_INSPECT, PACKAGE_IMPORT ->
+                    throw new IllegalStateException(
+                            "Package commands do not use the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));

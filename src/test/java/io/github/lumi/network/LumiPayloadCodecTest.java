@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.minecraft.operation.OperationProgress;
 import io.netty.buffer.Unpooled;
 import java.util.UUID;
@@ -63,6 +64,19 @@ class LumiPayloadCodecTest {
                 id('2').hex(), id('1'), 42);
         assertEquals(cleanupVersion,
                 roundTrip(HistoryCommandPayload.CODEC, cleanupVersion));
+        for (HistoryCommandPayload.Kind kind : java.util.List.of(
+                HistoryCommandPayload.Kind.PACKAGE_EXPORT,
+                HistoryCommandPayload.Kind.PACKAGE_INSPECT)) {
+            HistoryCommandPayload packageCommand = new HistoryCommandPayload(
+                    UUID.randomUUID(), kind, "clock-v2", id('1'), 42);
+            assertEquals(packageCommand,
+                    roundTrip(HistoryCommandPayload.CODEC, packageCommand));
+        }
+        HistoryCommandPayload importPackage = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.PACKAGE_IMPORT,
+                UUID.randomUUID().toString(), id('1'), 42);
+        assertEquals(importPackage,
+                roundTrip(HistoryCommandPayload.CODEC, importPackage));
         OperationCancelPayload cancel = new OperationCancelPayload(
                 UUID.randomUUID(), UUID.randomUUID());
         assertEquals(cancel, roundTrip(OperationCancelPayload.CODEC, cancel));
@@ -126,6 +140,12 @@ class LumiPayloadCodecTest {
                 request, HistoryCommandPayload.Kind.BRANCH_CREATE, " ", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.COMPARE_CANCEL, "not-a-uuid", id('1'), 0));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.PACKAGE_EXPORT,
+                "../outside", id('1'), 0));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.PACKAGE_IMPORT,
+                "not-a-token", id('1'), 0));
     }
 
     @Test
@@ -161,6 +181,12 @@ class LumiPayloadCodecTest {
                 Optional.of(UUID.randomUUID()), 0,
                 Optional.of(new OperationProgress("Restore: applying", 4, 10)));
         assertEquals(progress, roundTrip(OperationEventPayload.CODEC, progress));
+        PackageInspectionPayload inspection = new PackageInspectionPayload(
+                UUID.randomUUID(), "minecraft:overworld",
+                new PackageName("clock-v2"), id('d'),
+                "Working clock", "Builder", 123_456, 9);
+        assertEquals(inspection,
+                roundTrip(PackageInspectionPayload.CODEC, inspection));
     }
 
     private static CommitId id(char digit) {

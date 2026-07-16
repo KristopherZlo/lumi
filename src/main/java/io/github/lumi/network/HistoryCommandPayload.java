@@ -3,6 +3,7 @@ package io.github.lumi.network;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.domain.model.PackageName;
 import java.util.Objects;
 import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
@@ -64,6 +65,12 @@ public record HistoryCommandPayload(
         if (kind == Kind.DELETE_VERSION || kind == Kind.CLEANUP_VERSION) {
             new ObjectId(argument);
         }
+        if (kind == Kind.PACKAGE_EXPORT || kind == Kind.PACKAGE_INSPECT) {
+            new PackageName(argument);
+        }
+        if (kind == Kind.PACKAGE_IMPORT) {
+            UUID.fromString(argument);
+        }
         if ((kind == Kind.QUICK_ROLLBACK || kind == Kind.UNDO || kind == Kind.REDO
                 || kind == Kind.RECOVER_RESUME || kind == Kind.RECOVER_RETURN)
                 && !argument.isEmpty()) {
@@ -98,7 +105,8 @@ public record HistoryCommandPayload(
         RECOVER_RESUME(6), RECOVER_RETURN(7), BRANCH_CREATE(8),
         RESTORE_NO_ENTITIES(9), RESTORE_AREA(10), COMPARE(11), COMPARE_CANCEL(12),
         AMEND(13), MERGE(14), ZONE_CREATE(15), ZONE_ENTER(16), ZONE_LEAVE(17),
-        ZONE_SAVE(18), ZONE_RESTORE(19), DELETE_VERSION(20), CLEANUP_VERSION(21);
+        ZONE_SAVE(18), ZONE_RESTORE(19), DELETE_VERSION(20), CLEANUP_VERSION(21),
+        PACKAGE_EXPORT(22), PACKAGE_INSPECT(23), PACKAGE_IMPORT(24);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {
