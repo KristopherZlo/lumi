@@ -68,9 +68,10 @@ public final class LumiClient implements ClientModInitializer {
                         client.setScreen(new LumiDashboardScreen(
                                 client.screen, HISTORY,
                                 () -> client.setScreen(new LumiSaveScreen(
-                                        client.screen,
+                                        client.screen, HISTORY,
                                         new SaveScreenController(
-                                                NETWORKING::save, NETWORKING::amend))),
+                                                NETWORKING::save, NETWORKING::amend),
+                                        NETWORKING::refreshSnapshot)),
                                 () -> client.setScreen(new LumiBranchScreen(
                                         client.screen,
                                         currentBranch(),
@@ -120,8 +121,9 @@ public final class LumiClient implements ClientModInitializer {
                     @Override public void openSave() {
                         Minecraft client = Minecraft.getInstance();
                         client.setScreen(new LumiSaveScreen(
-                                client.screen, new SaveScreenController(
-                                        NETWORKING::save, NETWORKING::amend)));
+                                client.screen, HISTORY, new SaveScreenController(
+                                        NETWORKING::save, NETWORKING::amend),
+                                NETWORKING::refreshSnapshot));
                     }
 
                     @Override public void openHotkeys() {
@@ -153,6 +155,7 @@ public final class LumiClient implements ClientModInitializer {
         hotkeys.register();
         new LumiSelectionTool(SELECTION, LumiClient::showFeedback).register();
         new LumiOperationHud(HISTORY).register();
+        new LumiPendingChangeOverlay(HISTORY, NETWORKING::refreshSnapshot).register();
         LumiMod.LOGGER.info("Lumi V2 client initialized");
     }
 
