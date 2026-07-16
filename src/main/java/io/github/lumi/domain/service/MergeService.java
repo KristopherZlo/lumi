@@ -51,6 +51,9 @@ public final class MergeService {
         Objects.requireNonNull(request, "request");
         CommitId base = graph.nearestCommonAncestor(
                 request.current.commit(), request.source.commit());
+        Commit baseCommit = commits.read(base);
+        Commit currentCommit = commits.read(request.current.commit());
+        Commit sourceCommit = commits.read(request.source.commit());
         var currentDifference = compare.compare(base, request.current.commit());
         var sourceDifference = compare.compare(base, request.source.commit());
         Map<HistoryKey, ObjectId> changes = new HashMap<>();
@@ -107,14 +110,17 @@ public final class MergeService {
             totals.conflicts = Math.addExact(totals.conflicts, merged.conflicts());
         }
 
-        Commit current = commits.read(request.current.commit());
-        ObjectId tree = trees.update(Optional.of(current.tree()), changes);
+        var playerSpawns = merge.playerSpawns(
+                baseCommit.playerSpawns(), currentCommit.playerSpawns(),
+                sourceCommit.playerSpawns());
+        totals.conflicts = Math.addExact(totals.conflicts, playerSpawns.conflicts());
+        ObjectId tree = trees.update(Optional.of(currentCommit.tree()), changes);
         CommitStatistics statistics = new CommitStatistics(
                 totals.sections, totals.entityChunks, totals.blocks, totals.entities);
         CommitId commit = commits.write(new Commit(
                 tree, List.of(request.current.commit(), request.source.commit()),
                 request.author, request.message, request.timestamp, request.workspaceId,
-                request.zoneId, CommitKind.MERGE, statistics));
+                request.zoneId, CommitKind.MERGE, statistics, playerSpawns.value()));
         return new Result(base, commit, totals.conflicts, statistics);
     }
 

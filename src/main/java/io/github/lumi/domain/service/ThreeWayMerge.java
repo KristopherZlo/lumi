@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.PlayerSpawn;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -100,6 +101,34 @@ public final class ThreeWayMerge {
         return new EntityWorldResult(result, conflicts, changed);
     }
 
+    public PlayerSpawnResult playerSpawns(
+            Map<UUID, PlayerSpawn> base,
+            Map<UUID, PlayerSpawn> current,
+            Map<UUID, PlayerSpawn> source) {
+        Objects.requireNonNull(base, "base");
+        Objects.requireNonNull(current, "current");
+        Objects.requireNonNull(source, "source");
+        var ids = new TreeSet<UUID>();
+        ids.addAll(base.keySet());
+        ids.addAll(current.keySet());
+        ids.addAll(source.keySet());
+        Map<UUID, PlayerSpawn> result = new TreeMap<>(current);
+        int conflicts = 0;
+        for (UUID id : ids) {
+            Choice<Optional<PlayerSpawn>> choice = choose(
+                    Optional.ofNullable(base.get(id)),
+                    Optional.ofNullable(current.get(id)),
+                    Optional.ofNullable(source.get(id)));
+            conflicts += choice.conflict ? 1 : 0;
+            if (choice.value.isPresent()) {
+                result.put(id, choice.value.orElseThrow());
+            } else {
+                result.remove(id);
+            }
+        }
+        return new PlayerSpawnResult(result, conflicts);
+    }
+
     private static Cell cell(SectionBlob section, int index) {
         return new Cell(section.blockStates().get(index),
                 Optional.ofNullable(section.blockEntities().get(index)));
@@ -139,6 +168,12 @@ public final class ThreeWayMerge {
             int conflicts,
             int changedEntities) {
         public EntityWorldResult {
+            value = Map.copyOf(value);
+        }
+    }
+
+    public record PlayerSpawnResult(Map<UUID, PlayerSpawn> value, int conflicts) {
+        public PlayerSpawnResult {
             value = Map.copyOf(value);
         }
     }

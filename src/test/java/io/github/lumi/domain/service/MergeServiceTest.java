@@ -17,6 +17,7 @@ import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.RegionCoordinate;
 import io.github.lumi.domain.model.RegionTree;
+import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.MerkleTreeEditor;
@@ -95,6 +96,33 @@ class MergeServiceTest {
         assertEquals(1, result.conflicts());
     }
 
+    @Test
+    void sourceWinsConflictingPlayerSpawn() throws Exception {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        UUID player = new UUID(0, 7);
+        CommitId base = commits.write(spawnCommit(
+                objects, List.of(), player, new PlayerSpawn(0, 64, 0, 0, 0, false)));
+        CommitId current = commits.write(spawnCommit(
+                objects, List.of(base), player, new PlayerSpawn(5, 70, 5, 0, 0, false)));
+        PlayerSpawn sourceSpawn = new PlayerSpawn(-4, 80, 9, 90, 8, true);
+        CommitId source = commits.write(spawnCommit(
+                objects, List.of(base), player, sourceSpawn));
+        var service = new MergeService(
+                objects, commits, new OriginStore(repositoryRoot),
+                new MerkleTreeEditor(objects));
+
+        var result = service.prepare(new MergeService.Request(
+                new BranchRef(new BranchName("main"), current, 1),
+                new BranchRef(new BranchName("idea"), source, 1),
+                new CommitAuthor(new UUID(0, 1), "Builder"), "Merge spawn",
+                Instant.EPOCH, new UUID(0, 2), Optional.empty()));
+
+        assertEquals(Map.of(player, sourceSpawn),
+                commits.read(result.commit()).playerSpawns());
+        assertEquals(1, result.conflicts());
+    }
+
     private static Commit commit(
             WorldObjectRepository objects,
             List<CommitId> parents,
@@ -137,6 +165,16 @@ class MergeServiceTest {
     private static EntityState entity(UUID id, int state) {
         return new EntityState(id, "minecraft:armor_stand",
                 new CanonicalNbt(new byte[] {(byte) state}));
+    }
+
+    private static Commit spawnCommit(
+            WorldObjectRepository objects, List<CommitId> parents,
+            UUID player, PlayerSpawn spawn) throws Exception {
+        var tree = objects.write(new DimensionTree(Map.of()));
+        return new Commit(tree, parents, new CommitAuthor(new UUID(0, 1), "Builder"),
+                "Spawn", Instant.EPOCH, new UUID(0, 2), Optional.empty(),
+                CommitKind.MANUAL, new CommitStatistics(0, 0, 0, 0),
+                Map.of(player, spawn));
     }
 
     private static SectionBlob section(String... firstStates) {
