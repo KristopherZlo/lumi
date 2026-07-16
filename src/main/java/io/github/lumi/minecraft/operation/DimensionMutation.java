@@ -26,4 +26,8 @@ public interface DimensionMutation {
     default Optional<Throwable> failure() {
         return Optional.empty();
     }
+
+    default OperationProgress progress() {
+        return OperationProgress.indeterminate(getClass().getSimpleName());
+    }
 }

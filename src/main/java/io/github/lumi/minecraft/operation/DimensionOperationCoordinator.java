@@ -23,6 +23,9 @@ public final class DimensionOperationCoordinator {
     private final Consumer<DimensionMutation> terminalObserver;
     private final ArrayList<QueuedOperation> queued = new ArrayList<>();
     private final HashMap<OperationTicket, IntConsumer> positionObservers = new HashMap<>();
+    private final HashMap<OperationTicket, Consumer<OperationProgress>> progressObservers =
+            new HashMap<>();
+    private final HashMap<OperationTicket, OperationProgress> publishedProgress = new HashMap<>();
     private DimensionMutation active;
     private OperationTicket activeTicket;
     private Consumer<DimensionMutation> activeObserver = ignored -> { };
@@ -134,6 +137,7 @@ public final class DimensionOperationCoordinator {
         }
         if (active.isTerminal()) {
             reportTerminal();
+            notifyProgress();
             releaseFreezeIfSafe();
             clearTerminalIfSafe();
             return;
@@ -146,6 +150,7 @@ public final class DimensionOperationCoordinator {
                 ? Long.MAX_VALUE : start + tickBudgetNanos;
         active.advance(deadline);
         reportTerminal();
+        notifyProgress();
         releaseFreezeIfSafe();
         clearTerminalIfSafe();
     }
@@ -161,6 +166,8 @@ public final class DimensionOperationCoordinator {
     private void clearTerminalIfSafe() {
         if (active.isTerminal() && active.isSafeToRelease()) {
             positionObservers.remove(activeTicket);
+            progressObservers.remove(activeTicket);
+            publishedProgress.remove(activeTicket);
             active = null;
             activeTicket = null;
             activeObserver = ignored -> { };
@@ -174,6 +181,7 @@ public final class DimensionOperationCoordinator {
         if (active == null && !queued.isEmpty()) {
             activate(queued.removeFirst());
             notifyPositions();
+            notifyProgress();
         }
     }
 
@@ -220,6 +228,8 @@ public final class DimensionOperationCoordinator {
         boolean removed = queued.removeIf(entry -> entry.ticket().equals(ticket));
         if (removed) {
             positionObservers.remove(ticket);
+            progressObservers.remove(ticket);
+            publishedProgress.remove(ticket);
             notifyPositions();
         }
         return removed;
@@ -231,6 +241,41 @@ public final class DimensionOperationCoordinator {
                 .orElseThrow(() -> new IllegalArgumentException("Unknown operation ticket"));
         positionObservers.put(ticket, Objects.requireNonNull(observer, "observer"));
         observer.accept(position);
+    }
+
+    public synchronized void observeProgress(
+            OperationTicket ticket, Consumer<OperationProgress> observer) {
+        OperationProgress progress = progress(ticket);
+        progressObservers.put(ticket, Objects.requireNonNull(observer, "observer"));
+        publishedProgress.put(ticket, progress);
+        observer.accept(progress);
+    }
+
+    private OperationProgress progress(OperationTicket ticket) {
+        Objects.requireNonNull(ticket, "ticket");
+        if (ticket.equals(activeTicket)) {
+            return active.progress();
+        }
+        if (queued.stream().anyMatch(entry -> entry.ticket().equals(ticket))) {
+            return OperationProgress.indeterminate("Queued");
+        }
+        throw new IllegalArgumentException("Unknown operation ticket");
+    }
+
+    private void notifyProgress() {
+        progressObservers.entrySet().removeIf(entry -> {
+            OperationProgress progress;
+            try {
+                progress = progress(entry.getKey());
+            } catch (IllegalArgumentException unknown) {
+                publishedProgress.remove(entry.getKey());
+                return true;
+            }
+            if (!progress.equals(publishedProgress.put(entry.getKey(), progress))) {
+                entry.getValue().accept(progress);
+            }
+            return false;
+        });
     }
 
     private void notifyPositions() {

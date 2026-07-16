@@ -188,6 +188,25 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
+    void publishesOnlyChangedImmutableProgressSnapshots() throws IOException {
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                new RecordingFreeze(), () -> 0L, 1L);
+        NamedMutation mutation = new NamedMutation("save", new ArrayList<>(), 2);
+        coordinator.start(mutation);
+        OperationTicket ticket = coordinator.ticketOf(mutation).orElseThrow();
+        var progress = new ArrayList<OperationProgress>();
+        coordinator.observeProgress(ticket, progress::add);
+
+        coordinator.tick();
+        coordinator.tick();
+
+        assertEquals(java.util.List.of(
+                new OperationProgress("save", 0, 2),
+                new OperationProgress("save", 1, 2),
+                new OperationProgress("save", 2, 2)), progress);
+    }
+
+    @Test
     void adoptsRecoveryFreezeWithoutAnUnfrozenGap() throws IOException {
         RecordingFreeze freeze = new RecordingFreeze();
         DimensionFreeze.Lease recoveryLease = freeze.acquire();
@@ -258,6 +277,9 @@ class DimensionOperationCoordinatorTest {
 
         @Override public boolean isTerminal() { return ticks >= requiredTicks; }
         @Override public boolean isSafeToRelease() { return isTerminal(); }
+        @Override public OperationProgress progress() {
+            return new OperationProgress(name, Math.min(ticks, requiredTicks), requiredTicks);
+        }
     }
 
     private static final class AlreadyTerminalMutation implements DimensionMutation {
