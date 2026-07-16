@@ -907,6 +907,7 @@
   "luma.share.merge_unresolved_help": "Выберите решение для каждой зоны перед применением объединения.",
   "luma.share.merge_ready": "Готово к объединению: %s импортированных изменений блоков.",
   "luma.share.package_safety_warning": "Этот импортированный пакет содержит данные состояния мира, которые будут применены к миру. Применяйте его только если доверяете источнику.",
+  "luma.share.package_safety_metadata": "%s байт · объектов: %s",
   "luma.share.package_safety_block_entities": "Помеченные данные блоков: %s",
   "luma.share.package_safety_entities": "Помеченные сущности: %s",
   "luma.share.trusted_package_confirm": "Я доверяю этому импортированному пакету",

@@ -970,6 +970,7 @@
   "luma.share.merge_unresolved_help": "Incoming changes override matching local objects before the combine is applied.",
   "luma.share.merge_ready": "Ready to combine %s incoming changes.",
   "luma.share.package_safety_warning": "This imported package contains executable world-state data. Only apply it if you trust where it came from.",
+  "luma.share.package_safety_metadata": "%s bytes · %s objects",
   "luma.share.package_safety_block_entities": "Flagged block data: %s",
   "luma.share.package_safety_entities": "Flagged entities: %s",
   "luma.share.trusted_package_confirm": "I trust this imported package",

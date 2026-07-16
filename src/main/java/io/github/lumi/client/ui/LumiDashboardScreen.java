@@ -10,20 +10,6 @@ import net.minecraft.network.chat.Component;
 
 /** Legacy project-window presentation backed by the immutable V2 history snapshot. */
 public final class LumiDashboardScreen extends Screen {
-    private static final int TEXT = 0xfff4f1ea;
-    private static final int MUTED = 0xffa9a39a;
-    private static final int ACCENT = 0xffd9b86c;
-    private static final int BACKDROP = 0xd608090a;
-    private static final int WINDOW = 0xff141517;
-    private static final int WINDOW_BORDER = 0xff45413a;
-    private static final int SIDEBAR = 0xff111214;
-    private static final int TITLEBAR = 0xff1c1d20;
-    private static final int PANEL = 0xef1a1b1e;
-    private static final int PANEL_BORDER = 0xff343238;
-    private static final int INSET = 0xea101113;
-    private static final int CHIP = 0xff242326;
-    private static final int CHIP_BORDER = 0xff3c3830;
-
     private final Screen parent;
     private final ClientHistoryStore history;
     private final Runnable openSave;
@@ -145,15 +131,17 @@ public final class LumiDashboardScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, width, height, BACKDROP);
+        graphics.fill(0, 0, width, height, LegacyLumiTheme.BACKDROP);
         drawFrame(graphics);
         if (snapshot == null) {
             drawPanel(graphics, layout.bodyX(), layout.bodyY(),
                     layout.bodyWidth(), 96);
             graphics.drawString(font, Component.translatable("luma.dashboard.empty_title"),
-                    layout.bodyX() + 14, layout.bodyY() + 16, TEXT, false);
+                    layout.bodyX() + 14, layout.bodyY() + 16,
+                    LegacyLumiTheme.TEXT, false);
             graphics.drawString(font, Component.translatable("luma.dashboard.empty"),
-                    layout.bodyX() + 14, layout.bodyY() + 36, MUTED, false);
+                    layout.bodyX() + 14, layout.bodyY() + 36,
+                    LegacyLumiTheme.MUTED, false);
         } else {
             drawWorkspace(graphics);
         }
@@ -165,14 +153,17 @@ public final class LumiDashboardScreen extends Screen {
         int y = layout.windowY();
         int right = x + layout.windowWidth();
         int bottom = y + layout.windowHeight();
-        graphics.fill(x, y, right, bottom, WINDOW_BORDER);
-        graphics.fill(x + 1, y + 1, right - 1, bottom - 1, WINDOW);
-        graphics.fill(x + 1, y + 1, layout.contentX(), bottom - 1, SIDEBAR);
+        graphics.fill(x, y, right, bottom, LegacyLumiTheme.WINDOW_BORDER);
+        graphics.fill(x + 1, y + 1, right - 1, bottom - 1,
+                LegacyLumiTheme.WINDOW);
+        graphics.fill(x + 1, y + 1, layout.contentX(), bottom - 1,
+                LegacyLumiTheme.SIDEBAR);
         graphics.fill(layout.contentX(), y + 1, right - 1,
-                y + layout.titleHeight(), TITLEBAR);
-        graphics.drawString(font, "Lumi", x + 14, y + 18, TEXT, false);
+                y + layout.titleHeight(), LegacyLumiTheme.TITLEBAR);
+        graphics.drawString(font, "Lumi", x + 14, y + 18,
+                LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.window.mode"),
-                x + 14, y + 43, MUTED, false);
+                x + 14, y + 43, LegacyLumiTheme.MUTED, false);
         if (snapshot != null) {
             drawChip(graphics, x + 14, y + 62,
                     shortDimension(snapshot.dimensionId()));
@@ -180,10 +171,12 @@ public final class LumiDashboardScreen extends Screen {
             graphics.drawString(font,
                     Component.translatable("luma.screen.project.title",
                             snapshot.workspaceName()),
-                    layout.contentX() + 16, y + 15, TEXT, false);
+                    layout.contentX() + 16, y + 15,
+                    LegacyLumiTheme.TEXT, false);
             graphics.drawString(font,
                     Component.translatable("luma.window.home_help"),
-                    layout.contentX() + 16, y + 32, MUTED, false);
+                    layout.contentX() + 16, y + 32,
+                    LegacyLumiTheme.MUTED, false);
         }
     }
 
@@ -192,7 +185,7 @@ public final class LumiDashboardScreen extends Screen {
         int width = layout.bodyWidth();
         drawPanel(graphics, x, layout.bodyY(), width, 90);
         graphics.drawString(font, Component.translatable("luma.project.build_title"),
-                x + 14, layout.bodyY() + 13, TEXT, false);
+                x + 14, layout.bodyY() + 13, LegacyLumiTheme.TEXT, false);
         int pending = snapshot.pendingKeys();
         Component pendingText = pending == 0
                 ? Component.translatable("luma.dashboard.pending_clean")
@@ -200,40 +193,44 @@ public final class LumiDashboardScreen extends Screen {
         graphics.drawString(font,
                 pendingText,
                 x + 14, layout.bodyY() + 31,
-                pending == 0 ? MUTED : ACCENT, false);
+                pending == 0
+                        ? LegacyLumiTheme.MUTED : LegacyLumiTheme.ACCENT,
+                false);
 
         drawPanel(graphics, x, historyY, width, historyHeight);
         graphics.drawString(font, Component.translatable("luma.project.history_title"),
-                x + 14, historyY + 13, TEXT, false);
+                x + 14, historyY + 13, LegacyLumiTheme.TEXT, false);
         int rows = Math.min(snapshot.versions().size(),
                 Math.max(0, (historyHeight - 50) / 34));
         for (int index = 0; index < rows; index++) {
             HistorySnapshotPayload.Version version = snapshot.versions().get(index);
             int rowY = historyY + 38 + index * 34;
-            graphics.fill(x + 10, rowY, x + width - 10, rowY + 30, INSET);
+            graphics.fill(x + 10, rowY, x + width - 10, rowY + 30,
+                    LegacyLumiTheme.INSET);
             graphics.drawString(font,
                     font.plainSubstrByWidth(version.message(), width - 250),
-                    x + 20, rowY + 5, TEXT, false);
+                    x + 20, rowY + 5, LegacyLumiTheme.TEXT, false);
             graphics.drawString(font, version.author(),
-                    x + 20, rowY + 17, MUTED, false);
+                    x + 20, rowY + 17, LegacyLumiTheme.MUTED, false);
         }
         if (snapshot.versions().isEmpty()) {
             graphics.drawString(font,
                     Component.translatable("luma.simple.no_saved_help"),
-                    x + 14, historyY + 38, MUTED, false);
+                    x + 14, historyY + 38, LegacyLumiTheme.MUTED, false);
         }
     }
 
     private static void drawPanel(GuiGraphics graphics, int x, int y, int width, int height) {
-        graphics.fill(x, y, x + width, y + height, PANEL_BORDER);
-        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, PANEL);
+        LegacyLumiTheme.outlined(graphics, x, y, width, height,
+                LegacyLumiTheme.PANEL, LegacyLumiTheme.PANEL_BORDER);
     }
 
     private void drawChip(GuiGraphics graphics, int x, int y, String text) {
         int width = Math.min(layout.sidebarWidth() - 28, font.width(text) + 12);
-        graphics.fill(x, y, x + width, y + 17, CHIP_BORDER);
-        graphics.fill(x + 1, y + 1, x + width - 1, y + 16, CHIP);
-        graphics.drawString(font, text, x + 6, y + 5, MUTED, false);
+        LegacyLumiTheme.outlined(graphics, x, y, width, 17,
+                LegacyLumiTheme.CHIP, LegacyLumiTheme.CHIP_BORDER);
+        graphics.drawString(font, text, x + 6, y + 5,
+                LegacyLumiTheme.MUTED, false);
     }
 
     private String shortBranch() {

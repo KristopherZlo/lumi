@@ -19,6 +19,7 @@ import io.github.lumi.client.ui.LumiMergeScreen;
 import io.github.lumi.client.ui.LumiMoreScreen;
 import io.github.lumi.client.ui.LumiOnboardingScreen;
 import io.github.lumi.client.ui.LumiPackageScreen;
+import io.github.lumi.client.ui.LumiPackageInspectionScreen;
 import io.github.lumi.client.ui.LumiSpecialThanksScreen;
 import io.github.lumi.client.ui.LumiHotkeyScreen;
 import io.github.lumi.client.ui.LumiZonesScreen;
@@ -40,7 +41,6 @@ import io.github.lumi.update.UpdateChecker;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.network.chat.Component;
 
 /** Client entrypoint; retained UI controllers consume this single networking facade. */
@@ -260,26 +260,9 @@ public final class LumiClient implements ClientModInitializer {
         if (!(client.screen instanceof LumiPackageScreen packages)) {
             return;
         }
-        Component details = Component.translatable(
-                        "luma.share.package_safety_warning")
-                .append("\n")
-                .append(Component.literal(
-                        inspection.packageName() + ".lumi\n"
-                                + inspection.message() + " — " + inspection.author()
-                                + "\n" + inspection.totalBytes() + " bytes, "
-                                + inspection.objectCount() + " objects"));
-        client.setScreen(new ConfirmScreen(confirmed -> {
-            client.setScreen(packages);
-            if (!confirmed) {
-                return;
-            }
-            try {
-                NETWORKING.importPackage(inspection.requestId());
-            } catch (RuntimeException failed) {
-                showFeedback(failed.getMessage() == null
-                        ? "Lumi import could not start" : failed.getMessage());
-            }
-        }, Component.translatable("luma.share.import_title"), details));
+        client.setScreen(new LumiPackageInspectionScreen(
+                packages, inspection,
+                () -> NETWORKING.importPackage(inspection.requestId())));
     }
 
     private static String currentBranch() {

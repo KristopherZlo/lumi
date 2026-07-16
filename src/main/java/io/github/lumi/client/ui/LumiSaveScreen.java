@@ -10,7 +10,7 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** Focused legacy-style Save form retained for the Alt+S workflow. */
-public final class LumiSaveScreen extends Screen {
+public final class LumiSaveScreen extends LumiLegacyModalScreen {
     private static final int DIALOG_HEIGHT = 194;
 
     private final Screen parent;
@@ -43,9 +43,9 @@ public final class LumiSaveScreen extends Screen {
         int actionY = y + layout.height() - 28;
         int fieldY = y + 65;
 
-        addButton(x + layout.width() - 24, y + 6, 18,
+        addLegacyButton(x + layout.width() - 24, y + 6, 18,
                 Component.literal("×"), this::onClose, LumiLegacyButton.Kind.NORMAL);
-        addButton(x + layout.width() - 112, y + 34, 100,
+        addLegacyButton(x + layout.width() - 112, y + 34, 100,
                 Component.translatable("luma.action.refresh_preview"),
                 this::refreshPreview, LumiLegacyButton.Kind.NORMAL);
 
@@ -61,26 +61,19 @@ public final class LumiSaveScreen extends Screen {
 
         int contentWidth = layout.width() - 12;
         int buttonWidth = (contentWidth - 8) / 3;
-        save = addButton(x + 6, actionY, buttonWidth,
+        save = addLegacyButton(x + 6, actionY, buttonWidth,
                 Component.translatable("luma.action.save_build"),
                 () -> submit(SaveScreenController.Intent.SAVE),
                 LumiLegacyButton.Kind.PRIMARY);
-        amend = addButton(x + 10 + buttonWidth, actionY, buttonWidth,
+        amend = addLegacyButton(x + 10 + buttonWidth, actionY, buttonWidth,
                 Component.translatable("luma.action.amend_version"),
                 () -> submit(SaveScreenController.Intent.AMEND),
                 LumiLegacyButton.Kind.NORMAL);
-        addButton(x + 14 + buttonWidth * 2, actionY, buttonWidth,
+        addLegacyButton(x + 14 + buttonWidth * 2, actionY, buttonWidth,
                 Component.translatable("luma.action.cancel"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
         setSubmitActive(false);
         refreshPreview();
-    }
-
-    private LumiLegacyButton addButton(
-            int x, int y, int width, Component label,
-            Runnable action, LumiLegacyButton.Kind kind) {
-        return addRenderableWidget(new LumiLegacyButton(
-                x, y, width, 20, label, ignored -> action.run(), kind));
     }
 
     private void setSubmitActive(boolean active) {
@@ -135,7 +128,8 @@ public final class LumiSaveScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, width, height, LegacyLumiTheme.BACKDROP);
+        renderLegacyWindow(
+                graphics, layout.x(), layout.y(), layout.width(), layout.height());
         drawDialog(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
@@ -146,8 +140,6 @@ public final class LumiSaveScreen extends Screen {
         int actionY = y + layout.height() - 28;
         int fieldY = y + 65;
         int fieldHeight = Math.min(67, actionY - fieldY - 8);
-        LegacyLumiTheme.outlined(graphics, x, y, layout.width(), layout.height(),
-                LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
         graphics.drawString(font, title, x + 10, y + 12,
                 LegacyLumiTheme.TEXT, false);
 
