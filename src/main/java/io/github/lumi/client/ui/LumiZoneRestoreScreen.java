@@ -1,0 +1,94 @@
+package io.github.lumi.client.ui;
+
+import io.github.lumi.network.HistorySnapshotPayload;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.function.BiConsumer;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+
+/** Explicit confirmation for a zone-scoped verified Restore. */
+public final class LumiZoneRestoreScreen extends Screen {
+    private static final int PANEL_WIDTH = 420;
+    private static final int PANEL_HEIGHT = 180;
+    private final Screen cancelParent;
+    private final Screen successParent;
+    private final HistorySnapshotPayload.ZoneView zone;
+    private final HistorySnapshotPayload.Version version;
+    private final BiConsumer<UUID, io.github.lumi.domain.model.CommitId> restore;
+    private int panelX;
+    private int panelY;
+    private String error = "";
+
+    public LumiZoneRestoreScreen(
+            Screen cancelParent,
+            Screen successParent,
+            HistorySnapshotPayload.ZoneView zone,
+            HistorySnapshotPayload.Version version,
+            BiConsumer<UUID, io.github.lumi.domain.model.CommitId> restore) {
+        super(Component.translatable("luma.action.restore"));
+        this.cancelParent = cancelParent;
+        this.successParent = successParent;
+        this.zone = Objects.requireNonNull(zone, "zone");
+        this.version = Objects.requireNonNull(version, "version");
+        this.restore = Objects.requireNonNull(restore, "restore");
+    }
+
+    @Override
+    protected void init() {
+        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
+        panelX = (width - panelWidth) / 2;
+        panelY = (height - PANEL_HEIGHT) / 2;
+        int buttonWidth = (panelWidth - 48) / 2;
+        addRenderableWidget(Button.builder(
+                Component.translatable("luma.action.restore"), ignored -> restore())
+                .bounds(panelX + 20, panelY + 138, buttonWidth, 20).build());
+        addRenderableWidget(Button.builder(
+                Component.translatable("luma.action.cancel"), ignored -> onClose())
+                .bounds(panelX + 28 + buttonWidth, panelY + 138, buttonWidth, 20).build());
+    }
+
+    private void restore() {
+        try {
+            restore.accept(zone.id(), version.id());
+            if (minecraft.player != null) {
+                minecraft.player.displayClientMessage(
+                        Component.translatable("luma.status.zone_restore_started"), true);
+            }
+            minecraft.setScreen(successParent);
+        } catch (RuntimeException failed) {
+            error = failed.getMessage() == null
+                    ? "Lumi zone Restore could not start" : failed.getMessage();
+        }
+    }
+
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        renderTransparentBackground(graphics);
+        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
+        graphics.fill(panelX, panelY, panelX + panelWidth,
+                panelY + PANEL_HEIGHT, 0xee15181d);
+        graphics.drawCenteredString(font,
+                Component.translatable("luma.restore.confirm_title", version.message()),
+                width / 2, panelY + 18, 0xffffffff);
+        graphics.drawCenteredString(font,
+                Component.translatable("luma.restore.confirm_zone_help"),
+                width / 2, panelY + 48, 0xffaeb6c2);
+        graphics.drawCenteredString(font,
+                Component.translatable("luma.zones.details_title", zone.name()),
+                width / 2, panelY + 68, zone.color());
+        graphics.drawCenteredString(font,
+                Component.translatable("luma.restore.confirm_safety"),
+                width / 2, panelY + 92, 0xffffc857);
+        if (!error.isEmpty()) {
+            graphics.drawCenteredString(font, Component.literal(error),
+                    width / 2, panelY + 116, 0xffff6b6b);
+        }
+        super.render(graphics, mouseX, mouseY, partialTick);
+    }
+
+    @Override public boolean isPauseScreen() { return false; }
+    @Override public void onClose() { minecraft.setScreen(cancelParent); }
+}
