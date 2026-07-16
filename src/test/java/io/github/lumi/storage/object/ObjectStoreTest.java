@@ -84,6 +84,30 @@ class ObjectStoreTest {
     }
 
     @Test
+    void existingStoreDiscoversPackPublishedByAnotherRepositoryInstance()
+            throws IOException {
+        ObjectStore writer = new ObjectStore(tempDir);
+        ObjectStore reader = new ObjectStore(tempDir);
+        assertTrue(reader.listIds().isEmpty());
+        byte[] payload = "shared pack".getBytes(StandardCharsets.UTF_8);
+        ObjectId id;
+        try (ObjectStore.WriteBatch batch = writer.beginBatch()) {
+            id = batch.write(payload);
+            batch.publish();
+        }
+
+        assertArrayEquals(payload, reader.read(id));
+        assertEquals(Set.of(id), reader.listIds());
+        try (ObjectStore.WriteBatch batch = reader.beginBatch()) {
+            assertEquals(id, batch.write(payload));
+            batch.publish();
+        }
+        try (var files = Files.walk(tempDir.resolve("packs"))) {
+            assertEquals(1, files.filter(path -> path.toString().endsWith(".pack")).count());
+        }
+    }
+
+    @Test
     void publishesARealisticDirtySectionBatchAsOnePack() throws IOException {
         ObjectStore store = new ObjectStore(tempDir);
         Map<ObjectId, byte[]> expected = new LinkedHashMap<>();

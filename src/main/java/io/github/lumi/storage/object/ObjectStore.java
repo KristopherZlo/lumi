@@ -70,7 +70,7 @@ public final class ObjectStore {
         Objects.requireNonNull(id, "id");
         Path path = pathFor(id);
         if (!Files.exists(path)) {
-            PackedObject packed = packedObject(id);
+            PackedObject packed = refreshedPackedObject(id);
             if (packed == null) {
                 throw new java.nio.file.NoSuchFileException(path.toString());
             }
@@ -117,7 +117,7 @@ public final class ObjectStore {
     }
 
     public Set<ObjectId> listIds() throws IOException {
-        Set<ObjectId> ids = new HashSet<>(packedObjects().keySet());
+        Set<ObjectId> ids = new HashSet<>(refreshPackedObjects().keySet());
         if (Files.exists(objectsDirectory)) {
             try (var files = Files.walk(objectsDirectory)) {
                 for (Path file : files.filter(Files::isRegularFile)
@@ -143,7 +143,7 @@ public final class ObjectStore {
         if (Files.exists(loose)) {
             return Files.getLastModifiedTime(loose).toInstant();
         }
-        PackedObject packed = packedObject(id);
+        PackedObject packed = refreshedPackedObject(id);
         if (packed == null) {
             throw new java.nio.file.NoSuchFileException(loose.toString());
         }
@@ -156,6 +156,7 @@ public final class ObjectStore {
 
     public synchronized int deleteAll(Set<ObjectId> candidates) throws IOException {
         Objects.requireNonNull(candidates, "candidates");
+        refreshPackedObjects();
         int deleted = 0;
         for (ObjectId id : candidates) {
             if (Files.deleteIfExists(pathFor(id))) {
@@ -183,6 +184,7 @@ public final class ObjectStore {
     public synchronized void deleteOrphanPacksBefore(java.time.Instant cutoff)
             throws IOException {
         Objects.requireNonNull(cutoff, "cutoff");
+        refreshPackedObjects();
         if (!Files.exists(packsDirectory)) {
             return;
         }
@@ -245,10 +247,24 @@ public final class ObjectStore {
         return packedObjects().get(id);
     }
 
+    private synchronized PackedObject refreshedPackedObject(ObjectId id) throws IOException {
+        boolean catalogWasLoaded = packedObjects != null;
+        PackedObject packed = packedObjects().get(id);
+        if (packed != null || !catalogWasLoaded) {
+            return packed;
+        }
+        return refreshPackedObjects().get(id);
+    }
+
     private synchronized Map<ObjectId, PackedObject> packedObjects() throws IOException {
         if (packedObjects == null) {
             packedObjects = ObjectPack.load(packsDirectory);
         }
+        return packedObjects;
+    }
+
+    private synchronized Map<ObjectId, PackedObject> refreshPackedObjects() throws IOException {
+        packedObjects = ObjectPack.load(packsDirectory);
         return packedObjects;
     }
 
