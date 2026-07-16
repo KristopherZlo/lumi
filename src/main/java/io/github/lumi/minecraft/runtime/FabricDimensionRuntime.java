@@ -528,18 +528,24 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
     }
 
-    public synchronized BackgroundPreparedMutation<RestoreOperation> startBranchSwitch(
+    public synchronized DimensionMutation startBranchSwitch(
             BranchName target) throws IOException {
         return startBranchSwitch(target, ignored -> { });
     }
 
-    public synchronized BackgroundPreparedMutation<RestoreOperation> startBranchSwitch(
+    public synchronized DimensionMutation startBranchSwitch(
             BranchName target,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
-        if (operations.hasActiveOperation()) {
-            throw new IllegalStateException("A dimension operation is already active");
-        }
+        Objects.requireNonNull(target, "target");
+        var operation = new DeferredDimensionMutation(() -> createBranchSwitch(target));
+        operations.enqueue(
+                operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
+        return operation;
+    }
+
+    private BackgroundPreparedMutation<RestoreOperation> createBranchSwitch(
+            BranchName target) throws IOException {
         BranchSwitchPlan plan = branches.prepareSwitch(target);
         UUID operationId = UUID.randomUUID();
         CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
@@ -556,22 +562,28 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var operation = new BackgroundPreparedMutation<>(
                 preparation, () -> branches.validateSwitch(plan),
                 RestoreOperation::cancelBeforeApply, true);
-        operations.start(operation, clearingLiveHistory(terminalObserver));
         return operation;
     }
 
-    public synchronized BackgroundPreparedMutation<RestoreOperation> startWorkspaceSwitch(
+    public synchronized DimensionMutation startWorkspaceSwitch(
             UUID targetWorkspace) throws IOException {
         return startWorkspaceSwitch(targetWorkspace, ignored -> { });
     }
 
-    public synchronized BackgroundPreparedMutation<RestoreOperation> startWorkspaceSwitch(
+    public synchronized DimensionMutation startWorkspaceSwitch(
             UUID targetWorkspace,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
-        if (operations.hasActiveOperation()) {
-            throw new IllegalStateException("A dimension operation is already active");
-        }
+        Objects.requireNonNull(targetWorkspace, "targetWorkspace");
+        var operation = new DeferredDimensionMutation(
+                () -> createWorkspaceSwitch(targetWorkspace));
+        operations.enqueue(
+                operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
+        return operation;
+    }
+
+    private BackgroundPreparedMutation<RestoreOperation> createWorkspaceSwitch(
+            UUID targetWorkspace) throws IOException {
         BranchSwitchPlan branch = branches.prepareSwitch(
                 WorkspaceService.mainBranch(targetWorkspace));
         WorkspaceSwitchPlan plan = workspaces.prepareSwitch(targetWorkspace, branch);
@@ -591,7 +603,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             branches.validateSwitch(branch);
             workspaces.validateSwitch(plan);
         }, RestoreOperation::cancelBeforeApply, true);
-        operations.start(operation, clearingLiveHistory(terminalObserver));
         return operation;
     }
 
@@ -661,14 +672,19 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }, background);
     }
 
-    public synchronized BackgroundPreparedMutation<RestoreOperation> startMerge(
+    public synchronized DimensionMutation startMerge(
             PreparedMerge plan,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         Objects.requireNonNull(plan, "plan");
-        if (operations.hasActiveOperation()) {
-            throw new IllegalStateException("A dimension operation is already active");
-        }
+        var operation = new DeferredDimensionMutation(() -> createMerge(plan));
+        operations.enqueue(
+                operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
+        return operation;
+    }
+
+    private BackgroundPreparedMutation<RestoreOperation> createMerge(PreparedMerge plan)
+            throws IOException {
         validateMerge(plan);
         UUID operationId = UUID.randomUUID();
         CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
@@ -685,7 +701,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var operation = new BackgroundPreparedMutation<>(
                 preparation, () -> validateMerge(plan),
                 RestoreOperation::cancelBeforeApply, true);
-        operations.start(operation, clearingLiveHistory(terminalObserver));
         return operation;
     }
 
@@ -707,20 +722,28 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
     }
 
-    public synchronized ReturnPointRestoreOperation startPartialRestore(
+    public synchronized DimensionMutation startPartialRestore(
             CommitId target,
             BlockAreaTarget area,
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
-        if (operations.hasActiveOperation()) {
-            throw new IllegalStateException("A dimension operation is already active");
-        }
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(area, "area");
+        Objects.requireNonNull(author, "author");
+        var operation = new DeferredDimensionMutation(
+                () -> createPartialRestore(target, area, author));
+        operations.enqueue(operation, OperationPriority.NORMAL, terminalObserver);
+        return operation;
+    }
+
+    private ReturnPointRestoreOperation createPartialRestore(
+            CommitId target, BlockAreaTarget area, CommitAuthor author) throws IOException {
         BranchRef expected = activeRef();
         UUID operationId = UUID.randomUUID();
         BranchName hidden = new BranchName("hidden/partial/" + operationId);
         SaveRequest checkpointRequest = new SaveRequest(
-                expected, Objects.requireNonNull(author, "author"),
+                expected, author,
                 "Checkpoint before partial Restore", Instant.now(), activeWorkspaceId(),
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
         SaveCaptureOperation checkpoint = new SaveCaptureOperation(
@@ -743,34 +766,41 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         throw new CompletionException(failed);
                     }
                 }, background));
-        operations.start(operation, terminalObserver);
         return operation;
     }
 
-    public synchronized ReturnPointRestoreOperation startZoneRestore(
+    public synchronized DimensionMutation startZoneRestore(
             CommitId target,
             UUID zoneId,
             CommitAuthor author) throws IOException {
         return startZoneRestore(target, zoneId, author, ignored -> { });
     }
 
-    public synchronized ReturnPointRestoreOperation startZoneRestore(
+    public synchronized DimensionMutation startZoneRestore(
             CommitId target,
             UUID zoneId,
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
-        if (operations.hasActiveOperation()) {
-            throw new IllegalStateException("A dimension operation is already active");
-        }
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(zoneId, "zoneId");
+        Objects.requireNonNull(author, "author");
+        var operation = new DeferredDimensionMutation(
+                () -> createZoneRestore(target, zoneId, author));
+        operations.enqueue(operation, OperationPriority.NORMAL, terminalObserver);
+        return operation;
+    }
+
+    private ReturnPointRestoreOperation createZoneRestore(
+            CommitId target, UUID zoneId, CommitAuthor author) throws IOException {
         BranchRef expected = activeRef();
         var workspace = workspaces.active();
-        var zone = zones.require(workspace.id(), Objects.requireNonNull(zoneId, "zoneId"));
+        var zone = zones.require(workspace.id(), zoneId);
         ZoneScope scope = new ZoneScope(zone);
         UUID operationId = UUID.randomUUID();
         BranchName hidden = new BranchName("hidden/zone/" + operationId);
         SaveRequest checkpointRequest = new SaveRequest(
-                expected, Objects.requireNonNull(author, "author"),
+                expected, author,
                 "Checkpoint before zone Restore", Instant.now(), workspace.id(),
                 Optional.of(zone.id()), CommitKind.HIDDEN_RETURN);
         SavePreparation scoped = new ScopedSavePreparation(
@@ -799,7 +829,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         throw new CompletionException(failed);
                     }
                 }, background));
-        operations.start(operation, terminalObserver);
         return operation;
     }
 
