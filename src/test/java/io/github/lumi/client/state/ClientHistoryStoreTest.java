@@ -49,6 +49,26 @@ class ClientHistoryStoreTest {
         assertEquals(0, store.state().events().size());
     }
 
+    @Test
+    void oneTerminalEventDoesNotHideAnotherAcceptedOperation() {
+        ClientHistoryStore store = new ClientHistoryStore();
+        store.accept(new HistorySnapshotPayload(
+                "minecraft:overworld", id('1'), 0, 0, false));
+        UUID first = new UUID(0, 1);
+        UUID second = new UUID(0, 2);
+        store.accept(new OperationEventPayload(
+                first, "minecraft:overworld", OperationEventPayload.State.ACCEPTED,
+                "Active", id('1'), 0));
+        store.accept(new OperationEventPayload(
+                second, "minecraft:overworld", OperationEventPayload.State.ACCEPTED,
+                "Queued", id('1'), 0));
+        store.accept(new OperationEventPayload(
+                first, "minecraft:overworld", OperationEventPayload.State.SUCCEEDED,
+                "Done", id('2'), 1));
+
+        assertEquals(true, store.state().snapshot().orElseThrow().operationActive());
+    }
+
     private static CommitId id(char digit) {
         return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
     }

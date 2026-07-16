@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.network.HistoryCommandPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.OperationEventPayload;
+import io.github.lumi.network.OperationCancelPayload;
 import java.util.Objects;
 import java.util.UUID;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -36,6 +37,21 @@ public final class LumiClientNetworking {
     public UUID restore(CommitId target) {
         return send(HistoryCommandPayload.Kind.RESTORE,
                 Objects.requireNonNull(target, "target").hex());
+    }
+
+    public UUID cancel(UUID originalRequest) {
+        var event = history.state().events().get(
+                Objects.requireNonNull(originalRequest, "originalRequest"));
+        if (event == null || event.ticketId().isEmpty()) {
+            throw new IllegalStateException("Operation has no cancellable queue ticket");
+        }
+        if (!ClientPlayNetworking.canSend(OperationCancelPayload.TYPE)) {
+            throw new IllegalStateException("The connected server does not support queue cancellation");
+        }
+        UUID requestId = UUID.randomUUID();
+        ClientPlayNetworking.send(new OperationCancelPayload(
+                requestId, event.ticketId().orElseThrow()));
+        return requestId;
     }
 
     private UUID send(HistoryCommandPayload.Kind kind, String argument) {

@@ -14,6 +14,8 @@ import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -21,17 +23,24 @@ import net.minecraft.server.level.ServerPlayer;
 
 /** Registers and dispatches the server-authoritative V2 play protocol. */
 public final class LumiServerNetworking {
+    private static final ConcurrentHashMap<UUID, TicketOwner> TICKET_OWNERS =
+            new ConcurrentHashMap<>();
+
     private LumiServerNetworking() { }
 
     public static void register() {
         PayloadTypeRegistry.playC2S().register(
                 HistoryCommandPayload.TYPE, HistoryCommandPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(
+                OperationCancelPayload.TYPE, OperationCancelPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 HistorySnapshotPayload.TYPE, HistorySnapshotPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 OperationEventPayload.TYPE, OperationEventPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(
                 HistoryCommandPayload.TYPE, LumiServerNetworking::receive);
+        ServerPlayNetworking.registerGlobalReceiver(
+                OperationCancelPayload.TYPE, LumiServerNetworking::cancel);
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 LumiMod.serverRuntime().find(handler.getPlayer().level()).ifPresent(runtime ->
                         sendSnapshot(handler.getPlayer(), runtime)));
@@ -58,6 +67,8 @@ public final class LumiServerNetworking {
                 return;
             }
             Started started = start(player, runtime, actual, payload);
+            TICKET_OWNERS.put(started.ticket().id(),
+                    new TicketOwner(player.getUUID(), payload.requestId()));
             String message = started.position() == 0
                     ? "Operation accepted" : "Queued at position " + started.position();
             sendEvent(player, payload, runtime, OperationEventPayload.State.ACCEPTED,
@@ -95,11 +106,38 @@ public final class LumiServerNetworking {
             FabricDimensionRuntime runtime,
             HistoryCommandPayload payload,
             DimensionMutation operation) {
+        TICKET_OWNERS.entrySet().removeIf(entry ->
+                entry.getValue().requestId().equals(payload.requestId()));
         OperationEventPayload.State state = eventState(operation.terminalState());
         String message = operation.failure().map(Throwable::getMessage)
                 .filter(value -> value != null && !value.isBlank())
                 .orElseGet(() -> terminalMessage(operation.terminalState()));
         sendEvent(player, payload, runtime, state, message);
+        sendSnapshot(player, runtime);
+    }
+
+    private static void cancel(
+            OperationCancelPayload payload, ServerPlayNetworking.Context context) {
+        ServerPlayer player = context.player();
+        FabricDimensionRuntime runtime = LumiMod.serverRuntime()
+                .find(player.level()).orElse(null);
+        if (runtime == null || !context.server().getPlayerList().isOp(player.nameAndId())) {
+            return;
+        }
+        TicketOwner owner = TICKET_OWNERS.get(payload.ticketId());
+        if (owner == null || !owner.playerId().equals(player.getUUID())) {
+            sendEvent(player, payload.requestId(), runtime, OperationEventPayload.State.FAILED,
+                    "Operation ticket is not owned by this player");
+            return;
+        }
+        if (!runtime.operations().cancelQueued(new OperationTicket(payload.ticketId()))) {
+            sendEvent(player, payload.requestId(), runtime, OperationEventPayload.State.FAILED,
+                    "Active operations cannot be cancelled");
+            return;
+        }
+        TICKET_OWNERS.remove(payload.ticketId(), owner);
+        sendEvent(player, owner.requestId(), runtime, OperationEventPayload.State.CANCELLED,
+                "Queued operation cancelled");
         sendSnapshot(player, runtime);
     }
 
@@ -142,7 +180,7 @@ public final class LumiServerNetworking {
             FabricDimensionRuntime runtime,
             OperationEventPayload.State state,
             String message) {
-        sendEvent(player, request, runtime, state, message, Optional.empty(), -1);
+        sendEvent(player, request.requestId(), runtime, state, message, Optional.empty(), -1);
     }
 
     private static void sendEvent(
@@ -153,10 +191,30 @@ public final class LumiServerNetworking {
             String message,
             Optional<OperationTicket> ticket,
             int queuePosition) {
+        sendEvent(player, request.requestId(), runtime, state, message, ticket, queuePosition);
+    }
+
+    private static void sendEvent(
+            ServerPlayer player,
+            UUID requestId,
+            FabricDimensionRuntime runtime,
+            OperationEventPayload.State state,
+            String message) {
+        sendEvent(player, requestId, runtime, state, message, Optional.empty(), -1);
+    }
+
+    private static void sendEvent(
+            ServerPlayer player,
+            UUID requestId,
+            FabricDimensionRuntime runtime,
+            OperationEventPayload.State state,
+            String message,
+            Optional<OperationTicket> ticket,
+            int queuePosition) {
         try {
             BranchRef head = runtime.activeRef();
             send(player, new OperationEventPayload(
-                    request.requestId(), dimension(runtime), state,
+                    requestId, dimension(runtime), state,
                     message == null ? "Operation failed" : message,
                     head.commit(), head.revision(), ticket.map(OperationTicket::id),
                     queuePosition));
@@ -190,4 +248,5 @@ public final class LumiServerNetworking {
     }
 
     private record Started(OperationTicket ticket, int position) { }
+    private record TicketOwner(UUID playerId, UUID requestId) { }
 }

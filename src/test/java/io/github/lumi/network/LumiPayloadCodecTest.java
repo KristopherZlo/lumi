@@ -20,6 +20,9 @@ class LumiPayloadCodecTest {
                 HistoryCommandPayload.Kind.SAVE, "Builder idea", id('1'), 42);
 
         assertEquals(command, roundTrip(HistoryCommandPayload.CODEC, command));
+        OperationCancelPayload cancel = new OperationCancelPayload(
+                UUID.randomUUID(), UUID.randomUUID());
+        assertEquals(cancel, roundTrip(OperationCancelPayload.CODEC, cancel));
     }
 
     @Test
