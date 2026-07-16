@@ -583,14 +583,18 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public synchronized DimensionMutation startRestore(
             CommitId target, CommitAuthor author) throws IOException {
-        return startRestore(target, author, true, ignored -> { });
+        return startRestore(
+                target, author, activeWorkspace().settings().includeEntitiesOnRestore(),
+                ignored -> { });
     }
 
     public synchronized DimensionMutation startRestore(
             CommitId target,
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
-        return startRestore(target, author, true, terminalObserver);
+        return startRestore(
+                target, author, activeWorkspace().settings().includeEntitiesOnRestore(),
+                terminalObserver);
     }
 
     public synchronized DimensionMutation startRestore(
@@ -802,12 +806,19 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return workspaces.active();
     }
 
+    public List<io.github.lumi.domain.model.Workspace> visibleWorkspaces() throws IOException {
+        return workspaces.list();
+    }
+
     public List<io.github.lumi.domain.model.HistoryEntry> history(int limit)
             throws IOException {
         BranchRef ref = activeRef();
+        var workspace = activeWorkspace();
         var visible = new HistoryQueryService(
                 new CommitRepository(repository), refs, new TombstoneRepository(repository))
-                .firstParent(ref.name(), activeWorkspaceId(), limit);
+                .firstParent(
+                        ref.name(), workspace.id(),
+                        !workspace.settings().hideZoneCommits(), limit);
         return java.util.stream.Stream.concat(
                         visible.stream(),
                         autoVersions.list(ref.name(), activeWorkspaceId(), limit).stream())

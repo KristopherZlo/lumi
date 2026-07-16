@@ -84,6 +84,10 @@ public final class WorkspaceService {
         return require(selected.id());
     }
 
+    public List<Workspace> list() throws IOException {
+        return workspaces.list();
+    }
+
     public Workspace require(UUID id) throws IOException {
         return workspaces.read(Objects.requireNonNull(id, "id")).orElseThrow(
                 () -> new IOException("Active workspace metadata is missing"));
