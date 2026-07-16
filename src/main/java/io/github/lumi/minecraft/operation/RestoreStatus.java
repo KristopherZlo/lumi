@@ -4,6 +4,7 @@ public enum RestoreStatus {
     APPLYING,
     VERIFYING,
     REPAIRING,
+    PUBLISHING,
     RETURNING,
     COMPLETE,
     RETURNED,

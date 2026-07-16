@@ -7,4 +7,8 @@ import java.io.IOException;
 @FunctionalInterface
 public interface RestorePublication {
     void publish(PreparedRestore restore) throws IOException;
+
+    default boolean isDurable() {
+        return true;
+    }
 }

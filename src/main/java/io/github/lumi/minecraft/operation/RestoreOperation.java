@@ -245,6 +245,7 @@ public final class RestoreOperation implements DimensionMutation {
             case APPLYING -> applyTarget(deadlineNanos);
             case VERIFYING -> verifyTarget(deadlineNanos);
             case REPAIRING -> repairTarget(deadlineNanos);
+            case PUBLISHING -> finishPublication();
             case RETURNING -> returnToPreviousState(deadlineNanos);
             default -> { }
         }
@@ -264,7 +265,7 @@ public final class RestoreOperation implements DimensionMutation {
     private void verifyTarget(long deadlineNanos) throws IOException {
         switch (targetSession.verifyUntil(deadlineNanos)) {
             case IN_PROGRESS -> { }
-            case VERIFIED -> completeTarget();
+            case VERIFIED -> publishTarget();
             case MISMATCH -> {
                 if (targetRepairAttempted) {
                     beginReturn();
@@ -283,8 +284,16 @@ public final class RestoreOperation implements DimensionMutation {
         }
     }
 
-    private void completeTarget() throws IOException {
+    private void publishTarget() throws IOException {
         publication.publish(restore);
+        status = RestoreStatus.PUBLISHING;
+        finishPublication();
+    }
+
+    private void finishPublication() throws IOException {
+        if (!publication.isDurable()) {
+            return;
+        }
         journal = journals.advance(journal, OperationPhase.REF_PUBLISHED);
         journal = journals.advance(journal, OperationPhase.COMPLETE);
         journals.clear(journal);

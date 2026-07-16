@@ -276,6 +276,26 @@ class RestoreOperationTest {
         assertTrue(journals.read().isEmpty());
     }
 
+    @Test
+    void retainsJournalUntilPublicationBecomesDurable() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('d'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        DelayedPublication publication = new DelayedPublication();
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('e'), Map.of(), Map.of(), Map.of(), Map.of()),
+                new ImmediatelyVerified(), publication, journals, UUID.randomUUID());
+
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+
+        assertEquals(RestoreStatus.PUBLISHING, operation.status());
+        assertEquals(OperationPhase.VERIFYING, journals.read().orElseThrow().phase());
+        publication.durable = true;
+        operation.tick(Long.MAX_VALUE);
+        assertEquals(RestoreStatus.COMPLETE, operation.status());
+        assertTrue(journals.read().isEmpty());
+    }
+
     private static CommitId id(char digit) {
         return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
     }
@@ -298,6 +318,13 @@ class RestoreOperationTest {
                 @Override public void restartVerification() { }
             };
         }
+    }
+
+    private static final class DelayedPublication implements RestorePublication {
+        private boolean published;
+        private boolean durable;
+        @Override public void publish(PreparedRestore restore) { published = true; }
+        @Override public boolean isDurable() { return published && durable; }
     }
 
     private static final class TwoStepApply implements TestWorldApply {

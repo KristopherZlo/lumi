@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.operation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
@@ -35,9 +36,11 @@ class PendingRestorePublicationTest {
                 ref, id('2'), Map.of(key, section("minecraft:air")), Map.of(),
                 Map.of(key, section("minecraft:stone")), Map.of());
 
-        new PendingRestorePublication(mutations).publish(restore);
+        PendingRestorePublication publication = new PendingRestorePublication(mutations);
+        publication.publish(restore);
 
         assertEquals(1L, mutations.snapshot().generations().get(key));
+        assertFalse(publication.isDurable());
     }
 
     private static Executor queued() {
