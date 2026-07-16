@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.StreamSupport;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
 
@@ -19,9 +18,11 @@ public final class MinecraftWorldStateReader implements WorldStateReader {
     private final ServerLevel level;
     private final MinecraftSectionCapture sections = new MinecraftSectionCapture();
     private final MinecraftEntityChunkCapture entities = new MinecraftEntityChunkCapture();
+    private final ChunkEntityLookup entityLookup;
 
     public MinecraftWorldStateReader(ServerLevel level) {
         this.level = Objects.requireNonNull(level, "level");
+        entityLookup = ChunkEntityLookup.forLevel(level);
     }
 
     @Override
@@ -35,10 +36,7 @@ public final class MinecraftWorldStateReader implements WorldStateReader {
 
     @Override
     public EntityChunkBlob read(EntityChunkKey key) throws IOException {
-        var matching = StreamSupport.stream(level.getAllEntities().spliterator(), false)
-                .filter(entity -> entity.chunkPosition().x == key.chunkX()
-                        && entity.chunkPosition().z == key.chunkZ());
-        return entities.capture(level, matching);
+        return entities.capture(level, entityLookup.inChunk(key));
     }
 
     @Override

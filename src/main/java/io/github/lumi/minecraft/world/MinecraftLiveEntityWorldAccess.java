@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.StreamSupport;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityProcessor;
@@ -21,12 +20,14 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
     private final MinecraftEntityChunkCapture capture = new MinecraftEntityChunkCapture();
+    private final ChunkEntityLookup entityLookup;
     private final Map<EntityState, DecodedEntity> prepared = new HashMap<>();
     private final Map<EntityState, EntityChunkKey> chunks = new HashMap<>();
 
     public MinecraftLiveEntityWorldAccess(ServerLevel level, DimensionFreezeState freeze) {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
+        entityLookup = ChunkEntityLookup.forLevel(level);
     }
 
     public Optional<EntityState> capture(Entity entity) throws IOException {
@@ -89,8 +90,9 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     }
 
     private Optional<Entity> find(UUID entityId) {
-        return StreamSupport.stream(level.getAllEntities().spliterator(), false)
-                .filter(entity -> entity.getUUID().equals(entityId))
+        return entityLookup.byId(entityId).stream()
+                .filter(Entity.class::isInstance)
+                .map(Entity.class::cast)
                 .filter(MinecraftLiveEntityWorldAccess::isDurableRoot)
                 .filter(entity -> !entity.isRemoved())
                 .findFirst();

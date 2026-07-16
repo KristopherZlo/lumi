@@ -12,7 +12,6 @@ import java.util.Objects;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.StreamSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
@@ -40,10 +39,12 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     private final DimensionFreezeState freeze;
     private final MinecraftSectionCapture sections = new MinecraftSectionCapture();
     private final MinecraftEntityChunkCapture entities = new MinecraftEntityChunkCapture();
+    private final ChunkEntityLookup entityLookup;
 
     public MinecraftPreparedWorldAccess(ServerLevel level, DimensionFreezeState freeze) {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
+        entityLookup = ChunkEntityLookup.forLevel(level);
     }
 
     @Override
@@ -191,9 +192,9 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     }
 
     private java.util.stream.Stream<Entity> matchingEntities(EntityChunkKey key) {
-        return StreamSupport.stream(level.getAllEntities().spliterator(), false)
-                .filter(entity -> entity.chunkPosition().x == key.chunkX()
-                        && entity.chunkPosition().z == key.chunkZ());
+        return entityLookup.inChunk(key)
+                .filter(Entity.class::isInstance)
+                .map(Entity.class::cast);
     }
 
     private static boolean isDurableRoot(Entity entity) {
