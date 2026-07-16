@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 /** Produces bounded immutable history views without decoding world payloads. */
 public final class HistoryQueryService {
@@ -25,28 +26,40 @@ public final class HistoryQueryService {
     }
 
     public List<HistoryEntry> firstParent(BranchName branch, int limit) throws IOException {
-        return firstParent(branch, Optional.empty(), true, limit);
+        return firstParent(branch, Optional.empty(), commit -> visible(commit.kind(), true), limit);
     }
 
     public List<HistoryEntry> firstParent(
             BranchName branch, UUID workspaceId, int limit) throws IOException {
         return firstParent(branch, Optional.of(Objects.requireNonNull(workspaceId, "workspaceId")),
-                false, limit);
+                commit -> visible(commit.kind(), false), limit);
     }
 
     public List<HistoryEntry> firstParent(
             BranchName branch, UUID workspaceId, boolean includeZoneCommits, int limit)
             throws IOException {
         return firstParent(branch, Optional.of(Objects.requireNonNull(workspaceId, "workspaceId")),
-                includeZoneCommits, limit);
+                commit -> visible(commit.kind(), includeZoneCommits), limit);
+    }
+
+    public List<HistoryEntry> firstParentForZone(
+            BranchName branch, UUID workspaceId, UUID zoneId, int limit) throws IOException {
+        Objects.requireNonNull(zoneId, "zoneId");
+        return firstParent(
+                branch,
+                Optional.of(Objects.requireNonNull(workspaceId, "workspaceId")),
+                commit -> commit.kind() == CommitKind.ZONE
+                        && commit.zoneId().filter(zoneId::equals).isPresent(),
+                limit);
     }
 
     private List<HistoryEntry> firstParent(
             BranchName branch,
             Optional<UUID> workspaceId,
-            boolean includeZoneCommits,
+            Predicate<io.github.lumi.domain.model.Commit> included,
             int limit) throws IOException {
         Objects.requireNonNull(branch, "branch");
+        Objects.requireNonNull(included, "included");
         if (limit < 1 || limit > MAX_QUERY) {
             throw new IllegalArgumentException("History limit must be between 1 and " + MAX_QUERY);
         }
@@ -63,7 +76,7 @@ public final class HistoryQueryService {
                 }
                 break;
             }
-            if (visible(commit.kind(), includeZoneCommits)) {
+            if (included.test(commit)) {
                 history.add(new HistoryEntry(next, commit));
             }
             if (commit.parents().isEmpty()) {

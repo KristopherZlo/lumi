@@ -30,6 +30,7 @@ public record HistorySnapshotPayload(
     private static final int MAX_TEXT_BYTES = 4096;
     private static final int MAX_VERSIONS = 32;
     private static final int MAX_ZONES = 64;
+    private static final int MAX_ZONE_VERSIONS = 8;
     public static final Type<HistorySnapshotPayload> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "history_snapshot"));
     public static final StreamCodec<FriendlyByteBuf, HistorySnapshotPayload> CODEC =
@@ -202,15 +203,29 @@ public record HistorySnapshotPayload(
     }
 
     public record ZoneView(
-            UUID id, String name, int color, int cells, long revision, boolean active) {
+            UUID id,
+            String name,
+            int color,
+            int cells,
+            long revision,
+            boolean active,
+            List<Version> versions) {
         public ZoneView {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(name, "name");
+            versions = List.copyOf(Objects.requireNonNull(versions, "versions"));
             if (name.isBlank()
                     || name.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                    > MAX_TEXT_BYTES || cells < 0 || revision < 0) {
+                    > MAX_TEXT_BYTES || cells < 0 || revision < 0
+                    || versions.size() > MAX_ZONE_VERSIONS
+                    || versions.stream().anyMatch(version -> version.kind() != CommitKind.ZONE)) {
                 throw new IllegalArgumentException("Invalid zone metadata");
             }
+        }
+
+        public ZoneView(
+                UUID id, String name, int color, int cells, long revision, boolean active) {
+            this(id, name, color, cells, revision, active, List.of());
         }
 
         private void write(FriendlyByteBuf buffer) {
@@ -220,12 +235,26 @@ public record HistorySnapshotPayload(
             buffer.writeVarInt(cells);
             buffer.writeVarLong(revision);
             buffer.writeBoolean(active);
+            buffer.writeVarInt(versions.size());
+            versions.forEach(version -> version.write(buffer));
         }
 
         private static ZoneView read(FriendlyByteBuf buffer) {
-            return new ZoneView(buffer.readUUID(), buffer.readUtf(MAX_TEXT_BYTES),
-                    buffer.readInt(), buffer.readVarInt(), buffer.readVarLong(),
-                    buffer.readBoolean());
+            UUID id = buffer.readUUID();
+            String name = buffer.readUtf(MAX_TEXT_BYTES);
+            int color = buffer.readInt();
+            int cells = buffer.readVarInt();
+            long revision = buffer.readVarLong();
+            boolean active = buffer.readBoolean();
+            int count = buffer.readVarInt();
+            if (count < 0 || count > MAX_ZONE_VERSIONS) {
+                throw new IllegalArgumentException("Invalid zone version count");
+            }
+            java.util.ArrayList<Version> versions = new java.util.ArrayList<>(count);
+            for (int index = 0; index < count; index++) {
+                versions.add(Version.read(buffer));
+            }
+            return new ZoneView(id, name, color, cells, revision, active, versions);
         }
     }
 }

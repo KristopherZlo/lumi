@@ -44,6 +44,15 @@ class LumiPayloadCodecTest {
                     UUID.randomUUID(), kind, UUID.randomUUID().toString(), id('1'), 42);
             assertEquals(zoneActor, roundTrip(HistoryCommandPayload.CODEC, zoneActor));
         }
+        UUID zoneId = UUID.randomUUID();
+        HistoryCommandPayload zoneSave = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_SAVE,
+                new ZoneSaveArgument(zoneId, "Clock works").encode(), id('1'), 42);
+        assertEquals(zoneSave, roundTrip(HistoryCommandPayload.CODEC, zoneSave));
+        HistoryCommandPayload zoneRestore = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_RESTORE,
+                new ZoneRestoreArgument(zoneId, id('2')).encode(), id('1'), 42);
+        assertEquals(zoneRestore, roundTrip(HistoryCommandPayload.CODEC, zoneRestore));
         OperationCancelPayload cancel = new OperationCancelPayload(
                 UUID.randomUUID(), UUID.randomUUID());
         assertEquals(cancel, roundTrip(OperationCancelPayload.CODEC, cancel));
@@ -121,7 +130,10 @@ class LumiPayloadCodecTest {
                         new HistorySnapshotPayload.Branch("main", id('a'), true),
                         new HistorySnapshotPayload.Branch("idea", id('b'), false)),
                 java.util.List.of(new HistorySnapshotPayload.ZoneView(
-                        new UUID(0, 8), "Clock", 0xff336699, 4, 2, true)));
+                        new UUID(0, 8), "Clock", 0xff336699, 4, 2, true,
+                        java.util.List.of(new HistorySnapshotPayload.Version(
+                                id('b'), "Clock v1", "Builder", 1235,
+                                CommitKind.ZONE)))));
         OperationEventPayload event = new OperationEventPayload(
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 "minecraft:overworld", OperationEventPayload.State.ACCEPTED,

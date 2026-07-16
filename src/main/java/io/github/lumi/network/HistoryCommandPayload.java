@@ -55,6 +55,12 @@ public record HistoryCommandPayload(
         if (kind == Kind.ZONE_ENTER || kind == Kind.ZONE_LEAVE) {
             UUID.fromString(argument);
         }
+        if (kind == Kind.ZONE_SAVE) {
+            ZoneSaveArgument.parse(argument);
+        }
+        if (kind == Kind.ZONE_RESTORE) {
+            ZoneRestoreArgument.parse(argument);
+        }
         if ((kind == Kind.QUICK_ROLLBACK || kind == Kind.UNDO || kind == Kind.REDO
                 || kind == Kind.RECOVER_RESUME || kind == Kind.RECOVER_RETURN)
                 && !argument.isEmpty()) {
@@ -88,7 +94,8 @@ public record HistoryCommandPayload(
         SAVE(0), RESTORE(1), QUICK_ROLLBACK(2), UNDO(3), REDO(4), BRANCH_SWITCH(5),
         RECOVER_RESUME(6), RECOVER_RETURN(7), BRANCH_CREATE(8),
         RESTORE_NO_ENTITIES(9), RESTORE_AREA(10), COMPARE(11), COMPARE_CANCEL(12),
-        AMEND(13), MERGE(14), ZONE_CREATE(15), ZONE_ENTER(16), ZONE_LEAVE(17);
+        AMEND(13), MERGE(14), ZONE_CREATE(15), ZONE_ENTER(16), ZONE_LEAVE(17),
+        ZONE_SAVE(18), ZONE_RESTORE(19);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

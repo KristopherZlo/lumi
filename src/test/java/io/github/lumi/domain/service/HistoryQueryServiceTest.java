@@ -87,6 +87,28 @@ class HistoryQueryServiceTest {
     }
 
     @Test
+    void returnsOnlyCommitsForTheRequestedZone() throws Exception {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        UUID workspace = new UUID(0, 2);
+        UUID clock = new UUID(0, 4);
+        UUID door = new UUID(0, 5);
+        CommitId manual = commits.write(commit(tree, List.of(), "Manual", 1));
+        CommitId clockSave = commits.write(zoneCommit(
+                tree, List.of(manual), workspace, clock, "Clock", 2));
+        CommitId doorSave = commits.write(zoneCommit(
+                tree, List.of(clockSave), workspace, door, "Door", 3));
+        BranchName branch = new BranchName("main");
+        refs.create(branch, doorSave);
+
+        assertEquals(List.of(clockSave), new HistoryQueryService(commits, refs)
+                .firstParentForZone(branch, workspace, clock, 10).stream()
+                .map(HistoryEntry::id).toList());
+    }
+
+    @Test
     void neverShowsInternalSafetyCommitsInBuilderHistory() throws Exception {
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
         CommitRepository commits = new CommitRepository(repositoryRoot);
@@ -127,5 +149,18 @@ class HistoryQueryServiceTest {
                 tree, parents, new CommitAuthor(new UUID(0, 1), "Builder"), message,
                 Instant.ofEpochSecond(second), workspace, Optional.empty(),
                 CommitKind.MANUAL, new CommitStatistics(0, 0, 0, 0));
+    }
+
+    private static Commit zoneCommit(
+            io.github.lumi.domain.model.ObjectId tree,
+            List<CommitId> parents,
+            UUID workspace,
+            UUID zone,
+            String message,
+            long second) {
+        return new Commit(
+                tree, parents, new CommitAuthor(new UUID(0, 1), "Builder"), message,
+                Instant.ofEpochSecond(second), workspace, Optional.of(zone),
+                CommitKind.ZONE, new CommitStatistics(0, 0, 0, 0));
     }
 }

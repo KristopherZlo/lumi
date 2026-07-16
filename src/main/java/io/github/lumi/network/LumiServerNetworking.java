@@ -314,6 +314,8 @@ public final class LumiServerNetworking {
                     "Merge preparation starts before the mutation queue");
             case ZONE_CREATE, ZONE_ENTER, ZONE_LEAVE -> throw new IllegalStateException(
                     "Zone metadata does not use the mutation queue");
+            case ZONE_SAVE, ZONE_RESTORE -> throw new IllegalStateException(
+                    "Zone history dispatch is not available");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
