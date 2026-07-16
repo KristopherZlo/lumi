@@ -119,6 +119,11 @@ public final class LumiServerNetworking {
                     new CommitId(new ObjectId(payload.argument())), author, terminal);
             case RESTORE_NO_ENTITIES -> runtime.startRestore(
                     new CommitId(new ObjectId(payload.argument())), author, false, terminal);
+            case RESTORE_AREA -> {
+                PartialRestoreArgument partial = PartialRestoreArgument.parse(payload.argument());
+                yield runtime.startPartialRestore(
+                        partial.target(), partial.area(), author, terminal);
+            }
             case QUICK_ROLLBACK -> runtime.startQuickRollback(author, terminal);
             case UNDO -> runtime.startLiveAction(
                     player.getUUID(), LiveActionJournal.Direction.UNDO, terminal);

@@ -2,10 +2,12 @@ package io.github.lumi.client;
 
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.network.HistoryCommandPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
+import io.github.lumi.network.PartialRestoreArgument;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -50,6 +52,13 @@ public final class LumiClientNetworking {
     public UUID restoreWithoutEntities(CommitId target) {
         return send(HistoryCommandPayload.Kind.RESTORE_NO_ENTITIES,
                 Objects.requireNonNull(target, "target").hex());
+    }
+
+    public UUID restoreArea(CommitId target, BlockAreaTarget area) {
+        return send(HistoryCommandPayload.Kind.RESTORE_AREA,
+                new PartialRestoreArgument(
+                        Objects.requireNonNull(target, "target"),
+                        Objects.requireNonNull(area, "area")).encode());
     }
 
     public UUID quickRollback() {

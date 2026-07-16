@@ -1,10 +1,9 @@
 package io.github.lumi.client.ui;
 
 import io.github.lumi.client.state.ClientHistoryStore;
-import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Objects;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -18,7 +17,7 @@ public final class LumiDashboardScreen extends Screen {
     private final Runnable openSave;
     private final Runnable openBranch;
     private final Runnable quickRollback;
-    private final BiConsumer<CommitId, Boolean> restore;
+    private final Consumer<HistorySnapshotPayload.Version> openRestore;
     private HistorySnapshotPayload snapshot;
     private int panelX;
     private int panelY;
@@ -30,14 +29,14 @@ public final class LumiDashboardScreen extends Screen {
             Runnable openSave,
             Runnable openBranch,
             Runnable quickRollback,
-            BiConsumer<CommitId, Boolean> restore) {
+            Consumer<HistorySnapshotPayload.Version> openRestore) {
         super(Component.translatable("luma.screen.dashboard.title"));
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openBranch = Objects.requireNonNull(openBranch, "openBranch");
         this.quickRollback = Objects.requireNonNull(quickRollback, "quickRollback");
-        this.restore = Objects.requireNonNull(restore, "restore");
+        this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
     }
 
     @Override
@@ -71,14 +70,9 @@ public final class LumiDashboardScreen extends Screen {
             HistorySnapshotPayload.Version version = snapshot.versions().get(index);
             addRenderableWidget(Button.builder(
                     Component.translatable("luma.action.restore"),
-                    ignored -> openRestore(version))
+                    ignored -> openRestore.accept(version))
                     .bounds(panelX + panelWidth - 88, rowY + 4, 72, 20).build());
         }
-    }
-
-    private void openRestore(HistorySnapshotPayload.Version version) {
-        minecraft.setScreen(new LumiRestoreScreen(
-                this, version.id(), version.message(), restore));
     }
 
     @Override

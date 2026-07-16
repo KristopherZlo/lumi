@@ -8,6 +8,7 @@ import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
+import io.github.lumi.client.ui.LumiRestoreScreen;
 import io.github.lumi.client.ui.BranchNameController;
 import io.github.lumi.client.ui.SaveScreenController;
 import io.github.lumi.network.HistorySnapshotPayload;
@@ -39,13 +40,19 @@ public final class LumiClient implements ClientModInitializer {
                                         currentBranch(),
                                         new BranchNameController(NETWORKING::createBranch))),
                                 NETWORKING::quickRollback,
-                                (target, includeEntities) -> {
-                                    if (includeEntities) {
-                                        NETWORKING.restore(target);
-                                    } else {
-                                        NETWORKING.restoreWithoutEntities(target);
-                                    }
-                                }));
+                                version -> client.setScreen(new LumiRestoreScreen(
+                                        client.screen,
+                                        version.id(),
+                                        version.message(),
+                                        SELECTION.bounds(),
+                                        (target, includeEntities) -> {
+                                            if (includeEntities) {
+                                                NETWORKING.restore(target);
+                                            } else {
+                                                NETWORKING.restoreWithoutEntities(target);
+                                            }
+                                        },
+                                        NETWORKING::restoreArea))));
                     }
 
                     @Override public void openSave() {

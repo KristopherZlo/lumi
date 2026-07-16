@@ -48,6 +48,13 @@ class LumiPayloadCodecTest {
                 id('3').hex(), id('2'), 43);
         assertEquals(restoreWithoutEntities,
                 roundTrip(HistoryCommandPayload.CODEC, restoreWithoutEntities));
+        var partial = new PartialRestoreArgument(
+                id('3'), new io.github.lumi.domain.model.BlockAreaTarget(
+                        new io.github.lumi.domain.model.BlockBox(1, 2, 3, 4, 5, 6), true));
+        HistoryCommandPayload restoreArea = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.RESTORE_AREA,
+                partial.encode(), id('2'), 43);
+        assertEquals(restoreArea, roundTrip(HistoryCommandPayload.CODEC, restoreArea));
     }
 
     @Test
@@ -58,6 +65,9 @@ class LumiPayloadCodecTest {
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.RESTORE_NO_ENTITIES,
                 "not-a-commit", id('1'), 0));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.RESTORE_AREA,
+                "not-an-area", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.SAVE, "Save", id('1'), -1));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
