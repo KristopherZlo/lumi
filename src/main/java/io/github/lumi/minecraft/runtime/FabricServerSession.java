@@ -104,17 +104,26 @@ final class FabricServerSession implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        long started = System.nanoTime();
+        LumiMod.LOGGER.info("Lumi server shutdown started");
         Exception failure = null;
         try {
             dimensions.close();
+            LumiMod.LOGGER.info(
+                    "Lumi dimension runtimes closed in {} ms",
+                    elapsedMillis(started));
         } catch (Exception closeFailure) {
             failure = closeFailure;
         } finally {
+            long workersStarted = System.nanoTime();
             boolean durabilityFinished = stopBackgroundWorkers(
                     operationBackground,
                     durabilityBackground,
                     DURABILITY_SHUTDOWN_SECONDS,
                     TimeUnit.SECONDS);
+            LumiMod.LOGGER.info(
+                    "Lumi background workers stopped in {} ms; durabilityDrained={}",
+                    elapsedMillis(workersStarted), durabilityFinished);
             if (!durabilityFinished) {
                 LumiMod.LOGGER.warn(
                         "Lumi durability work exceeded the {} second shutdown window; "
@@ -125,6 +134,7 @@ final class FabricServerSession implements AutoCloseable {
         if (failure != null) {
             throw failure;
         }
+        LumiMod.LOGGER.info("Lumi server shutdown completed in {} ms", elapsedMillis(started));
     }
 
     static boolean stopBackgroundWorkers(
@@ -158,5 +168,9 @@ final class FabricServerSession implements AutoCloseable {
         return new PermissionSubject(
                 player.getUUID(), mayConfigure(player),
                 player.gameMode.getGameModeForPlayer() == GameType.SURVIVAL);
+    }
+
+    private static long elapsedMillis(long startedNanos) {
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
     }
 }

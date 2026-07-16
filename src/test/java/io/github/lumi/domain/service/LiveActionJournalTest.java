@@ -46,6 +46,22 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void summarizesOneActionWithoutExposingWorldContent() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER_A);
+        journal.record(action, POSITION, block("stone"), block("dirt"));
+        journal.retain(action);
+
+        var summary = journal.summary(action);
+
+        assertEquals(action, summary.actionId());
+        assertEquals(PLAYER_A, summary.player());
+        assertEquals(1, summary.blocks());
+        assertEquals(0, summary.entities());
+        assertEquals(1, summary.delayedReferences());
+    }
+
+    @Test
     void refusesWholeUndoAfterNewerPlayerOverlapsAnyPosition() {
         LiveActionJournal journal = new LiveActionJournal();
         UUID first = journal.begin(PLAYER_A);

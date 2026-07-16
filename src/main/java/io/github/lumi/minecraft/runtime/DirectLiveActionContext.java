@@ -1,5 +1,6 @@
 package io.github.lumi.minecraft.runtime;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.domain.service.LiveActionJournal;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -109,7 +110,16 @@ public final class DirectLiveActionContext {
             if (active.scopes.isEmpty()) {
                 try {
                     if (active.closeAction) {
-                        active.journal.close(active.action);
+                        var summary = active.journal.summary(active.action);
+                        if (active.journal.close(active.action)) {
+                            LumiMod.LOGGER.info(
+                                    "Lumi live action {} closed for player {}: "
+                                            + "{} blocks, {} entities, {} bytes, "
+                                            + "{} delayed references",
+                                    summary.actionId(), summary.player(),
+                                    summary.blocks(), summary.entities(), summary.bytes(),
+                                    summary.delayedReferences());
+                        }
                     }
                 } finally {
                     CURRENT.remove();

@@ -24,6 +24,7 @@ import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -82,6 +83,10 @@ public final class LumiServerNetworking {
             reject(player, payload, null, "Lumi is not ready for this dimension");
             return;
         }
+        LumiMod.LOGGER.info(
+                "Lumi request received: id={}, action={}, player={}, dimension={}, revision={}",
+                payload.requestId(), payload.kind(), player.getUUID(),
+                dimension(runtime), payload.expectedRevision());
         try {
             PermissionDecision permission = LumiMod.serverRuntime().permission(player);
             if (permission != PermissionDecision.ALLOWED) {
@@ -323,17 +328,31 @@ public final class LumiServerNetworking {
             Started started) {
         TICKET_OWNERS.put(started.ticket().id(),
                 new TicketOwner(player.getUUID(), payload.requestId()));
+        LumiMod.LOGGER.info(
+                "Lumi request {} received operation ticket {}",
+                payload.requestId(), started.ticket().id());
         runtime.operations().observeQueuePosition(started.ticket(), position -> {
             String message = position == 0
                     ? "Operation accepted" : "Queued at position " + position;
             sendEvent(player, payload, runtime, OperationEventPayload.State.ACCEPTED,
                     message, Optional.of(started.ticket()), position);
+            LumiMod.LOGGER.info(
+                    "Lumi request {} ticket {} queue position {}",
+                    payload.requestId(), started.ticket().id(), position);
             bossBar(player, started.ticket(), position).setVisible(position == 0);
         });
-        runtime.operations().observeProgress(started.ticket(), progress ->
-                runtime.operations().queuePosition(started.ticket()).ifPresent(position ->
+        AtomicReference<String> loggedPhase = new AtomicReference<>("");
+        runtime.operations().observeProgress(started.ticket(), progress -> {
+            if (!progress.phase().equals(loggedPhase.getAndSet(progress.phase()))) {
+                LumiMod.LOGGER.info(
+                        "Lumi request {} ticket {} entered phase '{}' ({}/{})",
+                        payload.requestId(), started.ticket().id(), progress.phase(),
+                        progress.completed(), progress.total());
+            }
+            runtime.operations().queuePosition(started.ticket()).ifPresent(position ->
                         sendProgress(player, payload, runtime, started.ticket(),
-                                position, progress)));
+                                position, progress));
+        });
         broadcastSnapshot(runtime);
     }
 
@@ -491,6 +510,9 @@ public final class LumiServerNetworking {
                         "Operation can no longer be cancelled safely");
                 return;
             }
+            LumiMod.LOGGER.info(
+                    "Lumi cancellation accepted: request={}, ticket={}, active={}",
+                    payload.requestId(), payload.ticketId(), active);
         } catch (IOException failed) {
             sendEvent(player, payload.requestId(), runtime, OperationEventPayload.State.FAILED,
                     failureMessage(failed));
@@ -591,6 +613,12 @@ public final class LumiServerNetworking {
                     message == null ? "Operation failed" : message,
                     head.commit(), head.revision(), ticket.map(OperationTicket::id),
                     queuePosition));
+            if (state != OperationEventPayload.State.ACCEPTED
+                    && state != OperationEventPayload.State.PROGRESS) {
+                LumiMod.LOGGER.info(
+                        "Lumi request finished: id={}, state={}, player={}, dimension={}",
+                        requestId, state, player.getUUID(), dimension(runtime));
+            }
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi operation event", failed);
         }

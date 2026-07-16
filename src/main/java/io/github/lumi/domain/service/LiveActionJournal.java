@@ -192,6 +192,13 @@ public final class LiveActionJournal {
         return action == null ? Optional.empty() : Optional.of(action.player);
     }
 
+    public synchronized ActionSummary summary(UUID actionId) {
+        MutableAction action = requireAction(actionId);
+        return new ActionSummary(
+                action.id, action.player, action.changes.size(), action.entities.size(),
+                action.bytes, action.causalReferences);
+    }
+
     public synchronized void makeUnavailable(UUID actionId, String reason) {
         MutableAction action = requireAction(actionId);
         if (action.closed) {
@@ -431,6 +438,14 @@ public final class LiveActionJournal {
             replacementEntities = Map.copyOf(replacementEntities);
         }
     }
+
+    public record ActionSummary(
+            UUID actionId,
+            UUID player,
+            int blocks,
+            int entities,
+            long bytes,
+            int delayedReferences) { }
 
     private static final class MutableAction {
         private final UUID id;
