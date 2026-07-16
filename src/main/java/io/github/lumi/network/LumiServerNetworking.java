@@ -6,7 +6,6 @@ import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
-import io.github.lumi.domain.model.ComparisonSummary;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.service.SaveRequest;
@@ -39,7 +38,8 @@ public final class LumiServerNetworking {
             new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, ServerBossEvent> BOSS_BARS =
             new ConcurrentHashMap<>();
-    private static final CompareRequestRegistry COMPARES = new CompareRequestRegistry();
+    private static final CompareCommandHandler COMPARES = new CompareCommandHandler(
+            LumiServerNetworking::failureMessage, LumiServerNetworking::send);
     private static final ConcurrentHashMap<UUID, PendingPackage> PACKAGE_INSPECTIONS =
             new ConcurrentHashMap<>();
     private static final HistorySnapshotFactory SNAPSHOTS = new HistorySnapshotFactory();
@@ -92,7 +92,8 @@ public final class LumiServerNetworking {
                 return;
             }
             if (payload.kind() == HistoryCommandPayload.Kind.COMPARE_CANCEL) {
-                cancelCompare(player, payload);
+                COMPARES.cancelOwned(
+                        UUID.fromString(payload.argument()), player.getUUID());
                 return;
             }
             BranchRef actual = runtime.activeRef();
@@ -147,7 +148,7 @@ public final class LumiServerNetworking {
             }
             if (payload.kind() == HistoryCommandPayload.Kind.COMPARE
                     || payload.kind() == HistoryCommandPayload.Kind.ZONE_COMPARE) {
-                compare(player, runtime, payload, context);
+                COMPARES.start(player, runtime, payload, context);
                 return;
             }
             if (payload.kind() == HistoryCommandPayload.Kind.MERGE) {
@@ -335,60 +336,8 @@ public final class LumiServerNetworking {
         broadcastSnapshot(runtime);
     }
 
-    private static void compare(
-            ServerPlayer player,
-            FabricDimensionRuntime runtime,
-            HistoryCommandPayload payload,
-            ServerPlayNetworking.Context context) throws IOException {
-        CommitId before;
-        CommitId after;
-        String dimension = dimension(runtime);
-        CompareRequestRegistry.Job job;
-        if (payload.kind() == HistoryCommandPayload.Kind.ZONE_COMPARE) {
-            ZoneCompareArgument argument = ZoneCompareArgument.parse(payload.argument());
-            before = argument.before();
-            after = argument.after();
-            job = COMPARES.start(
-                    payload.requestId(), player.getUUID(),
-                    cancelled -> runtime.compare(
-                            before, after, argument.zoneId(), cancelled));
-        } else {
-            CompareArgument argument = CompareArgument.parse(payload.argument());
-            before = argument.before();
-            after = argument.after();
-            job = COMPARES.start(
-                    payload.requestId(), player.getUUID(),
-                    cancelled -> runtime.compare(before, after, cancelled));
-        }
-        job.future()
-                .whenComplete((summary, failure) -> context.server().execute(() -> {
-                    if (!COMPARES.finish(payload.requestId(), job)
-                            || job.cancelled().get()) {
-                        return;
-                    }
-                    if (failure == null) {
-                        send(player, success(payload.requestId(), dimension, summary));
-                    } else {
-                        send(player, new CompareResultPayload(
-                                payload.requestId(), dimension,
-                                before, after, 0, 0,
-                                java.util.List.of(), failureMessage(failure)));
-                    }
-                }));
-    }
-
-    private static void cancelCompare(
-            ServerPlayer player, HistoryCommandPayload payload) {
-        UUID target = UUID.fromString(payload.argument());
-        COMPARES.cancelOwned(target, player.getUUID());
-    }
-
-    private static void cancelCompares(UUID playerId) {
-        COMPARES.cancelPlayer(playerId);
-    }
-
     private static void cleanupPlayer(UUID playerId) {
-        cancelCompares(playerId);
+        COMPARES.cleanupPlayer(playerId);
         PACKAGE_INSPECTIONS.remove(playerId);
         TICKET_OWNERS.forEach((ticketId, owner) -> {
             if (owner.playerId().equals(playerId)
@@ -403,24 +352,6 @@ public final class LumiServerNetworking {
         BOSS_BARS.keySet().forEach(LumiServerNetworking::removeBossBar);
         TICKET_OWNERS.clear();
         PACKAGE_INSPECTIONS.clear();
-    }
-
-    private static CompareResultPayload success(
-            UUID requestId, String dimension, ComparisonSummary summary) {
-        var materials = summary.materials().entrySet().stream()
-                .sorted(java.util.Map.Entry.comparingByKey())
-                .limit(128)
-                .map(entry -> new CompareResultPayload.Material(
-                        entry.getKey(), entry.getValue().before(), entry.getValue().after()))
-                .toList();
-        return new CompareResultPayload(
-                requestId, dimension, summary.before(), summary.after(),
-                summary.changedSections(), summary.changedEntityChunks(),
-                summary.sectionPreview().stream()
-                        .map(section -> new CompareResultPayload.ChangedSection(
-                                section.chunkX(), section.sectionY(), section.chunkZ()))
-                        .toList(),
-                materials, "");
     }
 
     private static String failureMessage(Throwable failure) {
