@@ -14,7 +14,7 @@ import java.util.Set;
 public final class GarbageCollector {
     private final ObjectStore objects;
     private final ObjectStore commits;
-    private final WorldObjectRepository worldObjects;
+    private final WorldObjectGraph worldGraph;
     private final CommitRepository commitRepository;
     private final BranchRefRepository refs;
     private final OriginStore origins;
@@ -24,7 +24,7 @@ public final class GarbageCollector {
         Objects.requireNonNull(dimensionRepository, "dimensionRepository");
         objects = new ObjectStore(dimensionRepository.resolve("objects"));
         commits = new ObjectStore(dimensionRepository.resolve("commits"));
-        worldObjects = new WorldObjectRepository(dimensionRepository);
+        worldGraph = new WorldObjectGraph(new WorldObjectRepository(dimensionRepository));
         commitRepository = new CommitRepository(dimensionRepository);
         refs = new BranchRefRepository(dimensionRepository);
         origins = new OriginStore(dimensionRepository);
@@ -54,7 +54,7 @@ public final class GarbageCollector {
             }
             var commit = commitRepository.read(id);
             pending.addAll(commit.parents());
-            markDimension(commit.tree(), reachableObjects);
+            reachableObjects.addAll(worldGraph.scan(commit.tree()).reachable());
         }
 
         int deletedObjects = 0;
@@ -74,30 +74,4 @@ public final class GarbageCollector {
         return new GarbageCollectionResult(deletedCommits, deletedObjects);
     }
 
-    private void markDimension(ObjectId id, Set<ObjectId> reachable) throws IOException {
-        if (!reachable.add(id)) {
-            return;
-        }
-        for (ObjectId region : worldObjects.readDimension(id).regions().values()) {
-            markRegion(region, reachable);
-        }
-    }
-
-    private void markRegion(ObjectId id, Set<ObjectId> reachable) throws IOException {
-        if (!reachable.add(id)) {
-            return;
-        }
-        for (ObjectId chunk : worldObjects.readRegion(id).chunks().values()) {
-            markChunk(chunk, reachable);
-        }
-    }
-
-    private void markChunk(ObjectId id, Set<ObjectId> reachable) throws IOException {
-        if (!reachable.add(id)) {
-            return;
-        }
-        var chunk = worldObjects.readChunk(id);
-        reachable.addAll(chunk.sections().values());
-        chunk.entities().ifPresent(reachable::add);
-    }
 }
