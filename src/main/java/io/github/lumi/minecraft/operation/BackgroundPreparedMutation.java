@@ -13,6 +13,7 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
     private final FrozenValidation validation;
     private final PreparedDiscard<T> discard;
     private final boolean freezeDuringPreparation;
+    private final boolean degradeOnFailure;
     private T delegate;
     private Throwable failure;
 
@@ -28,10 +29,20 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
             FrozenValidation validation,
             PreparedDiscard<T> discard,
             boolean freezeDuringPreparation) {
+        this(preparation, validation, discard, freezeDuringPreparation, false);
+    }
+
+    public BackgroundPreparedMutation(
+            CompletableFuture<T> preparation,
+            FrozenValidation validation,
+            PreparedDiscard<T> discard,
+            boolean freezeDuringPreparation,
+            boolean degradeOnFailure) {
         this.preparation = Objects.requireNonNull(preparation, "preparation");
         this.validation = Objects.requireNonNull(validation, "validation");
         this.discard = Objects.requireNonNull(discard, "discard");
         this.freezeDuringPreparation = freezeDuringPreparation;
+        this.degradeOnFailure = degradeOnFailure;
     }
 
     @Override
@@ -80,7 +91,8 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
     @Override
     public MutationTerminalState terminalState() {
         if (failure != null) {
-            return MutationTerminalState.FAILED;
+            return degradeOnFailure
+                    ? MutationTerminalState.DEGRADED : MutationTerminalState.FAILED;
         }
         if (delegate == null || !delegate.isTerminal()) {
             throw new IllegalStateException("Prepared mutation is not terminal");
@@ -95,7 +107,8 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
 
     @Override
     public boolean isSafeToRelease() {
-        return failure != null || delegate != null && delegate.isSafeToRelease();
+        return failure != null && !degradeOnFailure
+                || delegate != null && delegate.isSafeToRelease();
     }
 
     @FunctionalInterface

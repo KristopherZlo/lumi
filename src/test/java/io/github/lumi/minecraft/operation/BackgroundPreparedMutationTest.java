@@ -79,6 +79,23 @@ class BackgroundPreparedMutationTest {
         assertTrue(!coordinator.hasActiveOperation());
     }
 
+    @Test
+    void recoveryPreparationFailureDegradesAndRetainsFreeze() throws Exception {
+        BackgroundPreparedMutation<TestMutation> prepared = new BackgroundPreparedMutation<>(
+                CompletableFuture.failedFuture(new IOException("corrupt target")),
+                () -> { }, ignored -> { }, true, true);
+        RecordingFreeze freeze = new RecordingFreeze();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L);
+        coordinator.start(prepared);
+
+        coordinator.tick();
+
+        assertEquals(MutationTerminalState.DEGRADED, prepared.terminalState());
+        assertEquals(0, freeze.releaseCalls);
+        assertTrue(coordinator.hasActiveOperation());
+    }
+
     private static final class TestMutation implements DimensionMutation {
         private int advances;
         @Override public void advance(long deadlineNanos) { advances++; }
