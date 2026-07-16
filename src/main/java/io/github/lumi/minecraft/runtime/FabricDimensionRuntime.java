@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.runtime;
 import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
 import io.github.lumi.minecraft.operation.DimensionMutation;
+import io.github.lumi.minecraft.operation.DeferredDimensionMutation;
 import io.github.lumi.minecraft.operation.LiveActionOperation;
 import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
 import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
@@ -412,19 +413,19 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 saves, mutations, background);
     }
 
-    public synchronized ReturnPointRestoreOperation startRestore(
+    public synchronized DimensionMutation startRestore(
             CommitId target, CommitAuthor author) throws IOException {
         return startRestore(target, author, true, ignored -> { });
     }
 
-    public synchronized ReturnPointRestoreOperation startRestore(
+    public synchronized DimensionMutation startRestore(
             CommitId target,
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         return startRestore(target, author, true, terminalObserver);
     }
 
-    public synchronized ReturnPointRestoreOperation startRestore(
+    public synchronized DimensionMutation startRestore(
             CommitId target,
             CommitAuthor author,
             boolean includeEntities,
@@ -432,9 +433,15 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         requireNoRecovery();
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(author, "author");
-        if (operations.hasActiveOperation()) {
-            throw new IllegalStateException("A dimension operation is already active");
-        }
+        var operation = new DeferredDimensionMutation(
+                () -> createRestore(target, author, includeEntities));
+        operations.enqueue(
+                operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
+        return operation;
+    }
+
+    private ReturnPointRestoreOperation createRestore(
+            CommitId target, CommitAuthor author, boolean includeEntities) throws IOException {
         BranchRef expected = activeRef();
         UUID operationId = UUID.randomUUID();
         SaveRequest returnPoint = new SaveRequest(
@@ -444,7 +451,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var operation = new ReturnPointRestoreOperation(
                 createSave(returnPoint), saved -> returnPointRestores.prepare(
                         saved, target, hiddenRef, operationId, includeEntities));
-        operations.start(operation, clearingLiveHistory(terminalObserver));
         return operation;
     }
 
@@ -797,18 +803,24 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return operation;
     }
 
-    public synchronized ReturnPointRestoreOperation startQuickRollback(
+    public synchronized DimensionMutation startQuickRollback(
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
-        if (operations.hasActiveOperation()) {
-            throw new IllegalStateException("A dimension operation is already active");
-        }
+        Objects.requireNonNull(author, "author");
+        var operation = new DeferredDimensionMutation(() -> new LiveRecordedMutation(
+                liveActions, author.id(), createQuickRollback(author)));
+        operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
+        return operation;
+    }
+
+    private ReturnPointRestoreOperation createQuickRollback(CommitAuthor author)
+            throws IOException {
         BranchRef expected = activeRef();
         UUID operationId = UUID.randomUUID();
         BranchName hidden = new BranchName("hidden/rollback/" + operationId);
         SaveRequest checkpointRequest = new SaveRequest(
-                expected, Objects.requireNonNull(author, "author"),
+                expected, author,
                 "Checkpoint before Quick Rollback", Instant.now(), activeWorkspaceId(),
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
         SaveCaptureOperation checkpoint = new SaveCaptureOperation(
@@ -832,8 +844,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         throw new CompletionException(failed);
                     }
                 }, background));
-        operations.start(new LiveRecordedMutation(
-                liveActions, author.id(), operation), terminalObserver);
         return operation;
     }
 
