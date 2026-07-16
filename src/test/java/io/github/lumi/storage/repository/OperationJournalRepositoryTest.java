@@ -87,6 +87,22 @@ class OperationJournalRepositoryTest {
                 .read().orElseThrow());
     }
 
+    @Test
+    void persistsEntityExclusionForCrashRecovery() throws IOException {
+        OperationJournalRepository repository = new OperationJournalRepository(repositoryRoot);
+        OperationTarget target = new OperationTarget(
+                new BranchName("main"), id("expected"), 7,
+                Optional.of(id("target")), Optional.of(id("return")),
+                Optional.empty(), Optional.empty(), true);
+
+        var created = repository.create(new OperationJournal(
+                UUID.randomUUID(), OperationKind.RESTORE,
+                OperationPhase.PREPARED, target));
+
+        assertEquals(created, new OperationJournalRepository(repositoryRoot)
+                .read().orElseThrow());
+    }
+
     private static OperationTarget target() {
         return new OperationTarget(
                 new BranchName("main"), id("expected"), 7,

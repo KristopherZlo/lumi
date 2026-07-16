@@ -52,6 +52,15 @@ public final class ReturnPointRestorePreparation {
             CommitId target,
             BranchName hiddenRef,
             UUID operationId) {
+        return prepare(returnPoint, target, hiddenRef, operationId, true);
+    }
+
+    public CompletableFuture<RestoreOperation> prepare(
+            SaveResult returnPoint,
+            CommitId target,
+            BranchName hiddenRef,
+            UUID operationId,
+            boolean includeEntities) {
         Objects.requireNonNull(returnPoint, "returnPoint");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(hiddenRef, "hiddenRef");
@@ -59,9 +68,14 @@ public final class ReturnPointRestorePreparation {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 refs.create(hiddenRef, returnPoint.commitId());
-                return RestoreOperation.start(
-                        restores.prepare(returnPoint.branchRef(), target),
-                        world, refs, journals, operationId, stateListener);
+                var restore = includeEntities
+                        ? restores.prepare(returnPoint.branchRef(), target)
+                        : restores.prepareWithoutEntities(returnPoint.branchRef(), target);
+                return includeEntities
+                        ? RestoreOperation.start(
+                                restore, world, refs, journals, operationId, stateListener)
+                        : RestoreOperation.startWithoutEntities(
+                                restore, world, refs, journals, operationId, stateListener);
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }

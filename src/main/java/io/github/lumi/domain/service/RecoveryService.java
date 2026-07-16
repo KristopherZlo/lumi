@@ -37,6 +37,9 @@ public final class RecoveryService {
             return restores.preparePartial(
                     expected, source, desired, area.area(), area.outside());
         }
+        if (target.excludeEntities()) {
+            return restores.prepareWithoutEntities(expected, source, desired);
+        }
         return restores.prepare(expected, source, desired);
     }
 }

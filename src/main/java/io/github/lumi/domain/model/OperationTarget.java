@@ -10,7 +10,8 @@ public record OperationTarget(
         Optional<CommitId> target,
         Optional<CommitId> returnPoint,
         Optional<BranchSwitchTarget> branchSwitch,
-        Optional<BlockAreaTarget> blockArea) {
+        Optional<BlockAreaTarget> blockArea,
+        boolean excludeEntities) {
     public OperationTarget {
         Objects.requireNonNull(branch, "branch");
         Objects.requireNonNull(expectedHead, "expectedHead");
@@ -41,7 +42,7 @@ public record OperationTarget(
             Optional<CommitId> target,
             Optional<CommitId> returnPoint) {
         this(branch, expectedHead, expectedRevision, target, returnPoint,
-                Optional.empty(), Optional.empty());
+                Optional.empty(), Optional.empty(), false);
     }
 
     public OperationTarget(
@@ -52,6 +53,18 @@ public record OperationTarget(
             Optional<CommitId> returnPoint,
             Optional<BranchSwitchTarget> branchSwitch) {
         this(branch, expectedHead, expectedRevision, target, returnPoint,
-                branchSwitch, Optional.empty());
+                branchSwitch, Optional.empty(), false);
+    }
+
+    public OperationTarget(
+            BranchName branch,
+            CommitId expectedHead,
+            long expectedRevision,
+            Optional<CommitId> target,
+            Optional<CommitId> returnPoint,
+            Optional<BranchSwitchTarget> branchSwitch,
+            Optional<BlockAreaTarget> blockArea) {
+        this(branch, expectedHead, expectedRevision, target, returnPoint,
+                branchSwitch, blockArea, false);
     }
 }

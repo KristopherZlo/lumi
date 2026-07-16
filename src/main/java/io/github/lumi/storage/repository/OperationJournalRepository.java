@@ -84,6 +84,7 @@ public final class OperationJournalRepository {
             writeOptionalId(output, journal.target().returnPoint());
             writeBranchSwitch(output, journal.target().branchSwitch());
             writeBlockArea(output, journal.target().blockArea());
+            output.writeBoolean(journal.target().excludeEntities());
         }
         return bytes.toByteArray();
     }
@@ -104,10 +105,24 @@ public final class OperationJournalRepository {
             if (branch.length != branchLength) {
                 throw new IOException("Truncated operation journal");
             }
+            var branchName = new BranchName(new String(branch, StandardCharsets.UTF_8));
+            CommitId expected = readId(input);
+            long revision = input.readLong();
+            var targetCommit = readOptionalId(input);
+            var returnPoint = readOptionalId(input);
+            var branchSwitch = readBranchSwitch(input);
+            var blockArea = readBlockArea(input);
+            boolean excludeEntities = false;
+            if (input.available() != 0) {
+                int excluded = input.readUnsignedByte();
+                if (excluded > 1) {
+                    throw new IOException("Invalid entity exclusion flag");
+                }
+                excludeEntities = excluded == 1;
+            }
             OperationTarget target = new OperationTarget(
-                    new BranchName(new String(branch, StandardCharsets.UTF_8)),
-                    readId(input), input.readLong(), readOptionalId(input), readOptionalId(input),
-                    readBranchSwitch(input), readBlockArea(input));
+                    branchName, expected, revision, targetCommit, returnPoint,
+                    branchSwitch, blockArea, excludeEntities);
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in operation journal");
             }

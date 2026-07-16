@@ -364,12 +364,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public synchronized ReturnPointRestoreOperation startRestore(
             CommitId target, CommitAuthor author) throws IOException {
-        return startRestore(target, author, ignored -> { });
+        return startRestore(target, author, true, ignored -> { });
     }
 
     public synchronized ReturnPointRestoreOperation startRestore(
             CommitId target,
             CommitAuthor author,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        return startRestore(target, author, true, terminalObserver);
+    }
+
+    public synchronized ReturnPointRestoreOperation startRestore(
+            CommitId target,
+            CommitAuthor author,
+            boolean includeEntities,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         Objects.requireNonNull(target, "target");
@@ -385,7 +393,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         BranchName hiddenRef = new BranchName("hidden/return/" + operationId);
         var operation = new ReturnPointRestoreOperation(
                 createSave(returnPoint), saved -> returnPointRestores.prepare(
-                        saved, target, hiddenRef, operationId));
+                        saved, target, hiddenRef, operationId, includeEntities));
         operations.start(operation, clearingLiveHistory(terminalObserver));
         return operation;
     }

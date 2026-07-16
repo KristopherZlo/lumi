@@ -131,6 +131,23 @@ public final class RestoreOperation implements DimensionMutation {
                 stateListener, OperationKind.RESTORE, target);
     }
 
+    public static RestoreOperation startWithoutEntities(
+            PreparedRestore restore,
+            WorldStateApply world,
+            BranchRefRepository refs,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener) throws IOException {
+        Objects.requireNonNull(refs, "refs");
+        OperationTarget target = new OperationTarget(
+                restore.expectedRef().name(), restore.expectedRef().commit(),
+                restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
+                Optional.of(restore.expectedRef().commit()), Optional.empty(),
+                Optional.empty(), true);
+        return start(restore, world, new BranchRefRestorePublication(refs),
+                journals, operationId, stateListener, OperationKind.RESTORE, target);
+    }
+
     public static RestoreOperation startQuickRollback(
             PreparedRestore restore,
             WorldStateApply world,

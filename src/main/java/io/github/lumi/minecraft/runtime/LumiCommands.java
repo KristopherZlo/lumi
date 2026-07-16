@@ -51,6 +51,11 @@ public final class LumiCommands {
                     .requires(LumiCommands::mayUse)
                     .then(argument("commit", word()).executes(command ->
                             restore(command.getSource(), getString(command, "commit"))));
+            var restoreWithoutEntities = literal("restore-no-entities")
+                    .requires(LumiCommands::mayUse)
+                    .then(argument("commit", word()).executes(command ->
+                            restoreWithoutEntities(
+                                    command.getSource(), getString(command, "commit"))));
             var rollback = literal("rollback")
                     .requires(LumiCommands::mayUse)
                     .executes(command -> quickRollback(command.getSource()));
@@ -111,7 +116,8 @@ public final class LumiCommands {
                     .requires(LumiCommands::mayUse)
                     .then(argument("commit", word()).then(x1Arg));
             dispatcher.register(literal("lumi").then(save).then(restore)
-                    .then(restoreArea).then(rollback).then(undo).then(redo)
+                    .then(restoreWithoutEntities).then(restoreArea)
+                    .then(rollback).then(undo).then(redo)
                     .then(recover).then(debugActionSet).then(debugActionSummon).then(branch));
         });
     }
@@ -151,6 +157,25 @@ public final class LumiCommands {
             return 1;
         } catch (IOException | IllegalStateException | IllegalArgumentException failed) {
             source.sendFailure(Component.literal("Lumi restore could not start: " + failed.getMessage()));
+            return 0;
+        }
+    }
+
+    private static int restoreWithoutEntities(CommandSourceStack source, String commitHex) {
+        var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
+        if (runtime == null) {
+            source.sendFailure(Component.literal("Lumi is not ready for this dimension"));
+            return 0;
+        }
+        try {
+            runtime.startRestore(
+                    new CommitId(new ObjectId(commitHex)), author(source), false, ignored -> { });
+            source.sendSuccess(() -> Component.literal(
+                    "Lumi Restore without entities started"), false);
+            return 1;
+        } catch (IOException | IllegalStateException | IllegalArgumentException failed) {
+            source.sendFailure(Component.literal(
+                    "Lumi Restore without entities could not start: " + failed.getMessage()));
             return 0;
         }
     }

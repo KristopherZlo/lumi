@@ -7,11 +7,15 @@ import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.ChunkInRegion;
 import io.github.lumi.domain.model.ChunkTree;
+import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.Commit;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
+import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.RegionCoordinate;
 import io.github.lumi.domain.model.RegionTree;
 import io.github.lumi.domain.model.PlayerSpawn;
@@ -135,6 +139,31 @@ class RestoreServiceTest {
         assertEquals(Map.of(player, before), full.returnPlayerSpawns());
         assertEquals(true, full.restorePlayerSpawns());
         assertEquals(false, partial.restorePlayerSpawns());
+    }
+
+    @Test
+    void fullRestoreCanExplicitlyExcludeDurableEntities() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        EntityChunkBlob before = new EntityChunkBlob(List.of());
+        EntityChunkBlob after = new EntityChunkBlob(List.of(new EntityState(
+                new UUID(0, 8), "minecraft:armor_stand", new CanonicalNbt(new byte[] {1}))));
+        var beforeChunk = objects.write(new ChunkTree(
+                Map.of(), Optional.of(objects.write(before))));
+        var afterChunk = objects.write(new ChunkTree(
+                Map.of(), Optional.of(objects.write(after))));
+        var target = commits.write(commit(tree(objects, afterChunk), List.of()));
+        var current = commits.write(commit(tree(objects, beforeChunk), List.of(target)));
+        var currentRef = new BranchRef(new BranchName("main"), current, 1);
+        RestoreService service = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot));
+
+        PreparedRestore included = service.prepare(currentRef, target);
+        PreparedRestore excluded = service.prepareWithoutEntities(currentRef, target);
+
+        assertEquals(Map.of(new EntityChunkKey(0, 0), after), included.entities());
+        assertEquals(Map.of(), excluded.entities());
+        assertEquals(Map.of(), excluded.returnEntities());
     }
 
     private static io.github.lumi.domain.model.ObjectId tree(

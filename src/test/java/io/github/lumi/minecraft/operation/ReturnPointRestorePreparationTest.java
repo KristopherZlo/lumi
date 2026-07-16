@@ -50,10 +50,11 @@ class ReturnPointRestorePreparationTest {
 
         RestoreOperation operation = preparation.prepare(
                 saved, target, hidden,
-                UUID.fromString("10000000-0000-0000-0000-000000000001")).join();
+                UUID.fromString("10000000-0000-0000-0000-000000000001"), false).join();
 
         assertEquals(returnCommit, refs.read(hidden).orElseThrow().commit());
         assertTrue(journals.read().isPresent());
+        assertTrue(journals.read().orElseThrow().target().excludeEntities());
         assertEquals(RestoreStatus.APPLYING, operation.status());
     }
 
