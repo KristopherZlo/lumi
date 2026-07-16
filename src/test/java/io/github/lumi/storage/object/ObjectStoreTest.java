@@ -84,6 +84,25 @@ class ObjectStoreTest {
     }
 
     @Test
+    void publishesARealisticDirtySectionBatchAsOnePack() throws IOException {
+        ObjectStore store = new ObjectStore(tempDir);
+        Map<ObjectId, byte[]> expected = new LinkedHashMap<>();
+        try (ObjectStore.WriteBatch batch = store.beginBatch()) {
+            for (int index = 0; index < 1_644; index++) {
+                byte[] payload = ("section-" + index + "-"
+                        + "state,".repeat(512)).getBytes(StandardCharsets.UTF_8);
+                expected.put(batch.write(payload), payload);
+            }
+            batch.publish();
+        }
+
+        assertEquals(expected.keySet(), store.listIds());
+        try (var files = Files.walk(tempDir)) {
+            assertEquals(2, files.filter(Files::isRegularFile).count());
+        }
+    }
+
+    @Test
     void deletesAnImmutablePackOnlyWhenEveryEntryIsCollectable() throws IOException {
         ObjectStore store = new ObjectStore(tempDir);
         ObjectId first;

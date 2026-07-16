@@ -46,47 +46,53 @@ final class ObjectPack {
     private static byte[] read(PackedObject entry, boolean requirePublished) throws IOException {
         Objects.requireNonNull(entry, "entry");
         try (FileChannel channel = FileChannel.open(entry.pack(), StandardOpenOption.READ)) {
-            ByteBuffer packHeader = ByteBuffer.allocate(PACK_HEADER_BYTES);
-            readFully(channel, packHeader, 0);
-            packHeader.flip();
-            int count = packHeader.getInt() == PACK_MAGIC ? packHeader.getInt() : -1;
-            if (count < 0 || (requirePublished && count == 0)) {
-                throw corrupt(entry.pack(), "invalid pack header");
-            }
-            ByteBuffer header = ByteBuffer.allocate(ENTRY_HEADER_BYTES);
-            readFully(channel, header, entry.offset());
-            header.flip();
-            byte[] hash = new byte[32];
-            header.get(hash);
-            ObjectId stored = new ObjectId(HexFormat.of().formatHex(hash));
-            int rawLength = header.getInt();
-            int compressedLength = header.getInt();
-            if (!stored.equals(entry.id())
-                    || rawLength != entry.rawLength()
-                    || compressedLength != entry.compressedLength()
-                    || rawLength < 0 || rawLength > MAX_PAYLOAD_BYTES
-                    || compressedLength < 0 || compressedLength > MAX_COMPRESSED_BYTES) {
-                throw corrupt(entry.pack(), "invalid object entry");
-            }
-            ByteBuffer compressed = ByteBuffer.allocate(compressedLength);
-            readFully(channel, compressed, entry.offset() + ENTRY_HEADER_BYTES);
-            byte[] payload = new byte[rawLength];
-            try {
-                int restored = LZ4.safeDecompressor().decompress(
-                        compressed.array(), 0, compressedLength,
-                        payload, 0, rawLength);
-                if (restored != rawLength) {
-                    throw corrupt(entry.pack(), "unexpected uncompressed length");
-                }
-            } catch (LZ4Exception invalid) {
-                throw new CorruptObjectException(
-                        "Corrupt packed object " + entry.id(), invalid);
-            }
-            if (!ObjectId.hash(payload).equals(entry.id())) {
-                throw corrupt(entry.pack(), "content hash mismatch");
-            }
-            return payload;
+            return read(channel, entry, requirePublished);
         }
+    }
+
+    private static byte[] read(
+            FileChannel channel, PackedObject entry, boolean requirePublished)
+            throws IOException {
+        ByteBuffer packHeader = ByteBuffer.allocate(PACK_HEADER_BYTES);
+        readFully(channel, packHeader, 0);
+        packHeader.flip();
+        int count = packHeader.getInt() == PACK_MAGIC ? packHeader.getInt() : -1;
+        if (count < 0 || (requirePublished && count == 0)) {
+            throw corrupt(entry.pack(), "invalid pack header");
+        }
+        ByteBuffer header = ByteBuffer.allocate(ENTRY_HEADER_BYTES);
+        readFully(channel, header, entry.offset());
+        header.flip();
+        byte[] hash = new byte[32];
+        header.get(hash);
+        ObjectId stored = new ObjectId(HexFormat.of().formatHex(hash));
+        int rawLength = header.getInt();
+        int compressedLength = header.getInt();
+        if (!stored.equals(entry.id())
+                || rawLength != entry.rawLength()
+                || compressedLength != entry.compressedLength()
+                || rawLength < 0 || rawLength > MAX_PAYLOAD_BYTES
+                || compressedLength < 0 || compressedLength > MAX_COMPRESSED_BYTES) {
+            throw corrupt(entry.pack(), "invalid object entry");
+        }
+        ByteBuffer compressed = ByteBuffer.allocate(compressedLength);
+        readFully(channel, compressed, entry.offset() + ENTRY_HEADER_BYTES);
+        byte[] payload = new byte[rawLength];
+        try {
+            int restored = LZ4.safeDecompressor().decompress(
+                    compressed.array(), 0, compressedLength,
+                    payload, 0, rawLength);
+            if (restored != rawLength) {
+                throw corrupt(entry.pack(), "unexpected uncompressed length");
+            }
+        } catch (LZ4Exception invalid) {
+            throw new CorruptObjectException(
+                    "Corrupt packed object " + entry.id(), invalid);
+        }
+        if (!ObjectId.hash(payload).equals(entry.id())) {
+            throw corrupt(entry.pack(), "content hash mismatch");
+        }
+        return payload;
     }
 
     record Published(Map<ObjectId, PackedObject> entries) {
@@ -122,7 +128,7 @@ final class ObjectPack {
             ObjectId id = ObjectId.hash(payload);
             PackedObject existing = entries.get(id);
             if (existing != null) {
-                if (!Arrays.equals(payload, read(existing, false))) {
+                if (!Arrays.equals(payload, read(channel, existing, false))) {
                     throw corrupt(temporary, "SHA-256 collision");
                 }
                 return id;
@@ -162,8 +168,10 @@ final class ObjectPack {
             Map<ObjectId, PackedObject> finalEntries = new LinkedHashMap<>();
             entries.forEach((id, entry) -> finalEntries.put(id, new PackedObject(
                     id, pack, entry.offset(), entry.rawLength(), entry.compressedLength())));
-            for (PackedObject entry : finalEntries.values()) {
-                read(entry);
+            try (FileChannel reopened = FileChannel.open(pack, StandardOpenOption.READ)) {
+                for (PackedObject entry : finalEntries.values()) {
+                    read(reopened, entry, true);
+                }
             }
 
             Path index = directory.resolve(stem + ".idx");
