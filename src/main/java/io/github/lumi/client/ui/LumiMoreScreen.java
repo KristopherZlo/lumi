@@ -14,6 +14,7 @@ public final class LumiMoreScreen extends Screen {
     private final Runnable thanks;
     private final Runnable diagnostics;
     private final Runnable settings;
+    private final Runnable updates;
     private int panelX;
     private int panelY;
     private int panelWidth;
@@ -24,7 +25,8 @@ public final class LumiMoreScreen extends Screen {
             Runnable hotkeys,
             Runnable thanks,
             Runnable diagnostics,
-            Runnable settings) {
+            Runnable settings,
+            Runnable updates) {
         super(Component.translatable("luma.screen.more.title"));
         this.parent = parent;
         this.onboarding = Objects.requireNonNull(onboarding, "onboarding");
@@ -32,19 +34,21 @@ public final class LumiMoreScreen extends Screen {
         this.thanks = Objects.requireNonNull(thanks, "thanks");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         this.settings = Objects.requireNonNull(settings, "settings");
+        this.updates = Objects.requireNonNull(updates, "updates");
     }
 
     @Override
     protected void init() {
         panelWidth = Math.min(390, width - 24);
         panelX = (width - panelWidth) / 2;
-        panelY = Math.max(12, (height - 278) / 2);
+        panelY = Math.max(12, (height - 312) / 2);
         button("luma.more.onboarding_title", onboarding, 66);
         button("luma.hotkeys.title", hotkeys, 100);
         button("luma.more.special_thanks_title", thanks, 134);
         button("luma.action.open_diagnostics", diagnostics, 168);
         button("luma.action.settings", settings, 202);
-        button("luma.action.close", this::onClose, 236);
+        button("luma.action.check_updates", updates, 236);
+        button("luma.action.close", this::onClose, 270);
     }
 
     private void button(String key, Runnable action, int offset) {
@@ -55,7 +59,7 @@ public final class LumiMoreScreen extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderTransparentBackground(graphics);
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 278, 0xee15181d);
+        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 312, 0xee15181d);
         graphics.drawString(font, title, panelX + 16, panelY + 18, 0xffffffff, false);
         graphics.drawString(font, Component.translatable("luma.more.help"),
                 panelX + 16, panelY + 40, 0xffaeb6c2, false);

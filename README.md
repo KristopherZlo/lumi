@@ -27,6 +27,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   from More; Alt+I opens the live hotkey guide.
 - Diagnostic telemetry is bounded to an explicit technical allowlist, disclosed
   once and controllable from More > Settings.
+- More > Check updates performs a manual bounded lookup against Lumi's fixed
+  GitHub-hosted release manifest.
 
 The implementation grows only through tested vertical slices. See
 [`modules.md`](modules.md) for code ownership and `docs/architecture.md` for

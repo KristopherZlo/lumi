@@ -7,6 +7,7 @@ import io.github.lumi.client.state.ClientSelection;
 import io.github.lumi.client.onboarding.ClientOnboardingStateRepository;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiSettingsScreen;
+import io.github.lumi.client.ui.LumiUpdateScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.LumiDiagnosticsScreen;
@@ -33,6 +34,7 @@ import io.github.lumi.client.ui.ZoneDetailsController;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.telemetry.TelemetryService;
+import io.github.lumi.update.UpdateChecker;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -47,6 +49,7 @@ public final class LumiClient implements ClientModInitializer {
     private static final ClientOnboardingStateRepository ONBOARDING =
             new ClientOnboardingStateRepository();
     private static final TelemetryService TELEMETRY = TelemetryService.getInstance();
+    private static final UpdateChecker UPDATE_CHECKER = UpdateChecker.createDefault();
     private static boolean onboardingShown;
     private static final LumiClientNetworking NETWORKING =
             new LumiClientNetworking(
@@ -180,7 +183,9 @@ public final class LumiClient implements ClientModInitializer {
                         LumiHotkeys.shortcuts(client.options.keyMappings))),
                 () -> client.setScreen(new LumiSpecialThanksScreen(client.screen)),
                 () -> client.setScreen(new LumiDiagnosticsScreen(client.screen, HISTORY)),
-                () -> client.setScreen(new LumiSettingsScreen(client.screen, TELEMETRY))));
+                () -> client.setScreen(new LumiSettingsScreen(client.screen, TELEMETRY)),
+                () -> client.setScreen(new LumiUpdateScreen(
+                        client.screen, UPDATE_CHECKER))));
     }
 
     private static void openZoneDetails(
