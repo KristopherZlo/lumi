@@ -105,6 +105,45 @@ tasks.withType(Test).configureEach {
     useJUnitPlatform()
 }
 
+def productionJava = fileTree('src/main/java') {
+    include '**/*.java'
+}
+def coreJava = productionJava.matching {
+    include 'io/github/lumi/domain/**'
+    include 'io/github/lumi/minecraft/**'
+    include 'io/github/lumi/network/**'
+    include 'io/github/lumi/storage/**'
+}
+def countJavaLines = { collection ->
+    collection.files.sum { file -> file.readLines('UTF-8').size() } ?: 0
+}
+
+def verifyProductionLineBudget = tasks.register('verifyProductionLineBudget') {
+    group = 'verification'
+    description = 'Enforces Lumi V2 production Java line budgets.'
+    inputs.files(productionJava)
+
+    doLast {
+        int coreLines = countJavaLines(coreJava)
+        int completeLines = countJavaLines(productionJava)
+        logger.lifecycle(
+                "Lumi production Java lines: core/runtime/storage/network={}, complete={}",
+                coreLines, completeLines)
+        if (coreLines > 25_000) {
+            throw new GradleException(
+                    "Core/runtime/storage/network exceeds 25,000 Java lines: ${coreLines}")
+        }
+        if (completeLines > 50_000) {
+            throw new GradleException(
+                    "Complete mod exceeds 50,000 Java lines: ${completeLines}")
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn(verifyProductionLineBudget)
+}
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(21)
     sourceCompatibility = JavaVersion.VERSION_21
