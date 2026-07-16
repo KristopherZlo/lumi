@@ -22,7 +22,8 @@ public record HistorySnapshotPayload(
         UUID workspaceId,
         String workspaceName,
         String branchName,
-        List<Version> versions) implements CustomPacketPayload {
+        List<Version> versions,
+        List<Branch> branches) implements CustomPacketPayload {
     private static final int MAX_DIMENSION_BYTES = 256;
     private static final int MAX_TEXT_BYTES = 4096;
     private static final int MAX_VERSIONS = 32;
@@ -38,6 +39,7 @@ public record HistorySnapshotPayload(
         Objects.requireNonNull(workspaceName, "workspaceName");
         Objects.requireNonNull(branchName, "branchName");
         versions = List.copyOf(Objects.requireNonNull(versions, "versions"));
+        branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
         if (dimensionId.isBlank() || dimensionId.length() > MAX_DIMENSION_BYTES) {
             throw new IllegalArgumentException("Invalid dimension ID");
         }
@@ -47,7 +49,8 @@ public record HistorySnapshotPayload(
         if (workspaceName.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
                 > MAX_TEXT_BYTES || branchName.isBlank()
                 || branchName.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                > MAX_TEXT_BYTES || versions.size() > MAX_VERSIONS) {
+                > MAX_TEXT_BYTES || versions.size() > MAX_VERSIONS
+                || branches.size() > 64) {
             throw new IllegalArgumentException("Invalid workspace history snapshot");
         }
     }
@@ -59,7 +62,7 @@ public record HistorySnapshotPayload(
             int pendingKeys,
             boolean operationActive) {
         this(dimensionId, head, revision, pendingKeys, operationActive,
-                new UUID(0, 0), "", "unknown", List.of());
+                new UUID(0, 0), "", "unknown", List.of(), List.of());
     }
 
     private void write(FriendlyByteBuf buffer) {
@@ -73,6 +76,8 @@ public record HistorySnapshotPayload(
         buffer.writeUtf(branchName, MAX_TEXT_BYTES);
         buffer.writeVarInt(versions.size());
         versions.forEach(version -> version.write(buffer));
+        buffer.writeVarInt(branches.size());
+        branches.forEach(branch -> branch.write(buffer));
     }
 
     private static HistorySnapshotPayload read(FriendlyByteBuf buffer) {
@@ -92,9 +97,17 @@ public record HistorySnapshotPayload(
         for (int index = 0; index < count; index++) {
             versions.add(Version.read(buffer));
         }
+        int branchCount = buffer.readVarInt();
+        if (branchCount < 0 || branchCount > 64) {
+            throw new IllegalArgumentException("Invalid branch count");
+        }
+        java.util.ArrayList<Branch> branches = new java.util.ArrayList<>(branchCount);
+        for (int index = 0; index < branchCount; index++) {
+            branches.add(Branch.read(buffer));
+        }
         return new HistorySnapshotPayload(
                 dimension, head, revision, pending, active,
-                workspace, workspaceName, branch, versions);
+                workspace, workspaceName, branch, versions, branches);
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
@@ -127,6 +140,31 @@ public record HistorySnapshotPayload(
                     new CommitId(new ObjectId(buffer.readUtf(ObjectId.HEX_LENGTH))),
                     buffer.readUtf(MAX_TEXT_BYTES), buffer.readUtf(MAX_TEXT_BYTES),
                     buffer.readLong(), CommitKind.fromCode(buffer.readUnsignedByte()));
+        }
+    }
+
+    public record Branch(String name, CommitId head, boolean active) {
+        public Branch {
+            Objects.requireNonNull(name, "name");
+            Objects.requireNonNull(head, "head");
+            if (name.isBlank()
+                    || name.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+                    > MAX_TEXT_BYTES) {
+                throw new IllegalArgumentException("Invalid branch name");
+            }
+        }
+
+        private void write(FriendlyByteBuf buffer) {
+            buffer.writeUtf(name, MAX_TEXT_BYTES);
+            buffer.writeUtf(head.hex(), ObjectId.HEX_LENGTH);
+            buffer.writeBoolean(active);
+        }
+
+        private static Branch read(FriendlyByteBuf buffer) {
+            return new Branch(
+                    buffer.readUtf(MAX_TEXT_BYTES),
+                    new CommitId(new ObjectId(buffer.readUtf(ObjectId.HEX_LENGTH))),
+                    buffer.readBoolean());
         }
     }
 }

@@ -51,6 +51,11 @@ public final class LumiClientNetworking {
         return send(HistoryCommandPayload.Kind.REDO, "");
     }
 
+    public UUID switchBranch(String branchName) {
+        return send(HistoryCommandPayload.Kind.BRANCH_SWITCH,
+                Objects.requireNonNull(branchName, "branchName"));
+    }
+
     public UUID cancel(UUID originalRequest) {
         var event = history.state().events().get(
                 Objects.requireNonNull(originalRequest, "originalRequest"));

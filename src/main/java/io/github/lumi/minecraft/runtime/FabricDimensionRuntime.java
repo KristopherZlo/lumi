@@ -646,6 +646,18 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 .firstParent(ref.name(), activeWorkspaceId(), limit);
     }
 
+    public List<BranchRef> visibleBranches() throws IOException {
+        UUID workspace = activeWorkspaceId();
+        CommitRepository commits = new CommitRepository(repository);
+        java.util.ArrayList<BranchRef> visible = new java.util.ArrayList<>();
+        for (BranchRef ref : branches.visible()) {
+            if (commits.read(ref.commit()).workspaceId().equals(workspace)) {
+                visible.add(ref);
+            }
+        }
+        return List.copyOf(visible);
+    }
+
     public io.github.lumi.domain.model.Zone createZone(
             String name, int color, java.util.Set<SectionKey> cells) throws IOException {
         requireZoneMetadataMutable();

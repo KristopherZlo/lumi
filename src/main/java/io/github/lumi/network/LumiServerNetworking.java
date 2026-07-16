@@ -2,6 +2,7 @@ package io.github.lumi.network;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
@@ -107,6 +108,8 @@ public final class LumiServerNetworking {
                     player.getUUID(), LiveActionJournal.Direction.UNDO, terminal);
             case REDO -> runtime.startLiveAction(
                     player.getUUID(), LiveActionJournal.Direction.REDO, terminal);
+            case BRANCH_SWITCH -> runtime.startBranchSwitch(
+                    new BranchName(payload.argument()), terminal);
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
@@ -281,11 +284,16 @@ public final class LumiServerNetworking {
                             entry.commit().timestamp().toEpochMilli(),
                             entry.commit().kind()))
                     .toList();
+            var branchViews = runtime.visibleBranches().stream()
+                    .map(ref -> new HistorySnapshotPayload.Branch(
+                            ref.name().value(), ref.commit(), ref.name().equals(head.name())))
+                    .toList();
             send(player, new HistorySnapshotPayload(
                     dimension(runtime), head.commit(), head.revision(),
                     runtime.mutations().snapshot().generations().size(),
                     runtime.operations().hasActiveOperation(),
-                    workspace.id(), workspace.name(), head.name().value(), versions));
+                    workspace.id(), workspace.name(), head.name().value(),
+                    versions, branchViews));
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi history snapshot", failed);
         }

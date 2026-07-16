@@ -33,6 +33,10 @@ class LumiPayloadCodecTest {
                     UUID.randomUUID(), kind, "", id('2'), 43);
             assertEquals(live, roundTrip(HistoryCommandPayload.CODEC, live));
         }
+        HistoryCommandPayload switchBranch = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.BRANCH_SWITCH,
+                "workspace/lab/idea", id('2'), 43);
+        assertEquals(switchBranch, roundTrip(HistoryCommandPayload.CODEC, switchBranch));
     }
 
     @Test
@@ -53,7 +57,10 @@ class LumiPayloadCodecTest {
                 new UUID(0, 7), "Redstone lab", "workspace/lab/main",
                 java.util.List.of(new HistorySnapshotPayload.Version(
                         id('a'), "Clock works", "Builder", 1234,
-                        CommitKind.MANUAL)));
+                        CommitKind.MANUAL)),
+                java.util.List.of(
+                        new HistorySnapshotPayload.Branch("main", id('a'), true),
+                        new HistorySnapshotPayload.Branch("idea", id('b'), false)));
         OperationEventPayload event = new OperationEventPayload(
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 "minecraft:overworld", OperationEventPayload.State.ACCEPTED,

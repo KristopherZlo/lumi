@@ -38,6 +38,18 @@ public final class HotkeyActionDispatcher {
         }
     }
 
+    public void switchBranch(int slot) {
+        if (slot < 0 || slot > 9) {
+            throw new IllegalArgumentException("Branch slot must be 0-9");
+        }
+        try {
+            actions.switchBranch(slot);
+        } catch (RuntimeException failed) {
+            feedback.accept(failed.getMessage() == null
+                    ? "Lumi branch could not open" : failed.getMessage());
+        }
+    }
+
     public enum Action { DASHBOARD, SAVE, UNDO, REDO, QUICK_ROLLBACK }
 
     public interface Actions {
@@ -46,5 +58,6 @@ public final class HotkeyActionDispatcher {
         void undo();
         void redo();
         void quickRollback();
+        void switchBranch(int slot);
     }
 }

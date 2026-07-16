@@ -17,6 +17,9 @@ class HotkeyActionDispatcherTest {
                     @Override public void undo() { calls.add("undo"); }
                     @Override public void redo() { calls.add("redo"); }
                     @Override public void quickRollback() { calls.add("rollback"); }
+                    @Override public void switchBranch(int slot) {
+                        calls.add("branch-" + slot);
+                    }
                 }, statuses::add);
 
         for (HotkeyActionDispatcher.Action action : HotkeyActionDispatcher.Action.values()) {
@@ -28,5 +31,8 @@ class HotkeyActionDispatcherTest {
         assertEquals(java.util.List.of(
                 "luma.status.undo_started", "luma.status.redo_started",
                 "luma.status.quick_rollback_started"), statuses);
+
+        dispatcher.switchBranch(9);
+        assertEquals("branch-9", calls.getLast());
     }
 }

@@ -39,6 +39,19 @@ public final class LumiClient implements ClientModInitializer {
                     @Override public void undo() { NETWORKING.undo(); }
                     @Override public void redo() { NETWORKING.redo(); }
                     @Override public void quickRollback() { NETWORKING.quickRollback(); }
+                    @Override public void switchBranch(int slot) {
+                        var snapshot = HISTORY.state().snapshot().orElseThrow(
+                                () -> new IllegalStateException(
+                                        "Lumi history has not synchronized yet"));
+                        if (slot >= snapshot.branches().size()) {
+                            throw new IllegalStateException(
+                                    "No Lumi branch is bound to this number");
+                        }
+                        var branch = snapshot.branches().get(slot);
+                        if (!branch.active()) {
+                            NETWORKING.switchBranch(branch.name());
+                        }
+                    }
                 }, LumiClient::showFeedback)).register();
         new LumiOperationHud(HISTORY).register();
         LumiMod.LOGGER.info("Lumi V2 client initialized");

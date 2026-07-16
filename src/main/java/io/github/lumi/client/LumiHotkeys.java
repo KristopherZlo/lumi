@@ -21,6 +21,18 @@ public final class LumiHotkeys {
     private final KeyMapping redo = mapping("key.lumi.redo", InputConstants.KEY_Y);
     private final KeyMapping rollback = mapping(
             "key.lumi.quick_rollback", InputConstants.KEY_R);
+    private final KeyMapping[] branches = {
+            mapping("key.lumi.branch_slot.1", InputConstants.KEY_1),
+            mapping("key.lumi.branch_slot.2", InputConstants.KEY_2),
+            mapping("key.lumi.branch_slot.3", InputConstants.KEY_3),
+            mapping("key.lumi.branch_slot.4", InputConstants.KEY_4),
+            mapping("key.lumi.branch_slot.5", InputConstants.KEY_5),
+            mapping("key.lumi.branch_slot.6", InputConstants.KEY_6),
+            mapping("key.lumi.branch_slot.7", InputConstants.KEY_7),
+            mapping("key.lumi.branch_slot.8", InputConstants.KEY_8),
+            mapping("key.lumi.branch_slot.9", InputConstants.KEY_9),
+            mapping("key.lumi.branch_slot.0", InputConstants.KEY_0)
+    };
 
     public LumiHotkeys(HotkeyActionDispatcher dispatcher) {
         this.dispatcher = Objects.requireNonNull(dispatcher, "dispatcher");
@@ -32,6 +44,9 @@ public final class LumiHotkeys {
         KeyBindingHelper.registerKeyBinding(undo);
         KeyBindingHelper.registerKeyBinding(redo);
         KeyBindingHelper.registerKeyBinding(rollback);
+        for (KeyMapping branch : branches) {
+            KeyBindingHelper.registerKeyBinding(branch);
+        }
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
     }
 
@@ -42,6 +57,11 @@ public final class LumiHotkeys {
         consume(undo, canAct, HotkeyActionDispatcher.Action.UNDO);
         consume(redo, canAct, HotkeyActionDispatcher.Action.REDO);
         consume(rollback, canAct, HotkeyActionDispatcher.Action.QUICK_ROLLBACK);
+        for (int slot = 0; slot < branches.length; slot++) {
+            if (consume(branches[slot]) && canAct) {
+                dispatcher.switchBranch(slot);
+            }
+        }
     }
 
     private void consume(
@@ -53,6 +73,14 @@ public final class LumiHotkeys {
         if (clicked && canAct) {
             dispatcher.dispatch(action);
         }
+    }
+
+    private static boolean consume(KeyMapping mapping) {
+        boolean clicked = false;
+        while (mapping.consumeClick()) {
+            clicked = true;
+        }
+        return clicked;
     }
 
     private static boolean altDown(Minecraft client) {
