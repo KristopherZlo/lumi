@@ -1,5 +1,6 @@
 package io.github.lumi.client;
 
+import io.github.lumi.LumiMod;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -15,6 +16,7 @@ public final class HotkeyActionDispatcher {
 
     public void dispatch(Action action) {
         Objects.requireNonNull(action, "action");
+        LumiMod.LOGGER.info("Lumi client hotkey action invoked: {}", action);
         try {
             switch (action) {
                 case DASHBOARD -> actions.openDashboard();
@@ -42,6 +44,8 @@ public final class HotkeyActionDispatcher {
                 }
             }
         } catch (RuntimeException failed) {
+            LumiMod.LOGGER.warn(
+                    "Lumi client hotkey action {} could not start", action, failed);
             feedback.accept(failed.getMessage() == null
                     ? "Lumi action could not start" : failed.getMessage());
         }
@@ -51,9 +55,12 @@ public final class HotkeyActionDispatcher {
         if (slot < 0 || slot > 9) {
             throw new IllegalArgumentException("Branch slot must be 0-9");
         }
+        LumiMod.LOGGER.info("Lumi client branch hotkey invoked: slot={}", slot);
         try {
             actions.switchBranch(slot);
         } catch (RuntimeException failed) {
+            LumiMod.LOGGER.warn(
+                    "Lumi client branch hotkey {} could not start", slot, failed);
             feedback.accept(failed.getMessage() == null
                     ? "Lumi branch could not open" : failed.getMessage());
         }

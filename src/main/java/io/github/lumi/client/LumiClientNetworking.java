@@ -1,5 +1,6 @@
 package io.github.lumi.client;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.domain.model.CommitId;
@@ -223,9 +224,7 @@ public final class LumiClientNetworking {
         UUID requestId = UUID.randomUUID();
         comparisons.begin(
                 requestId, snapshot.dimensionId(), before, after);
-        ClientPlayNetworking.send(new HistoryCommandPayload(
-                requestId, kind, argument,
-                snapshot.head(), snapshot.revision()));
+        sendCommand(requestId, kind, argument, snapshot);
         return requestId;
     }
 
@@ -257,6 +256,9 @@ public final class LumiClientNetworking {
             throw new IllegalStateException("The connected server does not support queue cancellation");
         }
         UUID requestId = UUID.randomUUID();
+        LumiMod.LOGGER.info(
+                "Lumi client cancellation sent: id={}, ticket={}",
+                requestId, event.ticketId().orElseThrow());
         ClientPlayNetworking.send(new OperationCancelPayload(
                 requestId, event.ticketId().orElseThrow()));
         return requestId;
@@ -269,8 +271,19 @@ public final class LumiClientNetworking {
             throw new IllegalStateException("The connected server does not support Lumi history");
         }
         UUID requestId = UUID.randomUUID();
+        sendCommand(requestId, kind, argument, snapshot);
+        return requestId;
+    }
+
+    private static void sendCommand(
+            UUID requestId,
+            HistoryCommandPayload.Kind kind,
+            String argument,
+            HistorySnapshotPayload snapshot) {
+        LumiMod.LOGGER.info(
+                "Lumi client request sent: id={}, action={}, dimension={}, revision={}",
+                requestId, kind, snapshot.dimensionId(), snapshot.revision());
         ClientPlayNetworking.send(new HistoryCommandPayload(
                 requestId, kind, argument, snapshot.head(), snapshot.revision()));
-        return requestId;
     }
 }
