@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.network.chat.Component;
@@ -68,10 +69,9 @@ public final class LumiServerNetworking {
                 LumiMod.serverRuntime().find(handler.getPlayer().level()).ifPresent(runtime ->
                         sendSnapshot(handler.getPlayer(), runtime)));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            UUID player = handler.getPlayer().getUUID();
-            cancelCompares(player);
-            PACKAGE_INSPECTIONS.remove(player);
+            cleanupPlayer(handler.getPlayer().getUUID());
         });
+        ServerLifecycleEvents.SERVER_STOPPED.register(ignored -> clearState());
     }
 
     private static void receive(
@@ -107,7 +107,7 @@ public final class LumiServerNetworking {
                 runtime.createBranch(new BranchName(payload.argument().trim()));
                 sendEvent(player, payload, runtime,
                         OperationEventPayload.State.SUCCEEDED, "Branch created");
-                sendSnapshot(player, runtime);
+                broadcastSnapshot(runtime);
                 return;
             }
             if (payload.kind() == HistoryCommandPayload.Kind.WORKSPACE_CREATE) {
@@ -118,7 +118,7 @@ public final class LumiServerNetworking {
                         new CommitAuthor(player.getUUID(), player.getName().getString()));
                 sendEvent(player, payload, runtime,
                         OperationEventPayload.State.SUCCEEDED, "Workspace created");
-                sendSnapshot(player, runtime);
+                broadcastSnapshot(runtime);
                 return;
             }
             if (isPackageCommand(payload.kind())) {
@@ -131,7 +131,7 @@ public final class LumiServerNetworking {
                         new CommitAuthor(player.getUUID(), player.getName().getString()));
                 sendEvent(player, payload, runtime,
                         OperationEventPayload.State.SUCCEEDED, "Version deleted");
-                sendSnapshot(player, runtime);
+                broadcastSnapshot(runtime);
                 return;
             }
             if (payload.kind() == HistoryCommandPayload.Kind.CLEANUP_VERSION) {
@@ -140,7 +140,7 @@ public final class LumiServerNetworking {
                 sendEvent(player, payload, runtime,
                         OperationEventPayload.State.SUCCEEDED,
                         "Deleted version released for cleanup");
-                sendSnapshot(player, runtime);
+                broadcastSnapshot(runtime);
                 return;
             }
             if (isZoneMetadata(payload.kind())) {
@@ -251,7 +251,7 @@ public final class LumiServerNetworking {
                             OperationEventPayload.State.SUCCEEDED,
                             "Package imported as branch "
                                     + result.branch().name().value());
-                    sendSnapshot(player, runtime);
+                    broadcastSnapshot(runtime);
                 }));
     }
 
@@ -282,7 +282,7 @@ public final class LumiServerNetworking {
         }
         sendEvent(player, payload, runtime,
                 OperationEventPayload.State.SUCCEEDED, message);
-        sendSnapshot(player, runtime);
+        broadcastSnapshot(runtime);
     }
 
     private static void merge(
@@ -334,6 +334,7 @@ public final class LumiServerNetworking {
                 runtime.operations().queuePosition(started.ticket()).ifPresent(position ->
                         sendProgress(player, payload, runtime, started.ticket(),
                                 position, progress)));
+        broadcastSnapshot(runtime);
     }
 
     private static void compare(
@@ -399,6 +400,29 @@ public final class LumiServerNetworking {
                 job.future().cancel(false);
             }
         });
+    }
+
+    private static void cleanupPlayer(UUID playerId) {
+        cancelCompares(playerId);
+        PACKAGE_INSPECTIONS.remove(playerId);
+        TICKET_OWNERS.forEach((ticketId, owner) -> {
+            if (owner.playerId().equals(playerId)
+                    && TICKET_OWNERS.remove(ticketId, owner)) {
+                removeBossBar(ticketId);
+            }
+        });
+    }
+
+    private static void clearState() {
+        COMPARES.forEach((request, job) -> {
+            if (COMPARES.remove(request, job)) {
+                job.cancelled().set(true);
+                job.future().cancel(false);
+            }
+        });
+        BOSS_BARS.keySet().forEach(LumiServerNetworking::removeBossBar);
+        TICKET_OWNERS.clear();
+        PACKAGE_INSPECTIONS.clear();
     }
 
     private static CompareResultPayload success(
@@ -520,7 +544,7 @@ public final class LumiServerNetworking {
                 .filter(value -> value != null && !value.isBlank())
                 .orElseGet(() -> terminalMessage(operation.terminalState()));
         sendEvent(player, payload, runtime, state, message);
-        sendSnapshot(player, runtime);
+        broadcastSnapshot(runtime);
     }
 
     private static void cancel(
@@ -554,7 +578,7 @@ public final class LumiServerNetworking {
         removeBossBar(payload.ticketId());
         sendEvent(player, owner.requestId(), runtime, OperationEventPayload.State.CANCELLED,
                 "Queued operation cancelled");
-        sendSnapshot(player, runtime);
+        broadcastSnapshot(runtime);
     }
 
     private static OperationEventPayload.State eventState(MutationTerminalState state) {
@@ -749,6 +773,12 @@ public final class LumiServerNetworking {
                     workspaceViews, versions, branchViews, zoneViews, deleted));
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi history snapshot", failed);
+        }
+    }
+
+    private static void broadcastSnapshot(FabricDimensionRuntime runtime) {
+        for (ServerPlayer player : runtime.level().players()) {
+            sendSnapshot(player, runtime);
         }
     }
 
