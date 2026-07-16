@@ -63,6 +63,28 @@ public final class ZoneService {
         return zones.replace(current, copy(current, cells, current.activeActors()));
     }
 
+    public synchronized int growActiveForActor(
+            UUID workspaceId, UUID actor, Set<SectionKey> additions) throws IOException {
+        Objects.requireNonNull(actor, "actor");
+        Set<SectionKey> cellsToAdd = Set.copyOf(
+                Objects.requireNonNull(additions, "additions"));
+        if (cellsToAdd.isEmpty()) {
+            return 0;
+        }
+        int changed = 0;
+        for (Zone current : list(workspaceId)) {
+            if (!current.activeActors().contains(actor)) {
+                continue;
+            }
+            var cells = new HashSet<>(current.cells());
+            if (cells.addAll(cellsToAdd)) {
+                zones.replace(current, copy(current, cells, current.activeActors()));
+                changed++;
+            }
+        }
+        return changed;
+    }
+
     private static Zone copy(Zone source, Set<SectionKey> cells, Set<UUID> actors) {
         return new Zone(source.id(), source.workspaceId(), source.name(), source.color(),
                 cells, actors, Math.addExact(source.revision(), 1));

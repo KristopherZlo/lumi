@@ -47,4 +47,25 @@ class ZoneServiceTest {
         assertEquals(false, scope.includes(new SectionKey(1, 3, 3)));
         assertEquals(false, scope.includes(new EntityChunkKey(1, 4)));
     }
+
+    @Test
+    void growsEveryActiveZoneOnceForOneCausalBatch() throws Exception {
+        ZoneService service = new ZoneService(new ZoneRepository(repositoryRoot));
+        UUID workspace = new UUID(0, 1);
+        UUID actor = new UUID(0, 3);
+        UUID activeZone = new UUID(0, 4);
+        UUID inactiveZone = new UUID(0, 5);
+        SectionKey first = new SectionKey(1, 2, 3);
+        SectionKey second = new SectionKey(4, 5, 6);
+        service.create(activeZone, workspace, "Active", 0, Set.of());
+        service.create(inactiveZone, workspace, "Inactive", 0, Set.of());
+        service.setActorActive(workspace, activeZone, actor, true);
+
+        service.growActiveForActor(workspace, actor, Set.of(first, second));
+
+        var grown = service.require(workspace, activeZone);
+        assertEquals(Set.of(first, second), grown.cells());
+        assertEquals(2, grown.revision());
+        assertEquals(Set.of(), service.require(workspace, inactiveZone).cells());
+    }
 }
