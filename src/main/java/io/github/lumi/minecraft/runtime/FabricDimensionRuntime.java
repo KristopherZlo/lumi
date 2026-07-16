@@ -36,6 +36,7 @@ import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
+import io.github.lumi.domain.service.DimensionHistoryViewService;
 import io.github.lumi.domain.service.AutoVersionService;
 import io.github.lumi.domain.service.CompareService;
 import io.github.lumi.domain.service.HistoryQueryService;
@@ -140,6 +141,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final WorkspaceService workspaces;
     private final ZoneService zones;
     private final AutoVersionService autoVersions;
+    private final TombstoneService tombstones;
+    private final DimensionHistoryViewService historyViews;
     private final CausalZoneGrowthTracker zoneGrowth;
     private final ReturnPointRestorePreparation returnPointRestores;
     private final ImportExportService packageHistory;
@@ -147,7 +150,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final GarbageCollectionScheduler garbageCollection;
     private final Executor background;
     private final BranchRefRepository refs;
-    private final ActiveBranchRepository active;
     private final UUID defaultWorkspaceId;
     private final LiveActionJournal liveActions = new LiveActionJournal();
     private final MinecraftLiveBlockWorldAccess liveWorld;
@@ -178,7 +180,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             OperationJournalRepository journals,
             Executor background,
             BranchRefRepository refs,
-            ActiveBranchRepository active,
             BranchService branches,
             MergeService merges,
             WorkspaceService workspaces,
@@ -200,7 +201,15 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.merges = merges;
         this.workspaces = workspaces;
         this.zones = zones;
-        autoVersions = new AutoVersionService(new CommitRepository(repository), refs);
+        var commits = new CommitRepository(repository);
+        autoVersions = new AutoVersionService(commits, refs);
+        tombstones = new TombstoneService(
+                commits, refs, new TombstoneRepository(repository));
+        historyViews = new DimensionHistoryViewService(
+                commits,
+                new HistoryQueryService(
+                        commits, refs, new TombstoneRepository(repository)),
+                tombstones, branches, workspaces, zones, autoVersions);
         selectedWorkspaceId = activeWorkspaceId;
         nextAutoVersionTick = level.getGameTime() + AUTO_VERSION_INTERVAL_TICKS;
         zoneGrowth = new CausalZoneGrowthTracker(zones, background,
@@ -208,7 +217,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         recoveries = new RecoveryService(restores, zones);
         this.background = background;
         this.refs = refs;
-        this.active = active;
         this.defaultWorkspaceId = defaultWorkspaceId;
         this.pendingRecovery = pendingRecovery;
         this.recoveryLease = recoveryLease;
@@ -266,7 +274,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     .recover(interrupted.orElseThrow());
             interrupted = Optional.empty();
         }
-        BranchRef selected = refs.read(active.read().orElseThrow().name()).orElseThrow();
         var activeWorkspaces = new ActiveWorkspaceRepository(repository);
         var workspaceService = new WorkspaceService(
                 new WorkspaceRepository(repository), activeWorkspaces, commits, refs);
@@ -292,7 +299,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 new SaveService(objects, trees, commits, refs, journals),
                 restoreService,
                 new MinecraftWorldStateApply(level, freeze), journals,
-                background, refs, active, branches,
+                background, refs, branches,
                 new MergeService(objects, commits, origins, trees), workspaceService,
                 new ZoneService(new ZoneRepository(repository)),
                 defaultWorkspaceId, activeWorkspaceId,
@@ -805,11 +812,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public io.github.lumi.domain.model.Workspace activeWorkspace() throws IOException {
-        return workspaces.active();
+        return historyViews.activeWorkspace();
     }
 
     public List<io.github.lumi.domain.model.Workspace> visibleWorkspaces() throws IOException {
-        return workspaces.list();
+        return historyViews.workspaces();
     }
 
     public io.github.lumi.domain.model.WorkingIndexPreview pendingPreview(
@@ -820,74 +827,33 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public List<io.github.lumi.domain.model.HistoryEntry> history(int limit)
             throws IOException {
-        BranchRef ref = activeRef();
-        var workspace = activeWorkspace();
-        var visible = new HistoryQueryService(
-                new CommitRepository(repository), refs, new TombstoneRepository(repository))
-                .firstParent(
-                        ref.name(), workspace.id(),
-                        !workspace.settings().hideZoneCommits(), limit);
-        return java.util.stream.Stream.concat(
-                        visible.stream(),
-                        autoVersions.list(ref.name(), activeWorkspaceId(), limit).stream())
-                .collect(java.util.stream.Collectors.toMap(
-                        io.github.lumi.domain.model.HistoryEntry::id,
-                        entry -> entry, (first, ignored) -> first))
-                .values().stream()
-                .sorted(java.util.Comparator.comparing(
-                        (io.github.lumi.domain.model.HistoryEntry entry) ->
-                                entry.commit().timestamp()).reversed())
-                .limit(limit)
-                .toList();
+        return historyViews.history(limit);
     }
 
     public Map<UUID, List<io.github.lumi.domain.model.HistoryEntry>> zoneHistories(
             Set<UUID> zoneIds, int limit) throws IOException {
-        Set<UUID> requested = Set.copyOf(zoneIds);
-        UUID workspace = activeWorkspaceId();
-        for (UUID zoneId : requested) {
-            zones.require(workspace, zoneId);
-        }
-        return new HistoryQueryService(
-                new CommitRepository(repository), refs, new TombstoneRepository(repository))
-                .firstParentByZone(activeRef().name(), workspace, requested, limit);
+        return historyViews.zoneHistories(zoneIds, limit);
     }
 
     public io.github.lumi.domain.model.CommitTombstone softDelete(
             CommitId target, CommitAuthor author) throws IOException {
         requireHistoryMetadataMutable();
-        return new TombstoneService(
-                new CommitRepository(repository), refs,
-                new TombstoneRepository(repository))
-                .softDelete(target, activeWorkspaceId(), author, Instant.now());
+        return tombstones.softDelete(
+                target, activeWorkspaceId(), author, Instant.now());
     }
 
     public List<io.github.lumi.domain.model.HistoryEntry> deletedVersions(int limit)
             throws IOException {
-        return new TombstoneService(
-                new CommitRepository(repository), refs,
-                new TombstoneRepository(repository))
-                .deleted(activeWorkspaceId(), limit);
+        return historyViews.deletedVersions(limit);
     }
 
     public void cleanupTombstone(CommitId target) throws IOException {
         requireHistoryMetadataMutable();
-        new TombstoneService(
-                new CommitRepository(repository), refs,
-                new TombstoneRepository(repository))
-                .cleanup(target, activeWorkspaceId());
+        tombstones.cleanup(target, activeWorkspaceId());
     }
 
     public List<BranchRef> visibleBranches() throws IOException {
-        UUID workspace = activeWorkspaceId();
-        CommitRepository commits = new CommitRepository(repository);
-        java.util.ArrayList<BranchRef> visible = new java.util.ArrayList<>();
-        for (BranchRef ref : branches.visible()) {
-            if (commits.read(ref.commit()).workspaceId().equals(workspace)) {
-                visible.add(ref);
-            }
-        }
-        return List.copyOf(visible);
+        return historyViews.branches();
     }
 
     public CompletableFuture<ComparisonSummary> compare(
@@ -1005,7 +971,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public List<io.github.lumi.domain.model.Zone> visibleZones() throws IOException {
-        return zones.list(activeWorkspaceId());
+        return historyViews.zones();
     }
 
     public io.github.lumi.domain.model.Zone setZoneActorActive(
@@ -1285,10 +1251,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public MutationDurabilityTracker mutations() { return mutations; }
     public SavePreparation savePreparation() { return savePreparation; }
     public BranchRef activeRef() throws IOException {
-        BranchName name = active.read().orElseThrow(
-                () -> new IOException("Active Lumi branch is missing")).name();
-        return refs.read(name).orElseThrow(
-                () -> new IOException("Active Lumi branch ref is missing: " + name));
+        return historyViews.activeBranch();
     }
     public UUID defaultWorkspaceId() { return defaultWorkspaceId; }
     public UUID activeWorkspaceId() throws IOException { return selectedWorkspaceId; }
