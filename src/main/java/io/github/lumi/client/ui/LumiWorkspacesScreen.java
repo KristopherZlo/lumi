@@ -9,13 +9,12 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Thin create/switch view over the server-owned workspace snapshot. */
-public final class LumiWorkspacesScreen extends Screen {
+public final class LumiWorkspacesScreen extends LumiLegacyModalScreen {
     private static final int PANEL_WIDTH = 520;
     private static final int PANEL_HEIGHT = 330;
     private static final int PAGE_SIZE = 5;
@@ -26,8 +25,8 @@ public final class LumiWorkspacesScreen extends Screen {
     private final Consumer<UUID> switcher;
     private HistorySnapshotPayload snapshot;
     private EditBox name;
-    private Button createWhole;
-    private Button createSelection;
+    private LumiLegacyButton createWhole;
+    private LumiLegacyButton createSelection;
     private int panelX;
     private int panelY;
     private int page;
@@ -60,29 +59,29 @@ public final class LumiWorkspacesScreen extends Screen {
                 Component.translatable("luma.create_project.name"));
         name.setMaxLength(WorkspaceScreenController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.create_project.name"));
+        name.setBordered(false);
+        name.setTextColor(LegacyLumiTheme.TEXT);
         name.setResponder(ignored -> updateCreateButtons());
         addRenderableWidget(name);
-        createWhole = addRenderableWidget(Button.builder(
+        createWhole = addLegacyButton(contentX + contentWidth - 232, panelY + 72, 112,
                 Component.translatable("luma.project.scope_world"),
-                ignored -> create(Optional.empty()))
-                .bounds(contentX + contentWidth - 232, panelY + 72, 112, 20).build());
-        createSelection = addRenderableWidget(Button.builder(
+                () -> create(Optional.empty()), LumiLegacyButton.Kind.PRIMARY);
+        createSelection = addLegacyButton(contentX + contentWidth - 112, panelY + 72, 112,
                 Component.translatable("luma.project.scope_bounds"),
-                ignored -> create(selection.get()))
-                .bounds(contentX + contentWidth - 112, panelY + 72, 112, 20).build());
+                () -> create(selection.get()), LumiLegacyButton.Kind.NORMAL);
         updateCreateButtons();
         addWorkspaceRows(panelWidth);
-        addRenderableWidget(Button.builder(
-                Component.literal("<"), ignored -> changePage(-1))
-                .bounds(panelX + 20, panelY + 298, 28, 20).build()).active = page > 0;
+        addLegacyButton(panelX + 20, panelY + 298, 28,
+                Component.literal("<"), () -> changePage(-1),
+                LumiLegacyButton.Kind.NORMAL).active = page > 0;
         int count = snapshot == null ? 0 : snapshot.workspaces().size();
-        addRenderableWidget(Button.builder(
-                Component.literal(">"), ignored -> changePage(1))
-                .bounds(panelX + 52, panelY + 298, 28, 20).build())
+        addLegacyButton(panelX + 52, panelY + 298, 28,
+                Component.literal(">"), () -> changePage(1),
+                LumiLegacyButton.Kind.NORMAL)
                 .active = (page + 1) * PAGE_SIZE < count;
-        addRenderableWidget(Button.builder(
-                Component.translatable("luma.action.close"), ignored -> onClose())
-                .bounds(panelX + panelWidth - 140, panelY + 298, 120, 20).build());
+        addLegacyButton(panelX + panelWidth - 140, panelY + 298, 120,
+                Component.translatable("luma.action.close"),
+                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     private void addWorkspaceRows(int panelWidth) {
@@ -94,10 +93,11 @@ public final class LumiWorkspacesScreen extends Screen {
                     snapshot.workspaces().get(index);
             if (workspace.active()) continue;
             int rowY = panelY + 126 + (index - start) * 32;
-            Button button = addRenderableWidget(Button.builder(
+            LumiLegacyButton button = addLegacyButton(
+                    panelX + panelWidth - 116, rowY + 4, 96,
                     Component.translatable("luma.action.open_project"),
-                    ignored -> switchWorkspace(workspace.id()))
-                    .bounds(panelX + panelWidth - 116, rowY + 4, 96, 20).build());
+                    () -> switchWorkspace(workspace.id()),
+                    LumiLegacyButton.Kind.PRIMARY);
             button.active = !snapshot.operationActive();
         }
     }
@@ -150,25 +150,25 @@ public final class LumiWorkspacesScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderTransparentBackground(graphics);
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        graphics.fill(panelX, panelY, panelX + panelWidth,
-                panelY + PANEL_HEIGHT, 0xee15181d);
-        graphics.drawCenteredString(font, title, width / 2, panelY + 16, 0xffffffff);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+        graphics.drawCenteredString(font, title, width / 2, panelY + 16,
+                LegacyLumiTheme.TEXT);
         if (snapshot != null) {
             graphics.drawCenteredString(font,
                     Component.translatable(
                             "luma.screen.project.title", snapshot.workspaceName()),
-                    width / 2, panelY + 36, 0xffaeb6c2);
+                    width / 2, panelY + 36, LegacyLumiTheme.MUTED);
         }
         graphics.drawString(font, Component.translatable("luma.screen.create_project.title"),
-                panelX + 20, panelY + 56, 0xffdbe2ea, false);
+                panelX + 20, panelY + 56, LegacyLumiTheme.TEXT, false);
+        LegacyLumiTheme.outlined(graphics, panelX + 18, panelY + 69,
+                panelWidth - 278, 26,
+                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         renderWorkspaceRows(graphics, panelWidth);
         if (!error.isEmpty()) {
-            Component text = error.startsWith("luma.")
-                    ? Component.translatable(error) : Component.literal(error);
-            graphics.drawString(font, text, panelX + 88, panelY + 304,
-                    0xffff6b6b, false);
+            graphics.drawString(font, errorText(error), panelX + 88, panelY + 304,
+                    LegacyLumiTheme.DANGER, false);
         }
         super.render(graphics, mouseX, mouseY, partialTick);
     }
@@ -181,15 +181,16 @@ public final class LumiWorkspacesScreen extends Screen {
             HistorySnapshotPayload.WorkspaceView workspace =
                     snapshot.workspaces().get(index);
             int rowY = panelY + 126 + (index - start) * 32;
-            graphics.fill(panelX + 20, rowY,
-                    panelX + panelWidth - 20, rowY + 28, 0xff20252c);
+            renderLegacyPanel(graphics, panelX + 20, rowY,
+                    panelWidth - 40, 28);
             graphics.drawString(font,
                     font.plainSubstrByWidth(workspace.name(), panelWidth - 190),
-                    panelX + 28, rowY + 5, 0xfff0f3f6, false);
+                    panelX + 28, rowY + 5, LegacyLumiTheme.TEXT, false);
             Component scope = Component.translatable(workspace.bounded()
                     ? "luma.project.scope_bounds" : "luma.project.scope_world");
             graphics.drawString(font, scope, panelX + 28, rowY + 17,
-                    workspace.active() ? 0xff75d69c : 0xff8f9aa8, false);
+                    workspace.active() ? LegacyLumiTheme.ACCENT
+                            : LegacyLumiTheme.MUTED, false);
         }
     }
 
