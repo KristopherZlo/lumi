@@ -39,8 +39,9 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private final Map<HistoryKey, Long> publicationRequirements = new HashMap<>();
     private final Map<ChunkCoordinate, Integer> blockedChunks = new HashMap<>();
     private final Set<HistoryKey> pendingOrigins = new HashSet<>();
-    private final ArrayDeque<Runnable> originWrites = new ArrayDeque<>();
+    private final ArrayDeque<PendingOriginWrite> originWrites = new ArrayDeque<>();
     private long indexRevision;
+    private long durableIndexRevision;
     private boolean originWriterScheduled;
     private boolean indexWriterScheduled;
 
@@ -106,7 +107,8 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         synchronized (this) {
             if (!durableOrigins.contains(key) && pendingOrigins.add(key)) {
                 T origin = Objects.requireNonNull(capture.get(), "captured origin");
-                originWrites.add(() -> persistOrigin(key, origin, writer));
+                originWrites.add(new PendingOriginWrite(
+                        key, () -> persistOrigin(key, origin, writer)));
                 scheduleOrigins = !originWriterScheduled;
                 originWriterScheduled = true;
             }
@@ -122,10 +124,10 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             indexWriterScheduled = true;
         }
         if (scheduleOrigins) {
-            background.execute(this::drainOrigins);
+            scheduleOriginWriter();
         }
         if (scheduleIndex) {
-            background.execute(this::writeIndexUntilCurrent);
+            scheduleIndexWriter();
         }
         return generation;
     }
@@ -173,35 +175,62 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             indexWriterScheduled = true;
         }
         if (scheduleIndex) {
-            background.execute(this::writeIndexUntilCurrent);
+            scheduleIndexWriter();
         }
     }
 
-    private <T> void persistOrigin(HistoryKey key, T origin, OriginWriter<T> writer) {
-        try {
-            ObjectId id = writer.write(origin);
-            origins.register(key, id);
-            synchronized (this) {
-                durableOrigins.add(key);
-                pendingOrigins.remove(key);
-                releaseSatisfied(key);
-            }
-        } catch (IOException failed) {
-            LOGGER.log(Level.SEVERE, "Failed to persist Lumi origin for " + key, failed);
+    /** Requeues failed durability work; the runtime calls this with a one-second backoff. */
+    public void retryFailedWrites() {
+        boolean scheduleOrigins;
+        boolean scheduleIndex;
+        synchronized (this) {
+            scheduleOrigins = !originWrites.isEmpty() && !originWriterScheduled;
+            originWriterScheduled |= scheduleOrigins;
+            scheduleIndex = durableIndexRevision < indexRevision && !indexWriterScheduled;
+            indexWriterScheduled |= scheduleIndex;
+        }
+        if (scheduleOrigins) {
+            scheduleOriginWriter();
+        }
+        if (scheduleIndex) {
+            scheduleIndexWriter();
+        }
+    }
+
+    private <T> void persistOrigin(
+            HistoryKey key, T origin, OriginWriter<T> writer) throws IOException {
+        ObjectId id = writer.write(origin);
+        origins.register(key, id);
+        synchronized (this) {
+            durableOrigins.add(key);
+            pendingOrigins.remove(key);
+            releaseSatisfied(key);
         }
     }
 
     private void drainOrigins() {
         while (true) {
-            Runnable write;
+            PendingOriginWrite write;
             synchronized (this) {
-                write = originWrites.poll();
+                write = originWrites.peek();
                 if (write == null) {
                     originWriterScheduled = false;
                     return;
                 }
             }
-            write.run();
+            try {
+                write.persistence().persist();
+            } catch (IOException | RuntimeException failed) {
+                synchronized (this) {
+                    originWriterScheduled = false;
+                }
+                LOGGER.log(Level.SEVERE,
+                        "Failed to persist Lumi origin for " + write.key(), failed);
+                return;
+            }
+            synchronized (this) {
+                originWrites.removeFirst();
+            }
         }
     }
 
@@ -223,6 +252,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 return;
             }
             synchronized (this) {
+                durableIndexRevision = revision;
                 durableGenerations.clear();
                 durableGenerations.putAll(snapshot.generations());
                 Set.copyOf(publicationRequirements.keySet()).forEach(this::releaseSatisfied);
@@ -231,6 +261,28 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                     return;
                 }
             }
+        }
+    }
+
+    private void scheduleOriginWriter() {
+        try {
+            background.execute(this::drainOrigins);
+        } catch (RuntimeException rejected) {
+            synchronized (this) {
+                originWriterScheduled = false;
+            }
+            LOGGER.log(Level.SEVERE, "Failed to schedule Lumi origin persistence", rejected);
+        }
+    }
+
+    private void scheduleIndexWriter() {
+        try {
+            background.execute(this::writeIndexUntilCurrent);
+        } catch (RuntimeException rejected) {
+            synchronized (this) {
+                indexWriterScheduled = false;
+            }
+            LOGGER.log(Level.SEVERE, "Failed to schedule Lumi working index persistence", rejected);
         }
     }
 
@@ -257,6 +309,13 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private interface OriginWriter<T> {
         ObjectId write(T origin) throws IOException;
     }
+
+    @FunctionalInterface
+    private interface OriginPersistence {
+        void persist() throws IOException;
+    }
+
+    private record PendingOriginWrite(HistoryKey key, OriginPersistence persistence) { }
 
     private record ChunkCoordinate(int x, int z) { }
 }

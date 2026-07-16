@@ -115,6 +115,7 @@ import net.minecraft.world.level.entity.EntityAccess;
 /** Server-authoritative Lumi state owned by one loaded Minecraft dimension. */
 public final class FabricDimensionRuntime implements AutoCloseable {
     private static final long AUTO_VERSION_INTERVAL_TICKS = 6_000;
+    private static final long DURABILITY_RETRY_INTERVAL_TICKS = 20;
     private static final CommitAuthor AUTO_AUTHOR =
             new CommitAuthor(new UUID(0, 0), "Lumi");
     private final ServerLevel level;
@@ -328,6 +329,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             operations.tick();
         } finally {
             zoneGrowth.flush();
+        }
+        if (level.getGameTime() % DURABILITY_RETRY_INTERVAL_TICKS == 0) {
+            mutations.retryFailedWrites();
         }
         scheduleAutoVersion();
         garbageCollection.tick(level.getGameTime(),

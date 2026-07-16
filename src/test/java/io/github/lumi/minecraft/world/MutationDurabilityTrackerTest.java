@@ -10,6 +10,7 @@ import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -121,6 +122,59 @@ class MutationDurabilityTrackerTest {
 
         assertEquals(1L, tracker.markTrackedSection(key));
         assertEquals(1L, tracker.snapshot().generations().get(key));
+    }
+
+    @Test
+    void retriesFailedOriginWriteWithoutRecapturingTheOrigin() throws Exception {
+        Path objectsPath = repositoryRoot.resolve("objects");
+        Files.writeString(objectsPath, "temporarily unavailable");
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        SectionKey key = new SectionKey(4, 5, 6);
+        AtomicInteger captures = new AtomicInteger();
+
+        tracker.registerSectionMutation(key, () -> {
+            captures.incrementAndGet();
+            return airSection();
+        });
+        background.runNext();
+        background.runNext();
+        assertFalse(tracker.canPublishChunk(4, 6));
+
+        Files.delete(objectsPath);
+        tracker.retryFailedWrites();
+        background.runNext();
+
+        assertEquals(1, captures.get());
+        assertTrue(tracker.canPublishChunk(4, 6));
+        assertTrue(new OriginStore(repositoryRoot).read(key).isPresent());
+    }
+
+    @Test
+    void retriesFailedWorkingIndexWriteAtTheLatestGeneration() throws Exception {
+        Path workingPath = repositoryRoot.resolve("working");
+        Files.writeString(workingPath, "temporarily unavailable");
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        SectionKey key = new SectionKey(7, 8, 9);
+
+        tracker.registerSectionMutation(key, MutationDurabilityTrackerTest::airSection);
+        tracker.registerSectionMutation(key, MutationDurabilityTrackerTest::airSection);
+        background.runNext();
+        background.runNext();
+        assertFalse(tracker.canPublishChunk(7, 9));
+
+        Files.delete(workingPath);
+        tracker.retryFailedWrites();
+        background.runNext();
+
+        assertEquals(2L, new WorkingIndexRepository(repositoryRoot).read()
+                .generations().get(key));
+        assertTrue(tracker.canPublishChunk(7, 9));
     }
 
     private static SectionBlob airSection() {
