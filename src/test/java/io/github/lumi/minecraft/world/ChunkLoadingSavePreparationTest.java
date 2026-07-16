@@ -32,6 +32,8 @@ class ChunkLoadingSavePreparationTest {
         access.ready = true;
         assertTrue(session.prepareUntil(50));
         assertEquals(boundary, session.finish());
+        session.close();
+        assertEquals(java.util.List.of(new ChunkCoordinate(4, 6)), access.released);
     }
 
     private static SavePreparation fixed(WorkingIndexSnapshot boundary) {
@@ -51,6 +53,7 @@ class ChunkLoadingSavePreparationTest {
     private static final class RecordingChunkAccess implements ChunkLoadAccess {
         private final CompletableFuture<Void> loaded = new CompletableFuture<>();
         private final ArrayList<ChunkCoordinate> retained = new ArrayList<>();
+        private final ArrayList<ChunkCoordinate> released = new ArrayList<>();
         private boolean ready;
 
         @Override
@@ -60,6 +63,6 @@ class ChunkLoadingSavePreparationTest {
         }
 
         @Override public boolean isReady(ChunkCoordinate chunk) { return ready; }
-        @Override public void release(ChunkCoordinate chunk) { }
+        @Override public void release(ChunkCoordinate chunk) { released.add(chunk); }
     }
 }

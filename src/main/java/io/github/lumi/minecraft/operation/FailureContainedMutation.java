@@ -37,6 +37,11 @@ final class FailureContainedMutation implements DimensionMutation {
         } catch (IOException | RuntimeException failed) {
             failure = failed;
             failureState = requireFailureState(delegate.unhandledFailureState());
+            try {
+                delegate.close();
+            } catch (IOException closeFailure) {
+                failure.addSuppressed(closeFailure);
+            }
         }
     }
 
@@ -74,5 +79,15 @@ final class FailureContainedMutation implements DimensionMutation {
     @Override
     public OperationProgress progress() {
         return delegate.progress();
+    }
+
+    @Override
+    public boolean cancel() throws IOException {
+        return failure == null && delegate.cancel();
+    }
+
+    @Override
+    public void close() throws IOException {
+        delegate.close();
     }
 }

@@ -43,5 +43,10 @@ public final class ScopedSavePreparation implements SavePreparation {
             });
             return new WorkingIndexSnapshot(selected);
         }
+
+        @Override
+        public void close() throws java.io.IOException {
+            sourceSession.close();
+        }
     }
 }

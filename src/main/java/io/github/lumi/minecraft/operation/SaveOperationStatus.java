@@ -5,5 +5,6 @@ public enum SaveOperationStatus {
     CAPTURING,
     WRITING,
     COMPLETE,
+    CANCELLED,
     FAILED
 }

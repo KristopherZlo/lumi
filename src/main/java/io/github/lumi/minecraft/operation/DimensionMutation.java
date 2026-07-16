@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.util.Optional;
 
 /** A bounded, server-thread mutation owned by one dimension coordinator. */
-public interface DimensionMutation {
+public interface DimensionMutation extends AutoCloseable {
     default boolean requiresFreeze() {
         return true;
     }
@@ -38,4 +38,13 @@ public interface DimensionMutation {
     default OperationProgress progress() {
         return OperationProgress.indeterminate(getClass().getSimpleName());
     }
+
+    /** Cancels only while the operation can still prove that no unsafe mutation was exposed. */
+    default boolean cancel() throws IOException {
+        return false;
+    }
+
+    /** Releases resources when a queued operation is removed or its dimension closes. */
+    @Override
+    default void close() throws IOException { }
 }

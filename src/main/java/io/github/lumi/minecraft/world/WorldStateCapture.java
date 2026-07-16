@@ -8,7 +8,7 @@ import java.io.IOException;
 public interface WorldStateCapture {
     CaptureSession begin(WorkingIndexSnapshot dirty);
 
-    interface CaptureSession {
+    interface CaptureSession extends AutoCloseable {
         boolean captureUntil(long deadlineNanos) throws IOException;
 
         CapturedWorldState finish();
@@ -20,5 +20,8 @@ public interface WorldStateCapture {
         default long totalKeys() {
             return 0;
         }
+
+        @Override
+        default void close() throws IOException { }
     }
 }

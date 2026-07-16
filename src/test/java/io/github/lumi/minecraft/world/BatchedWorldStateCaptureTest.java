@@ -12,6 +12,7 @@ import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndex;
+import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -90,6 +91,28 @@ class BatchedWorldStateCaptureTest {
         assertTrue(session.captureUntil(Long.MAX_VALUE));
         assertEquals(0, releases[0]);
         session.finish();
+        assertEquals(1, releases[0]);
+    }
+
+    @Test
+    void releasesRetainedChunksWhenCaptureIsCancelled() throws Exception {
+        int[] releases = {0};
+        WorldStateCapture.CaptureSession session =
+                new BatchedWorldStateCapture(
+                        new WorldStateReader() {
+                            @Override public SectionBlob read(SectionKey key) {
+                                return airSection();
+                            }
+                            @Override public EntityChunkBlob read(EntityChunkKey key) {
+                                return entities();
+                            }
+                        },
+                        (Runnable) () -> releases[0]++)
+                        .begin(WorkingIndexSnapshot.empty());
+
+        session.close();
+        session.close();
+
         assertEquals(1, releases[0]);
     }
 

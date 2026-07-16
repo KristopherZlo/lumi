@@ -47,5 +47,14 @@ public final class ChunkLoadingSavePreparation implements SavePreparation {
             }
             return boundary;
         }
+
+        @Override
+        public void close() throws IOException {
+            try {
+                delegateSession.close();
+            } finally {
+                chunks.close();
+            }
+        }
     }
 }

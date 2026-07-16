@@ -133,6 +133,33 @@ class SaveCaptureOperationTest {
         assertEquals("disk full", operation.failure().orElseThrow().getMessage());
     }
 
+    @Test
+    void cancelsFrozenCaptureAndClosesOwnedSessions() throws Exception {
+        WorkingIndexSnapshot dirty = new WorkingIndexSnapshot(Map.of());
+        CapturedWorldState captured = new CapturedWorldState(
+                Map.of(), Map.of(), dirty, new CommitStatistics(0, 0, 0, 0));
+        TwoStepPreparation preparation = new TwoStepPreparation(dirty);
+        TwoStepCapture world = new TwoStepCapture(captured);
+        SaveCaptureOperation operation = new SaveCaptureOperation(
+                request(), preparation, world,
+                (request, state) -> {
+                    throw new AssertionError("Cancelled Save must not publish");
+                },
+                ignored -> { }, Runnable::run);
+
+        operation.advance(50L);
+        operation.advance(100L);
+        assertEquals(SaveOperationStatus.CAPTURING, operation.status());
+
+        assertTrue(operation.cancel());
+
+        assertEquals(SaveOperationStatus.CANCELLED, operation.status());
+        assertEquals(MutationTerminalState.CANCELLED, operation.terminalState());
+        assertTrue(operation.isSafeToRelease());
+        assertEquals(1, preparation.closeCalls);
+        assertEquals(1, world.session.closeCalls);
+    }
+
     private static SaveRequest request() {
         return new SaveRequest(
                 new BranchRef(new BranchName("main"), id('1'), 0),
@@ -163,16 +190,19 @@ class SaveCaptureOperationTest {
         private static final class Session implements CaptureSession {
             private final CapturedWorldState captured;
             private int captureCalls;
+            private int closeCalls;
 
             private Session(CapturedWorldState captured) { this.captured = captured; }
             @Override public boolean captureUntil(long deadlineNanos) { return ++captureCalls == 2; }
             @Override public CapturedWorldState finish() { return captured; }
+            @Override public void close() { closeCalls++; }
         }
     }
 
     private static final class TwoStepPreparation implements SavePreparation {
         private final io.github.lumi.domain.model.WorkingIndexSnapshot dirty;
         private int calls;
+        private int closeCalls;
 
         private TwoStepPreparation(io.github.lumi.domain.model.WorkingIndexSnapshot dirty) {
             this.dirty = dirty;
@@ -184,6 +214,7 @@ class SaveCaptureOperationTest {
                 @Override public io.github.lumi.domain.model.WorkingIndexSnapshot finish() {
                     return dirty;
                 }
+                @Override public void close() { closeCalls++; }
             };
         }
     }

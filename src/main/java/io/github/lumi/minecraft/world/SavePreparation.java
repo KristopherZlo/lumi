@@ -7,9 +7,12 @@ import java.io.IOException;
 public interface SavePreparation {
     Session begin();
 
-    interface Session {
+    interface Session extends AutoCloseable {
         boolean prepareUntil(long deadlineNanos) throws IOException;
 
         WorkingIndexSnapshot finish();
+
+        @Override
+        default void close() throws IOException { }
     }
 }

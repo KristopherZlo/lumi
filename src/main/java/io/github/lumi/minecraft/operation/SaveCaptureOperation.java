@@ -30,6 +30,7 @@ public final class SaveCaptureOperation implements DimensionMutation {
     private SaveOperationStatus status = SaveOperationStatus.PREPARING;
     private SaveResult result;
     private Throwable failure;
+    private boolean resourcesClosed;
     private volatile OperationProgress publicationProgress =
             OperationProgress.indeterminate("Save: starting publication");
 
@@ -93,6 +94,7 @@ public final class SaveCaptureOperation implements DimensionMutation {
         if (!captured.generations().equals(dirty)) {
             throw new IllegalStateException("Capture generations changed during frozen capture");
         }
+        closeSessions();
         status = SaveOperationStatus.WRITING;
         background = CompletableFuture.supplyAsync(() -> publish(captured), backgroundExecutor);
     }
@@ -138,12 +140,18 @@ public final class SaveCaptureOperation implements DimensionMutation {
         if (!isTerminal()) {
             throw new IllegalStateException("Save is not terminal");
         }
-        return status == SaveOperationStatus.COMPLETE
-                ? MutationTerminalState.SUCCEEDED : MutationTerminalState.FAILED;
+        return switch (status) {
+            case COMPLETE -> MutationTerminalState.SUCCEEDED;
+            case CANCELLED -> MutationTerminalState.CANCELLED;
+            case FAILED -> MutationTerminalState.FAILED;
+            default -> throw new IllegalStateException("Save is not terminal");
+        };
     }
 
     @Override public boolean isTerminal() {
-        return status == SaveOperationStatus.COMPLETE || status == SaveOperationStatus.FAILED;
+        return status == SaveOperationStatus.COMPLETE
+                || status == SaveOperationStatus.CANCELLED
+                || status == SaveOperationStatus.FAILED;
     }
 
     @Override public boolean isSafeToRelease() {
@@ -171,6 +179,58 @@ public final class SaveCaptureOperation implements DimensionMutation {
     private void recordProgress(SavePublicationProgress progress) {
         publicationProgress = new OperationProgress(
                 progress.phase(), progress.completed(), progress.total());
+    }
+
+    @Override
+    public boolean cancel() throws IOException {
+        if (status != SaveOperationStatus.PREPARING
+                && status != SaveOperationStatus.CAPTURING) {
+            return false;
+        }
+        closeSessions();
+        status = SaveOperationStatus.CANCELLED;
+        return true;
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (!isTerminal() && status != SaveOperationStatus.WRITING) {
+            cancel();
+        } else {
+            closeSessions();
+        }
+        if (background != null && !background.isDone()) {
+            background.cancel(true);
+        }
+    }
+
+    private void closeSessions() throws IOException {
+        if (resourcesClosed) {
+            return;
+        }
+        resourcesClosed = true;
+        IOException failure = null;
+        if (session != null) {
+            try {
+                session.close();
+            } catch (IOException failed) {
+                failure = failed;
+            }
+        }
+        if (preparationSession != null) {
+            try {
+                preparationSession.close();
+            } catch (IOException failed) {
+                if (failure == null) {
+                    failure = failed;
+                } else {
+                    failure.addSuppressed(failed);
+                }
+            }
+        }
+        if (failure != null) {
+            throw failure;
+        }
     }
 
     private static SavePreparation fixedPreparation(WorkingIndexSnapshot dirty) {

@@ -84,10 +84,7 @@ public final class BatchedWorldStateCapture implements WorldStateCapture {
             if (next != keys.size() || playerSpawns == null) {
                 throw new IllegalStateException("World capture is not complete");
             }
-            if (!finished) {
-                completion.run();
-                finished = true;
-            }
+            release();
             int entityCount = entities.values().stream()
                     .mapToInt(chunk -> chunk.entities().size()).sum();
             return new CapturedWorldState(
@@ -104,6 +101,17 @@ public final class BatchedWorldStateCapture implements WorldStateCapture {
 
         @Override public long totalKeys() {
             return keys.size();
+        }
+
+        @Override public void close() {
+            release();
+        }
+
+        private void release() {
+            if (!finished) {
+                completion.run();
+                finished = true;
+            }
         }
     }
 }
