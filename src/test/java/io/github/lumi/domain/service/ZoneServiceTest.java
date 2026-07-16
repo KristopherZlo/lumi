@@ -28,7 +28,10 @@ class ZoneServiceTest {
 
         assertThrows(IllegalStateException.class,
                 () -> service.growForActor(workspace, zoneId, actor, grown));
+        assertThrows(IllegalStateException.class,
+                () -> service.requireActorActive(workspace, zoneId, actor));
         service.setActorActive(workspace, zoneId, actor, true);
+        assertEquals(zoneId, service.requireActorActive(workspace, zoneId, actor).id());
         service.growForActor(workspace, zoneId, actor, grown);
 
         assertEquals(Set.of(initial, grown), service.require(workspace, zoneId).cells());

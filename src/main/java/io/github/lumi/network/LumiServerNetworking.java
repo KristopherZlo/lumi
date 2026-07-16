@@ -304,6 +304,17 @@ public final class LumiServerNetworking {
                     RecoveryChoice.RESUME_TARGET, terminal);
             case RECOVER_RETURN -> runtime.startRecovery(
                     RecoveryChoice.RETURN_CHECKPOINT, terminal);
+            case ZONE_SAVE -> {
+                ZoneSaveArgument zone = ZoneSaveArgument.parse(payload.argument());
+                yield runtime.startZoneSave(
+                        expected, author, player.getUUID(), zone.zoneId(),
+                        zone.message(), terminal);
+            }
+            case ZONE_RESTORE -> {
+                ZoneRestoreArgument zone = ZoneRestoreArgument.parse(payload.argument());
+                yield runtime.startZoneRestore(
+                        zone.target(), zone.zoneId(), author, terminal);
+            }
             case BRANCH_CREATE -> throw new IllegalStateException(
                     "Branch creation does not use the mutation queue");
             case COMPARE -> throw new IllegalStateException(
@@ -314,8 +325,6 @@ public final class LumiServerNetworking {
                     "Merge preparation starts before the mutation queue");
             case ZONE_CREATE, ZONE_ENTER, ZONE_LEAVE -> throw new IllegalStateException(
                     "Zone metadata does not use the mutation queue");
-            case ZONE_SAVE, ZONE_RESTORE -> throw new IllegalStateException(
-                    "Zone history dispatch is not available");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
@@ -524,11 +533,22 @@ public final class LumiServerNetworking {
                     .map(ref -> new HistorySnapshotPayload.Branch(
                             ref.name().value(), ref.commit(), ref.name().equals(head.name())))
                     .toList();
-            var zoneViews = runtime.visibleZones().stream()
-                    .limit(64)
+            var visibleZones = runtime.visibleZones().stream().limit(64).toList();
+            var zoneHistories = runtime.zoneHistories(
+                    visibleZones.stream().map(io.github.lumi.domain.model.Zone::id)
+                            .collect(java.util.stream.Collectors.toSet()),
+                    8);
+            var zoneViews = visibleZones.stream()
                     .map(zone -> new HistorySnapshotPayload.ZoneView(
                             zone.id(), zone.name(), zone.color(), zone.cells().size(),
-                            zone.revision(), zone.activeActors().contains(player.getUUID())))
+                            zone.revision(), zone.activeActors().contains(player.getUUID()),
+                            zoneHistories.getOrDefault(zone.id(), java.util.List.of()).stream()
+                                    .map(entry -> new HistorySnapshotPayload.Version(
+                                            entry.id(), entry.commit().message(),
+                                            entry.commit().author().name(),
+                                            entry.commit().timestamp().toEpochMilli(),
+                                            entry.commit().kind()))
+                                    .toList()))
                     .toList();
             send(player, new HistorySnapshotPayload(
                     dimension(runtime), head.commit(), head.revision(),

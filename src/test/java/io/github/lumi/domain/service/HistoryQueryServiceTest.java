@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -105,6 +106,12 @@ class HistoryQueryServiceTest {
 
         assertEquals(List.of(clockSave), new HistoryQueryService(commits, refs)
                 .firstParentForZone(branch, workspace, clock, 10).stream()
+                .map(HistoryEntry::id).toList());
+        var histories = new HistoryQueryService(commits, refs)
+                .firstParentByZone(branch, workspace, Set.of(clock, door), 10);
+        assertEquals(List.of(clockSave), histories.get(clock).stream()
+                .map(HistoryEntry::id).toList());
+        assertEquals(List.of(doorSave), histories.get(door).stream()
                 .map(HistoryEntry::id).toList());
     }
 

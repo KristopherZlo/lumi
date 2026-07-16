@@ -84,7 +84,9 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.CompletableFuture;
@@ -407,6 +409,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return operation;
     }
 
+    public synchronized SaveCaptureOperation startZoneSave(
+            BranchRef expected,
+            CommitAuthor author,
+            UUID actor,
+            UUID zoneId,
+            String message,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        UUID workspaceId = activeWorkspaceId();
+        zones.requireActorActive(workspaceId, zoneId, actor);
+        return startSave(new SaveRequest(
+                expected, author, message, Instant.now(), workspaceId,
+                Optional.of(zoneId), CommitKind.ZONE), terminalObserver);
+    }
+
     private SaveCaptureOperation createSave(SaveRequest request) throws IOException {
         var workspace = workspaces.require(request.workspaceId());
         if (!workspace.id().equals(workspaces.active().id())) {
@@ -655,6 +671,17 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         BranchRef ref = activeRef();
         return new HistoryQueryService(new CommitRepository(repository), refs)
                 .firstParent(ref.name(), activeWorkspaceId(), limit);
+    }
+
+    public Map<UUID, List<io.github.lumi.domain.model.HistoryEntry>> zoneHistories(
+            Set<UUID> zoneIds, int limit) throws IOException {
+        Set<UUID> requested = Set.copyOf(zoneIds);
+        UUID workspace = activeWorkspaceId();
+        for (UUID zoneId : requested) {
+            zones.require(workspace, zoneId);
+        }
+        return new HistoryQueryService(new CommitRepository(repository), refs)
+                .firstParentByZone(activeRef().name(), workspace, requested, limit);
     }
 
     public List<BranchRef> visibleBranches() throws IOException {

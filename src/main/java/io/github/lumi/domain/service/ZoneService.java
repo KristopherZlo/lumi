@@ -37,6 +37,16 @@ public final class ZoneService {
         return zones.list(workspaceId);
     }
 
+    public Zone requireActorActive(UUID workspaceId, UUID zoneId, UUID actor)
+            throws IOException {
+        Objects.requireNonNull(actor, "actor");
+        Zone zone = require(workspaceId, zoneId);
+        if (!zone.activeActors().contains(actor)) {
+            throw new IllegalStateException("Enter the zone before saving it");
+        }
+        return zone;
+    }
+
     public synchronized Zone setActorActive(
             UUID workspaceId, UUID zoneId, UUID actor, boolean enabled) throws IOException {
         Objects.requireNonNull(actor, "actor");
