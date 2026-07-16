@@ -60,6 +60,10 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), HistoryCommandPayload.Kind.COMPARE,
                 compare.encode(), id('2'), 43);
         assertEquals(compareCommand, roundTrip(HistoryCommandPayload.CODEC, compareCommand));
+        HistoryCommandPayload compareCancel = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.COMPARE_CANCEL,
+                UUID.randomUUID().toString(), id('2'), 43);
+        assertEquals(compareCancel, roundTrip(HistoryCommandPayload.CODEC, compareCancel));
     }
 
     @Test
@@ -79,6 +83,8 @@ class LumiPayloadCodecTest {
                 request, HistoryCommandPayload.Kind.UNDO, "unexpected", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.BRANCH_CREATE, " ", id('1'), 0));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.COMPARE_CANCEL, "not-a-uuid", id('1'), 0));
     }
 
     @Test

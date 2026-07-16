@@ -1,6 +1,7 @@
 package io.github.lumi.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.ChunkInRegion;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -61,6 +63,8 @@ class CompareServiceTest {
                 java.util.Set.of(new SectionKey(1, 0, 0)), java.util.Set.of());
         assertEquals(difference, compare.compare(empty, changed, new ZoneScope(included)));
         assertTrue(compare.compare(empty, changed, new ZoneScope(excluded)).isEmpty());
+        assertThrows(CancellationException.class,
+                () -> compare.compare(empty, changed, () -> true));
     }
 
     private static io.github.lumi.domain.model.ObjectId tree(

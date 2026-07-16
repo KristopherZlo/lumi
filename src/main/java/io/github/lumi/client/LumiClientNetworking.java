@@ -113,6 +113,12 @@ public final class LumiClientNetworking {
         return requestId;
     }
 
+    public UUID cancelCompare(UUID requestId) {
+        comparisons.clear();
+        return send(HistoryCommandPayload.Kind.COMPARE_CANCEL,
+                Objects.requireNonNull(requestId, "requestId").toString());
+    }
+
     public UUID resumeRecovery() {
         return send(HistoryCommandPayload.Kind.RECOVER_RESUME, "");
     }

@@ -61,7 +61,8 @@ public final class LumiClient implements ClientModInitializer {
                                         COMPARISONS,
                                         target.label(),
                                         () -> NETWORKING.compare(
-                                                target.before(), target.after())))));
+                                                target.before(), target.after()),
+                                        NETWORKING::cancelCompare))));
                     }
 
                     @Override public void openSave() {

@@ -22,6 +22,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 
 /** Compares commit trees by identity and resolves only sparse missing leaves through origin. */
 public final class CompareService {
@@ -38,13 +40,28 @@ public final class CompareService {
     }
 
     public WorldDifference compare(CommitId before, CommitId after) throws IOException {
-        return compare(before, after, null);
+        return compare(before, after, null, () -> false);
+    }
+
+    public WorldDifference compare(
+            CommitId before, CommitId after, BooleanSupplier cancelled) throws IOException {
+        return compare(before, after, null, cancelled);
     }
 
     public WorldDifference compare(CommitId before, CommitId after, ZoneScope scope)
             throws IOException {
+        return compare(before, after, scope, () -> false);
+    }
+
+    private WorldDifference compare(
+            CommitId before,
+            CommitId after,
+            ZoneScope scope,
+            BooleanSupplier cancelled) throws IOException {
         Objects.requireNonNull(before, "before");
         Objects.requireNonNull(after, "after");
+        Objects.requireNonNull(cancelled, "cancelled");
+        checkCancelled(cancelled);
         if (before.equals(after)) {
             return new WorldDifference(Map.of(), Map.of());
         }
@@ -53,6 +70,7 @@ public final class CompareService {
         Map<SectionKey, ObjectChange> sections = new HashMap<>();
         Map<EntityChunkKey, ObjectChange> entities = new HashMap<>();
         for (RegionCoordinate coordinate : union(left.regions().keySet(), right.regions().keySet())) {
+            checkCancelled(cancelled);
             Optional<ObjectId> leftId = Optional.ofNullable(left.regions().get(coordinate));
             Optional<ObjectId> rightId = Optional.ofNullable(right.regions().get(coordinate));
             if (leftId.equals(rightId)) continue;
@@ -60,7 +78,8 @@ public final class CompareService {
                     ? objects.readRegion(leftId.orElseThrow()) : new RegionTree(Map.of());
             RegionTree rightRegion = rightId.isPresent()
                     ? objects.readRegion(rightId.orElseThrow()) : new RegionTree(Map.of());
-            compareRegion(coordinate, leftRegion, rightRegion, sections, entities, scope);
+            compareRegion(
+                    coordinate, leftRegion, rightRegion, sections, entities, scope, cancelled);
         }
         return new WorldDifference(sections, entities);
     }
@@ -71,8 +90,10 @@ public final class CompareService {
             RegionTree right,
             Map<SectionKey, ObjectChange> sections,
             Map<EntityChunkKey, ObjectChange> entities,
-            ZoneScope scope) throws IOException {
+            ZoneScope scope,
+            BooleanSupplier cancelled) throws IOException {
         for (ChunkInRegion local : union(left.chunks().keySet(), right.chunks().keySet())) {
+            checkCancelled(cancelled);
             Optional<ObjectId> leftId = Optional.ofNullable(left.chunks().get(local));
             Optional<ObjectId> rightId = Optional.ofNullable(right.chunks().get(local));
             if (leftId.equals(rightId)) continue;
@@ -82,7 +103,9 @@ public final class CompareService {
                     ? objects.readChunk(rightId.orElseThrow()) : new ChunkTree(Map.of(), Optional.empty());
             int chunkX = region.x() * REGION_SIZE + local.x();
             int chunkZ = region.z() * REGION_SIZE + local.z();
-            compareChunk(chunkX, chunkZ, leftChunk, rightChunk, sections, entities, scope);
+            compareChunk(
+                    chunkX, chunkZ, leftChunk, rightChunk,
+                    sections, entities, scope, cancelled);
         }
     }
 
@@ -93,8 +116,10 @@ public final class CompareService {
             ChunkTree right,
             Map<SectionKey, ObjectChange> sections,
             Map<EntityChunkKey, ObjectChange> entities,
-            ZoneScope scope) throws IOException {
+            ZoneScope scope,
+            BooleanSupplier cancelled) throws IOException {
         for (int sectionY : union(left.sections().keySet(), right.sections().keySet())) {
+            checkCancelled(cancelled);
             SectionKey key = new SectionKey(chunkX, sectionY, chunkZ);
             if (scope != null && !scope.includes(key)) continue;
             addIfChanged(sections, key,
@@ -131,5 +156,11 @@ public final class CompareService {
         Set<T> union = new HashSet<>(first);
         union.addAll(second);
         return union;
+    }
+
+    private static void checkCancelled(BooleanSupplier cancelled) {
+        if (cancelled.getAsBoolean()) {
+            throw new CancellationException("Compare cancelled");
+        }
     }
 }

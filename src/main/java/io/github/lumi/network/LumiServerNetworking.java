@@ -21,8 +21,10 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -36,6 +38,8 @@ public final class LumiServerNetworking {
     private static final ConcurrentHashMap<UUID, TicketOwner> TICKET_OWNERS =
             new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, ServerBossEvent> BOSS_BARS =
+            new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, CompareJob> COMPARES =
             new ConcurrentHashMap<>();
 
     private LumiServerNetworking() { }
@@ -58,6 +62,8 @@ public final class LumiServerNetworking {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 LumiMod.serverRuntime().find(handler.getPlayer().level()).ifPresent(runtime ->
                         sendSnapshot(handler.getPlayer(), runtime)));
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
+                cancelCompares(handler.getPlayer().getUUID()));
     }
 
     private static void receive(
@@ -73,6 +79,10 @@ public final class LumiServerNetworking {
             PermissionDecision permission = LumiMod.serverRuntime().permission(player);
             if (permission != PermissionDecision.ALLOWED) {
                 reject(player, payload, runtime, permissionMessage(permission));
+                return;
+            }
+            if (payload.kind() == HistoryCommandPayload.Kind.COMPARE_CANCEL) {
+                cancelCompare(player, payload);
                 return;
             }
             BranchRef actual = runtime.activeRef();
@@ -118,8 +128,20 @@ public final class LumiServerNetworking {
             ServerPlayNetworking.Context context) throws IOException {
         CompareArgument argument = CompareArgument.parse(payload.argument());
         String dimension = dimension(runtime);
-        runtime.compare(argument.before(), argument.after())
+        AtomicBoolean cancelled = new AtomicBoolean();
+        CompletableFuture<ComparisonSummary> future = runtime.compare(
+                argument.before(), argument.after(), cancelled::get);
+        CompareJob job = new CompareJob(player.getUUID(), cancelled, future);
+        if (COMPARES.putIfAbsent(payload.requestId(), job) != null) {
+            cancelled.set(true);
+            future.cancel(false);
+            throw new IllegalStateException("Compare request already exists");
+        }
+        future
                 .whenComplete((summary, failure) -> context.server().execute(() -> {
+                    if (!COMPARES.remove(payload.requestId(), job) || cancelled.get()) {
+                        return;
+                    }
                     if (failure == null) {
                         send(player, success(payload.requestId(), dimension, summary));
                     } else {
@@ -129,6 +151,27 @@ public final class LumiServerNetworking {
                                 java.util.List.of(), failureMessage(failure)));
                     }
                 }));
+    }
+
+    private static void cancelCompare(
+            ServerPlayer player, HistoryCommandPayload payload) {
+        UUID target = UUID.fromString(payload.argument());
+        CompareJob job = COMPARES.get(target);
+        if (job != null
+                && job.playerId().equals(player.getUUID())
+                && COMPARES.remove(target, job)) {
+            job.cancelled().set(true);
+            job.future().cancel(false);
+        }
+    }
+
+    private static void cancelCompares(UUID playerId) {
+        COMPARES.forEach((request, job) -> {
+            if (job.playerId().equals(playerId) && COMPARES.remove(request, job)) {
+                job.cancelled().set(true);
+                job.future().cancel(false);
+            }
+        });
     }
 
     private static CompareResultPayload success(
@@ -189,6 +232,8 @@ public final class LumiServerNetworking {
                     "Branch creation does not use the mutation queue");
             case COMPARE -> throw new IllegalStateException(
                     "Compare does not use the mutation queue");
+            case COMPARE_CANCEL -> throw new IllegalStateException(
+                    "Compare cancellation does not use the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
@@ -423,4 +468,8 @@ public final class LumiServerNetworking {
 
     private record Started(OperationTicket ticket) { }
     private record TicketOwner(UUID playerId, UUID requestId) { }
+    private record CompareJob(
+            UUID playerId,
+            AtomicBoolean cancelled,
+            CompletableFuture<ComparisonSummary> future) { }
 }

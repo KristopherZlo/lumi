@@ -3,6 +3,9 @@ package io.github.lumi.client.ui;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.network.CompareResultPayload;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -16,8 +19,10 @@ public final class LumiCompareScreen extends Screen {
     private final Screen parent;
     private final ClientCompareStore comparisons;
     private final String label;
-    private final Runnable request;
+    private final Supplier<UUID> request;
+    private final Consumer<UUID> cancel;
     private boolean requested;
+    private UUID requestId;
     private String localError = "";
     private int panelX;
     private int panelY;
@@ -26,12 +31,14 @@ public final class LumiCompareScreen extends Screen {
             Screen parent,
             ClientCompareStore comparisons,
             String label,
-            Runnable request) {
+            Supplier<UUID> request,
+            Consumer<UUID> cancel) {
         super(Component.translatable("luma.screen.compare.title"));
         this.parent = parent;
         this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
         this.label = Objects.requireNonNull(label, "label");
         this.request = Objects.requireNonNull(request, "request");
+        this.cancel = Objects.requireNonNull(cancel, "cancel");
     }
 
     @Override
@@ -46,7 +53,7 @@ public final class LumiCompareScreen extends Screen {
         if (!requested) {
             requested = true;
             try {
-                request.run();
+                requestId = request.get();
             } catch (RuntimeException failed) {
                 localError = failed.getMessage() == null
                         ? "Lumi Compare could not start" : failed.getMessage();
@@ -123,5 +130,12 @@ public final class LumiCompareScreen extends Screen {
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { minecraft.setScreen(parent); }
+    @Override
+    public void onClose() {
+        if (requestId != null) {
+            cancel.accept(requestId);
+            requestId = null;
+        }
+        minecraft.setScreen(parent);
+    }
 }

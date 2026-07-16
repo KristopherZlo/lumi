@@ -1,6 +1,7 @@
 package io.github.lumi.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.MaterialDelta;
 import io.github.lumi.domain.model.ObjectChange;
@@ -12,6 +13,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -31,6 +33,8 @@ class MaterialCountServiceTest {
         var materials = new MaterialCountService(objects).count(difference);
 
         assertEquals(Map.of("minecraft:dirt", new MaterialDelta(0, 1)), materials);
+        assertThrows(CancellationException.class,
+                () -> new MaterialCountService(objects).count(difference, () -> true));
     }
 
     private static SectionBlob section(String... states) {

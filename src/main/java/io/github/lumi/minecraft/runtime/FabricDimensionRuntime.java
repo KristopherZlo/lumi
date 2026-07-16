@@ -90,6 +90,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
@@ -670,8 +671,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public CompletableFuture<ComparisonSummary> compare(
             CommitId before, CommitId after) throws IOException {
+        return compare(before, after, () -> false);
+    }
+
+    public CompletableFuture<ComparisonSummary> compare(
+            CommitId before, CommitId after, BooleanSupplier cancelled) throws IOException {
         Objects.requireNonNull(before, "before");
         Objects.requireNonNull(after, "after");
+        Objects.requireNonNull(cancelled, "cancelled");
         UUID workspace = activeWorkspaceId();
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -684,12 +691,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 }
                 var difference = new CompareService(
                         objects, commits, new OriginStore(repository))
-                        .compare(before, after);
+                        .compare(before, after, cancelled);
                 return new ComparisonSummary(
                         before, after,
                         difference.sections().size(),
                         difference.entities().size(),
-                        new MaterialCountService(objects).count(difference));
+                        new MaterialCountService(objects).count(difference, cancelled));
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }

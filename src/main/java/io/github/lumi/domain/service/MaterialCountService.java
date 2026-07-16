@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 
 /** Counts net block materials by decoding only section objects found by Compare. */
 public final class MaterialCountService {
@@ -24,13 +26,20 @@ public final class MaterialCountService {
     }
 
     public Map<String, MaterialDelta> count(WorldDifference difference) throws IOException {
+        return count(difference, () -> false);
+    }
+
+    public Map<String, MaterialDelta> count(
+            WorldDifference difference, BooleanSupplier cancelled) throws IOException {
         Objects.requireNonNull(difference, "difference");
+        Objects.requireNonNull(cancelled, "cancelled");
         Map<ObjectId, Map<String, Long>> cache = new HashMap<>();
         Map<String, Long> before = new HashMap<>();
         Map<String, Long> after = new HashMap<>();
         for (var change : difference.sections().values()) {
-            add(before, histogram(change.before(), cache));
-            add(after, histogram(change.after(), cache));
+            checkCancelled(cancelled);
+            add(before, histogram(change.before(), cache, cancelled));
+            add(after, histogram(change.after(), cache, cancelled));
         }
 
         Map<String, MaterialDelta> result = new TreeMap<>();
@@ -47,12 +56,17 @@ public final class MaterialCountService {
     }
 
     private Map<String, Long> histogram(
-            ObjectId id, Map<ObjectId, Map<String, Long>> cache) throws IOException {
+            ObjectId id,
+            Map<ObjectId, Map<String, Long>> cache,
+            BooleanSupplier cancelled) throws IOException {
         Map<String, Long> known = cache.get(id);
         if (known != null) return known;
 
         Map<String, Long> counted = new HashMap<>();
-        for (String state : objects.readSection(id).blockStates()) {
+        var states = objects.readSection(id).blockStates();
+        for (int index = 0; index < states.size(); index++) {
+            if ((index & 255) == 0) checkCancelled(cancelled);
+            String state = states.get(index);
             String material = materialId(state);
             if (!AIR.contains(material)) {
                 counted.merge(material, 1L, Math::addExact);
@@ -75,5 +89,11 @@ public final class MaterialCountService {
     private static void add(Map<String, Long> total, Map<String, Long> addition) {
         addition.forEach((material, count) ->
                 total.merge(material, count, Math::addExact));
+    }
+
+    private static void checkCancelled(BooleanSupplier cancelled) {
+        if (cancelled.getAsBoolean()) {
+            throw new CancellationException("Compare cancelled");
+        }
     }
 }
