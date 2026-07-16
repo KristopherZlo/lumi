@@ -4,6 +4,7 @@ import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.BlockAreaTarget;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.network.HistoryCommandPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.CompareArgument;
@@ -12,6 +13,7 @@ import io.github.lumi.network.MergeArgument;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
 import io.github.lumi.network.PartialRestoreArgument;
+import io.github.lumi.network.ZoneCreateArgument;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -99,6 +101,23 @@ public final class LumiClientNetworking {
     public UUID createBranch(String branchName) {
         return send(HistoryCommandPayload.Kind.BRANCH_CREATE,
                 Objects.requireNonNull(branchName, "branchName"));
+    }
+
+    public UUID createZone(String name, BlockBox area) {
+        return send(HistoryCommandPayload.Kind.ZONE_CREATE,
+                new ZoneCreateArgument(
+                        Objects.requireNonNull(name, "name"),
+                        Objects.requireNonNull(area, "area")).encode());
+    }
+
+    public UUID enterZone(UUID zoneId) {
+        return send(HistoryCommandPayload.Kind.ZONE_ENTER,
+                Objects.requireNonNull(zoneId, "zoneId").toString());
+    }
+
+    public UUID leaveZone(UUID zoneId) {
+        return send(HistoryCommandPayload.Kind.ZONE_LEAVE,
+                Objects.requireNonNull(zoneId, "zoneId").toString());
     }
 
     public UUID merge(String sourceBranch) {
