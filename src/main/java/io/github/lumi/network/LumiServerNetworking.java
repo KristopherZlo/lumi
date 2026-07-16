@@ -24,10 +24,15 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.ServerBossEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.BossEvent;
 
 /** Registers and dispatches the server-authoritative V2 play protocol. */
 public final class LumiServerNetworking {
     private static final ConcurrentHashMap<UUID, TicketOwner> TICKET_OWNERS =
+            new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, ServerBossEvent> BOSS_BARS =
             new ConcurrentHashMap<>();
 
     private LumiServerNetworking() { }
@@ -79,6 +84,7 @@ public final class LumiServerNetworking {
                         ? "Operation accepted" : "Queued at position " + position;
                 sendEvent(player, payload, runtime, OperationEventPayload.State.ACCEPTED,
                         message, Optional.of(started.ticket()), position);
+                bossBar(player, started.ticket(), position).setVisible(position == 0);
             });
             runtime.operations().observeProgress(started.ticket(), progress ->
                     runtime.operations().queuePosition(started.ticket()).ifPresent(position ->
@@ -121,8 +127,13 @@ public final class LumiServerNetworking {
             FabricDimensionRuntime runtime,
             HistoryCommandPayload payload,
             DimensionMutation operation) {
-        TICKET_OWNERS.entrySet().removeIf(entry ->
-                entry.getValue().requestId().equals(payload.requestId()));
+        TICKET_OWNERS.entrySet().removeIf(entry -> {
+            if (!entry.getValue().requestId().equals(payload.requestId())) {
+                return false;
+            }
+            removeBossBar(entry.getKey());
+            return true;
+        });
         OperationEventPayload.State state = eventState(operation.terminalState());
         String message = operation.failure().map(Throwable::getMessage)
                 .filter(value -> value != null && !value.isBlank())
@@ -159,6 +170,7 @@ public final class LumiServerNetworking {
             return;
         }
         TICKET_OWNERS.remove(payload.ticketId(), owner);
+        removeBossBar(payload.ticketId());
         sendEvent(player, owner.requestId(), runtime, OperationEventPayload.State.CANCELLED,
                 "Queued operation cancelled");
         sendSnapshot(player, runtime);
@@ -268,8 +280,32 @@ public final class LumiServerNetworking {
                     OperationEventPayload.State.PROGRESS, progress.phase(),
                     head.commit(), head.revision(), Optional.of(ticket.id()),
                     queuePosition, Optional.of(progress)));
+            ServerBossEvent boss = bossBar(player, ticket, queuePosition);
+            boss.setName(Component.literal(progress.phase()));
+            boss.setProgress((float) progress.fraction().orElse(0.0));
+            boss.setVisible(queuePosition == 0);
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi operation progress", failed);
+        }
+    }
+
+    private static ServerBossEvent bossBar(
+            ServerPlayer player, OperationTicket ticket, int queuePosition) {
+        ServerBossEvent boss = BOSS_BARS.computeIfAbsent(ticket.id(), ignored -> {
+            var created = new ServerBossEvent(
+                    Component.literal("Lumi"), BossEvent.BossBarColor.BLUE,
+                    BossEvent.BossBarOverlay.PROGRESS);
+            created.addPlayer(player);
+            return created;
+        });
+        boss.setVisible(queuePosition == 0);
+        return boss;
+    }
+
+    private static void removeBossBar(UUID ticketId) {
+        ServerBossEvent boss = BOSS_BARS.remove(ticketId);
+        if (boss != null) {
+            boss.removeAllPlayers();
         }
     }
 
