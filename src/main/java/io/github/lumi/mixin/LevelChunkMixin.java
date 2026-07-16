@@ -33,7 +33,6 @@ abstract class LevelChunkMixin {
             ThreadLocal.withInitial(ArrayDeque::new);
 
     @Shadow @Final private Level level;
-    @Shadow private boolean loaded;
 
     @Inject(
             method = "setBlockState(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Lnet/minecraft/world/level/block/state/BlockState;",
@@ -94,11 +93,13 @@ abstract class LevelChunkMixin {
     }
 
     private boolean lumi$trackSectionBeforeMutation(ServerLevel serverLevel, BlockPos position) {
-        if (!loaded) {
-            return true;
-        }
         var runtime = LumiMod.serverRuntime().find(serverLevel).orElse(null);
         if (runtime == null) {
+            return true;
+        }
+        LevelChunk chunk = (LevelChunk) (Object) this;
+        if (!runtime.isChunkMutationTrackable(
+                chunk.getPos().x, chunk.getPos().z)) {
             return true;
         }
         if (!runtime.freeze().isMutationAllowed()) {
@@ -107,7 +108,6 @@ abstract class LevelChunkMixin {
         if (runtime.freeze().isAuthorizedMutation()) {
             return true;
         }
-        LevelChunk chunk = (LevelChunk) (Object) this;
         var key = MinecraftSectionCapture.key(position);
         runtime.mutations().registerSectionMutation(key, () -> {
             try {

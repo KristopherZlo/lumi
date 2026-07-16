@@ -72,6 +72,7 @@ import io.github.lumi.minecraft.world.MinecraftChunkDurabilityRetention;
 import io.github.lumi.minecraft.world.MinecraftWorldStateReader;
 import io.github.lumi.minecraft.world.MinecraftWorldStateApply;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
+import io.github.lumi.minecraft.world.LoadedChunkMutationScope;
 import io.github.lumi.minecraft.world.RestoreBaselineReconciler;
 import io.github.lumi.minecraft.world.SavePreparation;
 import io.github.lumi.minecraft.world.ScopedSavePreparation;
@@ -156,6 +157,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final MinecraftCausalTickTracker causalTicks;
     private final io.github.lumi.minecraft.operation.RestoreStateListener restoreStateListener;
     private final BlockEntityBaselineStore blockEntityBaselines = new BlockEntityBaselineStore();
+    private final LoadedChunkMutationScope loadedChunks = new LoadedChunkMutationScope();
     private final MinecraftBlockEntityBaselineCapture baselineCapture =
             new MinecraftBlockEntityBaselineCapture();
     private final MinecraftEntityChunkCapture entityCapture = new MinecraftEntityChunkCapture();
@@ -508,11 +510,17 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public void chunkLoaded(LevelChunk chunk) throws IOException {
+        loadedChunks.loaded(chunk.getPos().x, chunk.getPos().z);
         baselineCapture.remember(level, chunk, mutations, blockEntityBaselines);
     }
 
     public void chunkUnloaded(LevelChunk chunk) {
+        loadedChunks.unloaded(chunk.getPos().x, chunk.getPos().z);
         blockEntityBaselines.discardChunk(chunk.getPos().x, chunk.getPos().z);
+    }
+
+    public boolean isChunkMutationTrackable(int chunkX, int chunkZ) {
+        return loadedChunks.contains(chunkX, chunkZ);
     }
 
     public void entityChunkLoaded(ChunkEntities<? extends EntityAccess> chunk) throws IOException {
