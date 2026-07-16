@@ -31,12 +31,14 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
+import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
 import io.github.lumi.domain.service.AutoVersionService;
 import io.github.lumi.domain.service.CompareService;
 import io.github.lumi.domain.service.HistoryQueryService;
+import io.github.lumi.domain.service.ImportExportService;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.MergeService;
 import io.github.lumi.domain.service.MaterialCountService;
@@ -82,6 +84,7 @@ import io.github.lumi.storage.repository.WorldObjectRepository;
 import io.github.lumi.storage.repository.WorkspaceRepository;
 import io.github.lumi.storage.repository.ZoneRepository;
 import io.github.lumi.storage.repository.TombstoneRepository;
+import io.github.lumi.storage.packageformat.LumiPackageDirectory;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -100,6 +103,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.entity.ChunkEntities;
@@ -131,6 +135,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final AutoVersionService autoVersions;
     private final CausalZoneGrowthTracker zoneGrowth;
     private final ReturnPointRestorePreparation returnPointRestores;
+    private final ImportExportService packageHistory;
+    private final LumiPackageDirectory packageDirectory;
     private final Executor background;
     private final BranchRefRepository refs;
     private final ActiveBranchRepository active;
@@ -208,6 +214,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         returnPointRestores = new ReturnPointRestorePreparation(
                 restores, worldApply, refs, journals,
                 restoreStateListener, background);
+        packageHistory = new ImportExportService(
+                level.dimension().identifier().toString(), repository);
+        packageDirectory = new LumiPackageDirectory(
+                level.getServer().getWorldPath(LevelResource.ROOT));
         worldReader = new MinecraftWorldStateReader(level);
         savePreparation = new DurableSavePreparation(worldReader, entityDurability, mutations);
         worldCapture = new BatchedWorldStateCapture(worldReader);
@@ -816,6 +826,58 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public CompletableFuture<ComparisonSummary> compare(
             CommitId before, CommitId after) throws IOException {
         return compare(before, after, () -> false);
+    }
+
+    public CompletableFuture<ImportExportService.PackageInspection> exportPackage(
+            PackageName name, BranchRef expected) {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(expected, "expected");
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                if (!activeRef().equals(expected)) {
+                    throw new IOException("Active branch changed before package export");
+                }
+                return packageHistory.export(
+                        expected.commit(), packageDirectory.resolve(name));
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+    }
+
+    public CompletableFuture<ImportExportService.PackageInspection> inspectPackage(
+            PackageName name) {
+        Objects.requireNonNull(name, "name");
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return packageHistory.inspect(packageDirectory.resolve(name));
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+    }
+
+    public CompletableFuture<ImportExportService.ImportResult> importPackage(
+            PackageName name,
+            ImportExportService.PackageInspection inspection,
+            BranchRef expected,
+            CommitAuthor author) {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(inspection, "inspection");
+        Objects.requireNonNull(expected, "expected");
+        Objects.requireNonNull(author, "author");
+        String suffix = inspection.manifest().commit().hex().substring(0, 8);
+        BranchName branch = new BranchName(
+                "import/" + name.value() + "-" + suffix);
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return packageHistory.importPackage(
+                        packageDirectory.resolve(name), inspection, expected,
+                        branch, author, Instant.now());
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
     }
 
     public CompletableFuture<ComparisonSummary> compare(

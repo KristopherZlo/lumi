@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ComparisonSummary;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.PermissionDecision;
 import io.github.lumi.domain.service.LiveActionJournal;
@@ -41,6 +42,8 @@ public final class LumiServerNetworking {
             new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, CompareJob> COMPARES =
             new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, PendingPackage> PACKAGE_INSPECTIONS =
+            new ConcurrentHashMap<>();
 
     private LumiServerNetworking() { }
 
@@ -55,6 +58,8 @@ public final class LumiServerNetworking {
                 OperationEventPayload.TYPE, OperationEventPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 CompareResultPayload.TYPE, CompareResultPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                PackageInspectionPayload.TYPE, PackageInspectionPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(
                 HistoryCommandPayload.TYPE, LumiServerNetworking::receive);
         ServerPlayNetworking.registerGlobalReceiver(
@@ -62,8 +67,11 @@ public final class LumiServerNetworking {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 LumiMod.serverRuntime().find(handler.getPlayer().level()).ifPresent(runtime ->
                         sendSnapshot(handler.getPlayer(), runtime)));
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
-                cancelCompares(handler.getPlayer().getUUID()));
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            UUID player = handler.getPlayer().getUUID();
+            cancelCompares(player);
+            PACKAGE_INSPECTIONS.remove(player);
+        });
     }
 
     private static void receive(
@@ -96,6 +104,10 @@ public final class LumiServerNetworking {
                 sendEvent(player, payload, runtime,
                         OperationEventPayload.State.SUCCEEDED, "Branch created");
                 sendSnapshot(player, runtime);
+                return;
+            }
+            if (isPackageCommand(payload.kind())) {
+                packageCommand(player, runtime, actual, payload, context);
                 return;
             }
             if (payload.kind() == HistoryCommandPayload.Kind.DELETE_VERSION) {
@@ -138,6 +150,102 @@ public final class LumiServerNetworking {
         return kind == HistoryCommandPayload.Kind.ZONE_CREATE
                 || kind == HistoryCommandPayload.Kind.ZONE_ENTER
                 || kind == HistoryCommandPayload.Kind.ZONE_LEAVE;
+    }
+
+    private static boolean isPackageCommand(HistoryCommandPayload.Kind kind) {
+        return kind == HistoryCommandPayload.Kind.PACKAGE_EXPORT
+                || kind == HistoryCommandPayload.Kind.PACKAGE_INSPECT
+                || kind == HistoryCommandPayload.Kind.PACKAGE_IMPORT;
+    }
+
+    private static void packageCommand(
+            ServerPlayer player,
+            FabricDimensionRuntime runtime,
+            BranchRef expected,
+            HistoryCommandPayload payload,
+            ServerPlayNetworking.Context context) {
+        if (payload.kind() == HistoryCommandPayload.Kind.PACKAGE_IMPORT) {
+            importPackage(player, runtime, expected, payload, context);
+            return;
+        }
+        PackageName name = new PackageName(payload.argument());
+        sendEvent(player, payload, runtime,
+                OperationEventPayload.State.ACCEPTED,
+                payload.kind() == HistoryCommandPayload.Kind.PACKAGE_EXPORT
+                        ? "Exporting package" : "Inspecting package");
+        var future = payload.kind() == HistoryCommandPayload.Kind.PACKAGE_EXPORT
+                ? runtime.exportPackage(name, expected)
+                : runtime.inspectPackage(name);
+        future.whenComplete((inspection, failure) -> context.server().execute(() -> {
+            if (failure != null) {
+                reject(player, payload, runtime, failureMessage(failure));
+                return;
+            }
+            if (payload.kind() == HistoryCommandPayload.Kind.PACKAGE_EXPORT) {
+                sendEvent(player, payload, runtime,
+                        OperationEventPayload.State.SUCCEEDED,
+                        "Package exported: " + name + ".lumi");
+                return;
+            }
+            if (context.server().getPlayerList().getPlayer(player.getUUID()) != player) {
+                return;
+            }
+            PACKAGE_INSPECTIONS.put(player.getUUID(), new PendingPackage(
+                    payload.requestId(), dimension(runtime), name, inspection));
+            send(player, new PackageInspectionPayload(
+                    payload.requestId(), dimension(runtime), name,
+                    inspection.manifest().commit(),
+                    displayText(inspection.source().message()),
+                    displayText(inspection.source().author().name()),
+                    inspection.manifest().totalBytes(),
+                    inspection.manifest().objects().size()));
+            sendEvent(player, payload, runtime,
+                    OperationEventPayload.State.SUCCEEDED,
+                    "Package inspected");
+        }));
+    }
+
+    private static void importPackage(
+            ServerPlayer player,
+            FabricDimensionRuntime runtime,
+            BranchRef expected,
+            HistoryCommandPayload payload,
+            ServerPlayNetworking.Context context) {
+        PendingPackage pending = PACKAGE_INSPECTIONS.get(player.getUUID());
+        UUID token = UUID.fromString(payload.argument());
+        if (pending == null || !pending.token().equals(token)
+                || !pending.dimensionId().equals(dimension(runtime))) {
+            reject(player, payload, runtime,
+                    "Inspect this package again before importing it");
+            return;
+        }
+        PACKAGE_INSPECTIONS.remove(player.getUUID(), pending);
+        sendEvent(player, payload, runtime,
+                OperationEventPayload.State.ACCEPTED, "Importing package");
+        CommitAuthor author = new CommitAuthor(
+                player.getUUID(), player.getName().getString());
+        runtime.importPackage(
+                        pending.name(), pending.inspection(), expected, author)
+                .whenComplete((result, failure) -> context.server().execute(() -> {
+                    if (failure != null) {
+                        reject(player, payload, runtime, failureMessage(failure));
+                        return;
+                    }
+                    sendEvent(player, payload, runtime,
+                            OperationEventPayload.State.SUCCEEDED,
+                            "Package imported as branch "
+                                    + result.branch().name().value());
+                    sendSnapshot(player, runtime);
+                }));
+    }
+
+    private static String displayText(String value) {
+        int end = Math.min(value.length(), 4096);
+        if (end > 0 && end < value.length()
+                && Character.isHighSurrogate(value.charAt(end - 1))) {
+            end--;
+        }
+        return value.substring(0, end);
     }
 
     private static void updateZoneMetadata(
@@ -284,7 +392,7 @@ public final class LumiServerNetworking {
             cause = cause.getCause();
         }
         String message = cause.getMessage();
-        return message == null || message.isBlank() ? "Compare failed" : message;
+        return message == null || message.isBlank() ? "Operation failed" : message;
     }
 
     private static Started start(
@@ -612,4 +720,9 @@ public final class LumiServerNetworking {
             UUID playerId,
             AtomicBoolean cancelled,
             CompletableFuture<ComparisonSummary> future) { }
+    private record PendingPackage(
+            UUID token,
+            String dimensionId,
+            PackageName name,
+            io.github.lumi.domain.service.ImportExportService.PackageInspection inspection) { }
 }
