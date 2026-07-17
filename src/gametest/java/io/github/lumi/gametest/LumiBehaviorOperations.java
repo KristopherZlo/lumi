@@ -81,6 +81,11 @@ final class LumiBehaviorOperations {
                 (runtime, terminal) -> runtime.startQuickRollback(author, terminal));
     }
 
+    void quickRollback(String name) throws IOException {
+        runOperation("quick_rollback_" + name,
+                (runtime, terminal) -> runtime.startQuickRollback(author, terminal));
+    }
+
     BranchRef createBranch(String name) throws IOException {
         long started = System.nanoTime();
         BranchRef branch = server.computeOnServer(

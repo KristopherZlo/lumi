@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.BlockBox;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 
@@ -50,6 +51,20 @@ final class LumiBehaviorChecks {
         context.waitTicks(ticks);
         report.event("wait", name, "completed", ticks,
                 elapsedMillis(started), "");
+    }
+
+    void waitUntil(String name, int maximumTicks, BooleanSupplier condition) {
+        long started = System.nanoTime();
+        int ticks = 0;
+        while (!condition.getAsBoolean() && ticks < maximumTicks) {
+            context.waitTick();
+            ticks++;
+        }
+        String status = condition.getAsBoolean() ? "completed" : "timeout";
+        report.event("wait", name, status, ticks, elapsedMillis(started), "");
+        if (!status.equals("completed")) {
+            throw new AssertionError(name + " exceeded " + maximumTicks + " ticks");
+        }
     }
 
     void screenshot(String name) {
