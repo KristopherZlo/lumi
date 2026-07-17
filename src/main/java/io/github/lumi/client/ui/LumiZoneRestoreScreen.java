@@ -37,6 +37,7 @@ public final class LumiZoneRestoreScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = (height - PANEL_HEIGHT) / 2;
@@ -65,6 +66,8 @@ public final class LumiZoneRestoreScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
         graphics.drawCenteredString(font,
@@ -83,7 +86,10 @@ public final class LumiZoneRestoreScreen extends LumiLegacyModalScreen {
             graphics.drawCenteredString(font, errorText(error),
                     width / 2, panelY + 116, LegacyLumiTheme.DANGER);
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     @Override public boolean isPauseScreen() { return false; }

@@ -37,6 +37,7 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         versions = history.state().snapshot()
                 .map(HistorySnapshotPayload::deletedVersions).orElse(List.of());
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
@@ -111,6 +112,8 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
         graphics.drawCenteredString(font, title, width / 2, panelY + 16,
@@ -127,7 +130,10 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyModalScreen {
             graphics.drawCenteredString(font, errorText(error),
                     width / 2, panelY + 220, LegacyLumiTheme.DANGER);
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     private void renderVersions(GuiGraphics graphics, int panelWidth) {

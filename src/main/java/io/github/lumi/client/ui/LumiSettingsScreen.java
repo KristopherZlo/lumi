@@ -21,6 +21,7 @@ public final class LumiSettingsScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         panelWidth = Math.min(430, width - 24);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - 270) / 2);
@@ -47,6 +48,8 @@ public final class LumiSettingsScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, 270);
         renderLegacyPanel(graphics, panelX + 12, panelY + 38,
                 panelWidth - 24, 176);
@@ -70,7 +73,10 @@ public final class LumiSettingsScreen extends LumiLegacyModalScreen {
                 Component.translatable("luma.settings.telemetry_last_send",
                         telemetry.lastSendSummary()),
                 panelX + 20, panelY + 166, LegacyLumiTheme.TEXT, false);
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     @Override public boolean isPauseScreen() { return false; }

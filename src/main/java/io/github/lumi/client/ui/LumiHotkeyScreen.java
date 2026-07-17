@@ -22,6 +22,7 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         panelWidth = Math.min(430, width - 24);
         panelX = (width - panelWidth) / 2;
         int panelHeight = 76 + shortcuts.size() * 34;
@@ -33,6 +34,8 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         int panelHeight = 76 + shortcuts.size() * 34;
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         graphics.drawString(font, title, panelX + 16, panelY + 17,
@@ -54,7 +57,10 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
                             panelWidth - 150),
                     panelX + 118, y + 12, LegacyLumiTheme.MUTED, false);
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     @Override public boolean isPauseScreen() { return false; }

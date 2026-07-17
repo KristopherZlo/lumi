@@ -26,6 +26,7 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         panelWidth = Math.min(390, width - 24);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - 210) / 2);
@@ -51,6 +52,8 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, 206);
         LegacyLumiTheme.outlined(graphics,
                 panelX + 12, panelY + 36, panelWidth - 24, 118,
@@ -72,7 +75,10 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
                     LegacyLumiTheme.MUTED, false);
             y += 12;
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     @Override public boolean isPauseScreen() { return false; }

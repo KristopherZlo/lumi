@@ -36,6 +36,7 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(16, (height - PANEL_HEIGHT) / 2);
@@ -69,6 +70,8 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
         graphics.drawCenteredString(font, title, width / 2, panelY + 16,
@@ -98,7 +101,10 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
             graphics.drawCenteredString(font, errorText(error),
                     width / 2, panelY + 72, LegacyLumiTheme.DANGER);
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     private static String shortName(String name) {

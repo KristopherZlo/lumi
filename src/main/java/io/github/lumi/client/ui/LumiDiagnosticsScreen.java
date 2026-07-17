@@ -24,6 +24,7 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         Runtime runtime = Runtime.getRuntime();
         diagnostics = ClientDiagnostics.from(
                 history.state(),
@@ -40,6 +41,8 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, 260);
         renderLegacyPanel(graphics, panelX + 12, panelY + 60,
                 panelWidth - 24, 180);
@@ -57,7 +60,10 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
         y = row(graphics, y, "WorldEdit / Axiom",
                 diagnostics.worldEdit() + " / " + diagnostics.axiom());
         row(graphics, y, "Used JVM heap", diagnostics.usedHeapMiB() + " MiB");
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     private int row(GuiGraphics graphics, int y, String label, String value) {

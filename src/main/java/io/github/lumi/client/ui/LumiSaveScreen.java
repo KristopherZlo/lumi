@@ -68,6 +68,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         layout = LegacyModalLayout.fit(width, height, DIALOG_HEIGHT);
         int x = layout.x();
         int y = layout.y();
@@ -164,10 +165,15 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         renderLegacyWindow(
                 graphics, layout.x(), layout.y(), layout.width(), layout.height());
         drawDialog(graphics);
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     private void drawDialog(GuiGraphics graphics) {

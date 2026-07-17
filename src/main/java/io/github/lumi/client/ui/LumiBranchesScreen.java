@@ -37,6 +37,7 @@ public final class LumiBranchesScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         layout = LegacyModalLayout.fit(width, height, PANEL_HEIGHT);
         int x = layout.x();
         int y = layout.y();
@@ -97,6 +98,8 @@ public final class LumiBranchesScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         renderLegacyWindow(graphics, layout.x(), layout.y(), layout.width(), layout.height());
         graphics.drawString(font, title, layout.x() + 16, layout.y() + 14,
                 LegacyLumiTheme.TEXT, false);
@@ -121,7 +124,10 @@ public final class LumiBranchesScreen extends LumiLegacyModalScreen {
             graphics.drawCenteredString(font, errorText(error),
                     width / 2, layout.y() + layout.height() - 44, LegacyLumiTheme.DANGER);
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     private int visibleRows() {

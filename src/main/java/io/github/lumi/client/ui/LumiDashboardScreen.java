@@ -91,6 +91,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         snapshot = history.state().snapshot().orElse(null);
         layout = LegacyWorkspaceLayout.fit(width, height);
         addSidebarButtons();
@@ -199,6 +200,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         graphics.fill(0, 0, width, height, LegacyLumiTheme.BACKDROP);
         drawFrame(graphics);
         if (snapshot == null) {
@@ -213,7 +216,10 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         } else {
             drawWorkspace(graphics);
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     private void drawFrame(GuiGraphics graphics) {

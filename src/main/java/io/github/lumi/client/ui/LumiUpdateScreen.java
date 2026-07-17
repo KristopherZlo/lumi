@@ -35,6 +35,7 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         panelWidth = Math.min(430, width - 24);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - 292) / 2);
@@ -74,6 +75,8 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, 292);
         graphics.drawString(font, title, panelX + 16, panelY + 18,
                 LegacyLumiTheme.TEXT, false);
@@ -82,7 +85,10 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
         renderLegacyPanel(graphics, panelX + 12, panelY + 66,
                 panelWidth - 24, 136);
         renderResult(graphics);
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     private void renderResult(GuiGraphics graphics) {

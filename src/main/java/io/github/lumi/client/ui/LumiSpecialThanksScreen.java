@@ -18,6 +18,7 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         panelWidth = Math.min(390, width - 24);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - 190) / 2);
@@ -28,6 +29,8 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, 190);
         graphics.drawString(font, title, panelX + 16, panelY + 18,
                 LegacyLumiTheme.TEXT, false);
@@ -36,7 +39,10 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
         entry(graphics, panelY + 76, "ImZlo",
                 Component.translatable("luma.special_thanks.zlo_role"));
         entry(graphics, panelY + 122, "Nayakochii", Component.literal("Tester"));
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     private void entry(GuiGraphics graphics, int y, String name, Component role) {

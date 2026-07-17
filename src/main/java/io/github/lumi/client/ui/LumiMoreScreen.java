@@ -38,6 +38,7 @@ public final class LumiMoreScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
+        beginLegacyInit();
         panelWidth = Math.min(390, width - 24);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - 312) / 2);
@@ -57,6 +58,8 @@ public final class LumiMoreScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        try {
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, 312);
         renderLegacyPanel(graphics, panelX + 12, panelY + 58,
                 panelWidth - 24, 206);
@@ -64,7 +67,10 @@ public final class LumiMoreScreen extends LumiLegacyModalScreen {
                 LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.more.help"),
                 panelX + 16, panelY + 40, LegacyLumiTheme.MUTED, false);
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        } finally {
+            endLegacyRender(graphics);
+        }
     }
 
     @Override public boolean isPauseScreen() { return false; }
