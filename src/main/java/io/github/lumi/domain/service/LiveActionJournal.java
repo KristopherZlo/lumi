@@ -9,8 +9,10 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 
 /** Session-only action history for one dimension. */
@@ -18,8 +20,8 @@ public final class LiveActionJournal {
     private final Map<UUID, MutableAction> actions = new HashMap<>();
     private final Map<UUID, UUID> openActions = new HashMap<>();
     private final Map<UUID, PlayerStacks> playerStacks = new HashMap<>();
-    private final Map<BlockPosition, Ownership> latestOwners = new HashMap<>();
-    private final Map<UUID, Ownership> latestEntityOwners = new HashMap<>();
+    private final OwnershipIndex<BlockPosition> blockOwners = new OwnershipIndex<>();
+    private final OwnershipIndex<UUID> entityOwners = new OwnershipIndex<>();
     private final Map<UUID, Long> playerBytes = new HashMap<>();
     private final Map<UUID, String> unavailableReasons = new HashMap<>();
     private final Limits limits;
@@ -74,10 +76,7 @@ public final class LiveActionJournal {
         } else {
             action.changes.put(position, updated);
         }
-        latestOwners.compute(position, (ignored, current) ->
-                current == null || current.sequence <= action.sequence
-                        ? new Ownership(action.id, action.sequence)
-                        : current);
+        blockOwners.set(position, action, updatedBytes != 0 && action.applied);
     }
 
     public synchronized void recordEntity(
@@ -106,9 +105,7 @@ public final class LiveActionJournal {
         } else {
             action.entities.put(entityId, updated);
         }
-        latestEntityOwners.compute(entityId, (ignored, current) ->
-                current == null || current.sequence <= action.sequence
-                        ? new Ownership(action.id, action.sequence) : current);
+        entityOwners.set(entityId, action, updatedBytes != 0 && action.applied);
     }
 
     public synchronized boolean close(UUID actionId) {
@@ -167,6 +164,12 @@ public final class LiveActionJournal {
         if (!plan.actionId.equals(source.peekLast())) {
             throw new IllegalStateException("Live action stack changed during apply");
         }
+        MutableAction action = requireAction(plan.actionId);
+        action.applied = plan.direction == Direction.REDO;
+        action.changes.keySet().forEach(position ->
+                blockOwners.set(position, action, action.applied));
+        action.entities.keySet().forEach(entity ->
+                entityOwners.set(entity, action, action.applied));
         source.removeLast();
         target.addLast(plan.actionId);
     }
@@ -175,8 +178,8 @@ public final class LiveActionJournal {
         actions.clear();
         openActions.clear();
         playerStacks.clear();
-        latestOwners.clear();
-        latestEntityOwners.clear();
+        blockOwners.clear();
+        entityOwners.clear();
         playerBytes.clear();
         unavailableReasons.clear();
         retainedBytes = 0;
@@ -221,14 +224,12 @@ public final class LiveActionJournal {
             throw new IllegalStateException("A newer evicted action makes this live action unsafe");
         }
         for (BlockPosition position : action.changes.keySet()) {
-            Ownership owner = latestOwners.get(position);
-            if (owner == null || !owner.actionId.equals(actionId)) {
+            if (overlaps(action, direction, blockOwners.latest(position))) {
                 throw new IllegalStateException("A newer action overlaps the selected live action");
             }
         }
         for (UUID entity : action.entities.keySet()) {
-            Ownership owner = latestEntityOwners.get(entity);
-            if (owner == null || !owner.actionId.equals(actionId)) {
+            if (overlaps(action, direction, entityOwners.latest(entity))) {
                 throw new IllegalStateException("A newer action overlaps the selected live action");
             }
         }
@@ -255,6 +256,14 @@ public final class LiveActionJournal {
             throw new IllegalArgumentException("Unknown live action: " + id);
         }
         return action;
+    }
+
+    private static boolean overlaps(
+            MutableAction action, Direction direction, Optional<Ownership> latest) {
+        if (direction == Direction.UNDO) {
+            return latest.isEmpty() || !latest.orElseThrow().actionId.equals(action.id);
+        }
+        return latest.filter(owner -> owner.sequence > action.sequence).isPresent();
     }
 
     private void startRecording(MutableAction action) {
@@ -359,6 +368,8 @@ public final class LiveActionJournal {
     private void evictState(MutableAction action, boolean createsSequenceBarrier) {
         adjustBytes(action.player, -action.bytes);
         action.bytes = 0;
+        action.changes.keySet().forEach(position -> blockOwners.set(position, action, false));
+        action.entities.keySet().forEach(entity -> entityOwners.set(entity, action, false));
         action.changes.clear();
         action.entities.clear();
         PlayerStacks stacks = stacks(action.player);
@@ -367,8 +378,6 @@ public final class LiveActionJournal {
         if (createsSequenceBarrier) {
             unsafeBeforeSequence = Math.max(unsafeBeforeSequence, action.sequence);
         }
-        latestOwners.entrySet().removeIf(entry -> entry.getValue().actionId.equals(action.id));
-        latestEntityOwners.entrySet().removeIf(entry -> entry.getValue().actionId.equals(action.id));
     }
 
     private void adjustBytes(UUID player, long delta) {
@@ -456,6 +465,7 @@ public final class LiveActionJournal {
         private boolean closed;
         private boolean started;
         private boolean available = true;
+        private boolean applied = true;
         private long bytes;
         private int causalReferences;
 
@@ -471,6 +481,39 @@ public final class LiveActionJournal {
     private record EntityChange(Optional<EntityState> before, Optional<EntityState> after) {}
 
     private record Ownership(UUID actionId, long sequence) {}
+
+    private static final class OwnershipIndex<K> {
+        private final Map<K, NavigableMap<Long, UUID>> owners = new HashMap<>();
+
+        private void set(K key, MutableAction action, boolean included) {
+            if (included) {
+                owners.computeIfAbsent(key, ignored -> new TreeMap<>())
+                        .put(action.sequence, action.id);
+                return;
+            }
+            NavigableMap<Long, UUID> indexed = owners.get(key);
+            if (indexed == null) {
+                return;
+            }
+            indexed.remove(action.sequence);
+            if (indexed.isEmpty()) {
+                owners.remove(key);
+            }
+        }
+
+        private Optional<Ownership> latest(K key) {
+            NavigableMap<Long, UUID> indexed = owners.get(key);
+            if (indexed == null || indexed.isEmpty()) {
+                return Optional.empty();
+            }
+            Map.Entry<Long, UUID> latest = indexed.lastEntry();
+            return Optional.of(new Ownership(latest.getValue(), latest.getKey()));
+        }
+
+        private void clear() {
+            owners.clear();
+        }
+    }
 
     private static final class PlayerStacks {
         private final Deque<UUID> undo = new ArrayDeque<>();

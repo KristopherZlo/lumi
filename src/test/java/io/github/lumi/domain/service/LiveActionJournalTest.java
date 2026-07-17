@@ -75,6 +75,27 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void undoRedoTraversesOverlappingAppliedActions() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID placement = journal.begin(PLAYER_A);
+        journal.record(placement, POSITION, block("air"), block("tnt"));
+        journal.recordEntity(
+                placement, ENTITY, Optional.empty(), Optional.of(entity(1)));
+        journal.close(placement);
+        UUID explosion = journal.begin(PLAYER_A);
+        journal.record(explosion, POSITION, block("tnt"), block("air"));
+        journal.recordEntity(
+                explosion, ENTITY, Optional.of(entity(1)), Optional.of(entity(2)));
+        journal.close(explosion);
+
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+        assertEquals(placement, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+        journal.complete(journal.prepareRedo(PLAYER_A).orElseThrow());
+        assertEquals(explosion, journal.prepareRedo(PLAYER_A).orElseThrow().actionId());
+    }
+
+    @Test
     void newDirectActionClearsOnlyThatPlayersRedo() {
         LiveActionJournal journal = new LiveActionJournal();
         UUID action = journal.begin(PLAYER_A);
