@@ -101,7 +101,7 @@ class MergePipelineTest {
             return new Prepared(state);
         }
         @Override public ApplySession begin(PreparedState ignored) { return new Session(); }
-        private record Prepared(State state) implements PreparedState { }
+        private record Prepared(State source) implements PreparedState { }
         private static final class Session implements ApplySession {
             @Override public boolean applyUntil(long deadlineNanos) { return true; }
             @Override public Verification verifyUntil(long deadlineNanos) { return Verification.VERIFIED; }

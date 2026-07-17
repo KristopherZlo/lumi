@@ -28,6 +28,7 @@ public final class RestoreOperation implements DimensionMutation {
     private final RestorePublication publication;
     private final OperationJournalRepository journals;
     private final WorldStateApply.ApplySession targetSession;
+    private final WorldStateApply.PreparedState preparedTarget;
     private final WorldStateApply.PreparedState preparedReturn;
     private final RestoreStateListener stateListener;
     private WorldStateApply.ApplySession returnSession;
@@ -55,6 +56,7 @@ public final class RestoreOperation implements DimensionMutation {
         this.publication = publication;
         this.journals = journals;
         this.journal = journal;
+        this.preparedTarget = preparedTarget;
         this.preparedReturn = preparedReturn;
         this.stateListener = stateListener;
         targetSession = world.begin(preparedTarget);
@@ -330,14 +332,28 @@ public final class RestoreOperation implements DimensionMutation {
         if (journal.phase() == OperationPhase.PREPARED) {
             journal = journals.advance(journal, OperationPhase.APPLYING);
         }
-        if (targetSession.applyUntil(deadlineNanos)) {
+        final boolean applied;
+        try {
+            applied = targetSession.applyUntil(deadlineNanos);
+        } catch (IOException targetFailure) {
+            beginReturnAfter(targetFailure);
+            return;
+        }
+        if (applied) {
             journal = journals.advance(journal, OperationPhase.VERIFYING);
             status = RestoreStatus.VERIFYING;
         }
     }
 
     private void verifyTarget(long deadlineNanos) throws IOException {
-        switch (targetSession.verifyUntil(deadlineNanos)) {
+        final WorldStateApply.Verification verification;
+        try {
+            verification = targetSession.verifyUntil(deadlineNanos);
+        } catch (IOException targetFailure) {
+            beginReturnAfter(targetFailure);
+            return;
+        }
+        switch (verification) {
             case IN_PROGRESS -> { }
             case VERIFIED -> publishTarget();
             case MISMATCH -> {
@@ -352,7 +368,14 @@ public final class RestoreOperation implements DimensionMutation {
     }
 
     private void repairTarget(long deadlineNanos) throws IOException {
-        if (targetSession.repairUntil(deadlineNanos)) {
+        final boolean repaired;
+        try {
+            repaired = targetSession.repairUntil(deadlineNanos);
+        } catch (IOException targetFailure) {
+            beginReturnAfter(targetFailure);
+            return;
+        }
+        if (repaired) {
             targetSession.restartVerification();
             status = RestoreStatus.VERIFYING;
         }
@@ -373,7 +396,7 @@ public final class RestoreOperation implements DimensionMutation {
         journals.clear(journal);
         targetSession.close();
         status = RestoreStatus.COMPLETE;
-        stateListener.restored(restore);
+        stateListener.restored(preparedTarget.source());
     }
 
     private void beginReturn() throws IOException {
@@ -382,6 +405,15 @@ public final class RestoreOperation implements DimensionMutation {
         returnSession = world.begin(preparedReturn);
         returnPhase = ReturnPhase.APPLYING;
         status = RestoreStatus.RETURNING;
+    }
+
+    private void beginReturnAfter(IOException targetFailure) throws IOException {
+        try {
+            beginReturn();
+        } catch (IOException returnFailure) {
+            returnFailure.addSuppressed(targetFailure);
+            throw returnFailure;
+        }
     }
 
     private void returnToPreviousState(long deadlineNanos) throws IOException {
@@ -394,7 +426,7 @@ public final class RestoreOperation implements DimensionMutation {
                 journals.clear(journal);
                 returnSession.close();
                 status = RestoreStatus.RETURNED;
-                stateListener.returned(restore);
+                stateListener.returned(preparedReturn.source());
             } else if (verification == WorldStateApply.Verification.MISMATCH) {
                 if (returnRepairAttempted) {
                     journal = journals.advance(journal, OperationPhase.DEGRADED);

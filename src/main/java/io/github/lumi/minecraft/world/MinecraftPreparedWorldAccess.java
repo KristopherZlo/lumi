@@ -106,7 +106,9 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
                 .filter(MinecraftPreparedWorldAccess::isDurableRoot)
                 .findFirst().orElseThrow(
                         () -> new IOException("Restored entity disappeared before removal: " + id));
-        freeze.runAuthorized(entity::discard);
+        List<Entity> graph = entity.getSelfAndPassengers()
+                .filter(member -> !(member instanceof Player)).toList();
+        freeze.runAuthorized(() -> graph.forEach(Entity::discard));
     }
 
     @Override
@@ -119,7 +121,7 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             throw new IOException("Restored entity position does not match " + key);
         }
         boolean[] added = {false};
-        freeze.runAuthorized(() -> added[0] = level.addWithUUID(entity));
+        freeze.runAuthorized(() -> added[0] = level.tryAddFreshEntityWithPassengers(entity));
         if (!added[0]) {
             throw new IOException("Cannot add restored entity " + decoded.id());
         }

@@ -3,7 +3,6 @@ package io.github.lumi.minecraft.world;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionKey;
-import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.minecraft.operation.RestoreStateListener;
 import java.util.Map;
 import java.util.Objects;
@@ -21,13 +20,13 @@ public final class RestoreBaselineReconciler implements RestoreStateListener {
     }
 
     @Override
-    public void restored(PreparedRestore restore) {
-        reconcile(restore.sections().keySet(), restore.entities());
+    public void restored(WorldStateApply.State state) {
+        reconcile(state.sections().keySet(), state.entities());
     }
 
     @Override
-    public void returned(PreparedRestore restore) {
-        reconcile(restore.returnSections().keySet(), restore.returnEntities());
+    public void returned(WorldStateApply.State state) {
+        reconcile(state.sections().keySet(), state.entities());
     }
 
     private void reconcile(

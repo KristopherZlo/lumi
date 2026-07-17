@@ -18,7 +18,9 @@ public interface WorldStateApply {
     /** Creates cursors only. World mutation starts with {@link ApplySession#applyUntil(long)}. */
     ApplySession begin(PreparedState target);
 
-    interface PreparedState { }
+    interface PreparedState {
+        State source();
+    }
 
     record State(
             Map<SectionKey, SectionBlob> sections,

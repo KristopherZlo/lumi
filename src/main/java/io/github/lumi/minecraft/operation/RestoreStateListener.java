@@ -1,15 +1,15 @@
 package io.github.lumi.minecraft.operation;
 
-import io.github.lumi.domain.service.PreparedRestore;
+import io.github.lumi.minecraft.world.WorldStateApply;
 
 /** Reconciles runtime-only caches with the verified state before Restore releases its freeze. */
 public interface RestoreStateListener {
     RestoreStateListener NONE = new RestoreStateListener() {
-        @Override public void restored(PreparedRestore restore) { }
-        @Override public void returned(PreparedRestore restore) { }
+        @Override public void restored(WorldStateApply.State state) { }
+        @Override public void returned(WorldStateApply.State state) { }
     };
 
-    void restored(PreparedRestore restore);
+    void restored(WorldStateApply.State state);
 
-    void returned(PreparedRestore restore);
+    void returned(WorldStateApply.State state);
 }

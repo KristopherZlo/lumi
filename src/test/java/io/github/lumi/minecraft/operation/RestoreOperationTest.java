@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.operation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BranchName;
@@ -259,6 +260,27 @@ class RestoreOperationTest {
     }
 
     @Test
+    void returnsToPreparedStateWhenTargetApplyFails() throws IOException {
+        CommitId current = id('5');
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var expectedRef = refs.create(new BranchName("main"), current);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        FailingTargetApply world = new FailingTargetApply();
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expectedRef, id('6'), Map.of(), Map.of(), Map.of(), Map.of()),
+                world, refs, journals, UUID.randomUUID());
+
+        assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.RETURNED, operation.tick(Long.MAX_VALUE));
+        assertEquals(MutationTerminalState.RETURNED, operation.terminalState());
+        assertEquals(2, world.beginCalls);
+        assertTrue(operation.isSafeToRelease());
+        assertTrue(journals.read().isEmpty());
+        assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
+    }
+
+    @Test
     void keepsJournalAndDegradesWhenNeitherDirectionVerifies() throws IOException {
         CommitId current = id('7');
         CommitId target = id('8');
@@ -344,6 +366,23 @@ class RestoreOperationTest {
     }
 
     @Test
+    void doesNotReturnAfterPublicationFailure() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('d'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('e'), Map.of(), Map.of(), Map.of(), Map.of()),
+                new ImmediatelyVerified(), ignored -> {
+                    throw new IOException("Cannot publish restored ref");
+                }, journals, UUID.randomUUID());
+
+        assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
+        assertThrows(IOException.class, () -> operation.tick(Long.MAX_VALUE));
+
+        assertEquals(RestoreStatus.VERIFYING, operation.status());
+        assertEquals(OperationPhase.VERIFYING, journals.read().orElseThrow().phase());
+    }
+
+    @Test
     void closesPreparedWorldSessionAfterSuccessfulRestore() throws IOException {
         var expected = new BranchRef(new BranchName("main"), id('e'), 1);
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
@@ -397,8 +436,8 @@ class RestoreOperationTest {
     private static final class RecordingRestoreStateListener implements RestoreStateListener {
         private int restored;
         private int returned;
-        @Override public void restored(PreparedRestore restore) { restored++; }
-        @Override public void returned(PreparedRestore restore) { returned++; }
+        @Override public void restored(WorldStateApply.State state) { restored++; }
+        @Override public void returned(WorldStateApply.State state) { returned++; }
     }
 
     private static final class ImmediatelyVerified implements TestWorldApply {
@@ -551,12 +590,34 @@ class RestoreOperationTest {
         }
     }
 
+    private static final class FailingTargetApply implements TestWorldApply {
+        private int beginCalls;
+
+        @Override
+        public ApplySession begin(PreparedState target) {
+            boolean targetSession = ++beginCalls == 1;
+            return new ApplySession() {
+                @Override public boolean applyUntil(long deadlineNanos) throws IOException {
+                    if (targetSession) {
+                        throw new IOException("Cannot add restored entity");
+                    }
+                    return true;
+                }
+                @Override public Verification verifyUntil(long deadlineNanos) {
+                    return Verification.VERIFIED;
+                }
+                @Override public boolean repairUntil(long deadlineNanos) { return true; }
+                @Override public void restartVerification() { }
+            };
+        }
+    }
+
     private interface TestWorldApply extends WorldStateApply {
         @Override default PreparedState prepare(State target) {
             return new TestPrepared(target);
         }
     }
 
-    private record TestPrepared(WorldStateApply.State state)
+    private record TestPrepared(WorldStateApply.State source)
             implements WorldStateApply.PreparedState { }
 }

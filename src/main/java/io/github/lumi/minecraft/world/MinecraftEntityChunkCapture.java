@@ -47,7 +47,7 @@ public final class MinecraftEntityChunkCapture {
             ServerLevel level, EntityAccess access) throws IOException {
         Objects.requireNonNull(level, "level");
         if (!(Objects.requireNonNull(access, "access") instanceof Entity entity)
-                || entity instanceof Player || !entity.shouldBeSaved()) {
+                || entity instanceof Player || entity.isPassenger() || !entity.shouldBeSaved()) {
             return Optional.empty();
         }
         TagValueOutput output = TagValueOutput.createWithContext(

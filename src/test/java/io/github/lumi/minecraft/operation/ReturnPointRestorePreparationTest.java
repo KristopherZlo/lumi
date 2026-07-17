@@ -82,5 +82,5 @@ class ReturnPointRestorePreparationTest {
         }
     }
 
-    private record Prepared(WorldStateApply.State state) implements WorldStateApply.PreparedState { }
+    private record Prepared(WorldStateApply.State source) implements WorldStateApply.PreparedState { }
 }

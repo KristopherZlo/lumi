@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.util.HashMap;
@@ -25,10 +26,14 @@ public final class MinecraftRestorePreparation {
         for (var entry : source.sections().entrySet()) {
             decodedSections.put(entry.getKey(), sections.decode(entry.getValue()));
         }
+        Map<EntityChunkKey, EntityChunkBlob> normalizedEntities =
+                entities.normalize(source.entities());
         Map<EntityChunkKey, DecodedEntityChunk> decodedEntities = new HashMap<>();
-        for (var entry : source.entities().entrySet()) {
-            decodedEntities.put(entry.getKey(), entities.decode(entry.getValue()));
+        for (var entry : normalizedEntities.entrySet()) {
+            decodedEntities.put(entry.getKey(), entities.decodeNormalized(entry.getValue()));
         }
-        return new PreparedMinecraftState(source, decodedSections, decodedEntities);
+        var normalizedSource = new WorldStateApply.State(
+                source.sections(), normalizedEntities, source.playerSpawns());
+        return new PreparedMinecraftState(normalizedSource, decodedSections, decodedEntities);
     }
 }

@@ -3,17 +3,12 @@ package io.github.lumi.minecraft.world;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.github.lumi.domain.model.BranchName;
-import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CanonicalNbt;
-import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
-import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
-import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -46,12 +41,10 @@ class RestoreBaselineReconcilerTest {
         EntityChunkBlob target = entities(2);
         entities.rememberLoaded(entityKey, original);
         blockEntities.remember(sectionKey, Map.of(0, new CanonicalNbt(new byte[] {1})));
-        PreparedRestore restore = new PreparedRestore(
-                new BranchRef(new BranchName("main"), id('1'), 0), id('2'),
-                Map.of(sectionKey, section()), Map.of(entityKey, target),
-                Map.of(sectionKey, section()), Map.of(entityKey, original));
+        var state = new WorldStateApply.State(
+                Map.of(sectionKey, section()), Map.of(entityKey, target));
 
-        new RestoreBaselineReconciler(entities, blockEntities).restored(restore);
+        new RestoreBaselineReconciler(entities, blockEntities).restored(state);
 
         assertFalse(blockEntities.contains(sectionKey));
         assertTrue(entities.permitStore(entityKey, target));
@@ -68,10 +61,6 @@ class RestoreBaselineReconcilerTest {
     private static SectionBlob section() {
         return new SectionBlob(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:air")), Map.of());
-    }
-
-    private static CommitId id(char digit) {
-        return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
     }
 
     private static final class ManualExecutor implements Executor {

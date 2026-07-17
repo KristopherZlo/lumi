@@ -54,7 +54,11 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     public void write(UUID entityId, Optional<EntityState> replacement) throws IOException {
         Objects.requireNonNull(entityId, "entityId");
         Objects.requireNonNull(replacement, "replacement");
-        find(entityId).ifPresent(entity -> freeze.runAuthorized(entity::discard));
+        find(entityId).ifPresent(entity -> {
+            var graph = entity.getSelfAndPassengers()
+                    .filter(member -> !(member instanceof Player)).toList();
+            freeze.runAuthorized(() -> graph.forEach(Entity::discard));
+        });
         if (replacement.isEmpty()) {
             return;
         }
@@ -70,7 +74,7 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
             throw new IOException("Cannot create live entity " + entityId);
         }
         boolean[] added = {false};
-        freeze.runAuthorized(() -> added[0] = level.addWithUUID(entity));
+        freeze.runAuthorized(() -> added[0] = level.tryAddFreshEntityWithPassengers(entity));
         if (!added[0]) {
             throw new IOException("Cannot add live entity " + entityId);
         }

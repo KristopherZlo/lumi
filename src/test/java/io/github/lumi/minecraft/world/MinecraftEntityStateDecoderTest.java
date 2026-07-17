@@ -7,9 +7,13 @@ import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityState;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.entity.EntityType;
 import org.junit.jupiter.api.BeforeAll;
@@ -49,5 +53,56 @@ class MinecraftEntityStateDecoderTest {
 
         assertThrows(IOException.class, () -> new MinecraftEntityStateDecoder(
                 BuiltInRegistries.ENTITY_TYPE).decode(source));
+    }
+
+    @Test
+    void removesLegacyTopLevelPassengerDuplicatedInsideVehicleNbt() throws Exception {
+        UUID vehicleId = UUID.fromString("10000000-0000-0000-0000-000000000001");
+        UUID passengerId = UUID.fromString("20000000-0000-0000-0000-000000000002");
+        CompoundTag passenger = new CompoundTag();
+        passenger.putString("id", "minecraft:armor_stand");
+        passenger.putIntArray("UUID", UUIDUtil.uuidToIntArray(passengerId));
+        ListTag passengers = new ListTag();
+        passengers.add(passenger);
+        CompoundTag vehicle = new CompoundTag();
+        vehicle.put("Passengers", passengers);
+        var source = new EntityChunkBlob(List.of(
+                new EntityState(vehicleId, "minecraft:armor_stand", MinecraftNbtCodec.encode(vehicle)),
+                new EntityState(passengerId, "minecraft:armor_stand",
+                        MinecraftNbtCodec.encode(new CompoundTag()))));
+        var decoder = new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE);
+
+        EntityChunkBlob normalized = decoder.normalize(source);
+
+        assertEquals(List.of(vehicleId), normalized.entities().stream()
+                .map(EntityState::id).toList());
+        assertEquals(List.of(vehicleId), decoder.decode(source).entities().stream()
+                .map(DecodedEntity::id).toList());
+    }
+
+    @Test
+    void removesLegacyPassengerEvenWhenItsTopLevelRecordUsesAnotherChunk() throws Exception {
+        UUID vehicleId = UUID.fromString("10000000-0000-0000-0000-000000000001");
+        UUID passengerId = UUID.fromString("20000000-0000-0000-0000-000000000002");
+        CompoundTag passenger = new CompoundTag();
+        passenger.putIntArray("UUID", UUIDUtil.uuidToIntArray(passengerId));
+        ListTag passengers = new ListTag();
+        passengers.add(passenger);
+        CompoundTag vehicle = new CompoundTag();
+        vehicle.put("Passengers", passengers);
+        var decoder = new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE);
+
+        Map<io.github.lumi.domain.model.EntityChunkKey, EntityChunkBlob> normalized =
+                decoder.normalize(Map.of(
+                        new io.github.lumi.domain.model.EntityChunkKey(0, 0),
+                        new EntityChunkBlob(List.of(new EntityState(vehicleId,
+                                "minecraft:oak_boat", MinecraftNbtCodec.encode(vehicle)))),
+                        new io.github.lumi.domain.model.EntityChunkKey(1, 0),
+                        new EntityChunkBlob(List.of(new EntityState(passengerId,
+                                "minecraft:armor_stand",
+                                MinecraftNbtCodec.encode(new CompoundTag()))))));
+
+        assertEquals(1, normalized.values().stream()
+                .mapToInt(chunk -> chunk.entities().size()).sum());
     }
 }
