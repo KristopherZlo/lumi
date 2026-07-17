@@ -1,0 +1,143 @@
+package io.github.lumi.gametest;
+
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/** Writes one self-contained diagnostic report for the client behavior test. */
+final class LumiBehaviorReport implements AutoCloseable {
+    private static final Logger LOGGER = LoggerFactory.getLogger("lumi-behavior-test");
+    private static final DateTimeFormatter RUN_NAME = DateTimeFormatter
+            .ofPattern("uuuuMMdd-HHmmss", Locale.ROOT).withZone(ZoneOffset.UTC);
+
+    private final Path directory;
+    private final Path snapshots;
+    private final BufferedWriter events;
+    private int snapshotNumber;
+
+    private LumiBehaviorReport(Path directory, BufferedWriter events) throws IOException {
+        this.directory = directory;
+        snapshots = Files.createDirectories(directory.resolve("snapshots"));
+        this.events = events;
+        event("test", "client_behavior", "started", 0, 0, "");
+        LOGGER.info("Lumi behavior report: {}", directory.toAbsolutePath());
+    }
+
+    static LumiBehaviorReport create(Path gameDirectory) throws IOException {
+        Path directory = Files.createDirectories( gameDirectory
+                .resolve("lumi-behavior-reports")
+                .resolve(RUN_NAME.format(Instant.now())));
+        BufferedWriter events = Files.newBufferedWriter(
+                directory.resolve("events.jsonl"), StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        return new LumiBehaviorReport(directory, events);
+    }
+
+    Path directory() {
+        return directory;
+    }
+
+    void event(
+            String type,
+            String name,
+            String status,
+            int ticks,
+            long millis,
+            String detail) {
+        String line = "{"
+                + field("time", Instant.now().toString()) + ","
+                + field("type", type) + ","
+                + field("name", name) + ","
+                + field("status", status) + ","
+                + "\"ticks\":" + ticks + ","
+                + "\"millis\":" + millis + ","
+                + field("detail", detail)
+                + "}";
+        writeLine(line);
+        LOGGER.info("Behavior {} {}: {} ({} ticks, {} ms){}",
+                type, name, status, ticks, millis,
+                detail.isBlank() ? "" : " - " + detail);
+    }
+
+    void snapshot(
+            String name,
+            String digest,
+            int sections,
+            int entities,
+            long captureMillis) {
+        int number = ++snapshotNumber;
+        String body = "{"
+                + field("name", name) + ","
+                + field("sha256", digest) + ","
+                + "\"sections\":" + sections + ","
+                + "\"entities\":" + entities + ","
+                + "\"captureMillis\":" + captureMillis
+                + "}\n";
+        try {
+            Files.writeString(
+                    snapshots.resolve(String.format(
+                            Locale.ROOT, "%02d-%s.json", number, fileName(name))),
+                    body, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+        } catch (IOException failed) {
+            throw new IllegalStateException("Cannot write behavior snapshot", failed);
+        }
+        event("snapshot", name, "captured", 0, captureMillis,
+                digest + " sections=" + sections + " entities=" + entities);
+    }
+
+    private synchronized void writeLine(String line) {
+        try {
+            events.write(line);
+            events.newLine();
+            events.flush();
+        } catch (IOException failed) {
+            throw new IllegalStateException("Cannot write behavior event", failed);
+        }
+    }
+
+    private static String field(String name, String value) {
+        return "\"" + name + "\":\"" + escape(value) + "\"";
+    }
+
+    private static String escape(String value) {
+        StringBuilder escaped = new StringBuilder(value.length() + 16);
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            switch (character) {
+                case '"' -> escaped.append("\\\"");
+                case '\\' -> escaped.append("\\\\");
+                case '\n' -> escaped.append("\\n");
+                case '\r' -> escaped.append("\\r");
+                case '\t' -> escaped.append("\\t");
+                default -> {
+                    if (character < 0x20) {
+                        escaped.append(String.format(
+                                Locale.ROOT, "\\u%04x", (int) character));
+                    } else {
+                        escaped.append(character);
+                    }
+                }
+            }
+        }
+        return escaped.toString();
+    }
+
+    private static String fileName(String name) {
+        return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]+", "-");
+    }
+
+    @Override
+    public void close() throws IOException {
+        event("test", "client_behavior", "finished", 0, 0, "");
+        events.close();
+    }
+}

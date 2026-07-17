@@ -60,7 +60,7 @@ fabricApi {
         createSourceSet = true
         modId = "lumi-gametest"
         enableGameTests = true
-        enableClientGameTests = false
+        enableClientGameTests = true
         eula = true
     }
 }

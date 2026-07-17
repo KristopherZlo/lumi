@@ -3,8 +3,11 @@
   "id": "lumi-gametest",
   "version": "1.0.0",
   "name": "Lumi Game Tests",
-  "environment": "server",
+  "environment": "*",
   "entrypoints": {
+    "fabric-client-gametest": [
+      "io.github.lumi.gametest.LumiBehaviorClientGameTest"
+    ],
     "fabric-gametest": [
       "io.github.lumi.gametest.LumiLiveActionGameTests",
       "io.github.lumi.gametest.LumiTntGameTests",
