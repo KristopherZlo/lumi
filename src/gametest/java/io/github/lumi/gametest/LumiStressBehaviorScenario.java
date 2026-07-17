@@ -156,11 +156,17 @@ final class LumiStressBehaviorScenario {
         CommitId tntCommit = operations.save("tnt");
         checks.assertSnapshot("save_tnt", area, allTnt);
         BlockPos ignition = tnt.get(new Random(RANDOM_SEED).nextInt(tnt.size()));
-        actions.igniteTnt("ignite_all_128_tnt", ignition);
+        actions.igniteTnt("ignite_all_128_tnt", tnt);
         checks.waitUntil("ignite_all_128_tnt_started", 20,
                 () -> actions.hasPrimedTnt(ignition));
-        checks.waitUntil("all_128_tnt_exploded", 600,
-                () -> !actions.hasTnt(tnt));
+        try {
+            checks.waitUntil("all_128_tnt_exploded", 600,
+                    () -> !actions.hasTnt(tnt));
+        } catch (AssertionError timeout) {
+            report.event("diagnostic", "all_128_tnt_exploded", "failed",
+                    600, 0, actions.describeTnt(tnt));
+            throw timeout;
+        }
         checks.waitTicks("all_128_tnt_settle", 20);
         LumiWorldSnapshot afterTnt = checks.snapshot("after_all_tnt", area);
         CommitId afterTntCommit = operations.save("after tnt");

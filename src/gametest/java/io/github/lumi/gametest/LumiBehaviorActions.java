@@ -89,6 +89,17 @@ final class LumiBehaviorActions {
         }));
     }
 
+    void igniteTnt(String name, List<BlockPos> targets) {
+        timed(name, () -> server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            for (BlockPos target : targets) {
+                require(player.level().getBlockState(target).is(Blocks.TNT),
+                        "Missing TNT before ignition at " + target);
+                useOn(player, Items.FLINT_AND_STEEL, target, Direction.UP);
+            }
+        }));
+    }
+
     void placeBlocks(String name, Item item, List<BlockPos> positions) {
         timed(name, () -> server.runOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
@@ -125,6 +136,21 @@ final class LumiBehaviorActions {
                     || StreamSupport.stream(
                             level.getAllEntities().spliterator(), false)
                             .anyMatch(PrimedTnt.class::isInstance);
+        });
+    }
+
+    String describeTnt(List<BlockPos> positions) {
+        return server.computeOnServer(minecraft -> {
+            ServerLevel level = player(minecraft).level();
+            List<BlockPos> blocks = positions.stream()
+                    .filter(position -> level.getBlockState(position).is(Blocks.TNT))
+                    .toList();
+            long carriers = StreamSupport.stream(
+                            level.getAllEntities().spliterator(), false)
+                    .filter(PrimedTnt.class::isInstance)
+                    .count();
+            return "blocks=" + blocks.size() + ", carriers=" + carriers
+                    + ", firstBlocks=" + blocks.stream().limit(8).toList();
         });
     }
 
