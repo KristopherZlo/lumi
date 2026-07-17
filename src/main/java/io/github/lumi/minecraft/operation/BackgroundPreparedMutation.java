@@ -61,6 +61,7 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
             try {
                 delegate = Objects.requireNonNull(preparation.join(), "prepared mutation");
                 validation.validate();
+                return;
             } catch (CompletionException failed) {
                 failure = failed.getCause() == null ? failed : failed.getCause();
                 return;

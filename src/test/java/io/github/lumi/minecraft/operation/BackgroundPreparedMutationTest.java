@@ -28,6 +28,9 @@ class BackgroundPreparedMutationTest {
 
         future.complete(new TestMutation());
         coordinator.tick();
+        assertEquals(0, freeze.releaseCalls);
+
+        coordinator.tick();
         assertEquals(1, freeze.releaseCalls);
     }
 
@@ -51,11 +54,33 @@ class BackgroundPreparedMutationTest {
         coordinator.tick();
 
         assertEquals(1, validations.get());
+        assertEquals(0, delegate.advances);
+        assertEquals(0, discards.get());
+        assertEquals(1, freeze.acquireCalls);
+        assertEquals(0, freeze.releaseCalls);
+
+        coordinator.tick();
+
         assertEquals(1, delegate.advances);
         assertEquals(0, discards.get());
         assertEquals(1, freeze.acquireCalls);
         assertEquals(1, freeze.releaseCalls);
         assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
+    void completionAfterFreezeCheckCannotAdvanceDelegate() throws Exception {
+        CompletableFuture<TestMutation> future = new CompletableFuture<>();
+        TestMutation delegate = new TestMutation();
+        BackgroundPreparedMutation<TestMutation> prepared = new BackgroundPreparedMutation<>(
+                future, () -> { }, ignored -> { });
+
+        assertFalse(prepared.requiresFreeze());
+        future.complete(delegate);
+        prepared.advance(Long.MAX_VALUE);
+
+        assertEquals(0, delegate.advances);
+        assertTrue(prepared.requiresFreeze());
     }
 
     @Test

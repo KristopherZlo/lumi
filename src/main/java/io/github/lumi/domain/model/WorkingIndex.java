@@ -36,6 +36,10 @@ public final class WorkingIndex {
         return generations.get(Objects.requireNonNull(key, "key"));
     }
 
+    public synchronized boolean isEmpty() {
+        return generations.isEmpty();
+    }
+
     public synchronized WorkingIndexPreview preview(
             Predicate<HistoryKey> scope, int maximumSections) {
         Objects.requireNonNull(scope, "scope");

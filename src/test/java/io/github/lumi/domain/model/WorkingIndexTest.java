@@ -1,10 +1,25 @@
 package io.github.lumi.domain.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
 class WorkingIndexTest {
+    @Test
+    void reportsPendingStateWithoutCreatingASnapshot() {
+        WorkingIndex index = new WorkingIndex();
+
+        assertTrue(index.isEmpty());
+        WorkingIndexSnapshot dirty = new WorkingIndexSnapshot(
+                java.util.Map.of(new SectionKey(0, 0, 0), 1L));
+        index.markDirty(new SectionKey(0, 0, 0));
+        assertFalse(index.isEmpty());
+        index.clearCaptured(dirty);
+        assertTrue(index.isEmpty());
+    }
+
     @Test
     void previewsExactScopedCountWithBoundedSectionCoordinates() {
         WorkingIndex index = new WorkingIndex();

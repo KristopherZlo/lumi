@@ -79,10 +79,9 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
     modCompileOnly "maven.modrinth:1u6JkXh5:${project.worldedit_version_id}"
     modCompileOnly "maven.modrinth:N6n5dqoA:${project.axiom_version_id}"
-    modCompileOnly axiomRuntimeJars
+    compileOnly axiomRuntimeJars
     modRuntimeOnly "maven.modrinth:1u6JkXh5:${project.worldedit_version_id}"
     modRuntimeOnly "maven.modrinth:N6n5dqoA:${project.axiom_version_id}"
-    modRuntimeOnly axiomRuntimeJars
     modRuntimeOnly "org.enginehub.worldeditcui-protocol:" +
             "worldeditcui-protocol-fabric-mc1.21.11:4.0.2"
 

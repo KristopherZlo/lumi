@@ -177,6 +177,10 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         return working.snapshot();
     }
 
+    public boolean hasPendingChanges() {
+        return !working.isEmpty();
+    }
+
     public synchronized WorkingIndexPreview preview(
             Predicate<HistoryKey> scope, int maximumBlocks) {
         if (maximumBlocks < 0) {

@@ -369,7 +369,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 recoveryJournal().isPresent()
                         || operations.hasActiveOperation()
                         || operations.queuedCount() > 0
-                        || !mutations.snapshot().generations().isEmpty());
+                        || mutations.hasPendingChanges());
     }
 
     private void scheduleAutoVersion() {
@@ -380,7 +380,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         boolean busy = recoveryJournal().isPresent()
                 || operations.hasActiveOperation() || operations.queuedCount() > 0;
         nextAutoVersionTick = now + (busy ? 200 : AUTO_VERSION_INTERVAL_TICKS);
-        if (busy || mutations.snapshot().generations().isEmpty()
+        if (busy || !mutations.hasPendingChanges()
                 || !autoVersionScheduled.compareAndSet(false, true)) {
             return;
         }

@@ -137,6 +137,9 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
         for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
             PlayerSpawn spawn = spawns.get(player.getUUID());
             if (spawn == null) {
+                if (currentSpawn(player).isPresent()) {
+                    player.setRespawnPosition(null, false);
+                }
                 continue;
             }
             var data = LevelData.RespawnData.of(
@@ -151,11 +154,15 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     public boolean matchesPlayerSpawns(Map<UUID, PlayerSpawn> spawns) {
         for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
             PlayerSpawn expected = spawns.get(player.getUUID());
-            if (expected != null && !Optional.of(expected).equals(currentSpawn(player))) {
+            if (!matchesSpawn(expected, currentSpawn(player))) {
                 return false;
             }
         }
         return true;
+    }
+
+    static boolean matchesSpawn(PlayerSpawn expected, Optional<PlayerSpawn> actual) {
+        return Optional.ofNullable(expected).equals(actual);
     }
 
     static BlockPos position(SectionKey key, int localIndex) {
