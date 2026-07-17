@@ -1,11 +1,13 @@
 package io.github.lumi.network;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -19,6 +21,7 @@ public record HistorySnapshotPayload(
         long revision,
         int pendingKeys,
         List<PendingBlock> pendingBlocks,
+        Optional<BlockBox> pendingBounds,
         boolean operationActive,
         boolean recoveryPending,
         UUID workspaceId,
@@ -47,6 +50,7 @@ public record HistorySnapshotPayload(
         Objects.requireNonNull(head, "head");
         pendingBlocks = List.copyOf(
                 Objects.requireNonNull(pendingBlocks, "pendingBlocks"));
+        pendingBounds = Objects.requireNonNull(pendingBounds, "pendingBounds");
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(workspaceName, "workspaceName");
         Objects.requireNonNull(branchName, "branchName");
@@ -72,6 +76,27 @@ public record HistorySnapshotPayload(
                 || deletedVersions.size() > MAX_DELETED_VERSIONS) {
             throw new IllegalArgumentException("Invalid workspace history snapshot");
         }
+    }
+
+    public HistorySnapshotPayload(
+            String dimensionId,
+            CommitId head,
+            long revision,
+            int pendingKeys,
+            List<PendingBlock> pendingBlocks,
+            boolean operationActive,
+            boolean recoveryPending,
+            UUID workspaceId,
+            String workspaceName,
+            String branchName,
+            List<WorkspaceView> workspaces,
+            List<Version> versions,
+            List<Branch> branches,
+            List<ZoneView> zones,
+            List<Version> deletedVersions) {
+        this(dimensionId, head, revision, pendingKeys, pendingBlocks, Optional.empty(),
+                operationActive, recoveryPending, workspaceId, workspaceName, branchName,
+                workspaces, versions, branches, zones, deletedVersions);
     }
 
     public HistorySnapshotPayload(
@@ -166,6 +191,15 @@ public record HistorySnapshotPayload(
         buffer.writeVarInt(pendingKeys);
         buffer.writeVarInt(pendingBlocks.size());
         pendingBlocks.forEach(block -> block.write(buffer));
+        buffer.writeBoolean(pendingBounds.isPresent());
+        pendingBounds.ifPresent(bounds -> {
+            buffer.writeInt(bounds.minX());
+            buffer.writeInt(bounds.minY());
+            buffer.writeInt(bounds.minZ());
+            buffer.writeInt(bounds.maxX());
+            buffer.writeInt(bounds.maxY());
+            buffer.writeInt(bounds.maxZ());
+        });
         buffer.writeBoolean(operationActive);
         buffer.writeBoolean(recoveryPending);
         buffer.writeUUID(workspaceId);
@@ -197,6 +231,11 @@ public record HistorySnapshotPayload(
         for (int index = 0; index < pendingBlockCount; index++) {
             pendingBlocks.add(PendingBlock.read(buffer));
         }
+        Optional<BlockBox> pendingBounds = buffer.readBoolean()
+                ? Optional.of(new BlockBox(
+                        buffer.readInt(), buffer.readInt(), buffer.readInt(),
+                        buffer.readInt(), buffer.readInt(), buffer.readInt()))
+                : Optional.empty();
         boolean active = buffer.readBoolean();
         boolean recovery = buffer.readBoolean();
         UUID workspace = buffer.readUUID();
@@ -244,8 +283,8 @@ public record HistorySnapshotPayload(
             deleted.add(Version.read(buffer));
         }
         return new HistorySnapshotPayload(
-                dimension, head, revision, pending, pendingBlocks, active, recovery,
-                workspace, workspaceName, branch, workspaces,
+                dimension, head, revision, pending, pendingBlocks, pendingBounds,
+                active, recovery, workspace, workspaceName, branch, workspaces,
                 versions, branches, zones, deleted);
     }
 

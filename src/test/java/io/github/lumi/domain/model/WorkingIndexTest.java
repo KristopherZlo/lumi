@@ -19,5 +19,18 @@ class WorkingIndexTest {
 
         assertEquals(2, preview.totalKeys());
         assertEquals(java.util.List.of(second), preview.sections());
+        assertEquals(new BlockBox(48, 64, 80, 63, 79, 95),
+                preview.bounds().orElseThrow());
+    }
+
+    @Test
+    void aggregatesRepresentableSectionBoundaryCoordinatesWithoutOverflow() {
+        WorkingIndex index = new WorkingIndex();
+        index.markDirty(new SectionKey(134_217_727, 0, -134_217_728));
+
+        assertEquals(new BlockBox(
+                        2_147_483_632, 0, Integer.MIN_VALUE,
+                        Integer.MAX_VALUE, 15, -2_147_483_633),
+                index.preview(ignored -> true, 0).bounds().orElseThrow());
     }
 }

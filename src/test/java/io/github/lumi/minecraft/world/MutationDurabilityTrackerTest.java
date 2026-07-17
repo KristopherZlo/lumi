@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.BlockPosition;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -118,8 +119,10 @@ class MutationDurabilityTrackerTest {
 
         tracker.clear(captured);
 
-        assertEquals(List.of(newer),
-                tracker.preview(ignored -> true, 16).blocks());
+        var preview = tracker.preview(ignored -> true, 16);
+        assertEquals(List.of(newer), preview.blocks());
+        assertEquals(new BlockBox(0, 0, 0, 15, 15, 15),
+                preview.bounds().orElseThrow());
     }
 
     @Test

@@ -3,6 +3,7 @@ package io.github.lumi.network;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
@@ -216,6 +217,7 @@ class LumiPayloadCodecTest {
                 java.util.List.of(
                         new HistorySnapshotPayload.PendingBlock(1, 2, 3),
                         new HistorySnapshotPayload.PendingBlock(-4, -5, -6)),
+                Optional.of(new BlockBox(-16, -32, -48, 31, 47, 63)),
                 true, true,
                 new UUID(0, 7), "Redstone lab", "workspace/lab/main",
                 java.util.List.of(

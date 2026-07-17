@@ -195,7 +195,8 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 blocks.add(pending.position());
             }
         }
-        return new WorkingIndexPreview(keys.totalKeys(), List.of(), blocks);
+        return new WorkingIndexPreview(
+                keys.totalKeys(), List.of(), blocks, keys.bounds());
     }
 
     public synchronized void recordBlockMutation(

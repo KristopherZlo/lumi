@@ -2,12 +2,15 @@ package io.github.lumi.client.preview;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.OperationEventPayload;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
@@ -36,7 +39,8 @@ public final class ClientVersionPreviewCapture {
         Objects.requireNonNull(requestId, "requestId");
         Objects.requireNonNull(snapshot, "snapshot");
         PendingCapture replaced = pending.put(requestId, new PendingCapture(
-                snapshot.dimensionId(), snapshot.head(), false, null, null));
+                snapshot.dimensionId(), snapshot.head(), snapshot.pendingBounds(),
+                false, null, null));
         close(replaced);
         while (pending.size() > MAX_PENDING) {
             Iterator<PendingCapture> iterator = pending.values().iterator();
@@ -142,20 +146,24 @@ public final class ClientVersionPreviewCapture {
 
     private record PendingCapture(
             String dimensionId,
-            io.github.lumi.domain.model.CommitId before,
+            CommitId before,
+            Optional<BlockBox> bounds,
             boolean capturing,
             NativeImage image,
-            io.github.lumi.domain.model.CommitId target) {
+            CommitId target) {
         private PendingCapture withCapturing() {
-            return new PendingCapture(dimensionId, before, true, image, target);
+            return new PendingCapture(
+                    dimensionId, before, bounds, true, image, target);
         }
 
         private PendingCapture withImage(NativeImage value) {
-            return new PendingCapture(dimensionId, before, false, value, target);
+            return new PendingCapture(
+                    dimensionId, before, bounds, false, value, target);
         }
 
-        private PendingCapture withTarget(io.github.lumi.domain.model.CommitId value) {
-            return new PendingCapture(dimensionId, before, capturing, image, value);
+        private PendingCapture withTarget(CommitId value) {
+            return new PendingCapture(
+                    dimensionId, before, bounds, capturing, image, value);
         }
     }
 }

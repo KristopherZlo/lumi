@@ -19,5 +19,6 @@ class ClientVersionPreviewCaptureTest {
         assertTrue(source.contains("WIDTH = 320"));
         assertTrue(source.contains("HEIGHT = 180"));
         assertTrue(source.contains("MAX_PENDING = 4"));
+        assertTrue(source.contains("snapshot.pendingBounds()"));
     }
 }

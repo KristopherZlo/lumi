@@ -61,6 +61,7 @@ final class HistorySnapshotFactory {
                         .map(block -> new HistorySnapshotPayload.PendingBlock(
                                 block.x(), block.y(), block.z()))
                         .toList(),
+                pending.bounds(),
                 runtime.operations().hasActiveOperation(),
                 runtime.recoveryJournal().isPresent(),
                 workspace.id(), workspace.name(), head.name().value(),

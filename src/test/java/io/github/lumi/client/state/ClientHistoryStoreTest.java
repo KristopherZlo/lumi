@@ -3,6 +3,7 @@ package io.github.lumi.client.state;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.network.HistorySnapshotPayload;
@@ -16,8 +17,13 @@ class ClientHistoryStoreTest {
     @Test
     void appliesCorrelatedEventsWithoutMutatingServerOwnedHistory() {
         ClientHistoryStore store = new ClientHistoryStore();
+        BlockBox pendingBounds = new BlockBox(0, 16, 32, 15, 31, 47);
         store.accept(new HistorySnapshotPayload(
-                "minecraft:overworld", id('1'), 3, 2, false));
+                "minecraft:overworld", id('1'), 3, 2, java.util.List.of(),
+                Optional.of(pendingBounds), false, false, new UUID(0, 1),
+                "Default workspace", "workspace/default/main",
+                java.util.List.of(), java.util.List.of(), java.util.List.of(),
+                java.util.List.of(), java.util.List.of()));
         UUID request = UUID.fromString("10000000-0000-0000-0000-000000000001");
 
         store.accept(new OperationEventPayload(
@@ -31,6 +37,8 @@ class ClientHistoryStoreTest {
         assertEquals(id('2'), state.snapshot().orElseThrow().head());
         assertEquals(4, state.snapshot().orElseThrow().revision());
         assertFalse(state.snapshot().orElseThrow().operationActive());
+        assertEquals(Optional.of(pendingBounds),
+                state.snapshot().orElseThrow().pendingBounds());
         assertEquals(OperationEventPayload.State.SUCCEEDED,
                 state.events().get(request).state());
     }
