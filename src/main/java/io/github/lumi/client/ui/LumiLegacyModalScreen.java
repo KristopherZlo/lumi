@@ -9,10 +9,16 @@ import net.minecraft.network.chat.Component;
 
 /** Shared legacy window chrome for V2 modal workflows. */
 abstract class LumiLegacyModalScreen extends Screen {
+    private final Screen background;
     private LumiUiScale uiScale = LumiUiScale.forFramebuffer(1280, 720);
 
     protected LumiLegacyModalScreen(Component title) {
+        this(Minecraft.getInstance().screen, title);
+    }
+
+    protected LumiLegacyModalScreen(Screen background, Component title) {
         super(title);
+        this.background = background;
     }
 
     protected final LumiLegacyButton addLegacyButton(
@@ -39,6 +45,11 @@ abstract class LumiLegacyModalScreen extends Screen {
 
     protected final LegacyRenderContext beginLegacyRender(
             GuiGraphics graphics, int mouseX, int mouseY) {
+        if (background != null && background != this) {
+            int backgroundMouseX = forwardsParentInput() ? mouseX : -1;
+            int backgroundMouseY = forwardsParentInput() ? mouseY : -1;
+            background.render(graphics, backgroundMouseX, backgroundMouseY, 0.0F);
+        }
         float scale = renderScale();
         graphics.pose().pushMatrix();
         graphics.pose().scale(scale, scale);
@@ -52,12 +63,16 @@ abstract class LumiLegacyModalScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
-        return super.mouseClicked(virtualClick(click), doubled);
+        return super.mouseClicked(virtualClick(click), doubled)
+                || forwardsParentInput() && background != null
+                && background.mouseClicked(click, doubled);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent click) {
-        return super.mouseReleased(virtualClick(click));
+        return super.mouseReleased(virtualClick(click))
+                || forwardsParentInput() && background != null
+                && background.mouseReleased(click);
     }
 
     @Override
@@ -80,6 +95,17 @@ abstract class LumiLegacyModalScreen extends Screen {
         LegacyLumiTheme.outlined(
                 graphics, x, y, width, height,
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
+    }
+
+    protected final void renderLegacyPage(
+            GuiGraphics graphics, int x, int y, int width, int height) {
+        LegacyLumiTheme.outlined(
+                graphics, x, y, width, height,
+                LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
+    }
+
+    protected boolean forwardsParentInput() {
+        return false;
     }
 
     protected final void renderLegacyPanel(

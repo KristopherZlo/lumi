@@ -16,11 +16,8 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** Thin workspace-zone screen backed by immutable server snapshots. */
-public final class LumiZonesScreen extends LumiLegacyModalScreen {
-    private static final int PANEL_WIDTH = 520;
-    private static final int PANEL_HEIGHT = 330;
+public final class LumiZonesScreen extends LumiLegacyPageScreen {
     private static final int PAGE_SIZE = 5;
-    private final Screen parent;
     private final ClientHistoryStore history;
     private final Supplier<Optional<BlockBox>> selection;
     private final ZoneScreenController controller;
@@ -32,6 +29,8 @@ public final class LumiZonesScreen extends LumiLegacyModalScreen {
     private LumiLegacyButton create;
     private int panelX;
     private int panelY;
+    private int panelWidth;
+    private int panelHeight;
     private int page;
     private String error = "";
 
@@ -43,8 +42,7 @@ public final class LumiZonesScreen extends LumiLegacyModalScreen {
             Consumer<HistorySnapshotPayload.ZoneView> openDetails,
             Consumer<UUID> enter,
             Consumer<UUID> leave) {
-        super(Component.translatable("luma.tab.zones"));
-        this.parent = parent;
+        super(parent, Component.translatable("luma.tab.zones"), LegacyProjectTab.ZONES);
         this.history = Objects.requireNonNull(history, "history");
         this.selection = Objects.requireNonNull(selection, "selection");
         this.controller = Objects.requireNonNull(controller, "controller");
@@ -57,9 +55,11 @@ public final class LumiZonesScreen extends LumiLegacyModalScreen {
     protected void init() {
         beginLegacyInit();
         snapshot = history.state().snapshot().orElse(null);
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        panelX = (width - panelWidth) / 2;
-        panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
+        LegacyWorkspaceLayout shell = pageLayout();
+        panelX = shell.contentX();
+        panelY = shell.windowY();
+        panelWidth = shell.contentWidth();
+        panelHeight = shell.windowHeight();
         int contentX = panelX + 20;
         int contentWidth = panelWidth - 40;
         name = new EditBox(font, contentX, panelY + 72, contentWidth - 140, 20,
@@ -119,7 +119,7 @@ public final class LumiZonesScreen extends LumiLegacyModalScreen {
         error = submission.error();
         if (submission.accepted()) {
             feedback("luma.status.zone_created");
-            minecraft.setScreen(parent);
+            onClose();
         }
     }
 
@@ -128,7 +128,7 @@ public final class LumiZonesScreen extends LumiLegacyModalScreen {
             (zone.active() ? leave : enter).accept(zone.id());
             feedback(zone.active()
                     ? "luma.status.zone_cleared" : "luma.status.zone_selected");
-            minecraft.setScreen(parent);
+            onClose();
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null
                     ? "Lumi zone could not be updated" : failed.getMessage();
@@ -168,15 +168,14 @@ public final class LumiZonesScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+        renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
         Component heading = snapshot == null
                 ? title : Component.translatable(
                         "luma.screen.zones.title", snapshot.workspaceName());
-        graphics.drawCenteredString(font, heading, width / 2, panelY + 16,
+        graphics.drawCenteredString(font, heading, panelX + panelWidth / 2, panelY + 16,
                 LegacyLumiTheme.TEXT);
         graphics.drawCenteredString(font, activeZoneText(),
-                width / 2, panelY + 36, LegacyLumiTheme.MUTED);
+                panelX + panelWidth / 2, panelY + 36, LegacyLumiTheme.MUTED);
         graphics.drawString(font, Component.translatable("luma.zones.create_help"),
                 panelX + 20, panelY + 56, LegacyLumiTheme.MUTED, false);
         LegacyLumiTheme.outlined(graphics, panelX + 18, panelY + 69,
@@ -232,5 +231,4 @@ public final class LumiZonesScreen extends LumiLegacyModalScreen {
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { minecraft.setScreen(parent); }
 }

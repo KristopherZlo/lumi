@@ -6,8 +6,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Secondary client-only tools kept away from the main history workflow. */
-public final class LumiMoreScreen extends LumiLegacyModalScreen {
-    private final Screen parent;
+public final class LumiMoreScreen extends LumiLegacyPageScreen {
     private final Runnable onboarding;
     private final Runnable hotkeys;
     private final Runnable thanks;
@@ -17,6 +16,7 @@ public final class LumiMoreScreen extends LumiLegacyModalScreen {
     private int panelX;
     private int panelY;
     private int panelWidth;
+    private int panelHeight;
 
     public LumiMoreScreen(
             Screen parent,
@@ -26,8 +26,8 @@ public final class LumiMoreScreen extends LumiLegacyModalScreen {
             Runnable diagnostics,
             Runnable settings,
             Runnable updates) {
-        super(Component.translatable("luma.screen.more.title"));
-        this.parent = parent;
+        super(parent, Component.translatable("luma.screen.more.title"),
+                LegacyProjectTab.MORE);
         this.onboarding = Objects.requireNonNull(onboarding, "onboarding");
         this.hotkeys = Objects.requireNonNull(hotkeys, "hotkeys");
         this.thanks = Objects.requireNonNull(thanks, "thanks");
@@ -39,9 +39,11 @@ public final class LumiMoreScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        panelWidth = Math.min(390, width - 24);
-        panelX = (width - panelWidth) / 2;
-        panelY = Math.max(12, (height - 312) / 2);
+        LegacyWorkspaceLayout page = pageLayout();
+        panelX = page.contentX();
+        panelY = page.windowY();
+        panelWidth = page.contentWidth();
+        panelHeight = page.windowHeight();
         button("luma.more.onboarding_title", onboarding, 66);
         button("luma.hotkeys.title", hotkeys, 100);
         button("luma.more.special_thanks_title", thanks, 134);
@@ -60,7 +62,7 @@ public final class LumiMoreScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, 312);
+        renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
         renderLegacyPanel(graphics, panelX + 12, panelY + 58,
                 panelWidth - 24, 206);
         graphics.drawString(font, title, panelX + 16, panelY + 18,
@@ -74,5 +76,4 @@ public final class LumiMoreScreen extends LumiLegacyModalScreen {
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { minecraft.setScreen(parent); }
 }

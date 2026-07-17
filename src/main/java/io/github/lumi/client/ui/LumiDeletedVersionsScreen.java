@@ -11,16 +11,15 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Bounded tombstone list with an explicit legacy permanent-cleanup confirmation. */
-public final class LumiDeletedVersionsScreen extends LumiLegacyModalScreen {
-    private static final int PANEL_WIDTH = 520;
-    private static final int PANEL_HEIGHT = 300;
+public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
     private static final int PAGE_SIZE = 5;
-    private final Screen parent;
     private final ClientHistoryStore history;
     private final Consumer<CommitId> cleanup;
     private List<HistorySnapshotPayload.Version> versions = List.of();
     private int panelX;
     private int panelY;
+    private int panelWidth;
+    private int panelHeight;
     private int page;
     private String error = "";
     private HistorySnapshotPayload.Version pendingCleanup;
@@ -29,8 +28,8 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyModalScreen {
             Screen parent,
             ClientHistoryStore history,
             Consumer<CommitId> cleanup) {
-        super(Component.translatable("luma.more.deleted_saves_title"));
-        this.parent = parent;
+        super(parent, Component.translatable("luma.more.deleted_saves_title"),
+                LegacyProjectTab.DELETED);
         this.history = Objects.requireNonNull(history, "history");
         this.cleanup = Objects.requireNonNull(cleanup, "cleanup");
     }
@@ -40,9 +39,11 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyModalScreen {
         beginLegacyInit();
         versions = history.state().snapshot()
                 .map(HistorySnapshotPayload::deletedVersions).orElse(List.of());
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        panelX = (width - panelWidth) / 2;
-        panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
+        LegacyWorkspaceLayout shell = pageLayout();
+        panelX = shell.contentX();
+        panelY = shell.windowY();
+        panelWidth = shell.contentWidth();
+        panelHeight = shell.windowHeight();
         if (pendingCleanup != null) {
             addConfirmationButtons(panelWidth);
             return;
@@ -92,7 +93,7 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyModalScreen {
         try {
             cleanup.accept(pendingCleanup.id());
             feedback("luma.status.cleanup_applied");
-            minecraft.setScreen(parent);
+            onClose();
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null
                     ? "Lumi cleanup failed" : failed.getMessage();
@@ -114,13 +115,12 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
-        graphics.drawCenteredString(font, title, width / 2, panelY + 16,
+        renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
+        graphics.drawCenteredString(font, title, panelX + panelWidth / 2, panelY + 16,
                 LegacyLumiTheme.TEXT);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.more.deleted_saves_help"),
-                width / 2, panelY + 36, LegacyLumiTheme.MUTED);
+                panelX + panelWidth / 2, panelY + 36, LegacyLumiTheme.MUTED);
         if (pendingCleanup == null) {
             renderVersions(graphics, panelWidth);
         } else {
@@ -128,7 +128,7 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyModalScreen {
         }
         if (!error.isEmpty()) {
             graphics.drawCenteredString(font, errorText(error),
-                    width / 2, panelY + 220, LegacyLumiTheme.DANGER);
+                    panelX + panelWidth / 2, panelY + 220, LegacyLumiTheme.DANGER);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -163,15 +163,14 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyModalScreen {
                 panelX + 20, panelY + 66, panelWidth - 40, 134);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.screen.cleanup.title"),
-                width / 2, panelY + 82, LegacyLumiTheme.DANGER);
+                panelX + panelWidth / 2, panelY + 82, LegacyLumiTheme.DANGER);
         graphics.drawCenteredString(font,
                 font.plainSubstrByWidth(pendingCleanup.message(), panelWidth - 80),
-                width / 2, panelY + 108, LegacyLumiTheme.TEXT);
+                panelX + panelWidth / 2, panelY + 108, LegacyLumiTheme.TEXT);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.recovery.delete_confirm_warning"),
-                width / 2, panelY + 140, LegacyLumiTheme.ACCENT);
+                panelX + panelWidth / 2, panelY + 140, LegacyLumiTheme.ACCENT);
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { minecraft.setScreen(parent); }
 }

@@ -17,8 +17,10 @@ class LumiLegacyScreenScaleTest {
             screens = files.filter(path -> path.getFileName().toString().endsWith("Screen.java"))
                     .filter(path -> {
                         try {
-                            return Files.readString(path)
-                                    .contains("extends LumiLegacyModalScreen");
+                            String source = Files.readString(path);
+                            return source.contains("public final class")
+                                    && (source.contains("extends LumiLegacyModalScreen")
+                                    || source.contains("extends LumiLegacyPageScreen"));
                         } catch (java.io.IOException failed) {
                             throw new java.io.UncheckedIOException(failed);
                         }

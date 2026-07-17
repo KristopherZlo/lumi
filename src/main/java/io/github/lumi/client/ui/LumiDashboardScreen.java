@@ -24,13 +24,13 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private final ClientVersionPreviewStore previews;
     private final Runnable openSave;
     private final Runnable openAmend;
-    private final Runnable openBranches;
-    private final Runnable openWorkspaces;
-    private final Runnable openZones;
-    private final Runnable openDeleted;
-    private final Runnable openPackages;
-    private final Runnable openMore;
-    private final Runnable openSettings;
+    private final Consumer<Screen> openBranches;
+    private final Consumer<Screen> openWorkspaces;
+    private final Consumer<Screen> openZones;
+    private final Consumer<Screen> openDeleted;
+    private final Consumer<Screen> openPackages;
+    private final Consumer<Screen> openMore;
+    private final Consumer<Screen> openSettings;
     private final Runnable showChanges;
     private final Runnable quickRollback;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
@@ -39,6 +39,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private final VersionCompareController compareController = new VersionCompareController();
     private HistorySnapshotPayload snapshot;
     private LegacyWorkspaceLayout layout;
+    private LegacyProjectTab activeTab = LegacyProjectTab.HISTORY;
     private int historyY;
     private int historyHeight;
 
@@ -48,13 +49,13 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             ClientVersionPreviewStore previews,
             Runnable openSave,
             Runnable openAmend,
-            Runnable openBranches,
-            Runnable openWorkspaces,
-            Runnable openZones,
-            Runnable openDeleted,
-            Runnable openPackages,
-            Runnable openMore,
-            Runnable openSettings,
+            Consumer<Screen> openBranches,
+            Consumer<Screen> openWorkspaces,
+            Consumer<Screen> openZones,
+            Consumer<Screen> openDeleted,
+            Consumer<Screen> openPackages,
+            Consumer<Screen> openMore,
+            Consumer<Screen> openSettings,
             Runnable showChanges,
             Runnable quickRollback,
             Consumer<HistorySnapshotPayload.Version> openRestore,
@@ -145,43 +146,82 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         int x = layout.windowX() + 12;
         int width = layout.sidebarWidth() - 24;
         int y = layout.windowY() + 112;
-        addButton(x, y, width, "luma.tab.history", () -> { },
-                LumiLegacyButton.Kind.SELECTED);
-        addButton(x, y + 27, width, "luma.tab.zones", openZones,
-                LumiLegacyButton.Kind.NORMAL);
-        addButton(x, y + 54, width, "luma.tab.variants", openBranches,
-                LumiLegacyButton.Kind.NORMAL);
-        addButton(x, y + 81, width, "luma.action.workspaces", openWorkspaces,
-                LumiLegacyButton.Kind.NORMAL);
-        addButton(x, y + 108, width, "luma.simple.share_button", openPackages,
-                LumiLegacyButton.Kind.NORMAL);
-        addButton(x, y + 135, width, "luma.action.settings", openSettings,
-                LumiLegacyButton.Kind.NORMAL);
-        addButton(x, y + 162, width, "luma.more.deleted_saves_title", openDeleted,
-                LumiLegacyButton.Kind.NORMAL);
+        addButton(x, y, width, "luma.tab.history", this::showHistory,
+                tabKind(LegacyProjectTab.HISTORY));
+        addButton(x, y + 27, width, "luma.tab.zones",
+                () -> openTab(LegacyProjectTab.ZONES, openZones),
+                tabKind(LegacyProjectTab.ZONES));
+        addButton(x, y + 54, width, "luma.tab.variants",
+                () -> openTab(LegacyProjectTab.BRANCHES, openBranches),
+                tabKind(LegacyProjectTab.BRANCHES));
+        addButton(x, y + 81, width, "luma.action.workspaces",
+                () -> openTab(LegacyProjectTab.WORKSPACES, openWorkspaces),
+                tabKind(LegacyProjectTab.WORKSPACES));
+        addButton(x, y + 108, width, "luma.simple.share_button",
+                () -> openTab(LegacyProjectTab.PACKAGES, openPackages),
+                tabKind(LegacyProjectTab.PACKAGES));
+        addButton(x, y + 135, width, "luma.action.settings",
+                () -> openTab(LegacyProjectTab.SETTINGS, openSettings),
+                tabKind(LegacyProjectTab.SETTINGS));
+        addButton(x, y + 162, width, "luma.more.deleted_saves_title",
+                () -> openTab(LegacyProjectTab.DELETED, openDeleted),
+                tabKind(LegacyProjectTab.DELETED));
         addButton(x, layout.windowY() + layout.windowHeight() - 36,
-                width, "luma.action.more", openMore, LumiLegacyButton.Kind.NORMAL);
+                width, "luma.action.more",
+                () -> openTab(LegacyProjectTab.MORE, openMore),
+                tabKind(LegacyProjectTab.MORE));
     }
 
     private void addCompactSidebarButtons() {
         int x = layout.windowX() + 12;
         int y = layout.windowY() + 60;
-        addIconButton(x, y, "graph", "luma.tab.history", () -> { },
-                LumiLegacyButton.Kind.SELECTED);
-        addIconButton(x + 32, y, "sitemap-4", "luma.tab.zones", openZones,
-                LumiLegacyButton.Kind.NORMAL);
-        addIconButton(x, y + 26, "branch", "luma.tab.variants", openBranches,
-                LumiLegacyButton.Kind.NORMAL);
+        addIconButton(x, y, "graph", "luma.tab.history", this::showHistory,
+                tabKind(LegacyProjectTab.HISTORY));
+        addIconButton(x + 32, y, "sitemap-4", "luma.tab.zones",
+                () -> openTab(LegacyProjectTab.ZONES, openZones),
+                tabKind(LegacyProjectTab.ZONES));
+        addIconButton(x, y + 26, "branch", "luma.tab.variants",
+                () -> openTab(LegacyProjectTab.BRANCHES, openBranches),
+                tabKind(LegacyProjectTab.BRANCHES));
         addIconButton(x + 32, y + 26, "bookmarks", "luma.action.workspaces",
-                openWorkspaces, LumiLegacyButton.Kind.NORMAL);
-        addIconButton(x, y + 52, "folder", "luma.simple.share_button", openPackages,
-                LumiLegacyButton.Kind.NORMAL);
-        addIconButton(x + 32, y + 52, "sliders", "luma.action.settings", openSettings,
-                LumiLegacyButton.Kind.NORMAL);
-        addIconButton(x, y + 78, "trash", "luma.more.deleted_saves_title", openDeleted,
-                LumiLegacyButton.Kind.NORMAL);
-        addIconButton(x + 32, y + 78, "unordered-list", "luma.action.more", openMore,
-                LumiLegacyButton.Kind.NORMAL);
+                () -> openTab(LegacyProjectTab.WORKSPACES, openWorkspaces),
+                tabKind(LegacyProjectTab.WORKSPACES));
+        addIconButton(x, y + 52, "folder", "luma.simple.share_button",
+                () -> openTab(LegacyProjectTab.PACKAGES, openPackages),
+                tabKind(LegacyProjectTab.PACKAGES));
+        addIconButton(x + 32, y + 52, "sliders", "luma.action.settings",
+                () -> openTab(LegacyProjectTab.SETTINGS, openSettings),
+                tabKind(LegacyProjectTab.SETTINGS));
+        addIconButton(x, y + 78, "trash", "luma.more.deleted_saves_title",
+                () -> openTab(LegacyProjectTab.DELETED, openDeleted),
+                tabKind(LegacyProjectTab.DELETED));
+        addIconButton(x + 32, y + 78, "unordered-list", "luma.action.more",
+                () -> openTab(LegacyProjectTab.MORE, openMore),
+                tabKind(LegacyProjectTab.MORE));
+    }
+
+    void selectTab(LegacyProjectTab tab) {
+        if (activeTab != tab) {
+            activeTab = tab;
+            rebuildWidgets();
+        }
+    }
+
+    private void openTab(LegacyProjectTab tab, Consumer<Screen> destination) {
+        selectTab(tab);
+        destination.accept(this);
+    }
+
+    private void showHistory() {
+        selectTab(LegacyProjectTab.HISTORY);
+        if (minecraft.screen != this) {
+            minecraft.setScreen(this);
+        }
+    }
+
+    private LumiLegacyButton.Kind tabKind(LegacyProjectTab tab) {
+        return activeTab == tab
+                ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL;
     }
 
     private void addButton(

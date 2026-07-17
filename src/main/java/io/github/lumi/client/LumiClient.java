@@ -81,18 +81,18 @@ public final class LumiClient implements ClientModInitializer {
                                 () -> LumiClient.openSave(client.screen,
                                         SaveScreenController.Intent.AMEND,
                                         latestVersionMessage()),
-                                () -> openBranches(client.screen),
-                                () -> openWorkspaces(client.screen),
-                                () -> openZones(client.screen),
-                                () -> client.setScreen(new LumiDeletedVersionsScreen(
-                                        client.screen, HISTORY, NETWORKING::cleanupVersion)),
-                                () -> client.setScreen(new LumiPackageScreen(
-                                        client.screen, new PackageScreenController(
+                                LumiClient::openBranches,
+                                LumiClient::openWorkspaces,
+                                LumiClient::openZones,
+                                parent -> client.setScreen(new LumiDeletedVersionsScreen(
+                                        parent, HISTORY, NETWORKING::cleanupVersion)),
+                                parent -> client.setScreen(new LumiPackageScreen(
+                                        parent, new PackageScreenController(
                                                 NETWORKING::exportPackage,
                                                 NETWORKING::inspectPackage))),
-                                () -> openMore(client.screen),
-                                () -> client.setScreen(new LumiSettingsScreen(
-                                        client.screen, TELEMETRY)),
+                                LumiClient::openMore,
+                                parent -> client.setScreen(new LumiSettingsScreen(
+                                        parent, TELEMETRY)),
                                 () -> {
                                     NETWORKING.refreshSnapshot();
                                     showFeedback("luma.hotkeys.pending_preview_help");
@@ -233,7 +233,7 @@ public final class LumiClient implements ClientModInitializer {
                         LumiHotkeys.shortcuts(client.options.keyMappings))),
                 () -> client.setScreen(new LumiSpecialThanksScreen(client.screen)),
                 () -> client.setScreen(new LumiDiagnosticsScreen(client.screen, HISTORY)),
-                () -> client.setScreen(new LumiSettingsScreen(client.screen, TELEMETRY)),
+                () -> client.setScreen(new LumiSettingsScreen(parent, TELEMETRY)),
                 () -> client.setScreen(new LumiUpdateScreen(
                         client.screen, UPDATE_CHECKER))));
     }

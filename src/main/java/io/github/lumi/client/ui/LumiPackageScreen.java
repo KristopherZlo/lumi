@@ -8,10 +8,7 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** One logical-name form for world-local package export and trust inspection. */
-public final class LumiPackageScreen extends LumiLegacyModalScreen {
-    private static final int PANEL_WIDTH = 400;
-    private static final int PANEL_HEIGHT = 174;
-    private final Screen parent;
+public final class LumiPackageScreen extends LumiLegacyPageScreen {
     private final PackageScreenController controller;
     private EditBox name;
     private LumiLegacyButton export;
@@ -20,19 +17,23 @@ public final class LumiPackageScreen extends LumiLegacyModalScreen {
     private boolean failed;
     private int panelX;
     private int panelY;
+    private int panelWidth;
+    private int panelHeight;
 
     public LumiPackageScreen(Screen parent, PackageScreenController controller) {
-        super(Component.translatable("luma.screen.import_export.title"));
-        this.parent = parent;
+        super(parent, Component.translatable("luma.screen.import_export.title"),
+                LegacyProjectTab.PACKAGES);
         this.controller = controller;
     }
 
     @Override
     protected void init() {
         beginLegacyInit();
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        panelX = (width - panelWidth) / 2;
-        panelY = (height - PANEL_HEIGHT) / 2;
+        LegacyWorkspaceLayout page = pageLayout();
+        panelX = page.contentX();
+        panelY = page.windowY();
+        panelWidth = page.contentWidth();
+        panelHeight = page.windowHeight();
         int contentX = panelX + 20;
         int contentWidth = panelWidth - 40;
         name = new EditBox(font, contentX, panelY + 68, contentWidth, 20,
@@ -95,13 +96,12 @@ public final class LumiPackageScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
-        graphics.drawCenteredString(font, title, width / 2, panelY + 17,
+        renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
+        graphics.drawCenteredString(font, title, panelX + panelWidth / 2, panelY + 17,
                 LegacyLumiTheme.TEXT);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.simple.share_help"),
-                width / 2, panelY + 37, LegacyLumiTheme.MUTED);
+                panelX + panelWidth / 2, panelY + 37, LegacyLumiTheme.MUTED);
         graphics.drawString(font, Component.translatable("luma.share.package_name"),
                 panelX + 20, panelY + 55, LegacyLumiTheme.TEXT, false);
         LegacyLumiTheme.outlined(graphics, panelX + 18, panelY + 66,
@@ -119,5 +119,4 @@ public final class LumiPackageScreen extends LumiLegacyModalScreen {
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { minecraft.setScreen(parent); }
 }

@@ -9,10 +9,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Bounded native branch list with the legacy create, switch and merge actions. */
-public final class LumiBranchesScreen extends LumiLegacyModalScreen {
-    private static final int PANEL_HEIGHT = 300;
+public final class LumiBranchesScreen extends LumiLegacyPageScreen {
     private static final int MAX_ROWS = 6;
-    private final Screen parent;
     private final List<HistorySnapshotPayload.Branch> branches;
     private final Runnable create;
     private final Runnable merge;
@@ -27,8 +25,8 @@ public final class LumiBranchesScreen extends LumiLegacyModalScreen {
             Runnable create,
             Runnable merge,
             Consumer<String> switcher) {
-        super(Component.translatable("luma.variants.overview_title"));
-        this.parent = parent;
+        super(parent, Component.translatable("luma.variants.overview_title"),
+                LegacyProjectTab.BRANCHES);
         this.branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
         this.create = Objects.requireNonNull(create, "create");
         this.merge = Objects.requireNonNull(merge, "merge");
@@ -38,7 +36,10 @@ public final class LumiBranchesScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        layout = LegacyModalLayout.fit(width, height, PANEL_HEIGHT);
+        LegacyWorkspaceLayout shell = pageLayout();
+        layout = new LegacyModalLayout(
+                shell.contentX(), shell.windowY(),
+                shell.contentWidth(), shell.windowHeight());
         int x = layout.x();
         int y = layout.y();
         int contentWidth = Math.max(0, layout.width() - 32);
@@ -84,7 +85,7 @@ public final class LumiBranchesScreen extends LumiLegacyModalScreen {
                 minecraft.player.displayClientMessage(
                         Component.translatable("luma.status.variant_switched"), true);
             }
-            minecraft.setScreen(parent);
+            onClose();
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null
                     ? "Lumi branch could not be switched" : failed.getMessage();
@@ -100,7 +101,7 @@ public final class LumiBranchesScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(graphics, layout.x(), layout.y(), layout.width(), layout.height());
+        renderLegacyPage(graphics, layout.x(), layout.y(), layout.width(), layout.height());
         graphics.drawString(font, title, layout.x() + 16, layout.y() + 14,
                 LegacyLumiTheme.TEXT, false);
         int rows = visibleRows();
@@ -118,11 +119,13 @@ public final class LumiBranchesScreen extends LumiLegacyModalScreen {
         if (branches.isEmpty()) {
             graphics.drawCenteredString(font,
                     Component.translatable("luma.merge.no_sources"),
-                    width / 2, layout.y() + 86, LegacyLumiTheme.MUTED);
+                    layout.x() + layout.width() / 2,
+                    layout.y() + 86, LegacyLumiTheme.MUTED);
         }
         if (!error.isEmpty()) {
             graphics.drawCenteredString(font, errorText(error),
-                    width / 2, layout.y() + layout.height() - 44, LegacyLumiTheme.DANGER);
+                    layout.x() + layout.width() / 2,
+                    layout.y() + layout.height() - 44, LegacyLumiTheme.DANGER);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -140,5 +143,4 @@ public final class LumiBranchesScreen extends LumiLegacyModalScreen {
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { minecraft.setScreen(parent); }
 }

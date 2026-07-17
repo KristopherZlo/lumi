@@ -6,25 +6,27 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Client-local controls for the diagnostic data that Lumi may send. */
-public final class LumiSettingsScreen extends LumiLegacyModalScreen {
-    private final Screen parent;
+public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private final TelemetryService telemetry;
     private int panelX;
     private int panelY;
     private int panelWidth;
+    private int panelHeight;
 
     public LumiSettingsScreen(Screen parent, TelemetryService telemetry) {
-        super(Component.translatable("luma.screen.settings.title", "Lumi"));
-        this.parent = parent;
+        super(parent, Component.translatable("luma.screen.settings.title", "Lumi"),
+                LegacyProjectTab.SETTINGS);
         this.telemetry = java.util.Objects.requireNonNull(telemetry, "telemetry");
     }
 
     @Override
     protected void init() {
         beginLegacyInit();
-        panelWidth = Math.min(430, width - 24);
-        panelX = (width - panelWidth) / 2;
-        panelY = Math.max(12, (height - 270) / 2);
+        LegacyWorkspaceLayout page = pageLayout();
+        panelX = page.contentX();
+        panelY = page.windowY();
+        panelWidth = page.contentWidth();
+        panelHeight = page.windowHeight();
         boolean enabled = telemetry.settings().enabled();
         addLegacyButton(panelX + 16, panelY + 112, panelWidth - 32,
                 Component.translatable("luma.settings.telemetry_enabled")
@@ -50,7 +52,7 @@ public final class LumiSettingsScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, 270);
+        renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
         renderLegacyPanel(graphics, panelX + 12, panelY + 38,
                 panelWidth - 24, 176);
         graphics.drawString(font, title, panelX + 16, panelY + 18,
@@ -80,5 +82,4 @@ public final class LumiSettingsScreen extends LumiLegacyModalScreen {
     }
 
     @Override public boolean isPauseScreen() { return false; }
-    @Override public void onClose() { minecraft.setScreen(parent); }
 }
