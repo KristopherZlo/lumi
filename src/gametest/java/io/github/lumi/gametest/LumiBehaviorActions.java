@@ -130,6 +130,11 @@ final class LumiBehaviorActions {
         });
     }
 
+    boolean hasEntity(UUID id) {
+        return server.computeOnServer(minecraft ->
+                player(minecraft).level().getEntityInAnyDimension(id) != null);
+    }
+
     UUID placeEndCrystal(BlockPos obsidian) {
         return timed("place_end_crystal", () -> server.computeOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);

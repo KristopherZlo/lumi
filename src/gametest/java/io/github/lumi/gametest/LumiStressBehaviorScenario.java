@@ -1,11 +1,17 @@
 package io.github.lumi.gametest;
 
 import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.domain.model.CommitId;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.UUID;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.core.BlockPos;
@@ -84,6 +90,7 @@ final class LumiStressBehaviorScenario {
         }
 
         runEndCrystal(allTnt);
+        runSavedHistoryAndEntities(allTnt);
         checks.finish();
     }
 
@@ -140,6 +147,125 @@ final class LumiStressBehaviorScenario {
         checks.assertSnapshot("undo_end_crystal_placement", area, obsidianOnly);
         operations.undo("remove_crystal_obsidian");
         checks.assertSnapshot("undo_crystal_obsidian", area, allTnt);
+    }
+
+    private void runSavedHistoryAndEntities(LumiWorldSnapshot allTnt)
+            throws IOException {
+        CommitId tntCommit = operations.save("tnt");
+        checks.assertSnapshot("save_tnt", area, allTnt);
+        actions.igniteTnt("ignite_all_128_tnt",
+                tnt.get(new Random(RANDOM_SEED).nextInt(tnt.size())));
+        checks.waitUntil("all_128_tnt_exploded", 600,
+                () -> !actions.hasTnt(tnt));
+        checks.waitTicks("all_128_tnt_settle", 20);
+        LumiWorldSnapshot afterTnt = checks.snapshot("after_all_tnt", area);
+        CommitId afterTntCommit = operations.save("after tnt");
+        checks.assertSnapshot("save_after_tnt", area, afterTnt);
+
+        restoreAndAssert("spam_tnt_1", tntCommit, allTnt);
+        restoreAndAssert("spam_after_tnt_1", afterTntCommit, afterTnt);
+        restoreAndAssert("spam_tnt_2", tntCommit, allTnt);
+        restoreAndAssert("spam_after_tnt_2", afterTntCommit, afterTnt);
+        restoreAndAssert("spam_tnt_3", tntCommit, allTnt);
+        restoreAndAssert("spam_after_tnt_3", afterTntCommit, afterTnt);
+        restoreAndAssert("spam_tnt_4", tntCommit, allTnt);
+
+        actions.destroyBlocks("break_tnt_before_quick_reset",
+                List.of(tnt.get(0), tnt.get(1)));
+        checks.snapshot("tnt_manually_broken", area);
+        operations.quickRollback("broken_tnt");
+        checks.assertSnapshot("quick_reset_broken_tnt", area, allTnt);
+        restoreAndAssert("after_quick_reset", afterTntCommit, afterTnt);
+
+        List<BlockPos> smoothPositions = randomSurfacePositions(
+                RANDOM_SEED, 10, Set.of());
+        actions.placeBlocks("place_10_smooth_stone",
+                Items.SMOOTH_STONE, smoothPositions);
+        LumiWorldSnapshot smooth = checks.snapshot("ten_smooth_stone", area);
+        operations.save("smooth");
+        checks.assertSnapshot("save_smooth", area, smooth);
+        operations.quickRollback("clean_smooth");
+        checks.assertSnapshot("quick_restore_clean_noop", area, smooth);
+
+        List<BlockPos> glassPositions = randomSurfacePositions(
+                RANDOM_SEED + 1, 10, new HashSet<>(smoothPositions));
+        actions.placeBlocks("place_10_glass", Items.GLASS, glassPositions);
+        checks.snapshot("ten_glass_after_smooth", area);
+        restoreAndAssert("glass_to_tnt", tntCommit, allTnt);
+
+        runArmorStandAndChickenChecks();
+    }
+
+    private void runArmorStandAndChickenChecks() throws IOException {
+        List<BlockPos> standPositions = List.of(
+                actions.surfacePosition(origin.getX() + 24, origin.getZ() - 3),
+                actions.surfacePosition(origin.getX() + 24, origin.getZ()),
+                actions.surfacePosition(origin.getX() + 24, origin.getZ() + 3));
+        List<UUID> stands = actions.placeArmorStands(standPositions);
+        actions.equipArmorStands(stands, RANDOM_SEED);
+        LumiWorldSnapshot armoredStands = checks.snapshot(
+                "three_armored_stands", area);
+
+        actions.attackEntity("break_armored_stand", stands.getFirst(), Items.AIR);
+        checks.waitUntil("armored_stand_removed", 20,
+                () -> !actions.hasEntity(stands.getFirst()));
+        checks.snapshot("one_armored_stand_broken", area);
+        operations.undo("broken_armored_stand");
+        checks.assertSnapshot("undo_broken_armored_stand", area, armoredStands);
+
+        BlockPos standTnt = actions.surfacePosition(
+                origin.getX() + 21, origin.getZ());
+        actions.placeTnt(standTnt);
+        LumiWorldSnapshot standsWithTnt = checks.snapshot(
+                "armored_stands_with_tnt", area);
+        actions.igniteTnt("ignite_armor_stand_tnt", standTnt);
+        checks.waitTicks("armor_stand_tnt_explosion_5s", 100);
+        checks.snapshot("armored_stands_after_tnt", area);
+        operations.undo("armor_stand_tnt");
+        checks.assertSnapshot("undo_armor_stand_tnt", area, standsWithTnt);
+
+        BlockPos chickenPosition = actions.surfacePosition(
+                origin.getX() + 24, origin.getZ() + 8);
+        UUID chicken = actions.spawnChicken(chickenPosition);
+        LumiWorldSnapshot liveChicken = checks.snapshot("live_chicken", area);
+        actions.attackEntity("kill_chicken", chicken, Items.DIAMOND_SWORD);
+        checks.waitUntil("chicken_killed", 20,
+                () -> !actions.hasEntity(chicken));
+        checks.waitTicks("dead_chicken_settle_1s", 20);
+        checks.snapshot("dead_chicken", area);
+        operations.undo("killed_chicken");
+        checks.assertSnapshot("undo_killed_chicken", area, liveChicken);
+    }
+
+    private void restoreAndAssert(
+            String name, CommitId commit, LumiWorldSnapshot expected)
+            throws IOException {
+        operations.restore(name, commit);
+        checks.assertSnapshot("restore_" + name, area, expected);
+    }
+
+    private List<BlockPos> randomSurfacePositions(
+            long seed, int count, Set<BlockPos> excluded) {
+        List<BlockPos> candidates = new ArrayList<>();
+        for (int z = -20; z <= 20; z++) {
+            for (int x = -20; x <= 20; x++) {
+                candidates.add(origin.offset(x, 0, z));
+            }
+        }
+        Collections.shuffle(candidates, new Random(seed));
+        Set<BlockPos> used = new HashSet<>(excluded);
+        List<BlockPos> selected = new ArrayList<>(count);
+        for (BlockPos candidate : candidates) {
+            BlockPos surface = actions.surfacePosition(
+                    candidate.getX(), candidate.getZ());
+            if (used.add(surface)) {
+                selected.add(surface);
+                if (selected.size() == count) {
+                    return List.copyOf(selected);
+                }
+            }
+        }
+        throw new AssertionError("Could not plan " + count + " random blocks");
     }
 
     private static long elapsedMillis(long started) {
