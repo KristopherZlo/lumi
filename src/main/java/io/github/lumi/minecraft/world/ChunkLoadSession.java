@@ -2,7 +2,8 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.HistoryKey;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -15,7 +16,12 @@ public final class ChunkLoadSession implements AutoCloseable {
     private final ChunkLoadAccess access;
     private final LongSupplier nanoTime;
     private final Map<ChunkCoordinate, CompletableFuture<Void>> retained = new LinkedHashMap<>();
-    private int next;
+    private final ArrayDeque<Iterator<? extends HistoryKey>> pendingRetentions =
+            new ArrayDeque<>();
+    private Iterator<Map.Entry<ChunkCoordinate, CompletableFuture<Void>>> loading;
+    private Map.Entry<ChunkCoordinate, CompletableFuture<Void>> current;
+    private int completed;
+    private boolean loadingStarted;
     private boolean closed;
 
     public ChunkLoadSession(ChunkLoadAccess access) {
@@ -31,35 +37,54 @@ public final class ChunkLoadSession implements AutoCloseable {
         if (closed) {
             throw new IllegalStateException("Chunk load session is closed");
         }
-        for (HistoryKey key : keys) {
-            ChunkCoordinate chunk = ChunkCoordinate.from(key);
-            retained.computeIfAbsent(chunk, access::retain);
+        if (loadingStarted) {
+            throw new IllegalStateException("Cannot add chunks after loading started");
         }
+        pendingRetentions.add(Objects.requireNonNull(keys, "keys").iterator());
     }
 
     public boolean loadUntil(long deadlineNanos) throws IOException {
-        var chunks = new ArrayList<>(retained.entrySet());
-        while (next < chunks.size() && nanoTime.getAsLong() < deadlineNanos) {
-            var entry = chunks.get(next);
-            if (!entry.getValue().isDone()) {
+        loadingStarted = true;
+        while (nanoTime.getAsLong() < deadlineNanos) {
+            if (!pendingRetentions.isEmpty()) {
+                Iterator<? extends HistoryKey> keys = pendingRetentions.getFirst();
+                if (keys.hasNext()) {
+                    ChunkCoordinate chunk = ChunkCoordinate.from(keys.next());
+                    retained.computeIfAbsent(chunk, access::retain);
+                } else {
+                    pendingRetentions.removeFirst();
+                }
+                continue;
+            }
+            if (loading == null) {
+                loading = retained.entrySet().iterator();
+            }
+            if (current == null) {
+                if (!loading.hasNext()) {
+                    return true;
+                }
+                current = loading.next();
+            }
+            if (!current.getValue().isDone()) {
                 return false;
             }
             try {
-                entry.getValue().join();
+                current.getValue().join();
             } catch (CompletionException failed) {
                 Throwable cause = failed.getCause() == null ? failed : failed.getCause();
-                throw new IOException("Cannot load Lumi chunk " + entry.getKey(), cause);
+                throw new IOException("Cannot load Lumi chunk " + current.getKey(), cause);
             }
-            if (!access.isReady(entry.getKey())) {
+            if (!access.isReady(current.getKey())) {
                 return false;
             }
-            next++;
+            current = null;
+            completed++;
         }
-        return next == chunks.size();
+        return false;
     }
 
     public int completedChunks() {
-        return next;
+        return completed;
     }
 
     public int totalChunks() {

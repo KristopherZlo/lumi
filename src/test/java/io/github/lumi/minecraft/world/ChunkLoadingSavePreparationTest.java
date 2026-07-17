@@ -39,6 +39,23 @@ class ChunkLoadingSavePreparationTest {
         assertEquals(java.util.List.of(new ChunkCoordinate(4, 6)), access.released);
     }
 
+    @Test
+    void retainsDirtyChunksOnlyWithinTheCurrentDeadline() throws Exception {
+        SectionKey first = new SectionKey(1, 0, 1);
+        SectionKey second = new SectionKey(2, 0, 2);
+        WorkingIndexSnapshot boundary = new WorkingIndexSnapshot(Map.of(first, 1L, second, 1L));
+        AtomicLong clock = new AtomicLong();
+        RecordingChunkAccess access = new RecordingChunkAccess();
+        ChunkLoadSession chunks = new ChunkLoadSession(access, clock::getAndIncrement);
+        SavePreparation.Session session = new ChunkLoadingSavePreparation(
+                fixed(boundary), chunks).begin();
+
+        assertFalse(session.prepareUntil(1));
+        assertEquals(1, access.retained.size());
+        session.close();
+        assertEquals(1, access.released.size());
+    }
+
     private static SavePreparation fixed(WorkingIndexSnapshot boundary) {
         return () -> new SavePreparation.Session() {
             private int finishes;
