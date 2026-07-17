@@ -1,10 +1,13 @@
 package io.github.lumi.gametest;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
+import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -12,8 +15,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.TntBlock;
@@ -134,6 +143,89 @@ public final class LumiTntGameTests {
                 .thenSucceed();
     }
 
+    @GameTest(maxTicks = 300000)
+    public void completedExplosionRestoresArmoredStandExactly(GameTestHelper helper) {
+        FabricDimensionRuntime runtime = runtime(helper);
+        UUID player = UUID.randomUUID();
+        UUID test = UUID.randomUUID();
+        BlockPos tnt = new BlockPos(3, 2, 3);
+        BlockPos standPosition = tnt.south();
+        AtomicReference<UUID> standId = new AtomicReference<>();
+        AtomicReference<UUID> cartId = new AtomicReference<>();
+        AtomicReference<EntityState> standBaseline = new AtomicReference<>();
+        AtomicReference<EntityState> cartBaseline = new AtomicReference<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    for (int x = 1; x <= 5; x++) {
+                        for (int z = 1; z <= 5; z++) {
+                            helper.setBlock(x, 1, z, Blocks.OBSIDIAN);
+                        }
+                    }
+                    helper.setBlock(tnt, Blocks.TNT);
+                    ArmorStand stand = helper.spawn(
+                            EntityType.ARMOR_STAND, standPosition);
+                    stand.setItemSlot(EquipmentSlot.FEET,
+                            new ItemStack(Items.DIAMOND_BOOTS));
+                    stand.setItemSlot(EquipmentSlot.LEGS,
+                            new ItemStack(Items.DIAMOND_LEGGINGS));
+                    stand.setItemSlot(EquipmentSlot.CHEST,
+                            new ItemStack(Items.DIAMOND_CHESTPLATE));
+                    stand.setItemSlot(EquipmentSlot.HEAD,
+                            new ItemStack(Items.DIAMOND_HELMET));
+                    standId.set(stand.getUUID());
+                    MinecartChest cart = helper.spawn(
+                            EntityType.CHEST_MINECART, tnt.west());
+                    cart.setItem(0, new ItemStack(Items.DIAMOND, 7));
+                    cartId.set(cart.getUUID());
+                })
+                .thenIdle(2)
+                .thenExecute(() -> {
+                    Entity stand = helper.getLevel().getEntityInAnyDimension(
+                            standId.get());
+                    helper.assertTrue(stand instanceof ArmorStand,
+                            "Armored stand disappeared before the explosion");
+                    helper.assertTrue(stand.onGround(),
+                            "Armored stand baseline was captured before landing");
+                    standBaseline.set(captureEntity(helper, stand));
+                    Entity cart = helper.getLevel().getEntityInAnyDimension(
+                            cartId.get());
+                    helper.assertTrue(cart instanceof MinecartChest,
+                            "Chest minecart disappeared before the explosion");
+                    cartBaseline.set(captureEntity(helper, cart));
+                    prime(helper, runtime, player, tnt, 3);
+                })
+                .thenWaitUntil(() -> helper.assertEntityNotPresent(EntityType.TNT))
+                .thenWaitUntil(() -> helper.assertEntityNotPresent(
+                        EntityType.ARMOR_STAND))
+                .thenWaitUntil(() -> helper.assertEntityNotPresent(
+                        EntityType.CHEST_MINECART))
+                .thenExecute(() -> runtime.startLiveAction(
+                        player, LiveActionJournal.Direction.UNDO, ignored -> { }))
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    Entity restored = helper.getLevel().getEntityInAnyDimension(
+                            standId.get());
+                    helper.assertTrue(restored instanceof ArmorStand,
+                            "Undo did not restore the same armor stand UUID");
+                    helper.assertValueEqual(
+                            standBaseline.get(), captureEntity(helper, restored),
+                            "Undo changed armor stand state or equipment");
+                    Entity restoredCart = helper.getLevel().getEntityInAnyDimension(
+                            cartId.get());
+                    helper.assertTrue(restoredCart instanceof MinecartChest,
+                            "Undo did not restore the same chest minecart UUID");
+                    helper.assertValueEqual(
+                            cartBaseline.get(), captureEntity(helper, restoredCart),
+                            "Undo changed chest minecart state or inventory");
+                    helper.assertBlockState(tnt, Blocks.TNT.defaultBlockState());
+                    helper.assertEntityNotPresent(EntityType.ITEM);
+                })
+                .thenExecute(() -> LumiGameTestLease.release(test))
+                .thenSucceed();
+    }
+
     private static void prime(
             GameTestHelper helper,
             FabricDimensionRuntime runtime,
@@ -190,6 +282,20 @@ public final class LumiTntGameTests {
     private static void assertSnapshot(
             GameTestHelper helper, Map<BlockPos, BlockState> expected) {
         expected.forEach(helper::assertBlockState);
+    }
+
+    private static EntityState captureEntity(
+            GameTestHelper helper, Entity entity) {
+        try {
+            return new MinecraftEntityChunkCapture()
+                    .captureEntity(helper.getLevel(), entity)
+                    .orElseThrow(() -> helper.assertionException(
+                            "Entity is not durable: %s", entity.getUUID()))
+                    .state();
+        } catch (IOException failed) {
+            throw helper.assertionException(
+                    "Cannot capture entity %s: %s", entity.getUUID(), failed);
+        }
     }
 
     private static FabricDimensionRuntime runtime(GameTestHelper helper) {

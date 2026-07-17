@@ -16,6 +16,7 @@
     "PersistentEntitySectionManagerMixin",
     "PistonMovingBlockEntityMixin",
     "ServerPlayerGameModeMixin",
+    "ServerExplosionMixin",
     "ServerLevelMixin",
     "ServerGamePacketListenerImplMixin",
     "ServerLevelEntityManagerAccessor",

@@ -41,8 +41,17 @@ public final class MinecraftLiveEntityTracker {
         if (action.isEmpty()) {
             return Optional.empty();
         }
-        return world.capture(entity).map(before ->
-                new Pending(action.orElseThrow(), entity.getUUID(), before));
+        UUID actionId = action.orElseThrow();
+        UUID entityId = entity.getUUID();
+        Map<UUID, Optional<EntityState>> entities = owned.get(actionId);
+        Optional<EntityState> before = entities == null
+                ? Optional.empty()
+                : entities.getOrDefault(entityId, Optional.empty());
+        if (before.isEmpty()) {
+            before = world.capture(entity);
+        }
+        before.ifPresent(state -> own(actionId, entityId, Optional.of(state)));
+        return before.map(state -> new Pending(actionId, entityId, state));
     }
 
     public void finish(Pending pending) throws IOException {
