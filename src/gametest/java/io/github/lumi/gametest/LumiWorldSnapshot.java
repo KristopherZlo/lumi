@@ -1,0 +1,172 @@
+package io.github.lumi.gametest;
+
+import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
+import io.github.lumi.minecraft.world.MinecraftSectionCapture;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.StreamSupport;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+
+/** Exact blocks, block entities and durable entities for bounded test volumes. */
+final class LumiWorldSnapshot {
+    private static final Comparator<SectionKey> SECTION_ORDER =
+            Comparator.comparingInt(SectionKey::chunkX)
+                    .thenComparingInt(SectionKey::sectionY)
+                    .thenComparingInt(SectionKey::chunkZ);
+    private static final Comparator<EntityState> ENTITY_ORDER =
+            Comparator.comparing(entity -> entity.id().toString());
+
+    private final Map<SectionKey, SectionBlob> sections;
+    private final EntityChunkBlob entities;
+    private final String digest;
+
+    private LumiWorldSnapshot(
+            Map<SectionKey, SectionBlob> sections,
+            EntityChunkBlob entities) {
+        this.sections = Map.copyOf(sections);
+        this.entities = entities;
+        digest = digest();
+    }
+
+    static LumiWorldSnapshot capture(
+            ServerLevel level,
+            List<BlockBox> areas,
+            LumiBehaviorReport report,
+            String name) throws IOException {
+        Objects.requireNonNull(level, "level");
+        List<BlockBox> copiedAreas = List.copyOf(areas);
+        if (copiedAreas.isEmpty()) {
+            throw new IllegalArgumentException("Snapshot needs at least one area");
+        }
+        long started = System.nanoTime();
+        var sectionCapture = new MinecraftSectionCapture();
+        Map<SectionKey, SectionBlob> sections = new LinkedHashMap<>();
+        for (SectionKey key : sectionKeys(copiedAreas)) {
+            sections.put(key, sectionCapture.capture(
+                    level, level.getChunk(key.chunkX(), key.chunkZ()), key.sectionY()));
+        }
+        var entityCapture = new MinecraftEntityChunkCapture();
+        var capturedEntities = entityCapture.capture(level, StreamSupport.stream(
+                        level.getAllEntities().spliterator(), false)
+                .filter(entity -> copiedAreas.stream().anyMatch(area -> area.contains(
+                        entity.getBlockX(), entity.getBlockY(), entity.getBlockZ()))));
+        var sortedEntities = new EntityChunkBlob(capturedEntities.entities().stream()
+                .sorted(ENTITY_ORDER).toList());
+        LumiWorldSnapshot snapshot = new LumiWorldSnapshot(sections, sortedEntities);
+        report.snapshot(name, snapshot.digest, sections.size(),
+                sortedEntities.entities().size(), elapsedMillis(started));
+        return snapshot;
+    }
+
+    void assertMatches(LumiWorldSnapshot expected, String label) {
+        Objects.requireNonNull(expected, "expected");
+        if (digest.equals(expected.digest)) {
+            return;
+        }
+        throw new AssertionError(label + " snapshot mismatch: expected "
+                + expected.digest + ", got " + digest + "; " + firstDifference(expected));
+    }
+
+    private String firstDifference(LumiWorldSnapshot expected) {
+        if (!sections.keySet().equals(expected.sections.keySet())) {
+            return "section keys differ";
+        }
+        for (SectionKey key : sectionKeys(sections.keySet())) {
+            SectionBlob wanted = expected.sections.get(key);
+            SectionBlob actual = sections.get(key);
+            for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+                String wantedState = wanted.blockStates().get(index);
+                String actualState = actual.blockStates().get(index);
+                if (!wantedState.equals(actualState)) {
+                    return "block " + absolutePosition(key, index)
+                            + " expected " + wantedState + " but was " + actualState;
+                }
+            }
+            if (!wanted.blockEntities().equals(actual.blockEntities())) {
+                return "block entities differ in section " + key;
+            }
+        }
+        if (!entities.equals(expected.entities)) {
+            return "durable entities differ: expected "
+                    + describe(expected.entities) + " but was " + describe(entities);
+        }
+        return "digest differs despite equal decoded state";
+    }
+
+    private String digest() {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            for (SectionKey key : sectionKeys(sections.keySet())) {
+                update(digest, key.chunkX() + "," + key.sectionY() + "," + key.chunkZ());
+                SectionBlob section = sections.get(key);
+                section.blockStates().forEach(state -> update(digest, state));
+                section.blockEntities().entrySet().stream()
+                        .sorted(Map.Entry.comparingByKey())
+                        .forEach(entry -> {
+                            update(digest, Integer.toString(entry.getKey()));
+                            digest.update(entry.getValue().bytes());
+                        });
+            }
+            for (EntityState entity : entities.entities()) {
+                update(digest, entity.id().toString());
+                update(digest, entity.type());
+                digest.update(entity.nbt().bytes());
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
+    }
+
+    private static Set<SectionKey> sectionKeys(List<BlockBox> areas) {
+        Set<SectionKey> keys = new TreeSet<>(SECTION_ORDER);
+        areas.forEach(area -> keys.addAll(area.sectionCells(Integer.MAX_VALUE)));
+        return keys;
+    }
+
+    private static Set<SectionKey> sectionKeys(Set<SectionKey> source) {
+        Set<SectionKey> keys = new TreeSet<>(SECTION_ORDER);
+        keys.addAll(source);
+        return keys;
+    }
+
+    private static BlockPos absolutePosition(SectionKey section, int index) {
+        return new BlockPos(
+                section.chunkX() * 16 + (index & 15),
+                section.sectionY() * 16 + ((index >> 8) & 15),
+                section.chunkZ() * 16 + ((index >> 4) & 15));
+    }
+
+    private static String describe(EntityChunkBlob blob) {
+        List<String> descriptions = new ArrayList<>();
+        blob.entities().forEach(entity -> descriptions.add(
+                entity.type() + "[" + entity.id() + "]"));
+        return descriptions.toString();
+    }
+
+    private static void update(MessageDigest digest, String value) {
+        digest.update(value.getBytes(StandardCharsets.UTF_8));
+        digest.update((byte) 0);
+    }
+
+    private static long elapsedMillis(long started) {
+        return (System.nanoTime() - started) / 1_000_000;
+    }
+}
