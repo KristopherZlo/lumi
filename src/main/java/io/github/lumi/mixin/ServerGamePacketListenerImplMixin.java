@@ -24,12 +24,16 @@ abstract class ServerGamePacketListenerImplMixin {
     @Unique private final Deque<Optional<InteractionCapture>> lumi$interactions =
             new ArrayDeque<>();
 
-    @Inject(method = "handleInteract", at = @At("HEAD"))
+    @Inject(method = "handleInteract", at = @At("HEAD"), cancellable = true)
     private void lumi$beginEntityInteraction(
             ServerboundInteractPacket packet, CallbackInfo callback) {
         var runtime = LumiMod.serverRuntime().find(player.level()).orElse(null);
         if (runtime == null) {
             lumi$interactions.addLast(Optional.empty());
+            return;
+        }
+        if (!runtime.freeze().isMutationAllowed()) {
+            callback.cancel();
             return;
         }
         DirectLiveActionContext.Scope scope = DirectLiveActionContext.open(

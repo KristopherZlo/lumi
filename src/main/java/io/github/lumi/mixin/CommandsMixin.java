@@ -20,9 +20,15 @@ abstract class CommandsMixin {
             Operation<Void> original) {
         CommandSourceStack source = parsed.getContext().getSource();
         ServerPlayer player = source.getPlayer();
-        var runtime = player == null
-                ? null : LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
+        var runtime = LumiMod.serverRuntime().find(source.getLevel()).orElse(null);
         if (runtime == null) {
+            original.call(parsed, command);
+            return;
+        }
+        if (!runtime.freeze().isMutationAllowed()) {
+            return;
+        }
+        if (player == null) {
             original.call(parsed, command);
             return;
         }

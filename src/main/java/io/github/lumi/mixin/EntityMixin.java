@@ -19,13 +19,17 @@ abstract class EntityMixin {
     @Unique private static final ThreadLocal<Deque<Optional<PendingRemoval>>> LUMI_REMOVALS =
             ThreadLocal.withInitial(ArrayDeque::new);
 
-    @Inject(method = "remove", at = @At("HEAD"))
+    @Inject(method = "remove", at = @At("HEAD"), cancellable = true)
     private void lumi$beginRemoval(Entity.RemovalReason reason, CallbackInfo callback) {
         Entity entity = (Entity) (Object) this;
         Optional<PendingRemoval> removal = Optional.empty();
         if (entity.level() instanceof ServerLevel level) {
             var runtime = LumiMod.serverRuntime().find(level).orElse(null);
             if (runtime != null) {
+                if (!runtime.freeze().isMutationAllowed()) {
+                    callback.cancel();
+                    return;
+                }
                 try {
                     removal = runtime.liveEntities().begin(entity)
                             .map(pending -> new PendingRemoval(runtime.liveEntities(), pending));

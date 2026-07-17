@@ -22,6 +22,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
@@ -32,6 +33,27 @@ public final class LumiHistoryGameTests {
             new CommitAuthor(new UUID(0, 7), "History gate");
     private static final TicketType TEST_CHUNK_TICKET =
             new TicketType(Long.MAX_VALUE, TicketType.FLAG_LOADING);
+
+    @GameTest
+    public void freezeRejectsOrdinaryEntityLifecycle(GameTestHelper helper) {
+        FabricDimensionRuntime runtime = runtime(helper);
+        Entity existing = helper.spawn(EntityType.ARMOR_STAND, new BlockPos(2, 2, 2));
+        var lease = runtime.freeze().acquire();
+        try {
+            Entity added = EntityType.ARMOR_STAND.create(
+                    helper.getLevel(), EntitySpawnReason.COMMAND);
+            helper.assertFalse(added == null, "Cannot create test entity");
+            helper.assertFalse(helper.getLevel().addFreshEntity(added),
+                    "Frozen dimension accepted an ordinary entity");
+            existing.discard();
+            helper.assertFalse(existing.isRemoved(),
+                    "Frozen dimension removed an ordinary entity");
+        } finally {
+            lease.release();
+        }
+        existing.discard();
+        helper.succeed();
+    }
 
     @GameTest(maxTicks = 300000)
     public void saveRestoreAddsAndRemovesDurableEntityExactly(GameTestHelper helper) {

@@ -23,6 +23,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ServerLevel.class)
 abstract class ServerLevelMixin implements OwnedBlockEventAccess {
@@ -93,7 +94,7 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
     @Inject(method = "addEntity", at = @At("RETURN"))
     private void lumi$captureEntityCarrier(
             Entity entity,
-            org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> callback) {
+            CallbackInfoReturnable<Boolean> callback) {
         if (callback.getReturnValue()) {
             ServerLevel level = (ServerLevel) (Object) this;
             LumiMod.serverRuntime().find(level).ifPresent(runtime -> {
@@ -106,6 +107,17 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
                 }
             });
         }
+    }
+
+    @Inject(method = "addEntity", at = @At("HEAD"), cancellable = true)
+    private void lumi$rejectFrozenEntityAdd(
+            Entity entity, CallbackInfoReturnable<Boolean> callback) {
+        ServerLevel level = (ServerLevel) (Object) this;
+        LumiMod.serverRuntime().find(level).ifPresent(runtime -> {
+            if (!runtime.freeze().isMutationAllowed()) {
+                callback.setReturnValue(false);
+            }
+        });
     }
 
     @Override
