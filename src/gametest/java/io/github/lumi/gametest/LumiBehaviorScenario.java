@@ -19,6 +19,7 @@ final class LumiBehaviorScenario {
     private final LumiBehaviorActions actions;
     private final BlockPos origin;
     private final List<BlockBox> tntArea;
+    private final List<BlockBox> unmodifiedControlArea;
     private final List<BlockBox> platformArea;
     private final List<BlockBox> allAreas;
     private final List<String> failures = new ArrayList<>();
@@ -35,9 +36,13 @@ final class LumiBehaviorScenario {
         actions = new LumiBehaviorActions(singleplayer.getServer(), report);
         origin = singleplayer.getServer().computeOnServer(server ->
                 server.getPlayerList().getPlayers().getFirst().blockPosition());
-        tntArea = List.of(new BlockBox(
+        BlockBox tntVolume = new BlockBox(
                 origin.getX() - 24, origin.getY() - 16, origin.getZ() - 24,
-                origin.getX() + 24, origin.getY() + 16, origin.getZ() + 24));
+                origin.getX() + 24, origin.getY() + 16, origin.getZ() + 24);
+        tntArea = List.of(tntVolume);
+        unmodifiedControlArea = List.of(new BlockBox(
+                tntVolume.minX(), tntVolume.minY(), tntVolume.minZ(),
+                tntVolume.minX(), tntVolume.maxY(), tntVolume.maxZ()));
         platformArea = List.of(new BlockBox(
                 origin.getX() - 40, origin.getY() + 60, origin.getZ() - 40,
                 origin.getX() + 40, origin.getY() + 140, origin.getZ() + 40));
@@ -50,6 +55,8 @@ final class LumiBehaviorScenario {
         CommitId initialCommit = operations.activeCommit();
         BranchName mainBranch = operations.activeBranch();
         LumiWorldSnapshot initial = snapshot("initial", allAreas);
+        LumiWorldSnapshot initialControl = snapshot(
+                "initial_unmodified_control", unmodifiedControlArea);
 
         var tnt = actions.placeTwentyTnt(origin);
         LumiWorldSnapshot tntPlaced = snapshot("tnt_placed", tntArea);
@@ -68,6 +75,8 @@ final class LumiBehaviorScenario {
         actions.powerTnt(tnt.getFirst());
         waitTicks("second_explosion_20s", 400);
         snapshot("second_explosion_20s", tntArea);
+        assertSnapshot("before_quick_rollback_unmodified_control",
+                unmodifiedControlArea, initialControl);
         operations.quickRollback();
         assertSnapshot("quick_rollback_initial", allAreas, initial);
         screenshot("quick-rollback-initial");
