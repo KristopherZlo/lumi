@@ -3,6 +3,7 @@ package io.github.lumi.gametest;
 import com.sk89q.worldedit.fabric.FabricPermissionsProvider;
 import com.sk89q.worldedit.fabric.FabricWorldEdit;
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import java.util.ArrayList;
 import java.util.List;
@@ -86,6 +87,17 @@ final class LumiBehaviorActions {
         timed(name, () -> server.runOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
             useOn(player, Items.FLINT_AND_STEEL, target, Direction.UP);
+        }));
+    }
+
+    LumiWorldSnapshot snapshotAndIgniteTnt(
+            String name, BlockPos target, List<BlockBox> areas) {
+        return timed(name, () -> server.computeOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            LumiWorldSnapshot before = LumiWorldSnapshot.capture(
+                    player.level(), areas, report, name + "_before");
+            useOn(player, Items.FLINT_AND_STEEL, target, Direction.UP);
+            return before;
         }));
     }
 
@@ -248,15 +260,22 @@ final class LumiBehaviorActions {
     void attackEntity(String name, UUID id, Item weapon) {
         timed(name, () -> server.runOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
+            attack(player, entity(player.level(), id, Entity.class), weapon, name);
+        }));
+    }
+
+    LumiWorldSnapshot snapshotAndAttackEntity(
+            String name, UUID id, Item weapon, List<BlockBox> areas) {
+        return timed(name, () -> server.computeOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
             Entity target = entity(player.level(), id, Entity.class);
-            player.teleportTo(target.getX() + 2, target.getY(), target.getZ());
-            if (!player.getMainHandItem().is(weapon)) {
-                player.setItemInHand(
-                        InteractionHand.MAIN_HAND, new ItemStack(weapon));
-            }
+            prepareAttack(player, target, weapon);
+            LumiWorldSnapshot before = LumiWorldSnapshot.capture(
+                    player.level(), areas, report, name + "_before");
             player.connection.handleInteract(
                     ServerboundInteractPacket.createAttackPacket(target, false));
             require(!target.isAlive(), "Entity survived " + name + ": " + id);
+            return before;
         }));
     }
 
@@ -508,6 +527,21 @@ final class LumiBehaviorActions {
             report.event("change", name, "failed", 0,
                     elapsedMillis(started), failed.toString());
             throw new IllegalStateException(name + " failed", failed);
+        }
+    }
+
+    private static void attack(
+            ServerPlayer player, Entity target, Item weapon, String name) {
+        prepareAttack(player, target, weapon);
+        player.connection.handleInteract(
+                ServerboundInteractPacket.createAttackPacket(target, false));
+        require(!target.isAlive(), "Entity survived " + name + ": " + target.getUUID());
+    }
+
+    private static void prepareAttack(ServerPlayer player, Entity target, Item weapon) {
+        player.teleportTo(target.getX() + 2, target.getY(), target.getZ());
+        if (!player.getMainHandItem().is(weapon)) {
+            player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(weapon));
         }
     }
 

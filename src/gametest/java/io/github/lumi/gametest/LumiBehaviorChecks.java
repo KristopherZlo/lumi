@@ -35,7 +35,13 @@ final class LumiBehaviorChecks {
             String name,
             List<BlockBox> areas,
             LumiWorldSnapshot expected) throws IOException {
-        LumiWorldSnapshot actual = snapshot(name, areas);
+        assertSnapshot(name, snapshot(name, areas), expected);
+    }
+
+    void assertSnapshot(
+            String name,
+            LumiWorldSnapshot actual,
+            LumiWorldSnapshot expected) {
         try {
             actual.assertMatches(expected, name);
             report.event("assertion", name, "succeeded", 0, 0, "");
