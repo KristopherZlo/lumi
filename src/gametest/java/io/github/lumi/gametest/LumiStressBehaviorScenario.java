@@ -20,6 +20,8 @@ import net.minecraft.world.item.Items;
 /** Large TNT, crystal and durable-entity history stress workflow. */
 final class LumiStressBehaviorScenario {
     private static final long RANDOM_SEED = 710L;
+    private static final int QUIESCENCE_WINDOW_TICKS = 120;
+    private static final int MAX_QUIESCENCE_ATTEMPTS = 10;
 
     private final ClientGameTestContext context;
     private final LumiBehaviorReport report;
@@ -60,9 +62,7 @@ final class LumiStressBehaviorScenario {
     }
 
     void run() throws IOException {
-        checks.snapshot("stress_world_preload", area);
-        checks.waitTicks("stress_world_stabilization", 100);
-        checks.snapshot("stress_initial", area);
+        awaitQuiescentStressArea(checks.snapshot("stress_world_preload", area));
 
         Map<Integer, LumiWorldSnapshot> placedStates = placeTntOverFourSeconds();
         LumiWorldSnapshot allTnt = placedStates.get(128);
@@ -94,6 +94,33 @@ final class LumiStressBehaviorScenario {
         runEndCrystal(allTnt);
         runSavedHistoryAndEntities(allTnt);
         checks.finish();
+    }
+
+    private void awaitQuiescentStressArea(LumiWorldSnapshot previous)
+            throws IOException {
+        for (int attempt = 1; attempt <= MAX_QUIESCENCE_ATTEMPTS; attempt++) {
+            long started = System.nanoTime();
+            String name = "stress_world_quiescence_" + attempt;
+            checks.waitTicks(name, QUIESCENCE_WINDOW_TICKS);
+            LumiWorldSnapshot current = checks.snapshot(name, area);
+            try {
+                current.assertMatches(previous, name);
+                report.event("gate", name, "succeeded",
+                        QUIESCENCE_WINDOW_TICKS, elapsedMillis(started),
+                        "full stress area unchanged");
+                return;
+            } catch (AssertionError drift) {
+                String status = attempt == MAX_QUIESCENCE_ATTEMPTS
+                        ? "failed" : "retry";
+                report.event("gate", name, status,
+                        QUIESCENCE_WINDOW_TICKS, elapsedMillis(started),
+                        drift.getMessage());
+                if (attempt == MAX_QUIESCENCE_ATTEMPTS) {
+                    throw drift;
+                }
+                previous = current;
+            }
+        }
     }
 
     private Map<Integer, LumiWorldSnapshot> placeTntOverFourSeconds()
