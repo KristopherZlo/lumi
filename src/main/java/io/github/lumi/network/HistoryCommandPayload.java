@@ -35,6 +35,9 @@ public record HistoryCommandPayload(
         if (expectedRevision < 0) {
             throw new IllegalArgumentException("Expected ref revision cannot be negative");
         }
+        if (kind == Kind.SAVE || kind == Kind.AMEND) {
+            SaveArgument.parse(argument);
+        }
         if (kind == Kind.RESTORE || kind == Kind.RESTORE_NO_ENTITIES) {
             new ObjectId(argument);
         }

@@ -15,6 +15,7 @@ import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.MerkleTreeEditor;
 import io.github.lumi.storage.repository.OperationJournalRepository;
 import io.github.lumi.storage.repository.RefConflictException;
+import io.github.lumi.storage.repository.VersionTagRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
 import java.util.List;
@@ -30,18 +31,21 @@ public final class SaveService implements SavePublisher {
     private final CommitRepository commits;
     private final BranchRefRepository refs;
     private final OperationJournalRepository journals;
+    private final VersionTagRepository tags;
 
     public SaveService(
             WorldObjectRepository objects,
             MerkleTreeEditor trees,
             CommitRepository commits,
             BranchRefRepository refs,
-            OperationJournalRepository journals) {
+            OperationJournalRepository journals,
+            VersionTagRepository tags) {
         this.objects = Objects.requireNonNull(objects, "objects");
         this.trees = Objects.requireNonNull(trees, "trees");
         this.commits = Objects.requireNonNull(commits, "commits");
         this.refs = Objects.requireNonNull(refs, "refs");
         this.journals = Objects.requireNonNull(journals, "journals");
+        this.tags = Objects.requireNonNull(tags, "tags");
     }
 
     @Override
@@ -58,6 +62,11 @@ public final class SaveService implements SavePublisher {
         Objects.requireNonNull(captured, "captured");
         Objects.requireNonNull(progress, "progress");
         CommitId commitId = writeCommit(request, captured, progress);
+        if (!request.tags().isEmpty()) {
+            progress.accept(SavePublicationProgress.indeterminate(
+                    "Save: writing version tags"));
+            tags.replace(commitId, request.tags());
+        }
         progress.accept(SavePublicationProgress.indeterminate("Save: publishing branch"));
         OperationJournal journal = journals.create(new OperationJournal(
                 UUID.randomUUID(),

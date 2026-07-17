@@ -89,6 +89,7 @@ import io.github.lumi.storage.repository.WorldObjectRepository;
 import io.github.lumi.storage.repository.WorkspaceRepository;
 import io.github.lumi.storage.repository.ZoneRepository;
 import io.github.lumi.storage.repository.TombstoneRepository;
+import io.github.lumi.storage.repository.VersionTagRepository;
 import io.github.lumi.storage.repository.GarbageCollector;
 import io.github.lumi.telemetry.TelemetryService;
 import java.io.IOException;
@@ -304,7 +305,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 level, repository, freeze, new DimensionOperationCoordinator(
                         freeze, operation -> logTerminal(level, operation)),
                 mutations,
-                new SaveService(objects, trees, commits, refs, journals),
+                new SaveService(objects, trees, commits, refs, journals,
+                        new VersionTagRepository(repository)),
                 restoreService,
                 new MinecraftWorldStateApply(level, freeze), journals,
                 background, refs, branches,

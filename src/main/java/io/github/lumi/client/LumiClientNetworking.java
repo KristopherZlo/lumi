@@ -7,6 +7,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.WorkspaceSettings;
+import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.network.HistoryCommandPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.CompareArgument;
@@ -15,6 +16,7 @@ import io.github.lumi.network.MergeArgument;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
 import io.github.lumi.network.PartialRestoreArgument;
+import io.github.lumi.network.SaveArgument;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.network.ZoneCreateArgument;
 import io.github.lumi.network.ZoneCompareArgument;
@@ -76,13 +78,25 @@ public final class LumiClientNetworking {
     }
 
     public UUID save(String message) {
+        return save(message, VersionTags.empty());
+    }
+
+    public UUID save(String message, VersionTags tags) {
         return send(HistoryCommandPayload.Kind.SAVE,
-                Objects.requireNonNull(message, "message"));
+                new SaveArgument(
+                        Objects.requireNonNull(message, "message"),
+                        Objects.requireNonNull(tags, "tags")).encode());
     }
 
     public UUID amend(String message) {
+        return amend(message, VersionTags.empty());
+    }
+
+    public UUID amend(String message, VersionTags tags) {
         return send(HistoryCommandPayload.Kind.AMEND,
-                Objects.requireNonNull(message, "message"));
+                new SaveArgument(
+                        Objects.requireNonNull(message, "message"),
+                        Objects.requireNonNull(tags, "tags")).encode());
     }
 
     public UUID restore(CommitId target) {
