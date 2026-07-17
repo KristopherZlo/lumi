@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -21,25 +22,33 @@ final class LumiBehaviorReport implements AutoCloseable {
 
     private final Path directory;
     private final Path snapshots;
+    private final Path runtimeLog;
     private final BufferedWriter events;
     private int snapshotNumber;
 
-    private LumiBehaviorReport(Path directory, BufferedWriter events) throws IOException {
+    private LumiBehaviorReport(
+            Path directory,
+            Path runtimeLog,
+            BufferedWriter events) throws IOException {
         this.directory = directory;
         snapshots = Files.createDirectories(directory.resolve("snapshots"));
+        this.runtimeLog = runtimeLog;
         this.events = events;
         event("test", "client_behavior", "started", 0, 0, "");
         LOGGER.info("Lumi behavior report: {}", directory.toAbsolutePath());
     }
 
     static LumiBehaviorReport create(Path gameDirectory) throws IOException {
-        Path directory = Files.createDirectories( gameDirectory
-                .resolve("lumi-behavior-reports")
+        Path buildDirectory = gameDirectory.toAbsolutePath().normalize()
+                .getParent().getParent();
+        Path directory = Files.createDirectories(buildDirectory
+                .resolve("reports/lumi-behavior")
                 .resolve(RUN_NAME.format(Instant.now())));
         BufferedWriter events = Files.newBufferedWriter(
                 directory.resolve("events.jsonl"), StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-        return new LumiBehaviorReport(directory, events);
+        return new LumiBehaviorReport(
+                directory, gameDirectory.resolve("logs/latest.log"), events);
     }
 
     Path directory() {
@@ -139,5 +148,11 @@ final class LumiBehaviorReport implements AutoCloseable {
     public void close() throws IOException {
         event("test", "client_behavior", "finished", 0, 0, "");
         events.close();
+        try {
+            Files.copy(runtimeLog, directory.resolve("latest.log"),
+                    StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException failed) {
+            LOGGER.warn("Could not preserve client behavior log", failed);
+        }
     }
 }

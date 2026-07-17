@@ -34,11 +34,16 @@ final class LumiBehaviorScenario {
         operations = new LumiBehaviorOperations(
                 context, singleplayer.getServer(), report);
         actions = new LumiBehaviorActions(singleplayer.getServer(), report);
-        origin = singleplayer.getServer().computeOnServer(server ->
-                server.getPlayerList().getPlayers().getFirst().blockPosition());
+        WorldOrigin world = singleplayer.getServer().computeOnServer(server -> {
+            var level = server.getPlayerList().getPlayers().getFirst().level();
+            return new WorldOrigin(
+                    server.getPlayerList().getPlayers().getFirst().blockPosition(),
+                    level.getMinY(), level.getMaxY() - 1);
+        });
+        origin = world.position();
         BlockBox tntVolume = new BlockBox(
-                origin.getX() - 24, origin.getY() - 16, origin.getZ() - 24,
-                origin.getX() + 24, origin.getY() + 16, origin.getZ() + 24);
+                origin.getX() - 24, world.minY(), origin.getZ() - 24,
+                origin.getX() + 24, world.maxY(), origin.getZ() + 24);
         tntArea = List.of(tntVolume);
         unmodifiedControlArea = List.of(new BlockBox(
                 tntVolume.minX(), tntVolume.minY(), tntVolume.minZ(),
@@ -178,4 +183,6 @@ final class LumiBehaviorScenario {
         report.event("screenshot", name, "captured", 0,
                 (System.nanoTime() - started) / 1_000_000, path.toString());
     }
+
+    private record WorldOrigin(BlockPos position, int minY, int maxY) { }
 }
