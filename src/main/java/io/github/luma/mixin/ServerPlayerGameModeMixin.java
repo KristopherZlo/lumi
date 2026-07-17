@@ -98,7 +98,11 @@ abstract class ServerPlayerGameModeMixin {
     @Unique
     private boolean luma$blocksWorldMutations(Level level) {
         return level instanceof ServerLevel serverLevel
-                && LUMA_WORLD_OPERATIONS.blocksWorldMutations(serverLevel);
+                && LUMA_WORLD_OPERATIONS.blocksPlayerWorldMutation(
+                        serverLevel,
+                        "game-mode-action",
+                        this.player == null ? "unknown" : this.player.getName().getString()
+                );
     }
 
     @Unique

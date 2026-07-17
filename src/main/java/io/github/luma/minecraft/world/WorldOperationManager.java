@@ -74,7 +74,13 @@ public final class WorldOperationManager {
     }
 
     public boolean blocksWorldMutations(ServerLevel level) {
-        return this.mutationBarrier.blocks(level);
+        return this.blockingOperation(level).isPresent();
+    }
+
+    public boolean blocksPlayerWorldMutation(ServerLevel level, String action, String actor) {
+        Optional<ActiveOperation> operation = this.blockingOperation(level);
+        operation.ifPresent(active -> this.mutationBarrier.logRejectedPlayerMutation(active, action, actor));
+        return operation.isPresent();
     }
 
     public boolean mayBlockWorldMutations() {
@@ -217,18 +223,24 @@ public final class WorldOperationManager {
     }
 
     public void shutdown(MinecraftServer server) {
-        if (server != null) {
-            this.shutdownHandler.finishServerOperationBeforeShutdown(this.serverKey(server), server);
+        try {
+            if (server != null) {
+                this.shutdownHandler.finishServerOperationBeforeShutdown(this.serverKey(server), server);
+            }
+        } finally {
+            if (server != null) {
+                this.mutationBarrier.releaseAll(server);
+            }
+            this.shutdown();
         }
-        this.shutdown();
     }
 
     private synchronized void complete(MinecraftServer server, ActiveOperation operation) {
         String serverKey = this.serverKey(server);
         WorldOperationLifecycle.Completion completion = this.lifecycle.complete(serverKey, operation);
         if (completion.completed()) {
-            this.recordReliabilityFailure(server, operation);
             this.mutationBarrier.release(operation);
+            this.recordReliabilityFailure(server, operation);
             completion.metrics().ifPresent(metrics -> LumaLoadLog.operationMetrics(operation.handle(), metrics));
             ActiveOperation followUp = completion.followUp();
             if (followUp != null) {
@@ -252,6 +264,17 @@ public final class WorldOperationManager {
                                 + ", projectId=" + followUp.handle().projectId()
                 );
             }
+        }
+    }
+
+    private Optional<ActiveOperation> blockingOperation(ServerLevel level) {
+        if (level == null || !this.mutationBarrier.active()) {
+            return Optional.empty();
+        }
+        synchronized (this) {
+            ActiveOperation active = this.lifecycle.active(this.serverKey(level.getServer()));
+            this.mutationBarrier.reconcile(level.getServer(), active);
+            return this.mutationBarrier.blocks(level, active) ? Optional.of(active) : Optional.empty();
         }
     }
 

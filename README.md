@@ -365,6 +365,11 @@ Useful JVM flags:
 -Dlumi.ui.iconDrawSize=12
 ```
 
+The normal Minecraft `latest.log` always records Lumi operation queueing,
+progress-stage changes, completion/failure, world-mutation lock acquire/release,
+the first rejected player mutation for each lock, and stale-lock recovery. No
+diagnostic flag is required to determine which operation is blocking edits.
+
 The `lumi.ui.*` flags are dev-only tuning knobs for Lumi's in-game menus.
 Without an override, Lumi selects target GUI scales `2`, `3`, `4`, and `6` for
 HD, Full HD, QHD, and 4K framebuffers so those displays share a 640x360 virtual

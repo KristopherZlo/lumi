@@ -197,7 +197,11 @@ abstract class ServerGamePacketListenerMixin {
     private boolean luma$worldMutationBlocked() {
         return this.player != null
                 && this.player.level() instanceof ServerLevel level
-                && LUMA_WORLD_OPERATIONS.blocksWorldMutations(level);
+                && LUMA_WORLD_OPERATIONS.blocksPlayerWorldMutation(
+                        level,
+                        "player-packet",
+                        this.player.getName().getString()
+                );
     }
 
     @Unique
