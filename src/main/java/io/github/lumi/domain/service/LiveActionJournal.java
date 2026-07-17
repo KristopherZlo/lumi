@@ -143,7 +143,8 @@ public final class LiveActionJournal {
             throw new IllegalStateException("Live action has no causal reference to release");
         }
         action.causalReferences--;
-        if (action.closed && action.causalReferences == 0 && isEmpty(action)) {
+        if (action.closed && action.causalReferences == 0
+                && (!action.available || isEmpty(action))) {
             evict(action, false);
         }
     }
@@ -347,7 +348,7 @@ public final class LiveActionJournal {
         action.available = false;
         unavailableReasons.put(action.player, reason);
         evictState(action);
-        if (action.closed) {
+        if (action.closed && action.causalReferences == 0) {
             actions.remove(action.id);
         }
     }
@@ -358,7 +359,10 @@ public final class LiveActionJournal {
 
     private void evict(MutableAction action, boolean createsSequenceBarrier) {
         evictState(action, createsSequenceBarrier);
-        actions.remove(action.id);
+        action.available = false;
+        if (action.causalReferences == 0) {
+            actions.remove(action.id);
+        }
     }
 
     private void evictState(MutableAction action) {

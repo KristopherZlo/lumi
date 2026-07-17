@@ -22,6 +22,29 @@ import net.minecraft.world.level.block.state.BlockState;
 /** Exact active-carrier and completed-result gates for TNT actions. */
 public final class LumiTntGameTests {
     @GameTest(maxTicks = 2500)
+    public void activeTntOutlivesHistoryCountEviction(GameTestHelper helper) {
+        FabricDimensionRuntime runtime = runtime(helper);
+        UUID player = UUID.randomUUID();
+        UUID test = UUID.randomUUID();
+        BlockPos tnt = new BlockPos(3, 2, 3);
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    cage(helper, tnt);
+                    for (int index = 0; index < 65; index++) {
+                        helper.setBlock(tnt, Blocks.TNT);
+                        prime(helper, runtime, player, tnt);
+                    }
+                    helper.assertEntitiesPresent(EntityType.TNT, 65);
+                    helper.getEntities(EntityType.TNT).forEach(carrier -> carrier.setFuse(5));
+                })
+                .thenWaitUntil(() -> helper.assertEntityNotPresent(EntityType.TNT))
+                .thenExecute(() -> LumiGameTestLease.release(test))
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 2500)
     public void midFuseUndoCancelsOwnedTnt(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
@@ -117,6 +140,16 @@ public final class LumiTntGameTests {
             UUID player,
             BlockPos relative,
             int fuse) {
+        prime(helper, runtime, player, relative);
+        PrimedTnt carrier = helper.findOneEntity(EntityType.TNT);
+        carrier.setFuse(fuse);
+    }
+
+    private static void prime(
+            GameTestHelper helper,
+            FabricDimensionRuntime runtime,
+            UUID player,
+            BlockPos relative) {
         BlockPos position = helper.absolutePos(relative);
         try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player)) {
             if (!TntBlock.prime(helper.getLevel(), position)) {
@@ -125,8 +158,16 @@ public final class LumiTntGameTests {
             helper.getLevel().setBlock(
                     position, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
         }
-        PrimedTnt carrier = helper.findOneEntity(EntityType.TNT);
-        carrier.setFuse(fuse);
+    }
+
+    private static void cage(GameTestHelper helper, BlockPos center) {
+        for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) {
+            for (int z = -1; z <= 1; z++) {
+                if (x != 0 || y != 0 || z != 0) {
+                    helper.setBlock(center.offset(x, y, z), Blocks.OBSIDIAN);
+                }
+            }
+        }
     }
 
     private static void fillStone(GameTestHelper helper) {

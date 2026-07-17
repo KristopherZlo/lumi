@@ -174,6 +174,24 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void retainedEvictedActionAcceptsLateLifecycleUntilReleased() {
+        LiveActionJournal journal = new LiveActionJournal(
+                new LiveActionJournal.Limits(1, 1_000, 4_000, 8_000));
+        UUID first = journal.begin(PLAYER_A);
+        journal.recordEntity(first, ENTITY, Optional.empty(), Optional.of(entity(1)));
+        journal.retain(first);
+        journal.close(first);
+
+        UUID second = add(journal, 2);
+
+        assertEquals(second, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+        assertEquals(Optional.of(PLAYER_A), journal.owner(first));
+        journal.recordEntity(first, ENTITY, Optional.of(entity(1)), Optional.empty());
+        journal.release(first);
+        assertEquals(Optional.empty(), journal.owner(first));
+    }
+
+    @Test
     void dimensionByteLimitEvictsOldestClosedPlayerAction() {
         LiveActionJournal journal = new LiveActionJournal(
                 new LiveActionJournal.Limits(64, 1_000, 1_000, 80));

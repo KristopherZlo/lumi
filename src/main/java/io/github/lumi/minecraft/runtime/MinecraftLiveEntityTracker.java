@@ -53,6 +53,8 @@ public final class MinecraftLiveEntityTracker {
                 after);
         if (after.isPresent()) {
             own(pending.action(), pending.entity(), Optional.of(pending.before()));
+        } else {
+            disown(pending.action(), pending.entity());
         }
     }
 
@@ -99,6 +101,15 @@ public final class MinecraftLiveEntityTracker {
             journal.retain(action);
         }
         entities.putIfAbsent(entity, before);
+    }
+
+    private void disown(UUID action, UUID entity) {
+        Map<UUID, Optional<EntityState>> entities = owned.get(action);
+        if (entities == null || entities.remove(entity) == null || !entities.isEmpty()) {
+            return;
+        }
+        owned.remove(action);
+        journal.release(action);
     }
 
     public record Pending(UUID action, UUID entity, EntityState before) {
