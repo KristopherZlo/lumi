@@ -4,6 +4,7 @@ import com.sk89q.worldedit.fabric.FabricPermissionsProvider;
 import com.sk89q.worldedit.fabric.FabricWorldEdit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.StreamSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -13,9 +14,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.BlockHitResult;
@@ -42,6 +45,77 @@ final class LumiBehaviorActions {
                 }
             }
             return List.copyOf(positions);
+        });
+    }
+
+    List<BlockPos> planTntGrid128(BlockPos origin) {
+        return server.computeOnServer(minecraft -> {
+            ServerLevel level = player(minecraft).level();
+            List<BlockPos> positions = new ArrayList<>(128);
+            for (int z = -7; z <= 7; z += 2) {
+                for (int x = -15; x <= 15; x += 2) {
+                    positions.add(surfacePlacement(
+                            level, origin.getX() + x, origin.getZ() + z));
+                }
+            }
+            return List.copyOf(positions);
+        });
+    }
+
+    void placeTnt(BlockPos target) {
+        server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            place(player, Items.TNT, target);
+            require(player.level().getBlockState(target).is(Blocks.TNT),
+                    "Player did not place TNT at " + target);
+        });
+    }
+
+    void igniteTnt(String name, BlockPos target) {
+        timed(name, () -> server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            useOn(player, Items.FLINT_AND_STEEL, target, Direction.UP);
+            require(player.level().getBlockState(target).isAir(),
+                    "Ignited TNT block remained at " + target);
+        }));
+    }
+
+    void placeBlocks(String name, Item item, List<BlockPos> positions) {
+        timed(name, () -> server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            Block expected = Block.byItem(item);
+            require(expected != Blocks.AIR, "Item is not a placeable block: " + item);
+            for (BlockPos position : positions) {
+                place(player, item, position);
+                require(player.level().getBlockState(position).is(expected),
+                        "Player did not place " + item + " at " + position);
+            }
+        }));
+    }
+
+    void destroyBlocks(String name, List<BlockPos> positions) {
+        timed(name, () -> server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            for (BlockPos position : positions) {
+                require(player.gameMode.destroyBlock(position),
+                        "Player could not break block " + position);
+            }
+        }));
+    }
+
+    BlockPos surfacePosition(int x, int z) {
+        return server.computeOnServer(minecraft ->
+                surfacePlacement(player(minecraft).level(), x, z));
+    }
+
+    boolean hasTnt(List<BlockPos> positions) {
+        return server.computeOnServer(minecraft -> {
+            ServerLevel level = player(minecraft).level();
+            return positions.stream().anyMatch(position ->
+                    level.getBlockState(position).is(Blocks.TNT))
+                    || StreamSupport.stream(
+                            level.getAllEntities().spliterator(), false)
+                            .anyMatch(PrimedTnt.class::isInstance);
         });
     }
 
