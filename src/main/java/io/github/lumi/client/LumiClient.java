@@ -31,12 +31,14 @@ import io.github.lumi.client.ui.LumiZoneDetailsScreen;
 import io.github.lumi.client.ui.LumiZoneRestoreScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.client.ui.LumiRestoreScreen;
+import io.github.lumi.client.ui.LumiVersionDetailsScreen;
 import io.github.lumi.client.ui.BranchNameController;
 import io.github.lumi.client.ui.SaveScreenController;
 import io.github.lumi.client.ui.PackageScreenController;
 import io.github.lumi.client.ui.ZoneScreenController;
 import io.github.lumi.client.ui.ZoneDetailsController;
 import io.github.lumi.client.ui.WorkspaceScreenController;
+import io.github.lumi.client.ui.VersionCompareController;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.telemetry.TelemetryService;
@@ -96,28 +98,10 @@ public final class LumiClient implements ClientModInitializer {
                                     client.setScreen(null);
                                 },
                                 NETWORKING::quickRollback,
-                                version -> client.setScreen(new LumiRestoreScreen(
-                                        client.screen,
-                                        version.id(),
-                                        version.message(),
-                                        SELECTION.bounds(),
-                                        (target, includeEntities) -> {
-                                            if (includeEntities) {
-                                                NETWORKING.restore(target);
-                                            } else {
-                                                NETWORKING.restoreWithoutEntities(target);
-                                            }
-                                        },
-                                        NETWORKING::restoreArea)),
-                                version -> client.setScreen(new LumiDeleteVersionScreen(
-                                        client.screen, version, NETWORKING::deleteVersion)),
-                                target -> client.setScreen(new LumiCompareScreen(
-                                        client.screen,
-                                        COMPARISONS,
-                                        target.label(),
-                                        () -> NETWORKING.compare(
-                                                target.before(), target.after()),
-                                        NETWORKING::cancelCompare))));
+                                version -> openVersionDetails(client.screen, version),
+                                version -> openRestore(client.screen, version),
+                                version -> openDelete(client.screen, version),
+                                target -> openCompare(client.screen, target)));
                     }
 
                     @Override public void openSave() {
@@ -211,6 +195,48 @@ public final class LumiClient implements ClientModInitializer {
                 NETWORKING::refreshSnapshot, intent, initialMessage,
                 requestId -> PREVIEW_CAPTURE.request(
                         requestId, HISTORY.state().snapshot().orElseThrow())));
+    }
+
+    private static void openVersionDetails(
+            Screen parent, HistorySnapshotPayload.Version version) {
+        Minecraft client = Minecraft.getInstance();
+        HistorySnapshotPayload snapshot = HISTORY.state().snapshot().orElseThrow();
+        int index = snapshot.versions().indexOf(version);
+        var compare = new VersionCompareController()
+                .target(snapshot.versions(), index)
+                .map(target -> (Runnable) () -> openCompare(parent, target));
+        client.setScreen(new LumiVersionDetailsScreen(
+                parent, snapshot.dimensionId(), version, PREVIEW_STORE,
+                () -> openRestore(parent, version), compare,
+                () -> openDelete(parent, version)));
+    }
+
+    private static void openRestore(
+            Screen parent, HistorySnapshotPayload.Version version) {
+        Minecraft.getInstance().setScreen(new LumiRestoreScreen(
+                parent, version.id(), version.message(), SELECTION.bounds(),
+                (target, includeEntities) -> {
+                    if (includeEntities) {
+                        NETWORKING.restore(target);
+                    } else {
+                        NETWORKING.restoreWithoutEntities(target);
+                    }
+                },
+                NETWORKING::restoreArea));
+    }
+
+    private static void openDelete(
+            Screen parent, HistorySnapshotPayload.Version version) {
+        Minecraft.getInstance().setScreen(new LumiDeleteVersionScreen(
+                parent, version, NETWORKING::deleteVersion));
+    }
+
+    private static void openCompare(
+            Screen parent, VersionCompareController.Target target) {
+        Minecraft.getInstance().setScreen(new LumiCompareScreen(
+                parent, COMPARISONS, target.label(),
+                () -> NETWORKING.compare(target.before(), target.after()),
+                NETWORKING::cancelCompare));
     }
 
     private static String latestVersionMessage() {

@@ -33,6 +33,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private final Consumer<Screen> openSettings;
     private final Runnable showChanges;
     private final Runnable quickRollback;
+    private final Consumer<HistorySnapshotPayload.Version> openDetails;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
     private final Consumer<HistorySnapshotPayload.Version> openDelete;
     private final Consumer<VersionCompareController.Target> openCompare;
@@ -60,6 +61,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             Consumer<Screen> openSettings,
             Runnable showChanges,
             Runnable quickRollback,
+            Consumer<HistorySnapshotPayload.Version> openDetails,
             Consumer<HistorySnapshotPayload.Version> openRestore,
             Consumer<HistorySnapshotPayload.Version> openDelete,
             Consumer<VersionCompareController.Target> openCompare) {
@@ -76,6 +78,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         this.openSettings = Objects.requireNonNull(openSettings, "openSettings");
         this.showChanges = Objects.requireNonNull(showChanges, "showChanges");
         this.quickRollback = Objects.requireNonNull(quickRollback, "quickRollback");
+        this.openDetails = Objects.requireNonNull(openDetails, "openDetails");
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
         this.openDelete = Objects.requireNonNull(openDelete, "openDelete");
         this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
@@ -147,6 +150,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             int rowY = historyY + 38 + index * 34;
             int right = layout.bodyX() + layout.bodyWidth() - 14;
             int sourceIndex = snapshot.versions().indexOf(version);
+            addIconButton(right - 122, rowY + 6,
+                    "eye-open", "luma.action.open_details",
+                    () -> openDetails.accept(version), LumiLegacyButton.Kind.NORMAL);
             compareController.target(snapshot.versions(), sourceIndex).ifPresent(target ->
                     addIconButton(right - 90, rowY + 6,
                             "see-changes", "luma.action.compare",
@@ -374,7 +380,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             drawPreview(graphics, version, x + 16, rowY + 4);
             graphics.drawString(font,
                     font.plainSubstrByWidth(
-                            version.message(), Math.max(0, width - 180)),
+                            version.message(), Math.max(0, width - 212)),
                     x + 64, rowY + 5, LegacyLumiTheme.TEXT, false);
             graphics.drawString(font, version.author(),
                     x + 64, rowY + 17, LegacyLumiTheme.MUTED, false);
