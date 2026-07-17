@@ -14,6 +14,7 @@ import io.github.lumi.client.ui.LumiDiagnosticsScreen;
 import io.github.lumi.client.ui.LumiDeleteVersionScreen;
 import io.github.lumi.client.ui.LumiDeletedVersionsScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
+import io.github.lumi.client.ui.LumiBranchesScreen;
 import io.github.lumi.client.ui.LumiCompareScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
 import io.github.lumi.client.ui.LumiMoreScreen;
@@ -67,23 +68,12 @@ public final class LumiClient implements ClientModInitializer {
                         Minecraft client = Minecraft.getInstance();
                         client.setScreen(new LumiDashboardScreen(
                                 client.screen, HISTORY,
-                                () -> client.setScreen(new LumiSaveScreen(
-                                        client.screen, HISTORY,
-                                        new SaveScreenController(
-                                                NETWORKING::save, NETWORKING::amend),
-                                        NETWORKING::refreshSnapshot)),
-                                () -> client.setScreen(new LumiBranchScreen(
-                                        client.screen,
-                                        currentBranch(),
-                                        new BranchNameController(NETWORKING::createBranch))),
-                                () -> {
-                                    var snapshot = HISTORY.state().snapshot().orElseThrow(
-                                            () -> new IllegalStateException(
-                                                    "Lumi history has not synchronized yet"));
-                                    client.setScreen(new LumiMergeScreen(
-                                            client.screen, snapshot.branchName(),
-                                            snapshot.branches(), NETWORKING::merge));
-                                },
+                                () -> LumiClient.openSave(client.screen,
+                                        SaveScreenController.Intent.SAVE, ""),
+                                () -> LumiClient.openSave(client.screen,
+                                        SaveScreenController.Intent.AMEND,
+                                        latestVersionMessage()),
+                                () -> openBranches(client.screen),
                                 () -> openWorkspaces(client.screen),
                                 () -> openZones(client.screen),
                                 () -> client.setScreen(new LumiDeletedVersionsScreen(
@@ -93,6 +83,13 @@ public final class LumiClient implements ClientModInitializer {
                                                 NETWORKING::exportPackage,
                                                 NETWORKING::inspectPackage))),
                                 () -> openMore(client.screen),
+                                () -> client.setScreen(new LumiSettingsScreen(
+                                        client.screen, TELEMETRY)),
+                                () -> {
+                                    NETWORKING.refreshSnapshot();
+                                    showFeedback("luma.hotkeys.pending_preview_help");
+                                    client.setScreen(null);
+                                },
                                 NETWORKING::quickRollback,
                                 version -> client.setScreen(new LumiRestoreScreen(
                                         client.screen,
@@ -120,10 +117,8 @@ public final class LumiClient implements ClientModInitializer {
 
                     @Override public void openSave() {
                         Minecraft client = Minecraft.getInstance();
-                        client.setScreen(new LumiSaveScreen(
-                                client.screen, HISTORY, new SaveScreenController(
-                                        NETWORKING::save, NETWORKING::amend),
-                                NETWORKING::refreshSnapshot));
+                        LumiClient.openSave(
+                                client.screen, SaveScreenController.Intent.SAVE, "");
                     }
 
                     @Override public void openHotkeys() {
@@ -185,6 +180,36 @@ public final class LumiClient implements ClientModInitializer {
                 parent, HISTORY, SELECTION::bounds,
                 new WorkspaceScreenController(NETWORKING::createWorkspace),
                 NETWORKING::switchWorkspace));
+    }
+
+    private static void openBranches(Screen parent) {
+        Minecraft client = Minecraft.getInstance();
+        var snapshot = HISTORY.state().snapshot().orElseThrow(
+                () -> new IllegalStateException(
+                        "Lumi history has not synchronized yet"));
+        client.setScreen(new LumiBranchesScreen(
+                parent, snapshot.branches(),
+                () -> client.setScreen(new LumiBranchScreen(
+                        client.screen, currentBranch(),
+                        new BranchNameController(NETWORKING::createBranch))),
+                () -> client.setScreen(new LumiMergeScreen(
+                        client.screen, snapshot.branchName(),
+                        snapshot.branches(), NETWORKING::merge)),
+                NETWORKING::switchBranch));
+    }
+
+    private static void openSave(
+            Screen parent, SaveScreenController.Intent intent, String initialMessage) {
+        Minecraft.getInstance().setScreen(new LumiSaveScreen(
+                parent, HISTORY,
+                new SaveScreenController(NETWORKING::save, NETWORKING::amend),
+                NETWORKING::refreshSnapshot, intent, initialMessage));
+    }
+
+    private static String latestVersionMessage() {
+        return HISTORY.state().snapshot().stream()
+                .flatMap(snapshot -> snapshot.versions().stream())
+                .findFirst().map(HistorySnapshotPayload.Version::message).orElse("");
     }
 
     private static void openMore(Screen parent) {

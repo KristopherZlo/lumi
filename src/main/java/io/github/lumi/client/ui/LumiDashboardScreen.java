@@ -9,17 +9,19 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Legacy project-window presentation backed by the immutable V2 history snapshot. */
-public final class LumiDashboardScreen extends Screen {
+public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private final Screen parent;
     private final ClientHistoryStore history;
     private final Runnable openSave;
-    private final Runnable openBranch;
-    private final Runnable openMerge;
+    private final Runnable openAmend;
+    private final Runnable openBranches;
     private final Runnable openWorkspaces;
     private final Runnable openZones;
     private final Runnable openDeleted;
     private final Runnable openPackages;
     private final Runnable openMore;
+    private final Runnable openSettings;
+    private final Runnable showChanges;
     private final Runnable quickRollback;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
     private final Consumer<HistorySnapshotPayload.Version> openDelete;
@@ -34,13 +36,15 @@ public final class LumiDashboardScreen extends Screen {
             Screen parent,
             ClientHistoryStore history,
             Runnable openSave,
-            Runnable openBranch,
-            Runnable openMerge,
+            Runnable openAmend,
+            Runnable openBranches,
             Runnable openWorkspaces,
             Runnable openZones,
             Runnable openDeleted,
             Runnable openPackages,
             Runnable openMore,
+            Runnable openSettings,
+            Runnable showChanges,
             Runnable quickRollback,
             Consumer<HistorySnapshotPayload.Version> openRestore,
             Consumer<HistorySnapshotPayload.Version> openDelete,
@@ -49,13 +53,15 @@ public final class LumiDashboardScreen extends Screen {
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
         this.openSave = Objects.requireNonNull(openSave, "openSave");
-        this.openBranch = Objects.requireNonNull(openBranch, "openBranch");
-        this.openMerge = Objects.requireNonNull(openMerge, "openMerge");
+        this.openAmend = Objects.requireNonNull(openAmend, "openAmend");
+        this.openBranches = Objects.requireNonNull(openBranches, "openBranches");
         this.openWorkspaces = Objects.requireNonNull(openWorkspaces, "openWorkspaces");
         this.openZones = Objects.requireNonNull(openZones, "openZones");
         this.openDeleted = Objects.requireNonNull(openDeleted, "openDeleted");
         this.openPackages = Objects.requireNonNull(openPackages, "openPackages");
         this.openMore = Objects.requireNonNull(openMore, "openMore");
+        this.openSettings = Objects.requireNonNull(openSettings, "openSettings");
+        this.showChanges = Objects.requireNonNull(showChanges, "showChanges");
         this.quickRollback = Objects.requireNonNull(quickRollback, "quickRollback");
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
         this.openDelete = Objects.requireNonNull(openDelete, "openDelete");
@@ -69,13 +75,18 @@ public final class LumiDashboardScreen extends Screen {
         addSidebarButtons();
         int actionY = layout.bodyY() + 58;
         int x = layout.bodyX() + 14;
-        addButton(x, actionY, 96, "luma.action.save_build", openSave,
+        int available = Math.max(0, layout.bodyWidth() - 28);
+        int buttonWidth = Math.max(0, (available - 70) / 2);
+        addButton(x, actionY, buttonWidth, "luma.action.save_build", openSave,
                 LumiLegacyButton.Kind.PRIMARY);
-        addButton(x + 104, actionY, 88, "luma.action.variant_create", openBranch,
+        addButton(x + buttonWidth + 6, actionY, buttonWidth,
+                "luma.action.amend_version", openAmend,
                 LumiLegacyButton.Kind.NORMAL);
-        addButton(x + 200, actionY, 104, "luma.action.merge_into_current", openMerge,
+        addIconButton(x + buttonWidth * 2 + 12, actionY,
+                "see-changes", "luma.action.see_changes", showChanges,
                 LumiLegacyButton.Kind.NORMAL);
-        addButton(x + 312, actionY, 112, "key.lumi.quick_rollback", () -> {
+        addIconButton(x + buttonWidth * 2 + 44, actionY,
+                "rollback", "key.lumi.quick_rollback", () -> {
             quickRollback.run();
             onClose();
         }, LumiLegacyButton.Kind.DANGER);
@@ -90,20 +101,25 @@ public final class LumiDashboardScreen extends Screen {
         for (int index = 0; index < rows; index++) {
             HistorySnapshotPayload.Version version = snapshot.versions().get(index);
             int rowY = historyY + 38 + index * 34;
+            int right = layout.bodyX() + layout.bodyWidth() - 14;
             compareController.target(snapshot.versions(), index).ifPresent(target ->
-                    addButton(layout.bodyX() + layout.bodyWidth() - 210, rowY + 6,
-                            58, "luma.action.compare",
+                    addIconButton(right - 90, rowY + 6,
+                            "see-changes", "luma.action.compare",
                             () -> openCompare.accept(target), LumiLegacyButton.Kind.NORMAL));
-            addButton(layout.bodyX() + layout.bodyWidth() - 146, rowY + 6,
-                    58, "luma.action.restore",
+            addIconButton(right - 58, rowY + 6,
+                    "rollback", "luma.action.restore",
                     () -> openRestore.accept(version), LumiLegacyButton.Kind.PRIMARY);
-            addButton(layout.bodyX() + layout.bodyWidth() - 82, rowY + 6,
-                    58, "luma.action.delete",
+            addIconButton(right - 26, rowY + 6,
+                    "trash", "luma.action.delete",
                     () -> openDelete.accept(version), LumiLegacyButton.Kind.DANGER);
         }
     }
 
     private void addSidebarButtons() {
+        if (compactSidebar()) {
+            addCompactSidebarButtons();
+            return;
+        }
         int x = layout.windowX() + 12;
         int width = layout.sidebarWidth() - 24;
         int y = layout.windowY() + 112;
@@ -111,14 +127,39 @@ public final class LumiDashboardScreen extends Screen {
                 LumiLegacyButton.Kind.SELECTED);
         addButton(x, y + 27, width, "luma.tab.zones", openZones,
                 LumiLegacyButton.Kind.NORMAL);
-        addButton(x, y + 54, width, "luma.action.workspaces", openWorkspaces,
+        addButton(x, y + 54, width, "luma.tab.variants", openBranches,
                 LumiLegacyButton.Kind.NORMAL);
-        addButton(x, y + 81, width, "luma.simple.share_button", openPackages,
+        addButton(x, y + 81, width, "luma.action.workspaces", openWorkspaces,
                 LumiLegacyButton.Kind.NORMAL);
-        addButton(x, y + 108, width, "luma.more.deleted_saves_title", openDeleted,
+        addButton(x, y + 108, width, "luma.simple.share_button", openPackages,
+                LumiLegacyButton.Kind.NORMAL);
+        addButton(x, y + 135, width, "luma.action.settings", openSettings,
+                LumiLegacyButton.Kind.NORMAL);
+        addButton(x, y + 162, width, "luma.more.deleted_saves_title", openDeleted,
                 LumiLegacyButton.Kind.NORMAL);
         addButton(x, layout.windowY() + layout.windowHeight() - 36,
                 width, "luma.action.more", openMore, LumiLegacyButton.Kind.NORMAL);
+    }
+
+    private void addCompactSidebarButtons() {
+        int x = layout.windowX() + 12;
+        int y = layout.windowY() + 60;
+        addIconButton(x, y, "graph", "luma.tab.history", () -> { },
+                LumiLegacyButton.Kind.SELECTED);
+        addIconButton(x + 32, y, "sitemap-4", "luma.tab.zones", openZones,
+                LumiLegacyButton.Kind.NORMAL);
+        addIconButton(x, y + 26, "branch", "luma.tab.variants", openBranches,
+                LumiLegacyButton.Kind.NORMAL);
+        addIconButton(x + 32, y + 26, "bookmarks", "luma.action.workspaces",
+                openWorkspaces, LumiLegacyButton.Kind.NORMAL);
+        addIconButton(x, y + 52, "folder", "luma.simple.share_button", openPackages,
+                LumiLegacyButton.Kind.NORMAL);
+        addIconButton(x + 32, y + 52, "sliders", "luma.action.settings", openSettings,
+                LumiLegacyButton.Kind.NORMAL);
+        addIconButton(x, y + 78, "trash", "luma.more.deleted_saves_title", openDeleted,
+                LumiLegacyButton.Kind.NORMAL);
+        addIconButton(x + 32, y + 78, "unordered-list", "luma.action.more", openMore,
+                LumiLegacyButton.Kind.NORMAL);
     }
 
     private void addButton(
@@ -127,6 +168,12 @@ public final class LumiDashboardScreen extends Screen {
         addRenderableWidget(new LumiLegacyButton(
                 x, y, width, 20, Component.translatable(translation),
                 ignored -> action.run(), kind));
+    }
+
+    private void addIconButton(
+            int x, int y, String icon, String translation,
+            Runnable action, LumiLegacyButton.Kind kind) {
+        addLegacyIconButton(x, y, icon, Component.translatable(translation), action, kind);
     }
 
     @Override
@@ -165,9 +212,11 @@ public final class LumiDashboardScreen extends Screen {
         graphics.drawString(font, Component.translatable("luma.window.mode"),
                 x + 14, y + 43, LegacyLumiTheme.MUTED, false);
         if (snapshot != null) {
-            drawChip(graphics, x + 14, y + 62,
-                    shortDimension(snapshot.dimensionId()));
-            drawChip(graphics, x + 14, y + 84, shortBranch());
+            if (!compactSidebar()) {
+                drawChip(graphics, x + 14, y + 62,
+                        shortDimension(snapshot.dimensionId()));
+                drawChip(graphics, x + 14, y + 84, shortBranch());
+            }
             graphics.drawString(font,
                     Component.translatable("luma.screen.project.title",
                             snapshot.workspaceName()),
@@ -208,7 +257,7 @@ public final class LumiDashboardScreen extends Screen {
             graphics.fill(x + 10, rowY, x + width - 10, rowY + 30,
                     LegacyLumiTheme.INSET);
             graphics.drawString(font,
-                    font.plainSubstrByWidth(version.message(), width - 250),
+                    font.plainSubstrByWidth(version.message(), width - 130),
                     x + 20, rowY + 5, LegacyLumiTheme.TEXT, false);
             graphics.drawString(font, version.author(),
                     x + 20, rowY + 17, LegacyLumiTheme.MUTED, false);
@@ -245,6 +294,10 @@ public final class LumiDashboardScreen extends Screen {
             case "minecraft:the_end" -> "End";
             default -> "Overworld";
         };
+    }
+
+    private boolean compactSidebar() {
+        return layout.sidebarWidth() < 136 || layout.windowHeight() < 320;
     }
 
     @Override public boolean isPauseScreen() { return false; }

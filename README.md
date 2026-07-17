@@ -23,6 +23,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - Another branch can be merged through the same verified apply pipeline;
   overlapping conflicts explicitly use the source branch.
 - U opens the current workspace history from the immutable server snapshot.
+  History exposes separate Save/Amend actions, compact version actions and a
+  branch browser for Create, Switch and Merge.
 - First-run onboarding opens once per client installation and remains replayable
   from More; Alt+I opens the live hotkey guide.
 - Diagnostic telemetry is bounded to an explicit technical allowlist, disclosed
