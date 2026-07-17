@@ -109,6 +109,34 @@ class SaveServiceTest {
     }
 
     @Test
+    void rejectsSaveIntoABranchOwnedByAnotherWorkspace() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        var initialId = commits.write(commit(tree, List.of(), "Initial"));
+        var initialRef = refs.create(new BranchName("main"), initialId);
+        SaveService service = new SaveService(
+                objects, new MerkleTreeEditor(objects), commits, refs,
+                new OperationJournalRepository(repositoryRoot),
+                new VersionTagRepository(repositoryRoot));
+        var request = new SaveRequest(
+                initialRef, author(), "Wrong project", Instant.EPOCH,
+                UUID.fromString("90000000-0000-0000-0000-000000000009"),
+                Optional.empty(), CommitKind.MANUAL);
+
+        assertThrows(IOException.class, () -> service.save(
+                request, new CapturedWorldState(
+                        Map.of(), Map.of(), WorkingIndexSnapshot.empty(),
+                        new CommitStatistics(0, 0, 0, 0))));
+
+        assertEquals(initialRef, refs.read(initialRef.name()).orElseThrow());
+        try (var files = Files.walk(repositoryRoot.resolve("commits"))) {
+            assertEquals(1, files.filter(Files::isRegularFile).count());
+        }
+    }
+
+    @Test
     void leavesTheRefUnchangedWhenVersionTagsCannotPersist() throws IOException {
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
         CommitRepository commits = new CommitRepository(repositoryRoot);

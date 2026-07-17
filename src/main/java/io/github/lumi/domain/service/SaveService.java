@@ -112,6 +112,9 @@ public final class SaveService implements SavePublisher {
             CapturedWorldState captured,
             Consumer<SavePublicationProgress> progress) throws IOException {
         Commit parent = commits.read(request.expectedRef().commit());
+        if (!parent.workspaceId().equals(request.workspaceId())) {
+            throw new IOException("Save workspace does not match the source branch");
+        }
         ObjectId tree;
         try (WorldObjectRepository.WriteBatch batch = objects.beginBatch()) {
             long capturedTotal = captured.sections().size() + (long) captured.entities().size();
