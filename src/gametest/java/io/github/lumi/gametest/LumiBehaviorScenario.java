@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -20,6 +21,7 @@ final class LumiBehaviorScenario {
     private final List<BlockBox> tntArea;
     private final List<BlockBox> platformArea;
     private final List<BlockBox> allAreas;
+    private final List<String> failures = new ArrayList<>();
 
     LumiBehaviorScenario(
             ClientGameTestContext context,
@@ -43,6 +45,7 @@ final class LumiBehaviorScenario {
     }
 
     void run() throws IOException {
+        waitTicks("world_stabilization", 100);
         CommitId initialCommit = operations.activeCommit();
         BranchName mainBranch = operations.activeBranch();
         LumiWorldSnapshot initial = snapshot("initial", allAreas);
@@ -123,6 +126,10 @@ final class LumiBehaviorScenario {
         operations.restore("initial_final", initialCommit);
         assertSnapshot("restore_initial_final", allAreas, initial);
         screenshot("restored-initial");
+        if (!failures.isEmpty()) {
+            throw new AssertionError(failures.size()
+                    + " exact snapshot checks failed: " + String.join(" | ", failures));
+        }
     }
 
     private LumiWorldSnapshot snapshot(String name, List<BlockBox> areas)
@@ -138,8 +145,14 @@ final class LumiBehaviorScenario {
             List<BlockBox> areas,
             LumiWorldSnapshot expected) throws IOException {
         LumiWorldSnapshot actual = snapshot(name, areas);
-        actual.assertMatches(expected, name);
-        report.event("assertion", name, "succeeded", 0, 0, "");
+        try {
+            actual.assertMatches(expected, name);
+            report.event("assertion", name, "succeeded", 0, 0, "");
+        } catch (AssertionError mismatch) {
+            failures.add(mismatch.getMessage());
+            report.event("assertion", name, "failed", 0, 0,
+                    mismatch.getMessage());
+        }
     }
 
     private void waitTicks(String name, int ticks) {

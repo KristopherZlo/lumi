@@ -53,8 +53,18 @@ final class LumiBehaviorActions {
     void powerTnt(BlockPos tnt) {
         timed("place_redstone_block", () -> server.runOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
-            place(player, Items.REDSTONE_BLOCK, tnt.above());
-            require(player.level().getBlockState(tnt.above()).is(Blocks.REDSTONE_BLOCK),
+            Direction direction = List.of(
+                            Direction.UP, Direction.NORTH, Direction.SOUTH,
+                            Direction.WEST, Direction.EAST)
+                    .stream()
+                    .filter(candidate -> player.level().getBlockState(
+                            tnt.relative(candidate)).canBeReplaced())
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError(
+                            "TNT has no free side at " + tnt));
+            BlockPos redstone = tnt.relative(direction);
+            useOn(player, Items.REDSTONE_BLOCK, tnt, direction);
+            require(player.level().getBlockState(redstone).is(Blocks.REDSTONE_BLOCK),
                     "Player did not place the redstone block");
         }));
     }
@@ -119,9 +129,11 @@ final class LumiBehaviorActions {
                     center.offset(-3, 0, 0),
                     center.offset(0, 0, 3),
                     center.offset(0, 0, -3),
-                    center.offset(0, 0, 0));
+                    center.offset(3, 0, 3));
             for (BlockPos position : positions) {
                 place(player, Items.TNT, position);
+                require(player.level().getBlockState(position).is(Blocks.TNT),
+                        "Player did not place TNT at " + position);
             }
             for (BlockPos position : positions) {
                 useOn(player, Items.FLINT_AND_STEEL, position, Direction.UP);
@@ -164,9 +176,10 @@ final class LumiBehaviorActions {
         var source = player.createCommandSourceStack()
                 .withPermission(PermissionSet.ALL_PERMISSIONS)
                 .withSuppressedOutput();
-        var parsed = minecraft.getCommands().getDispatcher().parse(command, source);
+        String parsedCommand = Commands.trimOptionalPrefix(command);
+        var parsed = minecraft.getCommands().getDispatcher().parse(parsedCommand, source);
         Commands.validateParseResults(parsed);
-        minecraft.getCommands().performCommand(parsed, command);
+        minecraft.getCommands().performCommand(parsed, parsedCommand);
     }
 
     private static void place(ServerPlayer player, Item item, BlockPos target) {

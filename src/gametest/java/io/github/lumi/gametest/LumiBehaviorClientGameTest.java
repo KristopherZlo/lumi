@@ -41,6 +41,7 @@ public final class LumiBehaviorClientGameTest implements FabricClientGameTest {
         settings.getGameRules().set(GameRules.SPAWN_MOBS, false, null);
         settings.getGameRules().set(GameRules.ADVANCE_TIME, false, null);
         settings.getGameRules().set(GameRules.ADVANCE_WEATHER, false, null);
+        settings.getGameRules().set(GameRules.RANDOM_TICK_SPEED, 0, null);
     }
 
     private static long elapsedMillis(long started) {

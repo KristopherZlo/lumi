@@ -35,13 +35,16 @@ final class LumiWorldSnapshot {
 
     private final Map<SectionKey, SectionBlob> sections;
     private final EntityChunkBlob entities;
+    private final List<BlockBox> areas;
     private final String digest;
 
     private LumiWorldSnapshot(
             Map<SectionKey, SectionBlob> sections,
-            EntityChunkBlob entities) {
+            EntityChunkBlob entities,
+            List<BlockBox> areas) {
         this.sections = Map.copyOf(sections);
         this.entities = entities;
+        this.areas = List.copyOf(areas);
         digest = digest();
     }
 
@@ -69,7 +72,8 @@ final class LumiWorldSnapshot {
                         entity.getBlockX(), entity.getBlockY(), entity.getBlockZ()))));
         var sortedEntities = new EntityChunkBlob(capturedEntities.entities().stream()
                 .sorted(ENTITY_ORDER).toList());
-        LumiWorldSnapshot snapshot = new LumiWorldSnapshot(sections, sortedEntities);
+        LumiWorldSnapshot snapshot = new LumiWorldSnapshot(
+                sections, sortedEntities, copiedAreas);
         report.snapshot(name, snapshot.digest, sections.size(),
                 sortedEntities.entities().size(), elapsedMillis(started));
         return snapshot;
@@ -92,14 +96,18 @@ final class LumiWorldSnapshot {
             SectionBlob wanted = expected.sections.get(key);
             SectionBlob actual = sections.get(key);
             for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+                BlockPos position = absolutePosition(key, index);
+                if (!contains(position)) {
+                    continue;
+                }
                 String wantedState = wanted.blockStates().get(index);
                 String actualState = actual.blockStates().get(index);
                 if (!wantedState.equals(actualState)) {
-                    return "block " + absolutePosition(key, index)
+                    return "block " + position
                             + " expected " + wantedState + " but was " + actualState;
                 }
             }
-            if (!wanted.blockEntities().equals(actual.blockEntities())) {
+            if (!blockEntities(key, wanted).equals(blockEntities(key, actual))) {
                 return "block entities differ in section " + key;
             }
         }
@@ -116,8 +124,13 @@ final class LumiWorldSnapshot {
             for (SectionKey key : sectionKeys(sections.keySet())) {
                 update(digest, key.chunkX() + "," + key.sectionY() + "," + key.chunkZ());
                 SectionBlob section = sections.get(key);
-                section.blockStates().forEach(state -> update(digest, state));
+                for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+                    if (contains(absolutePosition(key, index))) {
+                        update(digest, section.blockStates().get(index));
+                    }
+                }
                 section.blockEntities().entrySet().stream()
+                        .filter(entry -> contains(absolutePosition(key, entry.getKey())))
                         .sorted(Map.Entry.comparingByKey())
                         .forEach(entry -> {
                             update(digest, Integer.toString(entry.getKey()));
@@ -152,6 +165,23 @@ final class LumiWorldSnapshot {
                 section.chunkX() * 16 + (index & 15),
                 section.sectionY() * 16 + ((index >> 8) & 15),
                 section.chunkZ() * 16 + ((index >> 4) & 15));
+    }
+
+    private Map<Integer, io.github.lumi.domain.model.CanonicalNbt> blockEntities(
+            SectionKey key, SectionBlob section) {
+        Map<Integer, io.github.lumi.domain.model.CanonicalNbt> selected =
+                new LinkedHashMap<>();
+        section.blockEntities().forEach((index, nbt) -> {
+            if (contains(absolutePosition(key, index))) {
+                selected.put(index, nbt);
+            }
+        });
+        return selected;
+    }
+
+    private boolean contains(BlockPos position) {
+        return areas.stream().anyMatch(area -> area.contains(
+                position.getX(), position.getY(), position.getZ()));
     }
 
     private static String describe(EntityChunkBlob blob) {
