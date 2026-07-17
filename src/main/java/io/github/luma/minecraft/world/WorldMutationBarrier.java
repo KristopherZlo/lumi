@@ -66,7 +66,12 @@ final class WorldMutationBarrier {
     }
 
     void releaseAll(MinecraftServer server) {
-        this.reconcile(server, null);
+        for (Map.Entry<WorldOperationManager.ActiveOperation, Lease> entry : this.leases.entrySet()) {
+            if (entry.getValue().belongsTo(server)
+                    && this.leases.remove(entry.getKey(), entry.getValue())) {
+                entry.getValue().release("server-shutdown");
+            }
+        }
     }
 
     void logRejectedPlayerMutation(

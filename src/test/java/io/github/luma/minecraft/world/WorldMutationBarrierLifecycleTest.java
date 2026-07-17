@@ -33,6 +33,7 @@ class WorldMutationBarrierLifecycleTest {
         assertTrue(manager.contains("this.mutationBarrier.reconcile(level.getServer(), active);"));
         assertTrue(manager.contains("this.mutationBarrier.releaseAll(server);"));
         assertTrue(barrier.contains("entry.getKey() != activeOperation"));
+        assertTrue(barrier.contains("release(\"server-shutdown\")"));
         assertFalse(barrier.contains("blockedServers"));
     }
 
