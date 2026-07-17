@@ -23,13 +23,10 @@ abstract class LevelTicksMixin<T> implements OwnedTickAccess<T> {
     @Shadow @Final private Queue<ScheduledTick<T>> toRunThisTick;
     @Shadow @Final private List<ScheduledTick<T>> alreadyRunThisTick;
     @Shadow @Final private Set<ScheduledTick<?>> toRunThisTickSet;
-    @Shadow public abstract boolean hasScheduledTick(BlockPos position, T type);
 
     @Inject(method = "schedule", at = @At("HEAD"))
     private void lumi$captureScheduledTick(ScheduledTick<T> tick, CallbackInfo callback) {
-        if (!hasScheduledTick(tick.pos(), tick.type())) {
-            MinecraftCausalTickTracker.scheduled((LevelTicks<?>) (Object) this, tick);
-        }
+        MinecraftCausalTickTracker.scheduled((LevelTicks<?>) (Object) this, tick);
     }
 
     @Override

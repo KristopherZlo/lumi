@@ -5,6 +5,7 @@ import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -13,11 +14,67 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gamerules.GameRules;
 
 /** Integrated gates for exact session-only world actions. */
 public final class LumiLiveActionGameTests {
+    @GameTest(maxTicks = 2000)
+    public void derivedLeafWaveRemainsOwnedByRootAction(GameTestHelper helper) {
+        FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
+                .orElseThrow(() -> helper.assertionException("Lumi runtime is not loaded"));
+        UUID player = UUID.randomUUID();
+        UUID test = UUID.randomUUID();
+        BlockPos logRelative = new BlockPos(1, 1, 2);
+        List<BlockPos> leaves = List.of(
+                new BlockPos(2, 1, 2), new BlockPos(3, 1, 2),
+                new BlockPos(4, 1, 2), new BlockPos(5, 1, 2));
+        BlockPos log = helper.absolutePos(logRelative);
+        AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    helper.setBlock(logRelative, Blocks.OAK_LOG);
+                    for (int index = 0; index < leaves.size(); index++) {
+                        helper.setBlock(leaves.get(index),
+                                Blocks.OAK_LEAVES.defaultBlockState()
+                                        .setValue(LeavesBlock.DISTANCE, index + 1));
+                    }
+                    try (var ignored = DirectLiveActionContext.open(
+                            runtime.liveActions(), player)) {
+                        helper.getLevel().setBlock(
+                                log, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+                    }
+                })
+                .thenIdle(20)
+                .thenExecute(() -> {
+                    for (BlockPos leaf : leaves) {
+                        helper.assertValueEqual(7,
+                                helper.getBlockState(leaf).getValue(LeavesBlock.DISTANCE),
+                                "Leaf-distance wave did not settle");
+                    }
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
+                            operation -> terminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> helper.assertValueEqual(
+                        MutationTerminalState.SUCCEEDED, terminal.get(),
+                        "Derived leaf wave must Undo atomically"))
+                .thenExecute(() -> helper.assertBlockState(
+                        logRelative, Blocks.OAK_LOG.defaultBlockState()))
+                .thenExecute(() -> {
+                    for (int index = 0; index < leaves.size(); index++) {
+                        helper.assertBlockState(leaves.get(index),
+                                Blocks.OAK_LEAVES.defaultBlockState()
+                                        .setValue(LeavesBlock.DISTANCE, index + 1));
+                    }
+                })
+                .thenExecute(() -> LumiGameTestLease.release(test))
+                .thenSucceed();
+    }
+
     @GameTest(maxTicks = 2000)
     public void directBlockUndoRedoIsExact(GameTestHelper helper) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
