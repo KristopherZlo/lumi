@@ -71,6 +71,10 @@ tasks.named('runGameTest') {
     }
 }
 
+tasks.named('runClientGameTest') {
+    systemProperty 'fabric.client.gametest.disableNetworkSynchronizer', 'true'
+}
+
 dependencies {
     axiomDistribution "maven.modrinth:N6n5dqoA:${project.axiom_version_id}"
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
