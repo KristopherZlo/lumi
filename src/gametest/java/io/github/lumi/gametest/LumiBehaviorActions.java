@@ -166,8 +166,10 @@ final class LumiBehaviorActions {
     }
 
     boolean hasEntity(UUID id) {
-        return server.computeOnServer(minecraft ->
-                player(minecraft).level().getEntityInAnyDimension(id) != null);
+        return server.computeOnServer(minecraft -> {
+            Entity entity = player(minecraft).level().getEntityInAnyDimension(id);
+            return entity != null && !entity.isRemoved();
+        });
     }
 
     UUID placeEndCrystal(BlockPos obsidian) {
@@ -237,14 +239,24 @@ final class LumiBehaviorActions {
         }));
     }
 
+    void holdItem(String name, Item item) {
+        timed(name, () -> server.runOnServer(minecraft ->
+                player(minecraft).setItemInHand(
+                        InteractionHand.MAIN_HAND, new ItemStack(item))));
+    }
+
     void attackEntity(String name, UUID id, Item weapon) {
         timed(name, () -> server.runOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
             Entity target = entity(player.level(), id, Entity.class);
             player.teleportTo(target.getX() + 2, target.getY(), target.getZ());
-            player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(weapon));
+            if (!player.getMainHandItem().is(weapon)) {
+                player.setItemInHand(
+                        InteractionHand.MAIN_HAND, new ItemStack(weapon));
+            }
             player.connection.handleInteract(
                     ServerboundInteractPacket.createAttackPacket(target, false));
+            require(!target.isAlive(), "Entity survived " + name + ": " + id);
         }));
     }
 
