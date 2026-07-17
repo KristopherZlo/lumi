@@ -733,6 +733,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 .map(this::liveEntityChunk)
                 .distinct()
                 .forEach(this::publishLiveEntityChunk);
+        if (plan.direction() == LiveActionJournal.Direction.REDO) {
+            liveEntities.trackRedone(
+                    plan.actionId(), plan.expectedEntities(), plan.replacementEntities());
+        }
     }
 
     private EntityChunkKey liveEntityChunk(EntityState state) {

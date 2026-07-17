@@ -11,6 +11,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Blocks;
@@ -20,6 +23,64 @@ import net.minecraft.world.level.gamerules.GameRules;
 
 /** Integrated gates for exact session-only world actions. */
 public final class LumiLiveActionGameTests {
+    @GameTest(maxTicks = 2000)
+    public void redoneDynamicEntityRemainsUndoableAfterTicking(GameTestHelper helper) {
+        FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
+                .orElseThrow(() -> helper.assertionException("Lumi runtime is not loaded"));
+        UUID player = UUID.randomUUID();
+        UUID test = UUID.randomUUID();
+        AtomicReference<UUID> itemId = new AtomicReference<>();
+        AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    BlockPos position = helper.absolutePos(new BlockPos(2, 2, 2));
+                    ItemEntity item = new ItemEntity(
+                            helper.getLevel(), position.getX() + 0.5,
+                            position.getY(), position.getZ() + 0.5,
+                            new ItemStack(Items.DIAMOND));
+                    itemId.set(item.getUUID());
+                    try (var ignored = DirectLiveActionContext.open(
+                            runtime.liveActions(), player)) {
+                        helper.getLevel().addFreshEntity(item);
+                    }
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
+                            operation -> terminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> helper.assertValueEqual(
+                        MutationTerminalState.SUCCEEDED, terminal.get(),
+                        "Initial item Undo must succeed"))
+                .thenExecute(() -> helper.assertTrue(
+                        helper.getLevel().getEntity(itemId.get()) == null,
+                        "Initial Undo left the item behind"))
+                .thenExecute(() -> {
+                    terminal.set(null);
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.REDO,
+                            operation -> terminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> helper.assertValueEqual(
+                        MutationTerminalState.SUCCEEDED, terminal.get(),
+                        "Item Redo must succeed"))
+                .thenIdle(5)
+                .thenExecute(() -> {
+                    terminal.set(null);
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
+                            operation -> terminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> helper.assertValueEqual(
+                        MutationTerminalState.SUCCEEDED, terminal.get(),
+                        "Ticked Redo item must remain Undoable"))
+                .thenExecute(() -> helper.assertTrue(
+                        helper.getLevel().getEntity(itemId.get()) == null,
+                        "Repeated Undo left the item behind"))
+                .thenExecute(() -> LumiGameTestLease.release(test))
+                .thenSucceed();
+    }
+
     @GameTest(maxTicks = 2000)
     public void derivedLeafWaveRemainsOwnedByRootAction(GameTestHelper helper) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())

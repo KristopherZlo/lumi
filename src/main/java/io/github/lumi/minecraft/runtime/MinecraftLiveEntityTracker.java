@@ -71,6 +71,18 @@ public final class MinecraftLiveEntityTracker {
         }
     }
 
+    public void trackRedone(
+            UUID action,
+            Map<UUID, Optional<EntityState>> before,
+            Map<UUID, Optional<EntityState>> after) {
+        Objects.requireNonNull(before, "before");
+        Objects.requireNonNull(after, "after").forEach((entity, state) -> {
+            if (state.isPresent()) {
+                own(action, entity, Objects.requireNonNull(before.get(entity)));
+            }
+        });
+    }
+
     public void clear() {
         for (UUID action : owned.keySet()) {
             journal.release(action);
