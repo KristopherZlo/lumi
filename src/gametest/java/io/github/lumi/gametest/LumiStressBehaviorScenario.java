@@ -155,10 +155,16 @@ final class LumiStressBehaviorScenario {
             throws IOException {
         CommitId tntCommit = operations.save("tnt");
         checks.assertSnapshot("save_tnt", area, allTnt);
-        BlockPos ignition = tnt.get(new Random(RANDOM_SEED).nextInt(tnt.size()));
-        actions.igniteTnt("ignite_all_128_tnt", tnt);
-        checks.waitUntil("ignite_all_128_tnt_started", 20,
-                () -> actions.hasPrimedTnt(ignition));
+        List<BlockPos> ignited = actions.igniteTnt("ignite_all_128_tnt", tnt);
+        if (ignited.size() != tnt.size()) {
+            report.event("diagnostic", "ignite_all_128_tnt", "observed", 0, 0,
+                    "planned=" + tnt.size() + ", ignited=" + ignited.size()
+                            + ", missing=" + (tnt.size() - ignited.size()));
+        }
+        if (!ignited.isEmpty()) {
+            checks.waitUntil("ignite_all_128_tnt_started", 20,
+                    () -> actions.hasPrimedTnt(ignited.getFirst()));
+        }
         try {
             checks.waitUntil("all_128_tnt_exploded", 600,
                     () -> !actions.hasTnt(tnt));

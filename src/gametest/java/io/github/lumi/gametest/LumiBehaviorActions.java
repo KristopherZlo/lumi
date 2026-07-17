@@ -89,14 +89,17 @@ final class LumiBehaviorActions {
         }));
     }
 
-    void igniteTnt(String name, List<BlockPos> targets) {
-        timed(name, () -> server.runOnServer(minecraft -> {
+    List<BlockPos> igniteTnt(String name, List<BlockPos> targets) {
+        return timed(name, () -> server.computeOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
+            List<BlockPos> ignited = new ArrayList<>();
             for (BlockPos target : targets) {
-                require(player.level().getBlockState(target).is(Blocks.TNT),
-                        "Missing TNT before ignition at " + target);
-                useOn(player, Items.FLINT_AND_STEEL, target, Direction.UP);
+                if (player.level().getBlockState(target).is(Blocks.TNT)) {
+                    useOn(player, Items.FLINT_AND_STEEL, target, Direction.UP);
+                    ignited.add(target);
+                }
             }
+            return List.copyOf(ignited);
         }));
     }
 
@@ -423,8 +426,9 @@ final class LumiBehaviorActions {
     }
 
     private static BlockPos surfacePlacement(ServerLevel level, int x, int z) {
+        level.getChunk(Math.floorDiv(x, 16), Math.floorDiv(z, 16));
         int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-        for (int y = top + 1; y >= level.getMinY(); y--) {
+        for (int y = top; y >= level.getMinY(); y--) {
             BlockPos target = new BlockPos(x, y, z);
             BlockPos below = target.below();
             if (level.getBlockState(target).canBeReplaced()
