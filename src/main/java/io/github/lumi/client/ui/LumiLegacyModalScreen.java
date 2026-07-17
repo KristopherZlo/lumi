@@ -120,7 +120,7 @@ abstract class LumiLegacyModalScreen extends Screen {
         return (int) Math.round(virtualCoordinate((double) coordinate));
     }
 
-    private double virtualCoordinate(double coordinate) {
+    protected final double virtualCoordinate(double coordinate) {
         return uiScale.virtualCoordinate(coordinate, currentGuiScale());
     }
 

@@ -39,7 +39,9 @@ class LumiLegacyNavigationTest {
         assertTrue(modal.contains("background.render("));
         assertFalse(modal.contains("background.mouseClicked("));
         assertFalse(modal.contains("background.mouseReleased("));
-        assertFalse(Files.readString(ui.resolve("LumiLegacyPageScreen.java"))
-                .contains("forwardsParentInput"));
+        String page = Files.readString(ui.resolve("LumiLegacyPageScreen.java"));
+        assertFalse(page.contains("forwardsParentInput"));
+        assertTrue(page.contains("x < layout.contentX()"));
+        assertTrue(page.contains("dashboard.mouseClicked(click, doubled)"));
     }
 }
