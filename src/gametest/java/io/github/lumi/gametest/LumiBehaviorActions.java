@@ -388,8 +388,10 @@ final class LumiBehaviorActions {
             ServerPlayer player, Item item, BlockPos clicked, Direction face) {
         BlockHitResult hit = new BlockHitResult(
                 Vec3.atCenterOf(clicked), face, clicked, false);
+        ItemStack stack = new ItemStack(item);
+        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         var result = player.gameMode.useItemOn(
-                player, player.level(), new ItemStack(item),
+                player, player.level(), stack,
                 InteractionHand.MAIN_HAND, hit);
         require(result.consumesAction(), "Player item use failed at " + clicked);
     }
