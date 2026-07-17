@@ -32,6 +32,32 @@ class VersionCompareControllerTest {
                 .isEmpty());
     }
 
+    @Test
+    void comparesAnyTwoDistinctRowsInTheirSelectedOrder() {
+        var versions = List.of(
+                version('3', "newest"),
+                version('2', "middle"),
+                version('1', "oldest"));
+
+        var target = new VersionCompareController()
+                .target(versions, 2, 0)
+                .orElseThrow();
+
+        assertEquals(versions.get(2).id(), target.before());
+        assertEquals(versions.get(0).id(), target.after());
+        assertEquals("newest", target.label());
+    }
+
+    @Test
+    void rejectsEqualOrOutOfBoundsRows() {
+        var versions = List.of(version('1', "only"));
+        var controller = new VersionCompareController();
+
+        assertTrue(controller.target(versions, 0, 0).isEmpty());
+        assertTrue(controller.target(versions, -1, 0).isEmpty());
+        assertTrue(controller.target(versions, 0, 1).isEmpty());
+    }
+
     private static HistorySnapshotPayload.Version version(char digit, String message) {
         return new HistorySnapshotPayload.Version(
                 new CommitId(new ObjectId(

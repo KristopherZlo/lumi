@@ -10,13 +10,25 @@ import java.util.Optional;
 public final class VersionCompareController {
     public Optional<Target> target(
             List<HistorySnapshotPayload.Version> versions, int selectedIndex) {
+        return target(versions, selectedIndex + 1, selectedIndex);
+    }
+
+    public Optional<Target> target(
+            List<HistorySnapshotPayload.Version> versions,
+            int beforeIndex,
+            int afterIndex) {
         Objects.requireNonNull(versions, "versions");
-        if (selectedIndex < 0 || selectedIndex + 1 >= versions.size()) {
+        if (beforeIndex < 0 || beforeIndex >= versions.size()
+                || afterIndex < 0 || afterIndex >= versions.size()
+                || beforeIndex == afterIndex) {
             return Optional.empty();
         }
-        var selected = versions.get(selectedIndex);
-        var parent = versions.get(selectedIndex + 1);
-        return Optional.of(new Target(parent.id(), selected.id(), selected.message()));
+        var before = versions.get(beforeIndex);
+        var after = versions.get(afterIndex);
+        if (before.id().equals(after.id())) {
+            return Optional.empty();
+        }
+        return Optional.of(new Target(before.id(), after.id(), after.message()));
     }
 
     public record Target(CommitId before, CommitId after, String label) {

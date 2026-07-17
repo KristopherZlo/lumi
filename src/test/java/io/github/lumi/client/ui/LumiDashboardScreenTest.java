@@ -18,6 +18,7 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("new EditBox("));
         assertTrue(source.contains("searchController.filter("));
         assertTrue(source.contains("visibleVersions()"));
+        assertTrue(source.contains("new LumiComparePickerScreen("));
         assertTrue(source.contains("luma.tab.variants"));
         assertTrue(source.contains("luma.action.settings"));
         assertTrue(source.contains("addCompactSidebarButtons"));

@@ -237,10 +237,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         if (snapshot == null) {
             return;
         }
-        compareController.target(snapshot.versions(), 0).ifPresent(target -> {
-            selectTab(LegacyProjectTab.COMPARE);
-            openCompare.accept(target);
-        });
+        selectTab(LegacyProjectTab.COMPARE);
+        minecraft.setScreen(new LumiComparePickerScreen(
+                this, snapshot.versions(), openCompare));
     }
 
     private void search(String value) {
