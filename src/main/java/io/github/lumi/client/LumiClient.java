@@ -4,6 +4,8 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientSelection;
+import io.github.lumi.client.preview.ClientVersionPreviewCapture;
+import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.onboarding.ClientOnboardingStateRepository;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiSettingsScreen;
@@ -53,15 +55,21 @@ public final class LumiClient implements ClientModInitializer {
             new ClientOnboardingStateRepository();
     private static final TelemetryService TELEMETRY = TelemetryService.getInstance();
     private static final UpdateChecker UPDATE_CHECKER = UpdateChecker.createDefault();
+    private static final ClientVersionPreviewStore PREVIEW_STORE =
+            new ClientVersionPreviewStore();
+    private static final ClientVersionPreviewCapture PREVIEW_CAPTURE =
+            new ClientVersionPreviewCapture(PREVIEW_STORE);
     private static boolean onboardingShown;
     private static final LumiClientNetworking NETWORKING =
             new LumiClientNetworking(
                     HISTORY, COMPARISONS, LumiClient::acceptSnapshot,
+                    PREVIEW_CAPTURE::accept,
                     LumiClient::showPackageInspection);
 
     @Override
     public void onInitializeClient() {
         NETWORKING.register();
+        PREVIEW_CAPTURE.register();
         LumiHotkeys hotkeys = new LumiHotkeys(new HotkeyActionDispatcher(
                 new HotkeyActionDispatcher.Actions() {
                     @Override public void openDashboard() {
@@ -203,7 +211,9 @@ public final class LumiClient implements ClientModInitializer {
         Minecraft.getInstance().setScreen(new LumiSaveScreen(
                 parent, HISTORY,
                 new SaveScreenController(NETWORKING::save, NETWORKING::amend),
-                NETWORKING::refreshSnapshot, intent, initialMessage));
+                NETWORKING::refreshSnapshot, intent, initialMessage,
+                requestId -> PREVIEW_CAPTURE.request(
+                        requestId, HISTORY.state().snapshot().orElseThrow())));
     }
 
     private static String latestVersionMessage() {

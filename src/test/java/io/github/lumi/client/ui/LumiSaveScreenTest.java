@@ -16,5 +16,6 @@ class LumiSaveScreenTest {
         assertTrue(source.contains("preferredIntent == SaveScreenController.Intent.AMEND"));
         assertTrue(source.contains("submit(preferredIntent)"));
         assertTrue(source.contains("addLegacyIconButton"));
+        assertTrue(source.contains("submission.requestId().ifPresent(previewCapture)"));
     }
 }

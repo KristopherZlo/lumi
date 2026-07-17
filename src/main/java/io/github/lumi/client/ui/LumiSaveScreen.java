@@ -3,6 +3,8 @@ package io.github.lumi.client.ui;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.state.ClientHistoryStore;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -19,6 +21,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
     private final Runnable refresh;
     private final SaveScreenController.Intent preferredIntent;
     private final String initialMessage;
+    private final Consumer<UUID> previewCapture;
     private LegacyModalLayout layout;
     private EditBox message;
     private LumiLegacyButton save;
@@ -31,7 +34,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
             SaveScreenController controller,
             Runnable refresh) {
         this(parent, history, controller, refresh,
-                SaveScreenController.Intent.SAVE, "");
+                SaveScreenController.Intent.SAVE, "", ignored -> { });
     }
 
     public LumiSaveScreen(
@@ -41,6 +44,18 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
             Runnable refresh,
             SaveScreenController.Intent preferredIntent,
             String initialMessage) {
+        this(parent, history, controller, refresh,
+                preferredIntent, initialMessage, ignored -> { });
+    }
+
+    public LumiSaveScreen(
+            Screen parent,
+            ClientHistoryStore history,
+            SaveScreenController controller,
+            Runnable refresh,
+            SaveScreenController.Intent preferredIntent,
+            String initialMessage,
+            Consumer<UUID> previewCapture) {
         super(Component.translatable("luma.screen.save.title"));
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
@@ -48,6 +63,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         this.refresh = Objects.requireNonNull(refresh, "refresh");
         this.preferredIntent = Objects.requireNonNull(preferredIntent, "preferredIntent");
         this.initialMessage = Objects.requireNonNull(initialMessage, "initialMessage");
+        this.previewCapture = Objects.requireNonNull(previewCapture, "previewCapture");
     }
 
     @Override
@@ -127,6 +143,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
                 controller.submit(message.getValue(), intent);
         error = submission.error();
         if (submission.accepted()) {
+            submission.requestId().ifPresent(previewCapture);
             if (minecraft.player != null) {
                 minecraft.player.displayClientMessage(
                         Component.translatable("luma.status.save_started"), true);

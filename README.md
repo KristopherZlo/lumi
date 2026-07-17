@@ -25,6 +25,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - U opens the current workspace history from the immutable server snapshot.
   History exposes separate Save/Amend actions, compact version actions and a
   branch browser for Create, Switch and Merge.
+- Successful integrated Save and Amend operations capture a bounded world
+  thumbnail for their new history entry; missing previews fall back safely.
 - First-run onboarding opens once per client installation and remains replayable
   from More; Alt+I opens the live hotkey guide.
 - Diagnostic telemetry is bounded to an explicit technical allowlist, disclosed

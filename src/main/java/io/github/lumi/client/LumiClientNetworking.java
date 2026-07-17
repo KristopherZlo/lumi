@@ -32,16 +32,19 @@ public final class LumiClientNetworking {
     private final ClientHistoryStore history;
     private final ClientCompareStore comparisons;
     private final Consumer<HistorySnapshotPayload> snapshotListener;
+    private final Consumer<OperationEventPayload> eventListener;
     private final Consumer<PackageInspectionPayload> packageListener;
 
     public LumiClientNetworking(
             ClientHistoryStore history,
             ClientCompareStore comparisons,
             Consumer<HistorySnapshotPayload> snapshotListener,
+            Consumer<OperationEventPayload> eventListener,
             Consumer<PackageInspectionPayload> packageListener) {
         this.history = Objects.requireNonNull(history, "history");
         this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
         this.snapshotListener = Objects.requireNonNull(snapshotListener, "snapshotListener");
+        this.eventListener = Objects.requireNonNull(eventListener, "eventListener");
         this.packageListener = Objects.requireNonNull(packageListener, "packageListener");
     }
 
@@ -54,7 +57,10 @@ public final class LumiClientNetworking {
                         }));
         ClientPlayNetworking.registerGlobalReceiver(
                 OperationEventPayload.TYPE, (payload, context) ->
-                        context.client().execute(() -> history.accept(payload)));
+                        context.client().execute(() -> {
+                            history.accept(payload);
+                            eventListener.accept(payload);
+                        }));
         ClientPlayNetworking.registerGlobalReceiver(
                 CompareResultPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> comparisons.accept(payload)));

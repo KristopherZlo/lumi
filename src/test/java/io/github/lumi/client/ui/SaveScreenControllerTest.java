@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class SaveScreenControllerTest {
@@ -11,8 +13,16 @@ class SaveScreenControllerTest {
     void validatesNameAndSendsExactlyOneTrimmedSaveIntent() {
         var messages = new ArrayList<String>();
         var amendments = new ArrayList<String>();
+        UUID saveRequest = UUID.randomUUID();
         SaveScreenController controller = new SaveScreenController(
-                messages::add, amendments::add);
+                message -> {
+                    messages.add(message);
+                    return saveRequest;
+                },
+                message -> {
+                    amendments.add(message);
+                    return UUID.randomUUID();
+                });
 
         assertEquals("luma.status.save_name_required",
                 controller.submit("  ", SaveScreenController.Intent.SAVE).error());
@@ -21,6 +31,7 @@ class SaveScreenControllerTest {
         controller.submit("  Clock improved  ", SaveScreenController.Intent.AMEND);
 
         assertTrue(accepted.accepted());
+        assertEquals(Optional.of(saveRequest), accepted.requestId());
         assertEquals(java.util.List.of("Clock works"), messages);
         assertEquals(java.util.List.of("Clock improved"), amendments);
     }
@@ -31,7 +42,7 @@ class SaveScreenControllerTest {
                 message -> {
                     throw new IllegalStateException("History is not synchronized");
                 },
-                message -> { });
+                message -> UUID.randomUUID());
 
         SaveScreenController.Submission result = controller.submit(
                 "Idea", SaveScreenController.Intent.SAVE);
