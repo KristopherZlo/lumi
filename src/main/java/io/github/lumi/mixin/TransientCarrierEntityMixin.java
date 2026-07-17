@@ -7,13 +7,14 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin({FallingBlockEntity.class, PrimedTnt.class})
+@Mixin({FallingBlockEntity.class, PrimedTnt.class, AbstractArrow.class})
 abstract class TransientCarrierEntityMixin {
     @Unique private Optional<MinecraftCausalTickTracker.CausalExecution> lumi$scope = Optional.empty();
 

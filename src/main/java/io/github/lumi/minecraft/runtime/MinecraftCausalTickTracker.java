@@ -20,6 +20,7 @@ import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.ticks.LevelTicks;
 import net.minecraft.world.ticks.ScheduledTick;
@@ -109,7 +110,7 @@ public final class MinecraftCausalTickTracker {
     }
 
     public void rememberCarrier(Entity carrier) {
-        if (carrier instanceof FallingBlockEntity || carrier instanceof PrimedTnt) {
+        if (carrier instanceof FallingBlockEntity || carrier instanceof PrimedTnt || carrier instanceof AbstractArrow) {
             rememberCurrent(entityCarriers, carrier);
         }
     }

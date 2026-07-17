@@ -11,6 +11,7 @@
     ],
     "fabric-gametest": [
       "io.github.lumi.gametest.LumiLiveActionGameTests",
+      "io.github.lumi.gametest.LumiProjectileGameTests",
       "io.github.lumi.gametest.LumiTntGameTests",
       "io.github.lumi.gametest.LumiFallingBlockGameTests",
       "io.github.lumi.gametest.LumiFluidGameTests",
