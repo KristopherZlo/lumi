@@ -47,7 +47,7 @@ public final class MinecraftEntityChunkCapture {
             ServerLevel level, EntityAccess access) throws IOException {
         Objects.requireNonNull(level, "level");
         if (!(Objects.requireNonNull(access, "access") instanceof Entity entity)
-                || entity instanceof Player || entity.isPassenger() || !entity.shouldBeSaved()) {
+                || !isDurableRoot(entity)) {
             return Optional.empty();
         }
         TagValueOutput output = TagValueOutput.createWithContext(
@@ -61,6 +61,12 @@ public final class MinecraftEntityChunkCapture {
                 canonicalEntityNbt(full));
         return Optional.of(new CapturedEntity(
                 state, new DecodedEntity(state.id(), entity.getType(), full)));
+    }
+
+    public static boolean isDurableRoot(Entity entity) {
+        return !(Objects.requireNonNull(entity, "entity") instanceof Player)
+                && !entity.isPassenger()
+                && entity.shouldBeSaved();
     }
 
     static CanonicalNbt canonicalEntityNbt(CompoundTag saved) throws IOException {

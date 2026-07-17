@@ -2,6 +2,7 @@ package io.github.lumi.mixin;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.runtime.MinecraftLiveEntityTracker;
+import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -26,7 +27,8 @@ abstract class EntityMixin {
         if (entity.level() instanceof ServerLevel level) {
             var runtime = LumiMod.serverRuntime().find(level).orElse(null);
             if (runtime != null) {
-                if (!runtime.freeze().isMutationAllowed()) {
+                if (MinecraftEntityChunkCapture.isDurableRoot(entity)
+                        && !runtime.freeze().isMutationAllowed()) {
                     callback.cancel();
                     return;
                 }

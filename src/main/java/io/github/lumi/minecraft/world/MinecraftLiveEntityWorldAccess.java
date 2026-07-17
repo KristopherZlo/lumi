@@ -31,7 +31,7 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     }
 
     public Optional<EntityState> capture(Entity entity) throws IOException {
-        if (!isDurableRoot(entity) || entity.isRemoved()) {
+        if (!MinecraftEntityChunkCapture.isDurableRoot(entity) || entity.isRemoved()) {
             return Optional.empty();
         }
         Optional<MinecraftEntityChunkCapture.CapturedEntity> captured =
@@ -97,12 +97,8 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
         return entityLookup.byId(entityId).stream()
                 .filter(Entity.class::isInstance)
                 .map(Entity.class::cast)
-                .filter(MinecraftLiveEntityWorldAccess::isDurableRoot)
+                .filter(MinecraftEntityChunkCapture::isDurableRoot)
                 .filter(entity -> !entity.isRemoved())
                 .findFirst();
-    }
-
-    private static boolean isDurableRoot(Entity entity) {
-        return !(entity instanceof Player) && !entity.isPassenger() && entity.shouldBeSaved();
     }
 }

@@ -2,6 +2,7 @@ package io.github.lumi.mixin;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.runtime.MinecraftCausalTickTracker;
+import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
 import java.io.IOException;
 import io.github.lumi.minecraft.world.OwnedBlockEventAccess;
 import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
@@ -114,7 +115,8 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
             Entity entity, CallbackInfoReturnable<Boolean> callback) {
         ServerLevel level = (ServerLevel) (Object) this;
         LumiMod.serverRuntime().find(level).ifPresent(runtime -> {
-            if (!runtime.freeze().isMutationAllowed()) {
+            if (MinecraftEntityChunkCapture.isDurableRoot(entity)
+                    && !runtime.freeze().isMutationAllowed()) {
                 callback.setReturnValue(false);
             }
         });

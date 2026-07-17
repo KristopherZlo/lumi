@@ -95,7 +95,7 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
 
     @Override
     public List<UUID> durableEntityIds(EntityChunkKey key) {
-        return matchingEntities(key).filter(MinecraftPreparedWorldAccess::isDurableRoot)
+        return matchingEntities(key).filter(MinecraftEntityChunkCapture::isDurableRoot)
                 .map(Entity::getUUID).toList();
     }
 
@@ -103,7 +103,7 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     public void removeEntity(EntityChunkKey key, UUID id) throws IOException {
         Entity entity = matchingEntities(key)
                 .filter(candidate -> candidate.getUUID().equals(id))
-                .filter(MinecraftPreparedWorldAccess::isDurableRoot)
+                .filter(MinecraftEntityChunkCapture::isDurableRoot)
                 .findFirst().orElseThrow(
                         () -> new IOException("Restored entity disappeared before removal: " + id));
         List<Entity> graph = entity.getSelfAndPassengers()
@@ -190,10 +190,6 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
         return entityLookup.inChunk(key)
                 .filter(Entity.class::isInstance)
                 .map(Entity.class::cast);
-    }
-
-    private static boolean isDurableRoot(Entity entity) {
-        return !(entity instanceof Player) && !entity.isPassenger() && entity.shouldBeSaved();
     }
 
     private Optional<PlayerSpawn> currentSpawn(ServerPlayer player) {
