@@ -252,6 +252,51 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
+    void observerFailuresCannotRetainTheFreezeOrTheOperation() throws IOException {
+        RecordingFreeze freeze = new RecordingFreeze();
+        var failures = new ArrayList<RuntimeException>();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L,
+                ignored -> {
+                    throw new IllegalStateException("global failed");
+                },
+                failures::add);
+        TwoTickMutation mutation = new TwoTickMutation(false);
+        coordinator.start(mutation, ignored -> {
+            throw new IllegalStateException("request failed");
+        });
+
+        coordinator.tick();
+        coordinator.tick();
+
+        assertEquals(2, failures.size());
+        assertEquals(1, freeze.releaseCalls);
+        assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
+    void failingProgressObserverIsRemovedBeforeTheNextTick() throws IOException {
+        RecordingFreeze freeze = new RecordingFreeze();
+        var failures = new ArrayList<RuntimeException>();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                freeze, () -> 0L, 1L, ignored -> { }, failures::add);
+        TwoTickMutation mutation = new TwoTickMutation(false);
+        coordinator.start(mutation);
+        OperationTicket ticket = coordinator.ticketOf(mutation).orElseThrow();
+        coordinator.observeProgress(ticket, ignored -> { });
+        coordinator.observeProgress(ticket, ignored -> {
+            throw new IllegalStateException("progress failed");
+        });
+
+        coordinator.tick();
+        coordinator.tick();
+
+        assertEquals(1, failures.size());
+        assertEquals(1, freeze.releaseCalls);
+        assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
     void releasesOperationThatIsAlreadyTerminalWhenActivated() throws IOException {
         var outcomes = new ArrayList<MutationTerminalState>();
         DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(

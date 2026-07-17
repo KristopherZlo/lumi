@@ -21,6 +21,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
     private final LongSupplier nanoTime;
     private final long tickBudgetNanos;
     private final Consumer<DimensionMutation> terminalObserver;
+    private final Consumer<RuntimeException> observerFailure;
     private final ArrayList<QueuedOperation> queued = new ArrayList<>();
     private final HashMap<OperationTicket, IntConsumer> positionObservers = new HashMap<>();
     private final HashMap<OperationTicket, Consumer<OperationProgress>> progressObservers =
@@ -39,12 +40,20 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
 
     public DimensionOperationCoordinator(
             DimensionFreeze freeze, Consumer<DimensionMutation> terminalObserver) {
-        this(freeze, System::nanoTime, MAX_TICK_WORK_NANOS, terminalObserver);
+        this(freeze, terminalObserver, ignored -> { });
+    }
+
+    public DimensionOperationCoordinator(
+            DimensionFreeze freeze,
+            Consumer<DimensionMutation> terminalObserver,
+            Consumer<RuntimeException> observerFailure) {
+        this(freeze, System::nanoTime, MAX_TICK_WORK_NANOS,
+                terminalObserver, observerFailure);
     }
 
     DimensionOperationCoordinator(
             DimensionFreeze freeze, LongSupplier nanoTime, long tickBudgetNanos) {
-        this(freeze, nanoTime, tickBudgetNanos, ignored -> { });
+        this(freeze, nanoTime, tickBudgetNanos, ignored -> { }, ignored -> { });
     }
 
     DimensionOperationCoordinator(
@@ -52,9 +61,19 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             LongSupplier nanoTime,
             long tickBudgetNanos,
             Consumer<DimensionMutation> terminalObserver) {
+        this(freeze, nanoTime, tickBudgetNanos, terminalObserver, ignored -> { });
+    }
+
+    DimensionOperationCoordinator(
+            DimensionFreeze freeze,
+            LongSupplier nanoTime,
+            long tickBudgetNanos,
+            Consumer<DimensionMutation> terminalObserver,
+            Consumer<RuntimeException> observerFailure) {
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         this.terminalObserver = Objects.requireNonNull(terminalObserver, "terminalObserver");
+        this.observerFailure = Objects.requireNonNull(observerFailure, "observerFailure");
         if (tickBudgetNanos < 1 || tickBudgetNanos > MAX_TICK_WORK_NANOS) {
             throw new IllegalArgumentException("Tick budget must be between 1 ns and 50 ms");
         }
@@ -188,9 +207,29 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
     private void reportTerminal() {
         if (active.isTerminal() && !terminalReported) {
             DimensionMutation outcome = active.outcome();
-            terminalObserver.accept(outcome);
-            activeObserver.accept(outcome);
             terminalReported = true;
+            notifyObserver(terminalObserver, outcome, "global terminal");
+            notifyObserver(activeObserver, outcome, "request terminal");
+        }
+    }
+
+    private void notifyObserver(
+            Consumer<DimensionMutation> observer,
+            DimensionMutation outcome,
+            String description) {
+        try {
+            observer.accept(outcome);
+        } catch (RuntimeException failed) {
+            reportObserverFailure(description, failed);
+        }
+    }
+
+    private void reportObserverFailure(String description, RuntimeException failed) {
+        try {
+            observerFailure.accept(new IllegalStateException(
+                    "Lumi " + description + " observer failed", failed));
+        } catch (RuntimeException ignored) {
+            // Diagnostics must never interrupt freeze release or operation ownership.
         }
     }
 
@@ -262,7 +301,12 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         int position = queuePosition(Objects.requireNonNull(ticket, "ticket"))
                 .orElseThrow(() -> new IllegalArgumentException("Unknown operation ticket"));
         positionObservers.put(ticket, Objects.requireNonNull(observer, "observer"));
-        observer.accept(position);
+        try {
+            observer.accept(position);
+        } catch (RuntimeException failed) {
+            positionObservers.remove(ticket);
+            reportObserverFailure("queue position", failed);
+        }
     }
 
     public synchronized void observeProgress(
@@ -270,7 +314,13 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         OperationProgress progress = progress(ticket);
         progressObservers.put(ticket, Objects.requireNonNull(observer, "observer"));
         publishedProgress.put(ticket, progress);
-        observer.accept(progress);
+        try {
+            observer.accept(progress);
+        } catch (RuntimeException failed) {
+            progressObservers.remove(ticket);
+            publishedProgress.remove(ticket);
+            reportObserverFailure("progress", failed);
+        }
     }
 
     private OperationProgress progress(OperationTicket ticket) {
@@ -294,7 +344,13 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
                 return true;
             }
             if (!progress.equals(publishedProgress.put(entry.getKey(), progress))) {
-                entry.getValue().accept(progress);
+                try {
+                    entry.getValue().accept(progress);
+                } catch (RuntimeException failed) {
+                    publishedProgress.remove(entry.getKey());
+                    reportObserverFailure("progress", failed);
+                    return true;
+                }
             }
             return false;
         });
@@ -306,7 +362,12 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             if (position.isEmpty()) {
                 return true;
             }
-            entry.getValue().accept(position.orElseThrow());
+            try {
+                entry.getValue().accept(position.orElseThrow());
+            } catch (RuntimeException failed) {
+                reportObserverFailure("queue position", failed);
+                return true;
+            }
             return false;
         });
     }

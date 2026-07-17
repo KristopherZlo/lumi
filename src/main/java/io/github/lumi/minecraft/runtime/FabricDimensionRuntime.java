@@ -308,7 +308,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var restoreService = new RestoreService(objects, commits, origins);
         return new FabricDimensionRuntime(
                 level, repository, freeze, new DimensionOperationCoordinator(
-                        freeze, operation -> logTerminal(level, operation)),
+                        freeze,
+                        operation -> logTerminal(level, operation),
+                        failure -> LumiMod.LOGGER.error(
+                                "Lumi operation observer failed", failure)),
                 mutations,
                 new SaveService(objects, trees, commits, refs, journals,
                         new VersionTagRepository(repository)),
