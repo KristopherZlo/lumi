@@ -19,6 +19,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
 import net.minecraft.world.item.ItemStack;
@@ -221,6 +222,53 @@ public final class LumiTntGameTests {
                             "Undo changed chest minecart state or inventory");
                     helper.assertBlockState(tnt, Blocks.TNT.defaultBlockState());
                     helper.assertEntityNotPresent(EntityType.ITEM);
+                })
+                .thenExecute(() -> LumiGameTestLease.release(test))
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void completedExplosionDoesNotResurrectActionAddedItem(
+            GameTestHelper helper) {
+        FabricDimensionRuntime runtime = runtime(helper);
+        UUID player = UUID.randomUUID();
+        UUID test = UUID.randomUUID();
+        BlockPos tnt = new BlockPos(3, 2, 3);
+        AtomicReference<UUID> itemId = new AtomicReference<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    for (int x = 1; x <= 5; x++) {
+                        for (int z = 1; z <= 5; z++) {
+                            helper.setBlock(x, 1, z, Blocks.OBSIDIAN);
+                        }
+                    }
+                    helper.setBlock(tnt, Blocks.TNT);
+                    BlockPos absolute = helper.absolutePos(tnt);
+                    try (var ignored = DirectLiveActionContext.open(
+                            runtime.liveActions(), player)) {
+                        ItemEntity item = new ItemEntity(
+                                helper.getLevel(), absolute.getX() + 0.5,
+                                absolute.getY() + 1.0, absolute.getZ() + 0.5,
+                                new ItemStack(Items.DIRT));
+                        helper.assertTrue(helper.getLevel().addFreshEntity(item),
+                                "Action item could not be spawned");
+                        itemId.set(item.getUUID());
+                        prime(helper, runtime, player, tnt, 3);
+                    }
+                })
+                .thenWaitUntil(() -> helper.assertEntityNotPresent(EntityType.TNT))
+                .thenWaitUntil(() -> helper.assertEntityNotPresent(EntityType.ITEM))
+                .thenExecute(() -> runtime.startLiveAction(
+                        player, LiveActionJournal.Direction.UNDO, ignored -> { }))
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertTrue(helper.getLevel().getEntityInAnyDimension(
+                                    itemId.get()) == null,
+                            "Undo resurrected an item created and destroyed by the action");
+                    helper.assertEntityNotPresent(EntityType.ITEM);
+                    helper.assertBlockState(tnt, Blocks.TNT.defaultBlockState());
                 })
                 .thenExecute(() -> LumiGameTestLease.release(test))
                 .thenSucceed();

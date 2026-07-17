@@ -44,24 +44,26 @@ public final class MinecraftLiveEntityTracker {
         UUID actionId = action.orElseThrow();
         UUID entityId = entity.getUUID();
         Map<UUID, Optional<EntityState>> entities = owned.get(actionId);
-        Optional<EntityState> before = entities == null
-                ? Optional.empty()
-                : entities.getOrDefault(entityId, Optional.empty());
-        if (before.isEmpty()) {
-            before = world.capture(entity);
+        if (entities != null && entities.containsKey(entityId)) {
+            return Optional.of(new Pending(
+                    actionId, entityId, entities.get(entityId)));
         }
-        before.ifPresent(state -> own(actionId, entityId, Optional.of(state)));
-        return before.map(state -> new Pending(actionId, entityId, state));
+        Optional<EntityState> before = world.capture(entity);
+        if (before.isEmpty()) {
+            return Optional.empty();
+        }
+        own(actionId, entityId, before);
+        return Optional.of(new Pending(actionId, entityId, before));
     }
 
     public void finish(Pending pending) throws IOException {
         Objects.requireNonNull(pending, "pending");
         Optional<EntityState> after = world.read(pending.entity());
         journal.recordEntity(
-                pending.action(), pending.entity(), Optional.of(pending.before()),
+                pending.action(), pending.entity(), pending.before(),
                 after);
         if (after.isPresent()) {
-            own(pending.action(), pending.entity(), Optional.of(pending.before()));
+            own(pending.action(), pending.entity(), pending.before());
         } else {
             disown(pending.action(), pending.entity());
         }
@@ -121,7 +123,8 @@ public final class MinecraftLiveEntityTracker {
         journal.release(action);
     }
 
-    public record Pending(UUID action, UUID entity, EntityState before) {
+    public record Pending(
+            UUID action, UUID entity, Optional<EntityState> before) {
         public Pending {
             Objects.requireNonNull(action, "action");
             Objects.requireNonNull(entity, "entity");
