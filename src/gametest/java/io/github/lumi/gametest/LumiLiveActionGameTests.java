@@ -81,6 +81,67 @@ public final class LumiLiveActionGameTests {
                 .thenSucceed();
     }
 
+    @GameTest(maxTicks = 300000)
+    public void undoneDynamicEntityRemainsRedoableAfterTicking(GameTestHelper helper) {
+        FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
+                .orElseThrow(() -> helper.assertionException("Lumi runtime is not loaded"));
+        UUID player = UUID.randomUUID();
+        UUID test = UUID.randomUUID();
+        AtomicReference<UUID> itemId = new AtomicReference<>();
+        AtomicReference<Integer> restoredAge = new AtomicReference<>();
+        AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    BlockPos position = helper.absolutePos(new BlockPos(2, 2, 2));
+                    ItemEntity item = new ItemEntity(
+                            helper.getLevel(), position.getX() + 0.5,
+                            position.getY(), position.getZ() + 0.5,
+                            new ItemStack(Items.EMERALD));
+                    helper.assertTrue(helper.getLevel().addFreshEntity(item),
+                            "Control item could not be spawned");
+                    itemId.set(item.getUUID());
+                    try (var ignored = DirectLiveActionContext.open(
+                            runtime.liveActions(), player)) {
+                        item.discard();
+                    }
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
+                            operation -> terminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(
+                            MutationTerminalState.SUCCEEDED, terminal.get(),
+                            "Initial item Undo must succeed");
+                    ItemEntity restored = (ItemEntity) helper.getLevel()
+                            .getEntity(itemId.get());
+                    helper.assertTrue(restored != null,
+                            "Undo did not restore the removed item");
+                    restoredAge.set(restored.getAge());
+                })
+                .thenIdle(5)
+                .thenExecute(() -> {
+                    ItemEntity ticked = (ItemEntity) helper.getLevel()
+                            .getEntity(itemId.get());
+                    helper.assertTrue(ticked != null
+                                    && ticked.getAge() > restoredAge.get(),
+                            "Restored item did not tick before Redo");
+                    terminal.set(null);
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.REDO,
+                            operation -> terminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> helper.assertValueEqual(
+                        MutationTerminalState.SUCCEEDED, terminal.get(),
+                        "Ticked Undo item must remain Redoable"))
+                .thenExecute(() -> helper.assertTrue(
+                        helper.getLevel().getEntity(itemId.get()) == null,
+                        "Redo left the removed item behind"))
+                .thenExecute(() -> LumiGameTestLease.release(test))
+                .thenSucceed();
+    }
+
     @GameTest(maxTicks = 2000)
     public void derivedLeafWaveRemainsOwnedByRootAction(GameTestHelper helper) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())

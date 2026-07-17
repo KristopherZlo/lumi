@@ -108,6 +108,37 @@ public final class LiveActionJournal {
         entityOwners.set(entityId, action, updatedBytes != 0 && action.applied);
     }
 
+    public synchronized void refreshEntityBefore(
+            UUID actionId,
+            UUID entityId,
+            Optional<EntityState> before) {
+        MutableAction action = requireAction(actionId);
+        if (!action.available) {
+            return;
+        }
+        if (action.applied) {
+            throw new IllegalStateException("Cannot refresh before-state of an applied action");
+        }
+        Objects.requireNonNull(entityId, "entityId");
+        validateEntityId(entityId, before);
+        EntityChange previous = action.entities.get(entityId);
+        if (previous == null) {
+            throw new IllegalStateException("Entity is not part of the live action: " + entityId);
+        }
+        EntityChange updated = new EntityChange(before, previous.after);
+        long previousBytes = estimatedBytes(previous);
+        long updatedBytes = updated.before.equals(updated.after) ? 0 : estimatedBytes(updated);
+        if (!resize(action, updatedBytes - previousBytes)) {
+            return;
+        }
+        if (updatedBytes == 0) {
+            action.entities.remove(entityId);
+        } else {
+            action.entities.put(entityId, updated);
+        }
+        entityOwners.set(entityId, action, false);
+    }
+
     public synchronized boolean close(UUID actionId) {
         MutableAction action = requireAction(actionId);
         if (action.closed) {

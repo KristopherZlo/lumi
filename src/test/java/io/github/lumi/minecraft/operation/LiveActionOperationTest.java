@@ -87,6 +87,19 @@ class LiveActionOperationTest {
     }
 
     @Test
+    void cancellationFailureIsSafeToReleaseBeforeMutation() {
+        LiveActionOperation operation = new LiveActionOperation(
+                action(block("stone"), block("gold_block")), PLAYER,
+                LiveActionJournal.Direction.UNDO, new FakeWorld(block("gold_block")),
+                () -> 0L, ignored -> { throw new IllegalStateException("cancel failed"); });
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(MutationTerminalState.FAILED, operation.terminalState());
+        assertTrue(operation.isSafeToRelease());
+    }
+
+    @Test
     void removesEntityAddedByActionAndRestoresItOnRedo() throws IOException {
         EntityState entity = entity(1);
         LiveActionJournal journal = new LiveActionJournal();
