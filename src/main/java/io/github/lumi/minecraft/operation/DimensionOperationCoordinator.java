@@ -26,12 +26,14 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
     private final HashMap<OperationTicket, IntConsumer> positionObservers = new HashMap<>();
     private final HashMap<OperationTicket, Consumer<OperationProgress>> progressObservers =
             new HashMap<>();
+    private final HashMap<OperationTicket, Runnable> freezeObservers = new HashMap<>();
     private final HashMap<OperationTicket, OperationProgress> publishedProgress = new HashMap<>();
     private FailureContainedMutation active;
     private OperationTicket activeTicket;
     private Consumer<DimensionMutation> activeObserver = ignored -> { };
     private DimensionFreeze.Lease lease;
     private boolean freezeReleased;
+    private boolean freezeStartReported;
     private boolean terminalReported;
 
     public DimensionOperationCoordinator(DimensionFreeze freeze) {
@@ -120,6 +122,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         activeTicket = entry.ticket();
         activeObserver = entry.observer();
         freezeReleased = false;
+        freezeStartReported = false;
         terminalReported = false;
     }
 
@@ -164,6 +167,9 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         if (lease == null && !freezeReleased && active.requiresFreeze()) {
             lease = Objects.requireNonNull(freeze.acquire(), "freeze lease");
         }
+        if (lease != null && !freezeStartReported) {
+            reportFreezeStart();
+        }
         long start = nanoTime.getAsLong();
         long deadline = start > Long.MAX_VALUE - tickBudgetNanos
                 ? Long.MAX_VALUE : start + tickBudgetNanos;
@@ -186,11 +192,13 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         if (active.isTerminal() && active.isSafeToRelease()) {
             positionObservers.remove(activeTicket);
             progressObservers.remove(activeTicket);
+            freezeObservers.remove(activeTicket);
             publishedProgress.remove(activeTicket);
             active = null;
             activeTicket = null;
             activeObserver = ignored -> { };
             freezeReleased = false;
+            freezeStartReported = false;
             terminalReported = false;
             activateNext();
         }
@@ -289,6 +297,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             queued.remove(index);
             positionObservers.remove(ticket);
             progressObservers.remove(ticket);
+            freezeObservers.remove(ticket);
             publishedProgress.remove(ticket);
             notifyPositions();
             return true;
@@ -320,6 +329,33 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             progressObservers.remove(ticket);
             publishedProgress.remove(ticket);
             reportObserverFailure("progress", failed);
+        }
+    }
+
+    /** Runs once after the dimension is frozen and before the first mutation step. */
+    public synchronized void observeFreezeAcquired(
+            OperationTicket ticket, Runnable observer) {
+        Objects.requireNonNull(ticket, "ticket");
+        Objects.requireNonNull(observer, "observer");
+        if (ticket.equals(activeTicket) && freezeStartReported) {
+            throw new IllegalStateException("Operation freeze boundary has already passed");
+        }
+        if (queuePosition(ticket).isEmpty()) {
+            throw new IllegalArgumentException("Unknown operation ticket");
+        }
+        freezeObservers.put(ticket, observer);
+    }
+
+    private void reportFreezeStart() {
+        freezeStartReported = true;
+        Runnable observer = freezeObservers.remove(activeTicket);
+        if (observer == null) {
+            return;
+        }
+        try {
+            observer.run();
+        } catch (RuntimeException failed) {
+            reportObserverFailure("freeze boundary", failed);
         }
     }
 
@@ -395,6 +431,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         queued.clear();
         positionObservers.clear();
         progressObservers.clear();
+        freezeObservers.clear();
         publishedProgress.clear();
         active = null;
         activeTicket = null;

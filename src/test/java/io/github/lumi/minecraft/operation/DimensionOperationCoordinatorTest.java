@@ -275,6 +275,22 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
+    void reportsFrozenBoundaryBeforeTheFirstMutationStep() throws IOException {
+        var order = new ArrayList<String>();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                new RecordingFreeze(), () -> 0L, 1L);
+        NamedMutation mutation = new NamedMutation("advance", order, 1);
+        coordinator.start(mutation);
+        OperationTicket ticket = coordinator.ticketOf(mutation).orElseThrow();
+        coordinator.observeFreezeAcquired(ticket, () -> order.add("frozen"));
+
+        coordinator.tick();
+
+        assertEquals(java.util.List.of("frozen", "advance"), order);
+        assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
     void failingProgressObserverIsRemovedBeforeTheNextTick() throws IOException {
         RecordingFreeze freeze = new RecordingFreeze();
         var failures = new ArrayList<RuntimeException>();
