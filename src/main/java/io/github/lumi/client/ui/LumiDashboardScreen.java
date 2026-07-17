@@ -4,9 +4,11 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.network.HistorySnapshotPayload;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
@@ -35,8 +37,12 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private final Consumer<HistorySnapshotPayload.Version> openDelete;
     private final Consumer<VersionCompareController.Target> openCompare;
     private final VersionCompareController compareController = new VersionCompareController();
+    private final HistorySearchController searchController = new HistorySearchController();
     private HistorySnapshotPayload snapshot;
     private LegacyWorkspaceLayout layout;
+    private EditBox search;
+    private String searchQuery = "";
+    private boolean refocusSearch;
     private LegacyProjectTab activeTab = LegacyProjectTab.HISTORY;
     private int historyY;
     private int historyHeight;
@@ -80,6 +86,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         super.tick();
         HistorySnapshotPayload latest = history.state().snapshot().orElse(null);
         if (!Objects.equals(snapshot, latest)) {
+            refocusSearch = search != null && search.isFocused();
             rebuildWidgets();
         }
     }
@@ -113,13 +120,34 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         if (snapshot == null) {
             return;
         }
-        int rows = Math.min(snapshot.versions().size(),
+        int searchWidth = Math.min(160, Math.max(80, layout.bodyWidth() / 3));
+        search = new EditBox(
+                font,
+                layout.bodyX() + layout.bodyWidth() - searchWidth - 14,
+                historyY + 7,
+                searchWidth,
+                18,
+                Component.translatable("luma.dashboard.search"));
+        search.setBordered(false);
+        search.setHint(Component.translatable("luma.dashboard.search"));
+        search.setValue(searchQuery);
+        search.setResponder(this::search);
+        addRenderableWidget(search);
+        if (refocusSearch) {
+            setInitialFocus(search);
+            search.setFocused(true);
+            search.moveCursorToEnd(false);
+            refocusSearch = false;
+        }
+        List<HistorySnapshotPayload.Version> versions = visibleVersions();
+        int rows = Math.min(versions.size(),
                 Math.max(0, (historyHeight - 50) / 34));
         for (int index = 0; index < rows; index++) {
-            HistorySnapshotPayload.Version version = snapshot.versions().get(index);
+            HistorySnapshotPayload.Version version = versions.get(index);
             int rowY = historyY + 38 + index * 34;
             int right = layout.bodyX() + layout.bodyWidth() - 14;
-            compareController.target(snapshot.versions(), index).ifPresent(target ->
+            int sourceIndex = snapshot.versions().indexOf(version);
+            compareController.target(snapshot.versions(), sourceIndex).ifPresent(target ->
                     addIconButton(right - 90, rowY + 6,
                             "see-changes", "luma.action.compare",
                             () -> openCompare.accept(target), LumiLegacyButton.Kind.NORMAL));
@@ -213,6 +241,20 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             selectTab(LegacyProjectTab.COMPARE);
             openCompare.accept(target);
         });
+    }
+
+    private void search(String value) {
+        if (searchQuery.equals(value)) {
+            return;
+        }
+        searchQuery = value;
+        refocusSearch = true;
+        rebuildWidgets();
+    }
+
+    private List<HistorySnapshotPayload.Version> visibleVersions() {
+        return snapshot == null
+                ? List.of() : searchController.filter(snapshot.versions(), searchQuery);
     }
 
     private LumiLegacyButton.Kind tabKind(LegacyProjectTab tab) {
@@ -312,10 +354,21 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         drawPanel(graphics, x, historyY, width, historyHeight);
         graphics.drawString(font, Component.translatable("luma.project.history_title"),
                 x + 14, historyY + 13, LegacyLumiTheme.TEXT, false);
-        int rows = Math.min(snapshot.versions().size(),
+        if (search != null) {
+            LegacyLumiTheme.outlined(
+                    graphics,
+                    search.getX() - 2,
+                    search.getY() - 2,
+                    search.getWidth() + 4,
+                    search.getHeight() + 4,
+                    LegacyLumiTheme.INSET,
+                    LegacyLumiTheme.INSET_BORDER);
+        }
+        List<HistorySnapshotPayload.Version> versions = visibleVersions();
+        int rows = Math.min(versions.size(),
                 Math.max(0, (historyHeight - 50) / 34));
         for (int index = 0; index < rows; index++) {
-            HistorySnapshotPayload.Version version = snapshot.versions().get(index);
+            HistorySnapshotPayload.Version version = versions.get(index);
             int rowY = historyY + 38 + index * 34;
             graphics.fill(x + 10, rowY, x + width - 10, rowY + 30,
                     LegacyLumiTheme.INSET);
@@ -327,9 +380,11 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             graphics.drawString(font, version.author(),
                     x + 64, rowY + 17, LegacyLumiTheme.MUTED, false);
         }
-        if (snapshot.versions().isEmpty()) {
+        if (versions.isEmpty()) {
             graphics.drawString(font,
-                    Component.translatable("luma.simple.no_saved_help"),
+                    Component.translatable(searchQuery.isBlank()
+                            ? "luma.simple.no_saved_help"
+                            : "luma.project.history_search_help"),
                     x + 14, historyY + 38, LegacyLumiTheme.MUTED, false);
         }
     }
