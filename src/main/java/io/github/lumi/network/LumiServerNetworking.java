@@ -126,6 +126,14 @@ public final class LumiServerNetworking {
                 broadcastSnapshot(runtime);
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.WORKSPACE_SETTINGS) {
+                runtime.updateWorkspaceSettings(
+                        WorkspaceSettingsArgument.parse(payload.argument()).settings());
+                sendEvent(player, payload, runtime,
+                        OperationEventPayload.State.SUCCEEDED, "Workspace settings updated");
+                broadcastSnapshot(runtime);
+                return;
+            }
             if (isPackageCommand(payload.kind())) {
                 packageCommand(player, runtime, actual, payload, context);
                 return;
@@ -450,6 +458,8 @@ public final class LumiServerNetworking {
                             "Package commands do not use the mutation queue");
             case WORKSPACE_CREATE -> throw new IllegalStateException(
                     "Workspace creation does not use the mutation queue");
+            case WORKSPACE_SETTINGS -> throw new IllegalStateException(
+                    "Workspace settings do not use the mutation queue");
             case SNAPSHOT_REFRESH -> throw new IllegalStateException(
                     "Snapshot refresh does not use the mutation queue");
         };

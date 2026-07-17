@@ -66,6 +66,12 @@ class WorkspaceServiceTest {
 
         assertEquals(defaultId, service.defaultWorkspaceId());
         assertEquals(projectId, service.active().id());
+
+        WorkspaceSettings updated = new WorkspaceSettings(false, false);
+        assertEquals(updated, service.updateActiveSettings(updated).settings());
+        assertEquals(updated,
+                new WorkspaceRepository(repositoryRoot)
+                        .read(projectId).orElseThrow().settings());
     }
 
     private static Commit commit(io.github.lumi.domain.model.ObjectId tree, UUID workspace) {

@@ -6,6 +6,7 @@ import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.network.HistoryCommandPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.CompareArgument;
@@ -20,6 +21,7 @@ import io.github.lumi.network.ZoneCompareArgument;
 import io.github.lumi.network.ZoneRestoreArgument;
 import io.github.lumi.network.ZoneSaveArgument;
 import io.github.lumi.network.WorkspaceCreateArgument;
+import io.github.lumi.network.WorkspaceSettingsArgument;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -132,6 +134,12 @@ public final class LumiClientNetworking {
     public UUID switchWorkspace(UUID workspaceId) {
         return send(HistoryCommandPayload.Kind.WORKSPACE_SWITCH,
                 Objects.requireNonNull(workspaceId, "workspaceId").toString());
+    }
+
+    public UUID updateWorkspaceSettings(WorkspaceSettings settings) {
+        return send(HistoryCommandPayload.Kind.WORKSPACE_SETTINGS,
+                new WorkspaceSettingsArgument(
+                        Objects.requireNonNull(settings, "settings")).encode());
     }
 
     public UUID createZone(String name, BlockBox area) {

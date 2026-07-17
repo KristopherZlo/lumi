@@ -840,6 +840,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return historyViews.activeWorkspace();
     }
 
+    public io.github.lumi.domain.model.Workspace updateWorkspaceSettings(
+            io.github.lumi.domain.model.WorkspaceSettings settings) throws IOException {
+        requireHistoryMetadataMutable();
+        return workspaces.updateActiveSettings(settings);
+    }
+
     public List<io.github.lumi.domain.model.Workspace> visibleWorkspaces() throws IOException {
         return historyViews.workspaces();
     }

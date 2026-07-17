@@ -84,6 +84,17 @@ public final class WorkspaceService {
         return require(selected.id());
     }
 
+    public synchronized Workspace updateActiveSettings(WorkspaceSettings settings)
+            throws IOException {
+        Objects.requireNonNull(settings, "settings");
+        Workspace current = active();
+        if (current.settings().equals(settings)) {
+            return current;
+        }
+        return workspaces.replace(current, new Workspace(
+                current.id(), current.name(), current.bounds(), settings));
+    }
+
     public List<Workspace> list() throws IOException {
         return workspaces.list();
     }

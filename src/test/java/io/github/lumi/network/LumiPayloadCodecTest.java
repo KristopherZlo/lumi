@@ -7,6 +7,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.PackageName;
+import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.minecraft.operation.OperationProgress;
 import io.netty.buffer.Unpooled;
 import java.util.UUID;
@@ -16,6 +17,21 @@ import net.minecraft.network.codec.StreamCodec;
 import org.junit.jupiter.api.Test;
 
 class LumiPayloadCodecTest {
+    @Test
+    void workspaceSettingsArgumentIsCanonicalAndStrict() {
+        var argument = new WorkspaceSettingsArgument(
+                new WorkspaceSettings(false, true));
+
+        assertEquals("0,1", argument.encode());
+        assertEquals(argument, WorkspaceSettingsArgument.parse(argument.encode()));
+        assertEquals(argument.settings(),
+                WorkspaceSettingsArgument.parse(argument.encode()).settings());
+        assertThrows(IllegalArgumentException.class,
+                () -> WorkspaceSettingsArgument.parse("false,true"));
+        assertThrows(IllegalArgumentException.class,
+                () -> WorkspaceSettingsArgument.parse("1,2"));
+    }
+
     @Test
     void workspaceCreateArgumentRoundTripsWholeAndBoundedScopes() {
         var whole = new WorkspaceCreateArgument("Whole world", Optional.empty());
@@ -123,6 +139,12 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID().toString(), id('2'), 43);
         assertEquals(switchWorkspace,
                 roundTrip(HistoryCommandPayload.CODEC, switchWorkspace));
+        HistoryCommandPayload workspaceSettings = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.WORKSPACE_SETTINGS,
+                new WorkspaceSettingsArgument(
+                        new WorkspaceSettings(false, true)).encode(), id('2'), 43);
+        assertEquals(workspaceSettings,
+                roundTrip(HistoryCommandPayload.CODEC, workspaceSettings));
         HistoryCommandPayload restoreWithoutEntities = new HistoryCommandPayload(
                 UUID.randomUUID(), HistoryCommandPayload.Kind.RESTORE_NO_ENTITIES,
                 id('3').hex(), id('2'), 43);
@@ -174,6 +196,9 @@ class LumiPayloadCodecTest {
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.WORKSPACE_SWITCH,
                 "not-a-workspace", id('1'), 0));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.WORKSPACE_SETTINGS,
+                "true,false", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.COMPARE_CANCEL, "not-a-uuid", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
