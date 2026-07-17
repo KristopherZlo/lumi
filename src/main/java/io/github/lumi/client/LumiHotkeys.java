@@ -10,7 +10,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 
-/** Registers the retained U dashboard key and Alt action chords. */
+/** Registers the Alt+L dashboard chord and the remaining Alt action chords. */
 public final class LumiHotkeys {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "general"));
@@ -50,14 +50,18 @@ public final class LumiHotkeys {
         for (KeyMapping branch : branches) {
             KeyBindingHelper.registerKeyBinding(branch);
         }
-        ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+        ClientTickEvents.START_CLIENT_TICK.register(this::tick);
     }
 
     private void tick(Minecraft client) {
         boolean normalPlay = client.player != null && client.screen == null;
         boolean altDown = altDown(client);
-        consume(dashboard, canOpenDashboard(normalPlay, altDown),
-                HotkeyActionDispatcher.Action.DASHBOARD);
+        if (consume(dashboard) && canOpenDashboard(normalPlay, altDown)) {
+            if (dashboard.same(client.options.keyAdvancements)) {
+                consume(client.options.keyAdvancements);
+            }
+            dispatcher.dispatch(HotkeyActionDispatcher.Action.DASHBOARD);
+        }
         boolean canUseChord = normalPlay && altDown;
         consume(save, canUseChord, HotkeyActionDispatcher.Action.SAVE);
         consume(undo, canUseChord, HotkeyActionDispatcher.Action.UNDO);
@@ -72,11 +76,11 @@ public final class LumiHotkeys {
     }
 
     static int defaultDashboardKey() {
-        return InputConstants.KEY_U;
+        return InputConstants.KEY_L;
     }
 
     static boolean canOpenDashboard(boolean normalPlay, boolean altDown) {
-        return normalPlay;
+        return normalPlay && altDown;
     }
 
     private void consume(

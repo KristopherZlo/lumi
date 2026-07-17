@@ -22,7 +22,7 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
 
     public LumiPackageScreen(Screen parent, PackageScreenController controller) {
         super(parent, Component.translatable("luma.screen.import_export.title"),
-                LegacyProjectTab.PACKAGES);
+                LegacyProjectTab.IMPORT_EXPORT);
         this.controller = controller;
     }
 

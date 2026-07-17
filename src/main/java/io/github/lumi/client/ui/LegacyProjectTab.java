@@ -4,10 +4,9 @@ package io.github.lumi.client.ui;
 enum LegacyProjectTab {
     HISTORY,
     ZONES,
-    BRANCHES,
-    WORKSPACES,
-    PACKAGES,
+    VARIANTS,
+    COMPARE,
+    IMPORT_EXPORT,
     SETTINGS,
-    DELETED,
     MORE
 }

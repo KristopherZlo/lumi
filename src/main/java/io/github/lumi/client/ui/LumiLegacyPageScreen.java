@@ -21,11 +21,6 @@ abstract class LumiLegacyPageScreen extends LumiLegacyModalScreen {
     }
 
     @Override
-    protected final boolean forwardsParentInput() {
-        return true;
-    }
-
-    @Override
     public void onClose() {
         if (parent instanceof LumiDashboardScreen dashboard) {
             dashboard.selectTab(LegacyProjectTab.HISTORY);

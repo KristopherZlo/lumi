@@ -38,7 +38,7 @@ public final class LumiWorkspacesScreen extends LumiLegacyPageScreen {
             WorkspaceScreenController controller,
             Consumer<UUID> switcher) {
         super(parent, Component.translatable("luma.action.workspaces"),
-                LegacyProjectTab.WORKSPACES);
+                LegacyProjectTab.MORE);
         this.history = Objects.requireNonNull(history, "history");
         this.selection = Objects.requireNonNull(selection, "selection");
         this.controller = Objects.requireNonNull(controller, "controller");

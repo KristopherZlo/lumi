@@ -46,9 +46,7 @@ abstract class LumiLegacyModalScreen extends Screen {
     protected final LegacyRenderContext beginLegacyRender(
             GuiGraphics graphics, int mouseX, int mouseY) {
         if (background != null && background != this) {
-            int backgroundMouseX = forwardsParentInput() ? mouseX : -1;
-            int backgroundMouseY = forwardsParentInput() ? mouseY : -1;
-            background.render(graphics, backgroundMouseX, backgroundMouseY, 0.0F);
+            background.render(graphics, -1, -1, 0.0F);
         }
         float scale = renderScale();
         graphics.pose().pushMatrix();
@@ -63,16 +61,12 @@ abstract class LumiLegacyModalScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
-        return super.mouseClicked(virtualClick(click), doubled)
-                || forwardsParentInput() && background != null
-                && background.mouseClicked(click, doubled);
+        return super.mouseClicked(virtualClick(click), doubled);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent click) {
-        return super.mouseReleased(virtualClick(click))
-                || forwardsParentInput() && background != null
-                && background.mouseReleased(click);
+        return super.mouseReleased(virtualClick(click));
     }
 
     @Override
@@ -102,10 +96,6 @@ abstract class LumiLegacyModalScreen extends Screen {
         LegacyLumiTheme.outlined(
                 graphics, x, y, width, height,
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
-    }
-
-    protected boolean forwardsParentInput() {
-        return false;
     }
 
     protected final void renderLegacyPanel(

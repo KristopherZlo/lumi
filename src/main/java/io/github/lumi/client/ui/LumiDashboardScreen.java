@@ -25,9 +25,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private final Runnable openSave;
     private final Runnable openAmend;
     private final Consumer<Screen> openBranches;
-    private final Consumer<Screen> openWorkspaces;
     private final Consumer<Screen> openZones;
-    private final Consumer<Screen> openDeleted;
     private final Consumer<Screen> openPackages;
     private final Consumer<Screen> openMore;
     private final Consumer<Screen> openSettings;
@@ -50,9 +48,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             Runnable openSave,
             Runnable openAmend,
             Consumer<Screen> openBranches,
-            Consumer<Screen> openWorkspaces,
             Consumer<Screen> openZones,
-            Consumer<Screen> openDeleted,
             Consumer<Screen> openPackages,
             Consumer<Screen> openMore,
             Consumer<Screen> openSettings,
@@ -68,9 +64,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openAmend = Objects.requireNonNull(openAmend, "openAmend");
         this.openBranches = Objects.requireNonNull(openBranches, "openBranches");
-        this.openWorkspaces = Objects.requireNonNull(openWorkspaces, "openWorkspaces");
         this.openZones = Objects.requireNonNull(openZones, "openZones");
-        this.openDeleted = Objects.requireNonNull(openDeleted, "openDeleted");
         this.openPackages = Objects.requireNonNull(openPackages, "openPackages");
         this.openMore = Objects.requireNonNull(openMore, "openMore");
         this.openSettings = Objects.requireNonNull(openSettings, "openSettings");
@@ -152,20 +146,16 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                 () -> openTab(LegacyProjectTab.ZONES, openZones),
                 tabKind(LegacyProjectTab.ZONES));
         addButton(x, y + 54, width, "luma.tab.variants",
-                () -> openTab(LegacyProjectTab.BRANCHES, openBranches),
-                tabKind(LegacyProjectTab.BRANCHES));
-        addButton(x, y + 81, width, "luma.action.workspaces",
-                () -> openTab(LegacyProjectTab.WORKSPACES, openWorkspaces),
-                tabKind(LegacyProjectTab.WORKSPACES));
-        addButton(x, y + 108, width, "luma.simple.share_button",
-                () -> openTab(LegacyProjectTab.PACKAGES, openPackages),
-                tabKind(LegacyProjectTab.PACKAGES));
+                () -> openTab(LegacyProjectTab.VARIANTS, openBranches),
+                tabKind(LegacyProjectTab.VARIANTS));
+        addButton(x, y + 81, width, "luma.tab.compare", this::showCompare,
+                tabKind(LegacyProjectTab.COMPARE));
+        addButton(x, y + 108, width, "luma.tab.import_export",
+                () -> openTab(LegacyProjectTab.IMPORT_EXPORT, openPackages),
+                tabKind(LegacyProjectTab.IMPORT_EXPORT));
         addButton(x, y + 135, width, "luma.action.settings",
                 () -> openTab(LegacyProjectTab.SETTINGS, openSettings),
                 tabKind(LegacyProjectTab.SETTINGS));
-        addButton(x, y + 162, width, "luma.more.deleted_saves_title",
-                () -> openTab(LegacyProjectTab.DELETED, openDeleted),
-                tabKind(LegacyProjectTab.DELETED));
         addButton(x, layout.windowY() + layout.windowHeight() - 36,
                 width, "luma.action.more",
                 () -> openTab(LegacyProjectTab.MORE, openMore),
@@ -177,25 +167,21 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         int y = layout.windowY() + 60;
         addIconButton(x, y, "graph", "luma.tab.history", this::showHistory,
                 tabKind(LegacyProjectTab.HISTORY));
-        addIconButton(x + 32, y, "sitemap-4", "luma.tab.zones",
+        addIconButton(x + 32, y, "bookmarks", "luma.tab.zones",
                 () -> openTab(LegacyProjectTab.ZONES, openZones),
                 tabKind(LegacyProjectTab.ZONES));
         addIconButton(x, y + 26, "branch", "luma.tab.variants",
-                () -> openTab(LegacyProjectTab.BRANCHES, openBranches),
-                tabKind(LegacyProjectTab.BRANCHES));
-        addIconButton(x + 32, y + 26, "bookmarks", "luma.action.workspaces",
-                () -> openTab(LegacyProjectTab.WORKSPACES, openWorkspaces),
-                tabKind(LegacyProjectTab.WORKSPACES));
-        addIconButton(x, y + 52, "folder", "luma.simple.share_button",
-                () -> openTab(LegacyProjectTab.PACKAGES, openPackages),
-                tabKind(LegacyProjectTab.PACKAGES));
+                () -> openTab(LegacyProjectTab.VARIANTS, openBranches),
+                tabKind(LegacyProjectTab.VARIANTS));
+        addIconButton(x + 32, y + 26, "see-changes", "luma.tab.compare",
+                this::showCompare, tabKind(LegacyProjectTab.COMPARE));
+        addIconButton(x, y + 52, "folder", "luma.tab.import_export",
+                () -> openTab(LegacyProjectTab.IMPORT_EXPORT, openPackages),
+                tabKind(LegacyProjectTab.IMPORT_EXPORT));
         addIconButton(x + 32, y + 52, "sliders", "luma.action.settings",
                 () -> openTab(LegacyProjectTab.SETTINGS, openSettings),
                 tabKind(LegacyProjectTab.SETTINGS));
-        addIconButton(x, y + 78, "trash", "luma.more.deleted_saves_title",
-                () -> openTab(LegacyProjectTab.DELETED, openDeleted),
-                tabKind(LegacyProjectTab.DELETED));
-        addIconButton(x + 32, y + 78, "unordered-list", "luma.action.more",
+        addIconButton(x, y + 78, "unordered-list", "luma.action.more",
                 () -> openTab(LegacyProjectTab.MORE, openMore),
                 tabKind(LegacyProjectTab.MORE));
     }
@@ -217,6 +203,16 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         if (minecraft.screen != this) {
             minecraft.setScreen(this);
         }
+    }
+
+    private void showCompare() {
+        if (snapshot == null) {
+            return;
+        }
+        compareController.target(snapshot.versions(), 0).ifPresent(target -> {
+            selectTab(LegacyProjectTab.COMPARE);
+            openCompare.accept(target);
+        });
     }
 
     private LumiLegacyButton.Kind tabKind(LegacyProjectTab tab) {

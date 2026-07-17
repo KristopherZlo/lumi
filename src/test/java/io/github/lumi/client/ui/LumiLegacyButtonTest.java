@@ -10,13 +10,19 @@ import org.junit.jupiter.api.Test;
 
 class LumiLegacyButtonTest {
     @Test
-    void clipsLongLabelsAndUsesBundledIconsWithoutOwo() throws Exception {
+    void matchesLegacyFlatButtonRenderingWithoutOwo() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiLegacyButton.java"));
 
         assertTrue(source.contains("font.plainSubstrByWidth"));
         assertTrue(source.contains("graphics.enableScissor"));
-        assertTrue(source.contains("textures/gui/new-icons/"));
+        assertTrue(source.contains("private static final int CONTROL_HEIGHT = 18;"));
+        assertTrue(source.contains("private static final int ICON_BUTTON_WIDTH = 26;"));
+        assertTrue(source.contains("\"textures/gui/icons/\" + iconName + \".png\""));
+        assertTrue(source.contains("\"textures/gui/icons/\" + iconName + \"_disabled.png\""));
+        assertTrue(source.contains("active ? icon : disabledIcon"));
+        assertFalse(source.contains("textures/gui/new-icons/"));
+        assertFalse(source.contains("kind.border()"));
         assertTrue(source.contains("Tooltip.create"));
         assertFalse(source.toLowerCase(Locale.ROOT).contains("owo"));
     }

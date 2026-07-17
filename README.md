@@ -22,7 +22,7 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - The same form can replace the latest version with a crash-safe Amend.
 - Another branch can be merged through the same verified apply pipeline;
   overlapping conflicts explicitly use the source branch.
-- U opens the current workspace history from the immutable server snapshot.
+- Alt+L opens the current workspace history from the immutable server snapshot.
   History exposes separate Save/Amend actions, compact version actions and a
   branch browser for Create, Switch and Merge.
 - Successful integrated Save and Amend operations capture a bounded world

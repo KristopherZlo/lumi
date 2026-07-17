@@ -1,5 +1,7 @@
 package io.github.lumi.client.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -9,7 +11,16 @@ import org.junit.jupiter.api.Test;
 
 class LumiLegacyNavigationTest {
     @Test
-    void sidebarPagesRetainTheProjectShellAndModalsRetainTheirParent() throws Exception {
+    void sidebarUsesLegacyOrderAndPagesBlockBackgroundInput() throws Exception {
+        assertEquals(List.of(
+                LegacyProjectTab.HISTORY,
+                LegacyProjectTab.ZONES,
+                LegacyProjectTab.VARIANTS,
+                LegacyProjectTab.COMPARE,
+                LegacyProjectTab.IMPORT_EXPORT,
+                LegacyProjectTab.SETTINGS,
+                LegacyProjectTab.MORE), List.of(LegacyProjectTab.values()));
+
         Path ui = Path.of("src/main/java/io/github/lumi/client/ui");
         for (String page : List.of(
                 "LumiZonesScreen.java",
@@ -26,6 +37,9 @@ class LumiLegacyNavigationTest {
 
         String modal = Files.readString(ui.resolve("LumiLegacyModalScreen.java"));
         assertTrue(modal.contains("background.render("));
-        assertTrue(modal.contains("forwardsParentInput()"));
+        assertFalse(modal.contains("background.mouseClicked("));
+        assertFalse(modal.contains("background.mouseReleased("));
+        assertFalse(Files.readString(ui.resolve("LumiLegacyPageScreen.java"))
+                .contains("forwardsParentInput"));
     }
 }

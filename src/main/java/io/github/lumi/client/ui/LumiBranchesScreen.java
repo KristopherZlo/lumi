@@ -26,7 +26,7 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
             Runnable merge,
             Consumer<String> switcher) {
         super(parent, Component.translatable("luma.variants.overview_title"),
-                LegacyProjectTab.BRANCHES);
+                LegacyProjectTab.VARIANTS);
         this.branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
         this.create = Objects.requireNonNull(create, "create");
         this.merge = Objects.requireNonNull(merge, "merge");

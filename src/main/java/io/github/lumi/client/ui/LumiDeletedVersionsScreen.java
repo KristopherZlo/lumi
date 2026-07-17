@@ -29,7 +29,7 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
             ClientHistoryStore history,
             Consumer<CommitId> cleanup) {
         super(parent, Component.translatable("luma.more.deleted_saves_title"),
-                LegacyProjectTab.DELETED);
+                LegacyProjectTab.MORE);
         this.history = Objects.requireNonNull(history, "history");
         this.cleanup = Objects.requireNonNull(cleanup, "cleanup");
     }

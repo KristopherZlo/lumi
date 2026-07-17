@@ -13,9 +13,12 @@ import net.minecraft.resources.Identifier;
 public final class LumiLegacyButton extends Button {
     private static final int TEXT = 0xfff4f1ea;
     private static final int TEXT_DISABLED = 0xff77736d;
+    private static final int CONTROL_HEIGHT = 18;
+    private static final int ICON_BUTTON_WIDTH = 26;
     private static final int ICON_TEXTURE_SIZE = 24;
     private final Kind kind;
     private final Identifier icon;
+    private final Identifier disabledIcon;
 
     public LumiLegacyButton(
             int x, int y, int width, int height,
@@ -26,10 +29,14 @@ public final class LumiLegacyButton extends Button {
     public LumiLegacyButton(
             int x, int y, int width, int height,
             Component message, OnPress onPress, Kind kind, String iconName) {
-        super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
+        super(
+                x, y, iconName == null ? width : ICON_BUTTON_WIDTH, CONTROL_HEIGHT,
+                message, onPress, DEFAULT_NARRATION);
         this.kind = kind;
         this.icon = iconName == null ? null : Identifier.fromNamespaceAndPath(
-                LumiMod.MOD_ID, "textures/gui/new-icons/" + iconName + ".png");
+                LumiMod.MOD_ID, "textures/gui/icons/" + iconName + ".png");
+        this.disabledIcon = iconName == null ? null : Identifier.fromNamespaceAndPath(
+                LumiMod.MOD_ID, "textures/gui/icons/" + iconName + "_disabled.png");
         if (icon != null) {
             setTooltip(Tooltip.create(message));
         }
@@ -39,16 +46,12 @@ public final class LumiLegacyButton extends Button {
     protected void renderContents(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         int fill = active ? kind.fill(isHoveredOrFocused()) : 0xff18191b;
-        int border = kind.border();
-        graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), border);
-        graphics.fill(
-                getX() + 1, getY() + 1,
-                getX() + getWidth() - 1, getY() + getHeight() - 1,
-                fill);
+        graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), fill);
         if (icon != null) {
-            int size = Math.min(12, Math.min(getWidth() - 4, getHeight() - 4));
+            int preferredSize = LumiUiScale.current().targetGuiScale() == 3 ? 8 : 12;
+            int size = Math.min(preferredSize, Math.min(getWidth(), getHeight()));
             graphics.blit(
-                    RenderPipelines.GUI_TEXTURED, icon,
+                    RenderPipelines.GUI_TEXTURED, active ? icon : disabledIcon,
                     getX() + (getWidth() - size) / 2,
                     getY() + (getHeight() - size) / 2,
                     0, 0, size, size,
@@ -77,27 +80,21 @@ public final class LumiLegacyButton extends Button {
     }
 
     public enum Kind {
-        NORMAL(0xff2a292c, 0xff39363a, 0xff45413a),
-        PRIMARY(0xff7a5a21, 0xff936d29, 0xffd9b86c),
-        DANGER(0xff7a2424, 0xff963030, 0xffff8585),
-        SELECTED(0xff24211b, 0xff302a20, 0xffe0b95a);
+        NORMAL(0xff2a292c, 0xff39363a),
+        PRIMARY(0xff7a5a21, 0xff936d29),
+        DANGER(0xff7a2424, 0xff963030),
+        SELECTED(0xff211f18, 0xff211f18);
 
         private final int fill;
         private final int hover;
-        private final int border;
 
-        Kind(int fill, int hover, int border) {
+        Kind(int fill, int hover) {
             this.fill = fill;
             this.hover = hover;
-            this.border = border;
         }
 
         int fill(boolean hovered) {
             return hovered ? hover : fill;
-        }
-
-        int border() {
-            return border;
         }
     }
 }

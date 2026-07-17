@@ -7,6 +7,8 @@ import net.minecraft.network.chat.Component;
 
 /** Secondary client-only tools kept away from the main history workflow. */
 public final class LumiMoreScreen extends LumiLegacyPageScreen {
+    private final Runnable workspaces;
+    private final Runnable deletedVersions;
     private final Runnable onboarding;
     private final Runnable hotkeys;
     private final Runnable thanks;
@@ -20,6 +22,8 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
 
     public LumiMoreScreen(
             Screen parent,
+            Runnable workspaces,
+            Runnable deletedVersions,
             Runnable onboarding,
             Runnable hotkeys,
             Runnable thanks,
@@ -28,6 +32,9 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
             Runnable updates) {
         super(parent, Component.translatable("luma.screen.more.title"),
                 LegacyProjectTab.MORE);
+        this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
+        this.deletedVersions = Objects.requireNonNull(
+                deletedVersions, "deletedVersions");
         this.onboarding = Objects.requireNonNull(onboarding, "onboarding");
         this.hotkeys = Objects.requireNonNull(hotkeys, "hotkeys");
         this.thanks = Objects.requireNonNull(thanks, "thanks");
@@ -44,13 +51,14 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         panelY = page.windowY();
         panelWidth = page.contentWidth();
         panelHeight = page.windowHeight();
-        button("luma.more.onboarding_title", onboarding, 66);
-        button("luma.hotkeys.title", hotkeys, 100);
-        button("luma.more.special_thanks_title", thanks, 134);
-        button("luma.action.open_diagnostics", diagnostics, 168);
-        button("luma.action.settings", settings, 202);
-        button("luma.action.check_updates", updates, 236);
-        button("luma.action.close", this::onClose, 270);
+        button("luma.action.workspaces", workspaces, 58);
+        button("luma.more.deleted_saves_title", deletedVersions, 86);
+        button("luma.more.onboarding_title", onboarding, 114);
+        button("luma.hotkeys.title", hotkeys, 142);
+        button("luma.more.special_thanks_title", thanks, 170);
+        button("luma.action.open_diagnostics", diagnostics, 198);
+        button("luma.action.settings", settings, 226);
+        button("luma.action.check_updates", updates, 254);
     }
 
     private void button(String key, Runnable action, int offset) {
@@ -63,8 +71,8 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
         renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
-        renderLegacyPanel(graphics, panelX + 12, panelY + 58,
-                panelWidth - 24, 206);
+        renderLegacyPanel(graphics, panelX + 12, panelY + 50,
+                panelWidth - 24, panelHeight - 62);
         graphics.drawString(font, title, panelX + 16, panelY + 18,
                 LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.more.help"),

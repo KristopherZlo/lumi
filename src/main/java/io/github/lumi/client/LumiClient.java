@@ -82,10 +82,7 @@ public final class LumiClient implements ClientModInitializer {
                                         SaveScreenController.Intent.AMEND,
                                         latestVersionMessage()),
                                 LumiClient::openBranches,
-                                LumiClient::openWorkspaces,
                                 LumiClient::openZones,
-                                parent -> client.setScreen(new LumiDeletedVersionsScreen(
-                                        parent, HISTORY, NETWORKING::cleanupVersion)),
                                 parent -> client.setScreen(new LumiPackageScreen(
                                         parent, new PackageScreenController(
                                                 NETWORKING::exportPackage,
@@ -226,6 +223,9 @@ public final class LumiClient implements ClientModInitializer {
         Minecraft client = Minecraft.getInstance();
         client.setScreen(new LumiMoreScreen(
                 parent,
+                () -> openWorkspaces(client.screen),
+                () -> client.setScreen(new LumiDeletedVersionsScreen(
+                        client.screen, HISTORY, NETWORKING::cleanupVersion)),
                 () -> client.setScreen(new LumiOnboardingScreen(
                         client.screen, LumiClient::completeOnboarding)),
                 () -> client.setScreen(new LumiHotkeyScreen(
