@@ -17,6 +17,8 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
     private final ClientHistoryStore history;
     private final SaveScreenController controller;
     private final Runnable refresh;
+    private final SaveScreenController.Intent preferredIntent;
+    private final String initialMessage;
     private LegacyModalLayout layout;
     private EditBox message;
     private LumiLegacyButton save;
@@ -28,11 +30,24 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
             ClientHistoryStore history,
             SaveScreenController controller,
             Runnable refresh) {
+        this(parent, history, controller, refresh,
+                SaveScreenController.Intent.SAVE, "");
+    }
+
+    public LumiSaveScreen(
+            Screen parent,
+            ClientHistoryStore history,
+            SaveScreenController controller,
+            Runnable refresh,
+            SaveScreenController.Intent preferredIntent,
+            String initialMessage) {
         super(Component.translatable("luma.screen.save.title"));
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
         this.controller = Objects.requireNonNull(controller, "controller");
         this.refresh = Objects.requireNonNull(refresh, "refresh");
+        this.preferredIntent = Objects.requireNonNull(preferredIntent, "preferredIntent");
+        this.initialMessage = Objects.requireNonNull(initialMessage, "initialMessage");
     }
 
     @Override
@@ -43,9 +58,10 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         int actionY = y + layout.height() - 28;
         int fieldY = y + 65;
 
-        addLegacyButton(x + layout.width() - 24, y + 6, 18,
-                Component.literal("×"), this::onClose, LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x + layout.width() - 112, y + 34, 100,
+        addLegacyIconButton(x + layout.width() - 32, y + 6, "close",
+                Component.translatable("luma.action.close"),
+                this::onClose, LumiLegacyButton.Kind.NORMAL);
+        addLegacyIconButton(x + layout.width() - 32, y + 34, "see-changes",
                 Component.translatable("luma.action.refresh_preview"),
                 this::refreshPreview, LumiLegacyButton.Kind.NORMAL);
 
@@ -58,21 +74,24 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         message.setTextColor(LegacyLumiTheme.TEXT);
         message.setResponder(value -> setSubmitActive(!value.trim().isEmpty()));
         addRenderableWidget(message);
+        message.setValue(initialMessage);
 
         int contentWidth = layout.width() - 12;
         int buttonWidth = (contentWidth - 8) / 3;
         save = addLegacyButton(x + 6, actionY, buttonWidth,
                 Component.translatable("luma.action.save_build"),
                 () -> submit(SaveScreenController.Intent.SAVE),
-                LumiLegacyButton.Kind.PRIMARY);
+                preferredIntent == SaveScreenController.Intent.SAVE
+                        ? LumiLegacyButton.Kind.PRIMARY : LumiLegacyButton.Kind.NORMAL);
         amend = addLegacyButton(x + 10 + buttonWidth, actionY, buttonWidth,
                 Component.translatable("luma.action.amend_version"),
                 () -> submit(SaveScreenController.Intent.AMEND),
-                LumiLegacyButton.Kind.NORMAL);
+                preferredIntent == SaveScreenController.Intent.AMEND
+                        ? LumiLegacyButton.Kind.PRIMARY : LumiLegacyButton.Kind.NORMAL);
         addLegacyButton(x + 14 + buttonWidth * 2, actionY, buttonWidth,
                 Component.translatable("luma.action.cancel"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
-        setSubmitActive(false);
+        setSubmitActive(!initialMessage.trim().isEmpty());
         refreshPreview();
     }
 
@@ -97,7 +116,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
     public boolean keyPressed(KeyEvent event) {
         if ((event.key() == InputConstants.KEY_RETURN
                 || event.key() == InputConstants.KEY_NUMPADENTER) && save.active) {
-            submit(SaveScreenController.Intent.SAVE);
+            submit(preferredIntent);
             return true;
         }
         return super.keyPressed(event);
