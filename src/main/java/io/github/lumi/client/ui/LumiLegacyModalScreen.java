@@ -17,6 +17,13 @@ abstract class LumiLegacyModalScreen extends Screen {
                 x, y, width, 20, label, ignored -> action.run(), kind));
     }
 
+    protected final LumiLegacyButton addLegacyIconButton(
+            int x, int y, String icon, Component label,
+            Runnable action, LumiLegacyButton.Kind kind) {
+        return addRenderableWidget(new LumiLegacyButton(
+                x, y, 26, 20, label, ignored -> action.run(), kind, icon));
+    }
+
     protected final void renderLegacyWindow(
             GuiGraphics graphics, int x, int y, int width, int height) {
         graphics.fill(0, 0, this.width, this.height, LegacyLumiTheme.BACKDROP);

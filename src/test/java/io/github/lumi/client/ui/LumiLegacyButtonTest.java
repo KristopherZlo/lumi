@@ -1,0 +1,23 @@
+package io.github.lumi.client.ui;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Locale;
+import org.junit.jupiter.api.Test;
+
+class LumiLegacyButtonTest {
+    @Test
+    void clipsLongLabelsAndUsesBundledIconsWithoutOwo() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiLegacyButton.java"));
+
+        assertTrue(source.contains("font.plainSubstrByWidth"));
+        assertTrue(source.contains("graphics.enableScissor"));
+        assertTrue(source.contains("textures/gui/new-icons/"));
+        assertTrue(source.contains("Tooltip.create"));
+        assertFalse(source.toLowerCase(Locale.ROOT).contains("owo"));
+    }
+}

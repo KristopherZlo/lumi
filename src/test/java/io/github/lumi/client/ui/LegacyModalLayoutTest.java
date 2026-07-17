@@ -18,4 +18,14 @@ class LegacyModalLayoutTest {
         assertEquals(10, narrow.y());
         assertEquals(160, narrow.height());
     }
+
+    @Test
+    void usesTheWholeViewportWhenMarginsDoNotFit() {
+        LegacyModalLayout layout = LegacyModalLayout.fit(12, 12, 260);
+
+        assertEquals(6, layout.x());
+        assertEquals(6, layout.y());
+        assertEquals(0, layout.width());
+        assertEquals(0, layout.height());
+    }
 }

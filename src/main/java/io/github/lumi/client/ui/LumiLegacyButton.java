@@ -1,21 +1,38 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.LumiMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 /** Flat legacy Lumi control used instead of Minecraft's textured button. */
 public final class LumiLegacyButton extends Button {
     private static final int TEXT = 0xfff4f1ea;
     private static final int TEXT_DISABLED = 0xff77736d;
+    private static final int ICON_TEXTURE_SIZE = 24;
     private final Kind kind;
+    private final Identifier icon;
 
     public LumiLegacyButton(
             int x, int y, int width, int height,
             Component message, OnPress onPress, Kind kind) {
+        this(x, y, width, height, message, onPress, kind, null);
+    }
+
+    public LumiLegacyButton(
+            int x, int y, int width, int height,
+            Component message, OnPress onPress, Kind kind, String iconName) {
         super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
         this.kind = kind;
+        this.icon = iconName == null ? null : Identifier.fromNamespaceAndPath(
+                LumiMod.MOD_ID, "textures/gui/new-icons/" + iconName + ".png");
+        if (icon != null) {
+            setTooltip(Tooltip.create(message));
+        }
     }
 
     @Override
@@ -28,12 +45,35 @@ public final class LumiLegacyButton extends Button {
                 getX() + 1, getY() + 1,
                 getX() + getWidth() - 1, getY() + getHeight() - 1,
                 fill);
+        if (icon != null) {
+            int size = Math.min(12, Math.min(getWidth() - 4, getHeight() - 4));
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED, icon,
+                    getX() + (getWidth() - size) / 2,
+                    getY() + (getHeight() - size) / 2,
+                    0, 0, size, size,
+                    ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE,
+                    ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE);
+            return;
+        }
+        var font = Minecraft.getInstance().font;
+        int available = Math.max(0, getWidth() - 8);
+        String label = getMessage().getString();
+        if (font.width(label) > available) {
+            String suffix = available >= font.width("…") ? "…" : "";
+            label = font.plainSubstrByWidth(
+                    label, Math.max(0, available - font.width(suffix))) + suffix;
+            setTooltip(Tooltip.create(getMessage()));
+        }
+        graphics.enableScissor(
+                getX() + 2, getY() + 1,
+                getX() + getWidth() - 2, getY() + getHeight() - 1);
         graphics.drawCenteredString(
-                Minecraft.getInstance().font,
-                getMessage(),
+                font, label,
                 getX() + getWidth() / 2,
                 getY() + (getHeight() - 8) / 2,
                 active ? TEXT : TEXT_DISABLED);
+        graphics.disableScissor();
     }
 
     public enum Kind {
