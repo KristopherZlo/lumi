@@ -128,6 +128,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         private List<UUID> entityRemovals = List.of();
         private int entityRemovalIndex;
         private int entityAddIndex;
+        private boolean entitiesApplied;
         private boolean playerSpawnsApplied;
         private Phase phase = Phase.BLOCKS;
 
@@ -141,8 +142,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         private void step() throws IOException {
             if (sectionIndex < sections.size()) {
                 stepSection();
-            } else if (entityIndex < entities.size()) {
-                stepEntityChunk();
+            } else if (!entitiesApplied) {
+                stepEntities();
             } else if (!playerSpawnsApplied) {
                 world.applyPlayerSpawns(target.source().playerSpawns());
                 playerSpawnsApplied = true;
@@ -181,26 +182,48 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             }
         }
 
-        private void stepEntityChunk() throws IOException {
+        private void stepEntities() throws IOException {
+            if (phase == Phase.ADD_ENTITIES) {
+                addEntity();
+                return;
+            }
+            removeEntity();
+        }
+
+        private void removeEntity() throws IOException {
+            if (entityIndex == entities.size()) {
+                entityIndex = 0;
+                phase = Phase.ADD_ENTITIES;
+                return;
+            }
             var entityChunk = entities.get(entityIndex);
-            if (phase != Phase.REMOVE_ENTITIES && phase != Phase.ADD_ENTITIES) {
+            if (phase != Phase.REMOVE_ENTITIES) {
                 entityRemovals = world.durableEntityIds(entityChunk.getKey());
                 phase = Phase.REMOVE_ENTITIES;
             } else if (phase == Phase.REMOVE_ENTITIES
                     && entityRemovalIndex < entityRemovals.size()) {
                 world.removeEntity(
                         entityChunk.getKey(), entityRemovals.get(entityRemovalIndex++));
-            } else if (phase == Phase.REMOVE_ENTITIES) {
-                phase = Phase.ADD_ENTITIES;
-            } else if (entityAddIndex < entityChunk.getValue().entities().size()) {
-                world.addEntity(entityChunk.getKey(),
-                        entityChunk.getValue().entities().get(entityAddIndex++));
             } else {
                 entityIndex++;
                 entityRemovals = List.of();
                 entityRemovalIndex = 0;
-                entityAddIndex = 0;
                 phase = Phase.BLOCKS;
+            }
+        }
+
+        private void addEntity() throws IOException {
+            if (entityIndex == entities.size()) {
+                entitiesApplied = true;
+                return;
+            }
+            var entityChunk = entities.get(entityIndex);
+            if (entityAddIndex < entityChunk.getValue().entities().size()) {
+                world.addEntity(entityChunk.getKey(),
+                        entityChunk.getValue().entities().get(entityAddIndex++));
+            } else {
+                entityIndex++;
+                entityAddIndex = 0;
             }
         }
     }

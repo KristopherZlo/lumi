@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.minecraft.world.DimensionFreeze;
 import java.io.IOException;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -95,6 +96,25 @@ class BackgroundPreparedMutationTest {
         assertEquals(MutationTerminalState.DEGRADED, prepared.terminalState());
         assertEquals(0, freeze.releaseCalls);
         assertTrue(coordinator.hasActiveOperation());
+    }
+
+    @Test
+    void exposesPreparedDelegateFailure() throws Exception {
+        IOException failure = new IOException("restore mismatch");
+        DimensionMutation delegate = new DimensionMutation() {
+            @Override public void advance(long deadlineNanos) { }
+            @Override public boolean isTerminal() { return true; }
+            @Override public boolean isSafeToRelease() { return false; }
+            @Override public Optional<Throwable> failure() { return Optional.of(failure); }
+        };
+        BackgroundPreparedMutation<DimensionMutation> prepared =
+                new BackgroundPreparedMutation<>(
+                        CompletableFuture.completedFuture(delegate),
+                        () -> { }, ignored -> { });
+
+        prepared.advance(Long.MAX_VALUE);
+
+        assertEquals(failure, prepared.failure().orElseThrow());
     }
 
     @Test

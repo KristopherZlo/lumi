@@ -34,6 +34,7 @@ public final class RestoreOperation implements DimensionMutation {
     private WorldStateApply.ApplySession returnSession;
     private OperationJournal journal;
     private RestoreStatus status = RestoreStatus.APPLYING;
+    private IOException failure;
     private boolean targetRepairAttempted;
     private boolean returnRepairAttempted;
     private ReturnPhase returnPhase;
@@ -358,7 +359,8 @@ public final class RestoreOperation implements DimensionMutation {
             case VERIFIED -> publishTarget();
             case MISMATCH -> {
                 if (targetRepairAttempted) {
-                    beginReturn();
+                    beginReturnAfter(new IOException(
+                            "Restore target still mismatched after repair"));
                 } else {
                     targetRepairAttempted = true;
                     status = RestoreStatus.REPAIRING;
@@ -408,6 +410,7 @@ public final class RestoreOperation implements DimensionMutation {
     }
 
     private void beginReturnAfter(IOException targetFailure) throws IOException {
+        failure = targetFailure;
         try {
             beginReturn();
         } catch (IOException returnFailure) {
@@ -417,34 +420,50 @@ public final class RestoreOperation implements DimensionMutation {
     }
 
     private void returnToPreviousState(long deadlineNanos) throws IOException {
-        if (returnPhase == ReturnPhase.APPLYING && returnSession.applyUntil(deadlineNanos)) {
-            returnPhase = ReturnPhase.VERIFYING;
-        } else if (returnPhase == ReturnPhase.VERIFYING) {
-            WorldStateApply.Verification verification = returnSession.verifyUntil(deadlineNanos);
-            if (verification == WorldStateApply.Verification.VERIFIED) {
-                journal = journals.advance(journal, OperationPhase.COMPLETE);
-                journals.clear(journal);
-                returnSession.close();
-                status = RestoreStatus.RETURNED;
-                stateListener.returned(preparedReturn.source());
-            } else if (verification == WorldStateApply.Verification.MISMATCH) {
-                if (returnRepairAttempted) {
-                    journal = journals.advance(journal, OperationPhase.DEGRADED);
-                    status = RestoreStatus.DEGRADED;
-                } else {
-                    returnRepairAttempted = true;
-                    returnPhase = ReturnPhase.REPAIRING;
+        try {
+            if (returnPhase == ReturnPhase.APPLYING && returnSession.applyUntil(deadlineNanos)) {
+                returnPhase = ReturnPhase.VERIFYING;
+            } else if (returnPhase == ReturnPhase.VERIFYING) {
+                WorldStateApply.Verification verification = returnSession.verifyUntil(deadlineNanos);
+                if (verification == WorldStateApply.Verification.VERIFIED) {
+                    journal = journals.advance(journal, OperationPhase.COMPLETE);
+                    journals.clear(journal);
+                    returnSession.close();
+                    status = RestoreStatus.RETURNED;
+                    stateListener.returned(preparedReturn.source());
+                } else if (verification == WorldStateApply.Verification.MISMATCH) {
+                    if (returnRepairAttempted) {
+                        var mismatch = new IOException(
+                                "Restore return state still mismatched after repair");
+                        mismatch.addSuppressed(failure);
+                        failure = mismatch;
+                        journal = journals.advance(journal, OperationPhase.DEGRADED);
+                        status = RestoreStatus.DEGRADED;
+                    } else {
+                        returnRepairAttempted = true;
+                        returnPhase = ReturnPhase.REPAIRING;
+                    }
                 }
+            } else if (returnPhase == ReturnPhase.REPAIRING
+                    && returnSession.repairUntil(deadlineNanos)) {
+                returnSession.restartVerification();
+                returnPhase = ReturnPhase.VERIFYING;
             }
-        } else if (returnPhase == ReturnPhase.REPAIRING
-                && returnSession.repairUntil(deadlineNanos)) {
-            returnSession.restartVerification();
-            returnPhase = ReturnPhase.VERIFYING;
+        } catch (IOException returnFailure) {
+            if (failure != null && returnFailure != failure) {
+                returnFailure.addSuppressed(failure);
+            }
+            throw returnFailure;
         }
     }
 
     public RestoreStatus status() {
         return status;
+    }
+
+    @Override
+    public Optional<Throwable> failure() {
+        return Optional.ofNullable(failure);
     }
 
     @Override

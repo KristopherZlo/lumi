@@ -81,6 +81,40 @@ class PreparedWorldMutationSessionTest {
     }
 
     @Test
+    void removesEveryAffectedEntityBeforeAddingMovedEntities() throws Exception {
+        EntityChunkKey first = new EntityChunkKey(4, -2);
+        EntityChunkKey second = new EntityChunkKey(5, -2);
+        UUID firstOld = new UUID(0, 1);
+        UUID secondOld = new UUID(0, 2);
+        UUID firstTarget = new UUID(0, 3);
+        UUID secondTarget = new UUID(0, 4);
+        var emptyNbt = MinecraftNbtCodec.encode(new net.minecraft.nbt.CompoundTag());
+        var firstSource = new EntityChunkBlob(List.of(
+                new EntityState(firstTarget, "minecraft:armor_stand", emptyNbt)));
+        var secondSource = new EntityChunkBlob(List.of(
+                new EntityState(secondTarget, "minecraft:armor_stand", emptyNbt)));
+        var decoder = new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE);
+        PreparedMinecraftState target = new PreparedMinecraftState(
+                new WorldStateApply.State(Map.of(), Map.of(
+                        first, firstSource, second, secondSource)),
+                Map.of(), Map.of(
+                        first, decoder.decode(firstSource),
+                        second, decoder.decode(secondSource)));
+        FakeWorld world = new FakeWorld(new AtomicLong(), null);
+        world.entityIdsByChunk = Map.of(
+                first, List.of(firstOld),
+                second, List.of(secondOld));
+        PreparedWorldMutationSession session =
+                new PreparedWorldMutationSession(target, world, () -> 0L);
+
+        assertTrue(session.applyUntil(Long.MAX_VALUE));
+        assertTrue(world.entityMutations.subList(0, 2).stream()
+                .allMatch(mutation -> mutation.startsWith("remove:")));
+        assertTrue(world.entityMutations.subList(2, 4).stream()
+                .allMatch(mutation -> mutation.startsWith("add:")));
+    }
+
+    @Test
     void appliesAndVerifiesSavedPlayerSpawns() throws Exception {
         UUID player = UUID.fromString("10000000-0000-0000-0000-000000000001");
         PlayerSpawn spawn = new PlayerSpawn(8, 72, -3, 45.0F, 5.0F, true);
@@ -130,9 +164,11 @@ class PreparedWorldMutationSessionTest {
         private final SectionBlob captured;
         private int sectionWrites;
         private List<UUID> entityIds = List.of();
+        private Map<EntityChunkKey, List<UUID>> entityIdsByChunk = Map.of();
         private EntityChunkBlob capturedEntities = new EntityChunkBlob(List.of());
         private final List<UUID> removedEntities = new ArrayList<>();
         private final List<UUID> addedEntities = new ArrayList<>();
+        private final List<String> entityMutations = new ArrayList<>();
         private Map<UUID, PlayerSpawn> playerSpawns = Map.of();
 
         private FakeWorld(AtomicLong clock, SectionBlob captured) {
@@ -149,13 +185,17 @@ class PreparedWorldMutationSessionTest {
         @Override public void loadBlockEntity(
                 SectionKey key, int localIndex, net.minecraft.nbt.CompoundTag nbt) { }
         @Override public SectionBlob captureSection(SectionKey key) { return captured; }
-        @Override public List<UUID> durableEntityIds(EntityChunkKey key) { return entityIds; }
+        @Override public List<UUID> durableEntityIds(EntityChunkKey key) {
+            return entityIdsByChunk.getOrDefault(key, entityIds);
+        }
         @Override public void removeEntity(EntityChunkKey key, UUID id) {
             removedEntities.add(id);
+            entityMutations.add("remove:" + id);
             clock.incrementAndGet();
         }
         @Override public void addEntity(EntityChunkKey key, DecodedEntity entity) {
             addedEntities.add(entity.id());
+            entityMutations.add("add:" + entity.id());
             clock.incrementAndGet();
         }
         @Override public EntityChunkBlob captureEntities(EntityChunkKey key) {

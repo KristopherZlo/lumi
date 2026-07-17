@@ -86,7 +86,8 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
 
     @Override
     public Optional<Throwable> failure() {
-        return Optional.ofNullable(failure);
+        return failure != null ? Optional.of(failure)
+                : delegate == null ? Optional.empty() : delegate.failure();
     }
 
     @Override public OperationProgress progress() {

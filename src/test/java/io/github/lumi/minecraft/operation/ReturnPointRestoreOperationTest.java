@@ -14,6 +14,7 @@ import io.github.lumi.domain.service.CapturedWorldState;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SaveResult;
 import io.github.lumi.minecraft.world.DimensionFreeze;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Map;
@@ -86,6 +87,31 @@ class ReturnPointRestoreOperationTest {
     }
 
     @Test
+    void exposesPreparedRestoreFailure() throws Exception {
+        WorkingIndexSnapshot clean = WorkingIndexSnapshot.empty();
+        SaveResult returnPoint = new SaveResult(
+                id('2'), new BranchRef(new BranchName("main"), id('2'), 1), clean);
+        SaveCaptureOperation save = new SaveCaptureOperation(
+                request(), clean,
+                dirty -> immediateCapture(new CapturedWorldState(
+                        Map.of(), Map.of(), clean,
+                        new io.github.lumi.domain.model.CommitStatistics(0, 0, 0, 0))),
+                (request, captured) -> returnPoint, ignored -> { }, Runnable::run);
+        IOException failure = new IOException("restore mismatch");
+        DimensionMutation restore = new CompleteMutation() {
+            @Override public Optional<Throwable> failure() { return Optional.of(failure); }
+        };
+        ReturnPointRestoreOperation operation = new ReturnPointRestoreOperation(
+                save, ignored -> CompletableFuture.completedFuture(restore));
+
+        operation.advance(Long.MAX_VALUE);
+        operation.advance(Long.MAX_VALUE);
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(failure, operation.failure().orElseThrow());
+    }
+
+    @Test
     void cancelsNestedReturnPointCaptureBeforePublication() throws Exception {
         WorkingIndexSnapshot clean = WorkingIndexSnapshot.empty();
         int[] closes = {0};
@@ -134,7 +160,7 @@ class ReturnPointRestoreOperationTest {
         return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
     }
 
-    private static final class CompleteMutation implements DimensionMutation {
+    private static class CompleteMutation implements DimensionMutation {
         private boolean complete;
         @Override public void advance(long deadlineNanos) { complete = true; }
         @Override public boolean isTerminal() { return complete; }

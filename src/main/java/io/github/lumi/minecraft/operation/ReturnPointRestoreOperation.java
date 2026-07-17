@@ -76,7 +76,8 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
 
     @Override
     public Optional<Throwable> failure() {
-        return Optional.ofNullable(failure);
+        return failure != null ? Optional.of(failure)
+                : restore == null ? Optional.empty() : restore.failure();
     }
 
     @Override
