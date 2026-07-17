@@ -24,6 +24,9 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.vehicle.minecart.MinecartChest;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 
@@ -61,17 +64,22 @@ public final class LumiHistoryGameTests {
         UUID lease = UUID.randomUUID();
         AtomicReference<Entity> entity = new AtomicReference<>();
         AtomicReference<CommitId> withEntity = new AtomicReference<>();
+        AtomicReference<CommitId> changedEntity = new AtomicReference<>();
         AtomicReference<CommitId> withoutEntity = new AtomicReference<>();
         AtomicReference<UUID> zoneId = new AtomicReference<>();
         AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
         AtomicReference<DimensionMutation> current = new AtomicReference<>();
 
         helper.startSequence()
-                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, lease))
+                .thenWaitUntil(() -> acquireZone(
+                        helper, runtime, lease, zoneId,
+                        helper.absolutePos(new BlockPos(2, 2, 2))))
                 .thenExecute(() -> {
-                    zoneId.set(createZone(helper, runtime));
-                    entity.set(helper.spawn(
-                            EntityType.ARMOR_STAND, new BlockPos(2, 2, 2)));
+                    MinecartChest cart = helper.spawn(
+                            EntityType.CHEST_MINECART, new BlockPos(2, 2, 2));
+                    cart.setNoGravity(true);
+                    cart.setItem(0, new ItemStack(Items.DIAMOND, 7));
+                    entity.set(cart);
                     startSave(
                             helper, runtime, zoneId.get(), "With entity",
                             terminal, current);
@@ -80,7 +88,40 @@ public final class LumiHistoryGameTests {
                 .thenExecute(() -> {
                     requireSucceeded(helper, terminal.get(), "Save with entity");
                     withEntity.set(activeCommit(helper, runtime));
-                    entity.get().discard();
+                    ((MinecartChest) entity.get()).setItem(
+                            0, new ItemStack(Items.EMERALD, 3));
+                    startSave(
+                            helper, runtime, zoneId.get(), "Changed entity",
+                            terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Save changed entity");
+                    changedEntity.set(activeCommit(helper, runtime));
+                    startRestore(
+                            helper, runtime, withEntity.get(), zoneId.get(),
+                            terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Restore with entity");
+                    assertMinecart(
+                            helper, entity.get().getUUID(),
+                            new ItemStack(Items.DIAMOND, 7));
+                    helper.assertEntityNotPresent(EntityType.ITEM);
+                    startRestore(
+                            helper, runtime, changedEntity.get(), zoneId.get(),
+                            terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Restore changed entity");
+                    MinecartChest cart = assertMinecart(
+                            helper, entity.get().getUUID(),
+                            new ItemStack(Items.EMERALD, 3));
+                    helper.assertEntityNotPresent(EntityType.ITEM);
+                    cart.clearContent();
+                    cart.discard();
                     startSave(
                             helper, runtime, zoneId.get(), "Without entity",
                             terminal, current);
@@ -95,25 +136,37 @@ public final class LumiHistoryGameTests {
                 })
                 .thenWaitUntil(() -> requireIdle(helper, runtime, current))
                 .thenExecute(() -> {
-                    requireSucceeded(helper, terminal.get(), "Restore with entity");
-                    helper.assertFalse(
-                            helper.getLevel().getEntityInAnyDimension(
-                                    entity.get().getUUID()) == null,
-                            "Restore did not recreate the durable entity");
+                    requireSucceeded(helper, terminal.get(), "Restore added entity");
+                    assertMinecart(
+                            helper, entity.get().getUUID(),
+                            new ItemStack(Items.DIAMOND, 7));
+                    helper.assertEntityNotPresent(EntityType.ITEM);
                     startRestore(
                             helper, runtime, withoutEntity.get(), zoneId.get(),
                             terminal, current);
                 })
                 .thenWaitUntil(() -> requireIdle(helper, runtime, current))
                 .thenExecute(() -> {
-                    requireSucceeded(helper, terminal.get(), "Restore without entity");
+                    requireSucceeded(helper, terminal.get(), "Restore removed entity");
                     Entity restored = helper.getLevel().getEntityInAnyDimension(
                             entity.get().getUUID());
                     helper.assertTrue(restored == null || restored.isRemoved(),
                             "Restore left a durable entity absent from the target");
+                    helper.assertEntityNotPresent(EntityType.ITEM);
                 })
                 .thenExecute(() -> LumiGameTestLease.release(lease))
                 .thenSucceed();
+    }
+
+    private static MinecartChest assertMinecart(
+            GameTestHelper helper, UUID id, ItemStack expected) {
+        Entity restored = helper.getLevel().getEntityInAnyDimension(id);
+        helper.assertTrue(restored instanceof MinecartChest,
+                "Restore did not recreate the chest minecart");
+        MinecartChest cart = (MinecartChest) restored;
+        helper.assertTrue(ItemStack.matches(expected, cart.getItem(0)),
+                "Restore changed chest-minecart inventory");
+        return cart;
     }
 
     @GameTest(maxTicks = 300000)
@@ -131,9 +184,9 @@ public final class LumiHistoryGameTests {
         AtomicReference<CompletableFuture<?>> chunkLoad = new AtomicReference<>();
 
         helper.startSequence()
-                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, lease))
+                .thenWaitUntil(() -> acquireZone(
+                        helper, runtime, lease, zoneId, target))
                 .thenExecute(() -> {
-                    zoneId.set(createZone(helper, runtime, target));
                     chunkLoad.set(loadChunk(level, chunk));
                 })
                 .thenWaitUntil(() -> requireLoaded(helper, level, chunk, chunkLoad.get()))
@@ -238,10 +291,16 @@ public final class LumiHistoryGameTests {
         }
     }
 
-    private static UUID createZone(
-            GameTestHelper helper, FabricDimensionRuntime runtime) {
-        BlockPos position = helper.absolutePos(new BlockPos(2, 2, 2));
-        return createZone(helper, runtime, position);
+    private static void acquireZone(
+            GameTestHelper helper,
+            FabricDimensionRuntime runtime,
+            UUID lease,
+            AtomicReference<UUID> zoneId,
+            BlockPos position) {
+        LumiGameTestLease.acquire(helper, lease);
+        if (zoneId.get() == null) {
+            zoneId.set(createZone(helper, runtime, position));
+        }
     }
 
     private static UUID createZone(

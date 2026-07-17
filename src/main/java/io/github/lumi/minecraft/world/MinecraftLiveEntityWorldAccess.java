@@ -57,7 +57,8 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
         find(entityId).ifPresent(entity -> {
             var graph = entity.getSelfAndPassengers()
                     .filter(member -> !(member instanceof Player)).toList();
-            freeze.runAuthorized(() -> graph.forEach(Entity::discard));
+            freeze.runAuthorized(() -> graph.forEach(member ->
+                    member.setRemoved(Entity.RemovalReason.UNLOADED_WITH_PLAYER)));
         });
         if (replacement.isEmpty()) {
             return;

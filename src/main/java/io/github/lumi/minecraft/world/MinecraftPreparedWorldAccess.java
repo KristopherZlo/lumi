@@ -108,7 +108,8 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
                         () -> new IOException("Restored entity disappeared before removal: " + id));
         List<Entity> graph = entity.getSelfAndPassengers()
                 .filter(member -> !(member instanceof Player)).toList();
-        freeze.runAuthorized(() -> graph.forEach(Entity::discard));
+        freeze.runAuthorized(() -> graph.forEach(member ->
+                member.setRemoved(Entity.RemovalReason.UNLOADED_WITH_PLAYER)));
     }
 
     @Override
