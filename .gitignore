@@ -1,13 +1,20 @@
 .gradle/
 .gradle-user/
+.gradle-sandbox/
 build/
 run/
 logs/
 out/
+.tmp/
+.worktrees/
+structures/
+.superpowers/
 
 *.log
 *.tmp
 *.class
+.graphify_*.json
+.graphify_*.txt
 hs_err_pid*
 replay_pid*
 
