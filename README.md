@@ -29,8 +29,9 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   thumbnail for their new history entry; missing previews fall back safely.
 - First-run onboarding opens once per client installation and remains replayable
   from More; Alt+I opens the live hotkey guide.
-- Diagnostic telemetry is bounded to an explicit technical allowlist, disclosed
-  once and controllable from More > Settings.
+- More > Settings persists whether work-zone saves join active-workspace
+  history and whether full Restore includes durable entities by default.
+  Diagnostic telemetry remains a separate client-local allowlisted control.
 - More > Check updates performs a manual bounded lookup against Lumi's fixed
   GitHub-hosted release manifest.
 - A one-time native Minecraft world backup can be requested before first V2

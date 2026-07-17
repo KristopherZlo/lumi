@@ -451,6 +451,8 @@
   "luma.settings.history_help": "Настраивает, какие сохранения видны в глобальной истории.",
   "luma.settings.show_hidden_commits": "Показывать скрытые сохранения",
   "luma.settings.show_hidden_commits_help": "Показывать сохранения зон в общей истории проекта.",
+  "luma.settings.restore_entities": "Восстанавливать сущности по умолчанию",
+  "luma.settings.restore_entities_help": "Включать сохранённые сущности, кроме игроков, в обычное полное восстановление. Это можно изменить в окне подтверждения.",
   "luma.settings.debug_title": "Отладка",
   "luma.settings.debug_help": "Подробная трассировка для захвата, сохранения, восстановления, сравнения, HUD и фоновых операций.",
   "luma.settings.debug_logging": "Ведение журнала отладки",

@@ -91,7 +91,8 @@ public final class LumiClient implements ClientModInitializer {
                                                 NETWORKING::inspectPackage))),
                                 LumiClient::openMore,
                                 parent -> client.setScreen(new LumiSettingsScreen(
-                                        parent, TELEMETRY)),
+                                        parent, HISTORY, TELEMETRY,
+                                        NETWORKING::updateWorkspaceSettings)),
                                 () -> {
                                     NETWORKING.refreshSnapshot();
                                     showFeedback("luma.hotkeys.pending_preview_help");
@@ -259,7 +260,9 @@ public final class LumiClient implements ClientModInitializer {
                         LumiHotkeys.shortcuts(client.options.keyMappings))),
                 () -> client.setScreen(new LumiSpecialThanksScreen(client.screen)),
                 () -> client.setScreen(new LumiDiagnosticsScreen(client.screen, HISTORY)),
-                () -> client.setScreen(new LumiSettingsScreen(parent, TELEMETRY)),
+                () -> client.setScreen(new LumiSettingsScreen(
+                        parent, HISTORY, TELEMETRY,
+                        NETWORKING::updateWorkspaceSettings)),
                 () -> client.setScreen(new LumiUpdateScreen(
                         client.screen, UPDATE_CHECKER))));
     }

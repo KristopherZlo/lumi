@@ -439,6 +439,8 @@
   "luma.settings.history_help": "Steuern Sie, welche Speicherungen im globalen Verlauf angezeigt werden.",
   "luma.settings.show_hidden_commits": "Versteckte Commits anzeigen",
   "luma.settings.show_hidden_commits_help": "Work-Zone-Commits im globalen Projektverlauf anzeigen.",
+  "luma.settings.restore_entities": "Entitäten standardmäßig wiederherstellen",
+  "luma.settings.restore_entities_help": "Gespeicherte Nicht-Spieler-Entitäten bei einer normalen vollständigen Wiederherstellung einbeziehen. Die Bestätigung kann dies weiterhin überschreiben.",
   "luma.settings.debug_title": "Debuggen",
   "luma.settings.debug_help": "Ausführliche Ablaufverfolgung für Erfassung, Speicherung, Wiederherstellung, Vergleich, HUD und Hintergrundvorgänge.",
   "luma.settings.debug_logging": "Debug-Protokollierung",

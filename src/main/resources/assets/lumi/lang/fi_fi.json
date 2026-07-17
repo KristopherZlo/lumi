@@ -439,6 +439,8 @@
   "luma.settings.history_help": "Hallitse, mitkä talletukset näkyvät globaalissa historiassa.",
   "luma.settings.show_hidden_commits": "Näytä piilotetut sitoumukset",
   "luma.settings.show_hidden_commits_help": "Näytä työalueen sitoumukset globaalissa projektihistoriassa.",
+  "luma.settings.restore_entities": "Palauta entiteetit oletuksena",
+  "luma.settings.restore_entities_help": "Sisällytä tallennetut muut kuin pelaajaentiteetit tavalliseen täyteen palautukseen. Vahvistuksessa valinnan voi yhä ohittaa.",
   "luma.settings.debug_title": "Virheenkorjaus",
   "luma.settings.debug_help": "Monisanainen jäljitys kaappaamiseen, tallentamiseen, palauttamiseen, vertailuun, HUD ja taustatoimintoihin.",
   "luma.settings.debug_logging": "Virheenkorjausloki",

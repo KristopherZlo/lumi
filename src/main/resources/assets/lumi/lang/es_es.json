@@ -439,6 +439,8 @@
   "luma.settings.history_help": "Controla qué guardados aparecen en el historial global.",
   "luma.settings.show_hidden_commits": "Mostrar confirmaciones ocultas",
   "luma.settings.show_hidden_commits_help": "Mostrar confirmaciones de la zona de trabajo en el historial global del proyecto.",
+  "luma.settings.restore_entities": "Restaurar entidades de forma predeterminada",
+  "luma.settings.restore_entities_help": "Incluir entidades guardadas que no sean jugadores en una restauración completa normal. La confirmación aún puede cambiarlo.",
   "luma.settings.debug_title": "Depurar",
   "luma.settings.debug_help": "Seguimiento detallado para capturar, guardar, restaurar, comparar, HUD y operaciones en segundo plano.",
   "luma.settings.debug_logging": "Registro de depuración",

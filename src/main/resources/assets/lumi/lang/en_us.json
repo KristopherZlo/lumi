@@ -509,6 +509,8 @@
   "luma.settings.history_help": "Control which saves appear in the global history.",
   "luma.settings.show_hidden_commits": "Show hidden saves",
   "luma.settings.show_hidden_commits_help": "Show work-zone saves in the global project history.",
+  "luma.settings.restore_entities": "Restore durable entities by default",
+  "luma.settings.restore_entities_help": "Include durable non-player entities in ordinary full Restore. The Restore confirmation can still override this.",
   "luma.settings.debug_title": "Debug",
   "luma.settings.debug_help": "Verbose tracing for capture, save, restore, compare, HUD, and background operations.",
   "luma.settings.debug_logging": "Debug logging",

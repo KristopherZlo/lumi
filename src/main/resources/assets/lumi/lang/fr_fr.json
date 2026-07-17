@@ -439,6 +439,8 @@
   "luma.settings.history_help": "Contrôle quelles sauvegardes apparaissent dans l'historique global.",
   "luma.settings.show_hidden_commits": "Afficher les commits masqués",
   "luma.settings.show_hidden_commits_help": "Afficher les validations de zone de travail dans l’historique global du projet.",
+  "luma.settings.restore_entities": "Restaurer les entités par défaut",
+  "luma.settings.restore_entities_help": "Inclure les entités enregistrées autres que les joueurs dans une restauration complète normale. La confirmation peut toujours remplacer ce choix.",
   "luma.settings.debug_title": "Débogage",
   "luma.settings.debug_help": "Suivi détaillé pour les opérations de capture, d'enregistrement, de restauration, de comparaison, HUD et en arrière-plan.",
   "luma.settings.debug_logging": "Journalisation du débogage",
