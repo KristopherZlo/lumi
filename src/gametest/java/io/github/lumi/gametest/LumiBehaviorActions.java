@@ -2,19 +2,30 @@ package io.github.lumi.gametest;
 
 import com.sk89q.worldedit.fabric.FabricPermissionsProvider;
 import com.sk89q.worldedit.fabric.FabricWorldEdit;
+import io.github.lumi.LumiMod;
+import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
+import java.util.UUID;
 import java.util.stream.StreamSupport;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.commands.Commands;
+import net.minecraft.network.protocol.game.ServerboundInteractPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.entity.animal.chicken.Chicken;
 import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.entity.projectile.arrow.Arrow;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -117,6 +128,102 @@ final class LumiBehaviorActions {
                             level.getAllEntities().spliterator(), false)
                             .anyMatch(PrimedTnt.class::isInstance);
         });
+    }
+
+    UUID placeEndCrystal(BlockPos obsidian) {
+        return timed("place_end_crystal", () -> server.computeOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            useOn(player, Items.END_CRYSTAL, obsidian, Direction.UP);
+            EndCrystal crystal = nearest(
+                    player.level(), EndCrystal.class, Vec3.atCenterOf(obsidian.above()));
+            require(crystal != null, "End crystal was not placed on " + obsidian);
+            return crystal.getUUID();
+        }));
+    }
+
+    List<UUID> placeArmorStands(List<BlockPos> positions) {
+        return timed("place_armor_stands", () -> server.computeOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            List<UUID> placed = new ArrayList<>(positions.size());
+            for (BlockPos position : positions) {
+                useOn(player, Items.ARMOR_STAND, position.below(), Direction.UP);
+                ArmorStand stand = nearestNew(
+                        player.level(), ArmorStand.class,
+                        Vec3.atBottomCenterOf(position), placed);
+                require(stand != null, "Armor stand was not placed at " + position);
+                placed.add(stand.getUUID());
+            }
+            return List.copyOf(placed);
+        }));
+    }
+
+    void equipArmorStands(List<UUID> stands, long seed) {
+        timed("equip_armor_stands", () -> server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            List<List<Item>> sets = List.of(
+                    List.of(Items.IRON_BOOTS, Items.IRON_LEGGINGS,
+                            Items.IRON_CHESTPLATE, Items.IRON_HELMET),
+                    List.of(Items.GOLDEN_BOOTS, Items.GOLDEN_LEGGINGS,
+                            Items.GOLDEN_CHESTPLATE, Items.GOLDEN_HELMET),
+                    List.of(Items.DIAMOND_BOOTS, Items.DIAMOND_LEGGINGS,
+                            Items.DIAMOND_CHESTPLATE, Items.DIAMOND_HELMET));
+            Random random = new Random(seed);
+            for (UUID id : stands) {
+                ArmorStand stand = entity(player.level(), id, ArmorStand.class);
+                player.teleportTo(stand.getX() + 2, stand.getY(), stand.getZ());
+                for (Item item : sets.get(random.nextInt(sets.size()))) {
+                    ItemStack stack = new ItemStack(item);
+                    player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+                    player.connection.handleInteract(
+                            ServerboundInteractPacket.createInteractionPacket(
+                                    stand, false, InteractionHand.MAIN_HAND,
+                                    new Vec3(0, 1, 0)));
+                    require(stand.getItemBySlot(
+                            stand.getEquipmentSlotForItem(stack)).is(item),
+                            "Armor stand did not equip " + item);
+                }
+            }
+        }));
+    }
+
+    UUID spawnChicken(BlockPos position) {
+        return timed("spawn_chicken", () -> server.computeOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            useOn(player, Items.CHICKEN_SPAWN_EGG, position.below(), Direction.UP);
+            Chicken chicken = nearest(
+                    player.level(), Chicken.class, Vec3.atBottomCenterOf(position));
+            require(chicken != null, "Chicken was not spawned at " + position);
+            return chicken.getUUID();
+        }));
+    }
+
+    void attackEntity(String name, UUID id, Item weapon) {
+        timed(name, () -> server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            Entity target = entity(player.level(), id, Entity.class);
+            player.teleportTo(target.getX() + 2, target.getY(), target.getZ());
+            player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(weapon));
+            player.connection.handleInteract(
+                    ServerboundInteractPacket.createAttackPacket(target, false));
+        }));
+    }
+
+    void shootEndCrystal(UUID id) {
+        timed("shoot_end_crystal", () -> server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            ServerLevel level = player.level();
+            EndCrystal crystal = entity(level, id, EndCrystal.class);
+            player.teleportTo(crystal.getX() - 3, crystal.getY(), crystal.getZ());
+            var runtime = LumiMod.serverRuntime().find(level).orElseThrow();
+            try (var ignored = DirectLiveActionContext.open(
+                    runtime.liveActions(), player.getUUID())) {
+                Arrow arrow = new Arrow(level, player,
+                        new ItemStack(Items.ARROW), new ItemStack(Items.BOW));
+                arrow.setPos(crystal.getX() - 3, crystal.getY() + 1, crystal.getZ());
+                arrow.shoot(1, 0, 0, 3, 0);
+                require(level.addFreshEntity(arrow), "Bow arrow was not spawned");
+            }
+        }));
     }
 
     void placeTwentyTnt(List<BlockPos> positions) {
@@ -292,6 +399,39 @@ final class LumiBehaviorActions {
 
     private static ServerPlayer player(MinecraftServer server) {
         return server.getPlayerList().getPlayers().getFirst();
+    }
+
+    private static <T extends Entity> T entity(
+            ServerLevel level, UUID id, Class<T> type) {
+        Entity entity = level.getEntityInAnyDimension(id);
+        require(type.isInstance(entity), "Missing " + type.getSimpleName() + " " + id);
+        return type.cast(entity);
+    }
+
+    private static <T extends Entity> T nearest(
+            ServerLevel level, Class<T> type, Vec3 position) {
+        return StreamSupport.stream(level.getAllEntities().spliterator(), false)
+                .filter(type::isInstance)
+                .map(type::cast)
+                .min(java.util.Comparator.comparingDouble(
+                        entity -> entity.distanceToSqr(position)))
+                .filter(entity -> entity.distanceToSqr(position) < 9)
+                .orElse(null);
+    }
+
+    private static <T extends Entity> T nearestNew(
+            ServerLevel level,
+            Class<T> type,
+            Vec3 position,
+            List<UUID> excluded) {
+        return StreamSupport.stream(level.getAllEntities().spliterator(), false)
+                .filter(type::isInstance)
+                .map(type::cast)
+                .filter(entity -> !excluded.contains(entity.getUUID()))
+                .min(java.util.Comparator.comparingDouble(
+                        entity -> entity.distanceToSqr(position)))
+                .filter(entity -> entity.distanceToSqr(position) < 9)
+                .orElse(null);
     }
 
     private static String coordinates(BlockPos position) {
