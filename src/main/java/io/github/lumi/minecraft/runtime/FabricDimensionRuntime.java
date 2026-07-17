@@ -34,6 +34,7 @@ import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
 import io.github.lumi.domain.service.DimensionHistoryViewService;
@@ -56,6 +57,7 @@ import io.github.lumi.domain.service.WorkspaceService;
 import io.github.lumi.domain.service.ZoneScope;
 import io.github.lumi.domain.service.ZoneService;
 import io.github.lumi.domain.service.TombstoneService;
+import io.github.lumi.domain.service.VersionTagService;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.BatchedWorldStateCapture;
 import io.github.lumi.minecraft.world.ChunkLoadingSavePreparation;
@@ -143,6 +145,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final ZoneService zones;
     private final AutoVersionService autoVersions;
     private final TombstoneService tombstones;
+    private final VersionTagService versionTagService;
     private final DimensionHistoryViewService historyViews;
     private final CausalZoneGrowthTracker zoneGrowth;
     private final ReturnPointRestorePreparation returnPointRestores;
@@ -207,6 +210,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         autoVersions = new AutoVersionService(commits, refs);
         tombstones = new TombstoneService(
                 commits, refs, new TombstoneRepository(repository));
+        versionTagService = new VersionTagService(
+                commits, new VersionTagRepository(repository));
         historyViews = new DimensionHistoryViewService(
                 commits,
                 new HistoryQueryService(
@@ -861,6 +866,23 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public List<io.github.lumi.domain.model.HistoryEntry> history(int limit)
             throws IOException {
         return historyViews.history(limit);
+    }
+
+    public VersionTags versionTags(CommitId target) {
+        try {
+            return versionTagService.read(target);
+        } catch (IOException failed) {
+            LumiMod.LOGGER.warn(
+                    "Cannot read non-authoritative Lumi tags for commit {}",
+                    target, failed);
+            return VersionTags.empty();
+        }
+    }
+
+    public void updateVersionTags(CommitId target, VersionTags tags)
+            throws IOException {
+        requireHistoryMetadataMutable();
+        versionTagService.replace(target, activeWorkspaceId(), tags);
     }
 
     public Map<UUID, List<io.github.lumi.domain.model.HistoryEntry>> zoneHistories(

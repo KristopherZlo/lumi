@@ -77,6 +77,9 @@ public record HistoryCommandPayload(
         if (kind == Kind.WORKSPACE_SETTINGS) {
             WorkspaceSettingsArgument.parse(argument);
         }
+        if (kind == Kind.UPDATE_VERSION_TAGS) {
+            VersionTagsArgument.parse(argument);
+        }
         if (kind == Kind.DELETE_VERSION || kind == Kind.CLEANUP_VERSION) {
             new ObjectId(argument);
         }
@@ -126,7 +129,7 @@ public record HistoryCommandPayload(
         ZONE_SAVE(18), ZONE_RESTORE(19), DELETE_VERSION(20), CLEANUP_VERSION(21),
         PACKAGE_EXPORT(22), PACKAGE_INSPECT(23), PACKAGE_IMPORT(24),
         WORKSPACE_CREATE(25), WORKSPACE_SWITCH(26), ZONE_COMPARE(27),
-        SNAPSHOT_REFRESH(28), WORKSPACE_SETTINGS(29);
+        SNAPSHOT_REFRESH(28), WORKSPACE_SETTINGS(29), UPDATE_VERSION_TAGS(30);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

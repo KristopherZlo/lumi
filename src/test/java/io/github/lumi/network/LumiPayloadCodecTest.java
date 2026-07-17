@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.PackageName;
+import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.minecraft.operation.OperationProgress;
 import io.netty.buffer.Unpooled;
@@ -42,6 +43,21 @@ class LumiPayloadCodecTest {
 
         assertEquals(whole, WorkspaceCreateArgument.parse(whole.encode()));
         assertEquals(bounded, WorkspaceCreateArgument.parse(bounded.encode()));
+    }
+
+    @Test
+    void versionTagsArgumentRoundTripsAndRejectsAmbiguousInput() {
+        var argument = new VersionTagsArgument(
+                id('a'), VersionTags.parse("#Roof, castle"));
+
+        assertEquals(argument, VersionTagsArgument.parse(argument.encode()));
+        assertEquals(
+                new VersionTagsArgument(id('a'), VersionTags.empty()),
+                VersionTagsArgument.parse(id('a').hex() + "\n"));
+        assertThrows(IllegalArgumentException.class,
+                () -> VersionTagsArgument.parse(id('a').hex()));
+        assertThrows(IllegalArgumentException.class,
+                () -> VersionTagsArgument.parse(id('a').hex() + "\nroof\ncastle"));
     }
 
     @Test
@@ -146,6 +162,12 @@ class LumiPayloadCodecTest {
                         new WorkspaceSettings(false, true)).encode(), id('2'), 43);
         assertEquals(workspaceSettings,
                 roundTrip(HistoryCommandPayload.CODEC, workspaceSettings));
+        HistoryCommandPayload updateTags = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.UPDATE_VERSION_TAGS,
+                new VersionTagsArgument(
+                        id('3'), VersionTags.parse("roof, castle")).encode(),
+                id('2'), 43);
+        assertEquals(updateTags, roundTrip(HistoryCommandPayload.CODEC, updateTags));
         HistoryCommandPayload restoreWithoutEntities = new HistoryCommandPayload(
                 UUID.randomUUID(), HistoryCommandPayload.Kind.RESTORE_NO_ENTITIES,
                 id('3').hex(), id('2'), 43);
@@ -229,7 +251,7 @@ class LumiPayloadCodecTest {
                                 false, false, true)),
                 java.util.List.of(new HistorySnapshotPayload.Version(
                         id('a'), "Clock works", "Builder", 1234,
-                        CommitKind.MANUAL)),
+                        CommitKind.MANUAL, VersionTags.parse("redstone, stable"))),
                 java.util.List.of(
                         new HistorySnapshotPayload.Branch("main", id('a'), true),
                         new HistorySnapshotPayload.Branch("idea", id('b'), false)),
@@ -237,10 +259,10 @@ class LumiPayloadCodecTest {
                         new UUID(0, 8), "Clock", 0xff336699, 4, 2, true,
                         java.util.List.of(new HistorySnapshotPayload.Version(
                                 id('b'), "Clock v1", "Builder", 1235,
-                                CommitKind.ZONE)))),
+                                CommitKind.ZONE, VersionTags.parse("clock"))))),
                 java.util.List.of(new HistorySnapshotPayload.Version(
                         id('c'), "Old clock", "Builder", 1200,
-                        CommitKind.MANUAL)));
+                        CommitKind.MANUAL, VersionTags.parse("archived"))));
         OperationEventPayload event = new OperationEventPayload(
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 "minecraft:overworld", OperationEventPayload.State.ACCEPTED,

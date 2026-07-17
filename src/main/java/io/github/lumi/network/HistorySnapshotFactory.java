@@ -24,7 +24,7 @@ final class HistorySnapshotFactory {
                         entry.id(), entry.commit().message(),
                         entry.commit().author().name(),
                         entry.commit().timestamp().toEpochMilli(),
-                        entry.commit().kind()))
+                        entry.commit().kind(), runtime.versionTags(entry.id())))
                 .toList();
         var branchViews = runtime.visibleBranches().stream()
                 .map(ref -> new HistorySnapshotPayload.Branch(
@@ -44,7 +44,8 @@ final class HistorySnapshotFactory {
                                         entry.id(), entry.commit().message(),
                                         entry.commit().author().name(),
                                         entry.commit().timestamp().toEpochMilli(),
-                                        entry.commit().kind()))
+                                        entry.commit().kind(),
+                                        runtime.versionTags(entry.id())))
                                 .toList()))
                 .toList();
         var deleted = runtime.deletedVersions(64).stream()
@@ -52,7 +53,7 @@ final class HistorySnapshotFactory {
                         entry.id(), entry.commit().message(),
                         entry.commit().author().name(),
                         entry.commit().timestamp().toEpochMilli(),
-                        entry.commit().kind()))
+                        entry.commit().kind(), runtime.versionTags(entry.id())))
                 .toList();
         return new HistorySnapshotPayload(
                 runtime.level().dimension().identifier().toString(),

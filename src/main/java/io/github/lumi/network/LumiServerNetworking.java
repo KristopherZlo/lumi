@@ -134,6 +134,15 @@ public final class LumiServerNetworking {
                 broadcastSnapshot(runtime);
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.UPDATE_VERSION_TAGS) {
+                VersionTagsArgument argument =
+                        VersionTagsArgument.parse(payload.argument());
+                runtime.updateVersionTags(argument.target(), argument.tags());
+                sendEvent(player, payload, runtime,
+                        OperationEventPayload.State.SUCCEEDED, "Version tags updated");
+                broadcastSnapshot(runtime);
+                return;
+            }
             if (isPackageCommand(payload.kind())) {
                 packageCommand(player, runtime, actual, payload, context);
                 return;
@@ -468,6 +477,8 @@ public final class LumiServerNetworking {
                     "Workspace creation does not use the mutation queue");
             case WORKSPACE_SETTINGS -> throw new IllegalStateException(
                     "Workspace settings do not use the mutation queue");
+            case UPDATE_VERSION_TAGS -> throw new IllegalStateException(
+                    "Version tags do not use the mutation queue");
             case SNAPSHOT_REFRESH -> throw new IllegalStateException(
                     "Snapshot refresh does not use the mutation queue");
         };

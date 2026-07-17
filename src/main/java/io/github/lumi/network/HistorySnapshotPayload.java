@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.domain.model.VersionTags;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -338,12 +339,27 @@ public record HistorySnapshotPayload(
     }
 
     public record Version(
-            CommitId id, String message, String author, long timestampMillis, CommitKind kind) {
+            CommitId id,
+            String message,
+            String author,
+            long timestampMillis,
+            CommitKind kind,
+            VersionTags tags) {
+        public Version(
+                CommitId id,
+                String message,
+                String author,
+                long timestampMillis,
+                CommitKind kind) {
+            this(id, message, author, timestampMillis, kind, VersionTags.empty());
+        }
+
         public Version {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(message, "message");
             Objects.requireNonNull(author, "author");
             Objects.requireNonNull(kind, "kind");
+            Objects.requireNonNull(tags, "tags");
             if (message.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_TEXT_BYTES
                     || author.isBlank()
                     || author.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
@@ -358,13 +374,28 @@ public record HistorySnapshotPayload(
             buffer.writeUtf(author, MAX_TEXT_BYTES);
             buffer.writeLong(timestampMillis);
             buffer.writeByte(kind.code());
+            buffer.writeVarInt(tags.values().size());
+            tags.values().forEach(tag ->
+                    buffer.writeUtf(tag, VersionTags.MAX_TAG_LENGTH * 2));
         }
 
         private static Version read(FriendlyByteBuf buffer) {
+            CommitId id = new CommitId(
+                    new ObjectId(buffer.readUtf(ObjectId.HEX_LENGTH)));
+            String message = buffer.readUtf(MAX_TEXT_BYTES);
+            String author = buffer.readUtf(MAX_TEXT_BYTES);
+            long timestamp = buffer.readLong();
+            CommitKind kind = CommitKind.fromCode(buffer.readUnsignedByte());
+            int count = buffer.readVarInt();
+            if (count < 0 || count > VersionTags.MAX_TAGS) {
+                throw new IllegalArgumentException("Invalid history version tag count");
+            }
+            java.util.ArrayList<String> tags = new java.util.ArrayList<>(count);
+            for (int index = 0; index < count; index++) {
+                tags.add(buffer.readUtf(VersionTags.MAX_TAG_LENGTH * 2));
+            }
             return new Version(
-                    new CommitId(new ObjectId(buffer.readUtf(ObjectId.HEX_LENGTH))),
-                    buffer.readUtf(MAX_TEXT_BYTES), buffer.readUtf(MAX_TEXT_BYTES),
-                    buffer.readLong(), CommitKind.fromCode(buffer.readUnsignedByte()));
+                    id, message, author, timestamp, kind, new VersionTags(tags));
         }
     }
 

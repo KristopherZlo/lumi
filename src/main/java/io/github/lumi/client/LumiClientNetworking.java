@@ -24,6 +24,7 @@ import io.github.lumi.network.ZoneRestoreArgument;
 import io.github.lumi.network.ZoneSaveArgument;
 import io.github.lumi.network.WorkspaceCreateArgument;
 import io.github.lumi.network.WorkspaceSettingsArgument;
+import io.github.lumi.network.VersionTagsArgument;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -195,6 +196,13 @@ public final class LumiClientNetworking {
     public UUID cleanupVersion(CommitId target) {
         return send(HistoryCommandPayload.Kind.CLEANUP_VERSION,
                 Objects.requireNonNull(target, "target").hex());
+    }
+
+    public UUID updateVersionTags(CommitId target, VersionTags tags) {
+        return send(HistoryCommandPayload.Kind.UPDATE_VERSION_TAGS,
+                new VersionTagsArgument(
+                        Objects.requireNonNull(target, "target"),
+                        Objects.requireNonNull(tags, "tags")).encode());
     }
 
     public UUID exportPackage(String name) {
