@@ -44,6 +44,7 @@ final class LumiClientBehaviorWorld {
         settings.getGameRules().set(GameRules.ADVANCE_TIME, false, null);
         settings.getGameRules().set(GameRules.ADVANCE_WEATHER, false, null);
         settings.getGameRules().set(GameRules.RANDOM_TICK_SPEED, 0, null);
+        settings.getGameRules().set(GameRules.RESPAWN_RADIUS, 0, null);
     }
 
     private static long elapsedMillis(long started) {
