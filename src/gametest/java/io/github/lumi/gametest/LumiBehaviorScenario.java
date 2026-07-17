@@ -45,6 +45,7 @@ final class LumiBehaviorScenario {
     }
 
     void run() throws IOException {
+        snapshot("world_preload", allAreas);
         waitTicks("world_stabilization", 100);
         CommitId initialCommit = operations.activeCommit();
         BranchName mainBranch = operations.activeBranch();
