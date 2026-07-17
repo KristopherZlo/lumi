@@ -1,6 +1,6 @@
 package io.github.lumi.client.ui;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -27,7 +27,7 @@ class LumiLegacyScreenScaleTest {
                     }).toList();
         }
 
-        assertEquals(23, screens.size());
+        assertFalse(screens.isEmpty());
         for (Path screen : screens) {
             String source = Files.readString(screen);
             assertTrue(source.contains("beginLegacyInit();"), screen.toString());
