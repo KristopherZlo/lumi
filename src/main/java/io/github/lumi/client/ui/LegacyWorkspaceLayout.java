@@ -9,24 +9,20 @@ public record LegacyWorkspaceLayout(
         int sidebarWidth,
         int titleHeight) {
     private static final int MARGIN = 10;
-    private static final int MAX_WIDTH = 960;
-    private static final int MAX_HEIGHT = 540;
     private static final int WIDE_SIDEBAR = 172;
     private static final int NARROW_SIDEBAR = 136;
-    private static final int COMPACT_SIDEBAR = 112;
 
     public static LegacyWorkspaceLayout fit(int screenWidth, int screenHeight) {
-        int width = Math.min(MAX_WIDTH, Math.max(1, screenWidth - MARGIN * 2));
-        int height = Math.min(MAX_HEIGHT, Math.max(1, screenHeight - MARGIN * 2));
-        int sidebar = width < 440
-                ? COMPACT_SIDEBAR : width < 720 ? NARROW_SIDEBAR : WIDE_SIDEBAR;
+        int width = Math.max(1, screenWidth - MARGIN * 2);
+        int height = Math.max(1, screenHeight - MARGIN * 2);
+        int sidebar = screenWidth < 720 ? NARROW_SIDEBAR : WIDE_SIDEBAR;
         return new LegacyWorkspaceLayout(
                 Math.max(0, (screenWidth - width) / 2),
                 Math.max(0, (screenHeight - height) / 2),
                 width,
                 height,
                 Math.min(sidebar, Math.max(1, width / 2)),
-                Math.min(54, height));
+                Math.min(42, height));
     }
 
     public int contentX() {
@@ -38,18 +34,18 @@ public record LegacyWorkspaceLayout(
     }
 
     public int bodyX() {
-        return contentX() + 14;
+        return contentX() + 6;
     }
 
     public int bodyY() {
-        return windowY + titleHeight + 14;
+        return windowY + titleHeight + 6;
     }
 
     public int bodyWidth() {
-        return Math.max(0, contentWidth() - 28);
+        return Math.max(0, contentWidth() - 12);
     }
 
     public int bodyHeight() {
-        return Math.max(0, windowHeight - titleHeight - 28);
+        return Math.max(0, windowHeight - titleHeight - 12);
     }
 }
