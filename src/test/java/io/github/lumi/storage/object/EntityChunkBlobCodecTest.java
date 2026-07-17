@@ -30,6 +30,16 @@ class EntityChunkBlobCodecTest {
     }
 
     @Test
+    void modelEqualityIgnoresMinecraftEntityIterationOrder() {
+        EntityState first = entity(FIRST_ID, "minecraft:armor_stand", 1);
+        EntityState second = entity(SECOND_ID, "minecraft:item_frame", 2);
+
+        assertEquals(
+                new EntityChunkBlob(List.of(first, second)),
+                new EntityChunkBlob(List.of(second, first)));
+    }
+
+    @Test
     void refusesDuplicateEntityIdentity() {
         EntityState entity = entity(FIRST_ID, "minecraft:armor_stand", 1);
 
