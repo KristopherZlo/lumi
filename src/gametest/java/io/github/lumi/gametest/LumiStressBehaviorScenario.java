@@ -68,6 +68,8 @@ final class LumiStressBehaviorScenario {
         LumiWorldSnapshot allTnt = placedStates.get(128);
         BlockPos ignition = tnt.get(new Random(RANDOM_SEED).nextInt(tnt.size()));
         actions.igniteTnt("ignite_128_tnt", ignition);
+        checks.waitUntil("ignite_128_tnt_started", 20,
+                () -> actions.hasPrimedTnt(ignition));
         checks.waitTicks("partial_128_tnt_explosion_6s", 120);
         LumiWorldSnapshot partialExplosion = checks.snapshot(
                 "tnt_128_partial_explosion", area);
@@ -153,8 +155,10 @@ final class LumiStressBehaviorScenario {
             throws IOException {
         CommitId tntCommit = operations.save("tnt");
         checks.assertSnapshot("save_tnt", area, allTnt);
-        actions.igniteTnt("ignite_all_128_tnt",
-                tnt.get(new Random(RANDOM_SEED).nextInt(tnt.size())));
+        BlockPos ignition = tnt.get(new Random(RANDOM_SEED).nextInt(tnt.size()));
+        actions.igniteTnt("ignite_all_128_tnt", ignition);
+        checks.waitUntil("ignite_all_128_tnt_started", 20,
+                () -> actions.hasPrimedTnt(ignition));
         checks.waitUntil("all_128_tnt_exploded", 600,
                 () -> !actions.hasTnt(tnt));
         checks.waitTicks("all_128_tnt_settle", 20);
@@ -219,6 +223,8 @@ final class LumiStressBehaviorScenario {
         LumiWorldSnapshot standsWithTnt = checks.snapshot(
                 "armored_stands_with_tnt", area);
         actions.igniteTnt("ignite_armor_stand_tnt", standTnt);
+        checks.waitUntil("ignite_armor_stand_tnt_started", 20,
+                () -> actions.hasPrimedTnt(standTnt));
         checks.waitTicks("armor_stand_tnt_explosion_5s", 100);
         checks.snapshot("armored_stands_after_tnt", area);
         operations.undo("armor_stand_tnt");

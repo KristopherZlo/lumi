@@ -86,8 +86,6 @@ final class LumiBehaviorActions {
         timed(name, () -> server.runOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
             useOn(player, Items.FLINT_AND_STEEL, target, Direction.UP);
-            require(player.level().getBlockState(target).isAir(),
-                    "Ignited TNT block remained at " + target);
         }));
     }
 
@@ -128,6 +126,14 @@ final class LumiBehaviorActions {
                             level.getAllEntities().spliterator(), false)
                             .anyMatch(PrimedTnt.class::isInstance);
         });
+    }
+
+    boolean hasPrimedTnt(BlockPos position) {
+        return server.computeOnServer(minecraft -> StreamSupport.stream(
+                        player(minecraft).level().getAllEntities().spliterator(), false)
+                .filter(PrimedTnt.class::isInstance)
+                .anyMatch(entity -> entity.distanceToSqr(
+                        Vec3.atCenterOf(position)) < 9));
     }
 
     boolean hasEntity(UUID id) {
