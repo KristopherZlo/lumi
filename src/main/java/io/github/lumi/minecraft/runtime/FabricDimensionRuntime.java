@@ -105,20 +105,21 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.Executor;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.entity.ChunkEntities;
 import net.minecraft.world.level.entity.EntityAccess;
+import net.minecraft.world.level.storage.LevelResource;
 
 /** Server-authoritative Lumi state owned by one loaded Minecraft dimension. */
 public final class FabricDimensionRuntime implements AutoCloseable {
@@ -705,10 +706,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         };
     }
 
-    private void cancelLiveAction(UUID action) {
-        causalTicks.cancel(action);
+    private boolean cancelLiveAction(UUID action) {
+        boolean changed = causalTicks.cancel(
+                action, entity -> liveEntities.owns(action, entity));
         try {
-            liveEntities.finalizeOwned(action);
+            return liveEntities.finalizeOwned(action) || changed;
         } catch (IOException failed) {
             throw new java.io.UncheckedIOException(
                     "Cannot finalize owned live entities", failed);
@@ -736,6 +738,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         liveEntities.trackApplied(
                 plan.actionId(), plan.direction(),
                 plan.expectedEntities(), plan.replacementEntities());
+        if (plan.direction() == LiveActionJournal.Direction.REDO) {
+            plan.replacementEntities().forEach((id, state) -> state.ifPresent(ignored -> {
+                Entity carrier = level.getEntity(id);
+                if (carrier != null) {
+                    causalTicks.rememberAppliedCarrier(plan.actionId(), carrier);
+                }
+            }));
+        }
     }
 
     private EntityChunkKey liveEntityChunk(EntityState state) {

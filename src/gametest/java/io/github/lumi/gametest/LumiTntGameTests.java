@@ -9,6 +9,7 @@ import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -60,6 +61,7 @@ public final class LumiTntGameTests {
         UUID player = UUID.randomUUID();
         UUID test = UUID.randomUUID();
         BlockPos tnt = new BlockPos(3, 2, 3);
+        AtomicReference<UUID> carrierId = new AtomicReference<>();
 
         helper.startSequence()
                 .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
@@ -68,23 +70,136 @@ public final class LumiTntGameTests {
                     helper.setBlock(tnt, Blocks.TNT);
                     prime(helper, runtime, player, tnt, 200);
                     helper.assertEntityPresent(EntityType.TNT);
+                    carrierId.set(helper.findOneEntity(EntityType.TNT).getUUID());
                     runtime.startLiveAction(
                             player, LiveActionJournal.Direction.UNDO, ignored -> { });
                 })
                 .thenWaitUntil(() -> requireIdle(helper, runtime))
                 .thenExecute(() -> helper.assertBlockState(
                         tnt, Blocks.TNT.defaultBlockState()))
-                .thenExecute(() -> helper.assertEntityNotPresent(EntityType.TNT))
+                .thenExecute(() -> assertNoActiveEntities(helper, EntityType.TNT))
                 .thenIdle(220)
                 .thenExecute(() -> helper.assertBlockState(
                         tnt, Blocks.TNT.defaultBlockState()))
-                .thenExecute(() -> helper.assertEntityNotPresent(EntityType.TNT))
+                .thenExecute(() -> assertNoActiveEntities(helper, EntityType.TNT))
                 .thenExecute(() -> runtime.startLiveAction(
                         player, LiveActionJournal.Direction.REDO, ignored -> { }))
                 .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertBlockState(tnt, Blocks.AIR.defaultBlockState());
+                    List<PrimedTnt> active = activeEntities(helper, EntityType.TNT);
+                    helper.assertValueEqual(1, active.size(),
+                            "Redo must restore exactly one active TNT carrier");
+                    helper.assertValueEqual(carrierId.get(), active.get(0).getUUID(),
+                            "Redo must restore the original TNT carrier UUID");
+                    runtime.startLiveAction(
+                            player, LiveActionJournal.Direction.UNDO, ignored -> { });
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
                 .thenExecute(() -> helper.assertBlockState(
-                        tnt, Blocks.AIR.defaultBlockState()))
-                .thenExecute(() -> helper.assertEntityNotPresent(EntityType.TNT))
+                        tnt, Blocks.TNT.defaultBlockState()))
+                .thenExecute(() -> assertNoActiveEntities(helper, EntityType.TNT))
+                .thenExecute(() -> LumiGameTestLease.release(test))
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void redstoneMidFuseUndoRedoExplosionRemainsUndoable(
+            GameTestHelper helper) {
+        FabricDimensionRuntime runtime = runtime(helper);
+        UUID player = UUID.randomUUID();
+        UUID test = UUID.randomUUID();
+        BlockPos tnt = new BlockPos(3, 2, 3);
+        BlockPos trigger = tnt.east();
+        AtomicReference<Map<BlockPos, BlockState>> baseline = new AtomicReference<>();
+        AtomicReference<MutationTerminalState> firstUndoTerminal = new AtomicReference<>();
+        AtomicReference<MutationTerminalState> redoTerminal = new AtomicReference<>();
+        AtomicReference<MutationTerminalState> finalUndoTerminal = new AtomicReference<>();
+        AtomicReference<UUID> carrierId = new AtomicReference<>();
+        AtomicReference<PrimedTnt> originalCarrier = new AtomicReference<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    fillStone(helper);
+                    helper.setBlock(trigger, Blocks.AIR);
+                    helper.setBlock(tnt, Blocks.TNT);
+                    baseline.set(snapshot(helper));
+                    try (var ignored = DirectLiveActionContext.open(
+                            runtime.liveActions(), player)) {
+                        helper.getLevel().setBlock(helper.absolutePos(trigger),
+                                Blocks.REDSTONE_BLOCK.defaultBlockState(),
+                                Block.UPDATE_ALL);
+                    }
+                    helper.assertBlockState(trigger,
+                            Blocks.REDSTONE_BLOCK.defaultBlockState());
+                    helper.assertValueEqual(Blocks.AIR.defaultBlockState(),
+                            helper.getBlockState(tnt),
+                            "Initial redstone ignition must remove the TNT block");
+                    helper.assertEntitiesPresent(EntityType.TNT, 1);
+                    PrimedTnt carrier = helper.findOneEntity(EntityType.TNT);
+                    originalCarrier.set(carrier);
+                    carrierId.set(carrier.getUUID());
+                    carrier.setFuse(200);
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
+                            operation -> firstUndoTerminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> helper.assertTrue(firstUndoTerminal.get() != null,
+                        "Mid-fuse Undo is still running"))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                            firstUndoTerminal.get(), "Mid-fuse Undo must succeed");
+                    assertSnapshot(helper, baseline.get());
+                    helper.assertTrue(originalCarrier.get().isRemoved(),
+                            "Undo did not mark the original TNT carrier removed");
+                    helper.assertValueEqual(Entity.RemovalReason.UNLOADED_WITH_PLAYER,
+                            originalCarrier.get().getRemovalReason(),
+                            "Undo must remove the carrier through exact replacement");
+                    assertNotDurablyCaptured(helper, originalCarrier.get());
+                    List<PrimedTnt> active = activeEntities(helper, EntityType.TNT);
+                    helper.assertTrue(active.isEmpty(),
+                            "Active TNT remained after Undo; original=" + carrierId.get()
+                                    + ", active=" + active.stream()
+                                            .map(LumiTntGameTests::describeEntity).toList());
+                    assertNoActiveEntities(helper, EntityType.ITEM);
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.REDO,
+                            operation -> redoTerminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> helper.assertTrue(redoTerminal.get() != null,
+                        "Redo is still running"))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                            redoTerminal.get(), "Redo must succeed");
+                    helper.assertValueEqual(Blocks.AIR.defaultBlockState(),
+                            helper.getBlockState(tnt),
+                            "Redo must restore the ignited TNT block endpoint");
+                    List<PrimedTnt> carriers = activeEntities(helper, EntityType.TNT);
+                    helper.assertValueEqual(1, carriers.size(),
+                            "Redo must restore exactly one TNT carrier");
+                    PrimedTnt restored = carriers.get(0);
+                    helper.assertValueEqual(carrierId.get(), restored.getUUID(),
+                            "Redo did not restore the original TNT carrier UUID");
+                    restored.setFuse(3);
+                })
+                .thenWaitUntil(() -> helper.assertTrue(
+                        activeEntities(helper, EntityType.TNT).isEmpty(),
+                        "Redone TNT is still active"))
+                .thenExecute(() -> {
+                    helper.assertFalse(snapshot(helper).equals(baseline.get()),
+                            "Redone TNT did not change the test volume");
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
+                            operation -> finalUndoTerminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> helper.assertTrue(finalUndoTerminal.get() != null,
+                        "Undo after the redone explosion is still running"))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                            finalUndoTerminal.get(),
+                            "Undo after the redone explosion must succeed");
+                    assertSnapshot(helper, baseline.get());
+                    assertNoActiveEntities(helper, EntityType.TNT);
+                    assertNoActiveEntities(helper, EntityType.ITEM);
+                })
                 .thenExecute(() -> LumiGameTestLease.release(test))
                 .thenSucceed();
     }
@@ -343,6 +458,41 @@ public final class LumiTntGameTests {
         } catch (IOException failed) {
             throw helper.assertionException(
                     "Cannot capture entity %s: %s", entity.getUUID(), failed);
+        }
+    }
+
+    private static <T extends Entity> List<T> activeEntities(
+            GameTestHelper helper, EntityType<T> type) {
+        return helper.getEntities(type).stream()
+                .filter(entity -> !entity.isRemoved())
+                .toList();
+    }
+
+    private static <T extends Entity> void assertNoActiveEntities(
+            GameTestHelper helper, EntityType<T> type) {
+        List<T> active = activeEntities(helper, type);
+        helper.assertTrue(active.isEmpty(),
+                "Did not expect an active " + EntityType.getKey(type) + ": "
+                        + active.stream().map(LumiTntGameTests::describeEntity).toList());
+    }
+
+    private static String describeEntity(Entity entity) {
+        return entity.getUUID() + " removed=" + entity.isRemoved()
+                + " reason=" + entity.getRemovalReason()
+                + " pos=" + entity.position();
+    }
+
+    private static void assertNotDurablyCaptured(
+            GameTestHelper helper, Entity entity) {
+        try {
+            helper.assertTrue(new MinecraftEntityChunkCapture()
+                            .captureEntity(helper.getLevel(), entity)
+                            .isEmpty(),
+                    "Removed entity remained in the durable world snapshot: "
+                            + entity.getUUID());
+        } catch (IOException failed) {
+            throw helper.assertionException(
+                    "Cannot verify removed entity %s: %s", entity.getUUID(), failed);
         }
     }
 

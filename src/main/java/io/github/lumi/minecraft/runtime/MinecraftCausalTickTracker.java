@@ -11,6 +11,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.BlockEventData;
@@ -126,16 +127,21 @@ public final class MinecraftCausalTickTracker {
         }
     }
 
-    public void cancel(java.util.UUID action) {
-        tokens.cancel(root -> root.action().equals(action)).forEach(key -> {
-            remove(key);
-            journal.release(action);
-        });
-        blockEvents.cancel(root -> root.action().equals(action)).forEach(event -> {
-            eventAccess.lumi$removeBlockEvent(event);
-            journal.release(action);
-        });
-        blockCarriers.cancel(root -> root.action().equals(action)).forEach(carrier -> {
+    public void rememberAppliedCarrier(java.util.UUID action, Entity carrier) {
+        Objects.requireNonNull(action, "action");
+        Objects.requireNonNull(carrier, "carrier");
+        if (isTransientCarrier(carrier) && !carrier.isRemoved()) {
+            remember(entityCarriers, carrier,
+                    new DirectLiveActionContext.CausalRoot(action, 1));
+        }
+    }
+
+    public boolean cancel(java.util.UUID action, Predicate<java.util.UUID> preserveEntity) {
+        Objects.requireNonNull(action, "action");
+        Objects.requireNonNull(preserveEntity, "preserveEntity");
+        Set<BlockEntity> cancelledBlockCarriers =
+                blockCarriers.cancel(root -> root.action().equals(action));
+        cancelledBlockCarriers.forEach(carrier -> {
             if (carrier instanceof PistonMovingBlockEntity piston) {
                 try {
                     try (var ignored = DirectLiveActionContext.resume(journal, action)) {
@@ -146,14 +152,31 @@ public final class MinecraftCausalTickTracker {
                 }
             }
         });
-        entityCarriers.cancel(root -> root.action().equals(action)).forEach(carrier -> {
+        Set<TickKey> cancelledTicks = tokens.cancel(root -> root.action().equals(action));
+        cancelledTicks.forEach(key -> {
+            remove(key);
+            journal.release(action);
+        });
+        Set<BlockEventData> cancelledEvents =
+                blockEvents.cancel(root -> root.action().equals(action));
+        cancelledEvents.forEach(event -> {
+            eventAccess.lumi$removeBlockEvent(event);
+            journal.release(action);
+        });
+        Set<Entity> cancelledEntityCarriers =
+                entityCarriers.cancel(root -> root.action().equals(action));
+        cancelledEntityCarriers.forEach(carrier -> {
             try {
-                freeze.runAuthorized(carrier::discard);
+                if (!preserveEntity.test(carrier.getUUID())) {
+                    freeze.runAuthorized(carrier::discard);
+                }
             } finally {
                 journal.release(action);
             }
         });
         depthLimitLogged.remove(action);
+        return !cancelledBlockCarriers.isEmpty() || !cancelledTicks.isEmpty()
+                || !cancelledEvents.isEmpty() || !cancelledEntityCarriers.isEmpty();
     }
 
     public void cancelAll() {
@@ -213,6 +236,12 @@ public final class MinecraftCausalTickTracker {
                     "Lumi live action {} stopped inheriting delayed work after {} generations",
                     action, MAX_CAUSAL_DEPTH);
         }
+    }
+
+    private static boolean isTransientCarrier(Entity carrier) {
+        return carrier instanceof FallingBlockEntity
+                || carrier instanceof PrimedTnt
+                || carrier instanceof AbstractArrow;
     }
 
     @SuppressWarnings("unchecked")

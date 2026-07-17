@@ -13,8 +13,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.LongSupplier;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 
 /** Frozen, deadline-bounded and exactly verified live Undo/Redo operation. */
 public final class LiveActionOperation implements DimensionMutation {
@@ -24,7 +24,7 @@ public final class LiveActionOperation implements DimensionMutation {
     private final LiveBlockWorldAccess world;
     private final LiveEntityWorldAccess entities;
     private final LongSupplier nanoTime;
-    private final Consumer<UUID> cancelPending;
+    private final PendingCancellation cancelPending;
     private final Consumer<LiveActionJournal.Plan> publication;
     private final List<WorldChange<?>> mismatches = new ArrayList<>();
     private List<WorldChange<?>> changes = List.of();
@@ -37,6 +37,7 @@ public final class LiveActionOperation implements DimensionMutation {
     private Iterator<WorldChange<?>> cursor;
     private Throwable failure;
     private UUID retainedAction;
+    private boolean cancellationChangedState;
 
     public LiveActionOperation(
             LiveActionJournal journal,
@@ -44,7 +45,7 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveActionJournal.Direction direction,
             LiveBlockWorldAccess world) {
         this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
-                System::nanoTime, ignored -> { }, ignored -> { });
+                System::nanoTime, ignored -> false, ignored -> { });
     }
 
     public LiveActionOperation(
@@ -54,7 +55,7 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveBlockWorldAccess world,
             Consumer<UUID> cancelPending) {
         this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
-                System::nanoTime, cancelPending, ignored -> { });
+                System::nanoTime, adapt(cancelPending), ignored -> { });
     }
 
     public LiveActionOperation(
@@ -65,7 +66,7 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveEntityWorldAccess entities,
             Consumer<UUID> cancelPending) {
         this(journal, player, direction, world, entities,
-                System::nanoTime, cancelPending, ignored -> { });
+                System::nanoTime, adapt(cancelPending), ignored -> { });
     }
 
     public LiveActionOperation(
@@ -74,7 +75,7 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveActionJournal.Direction direction,
             LiveBlockWorldAccess world,
             LiveEntityWorldAccess entities,
-            Consumer<UUID> cancelPending,
+            PendingCancellation cancelPending,
             Consumer<LiveActionJournal.Plan> publication) {
         this(journal, player, direction, world, entities,
                 System::nanoTime, cancelPending, publication);
@@ -87,7 +88,7 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveBlockWorldAccess world,
             LongSupplier nanoTime) {
         this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
-                nanoTime, ignored -> { }, ignored -> { });
+                nanoTime, ignored -> false, ignored -> { });
     }
 
     LiveActionOperation(
@@ -98,7 +99,7 @@ public final class LiveActionOperation implements DimensionMutation {
             LongSupplier nanoTime,
             Consumer<UUID> cancelPending) {
         this(journal, player, direction, world, LiveEntityWorldAccess.UNSUPPORTED,
-                nanoTime, cancelPending, ignored -> { });
+                nanoTime, adapt(cancelPending), ignored -> { });
     }
 
     private LiveActionOperation(
@@ -108,7 +109,7 @@ public final class LiveActionOperation implements DimensionMutation {
             LiveBlockWorldAccess world,
             LiveEntityWorldAccess entities,
             LongSupplier nanoTime,
-            Consumer<UUID> cancelPending,
+            PendingCancellation cancelPending,
             Consumer<LiveActionJournal.Plan> publication) {
         this.journal = Objects.requireNonNull(journal, "journal");
         this.player = Objects.requireNonNull(player, "player");
@@ -129,7 +130,7 @@ public final class LiveActionOperation implements DimensionMutation {
                 step();
             } catch (IOException | RuntimeException exception) {
                 failure = exception;
-                phase = phase.beforeMutation() ? Phase.FAILED : Phase.DEGRADED;
+                phase = beforeMutation() ? Phase.FAILED : Phase.DEGRADED;
             }
         }
         if (isTerminal() && retainedAction != null) {
@@ -164,7 +165,7 @@ public final class LiveActionOperation implements DimensionMutation {
     private void cancelPending() {
         retainedAction = plan.actionId();
         journal.retain(retainedAction);
-        cancelPending.accept(plan.actionId());
+        cancellationChangedState = cancelPending.cancel(plan.actionId());
         plan = selectPlan().orElseThrow(
                 () -> new IllegalStateException("Live action disappeared during finalization"));
         prepareChanges();
@@ -197,7 +198,7 @@ public final class LiveActionOperation implements DimensionMutation {
         if (!change.matchesExpected()) {
             failure = new IllegalStateException(
                     "Visible world conflicts with live action at " + change.conflict());
-            phase = Phase.FAILED;
+            phase = cancellationChangedState ? Phase.DEGRADED : Phase.FAILED;
         }
     }
 
@@ -267,6 +268,24 @@ public final class LiveActionOperation implements DimensionMutation {
     @Override
     public Optional<Throwable> failure() {
         return Optional.ofNullable(failure);
+    }
+
+    private boolean beforeMutation() {
+        return phase == Phase.SELECTING
+                || (phase == Phase.VALIDATING && !cancellationChangedState);
+    }
+
+    private static PendingCancellation adapt(Consumer<UUID> cancellation) {
+        Objects.requireNonNull(cancellation, "cancelPending");
+        return action -> {
+            cancellation.accept(action);
+            return false;
+        };
+    }
+
+    @FunctionalInterface
+    public interface PendingCancellation {
+        boolean cancel(UUID action);
     }
 
     private abstract static class WorldChange<S> {
@@ -356,10 +375,6 @@ public final class LiveActionOperation implements DimensionMutation {
         REVERIFYING,
         SUCCEEDED,
         FAILED,
-        DEGRADED;
-
-        private boolean beforeMutation() {
-            return this == SELECTING || this == CANCELLING || this == VALIDATING;
-        }
+        DEGRADED
     }
 }

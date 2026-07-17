@@ -69,10 +69,10 @@ public final class MinecraftLiveEntityTracker {
         }
     }
 
-    public void finalizeOwned(UUID action) throws IOException {
+    public boolean finalizeOwned(UUID action) throws IOException {
         Map<UUID, Owned> entities = owned.remove(action);
         if (entities == null) {
-            return;
+            return false;
         }
         try {
             for (var entry : entities.entrySet()) {
@@ -87,6 +87,7 @@ public final class MinecraftLiveEntityTracker {
         } finally {
             journal.release(action);
         }
+        return true;
     }
 
     public void trackApplied(
@@ -105,6 +106,12 @@ public final class MinecraftLiveEntityTracker {
                 own(action, entity, new Owned(endpoint, origin));
             }
         });
+    }
+
+    public boolean owns(UUID action, UUID entity) {
+        Map<UUID, Owned> entities = owned.get(Objects.requireNonNull(action, "action"));
+        return entities != null && entities.containsKey(
+                Objects.requireNonNull(entity, "entity"));
     }
 
     public void clear() {

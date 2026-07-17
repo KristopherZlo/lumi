@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.model.EntityState;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -476,10 +477,18 @@ public final class LiveActionJournal {
             Objects.requireNonNull(player, "player");
             Objects.requireNonNull(actionId, "actionId");
             Objects.requireNonNull(direction, "direction");
-            expected = Map.copyOf(expected);
-            replacement = Map.copyOf(replacement);
-            expectedEntities = Map.copyOf(expectedEntities);
-            replacementEntities = Map.copyOf(replacementEntities);
+            expected = immutableOrderedCopy(expected);
+            replacement = immutableOrderedCopy(replacement);
+            expectedEntities = immutableOrderedCopy(expectedEntities);
+            replacementEntities = immutableOrderedCopy(replacementEntities);
+        }
+
+        private static <K, V> Map<K, V> immutableOrderedCopy(Map<K, V> source) {
+            var copy = new LinkedHashMap<K, V>();
+            Objects.requireNonNull(source, "source").forEach((key, value) -> copy.put(
+                    Objects.requireNonNull(key, "key"),
+                    Objects.requireNonNull(value, "value")));
+            return Collections.unmodifiableMap(copy);
         }
     }
 

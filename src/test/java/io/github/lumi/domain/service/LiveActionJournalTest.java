@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.EntityState;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,22 @@ class LiveActionJournalTest {
         var redo = journal.prepareRedo(PLAYER_A).orElseThrow();
         assertEquals(block("stone"), redo.expected().get(POSITION));
         assertEquals(block("gold_block"), redo.replacement().get(POSITION));
+    }
+
+    @Test
+    void planPreservesMutationOrderAndCannotBeModified() {
+        BlockPosition nested = new BlockPosition(6, 7, 8);
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER_A);
+        journal.record(action, POSITION, block("tnt"), block("air"));
+        journal.record(action, nested, block("air"), block("redstone_block"));
+        journal.close(action);
+
+        var plan = journal.prepareUndo(PLAYER_A).orElseThrow();
+
+        assertEquals(List.of(POSITION, nested), List.copyOf(plan.expected().keySet()));
+        assertThrows(UnsupportedOperationException.class,
+                () -> plan.expected().put(POSITION, block("diamond_block")));
     }
 
     @Test

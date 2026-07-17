@@ -11,9 +11,9 @@ import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.world.LiveBlockWorldAccess;
 import io.github.lumi.minecraft.world.LiveEntityWorldAccess;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.ArrayList;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -87,7 +87,38 @@ class LiveActionOperationTest {
     }
 
     @Test
-    void cancellationFailureIsSafeToReleaseBeforeMutation() {
+    void undoAndRedoReplayCapturedBlockOrder() throws IOException {
+        BlockPosition trigger = new BlockPosition(2, 2, 3);
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER);
+        journal.record(action, trigger, block("air"), block("redstone_block"));
+        journal.record(action, POSITION, block("tnt"), block("air"));
+        journal.close(action);
+        FakeWorld world = new FakeWorld(block("air"));
+        world.states.put(trigger, block("redstone_block"));
+
+        LiveActionOperation undo = new LiveActionOperation(
+                journal, PLAYER, LiveActionJournal.Direction.UNDO, world, () -> 0L);
+        undo.advance(Long.MAX_VALUE);
+
+        assertEquals(java.util.List.of(trigger, POSITION), world.writeOrder);
+        assertEquals(block("air"), world.states.get(trigger));
+        assertEquals(block("tnt"), world.states.get(POSITION));
+        assertEquals(MutationTerminalState.SUCCEEDED, undo.terminalState());
+        world.writeOrder.clear();
+
+        LiveActionOperation redo = new LiveActionOperation(
+                journal, PLAYER, LiveActionJournal.Direction.REDO, world, () -> 0L);
+        redo.advance(Long.MAX_VALUE);
+
+        assertEquals(java.util.List.of(trigger, POSITION), world.writeOrder);
+        assertEquals(block("air"), world.states.get(POSITION));
+        assertEquals(block("redstone_block"), world.states.get(trigger));
+        assertEquals(MutationTerminalState.SUCCEEDED, redo.terminalState());
+    }
+
+    @Test
+    void cancellationFailureRetainsFreezeAfterOwnershipChangesMayStart() {
         LiveActionOperation operation = new LiveActionOperation(
                 action(block("stone"), block("gold_block")), PLAYER,
                 LiveActionJournal.Direction.UNDO, new FakeWorld(block("gold_block")),
@@ -95,8 +126,8 @@ class LiveActionOperationTest {
 
         operation.advance(Long.MAX_VALUE);
 
-        assertEquals(MutationTerminalState.FAILED, operation.terminalState());
-        assertTrue(operation.isSafeToRelease());
+        assertEquals(MutationTerminalState.DEGRADED, operation.terminalState());
+        assertTrue(!operation.isSafeToRelease());
     }
 
     @Test
@@ -170,8 +201,8 @@ class LiveActionOperationTest {
         LiveActionJournal journal = action(block("stone"), block("gold_block"));
         LiveActionOperation operation = new LiveActionOperation(
                 journal, PLAYER, LiveActionJournal.Direction.UNDO,
-                new FakeWorld(block("gold_block")),
-                new FakeEntityWorld(Optional.empty()), ignored -> { }, ignored -> {
+                new FakeWorld(block("gold_block")), new FakeEntityWorld(Optional.empty()),
+                ignored -> false, ignored -> {
                     throw new IllegalStateException("working index unavailable");
                 });
 
@@ -204,6 +235,7 @@ class LiveActionOperationTest {
         private final Map<BlockPosition, BlockSnapshot> states = new HashMap<>();
         private int ignoredWrites;
         private int writes;
+        private final java.util.List<BlockPosition> writeOrder = new ArrayList<>();
 
         private FakeWorld(BlockSnapshot state) {
             states.put(POSITION, state);
@@ -217,6 +249,7 @@ class LiveActionOperationTest {
         @Override
         public void write(BlockPosition position, BlockSnapshot state) {
             writes++;
+            writeOrder.add(position);
             if (ignoredWrites > 0) {
                 ignoredWrites--;
             } else {
