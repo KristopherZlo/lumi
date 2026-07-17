@@ -1,17 +1,27 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.LumiMod;
+import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 /** Legacy project-window presentation backed by the immutable V2 history snapshot. */
 public final class LumiDashboardScreen extends LumiLegacyModalScreen {
+    private static final int PREVIEW_WIDTH = 40;
+    private static final int PREVIEW_HEIGHT = 22;
+    private static final int ICON_TEXTURE_SIZE = 24;
+    private static final Identifier NO_PREVIEW_ICON = Identifier.fromNamespaceAndPath(
+            LumiMod.MOD_ID, "textures/gui/new-icons/image.png");
     private final Screen parent;
     private final ClientHistoryStore history;
+    private final ClientVersionPreviewStore previews;
     private final Runnable openSave;
     private final Runnable openAmend;
     private final Runnable openBranches;
@@ -35,6 +45,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     public LumiDashboardScreen(
             Screen parent,
             ClientHistoryStore history,
+            ClientVersionPreviewStore previews,
             Runnable openSave,
             Runnable openAmend,
             Runnable openBranches,
@@ -52,6 +63,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         super(Component.translatable("luma.screen.dashboard.title"));
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
+        this.previews = Objects.requireNonNull(previews, "previews");
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openAmend = Objects.requireNonNull(openAmend, "openAmend");
         this.openBranches = Objects.requireNonNull(openBranches, "openBranches");
@@ -66,6 +78,15 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
         this.openDelete = Objects.requireNonNull(openDelete, "openDelete");
         this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        HistorySnapshotPayload latest = history.state().snapshot().orElse(null);
+        if (!Objects.equals(snapshot, latest)) {
+            rebuildWidgets();
+        }
     }
 
     @Override
@@ -256,17 +277,41 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             int rowY = historyY + 38 + index * 34;
             graphics.fill(x + 10, rowY, x + width - 10, rowY + 30,
                     LegacyLumiTheme.INSET);
+            drawPreview(graphics, version, x + 16, rowY + 4);
             graphics.drawString(font,
-                    font.plainSubstrByWidth(version.message(), width - 130),
-                    x + 20, rowY + 5, LegacyLumiTheme.TEXT, false);
+                    font.plainSubstrByWidth(
+                            version.message(), Math.max(0, width - 180)),
+                    x + 64, rowY + 5, LegacyLumiTheme.TEXT, false);
             graphics.drawString(font, version.author(),
-                    x + 20, rowY + 17, LegacyLumiTheme.MUTED, false);
+                    x + 64, rowY + 17, LegacyLumiTheme.MUTED, false);
         }
         if (snapshot.versions().isEmpty()) {
             graphics.drawString(font,
                     Component.translatable("luma.simple.no_saved_help"),
                     x + 14, historyY + 38, LegacyLumiTheme.MUTED, false);
         }
+    }
+
+    private void drawPreview(
+            GuiGraphics graphics, HistorySnapshotPayload.Version version, int x, int y) {
+        var texture = previews.texture(snapshot.dimensionId(), version.id()).orElse(null);
+        if (texture != null) {
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED, texture.id(),
+                    x, y, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT,
+                    texture.width(), texture.height(), texture.width(), texture.height());
+            return;
+        }
+        LegacyLumiTheme.outlined(graphics, x, y, PREVIEW_WIDTH, PREVIEW_HEIGHT,
+                LegacyLumiTheme.WINDOW, LegacyLumiTheme.INSET_BORDER);
+        int iconSize = 12;
+        graphics.blit(
+                RenderPipelines.GUI_TEXTURED, NO_PREVIEW_ICON,
+                x + (PREVIEW_WIDTH - iconSize) / 2,
+                y + (PREVIEW_HEIGHT - iconSize) / 2,
+                0, 0, iconSize, iconSize,
+                ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE,
+                ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE);
     }
 
     private static void drawPanel(GuiGraphics graphics, int x, int y, int width, int height) {

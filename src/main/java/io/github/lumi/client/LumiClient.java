@@ -75,7 +75,7 @@ public final class LumiClient implements ClientModInitializer {
                     @Override public void openDashboard() {
                         Minecraft client = Minecraft.getInstance();
                         client.setScreen(new LumiDashboardScreen(
-                                client.screen, HISTORY,
+                                client.screen, HISTORY, PREVIEW_STORE,
                                 () -> LumiClient.openSave(client.screen,
                                         SaveScreenController.Intent.SAVE, ""),
                                 () -> LumiClient.openSave(client.screen,

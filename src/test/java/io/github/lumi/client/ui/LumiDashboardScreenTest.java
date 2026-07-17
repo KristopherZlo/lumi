@@ -20,5 +20,8 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("addCompactSidebarButtons"));
         assertTrue(source.contains("\"rollback\", \"luma.action.restore\""));
         assertTrue(source.contains("\"trash\", \"luma.action.delete\""));
+        assertTrue(source.contains("previews.texture(snapshot.dimensionId(), version.id())"));
+        assertTrue(source.contains("NO_PREVIEW_ICON"));
+        assertTrue(source.contains("if (!Objects.equals(snapshot, latest))"));
     }
 }
