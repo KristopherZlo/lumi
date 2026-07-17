@@ -31,22 +31,28 @@ final class LumiBehaviorActions {
         this.report = report;
     }
 
-    List<BlockPos> placeTwentyTnt(BlockPos origin) {
-        return timed("place_20_tnt", () -> server.computeOnServer(minecraft -> {
-            ServerPlayer player = player(minecraft);
-            ServerLevel level = player.level();
+    List<BlockPos> planTwentyTnt(BlockPos origin) {
+        return server.computeOnServer(minecraft -> {
+            ServerLevel level = player(minecraft).level();
             List<BlockPos> positions = new ArrayList<>(20);
             for (int z = 3; z < 7; z++) {
                 for (int x = -2; x < 3; x++) {
-                    BlockPos target = surfacePlacement(
-                            level, origin.getX() + x, origin.getZ() + z);
-                    place(player, Items.TNT, target);
-                    require(level.getBlockState(target).is(Blocks.TNT),
-                            "Player did not place TNT at " + target);
-                    positions.add(target);
+                    positions.add(surfacePlacement(
+                            level, origin.getX() + x, origin.getZ() + z));
                 }
             }
             return List.copyOf(positions);
+        });
+    }
+
+    void placeTwentyTnt(List<BlockPos> positions) {
+        timed("place_20_tnt", () -> server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            for (BlockPos target : positions) {
+                place(player, Items.TNT, target);
+                require(player.level().getBlockState(target).is(Blocks.TNT),
+                        "Player did not place TNT at " + target);
+            }
         }));
     }
 

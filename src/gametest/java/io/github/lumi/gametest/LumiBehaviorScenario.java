@@ -18,6 +18,7 @@ final class LumiBehaviorScenario {
     private final LumiBehaviorOperations operations;
     private final LumiBehaviorActions actions;
     private final BlockPos origin;
+    private final List<BlockPos> tnt;
     private final List<BlockBox> tntArea;
     private final List<BlockBox> unmodifiedControlArea;
     private final List<BlockBox> platformArea;
@@ -41,17 +42,24 @@ final class LumiBehaviorScenario {
                     level.getMinY(), level.getMaxY() - 1);
         });
         origin = world.position();
-        BlockBox tntVolume = new BlockBox(
+        tnt = actions.planTwentyTnt(origin);
+        int lowestTnt = tnt.stream().mapToInt(BlockPos::getY).min().orElseThrow();
+        int highestTnt = tnt.stream().mapToInt(BlockPos::getY).max().orElseThrow();
+        tntArea = List.of(new BlockBox(
+                origin.getX() - 24, Math.max(world.minY(), lowestTnt - 16),
+                origin.getZ() - 24,
+                origin.getX() + 24, Math.min(world.maxY(), highestTnt + 16),
+                origin.getZ() + 24));
+        BlockBox initialVolume = new BlockBox(
                 origin.getX() - 24, world.minY(), origin.getZ() - 24,
                 origin.getX() + 24, world.maxY(), origin.getZ() + 24);
-        tntArea = List.of(tntVolume);
         unmodifiedControlArea = List.of(new BlockBox(
-                tntVolume.minX(), tntVolume.minY(), tntVolume.minZ(),
-                tntVolume.minX(), tntVolume.maxY(), tntVolume.maxZ()));
+                initialVolume.minX(), initialVolume.minY(), initialVolume.minZ(),
+                initialVolume.minX(), initialVolume.maxY(), initialVolume.maxZ()));
         platformArea = List.of(new BlockBox(
                 origin.getX() - 40, origin.getY() + 60, origin.getZ() - 40,
                 origin.getX() + 40, origin.getY() + 140, origin.getZ() + 40));
-        allAreas = List.of(tntArea.getFirst(), platformArea.getFirst());
+        allAreas = List.of(initialVolume, platformArea.getFirst());
     }
 
     void run() throws IOException {
@@ -63,7 +71,7 @@ final class LumiBehaviorScenario {
         LumiWorldSnapshot initialControl = snapshot(
                 "initial_unmodified_control", unmodifiedControlArea);
 
-        var tnt = actions.placeTwentyTnt(origin);
+        actions.placeTwentyTnt(tnt);
         LumiWorldSnapshot tntPlaced = snapshot("tnt_placed", tntArea);
         actions.powerTnt(tnt.getFirst());
         waitTicks("first_fuse_1s", 20);
