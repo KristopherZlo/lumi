@@ -24,31 +24,35 @@ final class LumiBehaviorReport implements AutoCloseable {
     private final Path snapshots;
     private final Path runtimeLog;
     private final BufferedWriter events;
+    private final String scenario;
     private int snapshotNumber;
 
     private LumiBehaviorReport(
             Path directory,
             Path runtimeLog,
-            BufferedWriter events) throws IOException {
+            BufferedWriter events,
+            String scenario) throws IOException {
         this.directory = directory;
         snapshots = Files.createDirectories(directory.resolve("snapshots"));
         this.runtimeLog = runtimeLog;
         this.events = events;
-        event("test", "client_behavior", "started", 0, 0, "");
+        this.scenario = scenario;
+        event("test", scenario, "started", 0, 0, "");
         LOGGER.info("Lumi behavior report: {}", directory.toAbsolutePath());
     }
 
-    static LumiBehaviorReport create(Path gameDirectory) throws IOException {
+    static LumiBehaviorReport create(Path gameDirectory, String scenario)
+            throws IOException {
         Path buildDirectory = gameDirectory.toAbsolutePath().normalize()
                 .getParent().getParent();
         Path directory = Files.createDirectories(buildDirectory
                 .resolve("reports/lumi-behavior")
-                .resolve(RUN_NAME.format(Instant.now())));
+                .resolve(RUN_NAME.format(Instant.now()) + "-" + fileName(scenario)));
         BufferedWriter events = Files.newBufferedWriter(
                 directory.resolve("events.jsonl"), StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         return new LumiBehaviorReport(
-                directory, gameDirectory.resolve("logs/latest.log"), events);
+                directory, gameDirectory.resolve("logs/latest.log"), events, scenario);
     }
 
     Path directory() {
@@ -146,7 +150,7 @@ final class LumiBehaviorReport implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        event("test", "client_behavior", "finished", 0, 0, "");
+        event("test", scenario, "finished", 0, 0, "");
         events.close();
         try {
             Files.copy(runtimeLog, directory.resolve("latest.log"),

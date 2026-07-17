@@ -3,13 +3,13 @@ package io.github.lumi.gametest;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 
-/** End-to-end singleplayer builder workflow with real production mods loaded. */
+/** Clean-world entry point for the large TNT and durable-entity workflow. */
 @SuppressWarnings("UnstableApiUsage")
-public final class LumiBehaviorClientGameTest implements FabricClientGameTest {
+public final class LumiStressBehaviorClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
-        LumiClientBehaviorWorld.run(context, "builder-history",
+        LumiClientBehaviorWorld.run(context, "tnt-entities-stress",
                 (test, world, report) ->
-                        new LumiBehaviorScenario(test, world, report).run());
+                        new LumiStressBehaviorScenario(test, world, report).run());
     }
 }
