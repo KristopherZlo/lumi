@@ -9,7 +9,9 @@ import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.TombstoneRepository;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,6 +26,7 @@ public final class HistoryQueryService {
     private final CommitRepository commits;
     private final BranchRefRepository refs;
     private final TombstoneRepository tombstones;
+    private final ForwardHistoryService forwardHistory;
 
     public HistoryQueryService(
             CommitRepository commits,
@@ -32,6 +35,7 @@ public final class HistoryQueryService {
         this.commits = Objects.requireNonNull(commits, "commits");
         this.refs = Objects.requireNonNull(refs, "refs");
         this.tombstones = Objects.requireNonNull(tombstones, "tombstones");
+        this.forwardHistory = new ForwardHistoryService(commits, refs);
     }
 
     public List<HistoryEntry> firstParent(BranchName branch, int limit) throws IOException {
@@ -112,6 +116,7 @@ public final class HistoryQueryService {
         validateLimit(limit);
         CommitId next = refs.read(branch).orElseThrow(
                 () -> new IOException("Branch does not exist: " + branch)).commit();
+        CommitId head = next;
         ArrayList<HistoryEntry> history = new ArrayList<>(Math.min(limit, 64));
         int visited = 0;
         while (history.size() < limit && visited++ < MAX_QUERY) {
@@ -131,7 +136,46 @@ public final class HistoryQueryService {
             }
             next = commit.parents().getFirst();
         }
-        return List.copyOf(history);
+        Map<CommitId, HistoryEntry> combined = new LinkedHashMap<>();
+        history.forEach(entry -> combined.put(entry.id(), entry));
+        for (CommitId root : forwardHistory.roots(branch, workspaceId)) {
+            if (visited >= MAX_QUERY) {
+                break;
+            }
+            ArrayList<HistoryEntry> forward = new ArrayList<>();
+            next = root;
+            boolean reachesHead = false;
+            while (visited++ < MAX_QUERY) {
+                if (next.equals(head)) {
+                    reachesHead = true;
+                    break;
+                }
+                var commit = commits.read(next);
+                if (workspaceId.isPresent()
+                        && !commit.workspaceId().equals(workspaceId.orElseThrow())) {
+                    break;
+                }
+                if (tombstones.read(next).isEmpty() && included.test(commit)) {
+                    forward.add(new HistoryEntry(next, commit));
+                }
+                if (commit.parents().isEmpty()) {
+                    break;
+                }
+                next = commit.parents().getFirst();
+            }
+            if (reachesHead) {
+                forward.forEach(entry -> combined.putIfAbsent(entry.id(), entry));
+            }
+        }
+        if (combined.size() == history.size()) {
+            return List.copyOf(history);
+        }
+        return combined.values().stream()
+                .sorted(Comparator
+                        .comparing((HistoryEntry entry) -> entry.commit().timestamp()).reversed()
+                        .thenComparing(entry -> entry.id().hex()))
+                .limit(limit)
+                .toList();
     }
 
     private static boolean visible(CommitKind kind, boolean includeZoneCommits) {

@@ -24,7 +24,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   overlapping conflicts explicitly use the source branch.
 - Alt+L opens the current workspace history from the immutable server snapshot.
   History exposes separate Save/Amend actions, compact version actions and a
-  branch browser for Create, Switch and Merge.
+  branch browser for Create, Switch and Merge. Restoring an older version keeps
+  its still-restorable forward versions visible, matching the legacy menu.
 - Successful integrated Save and Amend operations capture a bounded world
   thumbnail for their new history entry; missing previews fall back safely.
 - First-run onboarding opens once per client installation and remains replayable

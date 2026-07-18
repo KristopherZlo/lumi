@@ -47,6 +47,31 @@ class HistoryQueryServiceTest {
     }
 
     @Test
+    void keepsForwardDescendantsVisibleAfterRestoreReset() throws Exception {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        CommitId first = commits.write(commit(tree, List.of(), "First", 1));
+        CommitId second = commits.write(commit(tree, List.of(first), "Second", 2));
+        CommitId third = commits.write(commit(tree, List.of(second), "Third", 3));
+        var main = refs.create(new BranchName("main"), third);
+        CommitId checkpoint = commits.write(new Commit(
+                tree, List.of(third), new CommitAuthor(new UUID(0, 1), "Builder"),
+                "Return point", Instant.ofEpochSecond(4), new UUID(0, 2), Optional.empty(),
+                CommitKind.HIDDEN_RETURN, new CommitStatistics(0, 0, 0, 0)));
+        var checkpointRef = refs.compareAndSet(main, checkpoint);
+        refs.create(new BranchName("hidden/return/test"), checkpoint);
+        refs.compareAndSet(checkpointRef, first);
+
+        List<HistoryEntry> history = query(commits, refs)
+                .firstParent(new BranchName("main"), new UUID(0, 2), 10);
+
+        assertEquals(List.of(third, second, first),
+                history.stream().map(HistoryEntry::id).toList());
+    }
+
+    @Test
     void stopsBeforeParentFromAnotherWorkspace() throws Exception {
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
         CommitRepository commits = new CommitRepository(repositoryRoot);

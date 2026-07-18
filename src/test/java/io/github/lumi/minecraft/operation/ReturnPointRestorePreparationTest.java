@@ -11,6 +11,7 @@ import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.RestoreService;
+import io.github.lumi.domain.service.ForwardHistoryService;
 import io.github.lumi.domain.service.SaveResult;
 import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.storage.repository.BranchRefRepository;
@@ -46,13 +47,16 @@ class ReturnPointRestorePreparationTest {
         BranchName hidden = new BranchName("hidden/return/test");
         ReturnPointRestorePreparation preparation = new ReturnPointRestorePreparation(
                 new RestoreService(objects, commits, new OriginStore(repositoryRoot)),
-                new NoOpWorldApply(), refs, journals, Runnable::run);
+                new NoOpWorldApply(), refs, journals,
+                new ForwardHistoryService(commits, refs), Runnable::run);
 
         RestoreOperation operation = preparation.prepare(
                 saved, target, hidden,
                 UUID.fromString("10000000-0000-0000-0000-000000000001"), false).join();
 
         assertEquals(returnCommit, refs.read(hidden).orElseThrow().commit());
+        assertEquals(List.of(target), new ForwardHistoryService(commits, refs)
+                .roots(new BranchName("main"), Optional.of(new UUID(1, 1))));
         assertTrue(journals.read().isPresent());
         assertTrue(journals.read().orElseThrow().target().excludeEntities());
         assertEquals(RestoreStatus.APPLYING, operation.status());

@@ -40,6 +40,7 @@ import io.github.lumi.domain.service.DimensionHistoryInitializer;
 import io.github.lumi.domain.service.DimensionHistoryViewService;
 import io.github.lumi.domain.service.AutoVersionService;
 import io.github.lumi.domain.service.HistoryQueryService;
+import io.github.lumi.domain.service.ForwardHistoryService;
 import io.github.lumi.domain.service.ImportExportService;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.MergeService;
@@ -238,6 +239,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 entityDurability, blockEntityBaselines);
         returnPointRestores = new ReturnPointRestorePreparation(
                 restores, worldApply, refs, journals,
+                new ForwardHistoryService(commits, refs),
                 restoreStateListener, background);
         packages = new DimensionPackageService(
                 level.dimension().identifier().toString(), repository,
