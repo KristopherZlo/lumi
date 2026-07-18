@@ -422,6 +422,46 @@ class RestoreOperationTest {
     }
 
     @Test
+    void preparationFailureDoesNotCreateRecoveryJournal() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('2'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+
+        assertThrows(IOException.class, () -> RestoreOperation.start(
+                new PreparedRestore(expected, id('3'), Map.of(), Map.of(), Map.of(), Map.of()),
+                new FailingPreparation(), ignored -> { }, journals, UUID.randomUUID()));
+
+        assertTrue(journals.read().isEmpty());
+    }
+
+    @Test
+    void cleanCloseBeforeApplyClearsPreparedJournal() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('4'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('5'), Map.of(), Map.of(), Map.of(), Map.of()),
+                new ImmediatelyVerified(), ignored -> { }, journals, UUID.randomUUID());
+
+        operation.close();
+
+        assertEquals(RestoreStatus.CANCELLED, operation.status());
+        assertTrue(journals.read().isEmpty());
+    }
+
+    @Test
+    void closeAfterApplyStartsRetainsRecoveryJournal() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('6'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('7'), Map.of(), Map.of(), Map.of(), Map.of()),
+                new ImmediatelyVerified(), ignored -> { }, journals, UUID.randomUUID());
+        operation.tick(Long.MAX_VALUE);
+
+        operation.close();
+
+        assertEquals(OperationPhase.VERIFYING, journals.read().orElseThrow().phase());
+    }
+
+    @Test
     void closesTargetAndReturnSessionsAfterSafeReturn() throws IOException {
         var expected = new BranchRef(new BranchName("main"), id('3'), 1);
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
@@ -459,6 +499,16 @@ class RestoreOperationTest {
                 @Override public boolean repairUntil(long deadlineNanos) { return true; }
                 @Override public void restartVerification() { }
             };
+        }
+    }
+
+    private static final class FailingPreparation implements WorldStateApply {
+        @Override public PreparedState prepare(State target) throws IOException {
+            throw new IOException("Cannot decode restore state");
+        }
+
+        @Override public ApplySession begin(PreparedState target) {
+            throw new AssertionError("Failed preparation must not begin apply");
         }
     }
 

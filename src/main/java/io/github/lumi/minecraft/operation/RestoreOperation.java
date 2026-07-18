@@ -287,11 +287,20 @@ public final class RestoreOperation implements DimensionMutation {
         Objects.requireNonNull(publication, "publication");
         Objects.requireNonNull(journals, "journals");
         Objects.requireNonNull(stateListener, "stateListener");
+        WorldStateApply.PreparedState preparedTarget = world.prepare(
+                new WorldStateApply.State(
+                        restore.sections(), restore.entities(), restore.playerSpawns()));
+        WorldStateApply.PreparedState preparedReturn = world.prepare(
+                new WorldStateApply.State(
+                        restore.returnSections(), restore.returnEntities(),
+                        restore.returnPlayerSpawns()));
         OperationJournal journal = journals.create(new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
                 Objects.requireNonNull(target, "target")));
-        return prepare(restore, world, publication, journals, journal, stateListener);
+        return new RestoreOperation(
+                restore, world, publication, journals, journal,
+                preparedTarget, preparedReturn, stateListener);
     }
 
     private static RestoreOperation prepare(
@@ -481,9 +490,12 @@ public final class RestoreOperation implements DimensionMutation {
         if (status != RestoreStatus.APPLYING || journal.phase() != OperationPhase.PREPARED) {
             throw new IllegalStateException("Restore has already started mutating the world");
         }
-        journals.clear(journal);
-        targetSession.close();
-        status = RestoreStatus.CANCELLED;
+        try {
+            journals.clear(journal);
+            status = RestoreStatus.CANCELLED;
+        } finally {
+            targetSession.close();
+        }
     }
 
     @Override
@@ -497,8 +509,13 @@ public final class RestoreOperation implements DimensionMutation {
     }
 
     @Override
-    public void close() {
-        targetSession.close();
+    public void close() throws IOException {
+        if (status == RestoreStatus.APPLYING
+                && journal.phase() == OperationPhase.PREPARED) {
+            cancelBeforeApply();
+        } else {
+            targetSession.close();
+        }
         if (returnSession != null) {
             returnSession.close();
         }
