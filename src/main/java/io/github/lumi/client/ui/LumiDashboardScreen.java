@@ -16,6 +16,10 @@ import net.minecraft.resources.Identifier;
 
 /** Legacy project-window presentation backed by the immutable V2 history snapshot. */
 public final class LumiDashboardScreen extends LumiLegacyModalScreen {
+    static final int HISTORY_TOP_OFFSET = 98;
+    private static final int HISTORY_FIRST_ROW_OFFSET = 38;
+    private static final int HISTORY_ROW_HEIGHT = 30;
+    private static final int HISTORY_ROW_STRIDE = 34;
     private static final int PREVIEW_WIDTH = 40;
     private static final int PREVIEW_HEIGHT = 22;
     private static final int ICON_TEXTURE_SIZE = 24;
@@ -118,8 +122,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             onClose();
         }, LumiLegacyButton.Kind.DANGER);
 
-        historyY = layout.bodyY() + 104;
-        historyHeight = layout.bodyHeight() - 104;
+        historyY = layout.bodyY() + HISTORY_TOP_OFFSET;
+        historyHeight = layout.bodyHeight() - HISTORY_TOP_OFFSET;
         if (snapshot == null) {
             return;
         }
@@ -143,11 +147,11 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             refocusSearch = false;
         }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
-        int rows = Math.min(versions.size(),
-                Math.max(0, (historyHeight - 50) / 34));
+        int rows = visibleHistoryRows(historyHeight, versions.size());
         for (int index = 0; index < rows; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
-            int rowY = historyY + 38 + index * 34;
+            int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
+                    + index * HISTORY_ROW_STRIDE;
             int right = layout.bodyX() + layout.bodyWidth() - 14;
             int sourceIndex = snapshot.versions().indexOf(version);
             addIconButton(right - 122, rowY + 6,
@@ -370,11 +374,11 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     LegacyLumiTheme.INSET_BORDER);
         }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
-        int rows = Math.min(versions.size(),
-                Math.max(0, (historyHeight - 50) / 34));
+        int rows = visibleHistoryRows(historyHeight, versions.size());
         for (int index = 0; index < rows; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
-            int rowY = historyY + 38 + index * 34;
+            int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
+                    + index * HISTORY_ROW_STRIDE;
             graphics.fill(x + 10, rowY, x + width - 10, rowY + 30,
                     LegacyLumiTheme.INSET);
             drawPreview(graphics, version, x + 16, rowY + 4);
@@ -419,6 +423,15 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private static void drawPanel(GuiGraphics graphics, int x, int y, int width, int height) {
         LegacyLumiTheme.outlined(graphics, x, y, width, height,
                 LegacyLumiTheme.PANEL, LegacyLumiTheme.PANEL_BORDER);
+    }
+
+    static int visibleHistoryRows(int historyHeight, int availableVersions) {
+        int firstRowSpace = historyHeight - HISTORY_FIRST_ROW_OFFSET;
+        if (firstRowSpace < HISTORY_ROW_HEIGHT) {
+            return 0;
+        }
+        return Math.min(availableVersions,
+                1 + (firstRowSpace - HISTORY_ROW_HEIGHT) / HISTORY_ROW_STRIDE);
     }
 
     private void drawChip(GuiGraphics graphics, int x, int y, String text) {

@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -7,6 +8,14 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class LumiDashboardScreenTest {
+    @Test
+    void exposesHistoryAtDefaultClientGameTestViewport() {
+        LegacyWorkspaceLayout layout = LegacyWorkspaceLayout.fit(427, 240);
+
+        assertEquals(1, LumiDashboardScreen.visibleHistoryRows(
+                layout.bodyHeight() - LumiDashboardScreen.HISTORY_TOP_OFFSET, 2));
+    }
+
     @Test
     void restoresLegacyActionsAndCompactIconNavigation() throws Exception {
         String source = Files.readString(Path.of(
