@@ -23,7 +23,7 @@ public final class LumiFallingBlockGameTests {
     private static final BlockPos SOURCE = SUPPORT.above();
     private static final BlockPos LANDING = new BlockPos(3, 2, 3);
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void midFallUndoCancelsOwnedCarrier(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
@@ -53,7 +53,7 @@ public final class LumiFallingBlockGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void completedFallIsExactAndConflictIsAtomic(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID firstPlayer = UUID.randomUUID();

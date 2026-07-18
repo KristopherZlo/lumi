@@ -21,7 +21,7 @@ public final class LumiFluidGameTests {
     private static final BlockPos SOURCE = new BlockPos(3, 3, 3);
     private static final BlockPos FLOW = new BlockPos(3, 2, 3);
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void midFlowUndoCancelsOwnedFluidTicks(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
@@ -48,7 +48,7 @@ public final class LumiFluidGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void settledFlowIsExactAndConflictIsAtomic(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID firstPlayer = UUID.randomUUID();

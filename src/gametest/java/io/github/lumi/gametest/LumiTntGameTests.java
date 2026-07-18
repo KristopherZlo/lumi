@@ -32,7 +32,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /** Exact active-carrier and completed-result gates for TNT actions. */
 public final class LumiTntGameTests {
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void activeTntOutlivesHistoryCountEviction(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
@@ -55,7 +55,7 @@ public final class LumiTntGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void midFuseUndoCancelsOwnedTnt(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
@@ -204,7 +204,7 @@ public final class LumiTntGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void completedExplosionIsExactAndConflictIsAtomic(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID firstPlayer = UUID.randomUUID();

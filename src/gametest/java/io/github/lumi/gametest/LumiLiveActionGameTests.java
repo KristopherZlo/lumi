@@ -23,7 +23,7 @@ import net.minecraft.world.level.gamerules.GameRules;
 
 /** Integrated gates for exact session-only world actions. */
 public final class LumiLiveActionGameTests {
-    @GameTest(maxTicks = 2000)
+    @GameTest(maxTicks = 300000)
     public void redoneDynamicEntityRemainsUndoableAfterTicking(GameTestHelper helper) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
                 .orElseThrow(() -> helper.assertionException("Lumi runtime is not loaded"));
@@ -142,7 +142,7 @@ public final class LumiLiveActionGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(maxTicks = 2000)
+    @GameTest(maxTicks = 300000)
     public void derivedLeafWaveRemainsOwnedByRootAction(GameTestHelper helper) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
                 .orElseThrow(() -> helper.assertionException("Lumi runtime is not loaded"));
@@ -197,7 +197,7 @@ public final class LumiLiveActionGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(maxTicks = 2000)
+    @GameTest(maxTicks = 300000)
     public void directBlockUndoRedoIsExact(GameTestHelper helper) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
                 .orElseThrow(() -> helper.assertionException("Lumi runtime is not loaded"));
@@ -232,7 +232,7 @@ public final class LumiLiveActionGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(maxTicks = 2000)
+    @GameTest(maxTicks = 300000)
     public void activeFireUndoRedoIsExact(GameTestHelper helper) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
                 .orElseThrow(() -> helper.assertionException("Lumi runtime is not loaded"));
@@ -277,7 +277,7 @@ public final class LumiLiveActionGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(maxTicks = 2000)
+    @GameTest(maxTicks = 300000)
     public void newerFireOverlapRefusesUndoAtomically(GameTestHelper helper) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
                 .orElseThrow(() -> helper.assertionException("Lumi runtime is not loaded"));

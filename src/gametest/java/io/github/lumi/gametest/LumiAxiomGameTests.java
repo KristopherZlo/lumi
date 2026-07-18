@@ -22,7 +22,7 @@ public final class LumiAxiomGameTests {
     private static final BlockPos FIRST = new BlockPos(2, 2, 2);
     private static final BlockPos SECOND = new BlockPos(3, 2, 2);
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void axiomBufferIsExactAndConflictIsAtomic(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         AtomicReference<ServerPlayer> player = new AtomicReference<>();

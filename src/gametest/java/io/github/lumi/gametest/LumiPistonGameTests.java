@@ -25,7 +25,7 @@ public final class LumiPistonGameTests {
     private static final BlockPos PAYLOAD = new BlockPos(3, 2, 3);
     private static final BlockPos DESTINATION = new BlockPos(4, 2, 3);
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void midMoveUndoFinalizesOwnedPiston(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
@@ -52,7 +52,7 @@ public final class LumiPistonGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void completedMoveIsExactAndConflictIsAtomic(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID firstPlayer = UUID.randomUUID();

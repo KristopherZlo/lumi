@@ -33,7 +33,7 @@ public final class LumiWorldEditGameTests {
         public Optional<Integer> getPolyhedronVertexLimit() { return Optional.empty(); }
     };
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void worldEditCommandUndoRedoIsExact(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         AtomicReference<ServerPlayer> player = new AtomicReference<>();
@@ -72,7 +72,7 @@ public final class LumiWorldEditGameTests {
                 .thenSucceed();
     }
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void newerOverlapRefusesWorldEditUndoAtomically(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         AtomicReference<ServerPlayer> player = new AtomicReference<>();

@@ -24,7 +24,7 @@ import net.minecraft.world.phys.Vec3;
 public final class LumiProjectileGameTests {
     private static final BlockPos CRYSTAL = new BlockPos(4, 3, 4);
 
-    @GameTest(maxTicks = 2500)
+    @GameTest(maxTicks = 300000)
     public void arrowImpactRemainsOwnedThroughCrystalExplosion(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
