@@ -10,6 +10,9 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 
 /** Captures exact world state and accumulates independent behavior failures. */
 final class LumiBehaviorChecks {
+    private static final int QUIESCENCE_WINDOW_TICKS = 120;
+    private static final int MAX_QUIESCENCE_ATTEMPTS = 10;
+
     private final ClientGameTestContext context;
     private final TestSingleplayerContext singleplayer;
     private final LumiBehaviorReport report;
@@ -29,6 +32,33 @@ final class LumiBehaviorChecks {
             var level = server.getPlayerList().getPlayers().getFirst().level();
             return LumiWorldSnapshot.capture(level, areas, report, name);
         });
+    }
+
+    void awaitQuiescence(String name, List<BlockBox> areas) throws IOException {
+        LumiWorldSnapshot previous = snapshot(name + "_preload", areas);
+        for (int attempt = 1; attempt <= MAX_QUIESCENCE_ATTEMPTS; attempt++) {
+            long started = System.nanoTime();
+            String attemptName = name + "_quiescence_" + attempt;
+            waitTicks(attemptName, QUIESCENCE_WINDOW_TICKS);
+            LumiWorldSnapshot current = snapshot(attemptName, areas);
+            try {
+                current.assertMatches(previous, attemptName);
+                report.event("gate", attemptName, "succeeded",
+                        QUIESCENCE_WINDOW_TICKS, elapsedMillis(started),
+                        "full comparison area unchanged");
+                return;
+            } catch (AssertionError drift) {
+                String status = attempt == MAX_QUIESCENCE_ATTEMPTS
+                        ? "failed" : "retry";
+                report.event("gate", attemptName, status,
+                        QUIESCENCE_WINDOW_TICKS, elapsedMillis(started),
+                        drift.getMessage());
+                if (attempt == MAX_QUIESCENCE_ATTEMPTS) {
+                    throw drift;
+                }
+                previous = current;
+            }
+        }
     }
 
     void assertSnapshot(

@@ -57,11 +57,11 @@ final class LumiBehaviorScenario {
     }
 
     void run() throws IOException {
-        checks.snapshot("world_preload", allAreas);
-        checks.waitTicks("world_stabilization", 100);
-        CommitId initialCommit = operations.activeCommit();
+        checks.awaitQuiescence("world", allAreas);
+        var initialSave = operations.save("initial", allAreas);
+        CommitId initialCommit = initialSave.commit();
         BranchName mainBranch = operations.activeBranch();
-        LumiWorldSnapshot initial = checks.snapshot("initial", allAreas);
+        LumiWorldSnapshot initial = initialSave.snapshot();
         LumiWorldSnapshot initialControl = checks.snapshot(
                 "initial_unmodified_control", unmodifiedControlArea);
 
