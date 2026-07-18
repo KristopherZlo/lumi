@@ -291,6 +291,27 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
+    void nextEnqueueObserverCanAttachFrozenAndTerminalBoundaries() throws IOException {
+        var order = new ArrayList<String>();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                new RecordingFreeze(), () -> 0L, 1L);
+        NamedMutation mutation = new NamedMutation("advance", order, 1);
+        coordinator.observeNextEnqueue((ticket, accepted) -> {
+            assertTrue(accepted == mutation);
+            order.add("enqueued");
+            coordinator.observeFreezeAcquired(ticket, () -> order.add("frozen"));
+            coordinator.observeTerminal(ticket, ignored -> order.add("terminal"));
+        });
+
+        coordinator.start(mutation);
+        coordinator.tick();
+
+        assertEquals(java.util.List.of(
+                "enqueued", "frozen", "advance", "terminal"), order);
+        assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
     void failingProgressObserverIsRemovedBeforeTheNextTick() throws IOException {
         RecordingFreeze freeze = new RecordingFreeze();
         var failures = new ArrayList<RuntimeException>();

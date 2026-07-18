@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.LongSupplier;
@@ -27,7 +28,10 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
     private final HashMap<OperationTicket, Consumer<OperationProgress>> progressObservers =
             new HashMap<>();
     private final HashMap<OperationTicket, Runnable> freezeObservers = new HashMap<>();
+    private final HashMap<OperationTicket, Consumer<DimensionMutation>> terminalObservers =
+            new HashMap<>();
     private final HashMap<OperationTicket, OperationProgress> publishedProgress = new HashMap<>();
+    private BiConsumer<OperationTicket, DimensionMutation> nextEnqueueObserver;
     private FailureContainedMutation active;
     private OperationTicket activeTicket;
     private Consumer<DimensionMutation> activeObserver = ignored -> { };
@@ -102,6 +106,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
                 Objects.requireNonNull(operationObserver, "operationObserver"));
         if (active == null && queued.isEmpty()) {
             activate(entry);
+            reportEnqueue(entry);
             return entry.ticket();
         }
         if (queued.size() >= MAX_QUEUED_OPERATIONS) {
@@ -114,7 +119,21 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         }
         queued.add(position, entry);
         notifyPositions();
+        reportEnqueue(entry);
         return entry.ticket();
+    }
+
+    private void reportEnqueue(QueuedOperation entry) {
+        BiConsumer<OperationTicket, DimensionMutation> observer = nextEnqueueObserver;
+        if (observer == null) {
+            return;
+        }
+        nextEnqueueObserver = null;
+        try {
+            observer.accept(entry.ticket(), entry.operation());
+        } catch (RuntimeException failed) {
+            reportObserverFailure("enqueue", failed);
+        }
     }
 
     private void activate(QueuedOperation entry) {
@@ -193,6 +212,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             positionObservers.remove(activeTicket);
             progressObservers.remove(activeTicket);
             freezeObservers.remove(activeTicket);
+            terminalObservers.remove(activeTicket);
             publishedProgress.remove(activeTicket);
             active = null;
             activeTicket = null;
@@ -218,6 +238,10 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             terminalReported = true;
             notifyObserver(terminalObserver, outcome, "global terminal");
             notifyObserver(activeObserver, outcome, "request terminal");
+            Consumer<DimensionMutation> observer = terminalObservers.remove(activeTicket);
+            if (observer != null) {
+                notifyObserver(observer, outcome, "ticket terminal");
+            }
         }
     }
 
@@ -298,6 +322,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             positionObservers.remove(ticket);
             progressObservers.remove(ticket);
             freezeObservers.remove(ticket);
+            terminalObservers.remove(ticket);
             publishedProgress.remove(ticket);
             notifyPositions();
             return true;
@@ -330,6 +355,30 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             publishedProgress.remove(ticket);
             reportObserverFailure("progress", failed);
         }
+    }
+
+    /** Observes the next operation accepted by this coordinator exactly once. */
+    public synchronized void observeNextEnqueue(
+            BiConsumer<OperationTicket, DimensionMutation> observer) {
+        Objects.requireNonNull(observer, "observer");
+        if (nextEnqueueObserver != null) {
+            throw new IllegalStateException("The next enqueue already has an observer");
+        }
+        nextEnqueueObserver = observer;
+    }
+
+    /** Runs once for this ticket while its terminal state is still frozen. */
+    public synchronized void observeTerminal(
+            OperationTicket ticket, Consumer<DimensionMutation> observer) {
+        Objects.requireNonNull(ticket, "ticket");
+        Objects.requireNonNull(observer, "observer");
+        if (ticket.equals(activeTicket) && terminalReported) {
+            throw new IllegalStateException("Operation terminal boundary has already passed");
+        }
+        if (queuePosition(ticket).isEmpty()) {
+            throw new IllegalArgumentException("Unknown operation ticket");
+        }
+        terminalObservers.put(ticket, observer);
     }
 
     /** Runs once after the dimension is frozen and before the first mutation step. */
@@ -432,7 +481,9 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         positionObservers.clear();
         progressObservers.clear();
         freezeObservers.clear();
+        terminalObservers.clear();
         publishedProgress.clear();
+        nextEnqueueObserver = null;
         active = null;
         activeTicket = null;
         lease = null;
