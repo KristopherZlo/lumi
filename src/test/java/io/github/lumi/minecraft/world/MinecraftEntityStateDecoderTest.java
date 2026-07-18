@@ -131,6 +131,24 @@ class MinecraftEntityStateDecoderTest {
                 .getCompoundOrEmpty(1).getStringOr("id", ""));
     }
 
+    @Test
+    void removesMaterializedDefaultAttributesBeforeRestoreVerification() throws Exception {
+        UUID entityId = UUID.fromString("40000000-0000-0000-0000-000000000004");
+        CompoundTag payload = new CompoundTag();
+        ListTag attributes = new ListTag();
+        attributes.add(attribute("minecraft:movement_speed", 0.7D));
+        attributes.add(attribute("minecraft:armor", 0.0D));
+        attributes.add(attribute("minecraft:armor_toughness", 0.0D));
+        payload.put("attributes", attributes);
+        var source = new EntityChunkBlob(List.of(new EntityState(
+                entityId, "minecraft:armor_stand", MinecraftNbtCodec.encode(payload))));
+
+        EntityState normalized = new MinecraftEntityStateDecoder(
+                BuiltInRegistries.ENTITY_TYPE).normalize(source).entities().getFirst();
+
+        assertEquals(new CompoundTag(), MinecraftNbtCodec.decode(normalized.nbt()));
+    }
+
     private static CompoundTag entityPayload(
             float yaw, float pitch, String firstAttribute, String secondAttribute) {
         CompoundTag entity = new CompoundTag();
@@ -148,6 +166,12 @@ class MinecraftEntityStateDecoderTest {
     private static CompoundTag attribute(String id) {
         CompoundTag attribute = new CompoundTag();
         attribute.putString("id", id);
+        return attribute;
+    }
+
+    private static CompoundTag attribute(String id, double base) {
+        CompoundTag attribute = attribute(id);
+        attribute.putDouble("base", base);
         return attribute;
     }
 }

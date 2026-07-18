@@ -63,7 +63,9 @@ public final class MinecraftEntityStateDecoder {
             EntityChunkBlob source, Set<UUID> passengerIds) throws IOException {
         var normalized = new ArrayList<EntityState>(source.entities().size());
         for (EntityState entity : source.entities()) {
-            CompoundTag payload = canonicalizer.normalize(MinecraftNbtCodec.decode(entity.nbt()));
+            EntityType<?> type = resolveType(entity.type());
+            CompoundTag payload = canonicalizer.normalize(
+                    MinecraftNbtCodec.decode(entity.nbt()), type);
             collectPassengerIds(payload, passengerIds);
             var canonical = MinecraftNbtCodec.encode(payload);
             normalized.add(canonical.equals(entity.nbt()) ? entity
@@ -85,20 +87,24 @@ public final class MinecraftEntityStateDecoder {
     DecodedEntityChunk decodeNormalized(EntityChunkBlob source) throws IOException {
         var decoded = new ArrayList<DecodedEntity>(source.entities().size());
         for (var entity : source.entities()) {
-            final Identifier identifier;
-            try {
-                identifier = Identifier.parse(entity.type());
-            } catch (IllegalArgumentException invalid) {
-                throw new IOException("Invalid persistent entity type: " + entity.type(), invalid);
-            }
-            EntityType<?> type = types.getOptional(identifier).orElseThrow(
-                    () -> new IOException("Missing persistent entity type: " + entity.type()));
+            EntityType<?> type = resolveType(entity.type());
             var nbt = MinecraftNbtCodec.decode(entity.nbt());
             nbt.putString("id", entity.type());
             nbt.putIntArray("UUID", UUIDUtil.uuidToIntArray(entity.id()));
             decoded.add(new DecodedEntity(entity.id(), type, nbt));
         }
         return new DecodedEntityChunk(decoded);
+    }
+
+    private EntityType<?> resolveType(String value) throws IOException {
+        final Identifier identifier;
+        try {
+            identifier = Identifier.parse(value);
+        } catch (IllegalArgumentException invalid) {
+            throw new IOException("Invalid persistent entity type: " + value, invalid);
+        }
+        return types.getOptional(identifier).orElseThrow(
+                () -> new IOException("Missing persistent entity type: " + value));
     }
 
     private static void collectPassengerIds(CompoundTag parent, Set<UUID> passengerIds) {

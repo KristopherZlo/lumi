@@ -2,17 +2,27 @@ package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class MinecraftEntityNbtCanonicalizerTest {
     private final MinecraftEntityNbtCanonicalizer canonicalizer =
             new MinecraftEntityNbtCanonicalizer();
+
+    @BeforeAll
+    static void bootstrapMinecraft() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
 
     @Test
     void makesRotationAndAttributesStableAcrossVanillaReload() throws Exception {
@@ -59,6 +69,25 @@ class MinecraftEntityNbtCanonicalizerTest {
                 .getCompoundOrEmpty(0).getStringOr("id", ""));
     }
 
+    @Test
+    void omitsDefaultAttributesMaterializedByVanillaReload() throws Exception {
+        CompoundTag before = new CompoundTag();
+        before.putString("id", "minecraft:armor_stand");
+        ListTag beforeAttributes = new ListTag();
+        beforeAttributes.add(attribute("minecraft:movement_speed", 0.7D));
+        before.put("attributes", beforeAttributes);
+        CompoundTag reloaded = before.copy();
+        ListTag reloadedAttributes = reloaded.getListOrEmpty("attributes");
+        reloadedAttributes.add(attribute("minecraft:armor", 0.0D));
+        reloadedAttributes.add(attribute("minecraft:armor_toughness", 0.0D));
+
+        CompoundTag normalized = canonicalizer.normalize(reloaded);
+
+        assertEquals(MinecraftNbtCodec.encode(canonicalizer.normalize(before)),
+                MinecraftNbtCodec.encode(normalized));
+        assertFalse(normalized.contains("attributes"));
+    }
+
     private static CompoundTag entity(
             float yaw, float pitch, String firstAttribute, String secondAttribute) {
         CompoundTag entity = new CompoundTag();
@@ -76,6 +105,12 @@ class MinecraftEntityNbtCanonicalizerTest {
     private static CompoundTag attribute(String id) {
         CompoundTag attribute = new CompoundTag();
         attribute.putString("id", id);
+        return attribute;
+    }
+
+    private static CompoundTag attribute(String id, double base) {
+        CompoundTag attribute = attribute(id);
+        attribute.putDouble("base", base);
         return attribute;
     }
 
