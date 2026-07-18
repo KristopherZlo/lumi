@@ -191,7 +191,8 @@ public final class LumiHistoryGameTests {
                 .thenExecute(() -> {
                     chunkLoad.set(loadChunk(level, chunk));
                 })
-                .thenWaitUntil(() -> requireLoaded(helper, level, chunk, chunkLoad.get()))
+                .thenWaitUntil(() -> requireLoaded(
+                        helper, runtime, level, chunk, chunkLoad.get()))
                 .thenExecute(() -> {
                     level.setBlockAndUpdate(target, Blocks.GOLD_BLOCK.defaultBlockState());
                     releaseChunk(level, chunk);
@@ -208,7 +209,8 @@ public final class LumiHistoryGameTests {
                             helper, runtime, gold.get(), target, "minecraft:gold_block");
                     chunkLoad.set(loadChunk(level, chunk));
                 })
-                .thenWaitUntil(() -> requireLoaded(helper, level, chunk, chunkLoad.get()))
+                .thenWaitUntil(() -> requireLoaded(
+                        helper, runtime, level, chunk, chunkLoad.get()))
                 .thenExecute(() -> {
                     assertBlock(helper, level, target, Blocks.GOLD_BLOCK);
                     level.setBlockAndUpdate(target, Blocks.DIAMOND_BLOCK.defaultBlockState());
@@ -233,7 +235,8 @@ public final class LumiHistoryGameTests {
                     requireSucceeded(helper, terminal.get(), "Restore unloaded gold");
                     chunkLoad.set(loadChunk(level, chunk));
                 })
-                .thenWaitUntil(() -> requireLoaded(helper, level, chunk, chunkLoad.get()))
+                .thenWaitUntil(() -> requireLoaded(
+                        helper, runtime, level, chunk, chunkLoad.get()))
                 .thenExecute(() -> {
                     assertBlock(helper, level, target, Blocks.GOLD_BLOCK);
                     releaseChunk(level, chunk);
@@ -247,7 +250,8 @@ public final class LumiHistoryGameTests {
                     requireSucceeded(helper, terminal.get(), "Restore unloaded diamond");
                     chunkLoad.set(loadChunk(level, chunk));
                 })
-                .thenWaitUntil(() -> requireLoaded(helper, level, chunk, chunkLoad.get()))
+                .thenWaitUntil(() -> requireLoaded(
+                        helper, runtime, level, chunk, chunkLoad.get()))
                 .thenExecute(() -> {
                     assertBlock(helper, level, target, Blocks.DIAMOND_BLOCK);
                     releaseChunk(level, chunk);
@@ -336,6 +340,7 @@ public final class LumiHistoryGameTests {
 
     private static void requireLoaded(
             GameTestHelper helper,
+            FabricDimensionRuntime runtime,
             ServerLevel level,
             ChunkPos chunk,
             CompletableFuture<?> loading) {
@@ -343,6 +348,8 @@ public final class LumiHistoryGameTests {
                 "Test chunk load is not complete");
         helper.assertFalse(level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null,
                 "Test chunk is not loaded");
+        helper.assertTrue(runtime.isChunkMutationTrackable(chunk.x, chunk.z),
+                "Lumi chunk-load boundary is not complete");
     }
 
     private static void requireUnloaded(

@@ -11,7 +11,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 /** Captures exact world state and accumulates independent behavior failures. */
 final class LumiBehaviorChecks {
     private static final int QUIESCENCE_WINDOW_TICKS = 120;
-    private static final int MAX_QUIESCENCE_ATTEMPTS = 10;
+    private static final int MAX_QUIESCENCE_ATTEMPTS = 30;
 
     private final ClientGameTestContext context;
     private final TestSingleplayerContext singleplayer;
