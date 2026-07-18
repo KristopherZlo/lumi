@@ -21,6 +21,16 @@ import net.minecraft.world.level.storage.TagValueOutput;
 
 /** Copies durable non-player entities into Lumi's canonical chunk payload. */
 public final class MinecraftEntityChunkCapture {
+    private final MinecraftEntityNbtCanonicalizer canonicalizer;
+
+    public MinecraftEntityChunkCapture() {
+        this(new MinecraftEntityNbtCanonicalizer());
+    }
+
+    MinecraftEntityChunkCapture(MinecraftEntityNbtCanonicalizer canonicalizer) {
+        this.canonicalizer = Objects.requireNonNull(canonicalizer, "canonicalizer");
+    }
+
     public static EntityChunkKey key(ChunkPos position) {
         Objects.requireNonNull(position, "position");
         return key(position.x, position.z);
@@ -69,11 +79,8 @@ public final class MinecraftEntityChunkCapture {
                 && entity.shouldBeSaved();
     }
 
-    static CanonicalNbt canonicalEntityNbt(CompoundTag saved) throws IOException {
-        CompoundTag payload = Objects.requireNonNull(saved, "saved").copy();
-        payload.remove("id");
-        payload.remove("UUID");
-        return MinecraftNbtCodec.encode(payload);
+    CanonicalNbt canonicalEntityNbt(CompoundTag saved) throws IOException {
+        return MinecraftNbtCodec.encode(canonicalizer.normalize(saved));
     }
 
     public record CapturedEntity(EntityState state, DecodedEntity decoded) {

@@ -5,8 +5,8 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -21,9 +21,17 @@ import net.minecraft.world.entity.EntityType;
 /** Resolves durable entity types and canonical NBT before tick-time apply. */
 public final class MinecraftEntityStateDecoder {
     private final Registry<EntityType<?>> types;
+    private final MinecraftEntityNbtCanonicalizer canonicalizer;
 
     public MinecraftEntityStateDecoder(Registry<EntityType<?>> types) {
+        this(types, new MinecraftEntityNbtCanonicalizer());
+    }
+
+    MinecraftEntityStateDecoder(
+            Registry<EntityType<?>> types,
+            MinecraftEntityNbtCanonicalizer canonicalizer) {
         this.types = Objects.requireNonNull(types, "types");
+        this.canonicalizer = Objects.requireNonNull(canonicalizer, "canonicalizer");
     }
 
     public DecodedEntityChunk decode(EntityChunkBlob source) throws IOException {
@@ -34,10 +42,8 @@ public final class MinecraftEntityStateDecoder {
     public EntityChunkBlob normalize(EntityChunkBlob source) throws IOException {
         Objects.requireNonNull(source, "source");
         Set<UUID> passengerIds = new HashSet<>();
-        for (EntityState entity : source.entities()) {
-            collectPassengerIds(MinecraftNbtCodec.decode(entity.nbt()), passengerIds);
-        }
-        return withoutTopLevelPassengers(source, passengerIds);
+        EntityChunkBlob normalized = normalizePayloads(source, passengerIds);
+        return withoutTopLevelPassengers(normalized, passengerIds);
     }
 
     /** Normalizes the complete Restore state so cross-chunk passenger trees remain atomic. */
@@ -45,15 +51,25 @@ public final class MinecraftEntityStateDecoder {
             Map<EntityChunkKey, EntityChunkBlob> source) throws IOException {
         Objects.requireNonNull(source, "source");
         Set<UUID> passengerIds = new HashSet<>();
-        for (EntityChunkBlob chunk : source.values()) {
-            for (EntityState entity : chunk.entities()) {
-                collectPassengerIds(MinecraftNbtCodec.decode(entity.nbt()), passengerIds);
-            }
-        }
         Map<EntityChunkKey, EntityChunkBlob> normalized = new HashMap<>();
-        source.forEach((key, chunk) ->
-                normalized.put(key, withoutTopLevelPassengers(chunk, passengerIds)));
+        for (var entry : source.entrySet()) {
+            normalized.put(entry.getKey(), normalizePayloads(entry.getValue(), passengerIds));
+        }
+        normalized.replaceAll((key, chunk) -> withoutTopLevelPassengers(chunk, passengerIds));
         return Map.copyOf(normalized);
+    }
+
+    private EntityChunkBlob normalizePayloads(
+            EntityChunkBlob source, Set<UUID> passengerIds) throws IOException {
+        var normalized = new ArrayList<EntityState>(source.entities().size());
+        for (EntityState entity : source.entities()) {
+            CompoundTag payload = canonicalizer.normalize(MinecraftNbtCodec.decode(entity.nbt()));
+            collectPassengerIds(payload, passengerIds);
+            var canonical = MinecraftNbtCodec.encode(payload);
+            normalized.add(canonical.equals(entity.nbt()) ? entity
+                    : new EntityState(entity.id(), entity.type(), canonical));
+        }
+        return new EntityChunkBlob(normalized);
     }
 
     private static EntityChunkBlob withoutTopLevelPassengers(

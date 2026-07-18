@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import java.io.IOException;
 import java.util.List;
@@ -13,6 +14,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.entity.EntityType;
@@ -104,5 +106,48 @@ class MinecraftEntityStateDecoderTest {
 
         assertEquals(1, normalized.values().stream()
                 .mapToInt(chunk -> chunk.entities().size()).sum());
+    }
+
+    @Test
+    void normalizesLegacyEntityPayloadBeforeRestorePreparation() throws Exception {
+        UUID entityId = UUID.fromString("30000000-0000-0000-0000-000000000003");
+        CompoundTag legacy = entityPayload(488.9948F, -1285.8915F,
+                "minecraft:movement_speed", "minecraft:attack_damage");
+        EntityChunkKey key = new EntityChunkKey(2, 3);
+        var source = Map.of(key, new EntityChunkBlob(List.of(new EntityState(
+                entityId, "minecraft:bat", MinecraftNbtCodec.encode(legacy)))));
+
+        EntityState normalized = new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)
+                .normalize(source).get(key).entities().getFirst();
+        CompoundTag payload = MinecraftNbtCodec.decode(normalized.nbt());
+
+        assertEquals(488.9948F % 360.0F,
+                payload.getListOrEmpty("Rotation").getFloatOr(0, Float.NaN));
+        assertEquals(-90.0F,
+                payload.getListOrEmpty("Rotation").getFloatOr(1, Float.NaN));
+        assertEquals("minecraft:attack_damage", payload.getListOrEmpty("attributes")
+                .getCompoundOrEmpty(0).getStringOr("id", ""));
+        assertEquals("minecraft:movement_speed", payload.getListOrEmpty("attributes")
+                .getCompoundOrEmpty(1).getStringOr("id", ""));
+    }
+
+    private static CompoundTag entityPayload(
+            float yaw, float pitch, String firstAttribute, String secondAttribute) {
+        CompoundTag entity = new CompoundTag();
+        ListTag rotation = new ListTag();
+        rotation.add(FloatTag.valueOf(yaw));
+        rotation.add(FloatTag.valueOf(pitch));
+        entity.put("Rotation", rotation);
+        ListTag attributes = new ListTag();
+        attributes.add(attribute(firstAttribute));
+        attributes.add(attribute(secondAttribute));
+        entity.put("attributes", attributes);
+        return entity;
+    }
+
+    private static CompoundTag attribute(String id) {
+        CompoundTag attribute = new CompoundTag();
+        attribute.putString("id", id);
+        return attribute;
     }
 }

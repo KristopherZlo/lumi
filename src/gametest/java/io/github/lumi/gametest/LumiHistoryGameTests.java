@@ -105,6 +105,8 @@ public final class LumiHistoryGameTests {
                 .thenWaitUntil(() -> requireIdle(helper, runtime, current))
                 .thenExecute(() -> {
                     requireSucceeded(helper, terminal.get(), "Restore with entity");
+                    helper.assertFalse(runtime.freeze().isFrozen(),
+                            "Successful entity Restore left the dimension frozen");
                     assertMinecart(
                             helper, entity.get().getUUID(),
                             new ItemStack(Items.DIAMOND, 7));
