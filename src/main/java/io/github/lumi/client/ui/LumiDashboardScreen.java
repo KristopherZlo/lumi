@@ -42,6 +42,10 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private static final int HISTORY_FIRST_ROW_OFFSET = 38;
     private static final int HISTORY_ROW_HEIGHT = 30;
     private static final int HISTORY_ROW_STRIDE = 34;
+    private static final int COMPACT_HISTORY_ROW_HEIGHT = 54;
+    private static final int COMPACT_HISTORY_ROW_STRIDE = 58;
+    private static final int HISTORY_ACTION_STRIDE = 30;
+    private static final int HISTORY_ACTION_CLUSTER_WIDTH = 116;
     private static final int PREVIEW_WIDTH = 40;
     private static final int PREVIEW_HEIGHT = 22;
     private static final int ICON_TEXTURE_SIZE = 24;
@@ -274,7 +278,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             refocusSearch = false;
         }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
-        int capacity = visibleHistoryRows(historyHeight, Integer.MAX_VALUE);
+        int capacity = visibleHistoryRows(
+                historyHeight, Integer.MAX_VALUE, layout.bodyWidth());
         historyScroll = Math.min(historyScroll,
                 Math.max(0, versions.size() - capacity));
         List<HistorySnapshotPayload.Version> visible = versions.stream()
@@ -294,17 +299,22 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         for (int index = 0; index < visible.size(); index++) {
             HistorySnapshotPayload.Version version = visible.get(index);
             int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
-                    + index * HISTORY_ROW_STRIDE;
-            addIconButton(right - 116, rowY + 6,
+                    + index * historyRowStride(layout.bodyWidth());
+            int actionY = historyActionY(rowY, layout.bodyWidth());
+            addIconButton(historyActionX(
+                            layout.bodyX(), layout.bodyWidth(), 0), actionY,
                     "rollback", "luma.action.restore",
                     () -> openRestore.accept(version), LumiLegacyButton.Kind.PRIMARY);
-            addIconButton(right - 86, rowY + 6,
+            addIconButton(historyActionX(
+                            layout.bodyX(), layout.bodyWidth(), 1), actionY,
                     "folder", "luma.action.open_details",
                     () -> openDetails.accept(version), LumiLegacyButton.Kind.NORMAL);
-            addIconButton(right - 56, rowY + 6,
+            addIconButton(historyActionX(
+                            layout.bodyX(), layout.bodyWidth(), 2), actionY,
                     "branch", "luma.action.create_idea",
                     () -> createBranch.accept(version), LumiLegacyButton.Kind.NORMAL);
-            addIconButton(right - 26, rowY + 6,
+            addIconButton(historyActionX(
+                            layout.bodyX(), layout.bodyWidth(), 3), actionY,
                     "tags", "luma.action.edit_tags",
                     () -> editTags(version), LumiLegacyButton.Kind.NORMAL);
         }
@@ -408,14 +418,16 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
 
     OnboardingSpotlightLayout.Rect onboardingTarget(
             OnboardingTour.Kind kind) {
-        int right = layout.bodyX() + layout.bodyWidth() - PANEL_PADDING;
         return switch (kind) {
             case SPOTLIGHT_SAVE -> new OnboardingSpotlightLayout.Rect(
                     saveActionX, actionY, actionButtonWidth, CONTROL_HEIGHT);
             case SPOTLIGHT_CHANGES -> new OnboardingSpotlightLayout.Rect(
                     changesActionX, actionY, ICON_BUTTON_WIDTH, CONTROL_HEIGHT);
             case SPOTLIGHT_RESTORE -> new OnboardingSpotlightLayout.Rect(
-                    right - 116, historyY + HISTORY_FIRST_ROW_OFFSET + 6,
+                    historyActionX(layout.bodyX(), layout.bodyWidth(), 0),
+                    historyActionY(
+                            historyY + HISTORY_FIRST_ROW_OFFSET,
+                            layout.bodyWidth()),
                     ICON_BUTTON_WIDTH, CONTROL_HEIGHT);
             default -> throw new IllegalArgumentException(
                     "Page does not have a Dashboard spotlight");
@@ -691,7 +703,13 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         }
         int titleX = search == null ? x + PANEL_PADDING
                 : search.getX() + search.getWidth() + PANEL_PADDING;
-        graphics.drawString(font, Component.translatable("luma.project.history_title"),
+        int titleWidth = Math.max(0,
+                x + width - PANEL_PADDING - 56 - titleX - CONTROL_GAP);
+        graphics.drawString(font,
+                font.plainSubstrByWidth(
+                        Component.translatable("luma.project.history_title")
+                                .getString(),
+                        titleWidth),
                 titleX, historyY + 13, LegacyLumiTheme.TEXT, false);
         if (search != null) {
             LegacyLumiTheme.outlined(
@@ -707,23 +725,24 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         if (graphView != null) {
             graphView.renderConnections(graphics);
         }
-        int rows = visibleHistoryRows(historyHeight, versions.size());
+        int rows = visibleHistoryRows(
+                historyHeight, versions.size(), layout.bodyWidth());
         List<HistorySnapshotPayload.Version> visible = versions.stream()
                 .skip(historyScroll).limit(rows).toList();
         for (int index = 0; graphView == null && index < visible.size(); index++) {
             HistorySnapshotPayload.Version version = visible.get(index);
             int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
-                    + index * HISTORY_ROW_STRIDE;
+                    + index * historyRowStride(width);
             LegacyLumiTheme.outlined(
                     graphics, x + PANEL_PADDING, rowY,
-                    width - PANEL_PADDING * 2, HISTORY_ROW_HEIGHT,
+                    width - PANEL_PADDING * 2, historyRowHeight(width),
                     LegacyLumiTheme.INSET,
                     snapshot.head().equals(version.id())
                             ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.INSET_BORDER);
             drawPreview(graphics, version, x + PANEL_PADDING * 2, rowY + 4);
             graphics.drawString(font,
                     font.plainSubstrByWidth(
-                            version.message(), Math.max(0, width - 244)),
+                            version.message(), historyTextWidth(width)),
                     x + 58, rowY + 5, LegacyLumiTheme.TEXT, false);
             String tags = displayedTags(version).isEmpty() ? ""
                     : " · #" + String.join(" #", displayedTags(version).values());
@@ -736,7 +755,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     + " · " + version.statistics().blocks() + " blocks"
                     + tags + active;
             graphics.drawString(font,
-                    font.plainSubstrByWidth(meta, Math.max(0, width - 244)),
+                    font.plainSubstrByWidth(meta, historyTextWidth(width)),
                     x + 58, rowY + 17, LegacyLumiTheme.MUTED, false);
         }
         if (versions.isEmpty()) {
@@ -782,7 +801,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                 && x < layout.bodyX() + layout.bodyWidth()
                 && y >= historyY + HISTORY_FIRST_ROW_OFFSET
                 && y < historyY + historyHeight) {
-            int capacity = visibleHistoryRows(historyHeight, Integer.MAX_VALUE);
+            int capacity = visibleHistoryRows(
+                    historyHeight, Integer.MAX_VALUE, layout.bodyWidth());
             int maximum = Math.max(0, visibleVersions().size() - capacity);
             int replacement = Math.max(0, Math.min(
                     maximum, historyScroll + (verticalAmount < 0 ? 1 : -1)));
@@ -844,13 +864,48 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                 Math.max(0, bodyBottom - historyY), compact, headerVisible);
     }
 
-    static int visibleHistoryRows(int historyHeight, int availableVersions) {
+    static int visibleHistoryRows(
+            int historyHeight, int availableVersions, int bodyWidth) {
         int firstRowSpace = historyHeight - HISTORY_FIRST_ROW_OFFSET;
-        if (firstRowSpace < HISTORY_ROW_HEIGHT) {
+        int rowHeight = historyRowHeight(bodyWidth);
+        if (firstRowSpace < rowHeight) {
             return 0;
         }
         return Math.min(availableVersions,
-                1 + (firstRowSpace - HISTORY_ROW_HEIGHT) / HISTORY_ROW_STRIDE);
+                1 + (firstRowSpace - rowHeight) / historyRowStride(bodyWidth));
+    }
+
+    static boolean compactHistoryCards(int bodyWidth) {
+        return bodyWidth < 240;
+    }
+
+    static int historyRowHeight(int bodyWidth) {
+        return compactHistoryCards(bodyWidth)
+                ? COMPACT_HISTORY_ROW_HEIGHT : HISTORY_ROW_HEIGHT;
+    }
+
+    static int historyRowStride(int bodyWidth) {
+        return compactHistoryCards(bodyWidth)
+                ? COMPACT_HISTORY_ROW_STRIDE : HISTORY_ROW_STRIDE;
+    }
+
+    static int historyTextWidth(int bodyWidth) {
+        return Math.max(0, bodyWidth
+                - (compactHistoryCards(bodyWidth) ? 64 : 186));
+    }
+
+    static int historyActionX(
+            int bodyX, int bodyWidth, int actionIndex) {
+        int first = compactHistoryCards(bodyWidth)
+                ? bodyX + PANEL_PADDING + Math.max(0,
+                        (bodyWidth - PANEL_PADDING * 2
+                                - HISTORY_ACTION_CLUSTER_WIDTH) / 2)
+                : bodyX + bodyWidth - PANEL_PADDING - 116;
+        return first + actionIndex * HISTORY_ACTION_STRIDE;
+    }
+
+    static int historyActionY(int rowY, int bodyWidth) {
+        return rowY + (compactHistoryCards(bodyWidth) ? 30 : 6);
     }
 
     private void drawChip(GuiGraphics graphics, int x, int y, String text) {

@@ -25,9 +25,26 @@ class LumiDashboardScreenTest {
         assertEquals(reference.bodyY() + reference.bodyHeight(),
                 referenceGeometry.historyY() + referenceGeometry.historyHeight());
         assertEquals(3, LumiDashboardScreen.visibleHistoryRows(
-                referenceGeometry.historyHeight(), 10));
+                referenceGeometry.historyHeight(), 10, reference.bodyWidth()));
         assertEquals(1, LumiDashboardScreen.visibleHistoryRows(
-                smallGeometry.historyHeight(), 2));
+                smallGeometry.historyHeight(), 2, small.bodyWidth()));
+    }
+
+    @Test
+    void stacksHistoryActionsBelowTextWhenTheContentPaneIsVeryNarrow() {
+        LegacyWorkspaceLayout tiny = LegacyWorkspaceLayout.fit(320, 240);
+        int bodyX = tiny.bodyX();
+        int bodyWidth = tiny.bodyWidth();
+
+        assertTrue(LumiDashboardScreen.compactHistoryCards(bodyWidth));
+        assertEquals(54, LumiDashboardScreen.historyRowHeight(bodyWidth));
+        assertTrue(LumiDashboardScreen.historyTextWidth(bodyWidth) > 0);
+        assertTrue(LumiDashboardScreen.historyActionX(bodyX, bodyWidth, 0)
+                >= bodyX + 6);
+        assertTrue(LumiDashboardScreen.historyActionX(bodyX, bodyWidth, 3) + 26
+                <= bodyX + bodyWidth - 6);
+        assertTrue(LumiDashboardScreen.historyActionY(100, bodyWidth) + 18
+                <= 100 + LumiDashboardScreen.historyRowHeight(bodyWidth));
     }
 
     @Test
