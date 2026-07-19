@@ -75,7 +75,7 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
 
     private void addConfirmationButtons() {
         int buttonWidth = (panelWidth - 48) / 2;
-        int footerY = panelY + panelHeight - 28;
+        int footerY = panelY + footerOffset(panelHeight);
         addLegacyButton(panelX + 20, footerY, buttonWidth,
                 Component.translatable("luma.action.clean_up"),
                 this::cleanup, LumiLegacyButton.Kind.DANGER);
@@ -133,7 +133,10 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
         if (!error.isEmpty()) {
             graphics.drawCenteredString(font, errorText(error),
                     panelX + panelWidth / 2,
-                    panelY + panelHeight - 44, LegacyLumiTheme.DANGER);
+                    panelY + (pendingCleanup == null
+                            ? panelHeight - 44
+                            : confirmationErrorOffset(panelHeight)),
+                    LegacyLumiTheme.DANGER);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -165,18 +168,50 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
     }
 
     private void renderConfirmation(GuiGraphics graphics, int panelWidth) {
+        int top = confirmationPanelOffset(panelHeight);
+        int footer = footerOffset(panelHeight);
         renderLegacyPanel(graphics,
-                panelX + 20, panelY + 66, panelWidth - 40,
-                Math.max(54, panelHeight - 114));
+                panelX + 20, panelY + top, panelWidth - 40,
+                Math.max(1, footer - top - 8));
         graphics.drawCenteredString(font,
                 Component.translatable("luma.screen.cleanup.title"),
-                panelX + panelWidth / 2, panelY + 82, LegacyLumiTheme.DANGER);
+                panelX + panelWidth / 2,
+                panelY + confirmationHeadingOffset(panelHeight),
+                LegacyLumiTheme.DANGER);
         graphics.drawCenteredString(font,
                 font.plainSubstrByWidth(pendingCleanup.message(), panelWidth - 80),
-                panelX + panelWidth / 2, panelY + 108, LegacyLumiTheme.TEXT);
+                panelX + panelWidth / 2,
+                panelY + confirmationMessageOffset(panelHeight),
+                LegacyLumiTheme.TEXT);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.recovery.delete_confirm_warning"),
-                panelX + panelWidth / 2, panelY + 140, LegacyLumiTheme.ACCENT);
+                panelX + panelWidth / 2,
+                panelY + confirmationWarningOffset(panelHeight),
+                LegacyLumiTheme.ACCENT);
+    }
+
+    static int footerOffset(int panelHeight) {
+        return panelHeight - 28;
+    }
+
+    static int confirmationWarningOffset(int panelHeight) {
+        return Math.min(140, panelHeight - 64);
+    }
+
+    static int confirmationErrorOffset(int panelHeight) {
+        return confirmationWarningOffset(panelHeight) + 16;
+    }
+
+    static int confirmationMessageOffset(int panelHeight) {
+        return Math.min(108, confirmationWarningOffset(panelHeight) - 16);
+    }
+
+    static int confirmationHeadingOffset(int panelHeight) {
+        return Math.min(82, confirmationMessageOffset(panelHeight) - 16);
+    }
+
+    static int confirmationPanelOffset(int panelHeight) {
+        return Math.min(66, confirmationHeadingOffset(panelHeight) - 8);
     }
 
     private int visibleRows() {
