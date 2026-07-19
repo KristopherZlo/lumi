@@ -320,10 +320,9 @@ public final class LumiHistoryGameTests {
                 Math.floorDiv(position.getY(), 16),
                 Math.floorDiv(position.getZ(), 16));
         try {
-            UUID zoneId = runtime.createZone(
-                    "History gate", 0x44AAFF, Set.of(cell)).id();
-            runtime.setZoneActorActive(zoneId, AUTHOR.id(), true);
-            return zoneId;
+            var zone = runtime.createZone("History gate", AUTHOR.id());
+            runtime.growZoneForActor(zone.id(), AUTHOR.id(), cell);
+            return zone.id();
         } catch (IOException failed) {
             throw helper.assertionException(
                     "Cannot create history gate zone: %s", failed.getMessage());
