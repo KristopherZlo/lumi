@@ -281,10 +281,16 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             HistoryKey key, T origin, OriginWriter<T> writer) throws IOException {
         ObjectId id = writer.write(origin);
         origins.register(key, id);
+        boolean scheduleIndex;
         synchronized (this) {
             durableOrigins.add(key);
             pendingOrigins.remove(key);
             releaseSatisfied(key);
+            scheduleIndex = durableIndexRevision < indexRevision && !indexWriterScheduled;
+            indexWriterScheduled |= scheduleIndex;
+        }
+        if (scheduleIndex) {
+            scheduleIndexWriter();
         }
     }
 
@@ -321,6 +327,10 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             synchronized (this) {
                 snapshot = working.snapshot();
                 revision = indexRevision;
+                if (!durableOrigins.containsAll(snapshot.generations().keySet())) {
+                    indexWriterScheduled = false;
+                    return;
+                }
             }
             try {
                 indexRepository.write(snapshot);

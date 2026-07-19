@@ -126,6 +126,35 @@ class MutationDurabilityTrackerTest {
     }
 
     @Test
+    void neverPublishesDirtyIndexBeforeItsOriginWhenWorkersRunOutOfOrder()
+            throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        SectionKey key = new SectionKey(6, 7, 8);
+
+        long generation = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        background.runLast();
+
+        assertTrue(new WorkingIndexRepository(repositoryRoot).read().generations().isEmpty());
+        assertTrue(new OriginStore(repositoryRoot).read(key).isEmpty());
+        assertFalse(tracker.canPublish(key));
+
+        background.runNext();
+        assertTrue(new OriginStore(repositoryRoot).read(key).isPresent());
+        assertEquals(1, background.size());
+        background.runNext();
+
+        MutationDurabilityTracker reopened = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), Runnable::run);
+        assertEquals(generation, reopened.snapshot().generations().get(key));
+        assertTrue(tracker.canPublish(key));
+    }
+
+    @Test
     void drainsManyDistinctOriginsThroughOneBoundedBackgroundTask() throws Exception {
         ManualExecutor background = new ManualExecutor();
         MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
@@ -183,6 +212,8 @@ class MutationDurabilityTrackerTest {
         background.runNext();
 
         assertEquals(1, captures.get());
+        assertFalse(tracker.canPublishChunk(4, 6));
+        background.runNext();
         assertTrue(tracker.canPublishChunk(4, 6));
         assertTrue(new OriginStore(repositoryRoot).read(key).isPresent());
     }
@@ -222,6 +253,20 @@ class MutationDurabilityTrackerTest {
         @Override public void execute(Runnable command) { tasks.add(command); }
         private int size() { return tasks.size(); }
         private void runNext() { tasks.remove().run(); }
+        private void runLast() {
+            Runnable last = null;
+            int queued = tasks.size();
+            for (int index = 0; index < queued; index++) {
+                last = tasks.remove();
+                if (index + 1 < queued) {
+                    tasks.add(last);
+                }
+            }
+            if (last == null) {
+                throw new IllegalStateException("No background task is queued");
+            }
+            last.run();
+        }
     }
 
     private static final class RecordingChunkRetention implements ChunkDurabilityRetention {
