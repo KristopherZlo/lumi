@@ -77,6 +77,7 @@ public record ZoneOverlayPayload(
             int color,
             long revision,
             boolean active,
+            boolean entered,
             List<ZoneShellFace> faces) {
         public ZoneBatch {
             Objects.requireNonNull(id, "id");
@@ -94,6 +95,7 @@ public record ZoneOverlayPayload(
             buffer.writeInt(color);
             buffer.writeVarLong(revision);
             buffer.writeBoolean(active);
+            buffer.writeBoolean(entered);
             buffer.writeVarInt(faces.size());
             faces.forEach(face -> {
                 buffer.writeByte(face.side().ordinal());
@@ -111,6 +113,7 @@ public record ZoneOverlayPayload(
             int color = buffer.readInt();
             long revision = buffer.readVarLong();
             boolean active = buffer.readBoolean();
+            boolean entered = buffer.readBoolean();
             int count = buffer.readVarInt();
             if (count < 0 || count > MAX_FACES) {
                 throw new IllegalArgumentException(
@@ -128,7 +131,8 @@ public record ZoneOverlayPayload(
                         buffer.readInt(), buffer.readInt(), buffer.readInt(),
                         buffer.readInt(), buffer.readInt()));
             }
-            return new ZoneBatch(id, name, color, revision, active, faces);
+            return new ZoneBatch(
+                    id, name, color, revision, active, entered, faces);
         }
     }
 }

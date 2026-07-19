@@ -48,7 +48,7 @@ class ClientZoneOverlayStoreTest {
                 REQUEST, "minecraft:overworld", WORKSPACE,
                 index, complete,
                 Optional.of(new ZoneOverlayPayload.ZoneBatch(
-                        ZONE, "Gate", 0xff336699, 4, true, faces)),
+                        ZONE, "Gate", 0xff336699, 4, true, false, faces)),
                 "");
     }
 

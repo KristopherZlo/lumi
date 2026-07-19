@@ -17,6 +17,7 @@ public record ZoneShellSnapshot(UUID workspaceId, List<ZoneShell> zones) {
             int color,
             long revision,
             boolean active,
+            boolean entered,
             List<ZoneShellFace> faces) {
         public ZoneShell {
             Objects.requireNonNull(id, "id");

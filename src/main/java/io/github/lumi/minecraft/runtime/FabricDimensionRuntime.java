@@ -167,6 +167,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final ReturnPointRestorePreparation returnPointRestores;
     private final DimensionPackageService packages;
     private final DimensionComparisonQueries comparisons;
+    private final DimensionZoneOverlayQueries zoneOverlays;
     private final GarbageCollectionScheduler garbageCollection;
     private final Executor background;
     private final BranchRefRepository refs;
@@ -266,6 +267,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 background, this::activeRef);
         comparisons = new DimensionComparisonQueries(
                 repository, background, zones, this::activeWorkspaceId);
+        zoneOverlays = new DimensionZoneOverlayQueries(
+                background, zones, this::activeWorkspaceId);
         garbageCollection = new GarbageCollectionScheduler(
                 level.getGameTime(), background,
                 () -> new GarbageCollector(repository).collect(
@@ -1123,6 +1126,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             BooleanSupplier cancelled,
             Consumer<List<BlockChange>> batches) throws IOException {
         return comparisons.compare(before, after, zoneId, cancelled, batches);
+    }
+
+    public CompletableFuture<io.github.lumi.domain.model.ZoneShellSnapshot>
+            zoneOverlay(UUID actor, SectionKey center, boolean all) {
+        return zoneOverlays.query(actor, center, all);
     }
 
     public io.github.lumi.domain.model.Zone createZone(

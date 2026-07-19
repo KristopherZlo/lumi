@@ -81,6 +81,7 @@ public final class ClientZoneOverlayStore {
             int color,
             long revision,
             boolean active,
+            boolean entered,
             List<ZoneShellFace> faces) {
         public ZoneView {
             faces = List.copyOf(faces);
@@ -102,6 +103,7 @@ public final class ClientZoneOverlayStore {
         private final int color;
         private final long revision;
         private final boolean active;
+        private final boolean entered;
         private final List<ZoneShellFace> faces = new ArrayList<>();
 
         private MutableZone(ZoneOverlayPayload.ZoneBatch first) {
@@ -110,12 +112,14 @@ public final class ClientZoneOverlayStore {
             color = first.color();
             revision = first.revision();
             active = first.active();
+            entered = first.entered();
         }
 
         private void append(ZoneOverlayPayload.ZoneBatch batch) {
             if (!id.equals(batch.id()) || !name.equals(batch.name())
                     || color != batch.color() || revision != batch.revision()
-                    || active != batch.active()) {
+                    || active != batch.active()
+                    || entered != batch.entered()) {
                 throw new IllegalArgumentException(
                         "Zone metadata changed between overlay batches");
             }
@@ -123,7 +127,8 @@ public final class ClientZoneOverlayStore {
         }
 
         private ZoneView freeze() {
-            return new ZoneView(id, name, color, revision, active, faces);
+            return new ZoneView(
+                    id, name, color, revision, active, entered, faces);
         }
     }
 }
