@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -26,12 +27,13 @@ class LumiResponsiveModalLayoutTest {
     @Test
     void mergeReflowsRowsAndPreviewsAboveItsFooter() {
         for (int[] viewport : new int[][] {
-                {427, 240}, {320, 200}, {320, 180}}) {
+                {640, 360}, {427, 240}, {320, 200}, {320, 180}}) {
             LegacyModalLayout layout = LumiMergeScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertInside(viewport, layout);
             assertTrue(LumiMergeScreen.actionOffset(layout.height()) + 18
                     <= layout.height());
+            assertTrue(52 + 9 <= LumiMergeScreen.listOffset());
             assertTrue(LumiMergeScreen.visibleBranchRows(layout.height()) > 0);
             assertTrue(LumiMergeScreen.previewWidth(layout.width()) * 2 + 14
                     <= layout.width());
@@ -40,6 +42,34 @@ class LumiResponsiveModalLayoutTest {
                     layout.height(), true) + 9
                     <= LumiMergeScreen.actionOffset(layout.height()) - 13);
         }
+    }
+
+    @Test
+    void mergeSourceListCanScrollPastEveryVisibleCapacity() {
+        for (int[] viewport : new int[][] {
+                {320, 180, 3}, {427, 240, 6}, {640, 360, 6}}) {
+            LegacyModalLayout layout = LumiMergeScreen.fitPanel(
+                    viewport[0], viewport[1]);
+            assertEquals(viewport[2],
+                    LumiMergeScreen.visibleBranchRows(layout.height()));
+            assertEquals(2, LumiMergeScreen.maximumSourceScroll(
+                    layout.height(), viewport[2] + 2));
+        }
+    }
+
+    @Test
+    void deleteZonePanelAndFooterStayInsideSupportedViewports() {
+        for (int[] viewport : new int[][] {
+                {320, 180}, {427, 240}, {640, 360}}) {
+            LegacyModalLayout layout = LumiDeleteZoneScreen.fitPanel(
+                    viewport[0], viewport[1]);
+            assertInside(viewport, layout);
+            assertTrue(LumiDeleteZoneScreen.actionOffset(layout.height()) + 18
+                    <= layout.height());
+        }
+        LegacyModalLayout minimum = LumiDeleteZoneScreen.fitPanel(320, 180);
+        assertEquals(8, minimum.y());
+        assertEquals(164, minimum.height());
     }
 
     @Test

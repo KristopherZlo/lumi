@@ -87,7 +87,10 @@ public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
             renderLegacyWindow(
                     graphics, panelX, panelY, panelWidth, panelHeight);
             graphics.drawCenteredString(
-                    font, title, width / 2, panelY + 18,
+                    font, clippedCenteredHeader(
+                            title, width / 2,
+                            panelX + 16, panelX + panelWidth - 16),
+                    width / 2, panelY + 18,
                     LegacyLumiTheme.TEXT);
             graphics.drawCenteredString(
                     font, Component.translatable(

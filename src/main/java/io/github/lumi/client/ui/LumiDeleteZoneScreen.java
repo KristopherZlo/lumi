@@ -22,6 +22,8 @@ public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
     private LumiLegacyButton submit;
     private int panelX;
     private int panelY;
+    private int panelWidth;
+    private int panelHeight;
     private String error = "";
 
     public LumiDeleteZoneScreen(
@@ -37,9 +39,11 @@ public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        panelX = (width - panelWidth) / 2;
-        panelY = (height - PANEL_HEIGHT) / 2;
+        LegacyModalLayout layout = fitPanel(width, height);
+        panelX = layout.x();
+        panelY = layout.y();
+        panelWidth = layout.width();
+        panelHeight = layout.height();
         confirmation = new EditBox(
                 font, panelX + 22, panelY + 83, panelWidth - 44, 16,
                 Component.translatable("luma.zones.delete_input"));
@@ -50,11 +54,12 @@ public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
         addRenderableWidget(confirmation);
         int buttonWidth = (panelWidth - 48) / 2;
         submit = addLegacyButton(
-                panelX + 20, panelY + 142, buttonWidth,
+                panelX + 20, panelY + actionOffset(panelHeight), buttonWidth,
                 Component.translatable("luma.zones.delete_confirm"),
                 this::delete, LumiLegacyButton.Kind.DANGER);
         addLegacyButton(
-                panelX + 28 + buttonWidth, panelY + 142, buttonWidth,
+                panelX + 28 + buttonWidth,
+                panelY + actionOffset(panelHeight), buttonWidth,
                 Component.translatable("luma.action.cancel"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
         updateSubmit();
@@ -108,12 +113,11 @@ public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
         LegacyRenderContext render = beginLegacyRender(
                 graphics, mouseX, mouseY);
         try {
-            int panelWidth = Math.min(PANEL_WIDTH, width - 32);
             int centerX = width / 2;
             int contentLeft = panelX + 20;
             int contentRight = panelX + panelWidth - 20;
             renderLegacyWindow(
-                    graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+                    graphics, panelX, panelY, panelWidth, panelHeight);
             graphics.drawCenteredString(
                     font, clippedCenteredHeader(
                             title, centerX, contentLeft, contentRight),
@@ -141,6 +145,18 @@ public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
         } finally {
             endLegacyRender(graphics);
         }
+    }
+
+    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+        int width = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 32));
+        int height = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
+        return new LegacyModalLayout(
+                Math.max(0, (screenWidth - width) / 2),
+                Math.max(0, (screenHeight - height) / 2), width, height);
+    }
+
+    static int actionOffset(int panelHeight) {
+        return Math.max(0, Math.min(142, panelHeight - 22));
     }
 
     @Override public boolean isPauseScreen() { return false; }

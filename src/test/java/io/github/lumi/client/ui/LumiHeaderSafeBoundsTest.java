@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 class LumiHeaderSafeBoundsTest {
     @Test
     void reservesSpaceBeforeTheGlobalTopRightControl() {
-        for (int screenWidth : new int[] {320, 427}) {
+        for (int screenWidth : new int[] {320, 427, 640}) {
             int contentLeft = 36;
             int contentRight = screenWidth - 36;
             int safeRight = screenWidth - 44;
@@ -33,6 +33,9 @@ class LumiHeaderSafeBoundsTest {
                 "LumiZoneRestoreScreen.java", "clippedCenteredHeader(",
                 "LumiDeleteVersionScreen.java", "clippedCenteredHeader(",
                 "LumiDeleteZoneScreen.java", "clippedCenteredHeader(",
+                "LumiRestoreScreen.java", "clippedCenteredHeader(",
+                "LumiBranchSlotScreen.java", "clippedCenteredHeader(",
+                "LumiMergeScreen.java", "clippedCenteredHeader(",
                 "LumiBranchScreen.java", "clippedHeader(",
                 "LumiDimensionHistoryScreen.java", "clippedHeader(");
         Path screens = Path.of("src/main/java/io/github/lumi/client/ui");

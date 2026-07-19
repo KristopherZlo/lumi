@@ -62,7 +62,10 @@ public final class LumiRestoreScreen extends LumiLegacyModalScreen {
             int panelWidth = Math.min(PANEL_WIDTH, width - 32);
             renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
             graphics.drawCenteredString(
-                    font, title, width / 2, panelY + 24, LegacyLumiTheme.TEXT);
+                    font, clippedCenteredHeader(
+                            title, width / 2,
+                            panelX + 16, panelX + panelWidth - 16),
+                    width / 2, panelY + 24, LegacyLumiTheme.TEXT);
             if (!error.isEmpty()) {
                 graphics.drawCenteredString(
                         font,
