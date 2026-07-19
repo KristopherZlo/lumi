@@ -189,6 +189,35 @@ class SaveServiceTest {
     }
 
     @Test
+    void zoneAmendReplacesHeadButRemainsInZoneHistory() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        var root = commits.write(commit(tree, List.of(), "Initial"));
+        var previous = commits.write(commit(tree, List.of(root), "Previous"));
+        var ref = refs.create(new BranchName("main"), previous);
+        SaveService service = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
+                new OperationJournalRepository(repositoryRoot),
+                new VersionTagRepository(repositoryRoot));
+        UUID zone = new UUID(0, 17);
+
+        SaveResult result = service.save(new SaveRequest(
+                ref, author(), "Zone replacement", Instant.EPOCH,
+                UUID.fromString("20000000-0000-0000-0000-000000000002"),
+                Optional.of(zone), CommitKind.ZONE, VersionTags.parse("clock"), true),
+                new CapturedWorldState(Map.of(), Map.of(), WorkingIndexSnapshot.empty(),
+                        new CommitStatistics(0, 0, 0, 0)));
+
+        Commit amended = commits.read(result.commitId());
+        assertEquals(List.of(root), amended.parents());
+        assertEquals(CommitKind.ZONE, amended.kind());
+        assertEquals(Optional.of(zone), amended.zoneId());
+        assertEquals(VersionTags.parse("clock"),
+                new VersionTagRepository(repositoryRoot).read(result.commitId()));
+    }
+
+    @Test
     void createsHiddenCheckpointWithoutMovingTheSourceBranch() throws IOException {
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
         CommitRepository commits = new CommitRepository(repositoryRoot);

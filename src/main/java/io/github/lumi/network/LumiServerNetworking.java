@@ -501,11 +501,13 @@ public final class LumiServerNetworking {
                     RecoveryChoice.RESUME_TARGET, terminal);
             case RECOVER_RETURN -> runtime.startRecovery(
                     RecoveryChoice.RETURN_CHECKPOINT, terminal);
-            case ZONE_SAVE -> {
+            case ZONE_SAVE, ZONE_AMEND -> {
                 ZoneSaveArgument zone = ZoneSaveArgument.parse(payload.argument());
                 yield runtime.startZoneSave(
                         expected, author, player.getUUID(), zone.zoneId(),
-                        zone.message(), terminal);
+                        zone.message(), zone.tags(),
+                        payload.kind() == HistoryCommandPayload.Kind.ZONE_AMEND,
+                        terminal);
             }
             case ZONE_RESTORE -> {
                 ZoneRestoreArgument zone = ZoneRestoreArgument.parse(payload.argument());

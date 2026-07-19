@@ -584,12 +584,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             UUID actor,
             UUID zoneId,
             String message,
+            VersionTags tags,
+            boolean amend,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         UUID workspaceId = activeWorkspaceId();
         zones.requireActorActive(workspaceId, zoneId, actor);
         return startSave(new SaveRequest(
                 expected, author, message, Instant.now(), workspaceId,
-                Optional.of(zoneId), CommitKind.ZONE), terminalObserver);
+                Optional.of(zoneId), CommitKind.ZONE, tags, amend), terminalObserver);
     }
 
     private SaveCaptureOperation createSave(SaveRequest request) throws IOException {

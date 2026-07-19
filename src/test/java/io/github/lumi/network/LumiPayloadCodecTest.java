@@ -103,10 +103,16 @@ class LumiPayloadCodecTest {
             assertEquals(zoneActor, roundTrip(HistoryCommandPayload.CODEC, zoneActor));
         }
         UUID zoneId = UUID.randomUUID();
-        HistoryCommandPayload zoneSave = new HistoryCommandPayload(
-                UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_SAVE,
-                new ZoneSaveArgument(zoneId, "Clock works").encode(), id('1'), 42);
-        assertEquals(zoneSave, roundTrip(HistoryCommandPayload.CODEC, zoneSave));
+        for (HistoryCommandPayload.Kind kind : java.util.List.of(
+                HistoryCommandPayload.Kind.ZONE_SAVE,
+                HistoryCommandPayload.Kind.ZONE_AMEND)) {
+            HistoryCommandPayload zoneSave = new HistoryCommandPayload(
+                    UUID.randomUUID(), kind,
+                    new ZoneSaveArgument(
+                            zoneId, "Clock works", VersionTags.parse("redstone")).encode(),
+                    id('1'), 42);
+            assertEquals(zoneSave, roundTrip(HistoryCommandPayload.CODEC, zoneSave));
+        }
         HistoryCommandPayload zoneRestore = new HistoryCommandPayload(
                 UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_RESTORE,
                 new ZoneRestoreArgument(zoneId, id('2')).encode(), id('1'), 42);

@@ -13,7 +13,8 @@ class ZoneDetailsControllerTest {
         UUID zone = new UUID(0, 7);
         var requests = new ArrayList<String>();
         ZoneDetailsController controller = new ZoneDetailsController(
-                (id, message) -> requests.add(id + ":" + message));
+                (id, message, tags) -> requests.add(id + ":" + message),
+                (id, message, tags) -> requests.add("amend:" + id + ":" + message));
 
         assertEquals("luma.zones.save_enter_first",
                 controller.save(zone, "Clock", false).error());
@@ -28,14 +29,31 @@ class ZoneDetailsControllerTest {
 
     @Test
     void reportsRejectedSaveIntent() {
-        ZoneDetailsController controller = new ZoneDetailsController((zone, message) -> {
-            throw new IllegalStateException("History changed");
-        });
+        ZoneDetailsController controller = new ZoneDetailsController(
+                (zone, message, tags) -> {
+                    throw new IllegalStateException("History changed");
+                }, (zone, message, tags) -> { });
 
         ZoneDetailsController.Submission result =
                 controller.save(new UUID(0, 7), "Clock", true);
 
         assertEquals(false, result.accepted());
         assertEquals("History changed", result.error());
+    }
+
+    @Test
+    void sendsZoneAmendWithCanonicalTags() {
+        UUID zone = new UUID(0, 9);
+        var requests = new ArrayList<String>();
+        ZoneDetailsController controller = new ZoneDetailsController(
+                (id, message, tags) -> { },
+                (id, message, tags) -> requests.add(
+                        id + ":" + message + ":" + tags.serialize()));
+
+        ZoneDetailsController.Submission result = controller.amend(
+                zone, "  Clock works  ", " #Copper, redstone ", true);
+
+        assertTrue(result.accepted());
+        assertEquals(java.util.List.of(zone + ":Clock works:copper, redstone"), requests);
     }
 }

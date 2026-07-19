@@ -334,14 +334,19 @@ public final class LumiClient implements ClientModInitializer {
             Screen zones, HistorySnapshotPayload.ZoneView zone) {
         Minecraft client = Minecraft.getInstance();
         client.setScreen(new LumiZoneDetailsScreen(
-                zones, zone, new ZoneDetailsController(NETWORKING::saveZone),
+                zones, zone, new ZoneDetailsController(
+                        NETWORKING::saveZone, NETWORKING::amendZone),
                 version -> client.setScreen(new LumiZoneRestoreScreen(
                         client.screen, zones, zone, version, NETWORKING::restoreZone)),
                 target -> client.setScreen(new LumiCompareScreen(
                         client.screen, COMPARISONS, target.label(),
                         () -> NETWORKING.compareZone(
                                 zone.id(), target.before(), target.after()),
-                        NETWORKING::cancelCompare))));
+                        NETWORKING::cancelCompare)),
+                () -> {
+                    NETWORKING.refreshSnapshot();
+                    showFeedback("luma.hotkeys.pending_preview_help");
+                }));
     }
 
     private static void showRecovery(HistorySnapshotPayload snapshot) {

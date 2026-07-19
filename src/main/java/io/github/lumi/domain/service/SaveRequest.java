@@ -17,7 +17,8 @@ public record SaveRequest(
         UUID workspaceId,
         Optional<UUID> zoneId,
         CommitKind kind,
-        VersionTags tags) {
+        VersionTags tags,
+        boolean replacesHead) {
     public SaveRequest {
         Objects.requireNonNull(expectedRef, "expectedRef");
         Objects.requireNonNull(author, "author");
@@ -27,9 +28,27 @@ public record SaveRequest(
         zoneId = Objects.requireNonNull(zoneId, "zoneId");
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(tags, "tags");
-        if (!tags.isEmpty() && kind != CommitKind.MANUAL && kind != CommitKind.AMEND) {
-            throw new IllegalArgumentException("Only Save and Amend accept version tags");
+        if (!tags.isEmpty() && kind != CommitKind.MANUAL
+                && kind != CommitKind.AMEND && kind != CommitKind.ZONE) {
+            throw new IllegalArgumentException("Only player Saves accept version tags");
         }
+        if ((kind == CommitKind.AMEND && !replacesHead)
+                || (replacesHead && kind != CommitKind.AMEND && kind != CommitKind.ZONE)) {
+            throw new IllegalArgumentException("Invalid Save replacement mode");
+        }
+    }
+
+    public SaveRequest(
+            BranchRef expectedRef,
+            CommitAuthor author,
+            String message,
+            Instant timestamp,
+            UUID workspaceId,
+            Optional<UUID> zoneId,
+            CommitKind kind,
+            VersionTags tags) {
+        this(expectedRef, author, message, timestamp, workspaceId, zoneId,
+                kind, tags, kind == CommitKind.AMEND);
     }
 
     public SaveRequest(

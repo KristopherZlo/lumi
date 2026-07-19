@@ -132,7 +132,7 @@ public final class SaveService implements SavePublisher {
             batch.publish();
         }
         progress.accept(SavePublicationProgress.indeterminate("Save: writing commit"));
-        List<CommitId> parents = request.kind() == CommitKind.AMEND
+        List<CommitId> parents = request.replacesHead()
                 ? parent.parents() : List.of(request.expectedRef().commit());
         Commit commit = new Commit(
                 tree,
