@@ -42,6 +42,10 @@ class LumiSettingsScreenTest {
 
     @Test
     void settingsRowsStayInsideShortViewports() {
+        assertFalse(LumiSettingsScreen.supportsContextualHint(160));
+        assertTrue(LumiSettingsScreen.supportsContextualHint(180));
+        assertTrue(LumiSettingsScreen.supportsContextualHint(220));
+        assertEquals(4, LumiSettingsScreen.visibleSettingRows(160, 0));
         assertEquals(6, LumiSettingsScreen.visibleSettingRows(220, 0));
         assertEquals(4, LumiSettingsScreen.visibleSettingRows(220, 48));
         assertEquals(8, LumiSettingsScreen.visibleSettingRows(340, 0));

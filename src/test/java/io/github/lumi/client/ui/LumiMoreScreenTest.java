@@ -43,5 +43,8 @@ class LumiMoreScreenTest {
         assertEquals(0, LumiMoreScreen.requiredScrollRows(100, 100));
         assertEquals(1, LumiMoreScreen.requiredScrollRows(101, 100));
         assertEquals(2, LumiMoreScreen.requiredScrollRows(125, 100));
+        assertFalse(LumiMoreScreen.supportsContextualHint(160));
+        assertFalse(LumiMoreScreen.supportsContextualHint(180));
+        assertTrue(LumiMoreScreen.supportsContextualHint(220));
     }
 }

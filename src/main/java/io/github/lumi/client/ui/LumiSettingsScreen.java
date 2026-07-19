@@ -69,9 +69,10 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
         panelHeight = page.windowHeight();
         loadWorkspaceSettings();
         requestSurvivalSettings();
-        boolean hintVisible = addContextualHint(
-                ClientContextualHelpHint.SETTINGS,
-                panelX + 12, panelY + 36, panelWidth - 24);
+        boolean hintVisible = supportsContextualHint(panelHeight)
+                && addContextualHint(
+                        ClientContextualHelpHint.SETTINGS,
+                        panelX + 12, panelY + 36, panelWidth - 24);
         contentOffset = hintVisible ? contextualHintOffset(8) : 0;
         addNarrowControls();
     }
@@ -81,7 +82,10 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
             renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
-            graphics.drawString(font, title, panelX + 16, panelY + 18,
+            int headerX = panelX + 16;
+            graphics.drawString(font, clippedHeader(
+                            title, headerX, panelX + panelWidth - 16),
+                    headerX, panelY + 18,
                     LegacyLumiTheme.TEXT, false);
             renderNarrow(graphics);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
@@ -150,6 +154,10 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     static int visibleSettingRows(int panelHeight, int contentOffset) {
         return Math.min(SETTING_COUNT,
                 Math.max(1, 1 + (panelHeight - 78 - contentOffset) / SETTING_STRIDE));
+    }
+
+    static boolean supportsContextualHint(int panelHeight) {
+        return panelHeight >= 180;
     }
 
     private int visibleSettingRows() {

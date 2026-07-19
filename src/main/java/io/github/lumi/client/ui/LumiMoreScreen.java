@@ -64,9 +64,10 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         panelY = page.windowY();
         panelWidth = page.contentWidth();
         panelHeight = page.windowHeight();
-        boolean hintVisible = addContextualHint(
-                ClientContextualHelpHint.MORE,
-                panelX + 12, panelY + 50, panelWidth - 24);
+        boolean hintVisible = supportsContextualHint(panelHeight)
+                && addContextualHint(
+                        ClientContextualHelpHint.MORE,
+                        panelX + 12, panelY + 50, panelWidth - 24);
         actionTop = panelY + 58
                 + (hintVisible ? contextualHintOffset(8) : 0);
         creditY = panelY + panelHeight - 32;
@@ -118,18 +119,26 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
         renderLegacyPanel(graphics, panelX + 12, panelY + 50,
                 panelWidth - 24, panelHeight - 62);
-        graphics.drawString(font, title, panelX + 16, panelY + 18,
+        int textX = panelX + 16;
+        int textWidth = Math.max(1, panelWidth - 32);
+        graphics.drawString(font, clippedHeader(
+                        title, textX, panelX + panelWidth - 16),
+                textX, panelY + 18,
                 LegacyLumiTheme.TEXT, false);
-        graphics.drawString(font, Component.translatable("luma.more.help"),
-                panelX + 16, panelY + 40, LegacyLumiTheme.MUTED, false);
+        graphics.drawString(font, font.plainSubstrByWidth(
+                        Component.translatable("luma.more.help").getString(), textWidth),
+                textX, panelY + 40, LegacyLumiTheme.MUTED, false);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         String version = FabricLoader.getInstance().getModContainer(LumiMod.MOD_ID)
                 .map(container -> container.getMetadata().getVersion().getFriendlyString())
                 .orElse("?");
-        graphics.drawString(font, Component.translatable("luma.window.credit"),
-                panelX + 16, creditY, LegacyLumiTheme.MUTED, false);
-        graphics.drawString(font, Component.translatable("luma.window.mod_version", version),
-                panelX + 16, creditY + 11, LegacyLumiTheme.MUTED, false);
+        graphics.drawString(font, font.plainSubstrByWidth(
+                        Component.translatable("luma.window.credit").getString(), textWidth),
+                textX, creditY, LegacyLumiTheme.MUTED, false);
+        graphics.drawString(font, font.plainSubstrByWidth(
+                        Component.translatable("luma.window.mod_version", version).getString(),
+                        textWidth),
+                textX, creditY + 11, LegacyLumiTheme.MUTED, false);
         } finally {
             endLegacyRender(graphics);
         }
@@ -140,6 +149,10 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
     static int requiredScrollRows(int contentBottom, int viewportBottom) {
         int overflow = Math.max(0, contentBottom - viewportBottom);
         return (overflow + 23) / 24;
+    }
+
+    static boolean supportsContextualHint(int panelHeight) {
+        return panelHeight >= 200;
     }
 
     @Override
