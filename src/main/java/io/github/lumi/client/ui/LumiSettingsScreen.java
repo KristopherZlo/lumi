@@ -14,6 +14,8 @@ import net.minecraft.network.chat.Component;
 
 /** Active-workspace defaults and client-local diagnostic controls. */
 public final class LumiSettingsScreen extends LumiLegacyPageScreen {
+    private static final int SETTING_COUNT = 8;
+    private static final int SETTING_STRIDE = 24;
     private final ClientHistoryStore history;
     private final TelemetryService telemetry;
     private final Consumer<WorkspaceSettings> updateWorkspace;
@@ -31,6 +33,7 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private int panelWidth;
     private int panelHeight;
     private int contentOffset;
+    private int scroll;
     private boolean survivalRequested;
     private long survivalRevision = -1;
 
@@ -90,48 +93,71 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private void addNarrowControls() {
         int x = panelX + 16;
         int width = panelWidth - 32;
-        addLegacyContentButton(x, panelY + 44 + contentOffset, width,
+        scroll = Math.min(scroll, maximumScroll());
+        addSetting(0, x, width,
                 toggleLabel("luma.settings.show_hidden_commits", showZoneSaves),
                 this::toggleZoneSaves, showZoneSaves
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyContentButton(x, panelY + 68 + contentOffset, width,
+        addSetting(1, x, width,
                 toggleLabel(
                         "luma.settings.restore_entities", includeEntitiesOnRestore),
                 this::toggleRestoreEntities, includeEntitiesOnRestore
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyContentButton(x, panelY + 92 + contentOffset, width,
+        addSetting(2, x, width,
                 toggleLabel("luma.settings.preview_generation", previewGenerationEnabled),
                 this::togglePreviewGeneration, previewGenerationEnabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyContentButton(x, panelY + 116 + contentOffset, width,
+        addSetting(3, x, width,
                 toggleLabel("luma.settings.workspace_hud", workspaceHudEnabled),
                 this::toggleWorkspaceHud, workspaceHudEnabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
         var survival = survivalSettings.snapshot().orElse(
                 new ClientSurvivalSettingsStore.Snapshot(false, false));
-        addLegacyContentButton(x, panelY + 140 + contentOffset, width,
+        addSetting(4, x, width,
                 toggleLabel(
                         "luma.settings.automatic_versions", automaticVersionsEnabled),
                 this::toggleAutomaticVersions, automaticVersionsEnabled
                         ? LumiLegacyButton.Kind.SELECTED
                         : LumiLegacyButton.Kind.NORMAL);
-        addLegacyContentButton(x, panelY + 164 + contentOffset, width,
+        LumiLegacyButton survivalButton = addSetting(5, x, width,
                 toggleLabel("luma.settings.survival_mode", survival.enabled()),
                 this::toggleSurvival, survival.enabled()
                         ? LumiLegacyButton.Kind.SELECTED
-                        : LumiLegacyButton.Kind.NORMAL).active =
-                survival.configurable();
+                        : LumiLegacyButton.Kind.NORMAL);
+        if (survivalButton != null) survivalButton.active = survival.configurable();
         boolean enabled = telemetry.settings().enabled();
-        addLegacyContentButton(x, panelY + 188 + contentOffset, width,
+        addSetting(6, x, width,
                 toggleLabel("luma.settings.telemetry_enabled", enabled),
                 this::toggleTelemetry, enabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyContentButton(x, panelY + 212 + contentOffset, width,
+        addSetting(7, x, width,
                 Component.translatable("luma.settings.telemetry_clear_queue"),
                 () -> {
                     telemetry.clearLocalQueue();
                     rebuildWidgets();
                 }, LumiLegacyButton.Kind.DANGER);
+    }
+
+    private LumiLegacyButton addSetting(
+            int index, int x, int width, Component label,
+            Runnable action, LumiLegacyButton.Kind kind) {
+        if (index < scroll || index >= scroll + visibleSettingRows()) return null;
+        return addLegacyContentButton(
+                x, panelY + 44 + contentOffset + (index - scroll) * SETTING_STRIDE,
+                width, label, action, kind);
+    }
+
+    static int visibleSettingRows(int panelHeight, int contentOffset) {
+        return Math.min(SETTING_COUNT,
+                Math.max(1, 1 + (panelHeight - 78 - contentOffset) / SETTING_STRIDE));
+    }
+
+    private int visibleSettingRows() {
+        return visibleSettingRows(panelHeight, contentOffset);
+    }
+
+    private int maximumScroll() {
+        return Math.max(0, SETTING_COUNT - visibleSettingRows());
     }
 
     private void renderNarrow(GuiGraphics graphics) {
@@ -239,6 +265,26 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private static Component toggleLabel(String key, boolean enabled) {
         return Component.translatable(key).append(": ").append(
                 Component.translatable(enabled ? "options.on" : "options.off"));
+    }
+
+    @Override
+    public boolean mouseScrolled(
+            double mouseX, double mouseY,
+            double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        if (x >= panelX && x < panelX + panelWidth
+                && y >= panelY + 36 && y < panelY + panelHeight) {
+            int replacement = Math.max(0, Math.min(maximumScroll(),
+                    scroll + (verticalAmount < 0 ? 1 : -1)));
+            if (replacement != scroll) {
+                scroll = replacement;
+                rebuildWidgets();
+            }
+            return true;
+        }
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     @Override public boolean isPauseScreen() { return false; }

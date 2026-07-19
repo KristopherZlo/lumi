@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -36,5 +37,13 @@ class LumiSettingsScreenTest {
         assertFalse(source.contains("renderCards("));
         assertTrue(source.contains("ClientContextualHelpHint.SETTINGS"));
         assertTrue(source.contains("contentOffset"));
+        assertTrue(source.contains("public boolean mouseScrolled("));
+    }
+
+    @Test
+    void settingsRowsStayInsideShortViewports() {
+        assertEquals(6, LumiSettingsScreen.visibleSettingRows(220, 0));
+        assertEquals(4, LumiSettingsScreen.visibleSettingRows(220, 48));
+        assertEquals(8, LumiSettingsScreen.visibleSettingRows(340, 0));
     }
 }
