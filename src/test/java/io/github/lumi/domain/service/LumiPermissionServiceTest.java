@@ -28,6 +28,7 @@ class LumiPermissionServiceTest {
 
         service.setSurvivalEnabled(new PermissionSubject(player, true, true), true);
 
+        assertTrue(service.isSurvivalEnabled(player));
         assertEquals(PermissionDecision.ALLOWED,
                 service.evaluate(new PermissionSubject(player, true, true)));
         assertTrue(optIns.enabled.contains(player));

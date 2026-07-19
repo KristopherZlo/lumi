@@ -126,6 +126,13 @@ public record HistoryCommandPayload(
         if (kind == Kind.SNAPSHOT_REFRESH && !argument.isEmpty()) {
             throw new IllegalArgumentException(kind + " does not accept an argument");
         }
+        if (kind == Kind.SURVIVAL_STATUS && !argument.isEmpty()) {
+            throw new IllegalArgumentException(kind + " does not accept an argument");
+        }
+        if (kind == Kind.SURVIVAL_SETTINGS
+                && !argument.equals("0") && !argument.equals("1")) {
+            throw new IllegalArgumentException("Invalid Survival setting");
+        }
         if ((kind == Kind.BRANCH_SWITCH || kind == Kind.BRANCH_CREATE
                 || kind == Kind.BRANCH_DELETE)
                 && argument.isBlank()) {
@@ -163,7 +170,8 @@ public record HistoryCommandPayload(
         BRANCH_DELETE(31), RESTORE_DELETED_VERSION(32), RENAME_VERSION(33),
         BRANCH_CREATE_AT(34), CLEANUP_INSPECT(35), CLEANUP_APPLY(36),
         ZONE_AMEND(37), RESTORE_AREA_PLAN(38), RESTORE_AREA_APPLY(39),
-        ZONE_CELLS(40), ZONE_DELETE(41), ZONE_OVERLAY(42);
+        ZONE_CELLS(40), ZONE_DELETE(41), ZONE_OVERLAY(42),
+        SURVIVAL_STATUS(43), SURVIVAL_SETTINGS(44);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

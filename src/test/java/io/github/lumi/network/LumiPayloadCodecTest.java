@@ -374,6 +374,10 @@ class LumiPayloadCodecTest {
         CleanupResultPayload cleanup = new CleanupResultPayload(
                 UUID.randomUUID(), false, 2, 7, "");
         assertEquals(cleanup, roundTrip(CleanupResultPayload.CODEC, cleanup));
+        SurvivalSettingsPayload survival = new SurvivalSettingsPayload(
+                UUID.randomUUID(), true, true);
+        assertEquals(survival,
+                roundTrip(SurvivalSettingsPayload.CODEC, survival));
     }
 
     private static CommitId id(char digit) {

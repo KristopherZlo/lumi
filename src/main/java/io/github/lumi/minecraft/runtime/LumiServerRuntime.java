@@ -43,6 +43,10 @@ public final class LumiServerRuntime {
         requireSession().setSurvivalEnabled(player, enabled);
     }
 
+    public boolean isSurvivalEnabled(ServerPlayer player) throws IOException {
+        return requireSession().isSurvivalEnabled(player);
+    }
+
     private synchronized void starting(MinecraftServer server) {
         if (session != null) {
             throw new IllegalStateException("A Lumi server session is already active");

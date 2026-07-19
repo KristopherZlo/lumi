@@ -90,6 +90,8 @@ public final class LumiServerNetworking {
                 HistoryPagePayload.TYPE, HistoryPagePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 PendingStatisticsPayload.TYPE, PendingStatisticsPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                SurvivalSettingsPayload.TYPE, SurvivalSettingsPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(
                 HistoryCommandPayload.TYPE, LumiServerNetworking::receive);
         ServerPlayNetworking.registerGlobalReceiver(
@@ -122,6 +124,12 @@ public final class LumiServerNetworking {
                 payload.requestId(), payload.kind(), player.getUUID(),
                 dimension(runtime), payload.expectedRevision());
         try {
+            if (payload.kind() == HistoryCommandPayload.Kind.SURVIVAL_STATUS
+                    || payload.kind()
+                    == HistoryCommandPayload.Kind.SURVIVAL_SETTINGS) {
+                survivalSettings(player, payload, runtime);
+                return;
+            }
             PermissionDecision permission = LumiMod.serverRuntime().permission(player);
             if (permission != PermissionDecision.ALLOWED) {
                 reject(player, payload, runtime, permissionMessage(permission));
@@ -497,6 +505,28 @@ public final class LumiServerNetworking {
         return message == null || message.isBlank() ? "Operation failed" : message;
     }
 
+    private static void survivalSettings(
+            ServerPlayer player,
+            HistoryCommandPayload payload,
+            FabricDimensionRuntime runtime) throws IOException {
+        boolean configurable = LumiMod.serverRuntime().mayConfigure(player);
+        if (payload.kind() == HistoryCommandPayload.Kind.SURVIVAL_SETTINGS) {
+            if (!configurable) {
+                throw new IOException(
+                        "Only an operator can change Lumi Survival access");
+            }
+            LumiMod.serverRuntime().setSurvivalEnabled(
+                    player, payload.argument().equals("1"));
+            sendEvent(player, payload, runtime,
+                    OperationEventPayload.State.SUCCEEDED,
+                    "Survival setting updated");
+        }
+        send(player, new SurvivalSettingsPayload(
+                payload.requestId(),
+                LumiMod.serverRuntime().isSurvivalEnabled(player),
+                configurable));
+    }
+
     private static void pendingStatistics(
             PendingStatisticsRequestPayload payload,
             ServerPlayNetworking.Context context) {
@@ -695,6 +725,9 @@ public final class LumiServerNetworking {
                     "Version rename does not use the mutation queue");
             case SNAPSHOT_REFRESH -> throw new IllegalStateException(
                     "Snapshot refresh does not use the mutation queue");
+            case SURVIVAL_STATUS, SURVIVAL_SETTINGS ->
+                    throw new IllegalStateException(
+                            "Survival settings do not use the mutation queue");
             case RESTORE_AREA_PLAN -> throw new IllegalStateException(
                     "Partial Restore planning does not use the mutation queue");
         };

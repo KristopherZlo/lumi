@@ -2,6 +2,7 @@ package io.github.lumi.domain.service;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.UUID;
 
 /** Applies operator and explicit Survival opt-in rules independently of Minecraft APIs. */
 public final class LumiPermissionService {
@@ -29,5 +30,9 @@ public final class LumiPermissionService {
             throw new SecurityException("Only an operator can change Lumi Survival access");
         }
         optIns.setEnabled(subject.playerId(), enabled);
+    }
+
+    public boolean isSurvivalEnabled(UUID playerId) throws IOException {
+        return optIns.isEnabled(Objects.requireNonNull(playerId, "playerId"));
     }
 }

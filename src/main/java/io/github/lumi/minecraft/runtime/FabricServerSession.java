@@ -98,6 +98,10 @@ final class FabricServerSession implements AutoCloseable {
         permissions.setSurvivalEnabled(subject(player), enabled);
     }
 
+    boolean isSurvivalEnabled(ServerPlayer player) throws IOException {
+        return permissions.isSurvivalEnabled(player.getUUID());
+    }
+
     boolean mayConfigure(ServerPlayer player) {
         return server.getPlayerList().isOp(player.nameAndId());
     }
