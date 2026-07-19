@@ -38,6 +38,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     private final Runnable delete;
     private final Consumer<VersionTags> updateTags;
     private final Consumer<String> rename;
+    private final boolean readOnly;
     private String displayedName;
     private boolean editingName;
     private EditBox nameEditor;
@@ -65,6 +66,25 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
             Runnable delete,
             Consumer<VersionTags> updateTags,
             Consumer<String> rename) {
+        this(parent, dimensionId, version, previews, restore, compareToParent,
+                createBranch, amend, partialRestore, delete, updateTags, rename,
+                false);
+    }
+
+    public LumiVersionDetailsScreen(
+            Screen parent,
+            String dimensionId,
+            HistorySnapshotPayload.Version version,
+            ClientVersionPreviewStore previews,
+            Runnable restore,
+            Optional<Runnable> compareToParent,
+            Optional<Runnable> createBranch,
+            Optional<Runnable> amend,
+            Optional<Runnable> partialRestore,
+            Runnable delete,
+            Consumer<VersionTags> updateTags,
+            Consumer<String> rename,
+            boolean readOnly) {
         super(parent, Component.translatable(
                 "luma.screen.save_details.title", version.message()));
         this.parent = parent;
@@ -81,6 +101,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         this.delete = Objects.requireNonNull(delete, "delete");
         this.updateTags = Objects.requireNonNull(updateTags, "updateTags");
         this.rename = Objects.requireNonNull(rename, "rename");
+        this.readOnly = readOnly;
         this.displayedName = version.message();
         this.displayedTags = version.tags();
     }
@@ -93,21 +114,20 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
         int buttonWidth = Math.max(52, (panelWidth - 40) / 3);
         int buttonY = panelY + PANEL_HEIGHT - 30;
-        addLegacyButton(panelX + 16, buttonY, buttonWidth,
+        LumiLegacyButton restoreButton = addLegacyButton(
+                panelX + 16, buttonY, buttonWidth,
                 Component.translatable("luma.action.restore"),
                 restore, LumiLegacyButton.Kind.PRIMARY);
+        restoreButton.active = !readOnly;
         LumiLegacyButton compare = addLegacyButton(
                 panelX + 20 + buttonWidth, buttonY, buttonWidth,
                 Component.translatable("luma.action.compare"),
                 () -> compareToParent.ifPresent(Runnable::run),
                 LumiLegacyButton.Kind.NORMAL);
         compare.active = compareToParent.isPresent();
-        addLegacyButton(panelX + 24 + buttonWidth * 2, buttonY, buttonWidth,
-                Component.translatable("luma.action.back"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
         addSecondaryActions(panelWidth, buttonY - 28);
 
-        if (editingName) {
+        if (!readOnly && editingName) {
             nameEditor = new EditBox(font, panelX + 20, panelY + 12,
                     Math.max(20, panelWidth - 150), 16,
                     Component.translatable("luma.save_details.rename_title"));
@@ -117,7 +137,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
             addLegacyButton(panelX + panelWidth - 122, panelY + 13, 102,
                     Component.translatable("luma.action.rename_save"),
                     this::saveName, LumiLegacyButton.Kind.PRIMARY);
-        } else {
+        } else if (!readOnly) {
             addLegacyButton(panelX + panelWidth - 122, panelY + 13, 102,
                     Component.translatable("luma.action.rename_save"), () -> {
                         editingName = true;
@@ -128,7 +148,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
 
         int metadataX = panelX + 280;
         int metadataWidth = Math.max(0, panelWidth - 300);
-        if (editingTags) {
+        if (!readOnly && editingTags) {
             tagEditor = new EditBox(font, metadataX, panelY + 143,
                     Math.max(20, metadataWidth - 30), 16,
                     Component.translatable("luma.history.tags_input"));
@@ -138,7 +158,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
             addLegacyIconButton(panelX + panelWidth - 44, panelY + 139, "save",
                     Component.translatable("luma.action.save_tags"),
                     this::saveTags, LumiLegacyButton.Kind.PRIMARY);
-        } else {
+        } else if (!readOnly) {
             addLegacyIconButton(panelX + panelWidth - 44, panelY + 139, "tags",
                     Component.translatable("luma.action.edit_tags"), () -> {
                         editingTags = true;
@@ -166,9 +186,11 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                 () -> partialRestore.ifPresent(Runnable::run),
                 LumiLegacyButton.Kind.NORMAL);
         partial.active = partialRestore.isPresent();
-        addLegacyIconButton(panelX + panelWidth - 40, y, "trash",
+        LumiLegacyButton remove = addLegacyIconButton(
+                panelX + panelWidth - 40, y, "trash",
                 Component.translatable("luma.action.delete_save"),
                 delete, LumiLegacyButton.Kind.DANGER);
+        remove.active = !readOnly;
     }
 
     @Override

@@ -35,8 +35,10 @@ class LumiVersionDetailsScreenTest {
         assertTrue(details.contains("luma.action.zoom_in"));
         assertTrue(details.contains("luma.action.preview_pan_up"));
         assertTrue(details.contains("luma.action.preview_pan_down"));
+        assertTrue(details.contains("restoreButton.active = !readOnly"));
+        assertTrue(details.contains("remove.active = !readOnly"));
         assertTrue(details.contains("sourceWidth, sourceHeight"));
-        assertTrue(dashboard.contains("\"eye-open\", \"luma.action.open_details\""));
+        assertTrue(dashboard.contains("\"folder\", \"luma.action.open_details\""));
         assertTrue(client.contains("new LumiVersionDetailsScreen("));
         assertTrue(client.contains("() -> openRestore(parent, version)"));
         assertTrue(client.contains("() -> openDelete(parent, version)"));

@@ -10,6 +10,7 @@ import net.minecraft.network.chat.Component;
 
 /** Secondary client-only tools kept away from the main history workflow. */
 public final class LumiMoreScreen extends LumiLegacyPageScreen {
+    private final Runnable dimensions;
     private final Runnable deletedVersions;
     private final Runnable onboarding;
     private final Runnable hotkeys;
@@ -29,6 +30,7 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
 
     public LumiMoreScreen(
             Screen parent,
+            Runnable dimensions,
             Runnable deletedVersions,
             Runnable onboarding,
             Runnable hotkeys,
@@ -39,6 +41,7 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
             Runnable manualCompare) {
         super(parent, Component.translatable("luma.screen.more.title"),
                 LegacyProjectTab.MORE);
+        this.dimensions = Objects.requireNonNull(dimensions, "dimensions");
         this.deletedVersions = Objects.requireNonNull(
                 deletedVersions, "deletedVersions");
         this.onboarding = Objects.requireNonNull(onboarding, "onboarding");
@@ -64,6 +67,7 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         actionX = panelX + 16;
         actionY = panelY + (hintVisible ? 106 : 58);
         actionRight = panelX + panelWidth - 16;
+        button("luma.action.dimensions", dimensions);
         button("luma.more.deleted_saves_title", deletedVersions);
         button("luma.more.onboarding_title", onboarding);
         button("luma.hotkeys.title", hotkeys);

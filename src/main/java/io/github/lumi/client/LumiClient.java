@@ -19,6 +19,8 @@ import io.github.lumi.client.ui.LumiUpdateScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.LumiDiagnosticsScreen;
+import io.github.lumi.client.ui.LumiDimensionsScreen;
+import io.github.lumi.client.ui.LumiDimensionHistoryScreen;
 import io.github.lumi.client.ui.LumiDeleteVersionScreen;
 import io.github.lumi.client.ui.LumiDeleteZoneScreen;
 import io.github.lumi.client.ui.LumiDeletedVersionsScreen;
@@ -35,7 +37,6 @@ import io.github.lumi.client.ui.LumiPackageInspectionScreen;
 import io.github.lumi.client.ui.LumiSpecialThanksScreen;
 import io.github.lumi.client.ui.LumiHotkeyScreen;
 import io.github.lumi.client.ui.LumiZonesScreen;
-import io.github.lumi.client.ui.LumiWorkspacesScreen;
 import io.github.lumi.client.ui.LumiZoneDetailsScreen;
 import io.github.lumi.client.ui.LumiZoneRestoreScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
@@ -48,7 +49,6 @@ import io.github.lumi.client.ui.PackageScreenController;
 import io.github.lumi.client.ui.ZoneScreenController;
 import io.github.lumi.client.ui.ZoneDetailsController;
 import io.github.lumi.client.ui.ZoneHistoryActions;
-import io.github.lumi.client.ui.WorkspaceScreenController;
 import io.github.lumi.client.ui.VersionCompareController;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.CleanupResultPayload;
@@ -244,12 +244,34 @@ public final class LumiClient implements ClientModInitializer {
                         () -> client.setScreen(zones));
     }
 
-    private static void openWorkspaces(Screen parent) {
+    private static void openDimensions(Screen parent) {
         Minecraft client = Minecraft.getInstance();
-        client.setScreen(new LumiWorkspacesScreen(
-                parent, HISTORY, SELECTION::bounds,
-                new WorkspaceScreenController(NETWORKING::createWorkspace),
-                NETWORKING::switchWorkspace));
+        client.setScreen(new LumiDimensionsScreen(
+                parent, LumiClient::visibleDimensions,
+                () -> HISTORY.state().snapshot().orElseThrow().dimensionId(),
+                dimension -> openDimensionHistory(client.screen, dimension)));
+    }
+
+    private static java.util.List<String> visibleDimensions() {
+        var dimensions = new java.util.TreeSet<String>();
+        Minecraft client = Minecraft.getInstance();
+        if (client.getConnection() != null) {
+            client.getConnection().levels().forEach(
+                    key -> dimensions.add(key.identifier().toString()));
+        }
+        HISTORY.state().snapshot().stream()
+                .map(HistorySnapshotPayload::dimensionId)
+                .forEach(dimensions::add);
+        return java.util.List.copyOf(dimensions);
+    }
+
+    private static void openDimensionHistory(Screen parent, String dimension) {
+        Minecraft client = Minecraft.getInstance();
+        client.setScreen(new LumiDimensionHistoryScreen(
+                parent, dimension, HISTORY_PAGES, PREVIEW_STORE,
+                NETWORKING::requestDimensionHistoryPage,
+                version -> openDimensionVersionDetails(
+                        client.screen, dimension, version)));
     }
 
     private static void openBranches(Screen parent) {
@@ -363,6 +385,17 @@ public final class LumiClient implements ClientModInitializer {
                 name -> NETWORKING.renameVersion(version.id(), name)));
     }
 
+    private static void openDimensionVersionDetails(
+            Screen parent,
+            String dimensionId,
+            HistorySnapshotPayload.Version version) {
+        Minecraft.getInstance().setScreen(new LumiVersionDetailsScreen(
+                parent, dimensionId, version, PREVIEW_STORE,
+                () -> { }, Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.empty(), () -> { }, ignored -> { }, ignored -> { },
+                true));
+    }
+
     private static void openBranchAt(
             Screen parent, HistorySnapshotPayload.Version version) {
         Minecraft.getInstance().setScreen(new LumiBranchScreen(
@@ -435,6 +468,7 @@ public final class LumiClient implements ClientModInitializer {
         Minecraft client = Minecraft.getInstance();
         client.setScreen(new LumiMoreScreen(
                 parent,
+                () -> openDimensions(client.screen),
                 () -> client.setScreen(new LumiDeletedVersionsScreen(
                         client.screen, HISTORY,
                         NETWORKING::restoreDeletedVersion,
