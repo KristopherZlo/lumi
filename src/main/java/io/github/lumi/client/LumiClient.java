@@ -42,6 +42,7 @@ import io.github.lumi.client.ui.SaveScreenController;
 import io.github.lumi.client.ui.PackageScreenController;
 import io.github.lumi.client.ui.ZoneScreenController;
 import io.github.lumi.client.ui.ZoneDetailsController;
+import io.github.lumi.client.ui.ZoneHistoryActions;
 import io.github.lumi.client.ui.WorkspaceScreenController;
 import io.github.lumi.client.ui.VersionCompareController;
 import io.github.lumi.network.HistorySnapshotPayload;
@@ -52,6 +53,7 @@ import io.github.lumi.network.PartialRestorePlanPayload;
 import io.github.lumi.telemetry.TelemetryService;
 import io.github.lumi.update.UpdateChecker;
 import io.github.lumi.update.ClientUpdatePreferenceRepository;
+import java.util.List;
 import java.util.Optional;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
@@ -403,16 +405,59 @@ public final class LumiClient implements ClientModInitializer {
     private static void openZoneDetails(
             Screen zones, HistorySnapshotPayload.ZoneView zone) {
         Minecraft client = Minecraft.getInstance();
+        HistorySnapshotPayload snapshot =
+                HISTORY.state().snapshot().orElseThrow();
         client.setScreen(new LumiZoneDetailsScreen(
-                zones, zone, new ZoneDetailsController(
+                zones, snapshot, zone, new ZoneDetailsController(
                         NETWORKING::saveZone, NETWORKING::amendZone),
-                version -> client.setScreen(new LumiZoneRestoreScreen(
-                        client.screen, zones, zone, version, NETWORKING::restoreZone)),
-                target -> showZoneCompareChanges(zone.id(), target),
+                HISTORY_PAGES, NETWORKING::requestHistoryPage, PREVIEW_STORE,
+                new ZoneHistoryActions(
+                        version -> openZoneVersionDetails(
+                                client.screen, zones, zone, version),
+                        version -> client.setScreen(new LumiZoneRestoreScreen(
+                                client.screen, zones, zone, version,
+                                NETWORKING::restoreZone)),
+                        version -> openBranchAt(client.screen, version),
+                        target -> showZoneCompareChanges(zone.id(), target)),
                 () -> {
                     NETWORKING.refreshSnapshot();
                     showFeedback("luma.hotkeys.pending_preview_help");
                 }));
+    }
+
+    private static void openZoneVersionDetails(
+            Screen zoneDetails,
+            Screen zones,
+            HistorySnapshotPayload.ZoneView zone,
+            HistorySnapshotPayload.Version version) {
+        Minecraft client = Minecraft.getInstance();
+        HistorySnapshotPayload snapshot =
+                HISTORY.state().snapshot().orElseThrow();
+        var compare = new VersionCompareController()
+                .target(List.of(version), 0)
+                .map(target -> (Runnable) () ->
+                        showZoneCompareChanges(zone.id(), target));
+        boolean idle = !snapshot.operationActive();
+        var amend = idle && snapshot.pendingKeys() > 0
+                && snapshot.head().equals(version.id())
+                ? Optional.of((Runnable) () -> {
+                    NETWORKING.amendZone(
+                            zone.id(), version.message(), version.tags());
+                    client.setScreen(zones);
+                }) : Optional.<Runnable>empty();
+        client.setScreen(new LumiVersionDetailsScreen(
+                zoneDetails, snapshot.dimensionId(), version, PREVIEW_STORE,
+                () -> client.setScreen(new LumiZoneRestoreScreen(
+                        client.screen, zones, zone, version,
+                        NETWORKING::restoreZone)),
+                compare,
+                idle ? Optional.of((Runnable) () ->
+                        openBranchAt(client.screen, version))
+                        : Optional.empty(),
+                amend, Optional.empty(),
+                () -> openDelete(zoneDetails, version),
+                tags -> NETWORKING.updateVersionTags(version.id(), tags),
+                name -> NETWORKING.renameVersion(version.id(), name)));
     }
 
     private static void showRecovery(HistorySnapshotPayload snapshot) {
