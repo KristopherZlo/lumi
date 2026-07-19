@@ -57,6 +57,10 @@ class ReturnPointRestorePreparationTest {
         assertEquals(returnCommit, refs.read(hidden).orElseThrow().commit());
         assertEquals(List.of(target), new ForwardHistoryService(commits, refs)
                 .roots(new BranchName("main"), Optional.of(new UUID(1, 1))));
+        assertTrue(journals.read().isEmpty());
+
+        operation.tick(Long.MAX_VALUE);
+
         assertTrue(journals.read().isPresent());
         assertTrue(journals.read().orElseThrow().target().excludeEntities());
         assertEquals(RestoreStatus.APPLYING, operation.status());

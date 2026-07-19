@@ -10,6 +10,7 @@ import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.model.WorkspaceSwitchTarget;
+import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.model.Zone;
 import io.github.lumi.domain.model.ZoneRestoreTarget;
 import io.github.lumi.domain.service.PreparedRestore;
@@ -37,6 +38,8 @@ public final class RestoreOperation implements DimensionMutation {
     private IOException failure;
     private boolean targetRepairAttempted;
     private boolean returnRepairAttempted;
+    private boolean returnPublicationStarted;
+    private boolean journalPersisted;
     private ReturnPhase returnPhase;
 
     @Override public OperationProgress progress() {
@@ -49,6 +52,7 @@ public final class RestoreOperation implements DimensionMutation {
             RestorePublication publication,
             OperationJournalRepository journals,
             OperationJournal journal,
+            boolean journalPersisted,
             WorldStateApply.PreparedState preparedTarget,
             WorldStateApply.PreparedState preparedReturn,
             RestoreStateListener stateListener) {
@@ -57,6 +61,7 @@ public final class RestoreOperation implements DimensionMutation {
         this.publication = publication;
         this.journals = journals;
         this.journal = journal;
+        this.journalPersisted = journalPersisted;
         this.preparedTarget = preparedTarget;
         this.preparedReturn = preparedReturn;
         this.stateListener = stateListener;
@@ -282,6 +287,20 @@ public final class RestoreOperation implements DimensionMutation {
             RestoreStateListener stateListener,
             OperationKind kind,
             OperationTarget target) throws IOException {
+        return start(restore, world, publication, journals, operationId,
+                stateListener, kind, target, Optional.empty());
+    }
+
+    private static RestoreOperation start(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            OperationKind kind,
+            OperationTarget target,
+            Optional<WorkingIndexSnapshot> capturedGenerations) throws IOException {
         Objects.requireNonNull(restore, "restore");
         Objects.requireNonNull(world, "world");
         Objects.requireNonNull(publication, "publication");
@@ -294,12 +313,13 @@ public final class RestoreOperation implements DimensionMutation {
                 new WorldStateApply.State(
                         restore.returnSections(), restore.returnEntities(),
                         restore.returnPlayerSpawns()));
-        OperationJournal journal = journals.create(new OperationJournal(
+        OperationJournal journal = new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
-                Objects.requireNonNull(target, "target")));
+                Objects.requireNonNull(target, "target"),
+                Objects.requireNonNull(capturedGenerations, "capturedGenerations"));
         return new RestoreOperation(
-                restore, world, publication, journals, journal,
+                restore, world, publication, journals, journal, false,
                 preparedTarget, preparedReturn, stateListener);
     }
 
@@ -322,11 +342,16 @@ public final class RestoreOperation implements DimensionMutation {
                         restore.returnSections(), restore.returnEntities(),
                         restore.returnPlayerSpawns()));
         return new RestoreOperation(
-                restore, world, publication, journals, journal,
+                restore, world, publication, journals, journal, true,
                 preparedTarget, preparedReturn, stateListener);
     }
 
     public RestoreStatus tick(long deadlineNanos) throws IOException {
+        if (!journalPersisted) {
+            journal = journals.create(journal);
+            journalPersisted = true;
+            return status;
+        }
         switch (status) {
             case APPLYING -> applyTarget(deadlineNanos);
             case VERIFYING -> verifyTarget(deadlineNanos);
@@ -491,7 +516,9 @@ public final class RestoreOperation implements DimensionMutation {
             throw new IllegalStateException("Restore has already started mutating the world");
         }
         try {
-            journals.clear(journal);
+            if (journalPersisted) {
+                journals.clear(journal);
+            }
             status = RestoreStatus.CANCELLED;
         } finally {
             targetSession.close();

@@ -55,6 +55,7 @@ class RestoreOperationTest {
                 new PreparedRestore(expectedRef, target, Map.of(), Map.of(), Map.of(), Map.of()),
                 new RepairThenVerify(), publication, journals, UUID.randomUUID());
 
+        activate(operation, journals);
         operation.tick(Long.MAX_VALUE);
         operation.tick(Long.MAX_VALUE);
         operation.tick(Long.MAX_VALUE);
@@ -65,7 +66,7 @@ class RestoreOperationTest {
     }
 
     @Test
-    void createsBranchSwitchJournalFromExplicitSpec() throws IOException {
+    void createsBranchSwitchJournalFromExplicitSpecOnActivation() throws IOException {
         BranchRef source = new BranchRef(new BranchName("main"), id('d'), 2);
         BranchRef target = new BranchRef(new BranchName("redstone-test"), id('e'), 4);
         var plan = new BranchSwitchPlan(new ActiveBranch(source.name(), 6), source, target);
@@ -73,9 +74,12 @@ class RestoreOperationTest {
                 source, target.commit(), Map.of(), Map.of(), Map.of(), Map.of());
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
 
-        RestoreOperation.startBranchSwitch(
+        RestoreOperation operation = RestoreOperation.startBranchSwitch(
                 restore, new RepairThenVerify(), ignored -> { }, journals, UUID.randomUUID(),
                 RestoreStateListener.NONE, plan);
+        assertTrue(journals.read().isEmpty());
+
+        operation.tick(Long.MAX_VALUE);
 
         var journal = journals.read().orElseThrow();
         assertEquals(io.github.lumi.domain.model.OperationKind.BRANCH_SWITCH, journal.kind());
@@ -94,9 +98,12 @@ class RestoreOperationTest {
                 source, target.commit(), Map.of(), Map.of(), Map.of(), Map.of());
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
 
-        RestoreOperation.startWorkspaceSwitch(
+        RestoreOperation operation = RestoreOperation.startWorkspaceSwitch(
                 restore, new RepairThenVerify(), ignored -> { }, journals, UUID.randomUUID(),
                 RestoreStateListener.NONE, plan);
+        assertTrue(journals.read().isEmpty());
+
+        operation.tick(Long.MAX_VALUE);
 
         assertEquals(Optional.of(new WorkspaceSwitchTarget(
                         new UUID(0, 1), new UUID(0, 2), 8)),
@@ -115,9 +122,12 @@ class RestoreOperationTest {
                 current, target, Map.of(), Map.of(), Map.of(), Map.of());
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
 
-        RestoreOperation.startZone(
+        RestoreOperation operation = RestoreOperation.startZone(
                 restore, new RepairThenVerify(), ignored -> { }, journals, UUID.randomUUID(),
                 RestoreStateListener.NONE, zone, checkpoint);
+        assertTrue(journals.read().isEmpty());
+
+        operation.tick(Long.MAX_VALUE);
 
         var journal = journals.read().orElseThrow();
         assertEquals(Optional.of(new ZoneRestoreTarget(workspace, zone.id(), 7)),
@@ -133,9 +143,12 @@ class RestoreOperationTest {
                 current, merge, Map.of(), Map.of(), Map.of(), Map.of());
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
 
-        RestoreOperation.startMerge(
+        RestoreOperation operation = RestoreOperation.startMerge(
                 restore, new RepairThenVerify(), ignored -> { }, journals,
                 UUID.randomUUID(), RestoreStateListener.NONE);
+        assertTrue(journals.read().isEmpty());
+
+        operation.tick(Long.MAX_VALUE);
 
         var journal = journals.read().orElseThrow();
         assertEquals(io.github.lumi.domain.model.OperationKind.MERGE, journal.kind());
@@ -153,9 +166,12 @@ class RestoreOperationTest {
         var area = new BlockAreaTarget(new BlockBox(1, 2, 3, 4, 5, 6), false);
         CommitId checkpoint = id('a');
 
-        RestoreOperation.startPartial(
+        RestoreOperation operation = RestoreOperation.startPartial(
                 restore, new RepairThenVerify(), ignored -> { }, journals,
                 UUID.randomUUID(), RestoreStateListener.NONE, area, checkpoint);
+        assertTrue(journals.read().isEmpty());
+
+        operation.tick(Long.MAX_VALUE);
 
         assertEquals(Optional.of(area), journals.read().orElseThrow().target().blockArea());
         assertEquals(Optional.of(checkpoint), journals.read().orElseThrow().target().returnPoint());
@@ -195,9 +211,12 @@ class RestoreOperationTest {
                 UUID.fromString("10000000-0000-0000-0000-000000000001"), listener);
 
         assertEquals(2, world.prepareCalls);
-        assertEquals(OperationPhase.PREPARED, journals.read().orElseThrow().phase());
+        assertTrue(journals.read().isEmpty());
         assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
 
+        assertEquals(RestoreStatus.APPLYING, operation.tick(Long.MAX_VALUE));
+        assertEquals(OperationPhase.PREPARED, journals.read().orElseThrow().phase());
+        assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
         assertEquals(RestoreStatus.APPLYING, operation.tick(Long.MAX_VALUE));
         assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
@@ -224,6 +243,7 @@ class RestoreOperationTest {
                 new PreparedRestore(expectedRef, target, Map.of(), Map.of(), Map.of(), Map.of()),
                 world, refs, journals, UUID.randomUUID());
 
+        activate(operation, journals);
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.REPAIRING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
@@ -245,6 +265,7 @@ class RestoreOperationTest {
                 new PreparedRestore(expectedRef, target, Map.of(), Map.of(), Map.of(), Map.of()),
                 world, refs, journals, UUID.randomUUID(), listener);
 
+        activate(operation, journals);
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.REPAIRING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
@@ -272,6 +293,7 @@ class RestoreOperationTest {
                 new PreparedRestore(expectedRef, id('6'), Map.of(), Map.of(), Map.of(), Map.of()),
                 world, refs, journals, UUID.randomUUID());
 
+        activate(operation, journals);
         assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.RETURNED, operation.tick(Long.MAX_VALUE));
@@ -295,6 +317,7 @@ class RestoreOperationTest {
                 new PreparedRestore(expectedRef, target, Map.of(), Map.of(), Map.of(), Map.of()),
                 new ReturnAfterMismatch(false), refs, journals, UUID.randomUUID());
 
+        activate(operation, journals);
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.REPAIRING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
@@ -363,6 +386,7 @@ class RestoreOperationTest {
                 new PreparedRestore(expected, id('e'), Map.of(), Map.of(), Map.of(), Map.of()),
                 new ImmediatelyVerified(), publication, journals, UUID.randomUUID());
 
+        activate(operation, journals);
         operation.tick(Long.MAX_VALUE);
         operation.tick(Long.MAX_VALUE);
 
@@ -384,6 +408,7 @@ class RestoreOperationTest {
                     throw new IOException("Cannot publish restored ref");
                 }, journals, UUID.randomUUID());
 
+        activate(operation, journals);
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
         assertThrows(IOException.class, () -> operation.tick(Long.MAX_VALUE));
 
@@ -400,6 +425,7 @@ class RestoreOperationTest {
                 new PreparedRestore(expected, id('f'), Map.of(), Map.of(), Map.of(), Map.of()),
                 world, ignored -> { }, journals, UUID.randomUUID());
 
+        activate(operation, journals);
         operation.tick(Long.MAX_VALUE);
         operation.tick(Long.MAX_VALUE);
 
@@ -454,6 +480,7 @@ class RestoreOperationTest {
         RestoreOperation operation = RestoreOperation.start(
                 new PreparedRestore(expected, id('7'), Map.of(), Map.of(), Map.of(), Map.of()),
                 new ImmediatelyVerified(), ignored -> { }, journals, UUID.randomUUID());
+        activate(operation, journals);
         operation.tick(Long.MAX_VALUE);
 
         operation.close();
@@ -470,6 +497,7 @@ class RestoreOperationTest {
                 new PreparedRestore(expected, id('4'), Map.of(), Map.of(), Map.of(), Map.of()),
                 world, ignored -> { }, journals, UUID.randomUUID());
 
+        activate(operation, journals);
         for (int tick = 0; tick < 6; tick++) {
             operation.tick(Long.MAX_VALUE);
         }
@@ -500,6 +528,13 @@ class RestoreOperationTest {
                 @Override public void restartVerification() { }
             };
         }
+    }
+
+    private static void activate(
+            RestoreOperation operation, OperationJournalRepository journals) throws IOException {
+        assertTrue(journals.read().isEmpty());
+        assertEquals(RestoreStatus.APPLYING, operation.tick(Long.MAX_VALUE));
+        assertEquals(OperationPhase.PREPARED, journals.read().orElseThrow().phase());
     }
 
     private static final class FailingPreparation implements WorldStateApply {
