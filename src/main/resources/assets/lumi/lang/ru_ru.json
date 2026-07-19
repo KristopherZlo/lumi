@@ -1132,6 +1132,7 @@
   "luma.zones.empty": "Зон пока нет.",
   "luma.zones.zone_meta": "%s | %s ячеек",
   "luma.zones.shared_cells": "Общие ячейки: %s",
+  "luma.zones.cells": "Ячеек: %s",
   "luma.zones.zone_draft": "Ждем первый блок.",
   "luma.zones.enter": "Войти",
   "luma.zones.active": "Активна",

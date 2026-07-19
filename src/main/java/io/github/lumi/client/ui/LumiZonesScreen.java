@@ -237,7 +237,8 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
             graphics.drawString(font,
                     font.plainSubstrByWidth(zone.name(), panelWidth - 150),
                     panelX + 38, rowY + 5, LegacyLumiTheme.TEXT, false);
-            Component metadata = Component.literal(zone.cells() + " cells");
+            Component metadata = Component.translatable(
+                    "luma.zones.cells", zone.cells());
             graphics.drawString(font,
                     font.plainSubstrByWidth(metadata.getString(), panelWidth - 150),
                     panelX + 38, rowY + 17, LegacyLumiTheme.MUTED, false);

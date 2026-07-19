@@ -282,6 +282,7 @@
   "luma.zones.empty": "No zones yet.",
   "luma.zones.zone_meta": "%s | %s cells",
   "luma.zones.shared_cells": "Shared cells: %s",
+  "luma.zones.cells": "%s cells",
   "luma.zones.zone_draft": "Waiting for the first block.",
   "luma.zones.enter": "Enter",
   "luma.zones.active": "Active",

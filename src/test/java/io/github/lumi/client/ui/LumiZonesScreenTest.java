@@ -20,7 +20,7 @@ class LumiZonesScreenTest {
         assertTrue(source.contains("\"folder\""));
         assertTrue(source.contains("\"trash\""));
         assertTrue(source.contains("zone.color()"));
-        assertTrue(source.contains("zone.cells() + \" cells\""));
+        assertTrue(source.contains("\"luma.zones.cells\", zone.cells()"));
         assertTrue(source.contains("public boolean mouseScrolled("));
     }
 }

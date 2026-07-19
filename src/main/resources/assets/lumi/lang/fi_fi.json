@@ -1108,6 +1108,7 @@
   "luma.zones.empty": "Ei vielä vyöhykkeitä.",
   "luma.zones.zone_meta": "%s | %s solua",
   "luma.zones.shared_cells": "Jaetut solut: %s",
+  "luma.zones.cells": "%s solua",
   "luma.zones.zone_draft": "Ensimmäistä lohkoa odotellessa.",
   "luma.zones.enter": "Siirry",
   "luma.zones.active": "Aktiivinen",

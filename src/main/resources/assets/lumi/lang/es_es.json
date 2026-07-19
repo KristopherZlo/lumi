@@ -1108,6 +1108,7 @@
   "luma.zones.empty": "Aún no hay zonas.",
   "luma.zones.zone_meta": "%s | %s celdas",
   "luma.zones.shared_cells": "Celdas compartidas: %s",
+  "luma.zones.cells": "%s celdas",
   "luma.zones.zone_draft": "Esperando el primer bloque.",
   "luma.zones.enter": "Entrar",
   "luma.zones.active": "Activo",
