@@ -143,6 +143,10 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), HistoryCommandPayload.Kind.BRANCH_CREATE,
                 "idea", id('2'), 43);
         assertEquals(createBranch, roundTrip(HistoryCommandPayload.CODEC, createBranch));
+        HistoryCommandPayload deleteBranch = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.BRANCH_DELETE,
+                "workspace/lab/idea", id('2'), 43);
+        assertEquals(deleteBranch, roundTrip(HistoryCommandPayload.CODEC, deleteBranch));
         var boundedWorkspace = new WorkspaceCreateArgument(
                 "Castle", Optional.of(
                         new io.github.lumi.domain.model.BlockBox(1, 2, 3, 4, 5, 6)));
@@ -214,6 +218,8 @@ class LumiPayloadCodecTest {
                 request, HistoryCommandPayload.Kind.UNDO, "unexpected", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.BRANCH_CREATE, " ", id('1'), 0));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.BRANCH_DELETE, " ", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.WORKSPACE_CREATE, "bad", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(

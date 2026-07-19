@@ -39,6 +39,22 @@ public final class BranchService {
         return refs.create(name, at);
     }
 
+    public void delete(BranchName name, UUID workspaceId) throws IOException {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        var selected = active.read().orElseThrow(
+                () -> new IOException("Active Lumi branch is missing"));
+        if (selected.name().equals(name)) {
+            throw new IllegalStateException("The active branch cannot be deleted");
+        }
+        BranchRef target = refs.read(name).orElseThrow(
+                () -> new IOException("Branch does not exist: " + name));
+        if (!commits.read(target.commit()).workspaceId().equals(workspaceId)) {
+            throw new IOException("Branch belongs to another workspace");
+        }
+        refs.delete(target);
+    }
+
     public List<BranchRef> visible() throws IOException {
         return refs.list().stream()
                 .filter(ref -> !ref.name().value().startsWith(HIDDEN_PREFIX))

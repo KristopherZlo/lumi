@@ -850,6 +850,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 activeRef().commit());
     }
 
+    public void deleteBranch(BranchName name) throws IOException {
+        requireHistoryMetadataMutable();
+        branches.delete(name, activeWorkspaceId());
+    }
+
     public BranchName visibleBranchName(BranchName name) throws IOException {
         return WorkspaceService.visibleBranchName(
                 activeWorkspaceId(), defaultWorkspaceId, name);

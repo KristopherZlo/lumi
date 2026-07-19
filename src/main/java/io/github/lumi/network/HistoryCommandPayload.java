@@ -97,7 +97,8 @@ public record HistoryCommandPayload(
         if (kind == Kind.SNAPSHOT_REFRESH && !argument.isEmpty()) {
             throw new IllegalArgumentException(kind + " does not accept an argument");
         }
-        if ((kind == Kind.BRANCH_SWITCH || kind == Kind.BRANCH_CREATE)
+        if ((kind == Kind.BRANCH_SWITCH || kind == Kind.BRANCH_CREATE
+                || kind == Kind.BRANCH_DELETE)
                 && argument.isBlank()) {
             throw new IllegalArgumentException(kind + " requires a branch name");
         }
@@ -129,7 +130,8 @@ public record HistoryCommandPayload(
         ZONE_SAVE(18), ZONE_RESTORE(19), DELETE_VERSION(20), CLEANUP_VERSION(21),
         PACKAGE_EXPORT(22), PACKAGE_INSPECT(23), PACKAGE_IMPORT(24),
         WORKSPACE_CREATE(25), WORKSPACE_SWITCH(26), ZONE_COMPARE(27),
-        SNAPSHOT_REFRESH(28), WORKSPACE_SETTINGS(29), UPDATE_VERSION_TAGS(30);
+        SNAPSHOT_REFRESH(28), WORKSPACE_SETTINGS(29), UPDATE_VERSION_TAGS(30),
+        BRANCH_DELETE(31);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

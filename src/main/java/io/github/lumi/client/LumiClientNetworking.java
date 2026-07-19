@@ -139,6 +139,11 @@ public final class LumiClientNetworking {
                 Objects.requireNonNull(branchName, "branchName"));
     }
 
+    public UUID deleteBranch(String branchName) {
+        return send(HistoryCommandPayload.Kind.BRANCH_DELETE,
+                Objects.requireNonNull(branchName, "branchName"));
+    }
+
     public UUID createWorkspace(String name, Optional<BlockBox> bounds) {
         return send(HistoryCommandPayload.Kind.WORKSPACE_CREATE,
                 new WorkspaceCreateArgument(

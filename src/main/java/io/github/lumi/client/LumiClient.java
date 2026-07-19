@@ -192,7 +192,8 @@ public final class LumiClient implements ClientModInitializer {
                 () -> client.setScreen(new LumiMergeScreen(
                         client.screen, snapshot.branchName(),
                         snapshot.branches(), NETWORKING::merge)),
-                NETWORKING::switchBranch));
+                NETWORKING::switchBranch,
+                NETWORKING::deleteBranch));
     }
 
     private static void openSave(

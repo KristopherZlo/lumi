@@ -15,22 +15,26 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
     private final Runnable create;
     private final Runnable merge;
     private final Consumer<String> switcher;
+    private final Consumer<String> deleter;
     private LegacyModalLayout layout;
     private int page;
     private String error = "";
+    private HistorySnapshotPayload.Branch pendingDelete;
 
     public LumiBranchesScreen(
             Screen parent,
             List<HistorySnapshotPayload.Branch> branches,
             Runnable create,
             Runnable merge,
-            Consumer<String> switcher) {
+            Consumer<String> switcher,
+            Consumer<String> deleter) {
         super(parent, Component.translatable("luma.variants.overview_title"),
                 LegacyProjectTab.VARIANTS);
         this.branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
         this.create = Objects.requireNonNull(create, "create");
         this.merge = Objects.requireNonNull(merge, "merge");
         this.switcher = Objects.requireNonNull(switcher, "switcher");
+        this.deleter = Objects.requireNonNull(deleter, "deleter");
     }
 
     @Override
@@ -51,6 +55,11 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
                 Component.translatable("luma.action.merge_into_current"), merge,
                 LumiLegacyButton.Kind.NORMAL);
 
+        if (pendingDelete != null) {
+            addDeleteConfirmation(x, y, contentWidth);
+            return;
+        }
+
         int rows = visibleRows();
         int start = rows == 0 ? 0 : Math.min(page * rows, branches.size());
         int end = Math.min(start + rows, branches.size());
@@ -58,9 +67,12 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
             HistorySnapshotPayload.Branch branch = branches.get(index);
             if (!branch.active()) {
                 int rowY = y + 70 + (index - start) * 30;
-                addLegacyIconButton(x + layout.width() - 48, rowY + 3,
+                addLegacyIconButton(x + layout.width() - 76, rowY + 3,
                         "join", Component.translatable("luma.action.variant_switch"),
                         () -> switchBranch(branch.name()), LumiLegacyButton.Kind.PRIMARY);
+                addLegacyIconButton(x + layout.width() - 48, rowY + 3,
+                        "trash", Component.translatable("luma.action.delete_branch"),
+                        () -> confirmDelete(branch), LumiLegacyButton.Kind.DANGER);
             }
         }
 
@@ -92,6 +104,39 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         }
     }
 
+    private void confirmDelete(HistorySnapshotPayload.Branch branch) {
+        pendingDelete = branch;
+        error = "";
+        rebuildWidgets();
+    }
+
+    private void addDeleteConfirmation(int x, int y, int contentWidth) {
+        int buttonWidth = Math.max(0, (contentWidth - 8) / 2);
+        addLegacyButton(x + 16, y + 142, buttonWidth,
+                Component.translatable("luma.action.delete_branch"),
+                this::deleteBranch, LumiLegacyButton.Kind.DANGER);
+        addLegacyButton(x + 24 + buttonWidth, y + 142, buttonWidth,
+                Component.translatable("luma.action.cancel"), () -> {
+                    pendingDelete = null;
+                    error = "";
+                    rebuildWidgets();
+                }, LumiLegacyButton.Kind.NORMAL);
+    }
+
+    private void deleteBranch() {
+        try {
+            deleter.accept(pendingDelete.name());
+            if (minecraft.player != null) {
+                minecraft.player.displayClientMessage(
+                        Component.translatable("luma.status.variant_deleted"), true);
+            }
+            onClose();
+        } catch (RuntimeException failed) {
+            error = failed.getMessage() == null
+                    ? "Lumi branch could not be deleted" : failed.getMessage();
+        }
+    }
+
     private void changePage(int delta) {
         page = Math.max(0, page + delta);
         rebuildWidgets();
@@ -104,17 +149,34 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         renderLegacyPage(graphics, layout.x(), layout.y(), layout.width(), layout.height());
         graphics.drawString(font, title, layout.x() + 16, layout.y() + 14,
                 LegacyLumiTheme.TEXT, false);
-        int rows = visibleRows();
-        int start = rows == 0 ? 0 : Math.min(page * rows, branches.size());
-        int end = Math.min(start + rows, branches.size());
-        for (int index = start; index < end; index++) {
-            HistorySnapshotPayload.Branch branch = branches.get(index);
-            int rowY = layout.y() + 70 + (index - start) * 30;
-            renderLegacyPanel(graphics, layout.x() + 16, rowY, layout.width() - 32, 26);
-            graphics.drawString(font,
-                    font.plainSubstrByWidth(shortName(branch.name()), layout.width() - 86),
-                    layout.x() + 24, rowY + 9,
-                    branch.active() ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.TEXT, false);
+        if (pendingDelete == null) {
+            int rows = visibleRows();
+            int start = rows == 0 ? 0 : Math.min(page * rows, branches.size());
+            int end = Math.min(start + rows, branches.size());
+            for (int index = start; index < end; index++) {
+                HistorySnapshotPayload.Branch branch = branches.get(index);
+                int rowY = layout.y() + 70 + (index - start) * 30;
+                renderLegacyPanel(graphics,
+                        layout.x() + 16, rowY, layout.width() - 32, 26);
+                graphics.drawString(font,
+                        font.plainSubstrByWidth(
+                                shortName(branch.name()), layout.width() - 114),
+                        layout.x() + 24, rowY + 9,
+                        branch.active() ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.TEXT,
+                        false);
+            }
+        } else {
+            renderLegacyPanel(graphics, layout.x() + 16, layout.y() + 76,
+                    layout.width() - 32, 54);
+            graphics.drawCenteredString(font,
+                    Component.translatable("luma.action.delete_branch"),
+                    layout.x() + layout.width() / 2,
+                    layout.y() + 88, LegacyLumiTheme.DANGER);
+            graphics.drawCenteredString(font,
+                    font.plainSubstrByWidth(
+                            shortName(pendingDelete.name()), layout.width() - 64),
+                    layout.x() + layout.width() / 2,
+                    layout.y() + 108, LegacyLumiTheme.TEXT);
         }
         if (branches.isEmpty()) {
             graphics.drawCenteredString(font,

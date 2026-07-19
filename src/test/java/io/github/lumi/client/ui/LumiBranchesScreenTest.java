@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class LumiBranchesScreenTest {
     @Test
-    void exposesLegacyCreateMergeAndSwitchActions() throws Exception {
+    void exposesLegacyCreateMergeSwitchAndConfirmedDeleteActions() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiBranchesScreen.java"));
 
@@ -17,5 +17,9 @@ class LumiBranchesScreenTest {
         assertTrue(source.contains("luma.action.variant_switch"));
         assertTrue(source.contains("visibleRows()"));
         assertTrue(source.contains("addLegacyIconButton"));
+        assertTrue(source.contains("if (!branch.active())"));
+        assertTrue(source.contains("luma.action.delete_branch"));
+        assertTrue(source.contains("deleter.accept(pendingDelete.name())"));
+        assertTrue(source.contains("addDeleteConfirmation"));
     }
 }

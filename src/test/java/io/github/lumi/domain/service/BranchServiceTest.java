@@ -64,6 +64,11 @@ class BranchServiceTest {
         branches.completeSwitch(switchPlan);
         assertEquals(created, branches.active());
 
+        assertThrows(IllegalStateException.class,
+                () -> branches.delete(created.name(), mainWorkspace));
+        branches.delete(main.name(), mainWorkspace);
+        assertEquals(Optional.empty(), refs.read(main.name()));
+
         var source = commits.read(main.commit());
         UUID foreignWorkspace = new UUID(0, 9);
         CommitId foreignCommit = commits.write(new Commit(
@@ -75,6 +80,8 @@ class BranchServiceTest {
 
         assertThrows(IOException.class,
                 () -> branches.prepareSwitch(foreign.name(), mainWorkspace));
+        assertThrows(IOException.class,
+                () -> branches.delete(foreign.name(), mainWorkspace));
     }
 
     @Test
