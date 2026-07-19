@@ -46,6 +46,26 @@ class LumiDashboardScreenTest {
     }
 
     @Test
+    void hidesLowerBandsWhenTallHintConsumesTinyViewport() {
+        LegacyWorkspaceLayout layout = LegacyWorkspaceLayout.fit(320, 200);
+        int hintHeight = 70;
+        var geometry = LumiDashboardScreen.dashboardGeometry(
+                layout.bodyY(), layout.bodyHeight(), hintHeight);
+        int bodyBottom = layout.bodyY() + layout.bodyHeight();
+
+        assertEquals(geometry.hintY() + hintHeight + 5, geometry.actionY());
+        assertTrue(geometry.hintY() >= layout.bodyY());
+        assertFalse(geometry.headerVisible());
+        assertTrue(geometry.actionY() + 18 <= bodyBottom);
+        assertEquals(bodyBottom,
+                layout.bodyY() + geometry.buildPanelHeight());
+        assertEquals(bodyBottom, geometry.latestY());
+        assertEquals(0, geometry.latestHeight());
+        assertEquals(bodyBottom, geometry.historyY());
+        assertEquals(0, geometry.historyHeight());
+    }
+
+    @Test
     void restoresLegacyActionsAndCompactIconNavigation() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));

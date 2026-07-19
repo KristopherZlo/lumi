@@ -185,6 +185,10 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         dashboardGeometry = dashboardGeometry(
                 layout.bodyY(), layout.bodyHeight(),
                 hintVisible ? contextualHintOffset(0) : 0);
+        if (hintVisible) {
+            moveContextualHint(
+                    layout.bodyX() + PANEL_PADDING, dashboardGeometry.hintY());
+        }
         actionY = dashboardGeometry.actionY();
         int x = layout.bodyX() + PANEL_PADDING;
         int available = Math.max(0, layout.bodyWidth() - PANEL_PADDING * 2);
@@ -226,11 +230,14 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         pagedHistory.search(searchQuery);
         renderedPage = pagedHistory.page().orElse(null);
         renderedStatistics = pendingStatistics.result(snapshot).orElse(null);
-        latestCreated().ifPresent(version -> addIconButton(
-                layout.bodyX() + latestPanelWidth() - 28,
-                dashboardGeometry.stripControlY(), "folder", "luma.action.open_details",
-                () -> openDetails.accept(version), LumiLegacyButton.Kind.NORMAL));
-        addBranchTabs();
+        if (dashboardGeometry.stripVisible()) {
+            latestCreated().ifPresent(version -> addIconButton(
+                    layout.bodyX() + latestPanelWidth() - 28,
+                    dashboardGeometry.stripControlY(), "folder",
+                    "luma.action.open_details",
+                    () -> openDetails.accept(version), LumiLegacyButton.Kind.NORMAL));
+            addBranchTabs();
+        }
         if (historyHeight < 28) {
             return;
         }
@@ -631,46 +638,50 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         int width = layout.bodyWidth();
         drawPanel(graphics, x, layout.bodyY(), width,
                 dashboardGeometry.buildPanelHeight());
-        int titleOffset = dashboardGeometry.compact() ? 8 : 13;
-        int pendingOffset = dashboardGeometry.compact() ? 23 : 31;
-        graphics.drawString(font, Component.translatable("luma.project.build_title"),
-                x + PANEL_PADDING, layout.bodyY() + titleOffset,
-                LegacyLumiTheme.TEXT, false);
-        int pending = snapshot.pendingKeys();
-        Component pendingText = pending == 0
-                ? Component.translatable("luma.dashboard.pending_clean")
-                : Component.translatable("luma.dashboard.workspace_pending", pending);
-        graphics.drawString(font,
-                pendingText,
-                x + PANEL_PADDING, layout.bodyY() + pendingOffset,
-                pending == 0
-                        ? LegacyLumiTheme.MUTED : LegacyLumiTheme.ACCENT,
-                false);
-        if (!dashboardGeometry.compact()) {
-            pendingStatistics.result(snapshot)
-                    .filter(result -> result.error().isEmpty())
-                    .ifPresent(result -> graphics.drawString(
-                            font,
-                            PendingStatisticsText.summary(result.workspace()),
-                            x + PANEL_PADDING, layout.bodyY() + 50,
-                            LegacyLumiTheme.ACCENT, false));
+        if (dashboardGeometry.headerVisible()) {
+            int titleOffset = dashboardGeometry.compact() ? 8 : 13;
+            int pendingOffset = dashboardGeometry.compact() ? 23 : 31;
+            graphics.drawString(font, Component.translatable("luma.project.build_title"),
+                    x + PANEL_PADDING, layout.bodyY() + titleOffset,
+                    LegacyLumiTheme.TEXT, false);
+            int pending = snapshot.pendingKeys();
+            Component pendingText = pending == 0
+                    ? Component.translatable("luma.dashboard.pending_clean")
+                    : Component.translatable("luma.dashboard.workspace_pending", pending);
+            graphics.drawString(font,
+                    pendingText,
+                    x + PANEL_PADDING, layout.bodyY() + pendingOffset,
+                    pending == 0
+                            ? LegacyLumiTheme.MUTED : LegacyLumiTheme.ACCENT,
+                    false);
+            if (!dashboardGeometry.compact()) {
+                pendingStatistics.result(snapshot)
+                        .filter(result -> result.error().isEmpty())
+                        .ifPresent(result -> graphics.drawString(
+                                font,
+                                PendingStatisticsText.summary(result.workspace()),
+                                x + PANEL_PADDING, layout.bodyY() + 50,
+                                LegacyLumiTheme.ACCENT, false));
+            }
         }
 
-        latestCreated().ifPresent(version -> {
-            int latestWidth = latestPanelWidth();
-            LegacyLumiTheme.outlined(
-                    graphics, x, dashboardGeometry.latestY(), latestWidth,
-                    dashboardGeometry.latestHeight(),
-                    LegacyLumiTheme.STATUS, LegacyLumiTheme.STATUS_BORDER);
-            String latest = Component.translatable(
-                    "luma.ideas.latest_save", version.message(),
-                    HISTORY_TIME.format(Instant.ofEpochMilli(
-                            version.timestampMillis()))).getString();
-            graphics.drawString(font,
-                    font.plainSubstrByWidth(latest, latestWidth - 34),
-                    x + PANEL_PADDING, dashboardGeometry.stripTextY(),
-                    LegacyLumiTheme.ACCENT, false);
-        });
+        if (dashboardGeometry.stripVisible()) {
+            latestCreated().ifPresent(version -> {
+                int latestWidth = latestPanelWidth();
+                LegacyLumiTheme.outlined(
+                        graphics, x, dashboardGeometry.latestY(), latestWidth,
+                        dashboardGeometry.latestHeight(),
+                        LegacyLumiTheme.STATUS, LegacyLumiTheme.STATUS_BORDER);
+                String latest = Component.translatable(
+                        "luma.ideas.latest_save", version.message(),
+                        HISTORY_TIME.format(Instant.ofEpochMilli(
+                                version.timestampMillis()))).getString();
+                graphics.drawString(font,
+                        font.plainSubstrByWidth(latest, latestWidth - 34),
+                        x + PANEL_PADDING, dashboardGeometry.stripTextY(),
+                        LegacyLumiTheme.ACCENT, false);
+            });
+        }
         if (historyHeight <= 0) {
             return;
         }
@@ -803,21 +814,34 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     static DashboardGeometry dashboardGeometry(
             int bodyY, int bodyHeight, int hintHeight) {
         boolean compact = bodyHeight < 220;
-        int hintY = bodyY + (compact ? 42 : 64);
+        int bodyBottom = bodyY + Math.max(0, bodyHeight);
+        int preferredHintY = bodyY + (compact ? 42 : 64);
+        int latestCandidateHeight = compact ? CONTROL_HEIGHT : 22;
+        int latestHeight = latestCandidateHeight;
+        int maximumActionY = bodyBottom - CONTROL_HEIGHT - PANEL_PADDING;
+        int hintY = hintHeight > 0
+                ? Math.max(bodyY, Math.min(
+                        preferredHintY,
+                        maximumActionY - hintHeight - SECTION_GAP))
+                : preferredHintY;
+        boolean headerVisible = hintHeight == 0
+                || hintY >= bodyY + (compact ? 33 : 60);
         int actionY = hintHeight > 0
                 ? hintY + hintHeight + SECTION_GAP
                 : bodyY + (compact ? 38 : 64);
         int buildPanelHeight = actionY - bodyY
                 + CONTROL_HEIGHT + PANEL_PADDING;
-        int latestHeight = compact ? CONTROL_HEIGHT : 22;
         int latestY = bodyY + buildPanelHeight + SECTION_GAP;
-        int bodyBottom = bodyY + Math.max(0, bodyHeight);
-        int historyY = Math.min(
+        if (latestY + latestHeight > bodyBottom) {
+            latestY = bodyBottom;
+            latestHeight = 0;
+        }
+        int historyY = latestHeight == 0 ? bodyBottom : Math.min(
                 bodyBottom, latestY + latestHeight + SECTION_GAP);
         return new DashboardGeometry(
                 hintY, actionY, buildPanelHeight,
                 latestY, latestHeight, historyY,
-                Math.max(0, bodyBottom - historyY), compact);
+                Math.max(0, bodyBottom - historyY), compact, headerVisible);
     }
 
     static int visibleHistoryRows(int historyHeight, int availableVersions) {
@@ -870,13 +894,18 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             int latestHeight,
             int historyY,
             int historyHeight,
-            boolean compact) {
+            boolean compact,
+            boolean headerVisible) {
         int stripControlY() {
             return latestY + (latestHeight - CONTROL_HEIGHT) / 2;
         }
 
         int stripTextY() {
             return latestY + (latestHeight - 8) / 2;
+        }
+
+        boolean stripVisible() {
+            return latestHeight >= CONTROL_HEIGHT;
         }
     }
 
