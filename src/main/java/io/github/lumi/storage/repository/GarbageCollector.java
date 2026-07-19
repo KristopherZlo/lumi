@@ -31,7 +31,28 @@ public final class GarbageCollector {
         tombstones = new TombstoneRepository(dimensionRepository);
     }
 
-    public GarbageCollectionResult collect(Set<CommitId> retainedCommits, Instant deleteBefore) throws IOException {
+    public GarbageCollectionInspection inspect(
+            Set<CommitId> retainedCommits, Instant deleteBefore) throws IOException {
+        Plan plan = plan(retainedCommits, deleteBefore);
+        return new GarbageCollectionInspection(
+                plan.commits().size(), plan.objects().size());
+    }
+
+    public GarbageCollectionResult collect(
+            Set<CommitId> retainedCommits, Instant deleteBefore) throws IOException {
+        Plan plan = plan(retainedCommits, deleteBefore);
+        int deletedObjects = objects.deleteAll(plan.objects());
+        objects.deleteOrphanPacksBefore(deleteBefore);
+        int deletedCommits = 0;
+        for (ObjectId id : plan.commits()) {
+            commits.delete(id);
+            deletedCommits++;
+        }
+        return new GarbageCollectionResult(deletedCommits, deletedObjects);
+    }
+
+    private Plan plan(Set<CommitId> retainedCommits, Instant deleteBefore)
+            throws IOException {
         Objects.requireNonNull(retainedCommits, "retainedCommits");
         Objects.requireNonNull(deleteBefore, "deleteBefore");
         Set<CommitId> roots = new HashSet<>(retainedCommits);
@@ -63,16 +84,16 @@ public final class GarbageCollector {
                 collectableObjects.add(id);
             }
         }
-        int deletedObjects = objects.deleteAll(collectableObjects);
-        objects.deleteOrphanPacksBefore(deleteBefore);
-        int deletedCommits = 0;
+        Set<ObjectId> collectableCommits = new HashSet<>();
         for (ObjectId id : allCommitObjects) {
-            if (!reachableCommits.contains(new CommitId(id)) && commits.modifiedAt(id).isBefore(deleteBefore)) {
-                commits.delete(id);
-                deletedCommits++;
+            if (!reachableCommits.contains(new CommitId(id))
+                    && commits.modifiedAt(id).isBefore(deleteBefore)) {
+                collectableCommits.add(id);
             }
         }
-        return new GarbageCollectionResult(deletedCommits, deletedObjects);
+        return new Plan(Set.copyOf(collectableCommits), Set.copyOf(collectableObjects));
     }
 
+    private record Plan(Set<ObjectId> commits, Set<ObjectId> objects) {
+    }
 }

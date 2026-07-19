@@ -4,6 +4,7 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.operation.DimensionOperationCoordinator;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.DeferredDimensionMutation;
+import io.github.lumi.minecraft.operation.GarbageCollectionOperation;
 import io.github.lumi.minecraft.operation.LiveActionOperation;
 import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
 import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
@@ -860,6 +861,29 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         restores.requireTargetInWorkspace(startingPoint, workspaceId);
         return branches.create(
                 WorkspaceService.branchName(workspaceId, name), startingPoint);
+    }
+
+    public synchronized GarbageCollectionOperation startGarbageCollection(
+            boolean apply, Consumer<DimensionMutation> terminalObserver)
+            throws IOException {
+        requireNoRecovery();
+        if (garbageCollection.running()) {
+            throw new IllegalStateException("Automatic Lumi cleanup is already running");
+        }
+        Instant cutoff = Instant.now().minus(Duration.ofHours(24));
+        var operation = new GarbageCollectionOperation(apply, () -> {
+            var collector = new GarbageCollector(repository);
+            if (apply) {
+                var result = collector.collect(Set.of(), cutoff);
+                return new GarbageCollectionOperation.Counts(
+                        result.deletedCommits(), result.deletedObjects());
+            }
+            var result = collector.inspect(Set.of(), cutoff);
+            return new GarbageCollectionOperation.Counts(
+                    result.commits(), result.objects());
+        }, background);
+        operations.enqueue(operation, OperationPriority.NORMAL, terminalObserver);
+        return operation;
     }
 
     public void deleteBranch(BranchName name) throws IOException {

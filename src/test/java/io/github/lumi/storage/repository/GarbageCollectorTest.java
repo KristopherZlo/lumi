@@ -49,8 +49,16 @@ class GarbageCollectorTest {
         makeObjectsOld(now.minus(Duration.ofDays(2)));
         ObjectId freshOrphan = rawObjects.write(new byte[] {4});
 
-        GarbageCollectionResult result = new GarbageCollector(repositoryRoot)
-                .collect(Set.of(), now.minus(Duration.ofHours(24)));
+        GarbageCollector collector = new GarbageCollector(repositoryRoot);
+        GarbageCollectionInspection inspection = collector.inspect(
+                Set.of(), now.minus(Duration.ofHours(24)));
+
+        assertEquals(0, inspection.commits());
+        assertEquals(1, inspection.objects());
+        assertArrayEquals(new byte[] {3}, rawObjects.read(oldOrphan));
+
+        GarbageCollectionResult result = collector.collect(
+                Set.of(), now.minus(Duration.ofHours(24)));
 
         assertEquals(1, result.deletedObjects());
         assertArrayEquals(new byte[] {1}, rawObjects.read(livePayload));

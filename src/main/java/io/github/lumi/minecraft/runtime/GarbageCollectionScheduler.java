@@ -48,6 +48,10 @@ final class GarbageCollectionScheduler {
         }
     }
 
+    boolean running() {
+        return running.get();
+    }
+
     private void collect() {
         try {
             success.accept(collection.call());
