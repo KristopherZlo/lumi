@@ -21,6 +21,7 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains("actions.createBranch()"));
         assertTrue(source.contains("extends LumiLegacyPageScreen"));
         assertTrue(source.contains("zoneHistory.selectBranch(branch)"));
+        assertTrue(source.contains("LumiLegacyButton tab = addLegacyContentButton("));
         assertTrue(source.contains("\"folder\""));
         assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("zoneStatistics()"));

@@ -169,7 +169,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
         int tabRight = panelX + panelWidth - 20;
         for (HistorySnapshotPayload.Branch branch : snapshot.branches()) {
             if (tabRight - tabX < 24) break;
-            LumiLegacyButton tab = addLegacyButton(
+            LumiLegacyButton tab = addLegacyContentButton(
                     tabX, panelY + 124, tabRight - tabX,
                     Component.literal(shortBranch(branch.name())),
                     () -> selectBranch(branch.name()),
