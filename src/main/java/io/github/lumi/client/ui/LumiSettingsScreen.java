@@ -2,6 +2,7 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.state.ClientHistoryStore;
+import io.github.lumi.client.state.ClientSurvivalSettingsStore;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.telemetry.TelemetryService;
@@ -16,6 +17,9 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private final ClientHistoryStore history;
     private final TelemetryService telemetry;
     private final Consumer<WorkspaceSettings> updateWorkspace;
+    private final ClientSurvivalSettingsStore survivalSettings;
+    private final Runnable requestSurvivalSettings;
+    private final Consumer<Boolean> updateSurvivalSettings;
     private boolean settingsLoaded;
     private boolean showZoneSaves;
     private boolean includeEntitiesOnRestore;
@@ -32,18 +36,29 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private int diagnosticsY;
     private int diagnosticsHeight;
     private int contentOffset;
+    private boolean survivalRequested;
+    private long survivalRevision = -1;
 
     public LumiSettingsScreen(
             Screen parent,
             ClientHistoryStore history,
             TelemetryService telemetry,
-            Consumer<WorkspaceSettings> updateWorkspace) {
+            Consumer<WorkspaceSettings> updateWorkspace,
+            ClientSurvivalSettingsStore survivalSettings,
+            Runnable requestSurvivalSettings,
+            Consumer<Boolean> updateSurvivalSettings) {
         super(parent, Component.translatable("luma.screen.settings.title", "Lumi"),
                 LegacyProjectTab.SETTINGS);
         this.history = Objects.requireNonNull(history, "history");
         this.telemetry = Objects.requireNonNull(telemetry, "telemetry");
         this.updateWorkspace = Objects.requireNonNull(
                 updateWorkspace, "updateWorkspace");
+        this.survivalSettings = Objects.requireNonNull(
+                survivalSettings, "survivalSettings");
+        this.requestSurvivalSettings = Objects.requireNonNull(
+                requestSurvivalSettings, "requestSurvivalSettings");
+        this.updateSurvivalSettings = Objects.requireNonNull(
+                updateSurvivalSettings, "updateSurvivalSettings");
     }
 
     @Override
@@ -55,6 +70,7 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
         panelWidth = page.contentWidth();
         panelHeight = page.windowHeight();
         loadWorkspaceSettings();
+        requestSurvivalSettings();
         contentOffset = addContextualHint(
                 ClientContextualHelpHint.SETTINGS,
                 panelX + 12, panelY + 36, panelWidth - 24) ? 56 : 0;
@@ -91,12 +107,21 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
                 toggleLabel("luma.settings.workspace_hud", workspaceHudEnabled),
                 this::toggleWorkspaceHud, workspaceHudEnabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        int telemetryY = displayY + 24;
-        addLegacyButton(panelX + 20, telemetryY, controlWidth,
+        int survivalY = displayY + 24;
+        var survival = survivalSettings.snapshot().orElse(
+                new ClientSurvivalSettingsStore.Snapshot(false, false));
+        LumiLegacyButton survivalButton = addLegacyButton(
+                panelX + 20, survivalY, controlWidth,
+                toggleLabel("luma.settings.survival_mode", survival.enabled()),
+                this::toggleSurvival, survival.enabled()
+                        ? LumiLegacyButton.Kind.SELECTED
+                        : LumiLegacyButton.Kind.NORMAL);
+        survivalButton.active = survival.configurable();
+        addLegacyButton(panelX + 28 + controlWidth, survivalY, controlWidth,
                 toggleLabel("luma.settings.telemetry_enabled", telemetryEnabled),
                 this::toggleTelemetry, telemetryEnabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(panelX + 28 + controlWidth, telemetryY, controlWidth,
+        addLegacyButton(panelX + 20, survivalY + 24, panelWidth - 40,
                 Component.translatable("luma.settings.telemetry_clear_queue"),
                 () -> {
                     telemetry.clearLocalQueue();
@@ -142,12 +167,20 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
                 toggleLabel("luma.settings.workspace_hud", workspaceHudEnabled),
                 this::toggleWorkspaceHud, workspaceHudEnabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        boolean enabled = telemetry.settings().enabled();
+        var survival = survivalSettings.snapshot().orElse(
+                new ClientSurvivalSettingsStore.Snapshot(false, false));
         addLegacyButton(x, panelY + 140 + contentOffset, width,
+                toggleLabel("luma.settings.survival_mode", survival.enabled()),
+                this::toggleSurvival, survival.enabled()
+                        ? LumiLegacyButton.Kind.SELECTED
+                        : LumiLegacyButton.Kind.NORMAL).active =
+                survival.configurable();
+        boolean enabled = telemetry.settings().enabled();
+        addLegacyButton(x, panelY + 164 + contentOffset, width,
                 toggleLabel("luma.settings.telemetry_enabled", enabled),
                 this::toggleTelemetry, enabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x, panelY + 164 + contentOffset, width,
+        addLegacyButton(x, panelY + 188 + contentOffset, width,
                 Component.translatable("luma.settings.telemetry_clear_queue"),
                 () -> {
                     telemetry.clearLocalQueue();
@@ -158,16 +191,16 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private void renderNarrow(GuiGraphics graphics) {
         renderLegacyPanel(graphics, panelX + 12, panelY + 36,
                 panelWidth - 24, Math.max(1, panelHeight - 46));
-        if (panelHeight >= 216 + contentOffset) {
+        if (panelHeight >= 240 + contentOffset) {
             graphics.drawString(font,
                     Component.translatable("luma.settings.telemetry_pending",
                             telemetry.pendingEventCount()),
-                    panelX + 16, panelY + 190 + contentOffset,
+                    panelX + 16, panelY + 214 + contentOffset,
                     LegacyLumiTheme.MUTED, false);
             graphics.drawString(font,
                     Component.translatable("luma.settings.telemetry_last_send",
                             telemetry.lastSendSummary()),
-                    panelX + 16, panelY + 202 + contentOffset,
+                    panelX + 16, panelY + 226 + contentOffset,
                     LegacyLumiTheme.MUTED, false);
         }
     }
@@ -269,6 +302,30 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private void toggleTelemetry() {
         telemetry.setEnabled(!telemetry.settings().enabled());
         rebuildWidgets();
+    }
+
+    private void requestSurvivalSettings() {
+        if (!survivalRequested) {
+            survivalRequested = true;
+            requestSurvivalSettings.run();
+        }
+    }
+
+    private void toggleSurvival() {
+        survivalSettings.snapshot()
+                .filter(ClientSurvivalSettingsStore.Snapshot::configurable)
+                .ifPresent(setting ->
+                        updateSurvivalSettings.accept(!setting.enabled()));
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        long current = survivalSettings.revision();
+        if (current != survivalRevision) {
+            survivalRevision = current;
+            rebuildWidgets();
+        }
     }
 
     private static Component toggleLabel(String key, boolean enabled) {

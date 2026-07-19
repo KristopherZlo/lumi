@@ -3,6 +3,7 @@ package io.github.lumi.client;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
+import io.github.lumi.client.state.ClientSurvivalSettingsStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientBranchSlotStore;
 import io.github.lumi.client.state.ClientCompareStore;
@@ -76,6 +77,8 @@ public final class LumiClient implements ClientModInitializer {
             new ClientZoneOverlayStore();
     private static final ClientPendingStatisticsStore PENDING_STATISTICS =
             new ClientPendingStatisticsStore();
+    private static final ClientSurvivalSettingsStore SURVIVAL_SETTINGS =
+            new ClientSurvivalSettingsStore();
     private static final ClientOnboardingStateRepository ONBOARDING =
             new ClientOnboardingStateRepository();
     private static final TelemetryService TELEMETRY = TelemetryService.getInstance();
@@ -90,7 +93,7 @@ public final class LumiClient implements ClientModInitializer {
     private static final LumiClientNetworking NETWORKING =
             new LumiClientNetworking(
                     HISTORY, HISTORY_PAGES, COMPARISONS, ZONE_OVERLAYS,
-                    PENDING_STATISTICS,
+                    PENDING_STATISTICS, SURVIVAL_SETTINGS,
                     LumiClient::acceptSnapshot,
                     LumiClient::acceptOperationEvent,
                     LumiClient::acceptCompareResult,
@@ -126,7 +129,10 @@ public final class LumiClient implements ClientModInitializer {
                                 LumiClient::openMore,
                                 parent -> client.setScreen(new LumiSettingsScreen(
                                         parent, HISTORY, TELEMETRY,
-                                        NETWORKING::updateWorkspaceSettings)),
+                                        NETWORKING::updateWorkspaceSettings,
+                                        SURVIVAL_SETTINGS,
+                                        NETWORKING::requestSurvivalSettings,
+                                        NETWORKING::updateSurvivalSettings)),
                                 () -> {
                                     NETWORKING.refreshSnapshot();
                                     showFeedback("luma.hotkeys.pending_preview_help");
@@ -410,7 +416,10 @@ public final class LumiClient implements ClientModInitializer {
                 () -> client.setScreen(new LumiDiagnosticsScreen(client.screen, HISTORY)),
                 () -> client.setScreen(new LumiSettingsScreen(
                         parent, HISTORY, TELEMETRY,
-                        NETWORKING::updateWorkspaceSettings)),
+                        NETWORKING::updateWorkspaceSettings,
+                        SURVIVAL_SETTINGS,
+                        NETWORKING::requestSurvivalSettings,
+                        NETWORKING::updateSurvivalSettings)),
                 () -> client.setScreen(new LumiUpdateScreen(
                         client.screen, UPDATE_CHECKER, UPDATE_PREFERENCES)),
                 () -> client.setScreen(new LumiCleanupScreen(

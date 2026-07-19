@@ -25,6 +25,10 @@ class LumiSettingsScreenTest {
         assertTrue(source.contains("active.previewGenerationEnabled()"));
         assertTrue(source.contains("active.workspaceHudEnabled()"));
         assertTrue(source.contains("luma.settings.telemetry_enabled"));
+        assertTrue(source.contains("luma.settings.survival_mode"));
+        assertTrue(source.contains("ClientSurvivalSettingsStore"));
+        assertTrue(source.contains("requestSurvivalSettings.run()"));
+        assertTrue(source.contains("updateSurvivalSettings.accept"));
         assertTrue(source.contains("panelWidth < 360"));
         assertTrue(source.contains("ClientContextualHelpHint.SETTINGS"));
         assertTrue(source.contains("contentOffset"));

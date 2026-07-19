@@ -6,6 +6,7 @@ import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientZoneOverlayStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
+import io.github.lumi.client.state.ClientSurvivalSettingsStore;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.BlockAreaTarget;
@@ -31,6 +32,7 @@ import io.github.lumi.network.PendingStatisticsRequestPayload;
 import io.github.lumi.network.QuickRollbackArgument;
 import io.github.lumi.network.SaveArgument;
 import io.github.lumi.network.PackageInspectionPayload;
+import io.github.lumi.network.SurvivalSettingsPayload;
 import io.github.lumi.network.ZoneCreateArgument;
 import io.github.lumi.network.ZoneCellsArgument;
 import io.github.lumi.network.ZoneDeleteArgument;
@@ -57,6 +59,7 @@ public final class LumiClientNetworking {
     private final ClientCompareStore comparisons;
     private final ClientZoneOverlayStore zoneOverlays;
     private final ClientPendingStatisticsStore pendingStatistics;
+    private final ClientSurvivalSettingsStore survivalSettings;
     private final Consumer<HistorySnapshotPayload> snapshotListener;
     private final Consumer<OperationEventPayload> eventListener;
     private final Consumer<CompareResultPayload> compareListener;
@@ -70,6 +73,7 @@ public final class LumiClientNetworking {
             ClientCompareStore comparisons,
             ClientZoneOverlayStore zoneOverlays,
             ClientPendingStatisticsStore pendingStatistics,
+            ClientSurvivalSettingsStore survivalSettings,
             Consumer<HistorySnapshotPayload> snapshotListener,
             Consumer<OperationEventPayload> eventListener,
             Consumer<CompareResultPayload> compareListener,
@@ -82,6 +86,8 @@ public final class LumiClientNetworking {
         this.zoneOverlays = Objects.requireNonNull(zoneOverlays, "zoneOverlays");
         this.pendingStatistics = Objects.requireNonNull(
                 pendingStatistics, "pendingStatistics");
+        this.survivalSettings = Objects.requireNonNull(
+                survivalSettings, "survivalSettings");
         this.snapshotListener = Objects.requireNonNull(snapshotListener, "snapshotListener");
         this.eventListener = Objects.requireNonNull(eventListener, "eventListener");
         this.compareListener = Objects.requireNonNull(compareListener, "compareListener");
@@ -119,6 +125,10 @@ public final class LumiClientNetworking {
                         context.client().execute(() ->
                                 pendingStatistics.accept(payload)));
         ClientPlayNetworking.registerGlobalReceiver(
+                SurvivalSettingsPayload.TYPE, (payload, context) ->
+                        context.client().execute(() ->
+                                survivalSettings.accept(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(
                 PackageInspectionPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> packageListener.accept(payload)));
         ClientPlayNetworking.registerGlobalReceiver(
@@ -134,6 +144,7 @@ public final class LumiClientNetworking {
             history.clear();
             historyPages.clear();
             pendingStatistics.clear();
+            survivalSettings.clear();
             comparisons.clear();
             zoneOverlays.clear();
         });
@@ -412,6 +423,21 @@ public final class LumiClientNetworking {
 
     public UUID refreshSnapshot() {
         return send(HistoryCommandPayload.Kind.SNAPSHOT_REFRESH, "");
+    }
+
+    public UUID requestSurvivalSettings() {
+        UUID request = send(
+                HistoryCommandPayload.Kind.SURVIVAL_STATUS, "");
+        survivalSettings.begin(request);
+        return request;
+    }
+
+    public UUID updateSurvivalSettings(boolean enabled) {
+        UUID request = send(
+                HistoryCommandPayload.Kind.SURVIVAL_SETTINGS,
+                enabled ? "1" : "0");
+        survivalSettings.begin(request);
+        return request;
     }
 
     public UUID requestHistoryPage(
