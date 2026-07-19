@@ -30,25 +30,28 @@ final class HistoryPageCommandHandler {
             ServerPlayNetworking.Context context) {
         String actualDimension =
                 runtime.level().dimension().identifier().toString();
+        boolean browse = request.browsesDimension();
+        var branch = request.branch();
         UUID activeWorkspace;
         try {
             activeWorkspace = runtime.activeWorkspaceId();
+            if (browse) branch = runtime.activeRef().name();
         } catch (IOException failed) {
             results.send(player, failure(
                     request, failureMessage.apply(failed)));
             return;
         }
         if (!request.dimensionId().equals(actualDimension)
-                || !request.workspaceId().equals(activeWorkspace)) {
+                || (!browse && !request.workspaceId().equals(activeWorkspace))) {
             results.send(player, failure(request, "History context changed; refresh"));
             return;
         }
         var future = request.zoneId().isPresent()
                 ? runtime.zoneHistoryPage(
-                        request.branch(), request.zoneId().orElseThrow(),
+                        branch, request.zoneId().orElseThrow(),
                         request.offset(), request.limit(), request.query())
                 : runtime.historyPage(
-                        request.branch(), request.offset(), request.limit(),
+                        branch, request.offset(), request.limit(),
                         request.query());
         future.whenComplete((page, failure) -> {
             HistoryPagePayload result = failure == null

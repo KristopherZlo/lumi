@@ -1,6 +1,7 @@
 package io.github.lumi.network;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.BlockBox;
@@ -64,6 +65,18 @@ class LumiPayloadCodecTest {
                 () -> VersionTagsArgument.parse(id('a').hex()));
         assertThrows(IllegalArgumentException.class,
                 () -> VersionTagsArgument.parse(id('a').hex() + "\nroof\ncastle"));
+    }
+
+    @Test
+    void dimensionHistoryBrowseScopeRoundTrips() {
+        var request = new HistoryPageRequestPayload(
+                UUID.randomUUID(), "modded:moon",
+                HistoryPageRequestPayload.ACTIVE_WORKSPACE,
+                HistoryPageRequestPayload.ACTIVE_BRANCH,
+                Optional.empty(), 0, 32, "tower");
+
+        assertTrue(request.browsesDimension());
+        assertEquals(request, roundTrip(HistoryPageRequestPayload.CODEC, request));
     }
 
     @Test

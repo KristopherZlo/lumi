@@ -541,7 +541,7 @@ public final class LumiServerNetworking {
             ServerPlayNetworking.Context context) {
         ServerPlayer player = context.player();
         FabricDimensionRuntime runtime = LumiMod.serverRuntime()
-                .find(player.level()).orElse(null);
+                .find(request.dimensionId()).orElse(null);
         PermissionDecision permission;
         try {
             permission = LumiMod.serverRuntime().permission(player);

@@ -487,6 +487,15 @@ public final class LumiClientNetworking {
                 branch, zoneId, offset, limit, "");
     }
 
+    public UUID requestDimensionHistoryPage(
+            String dimensionId, int offset, int limit, String query) {
+        return requestHistoryPage(
+                Optional.empty(), Objects.requireNonNull(dimensionId, "dimensionId"),
+                HistoryPageRequestPayload.ACTIVE_WORKSPACE,
+                HistoryPageRequestPayload.ACTIVE_BRANCH,
+                Optional.empty(), offset, limit, query);
+    }
+
     private UUID requestHistoryPage(
             Optional<ClientHistoryPageStore.Channel> channel,
             io.github.lumi.domain.model.BranchName branch,
@@ -497,6 +506,20 @@ public final class LumiClientNetworking {
         var snapshot = history.state().snapshot().orElseThrow(
                 () -> new IllegalStateException(
                         "Lumi history has not synchronized yet"));
+        return requestHistoryPage(
+                channel, snapshot.dimensionId(), snapshot.workspaceId(),
+                branch, zoneId, offset, limit, query);
+    }
+
+    private UUID requestHistoryPage(
+            Optional<ClientHistoryPageStore.Channel> channel,
+            String dimensionId,
+            UUID workspaceId,
+            io.github.lumi.domain.model.BranchName branch,
+            Optional<UUID> zoneId,
+            int offset,
+            int limit,
+            String query) {
         if (!ClientPlayNetworking.canSend(HistoryPageRequestPayload.TYPE)) {
             throw new IllegalStateException(
                     "The connected server does not support paged history");
@@ -508,15 +531,15 @@ public final class LumiClientNetworking {
         if (channel.isPresent()) {
             historyPages.begin(
                     channel.orElseThrow(), requestId,
-                    snapshot.dimensionId(), snapshot.workspaceId(),
+                    dimensionId, workspaceId,
                     requestedBranch, requestedZone, offset);
         } else {
             historyPages.begin(
-                    requestId, snapshot.dimensionId(), snapshot.workspaceId(),
+                    requestId, dimensionId, workspaceId,
                     requestedBranch, requestedZone, offset);
         }
         ClientPlayNetworking.send(new HistoryPageRequestPayload(
-                requestId, snapshot.dimensionId(), snapshot.workspaceId(),
+                requestId, dimensionId, workspaceId,
                 requestedBranch, requestedZone, offset, limit, requestedQuery));
         return requestId;
     }

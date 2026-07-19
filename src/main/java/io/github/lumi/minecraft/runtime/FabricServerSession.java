@@ -86,10 +86,13 @@ final class FabricServerSession implements AutoCloseable {
         dimensions.unload(level);
     }
 
-    Optional<FabricDimensionRuntime> find(ServerLevel level) {
-        return dimensions.find(level);
+    Optional<FabricDimensionRuntime> find(ServerLevel level) { return dimensions.find(level); }
+    Optional<FabricDimensionRuntime> find(String dimensionId) {
+        return dimensions.loadedValues().stream()
+                .filter(runtime -> runtime.level().dimension().identifier().toString()
+                        .equals(dimensionId))
+                .findFirst();
     }
-
     PermissionDecision permission(ServerPlayer player) throws IOException {
         return permissions.evaluate(subject(player));
     }

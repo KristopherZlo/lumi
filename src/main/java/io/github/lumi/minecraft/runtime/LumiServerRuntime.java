@@ -28,8 +28,9 @@ public final class LumiServerRuntime {
     }
 
     public synchronized Optional<FabricDimensionRuntime> find(ServerLevel level) {
-        return session == null ? Optional.empty() : session.find(level);
-    }
+        return session == null ? Optional.empty() : session.find(level); }
+    public synchronized Optional<FabricDimensionRuntime> find(String dimensionId) {
+        return session == null ? Optional.empty() : session.find(dimensionId); }
 
     public PermissionDecision permission(ServerPlayer player) throws IOException {
         return requireSession().permission(player);

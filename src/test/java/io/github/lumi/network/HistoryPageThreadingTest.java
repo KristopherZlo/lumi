@@ -15,5 +15,7 @@ class HistoryPageThreadingTest {
         int materialize = source.indexOf("HistoryPagePayload result");
         int serverThread = source.indexOf("context.server().execute");
         assertTrue(materialize >= 0 && materialize < serverThread);
+        assertTrue(source.contains("request.browsesDimension()"));
+        assertTrue(source.contains("runtime.activeRef().name()"));
     }
 }

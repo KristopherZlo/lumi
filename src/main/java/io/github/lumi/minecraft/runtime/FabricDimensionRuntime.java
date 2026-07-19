@@ -1012,11 +1012,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public CompletableFuture<io.github.lumi.domain.model.HistoryPage> historyPage(
-            BranchName branch, int offset, int limit) {
-        return historyPage(branch, offset, limit, "");
-    }
-
-    public CompletableFuture<io.github.lumi.domain.model.HistoryPage> historyPage(
             BranchName branch, int offset, int limit, String query) {
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -1026,11 +1021,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 throw new CompletionException(failed);
             }
         }, background);
-    }
-
-    public CompletableFuture<io.github.lumi.domain.model.HistoryPage> zoneHistoryPage(
-            BranchName branch, UUID zoneId, int offset, int limit) {
-        return zoneHistoryPage(branch, zoneId, offset, limit, "");
     }
 
     public CompletableFuture<io.github.lumi.domain.model.HistoryPage> zoneHistoryPage(
@@ -1639,7 +1629,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public BranchRef activeRef() throws IOException {
         return historyViews.activeBranch();
     }
-    public UUID defaultWorkspaceId() { return defaultWorkspaceId; }
     public UUID activeWorkspaceId() throws IOException { return selectedWorkspaceId; }
     public BlockEntityBaselineStore blockEntityBaselines() { return blockEntityBaselines; }
 

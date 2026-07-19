@@ -22,13 +22,14 @@ public record HistoryPageRequestPayload(
         String query) implements CustomPacketPayload {
     private static final int MAX_TEXT_BYTES = 1024;
     public static final int MAX_QUERY_LENGTH = 128;
+    public static final UUID ACTIVE_WORKSPACE = new UUID(0L, 0L);
+    public static final BranchName ACTIVE_BRANCH = new BranchName("lumi/active");
     public static final Type<HistoryPageRequestPayload> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "history_page_request"));
     public static final StreamCodec<FriendlyByteBuf, HistoryPageRequestPayload> CODEC =
             CustomPacketPayload.codec(
                     HistoryPageRequestPayload::write,
                     HistoryPageRequestPayload::read);
-
     public HistoryPageRequestPayload {
         Objects.requireNonNull(requestId, "requestId");
         Objects.requireNonNull(dimensionId, "dimensionId");
@@ -43,7 +44,10 @@ public record HistoryPageRequestPayload(
             throw new IllegalArgumentException("Invalid history page request");
         }
     }
-
+    public boolean browsesDimension() {
+        return workspaceId.equals(ACTIVE_WORKSPACE)
+                && branch.equals(ACTIVE_BRANCH) && zoneId.isEmpty();
+    }
     private void write(FriendlyByteBuf buffer) {
         buffer.writeUUID(requestId);
         buffer.writeUtf(dimensionId, MAX_TEXT_BYTES);
