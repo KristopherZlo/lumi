@@ -6,6 +6,7 @@ import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -19,6 +20,8 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
     private final ZoneScreenController controller;
     private final Consumer<HistorySnapshotPayload.ZoneView> openDetails;
     private final Consumer<HistorySnapshotPayload.ZoneView> delete;
+    private final Supplier<Component> overlayLabel;
+    private final Runnable cycleOverlay;
     private final Consumer<UUID> enter;
     private final Consumer<UUID> leave;
     private HistorySnapshotPayload snapshot;
@@ -37,6 +40,8 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
             ZoneScreenController controller,
             Consumer<HistorySnapshotPayload.ZoneView> openDetails,
             Consumer<HistorySnapshotPayload.ZoneView> delete,
+            Supplier<Component> overlayLabel,
+            Runnable cycleOverlay,
             Consumer<UUID> enter,
             Consumer<UUID> leave) {
         super(parent, Component.translatable("luma.tab.zones"), LegacyProjectTab.ZONES);
@@ -44,6 +49,10 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         this.controller = Objects.requireNonNull(controller, "controller");
         this.openDetails = Objects.requireNonNull(openDetails, "openDetails");
         this.delete = Objects.requireNonNull(delete, "delete");
+        this.overlayLabel = Objects.requireNonNull(
+                overlayLabel, "overlayLabel");
+        this.cycleOverlay = Objects.requireNonNull(
+                cycleOverlay, "cycleOverlay");
         this.enter = Objects.requireNonNull(enter, "enter");
         this.leave = Objects.requireNonNull(leave, "leave");
     }
@@ -81,6 +90,10 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
                 Component.translatable("luma.zones.create_button"),
                 this::create, LumiLegacyButton.Kind.PRIMARY);
         updateCreateButton();
+        addLegacyButton(
+                panelX + panelWidth - 140, panelY + 102, 120,
+                overlayLabel.get(), this::cycleOverlay,
+                LumiLegacyButton.Kind.NORMAL);
         addZoneRows(panelWidth);
         addLegacyButton(panelX + 20, panelY + 298, 28,
                 Component.literal("<"), () -> changePage(-1),
@@ -93,6 +106,11 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         addLegacyButton(panelX + panelWidth - 140, panelY + 298, 120,
                 Component.translatable("luma.action.close"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
+    }
+
+    private void cycleOverlay() {
+        cycleOverlay.run();
+        rebuildWidgets();
     }
 
     private void addZoneRows(int panelWidth) {

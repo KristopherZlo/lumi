@@ -84,6 +84,9 @@ public final class LumiClient implements ClientModInitializer {
                     LumiClient::showPackageInspection,
                     LumiClient::showCleanupResult,
                     LumiClient::showPartialRestorePlan);
+    private static final LumiZoneOverlay ZONE_OVERLAY =
+            new LumiZoneOverlay(
+                    ZONE_OVERLAYS, HISTORY, NETWORKING::requestZoneOverlay);
 
     @Override
     public void onInitializeClient() {
@@ -172,6 +175,7 @@ public final class LumiClient implements ClientModInitializer {
                 NETWORKING::editActiveZone).register();
         new LumiSelectionOverlay(SELECTION).register();
         new LumiSelectionHud(SELECTION).register();
+        ZONE_OVERLAY.register();
         new LumiOperationHud(HISTORY).register();
         new LumiPendingChangeOverlay(
                 HISTORY, COMPARISONS, NETWORKING::refreshSnapshot).register();
@@ -204,6 +208,7 @@ public final class LumiClient implements ClientModInitializer {
                 zone -> openZoneDetails(client.screen, zone),
                 zone -> client.setScreen(new LumiDeleteZoneScreen(
                         client.screen, zone, NETWORKING::deleteZone)),
+                ZONE_OVERLAY::label, ZONE_OVERLAY::cycle,
                 NETWORKING::enterZone, NETWORKING::leaveZone));
     }
 
