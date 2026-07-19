@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,11 @@ class HistorySearchControllerTest {
         assertEquals(List.of(bridge), controller.filter(versions, "STN   alex"));
         assertEquals(List.of(tower), controller.filter(versions, "bBb zone"));
         assertEquals(List.of(), controller.filter(versions, "alex zone"));
+        var tagged = new HistorySnapshotPayload.Version(
+                bridge.id(), bridge.message(), bridge.author(),
+                bridge.timestampMillis(), bridge.kind(),
+                new VersionTags(List.of("entrance")));
+        assertEquals(List.of(tagged), controller.filter(List.of(tagged), "entrance"));
     }
 
     private static HistorySnapshotPayload.Version version(

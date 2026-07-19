@@ -27,7 +27,8 @@ final class HistorySearchController {
                 version.message().toLowerCase(Locale.ROOT),
                 version.author().toLowerCase(Locale.ROOT),
                 version.id().hex().toLowerCase(Locale.ROOT),
-                version.kind().name().toLowerCase(Locale.ROOT));
+                version.kind().name().toLowerCase(Locale.ROOT),
+                String.join(" ", version.tags().values()).toLowerCase(Locale.ROOT));
         for (String token : tokens) {
             if (fields.stream().noneMatch(field ->
                     field.contains(token) || isSubsequence(token, field))) {
