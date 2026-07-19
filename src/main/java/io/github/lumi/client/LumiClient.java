@@ -261,7 +261,9 @@ public final class LumiClient implements ClientModInitializer {
                 parent,
                 () -> openWorkspaces(client.screen),
                 () -> client.setScreen(new LumiDeletedVersionsScreen(
-                        client.screen, HISTORY, NETWORKING::cleanupVersion)),
+                        client.screen, HISTORY,
+                        NETWORKING::restoreDeletedVersion,
+                        NETWORKING::cleanupVersion)),
                 () -> client.setScreen(new LumiOnboardingScreen(
                         client.screen, LumiClient::completeOnboarding)),
                 () -> client.setScreen(new LumiHotkeyScreen(

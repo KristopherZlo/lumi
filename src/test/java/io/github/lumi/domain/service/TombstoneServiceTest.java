@@ -3,6 +3,7 @@ package io.github.lumi.domain.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.Commit;
@@ -79,6 +80,54 @@ class TombstoneServiceTest {
         assertThrows(IllegalStateException.class,
                 () -> service.cleanup(deleted, workspace));
         assertTrue(tombstones.contains(deleted));
+    }
+
+    @Test
+    void restoreReturnsADeletedLeafToItsPreviousBranchHead() throws Exception {
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        TombstoneRepository tombstones = new TombstoneRepository(repositoryRoot);
+        UUID workspace = new UUID(0, 2);
+        var tree = new WorldObjectRepository(repositoryRoot)
+                .write(new DimensionTree(Map.of()));
+        CommitId parent = commits.write(commit(tree, List.of(), workspace, "Parent"));
+        CommitId deleted = commits.write(commit(tree, List.of(parent), workspace, "Deleted"));
+        BranchName main = new BranchName("main");
+        refs.create(main, deleted);
+        TombstoneService service = new TombstoneService(commits, refs, tombstones);
+
+        service.softDelete(deleted, workspace,
+                new CommitAuthor(new UUID(0, 7), "Builder"), Instant.EPOCH);
+        service.restore(deleted, workspace);
+
+        assertEquals(deleted, refs.read(main).orElseThrow().commit());
+        assertFalse(tombstones.contains(deleted));
+    }
+
+    @Test
+    void restoreUsesANewBranchWhenTheOriginalBranchAdvanced() throws Exception {
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        TombstoneRepository tombstones = new TombstoneRepository(repositoryRoot);
+        UUID workspace = new UUID(0, 2);
+        var tree = new WorldObjectRepository(repositoryRoot)
+                .write(new DimensionTree(Map.of()));
+        CommitId parent = commits.write(commit(tree, List.of(), workspace, "Parent"));
+        CommitId deleted = commits.write(commit(tree, List.of(parent), workspace, "Deleted"));
+        CommitId advanced = commits.write(commit(tree, List.of(parent), workspace, "Advanced"));
+        BranchName main = new BranchName("main");
+        refs.create(main, deleted);
+        TombstoneService service = new TombstoneService(commits, refs, tombstones);
+        service.softDelete(deleted, workspace,
+                new CommitAuthor(new UUID(0, 7), "Builder"), Instant.EPOCH);
+        refs.compareAndSet(refs.read(main).orElseThrow(), advanced);
+
+        service.restore(deleted, workspace);
+
+        assertEquals(advanced, refs.read(main).orElseThrow().commit());
+        BranchName restored = WorkspaceService.branchName(
+                workspace, new BranchName("restored-" + deleted.hex().substring(0, 8)));
+        assertEquals(deleted, refs.read(restored).orElseThrow().commit());
     }
 
     @Test

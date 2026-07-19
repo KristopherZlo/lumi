@@ -1,5 +1,7 @@
 package io.github.lumi.domain.service;
 
+import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
@@ -8,9 +10,11 @@ import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.TombstoneRepository;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -18,6 +22,7 @@ import java.util.UUID;
 
 /** Soft-deletes builder history without deleting immutable commit data. */
 public final class TombstoneService {
+    private static final String RECOVERY_REF_PREFIX = "hidden/deleted/";
     private final CommitRepository commits;
     private final BranchRefRepository refs;
     private final TombstoneRepository tombstones;
@@ -64,6 +69,7 @@ public final class TombstoneService {
             }
         }
         for (var ref : pointing) {
+            preserveDeletedHead(target, ref);
             if (ref.name().value().startsWith("hidden/auto/")) {
                 refs.delete(ref);
             } else {
@@ -73,6 +79,35 @@ public final class TombstoneService {
         CommitTombstone tombstone = tombstones.read(target).orElseGet(() ->
                 new CommitTombstone(target, deletedBy, deletedAt));
         return tombstones.create(tombstone);
+    }
+
+    public synchronized void restore(CommitId target, UUID workspaceId)
+            throws IOException {
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        var commit = commits.read(target);
+        if (!commit.workspaceId().equals(workspaceId)) {
+            throw new IOException("Commit does not belong to the active workspace");
+        }
+        if (tombstones.read(target).isEmpty()) {
+            throw new IllegalStateException("Version is not soft-deleted");
+        }
+        boolean restoredHead = false;
+        for (BranchRef recovery : recoveryRefs(target)) {
+            BranchName original = originalBranch(recovery.name(), target);
+            var current = refs.read(original);
+            if (!original.value().startsWith("hidden/")
+                    && current.isPresent() && !commit.parents().isEmpty()
+                    && current.orElseThrow().commit().equals(commit.parents().getFirst())) {
+                refs.compareAndSet(current.orElseThrow(), target);
+                restoredHead = true;
+            }
+            refs.delete(recovery);
+        }
+        if (!restoredHead && !isReachable(target)) {
+            createRestoredBranch(target, workspaceId);
+        }
+        tombstones.delete(target);
     }
 
     public synchronized List<io.github.lumi.domain.model.HistoryEntry> deleted(
@@ -110,11 +145,72 @@ public final class TombstoneService {
         if (tombstones.read(target).isEmpty()) {
             throw new IllegalStateException("Version is not soft-deleted");
         }
+        for (BranchRef recovery : recoveryRefs(target)) {
+            refs.delete(recovery);
+        }
         if (isReachable(target)) {
             throw new IllegalStateException(
                     "Deleted version is still required by retained history");
         }
         tombstones.delete(target);
+    }
+
+    private void preserveDeletedHead(CommitId target, BranchRef original)
+            throws IOException {
+        BranchName recovery = recoveryRef(target, original.name());
+        var existing = refs.read(recovery);
+        if (existing.isPresent()) {
+            if (!existing.orElseThrow().commit().equals(target)) {
+                throw new IllegalStateException("Deleted-version recovery ref conflicts");
+            }
+            return;
+        }
+        refs.create(recovery, target);
+    }
+
+    private List<BranchRef> recoveryRefs(CommitId target) throws IOException {
+        String prefix = RECOVERY_REF_PREFIX + target.hex() + "/";
+        return refs.list().stream()
+                .filter(ref -> ref.name().value().startsWith(prefix))
+                .toList();
+    }
+
+    private static BranchName recoveryRef(CommitId target, BranchName original) {
+        String encoded = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                original.value().getBytes(StandardCharsets.UTF_8));
+        return new BranchName(RECOVERY_REF_PREFIX + target.hex() + "/" + encoded);
+    }
+
+    private static BranchName originalBranch(BranchName recovery, CommitId target)
+            throws IOException {
+        String prefix = RECOVERY_REF_PREFIX + target.hex() + "/";
+        try {
+            return new BranchName(new String(
+                    Base64.getUrlDecoder().decode(
+                            recovery.value().substring(prefix.length())),
+                    StandardCharsets.UTF_8));
+        } catch (IllegalArgumentException invalid) {
+            throw new IOException("Invalid deleted-version recovery ref", invalid);
+        }
+    }
+
+    private void createRestoredBranch(CommitId target, UUID workspaceId)
+            throws IOException {
+        String base = "restored-" + target.hex().substring(0, 8);
+        for (int attempt = 1; attempt <= 1_000; attempt++) {
+            String suffix = attempt == 1 ? "" : "-" + attempt;
+            BranchName name = WorkspaceService.branchName(
+                    workspaceId, new BranchName(base + suffix));
+            var existing = refs.read(name);
+            if (existing.isEmpty()) {
+                refs.create(name, target);
+                return;
+            }
+            if (existing.orElseThrow().commit().equals(target)) {
+                return;
+            }
+        }
+        throw new IOException("Cannot allocate a restored branch name");
     }
 
     private boolean isReachable(CommitId target) throws IOException {

@@ -935,6 +935,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         tombstones.cleanup(target, activeWorkspaceId());
     }
 
+    public void restoreTombstone(CommitId target) throws IOException {
+        requireHistoryMetadataMutable();
+        tombstones.restore(target, activeWorkspaceId());
+    }
+
     public List<BranchRef> visibleBranches() throws IOException {
         return historyViews.branches();
     }

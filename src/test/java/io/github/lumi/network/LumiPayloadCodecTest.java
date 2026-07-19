@@ -108,6 +108,11 @@ class LumiPayloadCodecTest {
                 id('2').hex(), id('1'), 42);
         assertEquals(cleanupVersion,
                 roundTrip(HistoryCommandPayload.CODEC, cleanupVersion));
+        HistoryCommandPayload restoreDeletedVersion = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.RESTORE_DELETED_VERSION,
+                id('3').hex(), id('2'), 42);
+        assertEquals(restoreDeletedVersion,
+                roundTrip(HistoryCommandPayload.CODEC, restoreDeletedVersion));
         for (HistoryCommandPayload.Kind kind : java.util.List.of(
                 HistoryCommandPayload.Kind.PACKAGE_EXPORT,
                 HistoryCommandPayload.Kind.PACKAGE_INSPECT)) {
@@ -212,6 +217,9 @@ class LumiPayloadCodecTest {
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.RESTORE_AREA,
                 "not-an-area", id('1'), 0));
+        assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
+                request, HistoryCommandPayload.Kind.RESTORE_DELETED_VERSION,
+                "not-a-commit", id('1'), 0));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(
                 request, HistoryCommandPayload.Kind.SAVE, "Save", id('1'), -1));
         assertThrows(IllegalArgumentException.class, () -> new HistoryCommandPayload(

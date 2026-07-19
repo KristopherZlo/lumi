@@ -203,6 +203,11 @@ public final class LumiClientNetworking {
                 Objects.requireNonNull(target, "target").hex());
     }
 
+    public UUID restoreDeletedVersion(CommitId target) {
+        return send(HistoryCommandPayload.Kind.RESTORE_DELETED_VERSION,
+                Objects.requireNonNull(target, "target").hex());
+    }
+
     public UUID updateVersionTags(CommitId target, VersionTags tags) {
         return send(HistoryCommandPayload.Kind.UPDATE_VERSION_TAGS,
                 new VersionTagsArgument(

@@ -173,6 +173,15 @@ public final class LumiServerNetworking {
                 broadcastSnapshot(runtime);
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.RESTORE_DELETED_VERSION) {
+                runtime.restoreTombstone(
+                        new CommitId(new ObjectId(payload.argument())));
+                sendEvent(player, payload, runtime,
+                        OperationEventPayload.State.SUCCEEDED,
+                        "luma.status.version_restored");
+                broadcastSnapshot(runtime);
+                return;
+            }
             if (isZoneMetadata(payload.kind())) {
                 updateZoneMetadata(player, runtime, payload);
                 return;
@@ -480,6 +489,8 @@ public final class LumiServerNetworking {
                     "Version deletion does not use the mutation queue");
             case CLEANUP_VERSION -> throw new IllegalStateException(
                     "Version cleanup does not use the mutation queue");
+            case RESTORE_DELETED_VERSION -> throw new IllegalStateException(
+                    "Deleted-version restore does not use the mutation queue");
             case PACKAGE_EXPORT, PACKAGE_INSPECT, PACKAGE_IMPORT ->
                     throw new IllegalStateException(
                             "Package commands do not use the mutation queue");

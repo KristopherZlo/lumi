@@ -12,8 +12,9 @@ import net.minecraft.network.chat.Component;
 
 /** Bounded tombstone list with an explicit legacy permanent-cleanup confirmation. */
 public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
-    private static final int PAGE_SIZE = 5;
+    private static final int MAX_PAGE_SIZE = 5;
     private final ClientHistoryStore history;
+    private final Consumer<CommitId> restore;
     private final Consumer<CommitId> cleanup;
     private List<HistorySnapshotPayload.Version> versions = List.of();
     private int panelX;
@@ -27,10 +28,12 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
     public LumiDeletedVersionsScreen(
             Screen parent,
             ClientHistoryStore history,
+            Consumer<CommitId> restore,
             Consumer<CommitId> cleanup) {
         super(parent, Component.translatable("luma.more.deleted_saves_title"),
                 LegacyProjectTab.MORE);
         this.history = Objects.requireNonNull(history, "history");
+        this.restore = Objects.requireNonNull(restore, "restore");
         this.cleanup = Objects.requireNonNull(cleanup, "cleanup");
     }
 
@@ -45,27 +48,32 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
         panelWidth = shell.contentWidth();
         panelHeight = shell.windowHeight();
         if (pendingCleanup != null) {
-            addConfirmationButtons(panelWidth);
+            addConfirmationButtons();
             return;
         }
-        int start = Math.min(page * PAGE_SIZE, versions.size());
-        int end = Math.min(start + PAGE_SIZE, versions.size());
+        int rows = visibleRows();
+        int start = rows == 0 ? 0 : Math.min(page * rows, versions.size());
+        int end = Math.min(start + rows, versions.size());
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
-            int rowY = panelY + 72 + (index - start) * 38;
-            addLegacyButton(panelX + panelWidth - 112, rowY + 7, 92,
-                    Component.translatable("luma.screen.cleanup.title"),
+            int rowY = panelY + 62 + (index - start) * 38;
+            addLegacyIconButton(panelX + panelWidth - 76, rowY + 4,
+                    "rollback", Component.translatable("luma.action.restore_deleted_save"),
+                    () -> restoreVersion(version), LumiLegacyButton.Kind.PRIMARY);
+            addLegacyIconButton(panelX + panelWidth - 48, rowY + 4,
+                    "trash", Component.translatable("luma.screen.cleanup.title"),
                     () -> confirm(version), LumiLegacyButton.Kind.DANGER);
         }
+        int footerY = panelY + panelHeight - 28;
         LumiLegacyButton previous = addLegacyButton(
-                panelX + 20, panelY + 262, 28, Component.literal("<"),
+                panelX + 20, footerY, 28, Component.literal("<"),
                 () -> changePage(-1), LumiLegacyButton.Kind.NORMAL);
         previous.active = page > 0;
         LumiLegacyButton next = addLegacyButton(
-                panelX + 52, panelY + 262, 28, Component.literal(">"),
+                panelX + 52, footerY, 28, Component.literal(">"),
                 () -> changePage(1), LumiLegacyButton.Kind.NORMAL);
-        next.active = (page + 1) * PAGE_SIZE < versions.size();
-        addLegacyButton(panelX + panelWidth - 140, panelY + 262, 120,
+        next.active = rows > 0 && (page + 1) * rows < versions.size();
+        addLegacyButton(panelX + panelWidth - 140, footerY, 120,
                 Component.translatable("luma.action.close"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
@@ -76,17 +84,29 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
         rebuildWidgets();
     }
 
-    private void addConfirmationButtons(int panelWidth) {
+    private void addConfirmationButtons() {
         int buttonWidth = (panelWidth - 48) / 2;
-        addLegacyButton(panelX + 20, panelY + 246, buttonWidth,
+        int footerY = panelY + panelHeight - 28;
+        addLegacyButton(panelX + 20, footerY, buttonWidth,
                 Component.translatable("luma.action.clean_up"),
                 this::cleanup, LumiLegacyButton.Kind.DANGER);
-        addLegacyButton(panelX + 28 + buttonWidth, panelY + 246, buttonWidth,
+        addLegacyButton(panelX + 28 + buttonWidth, footerY, buttonWidth,
                 Component.translatable("luma.action.cancel"), () -> {
                     pendingCleanup = null;
                     error = "";
                     rebuildWidgets();
                 }, LumiLegacyButton.Kind.NORMAL);
+    }
+
+    private void restoreVersion(HistorySnapshotPayload.Version version) {
+        try {
+            restore.accept(version.id());
+            feedback("luma.status.version_restored");
+            onClose();
+        } catch (RuntimeException failed) {
+            error = failed.getMessage() == null
+                    ? "Lumi could not restore the deleted save" : failed.getMessage();
+        }
     }
 
     private void cleanup() {
@@ -128,7 +148,8 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
         }
         if (!error.isEmpty()) {
             graphics.drawCenteredString(font, errorText(error),
-                    panelX + panelWidth / 2, panelY + 220, LegacyLumiTheme.DANGER);
+                    panelX + panelWidth / 2,
+                    panelY + panelHeight - 44, LegacyLumiTheme.DANGER);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -143,15 +164,16 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
                     panelX + 20, panelY + 78, LegacyLumiTheme.MUTED, false);
             return;
         }
-        int start = Math.min(page * PAGE_SIZE, versions.size());
-        int end = Math.min(start + PAGE_SIZE, versions.size());
+        int rows = visibleRows();
+        int start = rows == 0 ? 0 : Math.min(page * rows, versions.size());
+        int end = Math.min(start + rows, versions.size());
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
-            int rowY = panelY + 72 + (index - start) * 38;
+            int rowY = panelY + 62 + (index - start) * 38;
             renderLegacyPanel(graphics,
                     panelX + 20, rowY, panelWidth - 40, 34);
             graphics.drawString(font,
-                    font.plainSubstrByWidth(version.message(), panelWidth - 180),
+                    font.plainSubstrByWidth(version.message(), panelWidth - 132),
                     panelX + 28, rowY + 7, LegacyLumiTheme.TEXT, false);
             graphics.drawString(font, version.author(),
                     panelX + 28, rowY + 20, LegacyLumiTheme.MUTED, false);
@@ -160,7 +182,8 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
 
     private void renderConfirmation(GuiGraphics graphics, int panelWidth) {
         renderLegacyPanel(graphics,
-                panelX + 20, panelY + 66, panelWidth - 40, 134);
+                panelX + 20, panelY + 66, panelWidth - 40,
+                Math.max(54, panelHeight - 114));
         graphics.drawCenteredString(font,
                 Component.translatable("luma.screen.cleanup.title"),
                 panelX + panelWidth / 2, panelY + 82, LegacyLumiTheme.DANGER);
@@ -170,6 +193,10 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
         graphics.drawCenteredString(font,
                 Component.translatable("luma.recovery.delete_confirm_warning"),
                 panelX + panelWidth / 2, panelY + 140, LegacyLumiTheme.ACCENT);
+    }
+
+    private int visibleRows() {
+        return Math.min(MAX_PAGE_SIZE, Math.max(0, (panelHeight - 100) / 38));
     }
 
     @Override public boolean isPauseScreen() { return false; }
