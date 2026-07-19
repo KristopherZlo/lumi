@@ -41,9 +41,12 @@ class CompareRequestRegistryTest {
         CompletableFuture<ComparisonSummary> future = new CompletableFuture<>();
         var job = registry.start(request, PLAYER, cancelled -> future);
 
+        assertTrue(registry.isOwned(request, PLAYER));
+        assertFalse(registry.isOwned(request, OTHER_PLAYER));
         assertFalse(registry.cancelOwned(request, OTHER_PLAYER));
         assertFalse(job.cancelled().get());
         assertTrue(registry.finish(request, job));
+        assertFalse(registry.isOwned(request, PLAYER));
         assertFalse(registry.finish(request, job));
         assertFalse(future.isCancelled());
     }

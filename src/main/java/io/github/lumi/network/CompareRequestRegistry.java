@@ -36,6 +36,12 @@ final class CompareRequestRegistry {
                 Objects.requireNonNull(expected, "expected"));
     }
 
+    synchronized boolean isOwned(UUID requestId, UUID playerId) {
+        Job job = jobs.get(Objects.requireNonNull(requestId, "requestId"));
+        return job != null && job.playerId().equals(
+                Objects.requireNonNull(playerId, "playerId"));
+    }
+
     synchronized boolean cancelOwned(UUID requestId, UUID playerId) {
         Job job = jobs.get(Objects.requireNonNull(requestId, "requestId"));
         if (job == null || !job.playerId().equals(

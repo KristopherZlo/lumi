@@ -1,11 +1,14 @@
 package io.github.lumi.network;
 
+import io.github.lumi.domain.model.BlockChange;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ComparisonSummary;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import java.io.IOException;
 import java.util.Objects;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.level.ServerPlayer;
@@ -33,6 +36,8 @@ final class CompareCommandHandler {
         CommitId before;
         CommitId after;
         CompareRequestRegistry.Job job;
+        String dimension = runtime.level().dimension().identifier().toString();
+        AtomicInteger batchIndex = new AtomicInteger();
         if (payload.kind() == HistoryCommandPayload.Kind.ZONE_COMPARE) {
             ZoneCompareArgument argument = ZoneCompareArgument.parse(payload.argument());
             before = argument.before();
@@ -40,20 +45,46 @@ final class CompareCommandHandler {
             job = jobs.start(
                     payload.requestId(), player.getUUID(),
                     cancelled -> runtime.compare(
-                            before, after, argument.zoneId(), cancelled));
+                            before, after, argument.zoneId(), cancelled,
+                            blocks -> scheduleBatch(
+                                    player, payload.requestId(), dimension,
+                                    before, after, batchIndex.getAndIncrement(),
+                                    blocks, context)));
         } else {
             CompareArgument argument = CompareArgument.parse(payload.argument());
             before = argument.before();
             after = argument.after();
             job = jobs.start(
                     payload.requestId(), player.getUUID(),
-                    cancelled -> runtime.compare(before, after, cancelled));
+                    cancelled -> runtime.compare(
+                            before, after, cancelled,
+                            blocks -> scheduleBatch(
+                                    player, payload.requestId(), dimension,
+                                    before, after, batchIndex.getAndIncrement(),
+                                    blocks, context)));
         }
-        String dimension = runtime.level().dimension().identifier().toString();
         job.future().whenComplete((summary, failure) ->
                 context.server().execute(() -> finish(
                         player, payload.requestId(), dimension,
-                        before, after, job, summary, failure)));
+                        before, after, batchIndex.get(), job, summary, failure)));
+    }
+
+    private void scheduleBatch(
+            ServerPlayer player,
+            UUID requestId,
+            String dimension,
+            CommitId before,
+            CommitId after,
+            int batchIndex,
+            List<BlockChange> blocks,
+            ServerPlayNetworking.Context context) {
+        CompareResultPayload batch = blockBatch(
+                requestId, dimension, before, after, batchIndex, blocks);
+        context.server().execute(() -> {
+            if (jobs.isOwned(requestId, player.getUUID())) {
+                results.send(player, batch);
+            }
+        });
     }
 
     private void finish(
@@ -62,6 +93,7 @@ final class CompareCommandHandler {
             String dimension,
             CommitId before,
             CommitId after,
+            int batchIndex,
             CompareRequestRegistry.Job job,
             ComparisonSummary summary,
             Throwable failure) {
@@ -69,10 +101,11 @@ final class CompareCommandHandler {
             return;
         }
         CompareResultPayload result = failure == null
-                ? success(requestId, dimension, summary)
+                ? success(requestId, dimension, batchIndex, summary)
                 : new CompareResultPayload(
                         requestId, dimension, before, after, 0, 0,
-                        java.util.List.of(), failureMessage.apply(failure));
+                        List.of(), List.of(), failureMessage.apply(failure),
+                        batchIndex, true, List.of(), 0);
         results.send(player, result);
     }
 
@@ -88,8 +121,11 @@ final class CompareCommandHandler {
         jobs.clear();
     }
 
-    private static CompareResultPayload success(
-            UUID requestId, String dimension, ComparisonSummary summary) {
+    static CompareResultPayload success(
+            UUID requestId,
+            String dimension,
+            int batchIndex,
+            ComparisonSummary summary) {
         var materials = summary.materials().entrySet().stream()
                 .sorted(java.util.Map.Entry.comparingByKey())
                 .limit(MAX_MATERIALS)
@@ -103,7 +139,19 @@ final class CompareCommandHandler {
                         .map(section -> new CompareResultPayload.ChangedSection(
                                 section.chunkX(), section.sectionY(), section.chunkZ()))
                         .toList(),
-                materials, "");
+                materials, "", batchIndex, true, List.of(), summary.changedBlocks());
+    }
+
+    static CompareResultPayload blockBatch(
+            UUID requestId,
+            String dimension,
+            CommitId before,
+            CommitId after,
+            int batchIndex,
+            List<BlockChange> blocks) {
+        return new CompareResultPayload(
+                requestId, dimension, before, after, 0, 0,
+                List.of(), List.of(), "", batchIndex, false, blocks, 0);
     }
 
     @FunctionalInterface

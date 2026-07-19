@@ -27,6 +27,7 @@ import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.ActiveBranch;
 import io.github.lumi.domain.model.ActiveWorkspace;
 import io.github.lumi.domain.model.BlockAreaTarget;
+import io.github.lumi.domain.model.BlockChange;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
@@ -1099,9 +1100,26 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public CompletableFuture<ComparisonSummary> compare(
             CommitId before,
             CommitId after,
+            BooleanSupplier cancelled,
+            Consumer<List<BlockChange>> batches) throws IOException {
+        return comparisons.compare(before, after, cancelled, batches);
+    }
+
+    public CompletableFuture<ComparisonSummary> compare(
+            CommitId before,
+            CommitId after,
             UUID zoneId,
             BooleanSupplier cancelled) throws IOException {
         return comparisons.compare(before, after, zoneId, cancelled);
+    }
+
+    public CompletableFuture<ComparisonSummary> compare(
+            CommitId before,
+            CommitId after,
+            UUID zoneId,
+            BooleanSupplier cancelled,
+            Consumer<List<BlockChange>> batches) throws IOException {
+        return comparisons.compare(before, after, zoneId, cancelled, batches);
     }
 
     public io.github.lumi.domain.model.Zone createZone(
