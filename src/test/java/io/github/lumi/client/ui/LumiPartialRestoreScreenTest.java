@@ -24,5 +24,9 @@ class LumiPartialRestoreScreenTest {
         assertFalse(fullRestore.contains("BlockBox"));
         assertFalse(fullRestore.contains("PartialRestorePlanPayload"));
         assertFalse(fullRestore.contains("EditBox"));
+        assertTrue(fullRestore.contains("luma.action.restore"));
+        assertFalse(fullRestore.contains("restore_without_entities"));
+        assertFalse(fullRestore.contains("restore_whole_save"));
+        assertFalse(fullRestore.contains("includeEntities"));
     }
 }

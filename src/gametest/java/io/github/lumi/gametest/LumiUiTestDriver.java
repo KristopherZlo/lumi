@@ -45,7 +45,7 @@ final class LumiUiTestDriver {
         context.waitTick();
         pressUniqueButton(LumiDashboardScreen.class, "luma.action.restore");
         context.waitForScreen(LumiRestoreScreen.class);
-        pressUniqueButton(LumiRestoreScreen.class, "luma.action.restore_whole_save");
+        pressUniqueButton(LumiRestoreScreen.class, "luma.action.restore");
         context.waitForScreen(LumiDashboardScreen.class);
         closeScreen(LumiDashboardScreen.class, null);
     }

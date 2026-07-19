@@ -277,14 +277,17 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void openRestore(
             Screen parent, HistorySnapshotPayload.Version version) {
+        boolean includeEntities = HISTORY.state().snapshot().orElseThrow()
+                .workspaces().stream()
+                .filter(HistorySnapshotPayload.WorkspaceView::active)
+                .findFirst()
+                .map(HistorySnapshotPayload.WorkspaceView::includeEntitiesOnRestore)
+                .orElse(true);
         Minecraft.getInstance().setScreen(new LumiRestoreScreen(
-                parent, version.id(), version.message(), (target, includeEntities) -> {
-                    if (includeEntities) {
-                        NETWORKING.restore(target);
-                    } else {
-                        NETWORKING.restoreWithoutEntities(target);
-                    }
-                }));
+                parent, version.id(), version.message(),
+                includeEntities
+                        ? NETWORKING::restore
+                        : NETWORKING::restoreWithoutEntities));
     }
 
     private static void openPartialRestore(
