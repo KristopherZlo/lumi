@@ -2,6 +2,8 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphics;
@@ -24,9 +26,10 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
     private int panelWidth;
     private int panelHeight;
     private int creditY;
-    private int actionX;
-    private int actionY;
-    private int actionRight;
+    private int actionTop;
+    private int actionBottom;
+    private int actionScroll;
+    private int maximumActionScroll;
 
     public LumiMoreScreen(
             Screen parent,
@@ -64,34 +67,48 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         boolean hintVisible = addContextualHint(
                 ClientContextualHelpHint.MORE,
                 panelX + 12, panelY + 50, panelWidth - 24);
-        actionX = panelX + 16;
-        actionY = panelY + 58
+        actionTop = panelY + 58
                 + (hintVisible ? contextualHintOffset(8) : 0);
-        actionRight = panelX + panelWidth - 16;
-        button("luma.action.dimensions", dimensions);
-        button("luma.more.deleted_saves_title", deletedVersions);
-        button("luma.more.onboarding_title", onboarding);
-        button("luma.hotkeys.title", hotkeys);
-        button("luma.more.special_thanks_title", thanks);
-        button("luma.action.open_diagnostics", diagnostics);
-        button("luma.action.check_updates", updates);
-        button("luma.action.open_cleanup", cleanup);
-        button("luma.action.manual_compare", manualCompare);
-        button("luma.action.reset_contextual_hints", this::resetContextualHints);
         creditY = panelY + panelHeight - 32;
+        actionBottom = creditY - 4;
+        addActions(List.of(
+                new MoreAction("luma.action.dimensions", dimensions),
+                new MoreAction("luma.more.deleted_saves_title", deletedVersions),
+                new MoreAction("luma.more.onboarding_title", onboarding),
+                new MoreAction("luma.hotkeys.title", hotkeys),
+                new MoreAction("luma.more.special_thanks_title", thanks),
+                new MoreAction("luma.action.open_diagnostics", diagnostics),
+                new MoreAction("luma.action.check_updates", updates),
+                new MoreAction("luma.action.open_cleanup", cleanup),
+                new MoreAction("luma.action.manual_compare", manualCompare),
+                new MoreAction("luma.action.reset_contextual_hints",
+                        this::resetContextualHints)));
     }
 
-    private void button(String key, Runnable action) {
-        Component label = Component.translatable(key);
-        int width = Math.min(actionRight - panelX - 16,
-                Math.max(18, font.width(label) + 12));
-        if (actionX > panelX + 16 && actionX + width > actionRight) {
-            actionX = panelX + 16;
-            actionY += 24;
+    private void addActions(List<MoreAction> actions) {
+        int left = panelX + 16;
+        int right = panelX + panelWidth - 16;
+        int x = left;
+        int y = actionTop;
+        List<PlacedAction> placed = new ArrayList<>(actions.size());
+        for (MoreAction action : actions) {
+            Component label = Component.translatable(action.key());
+            int width = LumiLegacyButton.contentWidth(right - left, label);
+            if (x > left && x + width > right) {
+                x = left;
+                y += 24;
+            }
+            placed.add(new PlacedAction(action, label, x, y, width));
+            x += width + 4;
         }
-        addLegacyButton(actionX, actionY, width, label,
-                action, LumiLegacyButton.Kind.NORMAL);
-        actionX += width + 4;
+        maximumActionScroll = requiredScrollRows(y + 18, actionBottom);
+        actionScroll = Math.min(actionScroll, maximumActionScroll);
+        for (PlacedAction item : placed) {
+            int renderedY = item.y() - actionScroll * 24;
+            if (renderedY < actionTop || renderedY + 18 > actionBottom) continue;
+            addLegacyButton(item.x(), renderedY, item.width(), item.label(),
+                    item.action().callback(), LumiLegacyButton.Kind.NORMAL);
+        }
     }
 
     @Override
@@ -119,4 +136,33 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
     }
 
     @Override public boolean isPauseScreen() { return false; }
+
+    static int requiredScrollRows(int contentBottom, int viewportBottom) {
+        int overflow = Math.max(0, contentBottom - viewportBottom);
+        return (overflow + 23) / 24;
+    }
+
+    @Override
+    public boolean mouseScrolled(
+            double mouseX, double mouseY,
+            double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        if (x >= panelX && x < panelX + panelWidth
+                && y >= actionTop && y < actionBottom) {
+            int replacement = Math.max(0, Math.min(maximumActionScroll,
+                    actionScroll + (verticalAmount < 0 ? 1 : -1)));
+            if (replacement != actionScroll) {
+                actionScroll = replacement;
+                rebuildWidgets();
+            }
+            return true;
+        }
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    private record MoreAction(String key, Runnable callback) { }
+    private record PlacedAction(
+            MoreAction action, Component label, int x, int y, int width) { }
 }

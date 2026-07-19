@@ -1,7 +1,8 @@
 package io.github.lumi.client.ui;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,7 +24,9 @@ class LumiMoreScreenTest {
         assertTrue(more.contains("ClientContextualHelpHint.MORE"));
         assertTrue(more.contains("luma.action.reset_contextual_hints"));
         assertTrue(more.contains("resetContextualHints"));
-        assertTrue(more.contains("actionX += width + 4"));
+        assertTrue(more.contains("new MoreAction("));
+        assertTrue(more.contains("public boolean mouseScrolled("));
+        assertTrue(more.contains("renderedY + 18 > actionBottom"));
         assertFalse(more.contains("luma.action.settings"));
         assertFalse(more.contains("luma.action.buy_me_a_coffee"));
         assertFalse(more.contains("luma.action.paypal_donate"));
@@ -33,5 +36,12 @@ class LumiMoreScreenTest {
         assertTrue(cleanup.contains("luma.action.clean_up"));
         assertTrue(cleanup.contains("!result.applied()"));
         assertTrue(cleanup.contains("response.requestId().equals(pendingRequest)"));
+    }
+
+    @Test
+    void wrappedToolsScrollByWholeRows() {
+        assertEquals(0, LumiMoreScreen.requiredScrollRows(100, 100));
+        assertEquals(1, LumiMoreScreen.requiredScrollRows(101, 100));
+        assertEquals(2, LumiMoreScreen.requiredScrollRows(125, 100));
     }
 }
