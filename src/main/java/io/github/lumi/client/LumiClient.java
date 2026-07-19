@@ -179,18 +179,20 @@ public final class LumiClient implements ClientModInitializer {
                     @Override public void quickRollback() {
                         NETWORKING.quickRollback(SELECTION.bounds());
                     }
-                    @Override public void switchBranch(int slot) {
+                    @Override public void switchBranch(int keyCode) {
                         var snapshot = HISTORY.state().snapshot().orElseThrow(
                                 () -> new IllegalStateException(
                                         "Lumi history has not synchronized yet"));
-                        var branch = BRANCH_SLOTS.branch(snapshot, slot)
+                        var branch = BRANCH_SLOTS.branch(snapshot, keyCode)
                                 .orElseThrow(() -> new IllegalStateException(
-                                        "No Lumi branch is bound to this number"));
+                                        "No Lumi branch is bound to this key"));
                         if (!branch.active()) {
                             NETWORKING.switchBranch(branch.name());
                         }
                     }
-                }, LumiClient::showFeedback));
+                }, LumiClient::showFeedback),
+                () -> HISTORY.state().snapshot()
+                        .map(BRANCH_SLOTS::keys).orElseGet(List::of));
         hotkeys.register();
         new LumiSelectionTool(
                 SELECTION, HISTORY, LumiClient::showFeedback,

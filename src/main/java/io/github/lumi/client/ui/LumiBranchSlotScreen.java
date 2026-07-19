@@ -6,9 +6,10 @@ import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Objects;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
-/** Explicit Action-key slot assignment for one visible branch. */
+/** Captures one arbitrary keyboard key for a branch's Alt chord. */
 public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
     private static final int PANEL_WIDTH = 430;
     private static final int PANEL_HEIGHT = 210;
@@ -38,35 +39,10 @@ public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
-        int gap = 6;
-        int buttonWidth = (panelWidth - 40 - gap * 4) / 5;
-        for (int slot = 0; slot < ClientBranchSlotStore.SLOT_COUNT; slot++) {
-            int selectedSlot = slot;
-            int x = panelX + 20 + (slot % 5) * (buttonWidth + gap);
-            int y = panelY + 78 + (slot / 5) * 30;
-            addLegacyButton(
-                    x, y, buttonWidth, Component.literal(binding(slot)),
-                    () -> assign(selectedSlot),
-                    slots.slot(snapshot, branch.name()).isPresent()
-                            && slots.slot(snapshot, branch.name()).getAsInt() == slot
-                            ? LumiLegacyButton.Kind.SELECTED
-                            : LumiLegacyButton.Kind.NORMAL);
-        }
-        int actionWidth = (panelWidth - 48) / 2;
         addLegacyButton(
-                panelX + 20, panelY + 168, actionWidth,
+                panelX + 20, panelY + 168, panelWidth - 40,
                 Component.translatable("luma.action.clear_bind"),
                 this::clear, LumiLegacyButton.Kind.DANGER);
-        addLegacyButton(
-                panelX + 28 + actionWidth, panelY + 168, actionWidth,
-                Component.translatable("luma.action.cancel"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
-    }
-
-    private void assign(int slot) {
-        slots.assign(snapshot, branch.name(), slot);
-        feedback("luma.status.variant_switch_key_updated");
-        onClose();
     }
 
     private void clear() {
@@ -75,16 +51,20 @@ public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
         onClose();
     }
 
-    private String binding(int slot) {
-        String action = LumiHotkeys.bindingLabel(
-                minecraft.options.keyMappings, "key.lumi.action_modifier");
-        String number = LumiHotkeys.bindingLabel(
-                minecraft.options.keyMappings, slotKey(slot));
-        return action + " + " + number;
-    }
-
-    private static String slotKey(int slot) {
-        return "key.lumi.branch_slot." + (slot == 9 ? "0" : slot + 1);
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) {
+            onClose();
+            return true;
+        }
+        try {
+            slots.assignKey(snapshot, branch.name(), event.key());
+            feedback("luma.status.variant_switch_key_updated");
+            onClose();
+        } catch (IllegalArgumentException invalid) {
+            feedback(invalid.getMessage());
+        }
+        return true;
     }
 
     private void feedback(String key) {

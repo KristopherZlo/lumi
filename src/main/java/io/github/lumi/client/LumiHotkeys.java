@@ -3,7 +3,10 @@ package io.github.lumi.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.LumiMod;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.Supplier;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.KeyMapping;
@@ -15,6 +18,8 @@ public final class LumiHotkeys {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "general"));
     private final HotkeyActionDispatcher dispatcher;
+    private final Supplier<List<Integer>> branchKeys;
+    private final Set<Integer> pressedBranchKeys = new HashSet<>();
     private final KeyMapping dashboard = mapping(
             "key.lumi.open_dashboard", defaultDashboardKey());
     private final KeyMapping save = mapping("key.lumi.quick_save", InputConstants.KEY_S);
@@ -27,21 +32,15 @@ public final class LumiHotkeys {
     private final KeyMapping rollback = mapping(
             "key.lumi.quick_rollback", InputConstants.KEY_R);
     private final KeyMapping info = mapping("key.lumi.hotkey_info", InputConstants.KEY_I);
-    private final KeyMapping[] branches = {
-            mapping("key.lumi.branch_slot.1", InputConstants.KEY_1),
-            mapping("key.lumi.branch_slot.2", InputConstants.KEY_2),
-            mapping("key.lumi.branch_slot.3", InputConstants.KEY_3),
-            mapping("key.lumi.branch_slot.4", InputConstants.KEY_4),
-            mapping("key.lumi.branch_slot.5", InputConstants.KEY_5),
-            mapping("key.lumi.branch_slot.6", InputConstants.KEY_6),
-            mapping("key.lumi.branch_slot.7", InputConstants.KEY_7),
-            mapping("key.lumi.branch_slot.8", InputConstants.KEY_8),
-            mapping("key.lumi.branch_slot.9", InputConstants.KEY_9),
-            mapping("key.lumi.branch_slot.0", InputConstants.KEY_0)
-    };
-
     public LumiHotkeys(HotkeyActionDispatcher dispatcher) {
+        this(dispatcher, List::of);
+    }
+
+    public LumiHotkeys(
+            HotkeyActionDispatcher dispatcher,
+            Supplier<List<Integer>> branchKeys) {
         this.dispatcher = Objects.requireNonNull(dispatcher, "dispatcher");
+        this.branchKeys = Objects.requireNonNull(branchKeys, "branchKeys");
     }
 
     public void register() {
@@ -53,9 +52,6 @@ public final class LumiHotkeys {
         KeyBindingHelper.registerKeyBinding(actionModifier);
         KeyBindingHelper.registerKeyBinding(rollback);
         KeyBindingHelper.registerKeyBinding(info);
-        for (KeyMapping branch : branches) {
-            KeyBindingHelper.registerKeyBinding(branch);
-        }
         ClientTickEvents.START_CLIENT_TICK.register(this::tick);
     }
 
@@ -75,12 +71,25 @@ public final class LumiHotkeys {
         consume(undo, canUseChord, HotkeyActionDispatcher.Action.UNDO);
         consume(redo, canUseChord, HotkeyActionDispatcher.Action.REDO);
         consume(info, canUseChord, HotkeyActionDispatcher.Action.HOTKEYS);
-        for (int slot = 0; slot < branches.length; slot++) {
-            if (consume(branches[slot]) && canUseChord) {
-                dispatcher.switchBranch(slot);
+        pollBranchKeys(client, canUseChord);
+        consume(actionModifier);
+    }
+
+    private void pollBranchKeys(Minecraft client, boolean enabled) {
+        if (!enabled) {
+            pressedBranchKeys.clear();
+            return;
+        }
+        Set<Integer> down = new HashSet<>();
+        for (int keyCode : branchKeys.get()) {
+            if (InputConstants.isKeyDown(client.getWindow(), keyCode)) {
+                down.add(keyCode);
+                if (pressedBranchKeys.add(keyCode)) {
+                    dispatcher.switchBranch(keyCode);
+                }
             }
         }
-        consume(actionModifier);
+        pressedBranchKeys.retainAll(down);
     }
 
     static int defaultDashboardKey() {

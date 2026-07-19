@@ -1,5 +1,6 @@
 package io.github.lumi.client.state;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,13 +23,17 @@ class ClientBranchSlotStoreTest {
         ClientBranchSlotStore slots = new ClientBranchSlotStore(file);
         slots.synchronize(snapshot);
 
-        assertEquals("main", slots.branch(snapshot, 0).orElseThrow().name());
-        assertEquals("idea", slots.branch(snapshot, 1).orElseThrow().name());
+        assertEquals("main", slots.branch(
+                snapshot, InputConstants.KEY_1).orElseThrow().name());
+        assertEquals("idea", slots.branch(
+                snapshot, InputConstants.KEY_2).orElseThrow().name());
 
-        slots.assign(snapshot, "idea", 0);
+        slots.assignKey(snapshot, "idea", InputConstants.KEY_P);
         ClientBranchSlotStore reloaded = new ClientBranchSlotStore(file);
-        assertEquals("idea", reloaded.branch(snapshot, 0).orElseThrow().name());
-        assertTrue(reloaded.slot(snapshot, "main").isPresent() == false);
+        assertEquals("idea", reloaded.branch(
+                snapshot, InputConstants.KEY_P).orElseThrow().name());
+        assertEquals(InputConstants.KEY_P,
+                reloaded.keyCode(snapshot, "idea").orElseThrow());
     }
 
     @Test
@@ -48,7 +53,7 @@ class ClientBranchSlotStoreTest {
                 snapshot.zones(), snapshot.deletedVersions());
         slots.synchronize(withoutIdea);
 
-        assertTrue(slots.slot(withoutIdea, "idea").isPresent() == false);
+        assertTrue(slots.keyCode(withoutIdea, "idea").isPresent() == false);
     }
 
     private static HistorySnapshotPayload snapshot() {

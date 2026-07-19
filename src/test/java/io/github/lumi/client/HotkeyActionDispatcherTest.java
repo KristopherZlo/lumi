@@ -40,8 +40,9 @@ class HotkeyActionDispatcherTest {
                 "luma.status.compare_overlay_hidden",
                 "luma.status.quick_rollback_started"), statuses);
 
-        dispatcher.switchBranch(9);
-        assertEquals("branch-9", calls.getLast());
+        dispatcher.switchBranch(
+                com.mojang.blaze3d.platform.InputConstants.KEY_P);
+        assertEquals("branch-80", calls.getLast());
     }
 
     @Test

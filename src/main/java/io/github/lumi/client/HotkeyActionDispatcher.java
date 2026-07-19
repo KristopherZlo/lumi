@@ -52,16 +52,17 @@ public final class HotkeyActionDispatcher {
         }
     }
 
-    public void switchBranch(int slot) {
-        if (slot < 0 || slot > 9) {
-            throw new IllegalArgumentException("Branch slot must be 0-9");
+    public void switchBranch(int keyCode) {
+        if (keyCode < 32 || keyCode > 348) {
+            throw new IllegalArgumentException("Invalid branch shortcut key");
         }
-        LumiMod.LOGGER.info("Lumi client branch hotkey invoked: slot={}", slot);
+        LumiMod.LOGGER.info(
+                "Lumi client branch hotkey invoked: key={}", keyCode);
         try {
-            actions.switchBranch(slot);
+            actions.switchBranch(keyCode);
         } catch (RuntimeException failed) {
             LumiMod.LOGGER.warn(
-                    "Lumi client branch hotkey {} could not start", slot, failed);
+                    "Lumi client branch hotkey {} could not start", keyCode, failed);
             feedback.accept(failed.getMessage() == null
                     ? "Lumi branch could not open" : failed.getMessage());
         }
@@ -81,6 +82,6 @@ public final class HotkeyActionDispatcher {
         void redo();
         String toggleCompareOverlay();
         void quickRollback();
-        void switchBranch(int slot);
+        void switchBranch(int keyCode);
     }
 }

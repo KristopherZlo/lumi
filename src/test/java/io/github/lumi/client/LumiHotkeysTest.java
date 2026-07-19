@@ -44,13 +44,17 @@ class LumiHotkeysTest {
     }
 
     @Test
-    void branchNumbersResolveExplicitPersistentAssignments() throws Exception {
+    void arbitraryAltKeysResolveExplicitPersistentAssignments() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClient.java"));
 
-        assertTrue(source.contains("BRANCH_SLOTS.branch(snapshot, slot)"));
+        assertTrue(source.contains("BRANCH_SLOTS.branch(snapshot, keyCode)"));
         assertTrue(source.contains("BRANCH_SLOTS.synchronize(snapshot)"));
-        assertFalse(source.contains("snapshot.branches().get(slot)"));
+        assertFalse(source.contains("snapshot.branches().get(keyCode)"));
+        String hotkeys = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/LumiHotkeys.java"));
+        assertTrue(hotkeys.contains("pollBranchKeys(client, canUseChord)"));
+        assertTrue(hotkeys.contains("InputConstants.isKeyDown("));
     }
 
     @Test
