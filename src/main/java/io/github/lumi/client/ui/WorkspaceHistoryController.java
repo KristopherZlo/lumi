@@ -17,6 +17,7 @@ final class WorkspaceHistoryController {
     private BranchName branch;
     private int offset;
     private int pageSize;
+    private String query = "";
 
     WorkspaceHistoryController(
             HistorySnapshotPayload snapshot,
@@ -121,12 +122,25 @@ final class WorkspaceHistoryController {
         }
     }
 
+    void search(String replacement) {
+        String normalized = Objects.requireNonNull(replacement, "replacement")
+                .trim();
+        if (query.equals(normalized)) {
+            return;
+        }
+        query = normalized;
+        offset = 0;
+        if (pageSize > 0) {
+            request();
+        }
+    }
+
     String error() {
         return page().map(HistoryPagePayload::error).orElse("");
     }
 
     private void request() {
         requester.request(
-                branch, Optional.empty(), offset, pageSize);
+                branch, Optional.empty(), offset, pageSize, query);
     }
 }

@@ -405,7 +405,17 @@ public final class LumiClientNetworking {
             int offset,
             int limit) {
         return requestHistoryPage(
-                Optional.empty(), branch, zoneId, offset, limit);
+                Optional.empty(), branch, zoneId, offset, limit, "");
+    }
+
+    public UUID requestHistoryPage(
+            io.github.lumi.domain.model.BranchName branch,
+            Optional<UUID> zoneId,
+            int offset,
+            int limit,
+            String query) {
+        return requestHistoryPage(
+                Optional.empty(), branch, zoneId, offset, limit, query);
     }
 
     public UUID requestHistoryPage(
@@ -416,7 +426,7 @@ public final class LumiClientNetworking {
             int limit) {
         return requestHistoryPage(
                 Optional.of(Objects.requireNonNull(channel, "channel")),
-                branch, zoneId, offset, limit);
+                branch, zoneId, offset, limit, "");
     }
 
     private UUID requestHistoryPage(
@@ -424,7 +434,8 @@ public final class LumiClientNetworking {
             io.github.lumi.domain.model.BranchName branch,
             Optional<UUID> zoneId,
             int offset,
-            int limit) {
+            int limit,
+            String query) {
         var snapshot = history.state().snapshot().orElseThrow(
                 () -> new IllegalStateException(
                         "Lumi history has not synchronized yet"));
@@ -435,6 +446,7 @@ public final class LumiClientNetworking {
         UUID requestId = UUID.randomUUID();
         BranchName requestedBranch = Objects.requireNonNull(branch, "branch");
         Optional<UUID> requestedZone = Objects.requireNonNull(zoneId, "zoneId");
+        String requestedQuery = Objects.requireNonNull(query, "query");
         if (channel.isPresent()) {
             historyPages.begin(
                     channel.orElseThrow(), requestId,
@@ -447,7 +459,7 @@ public final class LumiClientNetworking {
         }
         ClientPlayNetworking.send(new HistoryPageRequestPayload(
                 requestId, snapshot.dimensionId(), snapshot.workspaceId(),
-                requestedBranch, requestedZone, offset, limit, ""));
+                requestedBranch, requestedZone, offset, limit, requestedQuery));
         return requestId;
     }
 

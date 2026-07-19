@@ -21,6 +21,7 @@ public record HistoryPageRequestPayload(
         int limit,
         String query) implements CustomPacketPayload {
     private static final int MAX_TEXT_BYTES = 1024;
+    public static final int MAX_QUERY_LENGTH = 128;
     public static final Type<HistoryPageRequestPayload> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "history_page_request"));
     public static final StreamCodec<FriendlyByteBuf, HistoryPageRequestPayload> CODEC =
@@ -37,7 +38,7 @@ public record HistoryPageRequestPayload(
         query = Objects.requireNonNull(query, "query").trim();
         if (dimensionId.isBlank() || offset < 0 || limit < 1 || limit > 64
                 || offset > 1_000 - limit
-                || query.codePointCount(0, query.length()) > 128
+                || query.codePointCount(0, query.length()) > MAX_QUERY_LENGTH
                 || query.codePoints().anyMatch(Character::isISOControl)) {
             throw new IllegalArgumentException("Invalid history page request");
         }

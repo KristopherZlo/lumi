@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class WorkspaceHistoryControllerTest {
@@ -24,7 +25,7 @@ class WorkspaceHistoryControllerTest {
         AtomicInteger requestedOffset = new AtomicInteger();
         UUID request = new UUID(0, 8);
         WorkspaceHistoryController controller = new WorkspaceHistoryController(
-                snapshot, pages, (branch, zone, offset, limit) -> {
+                snapshot, pages, (branch, zone, offset, limit, query) -> {
                     requestedOffset.set(offset);
                     pages.begin(request, snapshot.dimensionId(),
                             snapshot.workspaceId(), branch, zone, offset);
@@ -49,7 +50,8 @@ class WorkspaceHistoryControllerTest {
         var channel = new ClientHistoryPageStore.Channel(new UUID(0, 9));
         UUID request = new UUID(0, 10);
         WorkspaceHistoryController controller = new WorkspaceHistoryController(
-                snapshot, pages, channel, (branch, zone, offset, limit) -> {
+                snapshot, pages, channel,
+                (branch, zone, offset, limit, query) -> {
                     pages.begin(channel, request, snapshot.dimensionId(),
                             snapshot.workspaceId(), branch, zone, offset);
                     return request;
@@ -64,6 +66,26 @@ class WorkspaceHistoryControllerTest {
         assertTrue(pages.page(
                 snapshot.dimensionId(), snapshot.workspaceId(),
                 new BranchName("main"), Optional.empty()).isEmpty());
+    }
+
+    @Test
+    void requestsTheFirstFilteredPageFromTheServer() {
+        HistorySnapshotPayload snapshot = snapshot();
+        AtomicInteger requestedOffset = new AtomicInteger(-1);
+        AtomicReference<String> requestedQuery = new AtomicReference<>();
+        WorkspaceHistoryController controller = new WorkspaceHistoryController(
+                snapshot, new ClientHistoryPageStore(),
+                (branch, zone, offset, limit, query) -> {
+                    requestedOffset.set(offset);
+                    requestedQuery.set(query);
+                    return UUID.randomUUID();
+                });
+        controller.ensurePageSize(7);
+
+        controller.search("  tower  ");
+
+        assertEquals(0, requestedOffset.get());
+        assertEquals("tower", requestedQuery.get());
     }
 
     private static HistorySnapshotPayload snapshot() {

@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.network.HistoryPagePayload;
+import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -170,10 +171,12 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
                 font, panelX + panelWidth - 160, panelY + 126, 140, 18,
                 Component.translatable("luma.dashboard.search"));
         search.setBordered(false);
+        search.setMaxLength(HistoryPageRequestPayload.MAX_QUERY_LENGTH);
         search.setHint(Component.translatable("luma.dashboard.search"));
         search.setValue(searchValue);
         search.setResponder(value -> {
             searchValue = value;
+            zoneHistory.search(value);
             searchDirty = true;
             focusSearchAfterInit = true;
         });

@@ -27,7 +27,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - The same form can replace the latest version with a crash-safe Amend.
 - Another branch can be merged through the same verified apply pipeline;
   overlapping conflicts explicitly use the source branch.
-- Alt+L opens paged Cards/Graph history with branch and tag/text filtering.
+- Alt+L opens paged Cards/Graph history with branch and full-window server
+  tag/text filtering.
   Cards expose preview, Open, Restore and Create branch; the branch browser
   supports Create, Switch, Merge, protected Delete and persistent explicit
   Action+1..0 assignments. Restoring an older version keeps its still-restorable
@@ -37,7 +38,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   framebuffer or open menu is captured.
 - Work zones support empty color-assigned creation, exclusive Enter/Leave,
   sword cell editing, merged Focused/All/Hidden world shells, overlap counts,
-  metadata-only Delete, and paged Cards/Graph commit management.
+  metadata-only Delete, and paged Cards/Graph commit management with the same
+  full-window search.
 - First-run onboarding opens once per client installation and remains replayable
   from More. Contextual tips can be dismissed independently and restored with
   More > Show tips again without replaying onboarding; Alt+I opens the live

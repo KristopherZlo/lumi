@@ -27,7 +27,8 @@ class ZoneHistoryControllerTest {
         AtomicReference<BranchName> requestedBranch = new AtomicReference<>();
         HistorySnapshotPayload snapshot = snapshot(workspace);
         ZoneHistoryController controller = new ZoneHistoryController(
-                snapshot, zone, pages, (branch, ignored, offset, limit) -> {
+                snapshot, zone, pages,
+                (branch, ignored, offset, limit, query) -> {
                     requestedBranch.set(branch);
                     pages.begin(request, snapshot.dimensionId(), workspace,
                             branch, Optional.of(zone), offset);
@@ -46,6 +47,23 @@ class ZoneHistoryControllerTest {
         assertEquals(new BranchName("idea"), requestedBranch.get());
         assertEquals(0, controller.offset());
         assertFalse(controller.hasPrevious());
+    }
+
+    @Test
+    void resetsPagingWhenTheServerSearchChanges() {
+        UUID workspace = new UUID(0, 11);
+        UUID zone = new UUID(0, 12);
+        AtomicReference<String> requestedQuery = new AtomicReference<>();
+        ZoneHistoryController controller = new ZoneHistoryController(
+                snapshot(workspace), zone, new ClientHistoryPageStore(),
+                (branch, ignored, offset, limit, query) -> {
+                    requestedQuery.set(query + ":" + offset);
+                    return UUID.randomUUID();
+                });
+
+        controller.search("  tower  ");
+
+        assertEquals("tower:0", requestedQuery.get());
     }
 
     private static HistorySnapshotPayload snapshot(UUID workspace) {

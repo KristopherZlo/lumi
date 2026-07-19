@@ -6,6 +6,7 @@ import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.network.HistoryPagePayload;
+import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -164,6 +165,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         int pageSize = Math.max(1,
                 visibleHistoryRows(historyHeight - 24, 64));
         pagedHistory.ensurePageSize(pageSize);
+        pagedHistory.search(searchQuery);
         renderedPage = pagedHistory.page().orElse(null);
         int toolbarX = layout.bodyX() + 58;
         addIconButton(toolbarX, historyY + 7, "unordered-list",
@@ -192,6 +194,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                 18,
                 Component.translatable("luma.dashboard.search"));
         search.setBordered(false);
+        search.setMaxLength(HistoryPageRequestPayload.MAX_QUERY_LENGTH);
         search.setHint(Component.translatable("luma.dashboard.search"));
         search.setValue(searchQuery);
         search.setResponder(this::search);
@@ -355,6 +358,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             return;
         }
         searchQuery = value;
+        if (pagedHistory != null) {
+            pagedHistory.search(value);
+        }
         searchResultsDirty = true;
     }
 

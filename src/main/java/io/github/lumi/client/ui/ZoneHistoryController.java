@@ -18,6 +18,7 @@ public final class ZoneHistoryController {
     private final Requester requester;
     private BranchName branch;
     private int offset;
+    private String query = "";
 
     ZoneHistoryController(
             HistorySnapshotPayload snapshot,
@@ -32,7 +33,8 @@ public final class ZoneHistoryController {
     }
 
     void request() {
-        requester.request(branch, Optional.of(zoneId), offset, PAGE_SIZE);
+        requester.request(
+                branch, Optional.of(zoneId), offset, PAGE_SIZE, query);
     }
 
     Optional<HistoryPagePayload> page() {
@@ -96,6 +98,17 @@ public final class ZoneHistoryController {
         request();
     }
 
+    void search(String replacement) {
+        String normalized = Objects.requireNonNull(replacement, "replacement")
+                .trim();
+        if (query.equals(normalized)) {
+            return;
+        }
+        query = normalized;
+        offset = 0;
+        request();
+    }
+
     String error() {
         return page().map(HistoryPagePayload::error).orElse("");
     }
@@ -106,6 +119,7 @@ public final class ZoneHistoryController {
                 BranchName branch,
                 Optional<UUID> zoneId,
                 int offset,
-                int limit);
+                int limit,
+                String query);
     }
 }

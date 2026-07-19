@@ -73,7 +73,7 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
             ClientHistoryPageStore.Channel channel) {
         return new WorkspaceHistoryController(
                 snapshot, pages, channel,
-                (branch, zone, offset, limit) ->
+                (branch, zone, offset, limit, query) ->
                         requester.request(channel, branch, zone, offset, limit));
     }
 
