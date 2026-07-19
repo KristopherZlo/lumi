@@ -10,11 +10,39 @@ import org.junit.jupiter.api.Test;
 
 class LumiDashboardScreenTest {
     @Test
-    void exposesHistoryAtDefaultClientGameTestViewport() {
-        LegacyWorkspaceLayout layout = LegacyWorkspaceLayout.fit(427, 240);
+    void keepsDashboardBandsSeparatedAtReferenceAndSmallViewports() {
+        LegacyWorkspaceLayout reference = LegacyWorkspaceLayout.fit(640, 360);
+        var referenceGeometry = LumiDashboardScreen.dashboardGeometry(
+                reference.bodyY(), reference.bodyHeight(), 0);
+        LegacyWorkspaceLayout small = LegacyWorkspaceLayout.fit(427, 240);
+        var smallGeometry = LumiDashboardScreen.dashboardGeometry(
+                small.bodyY(), small.bodyHeight(), 0);
 
+        assertEquals(5, referenceGeometry.latestY()
+                - (reference.bodyY() + referenceGeometry.buildPanelHeight()));
+        assertEquals(5, referenceGeometry.historyY()
+                - (referenceGeometry.latestY() + referenceGeometry.latestHeight()));
+        assertEquals(reference.bodyY() + reference.bodyHeight(),
+                referenceGeometry.historyY() + referenceGeometry.historyHeight());
+        assertEquals(3, LumiDashboardScreen.visibleHistoryRows(
+                referenceGeometry.historyHeight(), 10));
         assertEquals(1, LumiDashboardScreen.visibleHistoryRows(
-                layout.bodyHeight() - LumiDashboardScreen.HISTORY_TOP_OFFSET, 2));
+                smallGeometry.historyHeight(), 2));
+    }
+
+    @Test
+    void contextualHintPushesActionsWithoutCrossingDashboardBands() {
+        LegacyWorkspaceLayout layout = LegacyWorkspaceLayout.fit(640, 360);
+        int hintHeight = 54;
+        var geometry = LumiDashboardScreen.dashboardGeometry(
+                layout.bodyY(), layout.bodyHeight(), hintHeight);
+
+        assertEquals(geometry.hintY() + hintHeight + 5, geometry.actionY());
+        assertEquals(geometry.actionY() + 18 + 6,
+                layout.bodyY() + geometry.buildPanelHeight());
+        assertEquals(5, geometry.latestY()
+                - (layout.bodyY() + geometry.buildPanelHeight()));
+        assertTrue(geometry.historyHeight() >= 0);
     }
 
     @Test
@@ -57,6 +85,7 @@ class LumiDashboardScreenTest {
         assertFalse(source.contains("addHistoryPageButtons"));
         assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("addBranchTabs()"));
+        assertTrue(source.contains("addLegacyContentButton("));
         assertTrue(source.contains("pagedHistory.selectBranch(branch)"));
         assertTrue(source.contains("latestCreated()"));
         assertTrue(source.contains("snapshot.head().equals(version.id())"));

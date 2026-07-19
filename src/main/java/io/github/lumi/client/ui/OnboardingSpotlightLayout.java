@@ -56,11 +56,11 @@ final class OnboardingSpotlightLayout {
     }
 
     private static Rect restoreTarget(LegacyWorkspaceLayout layout) {
-        int right = layout.bodyX() + layout.bodyWidth() - 14;
+        var geometry = LumiDashboardScreen.dashboardGeometry(
+                layout.bodyY(), layout.bodyHeight(), 0);
+        int right = layout.bodyX() + layout.bodyWidth() - 6;
         return new Rect(
-                right - 90,
-                layout.bodyY() + LumiDashboardScreen.HISTORY_TOP_OFFSET + 44,
-                26, 20);
+                right - 116, geometry.historyY() + 44, 26, 18);
     }
 
     private static int clamp(int value, int min, int max) {

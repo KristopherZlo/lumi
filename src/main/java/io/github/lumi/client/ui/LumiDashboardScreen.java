@@ -34,7 +34,11 @@ import net.minecraft.util.Util;
 
 /** Legacy project-window presentation backed by the immutable V2 history snapshot. */
 public final class LumiDashboardScreen extends LumiLegacyModalScreen {
-    static final int HISTORY_TOP_OFFSET = 98;
+    private static final int PANEL_PADDING = 6;
+    private static final int SECTION_GAP = 5;
+    private static final int CONTROL_GAP = 4;
+    private static final int CONTROL_HEIGHT = 18;
+    private static final int ICON_BUTTON_WIDTH = 26;
     private static final int HISTORY_FIRST_ROW_OFFSET = 38;
     private static final int HISTORY_ROW_HEIGHT = 30;
     private static final int HISTORY_ROW_STRIDE = 34;
@@ -91,7 +95,10 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private int historyHeight;
     private int historyScroll;
     private int actionY;
+    private int saveActionX;
+    private int changesActionX;
     private int actionButtonWidth;
+    private DashboardGeometry dashboardGeometry;
     private final Map<CommitId, VersionTags> optimisticTags = new HashMap<>();
 
     public LumiDashboardScreen(
@@ -172,28 +179,41 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         layout = LegacyWorkspaceLayout.fit(width, height);
         addSidebarButtons();
         addSupportButtons();
-        boolean hintVisible = addDashboardHint();
-        int contentOffset = hintVisible ? contextualHintOffset(8) : 0;
-        actionY = layout.bodyY() + 56 + contentOffset;
-        int x = layout.bodyX() + 14;
-        int available = Math.max(0, layout.bodyWidth() - 28);
-        actionButtonWidth = Math.max(0, (available - 70) / 2);
-        addButton(x, actionY, actionButtonWidth, "luma.action.save_build", openSave,
+        DashboardGeometry baseGeometry = dashboardGeometry(
+                layout.bodyY(), layout.bodyHeight(), 0);
+        boolean hintVisible = addDashboardHint(baseGeometry.hintY());
+        dashboardGeometry = dashboardGeometry(
+                layout.bodyY(), layout.bodyHeight(),
+                hintVisible ? contextualHintOffset(0) : 0);
+        actionY = dashboardGeometry.actionY();
+        int x = layout.bodyX() + PANEL_PADDING;
+        int available = Math.max(0, layout.bodyWidth() - PANEL_PADDING * 2);
+        int maximumTextWidth = Math.max(0,
+                (available - ICON_BUTTON_WIDTH * 2 - CONTROL_GAP * 3) / 2);
+        Component saveLabel = Component.translatable("luma.action.save_build");
+        LumiLegacyButton saveButton = addLegacyContentButton(
+                x, actionY, maximumTextWidth, saveLabel, openSave,
                 LumiLegacyButton.Kind.PRIMARY);
-        addButton(x + actionButtonWidth + 6, actionY, actionButtonWidth,
-                "luma.action.amend_version", openAmend,
+        saveActionX = saveButton.getX();
+        actionButtonWidth = saveButton.getWidth();
+        x += saveButton.getWidth() + CONTROL_GAP;
+        LumiLegacyButton amendButton = addLegacyContentButton(
+                x, actionY, maximumTextWidth,
+                Component.translatable("luma.action.amend_version"), openAmend,
                 LumiLegacyButton.Kind.NORMAL);
-        addIconButton(x + actionButtonWidth * 2 + 12, actionY,
+        x += amendButton.getWidth() + CONTROL_GAP;
+        changesActionX = x;
+        addIconButton(x, actionY,
                 "see-changes", "luma.action.see_changes", showChanges,
                 LumiLegacyButton.Kind.NORMAL);
-        addIconButton(x + actionButtonWidth * 2 + 44, actionY,
+        addIconButton(x + ICON_BUTTON_WIDTH + CONTROL_GAP, actionY,
                 "rollback", "key.lumi.quick_rollback", () -> {
             quickRollback.run();
             onClose();
         }, LumiLegacyButton.Kind.DANGER);
 
-        historyY = layout.bodyY() + HISTORY_TOP_OFFSET + contentOffset;
-        historyHeight = layout.bodyHeight() - HISTORY_TOP_OFFSET - contentOffset;
+        historyY = dashboardGeometry.historyY();
+        historyHeight = dashboardGeometry.historyHeight();
         if (snapshot == null) {
             return;
         }
@@ -208,11 +228,14 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         renderedStatistics = pendingStatistics.result(snapshot).orElse(null);
         latestCreated().ifPresent(version -> addIconButton(
                 layout.bodyX() + latestPanelWidth() - 28,
-                historyY - 21, "folder", "luma.action.open_details",
+                dashboardGeometry.stripControlY(), "folder", "luma.action.open_details",
                 () -> openDetails.accept(version), LumiLegacyButton.Kind.NORMAL));
         addBranchTabs();
-        int right = layout.bodyX() + layout.bodyWidth() - 14;
-        addIconButton(right - 58, historyY + 7, "unordered-list",
+        if (historyHeight < 28) {
+            return;
+        }
+        int right = layout.bodyX() + layout.bodyWidth() - PANEL_PADDING;
+        addIconButton(right - 56, historyY + 7, "unordered-list",
                 "luma.history.view_cards",
                 () -> showHistoryMode(HistoryViewController.Mode.CARDS),
                 historyView.mode() == HistoryViewController.Mode.CARDS
@@ -223,7 +246,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                 historyView.mode() == HistoryViewController.Mode.GRAPH
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
         int searchWidth = Math.min(100, Math.max(70, layout.bodyWidth() / 4));
-        int searchX = layout.bodyX() + 14;
+        int searchX = layout.bodyX() + PANEL_PADDING;
         search = new EditBox(
                 font,
                 searchX,
@@ -254,9 +277,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     .build(visible, snapshot.branches());
             graphView = new LumiHistoryGraphView(
                     snapshot.dimensionId(), previews, nodes, snapshot.zones(),
-                    layout.bodyX() + 10,
+                    layout.bodyX() + PANEL_PADDING,
                     historyY + HISTORY_FIRST_ROW_OFFSET,
-                    layout.bodyWidth() - 20);
+                    layout.bodyWidth() - PANEL_PADDING * 2);
             graphView.buttons(openDetails).forEach(this::addRenderableWidget);
             return;
         }
@@ -265,13 +288,13 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             HistorySnapshotPayload.Version version = visible.get(index);
             int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
                     + index * HISTORY_ROW_STRIDE;
-            addIconButton(right - 122, rowY + 6,
+            addIconButton(right - 116, rowY + 6,
                     "rollback", "luma.action.restore",
                     () -> openRestore.accept(version), LumiLegacyButton.Kind.PRIMARY);
-            addIconButton(right - 90, rowY + 6,
+            addIconButton(right - 86, rowY + 6,
                     "folder", "luma.action.open_details",
                     () -> openDetails.accept(version), LumiLegacyButton.Kind.NORMAL);
-            addIconButton(right - 58, rowY + 6,
+            addIconButton(right - 56, rowY + 6,
                     "branch", "luma.action.create_idea",
                     () -> createBranch.accept(version), LumiLegacyButton.Kind.NORMAL);
             addIconButton(right - 26, rowY + 6,
@@ -280,10 +303,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         }
     }
 
-    private boolean addDashboardHint() {
-        int x = layout.bodyX() + 14;
-        int y = layout.bodyY() + 50;
-        int width = Math.max(1, layout.bodyWidth() - 28);
+    private boolean addDashboardHint(int y) {
+        int x = layout.bodyX() + PANEL_PADDING;
+        int width = Math.max(1, layout.bodyWidth() - PANEL_PADDING * 2);
         if (addContextualHint(ClientContextualHelpHint.HISTORY, x, y, width)
                 || addContextualHint(
                         ClientContextualHelpHint.SHORTCUTS, x, y, width)) {
@@ -379,15 +401,15 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
 
     OnboardingSpotlightLayout.Rect onboardingTarget(
             OnboardingTour.Kind kind) {
-        int x = layout.bodyX() + 14;
-        int right = layout.bodyX() + layout.bodyWidth() - 14;
+        int right = layout.bodyX() + layout.bodyWidth() - PANEL_PADDING;
         return switch (kind) {
             case SPOTLIGHT_SAVE -> new OnboardingSpotlightLayout.Rect(
-                    x, actionY, actionButtonWidth, 20);
+                    saveActionX, actionY, actionButtonWidth, CONTROL_HEIGHT);
             case SPOTLIGHT_CHANGES -> new OnboardingSpotlightLayout.Rect(
-                    x + actionButtonWidth * 2 + 12, actionY, 26, 20);
+                    changesActionX, actionY, ICON_BUTTON_WIDTH, CONTROL_HEIGHT);
             case SPOTLIGHT_RESTORE -> new OnboardingSpotlightLayout.Rect(
-                    right - 90, historyY + HISTORY_FIRST_ROW_OFFSET + 6, 26, 20);
+                    right - 116, historyY + HISTORY_FIRST_ROW_OFFSET + 6,
+                    ICON_BUTTON_WIDTH, CONTROL_HEIGHT);
             default -> throw new IllegalArgumentException(
                     "Page does not have a Dashboard spotlight");
         };
@@ -441,12 +463,13 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     }
 
     private void addBranchTabs() {
-        int x = layout.bodyX() + latestPanelWidth() + 6;
-        int right = layout.bodyX() + layout.bodyWidth() - 10;
+        int x = layout.bodyX() + (latestCreated().isPresent()
+                ? latestPanelWidth() + SECTION_GAP : PANEL_PADDING);
+        int right = layout.bodyX() + layout.bodyWidth() - PANEL_PADDING;
         for (HistorySnapshotPayload.Branch branch : snapshot.branches()) {
             if (right - x < 24) break;
-            LumiLegacyButton tab = addLegacyButton(
-                    x, historyY - 17, right - x,
+            LumiLegacyButton tab = addLegacyContentButton(
+                    x, dashboardGeometry.stripControlY(), right - x,
                     Component.literal(shortBranch(branch.name())),
                     () -> selectHistoryBranch(branch.name()),
                     pagedHistory.branch().value().equals(branch.name())
@@ -481,7 +504,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     }
 
     private int latestPanelWidth() {
-        return Math.max(112, layout.bodyWidth() / 2 - 8);
+        return Math.min(layout.bodyWidth(),
+                Math.max(112, layout.bodyWidth() / 2 - PANEL_PADDING));
     }
 
     private List<HistorySnapshotPayload.Version> visibleVersions() {
@@ -605,31 +629,38 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private void drawWorkspace(GuiGraphics graphics) {
         int x = layout.bodyX();
         int width = layout.bodyWidth();
-        drawPanel(graphics, x, layout.bodyY(), width, 90);
+        drawPanel(graphics, x, layout.bodyY(), width,
+                dashboardGeometry.buildPanelHeight());
+        int titleOffset = dashboardGeometry.compact() ? 8 : 13;
+        int pendingOffset = dashboardGeometry.compact() ? 23 : 31;
         graphics.drawString(font, Component.translatable("luma.project.build_title"),
-                x + 14, layout.bodyY() + 13, LegacyLumiTheme.TEXT, false);
+                x + PANEL_PADDING, layout.bodyY() + titleOffset,
+                LegacyLumiTheme.TEXT, false);
         int pending = snapshot.pendingKeys();
         Component pendingText = pending == 0
                 ? Component.translatable("luma.dashboard.pending_clean")
                 : Component.translatable("luma.dashboard.workspace_pending", pending);
         graphics.drawString(font,
                 pendingText,
-                x + 14, layout.bodyY() + 31,
+                x + PANEL_PADDING, layout.bodyY() + pendingOffset,
                 pending == 0
                         ? LegacyLumiTheme.MUTED : LegacyLumiTheme.ACCENT,
                 false);
-        pendingStatistics.result(snapshot)
-                .filter(result -> result.error().isEmpty())
-                .ifPresent(result -> graphics.drawString(
-                        font,
-                        PendingStatisticsText.summary(result.workspace()),
-                        x + 14, layout.bodyY() + 50,
-                        LegacyLumiTheme.ACCENT, false));
+        if (!dashboardGeometry.compact()) {
+            pendingStatistics.result(snapshot)
+                    .filter(result -> result.error().isEmpty())
+                    .ifPresent(result -> graphics.drawString(
+                            font,
+                            PendingStatisticsText.summary(result.workspace()),
+                            x + PANEL_PADDING, layout.bodyY() + 50,
+                            LegacyLumiTheme.ACCENT, false));
+        }
 
         latestCreated().ifPresent(version -> {
             int latestWidth = latestPanelWidth();
             LegacyLumiTheme.outlined(
-                    graphics, x, historyY - 24, latestWidth, 22,
+                    graphics, x, dashboardGeometry.latestY(), latestWidth,
+                    dashboardGeometry.latestHeight(),
                     LegacyLumiTheme.STATUS, LegacyLumiTheme.STATUS_BORDER);
             String latest = Component.translatable(
                     "luma.ideas.latest_save", version.message(),
@@ -637,11 +668,18 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                             version.timestampMillis()))).getString();
             graphics.drawString(font,
                     font.plainSubstrByWidth(latest, latestWidth - 34),
-                    x + 6, historyY - 17, LegacyLumiTheme.ACCENT, false);
+                    x + PANEL_PADDING, dashboardGeometry.stripTextY(),
+                    LegacyLumiTheme.ACCENT, false);
         });
+        if (historyHeight <= 0) {
+            return;
+        }
         drawPanel(graphics, x, historyY, width, historyHeight);
-        int titleX = search == null ? x + 14
-                : search.getX() + search.getWidth() + 8;
+        if (historyHeight < 28) {
+            return;
+        }
+        int titleX = search == null ? x + PANEL_PADDING
+                : search.getX() + search.getWidth() + PANEL_PADDING;
         graphics.drawString(font, Component.translatable("luma.project.history_title"),
                 titleX, historyY + 13, LegacyLumiTheme.TEXT, false);
         if (search != null) {
@@ -666,15 +704,16 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
                     + index * HISTORY_ROW_STRIDE;
             LegacyLumiTheme.outlined(
-                    graphics, x + 10, rowY, width - 20, HISTORY_ROW_HEIGHT,
+                    graphics, x + PANEL_PADDING, rowY,
+                    width - PANEL_PADDING * 2, HISTORY_ROW_HEIGHT,
                     LegacyLumiTheme.INSET,
                     snapshot.head().equals(version.id())
                             ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.INSET_BORDER);
-            drawPreview(graphics, version, x + 16, rowY + 4);
+            drawPreview(graphics, version, x + PANEL_PADDING * 2, rowY + 4);
             graphics.drawString(font,
                     font.plainSubstrByWidth(
                             version.message(), Math.max(0, width - 244)),
-                    x + 64, rowY + 5, LegacyLumiTheme.TEXT, false);
+                    x + 58, rowY + 5, LegacyLumiTheme.TEXT, false);
             String tags = displayedTags(version).isEmpty() ? ""
                     : " · #" + String.join(" #", displayedTags(version).values());
             String active = snapshot.head().equals(version.id())
@@ -687,14 +726,15 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     + tags + active;
             graphics.drawString(font,
                     font.plainSubstrByWidth(meta, Math.max(0, width - 244)),
-                    x + 64, rowY + 17, LegacyLumiTheme.MUTED, false);
+                    x + 58, rowY + 17, LegacyLumiTheme.MUTED, false);
         }
         if (versions.isEmpty()) {
             graphics.drawString(font,
                     Component.translatable(searchQuery.isBlank()
                             ? "luma.simple.no_saved_help"
                             : "luma.project.history_search_help"),
-                    x + 14, historyY + 38, LegacyLumiTheme.MUTED, false);
+                    x + PANEL_PADDING, historyY + 38,
+                    LegacyLumiTheme.MUTED, false);
         }
     }
 
@@ -760,6 +800,26 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         }
     }
 
+    static DashboardGeometry dashboardGeometry(
+            int bodyY, int bodyHeight, int hintHeight) {
+        boolean compact = bodyHeight < 220;
+        int hintY = bodyY + (compact ? 42 : 64);
+        int actionY = hintHeight > 0
+                ? hintY + hintHeight + SECTION_GAP
+                : bodyY + (compact ? 38 : 64);
+        int buildPanelHeight = actionY - bodyY
+                + CONTROL_HEIGHT + PANEL_PADDING;
+        int latestHeight = compact ? CONTROL_HEIGHT : 22;
+        int latestY = bodyY + buildPanelHeight + SECTION_GAP;
+        int bodyBottom = bodyY + Math.max(0, bodyHeight);
+        int historyY = Math.min(
+                bodyBottom, latestY + latestHeight + SECTION_GAP);
+        return new DashboardGeometry(
+                hintY, actionY, buildPanelHeight,
+                latestY, latestHeight, historyY,
+                Math.max(0, bodyBottom - historyY), compact);
+    }
+
     static int visibleHistoryRows(int historyHeight, int availableVersions) {
         int firstRowSpace = historyHeight - HISTORY_FIRST_ROW_OFFSET;
         if (firstRowSpace < HISTORY_ROW_HEIGHT) {
@@ -800,6 +860,24 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
 
     private boolean compactSidebar() {
         return layout.sidebarWidth() < 136 || layout.windowHeight() < 320;
+    }
+
+    record DashboardGeometry(
+            int hintY,
+            int actionY,
+            int buildPanelHeight,
+            int latestY,
+            int latestHeight,
+            int historyY,
+            int historyHeight,
+            boolean compact) {
+        int stripControlY() {
+            return latestY + (latestHeight - CONTROL_HEIGHT) / 2;
+        }
+
+        int stripTextY() {
+            return latestY + (latestHeight - 8) / 2;
+        }
     }
 
     @Override public boolean isPauseScreen() { return false; }
