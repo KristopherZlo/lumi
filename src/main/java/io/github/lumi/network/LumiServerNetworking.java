@@ -30,6 +30,7 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.network.chat.Component;
@@ -624,7 +625,7 @@ public final class LumiServerNetworking {
                         .filter(value -> !value.isBlank()))
                 .orElseGet(() -> terminalMessage(operation.terminalState()));
         sendEvent(player, payload, runtime, state, message);
-        broadcastSnapshot(runtime);
+        deferSnapshotBroadcast(runtime);
     }
 
     private static void cancel(
@@ -828,6 +829,12 @@ public final class LumiServerNetworking {
         for (ServerPlayer player : runtime.level().players()) {
             sendSnapshot(player, runtime);
         }
+    }
+
+    private static void deferSnapshotBroadcast(FabricDimensionRuntime runtime) {
+        var server = runtime.level().getServer();
+        server.schedule(new TickTask(
+                server.getTickCount(), () -> broadcastSnapshot(runtime)));
     }
 
     private static void send(
