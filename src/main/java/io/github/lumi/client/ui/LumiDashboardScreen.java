@@ -171,6 +171,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
+        tagEditor = null;
         snapshot = history.state().snapshot().orElse(null);
         layout = LegacyWorkspaceLayout.fit(width, height);
         addSidebarButtons();

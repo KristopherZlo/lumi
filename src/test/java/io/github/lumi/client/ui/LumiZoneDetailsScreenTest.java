@@ -25,5 +25,8 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("zoneStatistics()"));
         assertTrue(source.contains("PendingStatisticsText::summary"));
+        assertTrue(source.contains("\"tags\""));
+        assertTrue(source.contains("actions.updateTags().accept"));
+        assertTrue(source.contains("optimisticTags"));
     }
 }

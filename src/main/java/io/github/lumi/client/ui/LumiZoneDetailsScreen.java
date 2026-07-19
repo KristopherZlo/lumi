@@ -4,6 +4,8 @@ import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
@@ -11,7 +13,9 @@ import io.github.lumi.network.PendingStatisticsPayload;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -39,7 +43,6 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
     private final HistoryViewController historyView = new HistoryViewController();
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
     private final Runnable showChanges;
-    private final VersionCompareController compareController = new VersionCompareController();
     private EditBox message;
     private EditBox tags;
     private EditBox search;
@@ -60,6 +63,10 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
     private HistoryPagePayload renderedPage;
     private PendingStatisticsPayload renderedStatistics;
     private LumiHistoryGraphView graphView;
+    private CommitId editingTags;
+    private EditBox tagEditor;
+    private String tagError = "";
+    private final Map<CommitId, VersionTags> optimisticTags = new HashMap<>();
 
     public LumiZoneDetailsScreen(
             Screen parent,
@@ -109,6 +116,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
     @Override
     protected void init() {
         beginLegacyInit();
+        tagEditor = null;
         requestPendingStatistics();
         LegacyWorkspaceLayout layout = pageLayout();
         panelX = layout.contentX();
@@ -225,11 +233,27 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
             HistorySnapshotPayload.Version version = visible.get(index);
             int rowY = panelY + 176 + index * HISTORY_ROW_STRIDE;
             int right = panelX + panelWidth - 24;
-            compareController.target(versions, historyScroll + index).ifPresent(target ->
-                    addLegacyIconButton(right - 120, rowY + 5, "see-changes",
-                            Component.translatable("luma.action.compare"),
-                            () -> actions.openCompare().accept(target),
-                            LumiLegacyButton.Kind.NORMAL));
+            boolean tagEditing = version.id().equals(editingTags);
+            if (tagEditing) {
+                tagEditor = new EditBox(
+                        font, panelX + 72, rowY + 7,
+                        Math.max(20, panelWidth - 250), 16,
+                        Component.translatable("luma.history.tags_input"));
+                tagEditor.setMaxLength(VersionTags.MAX_SERIALIZED_LENGTH);
+                tagEditor.setValue(displayedTags(version).serialize());
+                tagEditor.setBordered(false);
+                addRenderableWidget(tagEditor);
+                setInitialFocus(tagEditor);
+                tagEditor.setFocused(true);
+            }
+            addLegacyIconButton(right - 120, rowY + 5,
+                    tagEditing ? "save" : "tags",
+                    Component.translatable(tagEditing
+                            ? "luma.action.save_tags"
+                            : "luma.action.edit_tags"),
+                    tagEditing ? this::saveTags : () -> editTags(version),
+                    tagEditing ? LumiLegacyButton.Kind.PRIMARY
+                            : LumiLegacyButton.Kind.NORMAL);
             addLegacyIconButton(right - 88, rowY + 5, "rollback",
                     Component.translatable("luma.action.restore"),
                     () -> actions.openRestore().accept(version),
@@ -291,7 +315,33 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
     private void selectBranch(String branch) {
         zoneHistory.selectBranch(branch);
         historyScroll = 0;
+        editingTags = null;
         rebuildWidgets();
+    }
+
+    private void editTags(HistorySnapshotPayload.Version version) {
+        editingTags = version.id();
+        tagError = "";
+        rebuildWidgets();
+    }
+
+    private void saveTags() {
+        try {
+            VersionTags replacement = VersionTags.parse(tagEditor.getValue());
+            optimisticTags.put(editingTags, replacement);
+            actions.updateTags().accept(editingTags, replacement);
+            editingTags = null;
+            tagError = "";
+            rebuildWidgets();
+        } catch (IllegalArgumentException invalid) {
+            tagError = invalid.getMessage() == null
+                    ? "Invalid tags" : invalid.getMessage();
+        }
+    }
+
+    private VersionTags displayedTags(
+            HistorySnapshotPayload.Version version) {
+        return optimisticTags.getOrDefault(version.id(), version.tags());
     }
 
     private static String shortBranch(String value) {
@@ -311,7 +361,10 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
 
     @Override
     protected void setInitialFocus() {
-        if (focusSearchAfterInit && search != null) {
+        if (tagEditor != null) {
+            setInitialFocus(tagEditor);
+            tagEditor.setFocused(true);
+        } else if (focusSearchAfterInit && search != null) {
             setInitialFocus(search);
             search.setFocused(true);
             search.moveCursorToEnd(false);
@@ -365,7 +418,8 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
                     LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         }
         renderHistory(graphics, panelWidth);
-        String shownError = error.isEmpty() ? zoneHistory.error() : error;
+        String shownError = !tagError.isEmpty() ? tagError
+                : error.isEmpty() ? zoneHistory.error() : error;
         if (!shownError.isEmpty()) {
             graphics.drawString(font, errorText(shownError),
                     panelX + 88, panelY + panelHeight - 14,
@@ -407,8 +461,9 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
             graphics.drawString(font,
                     font.plainSubstrByWidth(version.message(), panelWidth - 270),
                     panelX + 72, rowY + 5, LegacyLumiTheme.TEXT, false);
-            String tagText = version.tags().isEmpty()
-                    ? "" : " · #" + String.join(" #", version.tags().values());
+            String tagText = displayedTags(version).isEmpty()
+                    ? "" : " · #" + String.join(
+                            " #", displayedTags(version).values());
             String meta = version.author() + " · "
                     + HISTORY_TIME.format(
                             Instant.ofEpochMilli(version.timestampMillis()))
@@ -471,6 +526,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
                     maximum, historyScroll + (verticalAmount < 0 ? 1 : -1)));
             if (replacement != historyScroll) {
                 historyScroll = replacement;
+                editingTags = null;
                 rebuildWidgets();
             } else if (verticalAmount < 0 && zoneHistory.hasNext()) {
                 zoneHistory.next();

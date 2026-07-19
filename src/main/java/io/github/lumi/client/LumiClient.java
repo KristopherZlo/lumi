@@ -532,7 +532,7 @@ public final class LumiClient implements ClientModInitializer {
                                 client.screen, zones, zone, version,
                                 NETWORKING::restoreZone)),
                         version -> openBranchAt(client.screen, version),
-                        target -> showZoneCompareChanges(zone.id(), target)),
+                        NETWORKING::updateVersionTags),
                 () -> {
                     NETWORKING.refreshSnapshot();
                     showFeedback("luma.hotkeys.pending_preview_help");
