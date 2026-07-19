@@ -59,6 +59,20 @@ class VersionCompareControllerTest {
         assertTrue(controller.target(versions, 0, 1).isEmpty());
     }
 
+    @Test
+    void comparesIndependentSelectionsAfterColumnFiltering() {
+        var before = version('1', "left branch");
+        var after = version('2', "right branch");
+
+        var target = new VersionCompareController()
+                .target(before, after)
+                .orElseThrow();
+
+        assertEquals(before.id(), target.before());
+        assertEquals(after.id(), target.after());
+        assertEquals(after.message(), target.label());
+    }
+
     private static HistorySnapshotPayload.Version version(
             char digit, String message, CommitId... parents) {
         return new HistorySnapshotPayload.Version(

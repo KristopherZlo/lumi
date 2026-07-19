@@ -37,6 +37,15 @@ public final class VersionCompareController {
         return Optional.of(new Target(before.id(), after.id(), after.message()));
     }
 
+    public Optional<Target> target(
+            HistorySnapshotPayload.Version before,
+            HistorySnapshotPayload.Version after) {
+        if (before == null || after == null || before.id().equals(after.id())) {
+            return Optional.empty();
+        }
+        return Optional.of(new Target(before.id(), after.id(), after.message()));
+    }
+
     public record Target(CommitId before, CommitId after, String label) {
         public Target {
             Objects.requireNonNull(before, "before");

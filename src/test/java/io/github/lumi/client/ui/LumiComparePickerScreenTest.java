@@ -15,11 +15,14 @@ class LumiComparePickerScreenTest {
 
         assertTrue(source.contains("leftPage"));
         assertTrue(source.contains("rightPage"));
-        assertTrue(source.contains("leftIndex"));
-        assertTrue(source.contains("rightIndex"));
+        assertTrue(source.contains("leftHistory"));
+        assertTrue(source.contains("rightHistory"));
+        assertTrue(source.contains("leftSelection"));
+        assertTrue(source.contains("rightSelection"));
+        assertTrue(source.contains("history(left).nextBranch(snapshot.branches())"));
         assertTrue(source.contains("\"textures/gui/icons/see-changes.png\""));
         assertTrue(source.contains("\"eye-open\""));
         assertTrue(source.contains("minecraft.setScreen(null)"));
-        assertTrue(source.contains("previews.texture(dimensionId, version.id())"));
+        assertTrue(source.contains("snapshot.dimensionId(), version.id()"));
     }
 }
