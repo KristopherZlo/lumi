@@ -52,6 +52,10 @@ public final class LumiServerNetworking {
             new HistoryPageCommandHandler(
                     LumiServerNetworking::failureMessage,
                     LumiServerNetworking::send);
+    private static final PendingStatisticsCommandHandler PENDING_STATISTICS =
+            new PendingStatisticsCommandHandler(
+                    LumiServerNetworking::failureMessage,
+                    LumiServerNetworking::send);
     private static final ConcurrentHashMap<UUID, PendingPackage> PACKAGE_INSPECTIONS =
             new ConcurrentHashMap<>();
     private static final HistorySnapshotFactory SNAPSHOTS = new HistorySnapshotFactory();
@@ -65,6 +69,9 @@ public final class LumiServerNetworking {
                 OperationCancelPayload.TYPE, OperationCancelPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(
                 HistoryPageRequestPayload.TYPE, HistoryPageRequestPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(
+                PendingStatisticsRequestPayload.TYPE,
+                PendingStatisticsRequestPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 HistorySnapshotPayload.TYPE, HistorySnapshotPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
@@ -81,12 +88,17 @@ public final class LumiServerNetworking {
                 ZoneOverlayPayload.TYPE, ZoneOverlayPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 HistoryPagePayload.TYPE, HistoryPagePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                PendingStatisticsPayload.TYPE, PendingStatisticsPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(
                 HistoryCommandPayload.TYPE, LumiServerNetworking::receive);
         ServerPlayNetworking.registerGlobalReceiver(
                 OperationCancelPayload.TYPE, LumiServerNetworking::cancel);
         ServerPlayNetworking.registerGlobalReceiver(
                 HistoryPageRequestPayload.TYPE, LumiServerNetworking::historyPage);
+        ServerPlayNetworking.registerGlobalReceiver(
+                PendingStatisticsRequestPayload.TYPE,
+                LumiServerNetworking::pendingStatistics);
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 LumiMod.serverRuntime().find(handler.getPlayer().level()).ifPresent(runtime ->
                         sendSnapshot(handler.getPlayer(), runtime)));
@@ -479,6 +491,20 @@ public final class LumiServerNetworking {
         }
         String message = cause.getMessage();
         return message == null || message.isBlank() ? "Operation failed" : message;
+    }
+
+    private static void pendingStatistics(
+            PendingStatisticsRequestPayload payload,
+            ServerPlayNetworking.Context context) {
+        ServerPlayer player = context.player();
+        FabricDimensionRuntime runtime = LumiMod.serverRuntime()
+                .find(player.level()).orElse(null);
+        if (runtime == null) {
+            send(player, PendingStatisticsPayload.failure(
+                    payload, "Lumi is not ready for this dimension"));
+            return;
+        }
+        PENDING_STATISTICS.start(player, runtime, payload, context);
     }
 
     private static void historyPage(
