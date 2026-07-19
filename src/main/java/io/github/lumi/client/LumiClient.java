@@ -249,8 +249,8 @@ public final class LumiClient implements ClientModInitializer {
                                 new BranchNameController(
                                         NETWORKING::createBranch)))),
                 () -> client.setScreen(new LumiMergeScreen(
-                        client.screen, snapshot.branchName(),
-                        snapshot.branches(), NETWORKING::merge)),
+                        client.screen, snapshot, PREVIEW_STORE,
+                        NETWORKING::merge)),
                 NETWORKING::switchBranch,
                 NETWORKING::deleteBranch,
                 branch -> client.setScreen(new LumiBranchSlotScreen(
@@ -269,10 +269,11 @@ public final class LumiClient implements ClientModInitializer {
                 ClientPackageAccess.integrated(), snapshot.branches(),
                 NETWORKING::switchBranch,
                 source -> client.setScreen(new LumiMergeScreen(
-                        client.screen, snapshot.branchName(),
+                        client.screen, snapshot,
                         snapshot.branches().stream()
-                                .filter(branch -> branch.name().equals(source))
-                                .toList(), NETWORKING::merge)),
+                                .filter(branch -> branch.active()
+                                        || branch.name().equals(source))
+                                .toList(), PREVIEW_STORE, NETWORKING::merge)),
                 NETWORKING::deleteBranch));
     }
 

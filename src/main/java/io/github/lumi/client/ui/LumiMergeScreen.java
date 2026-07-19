@@ -1,36 +1,52 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 
 /** Explicit source-wins confirmation for merging another visible branch. */
 public final class LumiMergeScreen extends LumiLegacyModalScreen {
     private static final int MAX_VISIBLE_BRANCHES = 6;
     private static final int PANEL_WIDTH = 520;
-    private static final int PANEL_HEIGHT = 270;
+    private static final int PANEL_HEIGHT = 300;
     private final Screen parent;
+    private final String dimensionId;
     private final String currentBranch;
     private final List<HistorySnapshotPayload.Branch> branches;
+    private final ClientVersionPreviewStore previews;
     private final Consumer<String> merge;
+    private HistorySnapshotPayload.Branch pendingSource;
     private String error = "";
     private int panelX;
     private int panelY;
 
     public LumiMergeScreen(
             Screen parent,
-            String currentBranch,
+            HistorySnapshotPayload snapshot,
+            ClientVersionPreviewStore previews,
+            Consumer<String> merge) {
+        this(parent, snapshot, snapshot.branches(), previews, merge);
+    }
+
+    public LumiMergeScreen(
+            Screen parent,
+            HistorySnapshotPayload snapshot,
             List<HistorySnapshotPayload.Branch> branches,
+            ClientVersionPreviewStore previews,
             Consumer<String> merge) {
         super(Component.translatable("luma.action.merge_into_current"));
         this.parent = parent;
         this.currentBranch = shortName(
-                Objects.requireNonNull(currentBranch, "currentBranch"));
+                Objects.requireNonNull(snapshot, "snapshot").branchName());
+        this.dimensionId = snapshot.dimensionId();
         this.branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
+        this.previews = Objects.requireNonNull(previews, "previews");
         this.merge = Objects.requireNonNull(merge, "merge");
     }
 
@@ -40,18 +56,43 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(16, (height - PANEL_HEIGHT) / 2);
+        if (pendingSource != null) {
+            addConfirmation(panelWidth);
+            return;
+        }
         int row = 0;
         for (HistorySnapshotPayload.Branch branch : branches) {
             if (branch.active() || row == MAX_VISIBLE_BRANCHES) continue;
             int rowY = panelY + 92 + row * 28;
             addLegacyButton(panelX + panelWidth - 168, rowY + 4, 148,
-                    Component.translatable("luma.action.merge_into_current"),
-                    () -> submit(branch.name()), LumiLegacyButton.Kind.PRIMARY);
+                    Component.translatable("luma.action.preview"),
+                    () -> preview(branch), LumiLegacyButton.Kind.NORMAL);
             row++;
         }
         addLegacyButton(width / 2 - 60, panelY + PANEL_HEIGHT - 28, 120,
                 Component.translatable("luma.action.cancel"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
+    }
+
+    private void addConfirmation(int panelWidth) {
+        int buttonWidth = (panelWidth - 48) / 2;
+        addLegacyButton(panelX + 20, panelY + PANEL_HEIGHT - 34, buttonWidth,
+                Component.translatable("luma.action.merge_into_current"),
+                () -> submit(pendingSource.name()),
+                LumiLegacyButton.Kind.PRIMARY);
+        addLegacyButton(panelX + 28 + buttonWidth,
+                panelY + PANEL_HEIGHT - 34, buttonWidth,
+                Component.translatable("luma.action.cancel"), () -> {
+                    pendingSource = null;
+                    error = "";
+                    rebuildWidgets();
+                }, LumiLegacyButton.Kind.NORMAL);
+    }
+
+    private void preview(HistorySnapshotPayload.Branch source) {
+        pendingSource = source;
+        error = "";
+        rebuildWidgets();
     }
 
     private void submit(String source) {
@@ -82,6 +123,11 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
         graphics.drawCenteredString(font,
                 Component.translatable("luma.merge.source_wins"),
                 width / 2, panelY + 52, LegacyLumiTheme.ACCENT);
+        if (pendingSource != null) {
+            renderConfirmation(graphics, panelWidth);
+            super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+            return;
+        }
         int row = 0;
         for (HistorySnapshotPayload.Branch branch : branches) {
             if (branch.active() || row == MAX_VISIBLE_BRANCHES) continue;
@@ -105,6 +151,64 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
         } finally {
             endLegacyRender(graphics);
         }
+    }
+
+    private void renderConfirmation(GuiGraphics graphics, int panelWidth) {
+        HistorySnapshotPayload.Branch target = branches.stream()
+                .filter(HistorySnapshotPayload.Branch::active)
+                .findFirst().orElse(null);
+        int previewWidth = 128;
+        int previewHeight = 72;
+        int gap = 34;
+        int startX = panelX + (panelWidth - previewWidth * 2 - gap) / 2;
+        drawPreview(graphics, pendingSource, startX, panelY + 92,
+                "luma.ideas.merge_source_preview",
+                LegacyLumiTheme.ACCENT);
+        if (target != null) {
+            drawPreview(graphics, target,
+                    startX + previewWidth + gap, panelY + 92,
+                    "luma.ideas.merge_target_preview",
+                    LegacyLumiTheme.TEXT);
+        }
+        graphics.drawCenteredString(
+                font, Component.literal("→"),
+                panelX + panelWidth / 2, panelY + 128,
+                LegacyLumiTheme.ACCENT);
+        graphics.drawCenteredString(
+                font,
+                Component.translatable(
+                        "luma.merge.confirm_source",
+                        shortName(pendingSource.name())),
+                width / 2, panelY + 188, LegacyLumiTheme.TEXT);
+        if (!error.isEmpty()) {
+            graphics.drawCenteredString(
+                    font, errorText(error), width / 2, panelY + 218,
+                    LegacyLumiTheme.DANGER);
+        }
+    }
+
+    private void drawPreview(
+            GuiGraphics graphics,
+            HistorySnapshotPayload.Branch branch,
+            int x,
+            int y,
+            String label,
+            int color) {
+        graphics.drawCenteredString(
+                font, Component.translatable(label),
+                x + 64, y - 14, color);
+        LegacyLumiTheme.outlined(
+                graphics, x, y, 128, 72,
+                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+        previews.texture(dimensionId, branch.head()).ifPresent(texture ->
+                graphics.blit(
+                        RenderPipelines.GUI_TEXTURED, texture.id(),
+                        x, y, 0, 0, 128, 72,
+                        texture.width(), texture.height(),
+                        texture.width(), texture.height()));
+        graphics.drawCenteredString(
+                font, shortName(branch.name()),
+                x + 64, y + 78, color);
     }
 
     private static String shortName(String name) {
