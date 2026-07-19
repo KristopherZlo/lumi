@@ -5,6 +5,7 @@ import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientZoneOverlayStore;
+import io.github.lumi.client.state.ClientPendingStatisticsStore;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.BlockAreaTarget;
@@ -25,6 +26,8 @@ import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
 import io.github.lumi.network.PartialRestoreArgument;
 import io.github.lumi.network.PartialRestorePlanPayload;
+import io.github.lumi.network.PendingStatisticsPayload;
+import io.github.lumi.network.PendingStatisticsRequestPayload;
 import io.github.lumi.network.QuickRollbackArgument;
 import io.github.lumi.network.SaveArgument;
 import io.github.lumi.network.PackageInspectionPayload;
@@ -53,6 +56,7 @@ public final class LumiClientNetworking {
     private final ClientHistoryPageStore historyPages;
     private final ClientCompareStore comparisons;
     private final ClientZoneOverlayStore zoneOverlays;
+    private final ClientPendingStatisticsStore pendingStatistics;
     private final Consumer<HistorySnapshotPayload> snapshotListener;
     private final Consumer<OperationEventPayload> eventListener;
     private final Consumer<CompareResultPayload> compareListener;
@@ -65,6 +69,7 @@ public final class LumiClientNetworking {
             ClientHistoryPageStore historyPages,
             ClientCompareStore comparisons,
             ClientZoneOverlayStore zoneOverlays,
+            ClientPendingStatisticsStore pendingStatistics,
             Consumer<HistorySnapshotPayload> snapshotListener,
             Consumer<OperationEventPayload> eventListener,
             Consumer<CompareResultPayload> compareListener,
@@ -75,6 +80,8 @@ public final class LumiClientNetworking {
         this.historyPages = Objects.requireNonNull(historyPages, "historyPages");
         this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
         this.zoneOverlays = Objects.requireNonNull(zoneOverlays, "zoneOverlays");
+        this.pendingStatistics = Objects.requireNonNull(
+                pendingStatistics, "pendingStatistics");
         this.snapshotListener = Objects.requireNonNull(snapshotListener, "snapshotListener");
         this.eventListener = Objects.requireNonNull(eventListener, "eventListener");
         this.compareListener = Objects.requireNonNull(compareListener, "compareListener");
@@ -108,6 +115,10 @@ public final class LumiClientNetworking {
                 HistoryPagePayload.TYPE, (payload, context) ->
                         context.client().execute(() -> historyPages.accept(payload)));
         ClientPlayNetworking.registerGlobalReceiver(
+                PendingStatisticsPayload.TYPE, (payload, context) ->
+                        context.client().execute(() ->
+                                pendingStatistics.accept(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(
                 PackageInspectionPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> packageListener.accept(payload)));
         ClientPlayNetworking.registerGlobalReceiver(
@@ -122,6 +133,7 @@ public final class LumiClientNetworking {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             history.clear();
             historyPages.clear();
+            pendingStatistics.clear();
             comparisons.clear();
             zoneOverlays.clear();
         });
@@ -406,6 +418,23 @@ public final class LumiClientNetworking {
             int limit) {
         return requestHistoryPage(
                 Optional.empty(), branch, zoneId, offset, limit, "");
+    }
+
+    public UUID requestPendingStatistics() {
+        var snapshot = history.state().snapshot().orElseThrow(
+                () -> new IllegalStateException(
+                        "Lumi history has not synchronized yet"));
+        if (!ClientPlayNetworking.canSend(
+                PendingStatisticsRequestPayload.TYPE)) {
+            throw new IllegalStateException(
+                    "The connected server does not support pending statistics");
+        }
+        UUID requestId = UUID.randomUUID();
+        pendingStatistics.begin(requestId, snapshot);
+        ClientPlayNetworking.send(new PendingStatisticsRequestPayload(
+                requestId, snapshot.dimensionId(), snapshot.workspaceId(),
+                snapshot.head(), snapshot.revision()));
+        return requestId;
     }
 
     public UUID requestHistoryPage(
