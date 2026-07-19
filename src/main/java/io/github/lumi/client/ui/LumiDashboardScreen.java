@@ -380,6 +380,18 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         }
     }
 
+    public void openBranchHistory(String branch) {
+        if (snapshot == null) return;
+        if (pagedHistory == null || !pagedHistory.matches(snapshot)) {
+            pagedHistory = new WorkspaceHistoryController(
+                    snapshot, historyPages, requestPage);
+        }
+        pagedHistory.selectBranch(branch);
+        historyScroll = 0;
+        activeTab = LegacyProjectTab.HISTORY;
+        minecraft.setScreen(this);
+    }
+
     private void showCompare() {
         if (snapshot == null) {
             return;

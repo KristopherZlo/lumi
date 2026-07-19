@@ -17,14 +17,21 @@ class LumiBranchesScreenTest {
         assertTrue(source.contains("luma.action.variant_switch"));
         assertTrue(source.contains("visibleRows()"));
         assertTrue(source.contains("addLegacyIconButton"));
-        assertTrue(source.contains("if (!branch.active())"));
+        assertTrue(source.contains("new EditBox("));
+        assertTrue(source.contains("create.submit(name.getValue())"));
         assertTrue(source.contains("luma.action.delete_branch"));
         assertTrue(source.contains("deleter.accept(pendingDelete.name())"));
         assertTrue(source.contains("addDeleteConfirmation"));
         assertTrue(source.contains("ClientContextualHelpHint.BRANCHES"));
         assertTrue(source.contains("contentOffset"));
-        assertTrue(source.contains("luma.action.bind_branch"));
+        assertTrue(source.contains("bindingLabel.apply(branch)"));
         assertTrue(source.contains("bindSlot.accept(branch)"));
+        assertTrue(source.contains("\"rollback\""));
+        assertTrue(source.contains("\"folder\""));
+        assertTrue(source.contains("\"trash\""));
+        assertTrue(source.contains("\"merge\""));
+        assertTrue(source.contains("mergeButton.active = !branch.active()"));
+        assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("luma.screen.zone_ideas.title"));
         assertTrue(source.contains("luma.ideas.zone_badge"));
     }

@@ -1,13 +1,17 @@
 package io.github.lumi.client.ui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** Bounded native branch list with the legacy create, switch and merge actions. */
@@ -15,13 +19,17 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
     private static final int MAX_ROWS = 6;
     private final List<HistorySnapshotPayload.Branch> branches;
     private final Optional<HistorySnapshotPayload.ZoneView> activeZone;
-    private final Runnable create;
-    private final Runnable merge;
+    private final BranchNameController create;
+    private final Consumer<String> merge;
+    private final Consumer<String> openHistory;
     private final Consumer<String> switcher;
     private final Consumer<String> deleter;
     private final Consumer<HistorySnapshotPayload.Branch> bindSlot;
+    private final Function<HistorySnapshotPayload.Branch, String> bindingLabel;
     private LegacyModalLayout layout;
-    private int page;
+    private EditBox name;
+    private LumiLegacyButton createButton;
+    private int scroll;
     private int contentOffset;
     private String error = "";
     private HistorySnapshotPayload.Branch pendingDelete;
@@ -30,11 +38,13 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
             Screen parent,
             Optional<HistorySnapshotPayload.ZoneView> activeZone,
             List<HistorySnapshotPayload.Branch> branches,
-            Runnable create,
-            Runnable merge,
+            BranchNameController create,
+            Consumer<String> merge,
+            Consumer<String> openHistory,
             Consumer<String> switcher,
             Consumer<String> deleter,
-            Consumer<HistorySnapshotPayload.Branch> bindSlot) {
+            Consumer<HistorySnapshotPayload.Branch> bindSlot,
+            Function<HistorySnapshotPayload.Branch, String> bindingLabel) {
         super(parent, activeZone.isPresent()
                         ? Component.translatable(
                                 "luma.screen.zone_ideas.title",
@@ -45,9 +55,11 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         this.branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
         this.create = Objects.requireNonNull(create, "create");
         this.merge = Objects.requireNonNull(merge, "merge");
+        this.openHistory = Objects.requireNonNull(openHistory, "openHistory");
         this.switcher = Objects.requireNonNull(switcher, "switcher");
         this.deleter = Objects.requireNonNull(deleter, "deleter");
         this.bindSlot = Objects.requireNonNull(bindSlot, "bindSlot");
+        this.bindingLabel = Objects.requireNonNull(bindingLabel, "bindingLabel");
     }
 
     @Override
@@ -64,14 +76,21 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         contentOffset = zoneOffset + (addContextualHint(
                 ClientContextualHelpHint.BRANCHES,
                 x + 16, y + 36 + zoneOffset, contentWidth) ? 56 : 0);
-        int actionWidth = Math.max(0, (contentWidth - 8) / 2);
-        addLegacyButton(x + 16, y + 38 + contentOffset, actionWidth,
+        name = new EditBox(
+                font, x + 18, y + 41 + contentOffset,
+                Math.max(20, contentWidth - 120), 16,
+                Component.translatable("luma.variant.name_input"));
+        name.setMaxLength(BranchNameController.MAX_NAME_LENGTH);
+        name.setHint(Component.translatable("luma.variant.name_input"));
+        name.setBordered(false);
+        name.setResponder(value -> updateCreateButton());
+        addRenderableWidget(name);
+        createButton = addLegacyButton(
+                x + layout.width() - 116, y + 40 + contentOffset, 100,
                 Component.translatable("luma.action.variant_create"),
                 this::createBranch,
                 LumiLegacyButton.Kind.PRIMARY);
-        addLegacyButton(x + 24 + actionWidth, y + 38 + contentOffset, actionWidth,
-                Component.translatable("luma.action.merge_into_current"), merge,
-                LumiLegacyButton.Kind.NORMAL);
+        updateCreateButton();
 
         if (pendingDelete != null) {
             addDeleteConfirmation(x, y, contentWidth);
@@ -79,36 +98,35 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         }
 
         int rows = visibleRows();
-        int start = rows == 0 ? 0 : Math.min(page * rows, branches.size());
+        int start = rows == 0 ? 0 : Math.min(scroll, branches.size());
         int end = Math.min(start + rows, branches.size());
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.Branch branch = branches.get(index);
             int rowY = y + 70 + contentOffset + (index - start) * 30;
-            addLegacyIconButton(x + layout.width() - 104, rowY + 3,
-                    "bookmark", Component.translatable("luma.action.bind_branch"),
+            int right = x + layout.width() - 20;
+            addLegacyButton(right - 252, rowY + 4, 120,
+                    Component.literal(bindingLabel.apply(branch)),
                     () -> bindSlot.accept(branch), LumiLegacyButton.Kind.NORMAL);
-            if (!branch.active()) {
-                addLegacyIconButton(x + layout.width() - 76, rowY + 3,
-                        "join", Component.translatable("luma.action.variant_switch"),
-                        () -> switchBranch(branch.name()), LumiLegacyButton.Kind.PRIMARY);
-                addLegacyIconButton(x + layout.width() - 48, rowY + 3,
-                        "trash", Component.translatable("luma.action.delete_branch"),
-                        () -> confirmDelete(branch), LumiLegacyButton.Kind.DANGER);
-            }
+            LumiLegacyButton switchButton = addLegacyIconButton(
+                    right - 122, rowY + 4, "rollback",
+                    Component.translatable("luma.action.variant_switch"),
+                    () -> switchBranch(branch.name()), LumiLegacyButton.Kind.PRIMARY);
+            switchButton.active = !branch.active();
+            addLegacyIconButton(right - 90, rowY + 4, "folder",
+                    Component.translatable("luma.action.open_history"),
+                    () -> openHistory.accept(branch.name()),
+                    LumiLegacyButton.Kind.NORMAL);
+            LumiLegacyButton deleteButton = addLegacyIconButton(
+                    right - 58, rowY + 4, "trash",
+                    Component.translatable("luma.action.delete_branch"),
+                    () -> confirmDelete(branch), LumiLegacyButton.Kind.DANGER);
+            deleteButton.active = !branch.active();
+            LumiLegacyButton mergeButton = addLegacyIconButton(
+                    right - 26, rowY + 4, "merge",
+                    Component.translatable("luma.action.merge_into_current"),
+                    () -> merge.accept(branch.name()), LumiLegacyButton.Kind.NORMAL);
+            mergeButton.active = !branch.active();
         }
-
-        int footerY = y + layout.height() - 28;
-        LumiLegacyButton previous = addLegacyIconButton(
-                x + 16, footerY, "chevron-left", Component.literal("<"),
-                () -> changePage(-1), LumiLegacyButton.Kind.NORMAL);
-        previous.active = page > 0;
-        LumiLegacyButton next = addLegacyIconButton(
-                x + 48, footerY, "chevron-right", Component.literal(">"),
-                () -> changePage(1), LumiLegacyButton.Kind.NORMAL);
-        next.active = rows > 0 && (page + 1) * rows < branches.size();
-        addLegacyIconButton(x + layout.width() - 42, footerY, "close",
-                Component.translatable("luma.action.close"), this::onClose,
-                LumiLegacyButton.Kind.NORMAL);
     }
 
     private void switchBranch(String name) {
@@ -126,12 +144,20 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
     }
 
     private void createBranch() {
-        try {
-            create.run();
-        } catch (RuntimeException failed) {
-            error = failed.getMessage() == null
-                    ? "Lumi branch could not be created"
-                    : failed.getMessage();
+        BranchNameController.Submission submission = create.submit(name.getValue());
+        error = submission.error();
+        if (submission.accepted()) {
+            if (minecraft.player != null) {
+                minecraft.player.displayClientMessage(
+                        Component.translatable("luma.status.variant_created"), true);
+            }
+            onClose();
+        }
+    }
+
+    private void updateCreateButton() {
+        if (createButton != null && name != null) {
+            createButton.active = !name.getValue().trim().isEmpty();
         }
     }
 
@@ -168,11 +194,6 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         }
     }
 
-    private void changePage(int delta) {
-        page = Math.max(0, page + delta);
-        rebuildWidgets();
-    }
-
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
@@ -184,9 +205,13 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
                 font,
                 Component.translatable("luma.ideas.zone_badge", zone.name()),
                 layout.x() + 16, layout.y() + 32, zone.color(), false));
+        LegacyLumiTheme.outlined(
+                graphics, name.getX() - 2, name.getY() - 2,
+                name.getWidth() + 4, name.getHeight() + 4,
+                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         if (pendingDelete == null) {
             int rows = visibleRows();
-            int start = rows == 0 ? 0 : Math.min(page * rows, branches.size());
+            int start = rows == 0 ? 0 : Math.min(scroll, branches.size());
             int end = Math.min(start + rows, branches.size());
             for (int index = start; index < end; index++) {
                 HistorySnapshotPayload.Branch branch = branches.get(index);
@@ -234,6 +259,47 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
     private int visibleRows() {
         return Math.min(MAX_ROWS,
                 Math.max(0, (layout.height() - 100 - contentOffset) / 30));
+    }
+
+    @Override
+    protected void setInitialFocus() {
+        if (name != null) {
+            setInitialFocus(name);
+            name.setFocused(true);
+        }
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if ((event.key() == InputConstants.KEY_RETURN
+                || event.key() == InputConstants.KEY_NUMPADENTER)
+                && createButton.active) {
+            createBranch();
+            return true;
+        }
+        return super.keyPressed(event);
+    }
+
+    @Override
+    public boolean mouseScrolled(
+            double mouseX, double mouseY,
+            double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        if (x >= layout.x() && x < layout.x() + layout.width()
+                && y >= layout.y() + 70 + contentOffset
+                && y < layout.y() + layout.height()) {
+            int maximum = Math.max(0, branches.size() - visibleRows());
+            int replacement = Math.max(0, Math.min(
+                    maximum, scroll + (verticalAmount < 0 ? 1 : -1)));
+            if (replacement != scroll) {
+                scroll = replacement;
+                rebuildWidgets();
+            }
+            return true;
+        }
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     private static String shortName(String name) {

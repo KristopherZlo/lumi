@@ -1,5 +1,6 @@
 package io.github.lumi.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
@@ -261,23 +262,45 @@ public final class LumiClient implements ClientModInitializer {
                 .findFirst();
         client.setScreen(new LumiBranchesScreen(
                 parent, activeZone, snapshot.branches(),
-                () -> activeZone.ifPresentOrElse(
-                        zone -> openBranchAt(
-                                client.screen, zone.versions().stream()
-                                        .findFirst()
+                new BranchNameController(name -> activeZone.ifPresentOrElse(
+                        zone -> NETWORKING.createBranchAt(
+                                name, zone.versions().stream().findFirst()
                                         .orElseThrow(() -> new IllegalStateException(
-                                                "Save the active zone before creating a branch"))),
-                        () -> client.setScreen(new LumiBranchScreen(
-                                client.screen, currentBranch(),
-                                new BranchNameController(
-                                        NETWORKING::createBranch)))),
-                () -> client.setScreen(new LumiMergeScreen(
-                        client.screen, snapshot, PREVIEW_STORE,
-                        NETWORKING::merge)),
+                                                "Save the active zone before creating a branch"))
+                                        .id()),
+                        () -> NETWORKING.createBranch(name))),
+                source -> client.setScreen(new LumiMergeScreen(
+                        client.screen, snapshot,
+                        snapshot.branches().stream()
+                                .filter(branch -> branch.active()
+                                        || branch.name().equals(source))
+                                .toList(),
+                        PREVIEW_STORE, NETWORKING::merge)),
+                branch -> {
+                    if (parent instanceof LumiDashboardScreen dashboard) {
+                        dashboard.openBranchHistory(branch);
+                    }
+                },
                 NETWORKING::switchBranch,
                 NETWORKING::deleteBranch,
                 branch -> client.setScreen(new LumiBranchSlotScreen(
-                        client.screen, snapshot, branch, BRANCH_SLOTS))));
+                        client.screen, snapshot, branch, BRANCH_SLOTS)),
+                branch -> branchBinding(snapshot, branch)));
+    }
+
+    private static String branchBinding(
+            HistorySnapshotPayload snapshot,
+            HistorySnapshotPayload.Branch branch) {
+        String modifier = LumiHotkeys.bindingLabel(
+                Minecraft.getInstance().options.keyMappings,
+                "key.lumi.action_modifier");
+        return BRANCH_SLOTS.keyCode(snapshot, branch.name()).stream()
+                .mapToObj(code -> InputConstants.Type.KEYSYM
+                        .getOrCreate(code).getDisplayName().getString())
+                .map(key -> "[" + modifier + "]+[" + key + "]")
+                .findFirst()
+                .orElseGet(() -> Component.translatable(
+                        "luma.ideas.switch_key_unassigned").getString());
     }
 
     private static void openPackages(Screen parent) {
