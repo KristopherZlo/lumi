@@ -22,6 +22,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
     private final SaveScreenController.Intent preferredIntent;
     private final String initialMessage;
     private final Consumer<UUID> previewCapture;
+    private final Runnable accepted;
     private LegacyModalLayout layout;
     private EditBox message;
     private EditBox tags;
@@ -35,7 +36,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
             SaveScreenController controller,
             Runnable refresh) {
         this(parent, history, controller, refresh,
-                SaveScreenController.Intent.SAVE, "", ignored -> { });
+                SaveScreenController.Intent.SAVE, "", ignored -> { }, () -> { });
     }
 
     public LumiSaveScreen(
@@ -46,7 +47,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
             SaveScreenController.Intent preferredIntent,
             String initialMessage) {
         this(parent, history, controller, refresh,
-                preferredIntent, initialMessage, ignored -> { });
+                preferredIntent, initialMessage, ignored -> { }, () -> { });
     }
 
     public LumiSaveScreen(
@@ -57,7 +58,20 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
             SaveScreenController.Intent preferredIntent,
             String initialMessage,
             Consumer<UUID> previewCapture) {
-        super(Component.translatable("luma.screen.save.title"));
+        this(parent, history, controller, refresh, preferredIntent,
+                initialMessage, previewCapture, () -> { });
+    }
+
+    public LumiSaveScreen(
+            Screen parent,
+            ClientHistoryStore history,
+            SaveScreenController controller,
+            Runnable refresh,
+            SaveScreenController.Intent preferredIntent,
+            String initialMessage,
+            Consumer<UUID> previewCapture,
+            Runnable accepted) {
+        super(parent, Component.translatable("luma.screen.save.title"));
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
         this.controller = Objects.requireNonNull(controller, "controller");
@@ -65,6 +79,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         this.preferredIntent = Objects.requireNonNull(preferredIntent, "preferredIntent");
         this.initialMessage = Objects.requireNonNull(initialMessage, "initialMessage");
         this.previewCapture = Objects.requireNonNull(previewCapture, "previewCapture");
+        this.accepted = Objects.requireNonNull(accepted, "accepted");
     }
 
     @Override
@@ -159,6 +174,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
                 minecraft.player.displayClientMessage(
                         Component.translatable("luma.status.save_started"), true);
             }
+            accepted.run();
             minecraft.setScreen(parent);
         }
     }

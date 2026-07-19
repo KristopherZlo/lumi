@@ -117,7 +117,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             Consumer<HistorySnapshotPayload.Version> createBranch,
             BiConsumer<CommitId, VersionTags> updateTags,
             Consumer<VersionCompareController.Target> openCompare) {
-        super(Component.translatable("luma.screen.dashboard.title"));
+        super(parent, Component.translatable("luma.screen.dashboard.title"));
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
         this.previews = Objects.requireNonNull(previews, "previews");

@@ -167,6 +167,14 @@ public final class LumiHotkeys {
         return mapping(mappings, name).getTranslatedKeyMessage().getString();
     }
 
+    public static boolean bindingDown(KeyMapping[] mappings, String name) {
+        return mapping(mappings, name).isDown();
+    }
+
+    public static boolean bindingUnbound(KeyMapping[] mappings, String name) {
+        return mapping(mappings, name).isUnbound();
+    }
+
     private static Shortcut shortcut(
             String labelKey, String helpKey, KeyMapping key, boolean chorded) {
         return new Shortcut(
