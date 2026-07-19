@@ -37,6 +37,22 @@ class LumiResponsiveModalLayoutTest {
         }
     }
 
+    @Test
+    void diagnosticsFitsItsHintAndRowsInsideNarrowPanels() {
+        for (int[] viewport : new int[][] {{427, 240}, {320, 200}}) {
+            LegacyModalLayout layout = LumiDiagnosticsScreen.fitPanel(
+                    viewport[0], viewport[1], 48);
+            assertInside(viewport, layout);
+            int rowAreaHeight = LumiDiagnosticsScreen.rowAreaHeight(
+                    layout.height(), 48);
+            int columns = LumiDiagnosticsScreen.rowColumns(rowAreaHeight - 10);
+            int rowsPerColumn = (8 + columns - 1) / columns;
+            assertTrue(LumiDiagnosticsScreen.rowStride(
+                    rowAreaHeight - 10, rowsPerColumn) * (rowsPerColumn - 1) + 9
+                    <= rowAreaHeight - 10);
+        }
+    }
+
     private static void assertInside(int[] viewport, LegacyModalLayout layout) {
         assertTrue(layout.x() >= 0 && layout.y() >= 0);
         assertTrue(layout.x() + layout.width() <= viewport[0]);

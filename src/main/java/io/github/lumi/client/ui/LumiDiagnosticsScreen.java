@@ -3,6 +3,8 @@ package io.github.lumi.client.ui;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.diagnostics.ClientDiagnostics;
 import io.github.lumi.client.state.ClientHistoryStore;
+import java.util.List;
+import java.util.Map;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -35,16 +37,20 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
                 FabricLoader.getInstance().isModLoaded("worldedit"),
                 FabricLoader.getInstance().isModLoaded("axiom"),
                 (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024));
-        panelWidth = Math.min(430, width - 24);
-        panelX = (width - panelWidth) / 2;
-        panelHeight = BASE_PANEL_HEIGHT;
-        panelY = Math.max(12, (height - panelHeight) / 2);
+        LegacyModalLayout layout = fitPanel(width, height, 0);
+        panelX = layout.x();
+        panelY = layout.y();
+        panelWidth = layout.width();
+        panelHeight = layout.height();
         boolean hintVisible = addContextualHint(
                 ClientContextualHelpHint.DIAGNOSTICS,
                 panelX + 12, panelY + 58, panelWidth - 24);
         contentOffset = hintVisible ? contextualHintOffset(8) : 0;
-        panelHeight = BASE_PANEL_HEIGHT + contentOffset;
-        panelY = Math.max(12, (height - panelHeight) / 2);
+        layout = fitPanel(width, height, contentOffset);
+        panelX = layout.x();
+        panelY = layout.y();
+        panelWidth = layout.width();
+        panelHeight = layout.height();
         if (hintVisible) {
             moveContextualHint(panelX + 12, panelY + 58);
         }
@@ -57,33 +63,82 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         renderLegacyPanel(graphics, panelX + 12,
                 panelY + 60 + contentOffset,
-                panelWidth - 24, 180);
+                panelWidth - 24, rowAreaHeight(panelHeight, contentOffset));
         graphics.drawString(font, title, panelX + 16, panelY + 18,
                 LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.diagnostics.help"),
                 panelX + 16, panelY + 42, LegacyLumiTheme.MUTED, false);
-        int y = panelY + 70 + contentOffset;
-        y = row(graphics, y, "Dimension", diagnostics.dimension());
-        y = row(graphics, y, "Workspace", diagnostics.workspace());
-        y = row(graphics, y, "Branch", diagnostics.branch());
-        y = row(graphics, y, "Pending keys", Integer.toString(diagnostics.pendingKeys()));
-        y = row(graphics, y, "Operation", diagnostics.operation());
-        y = row(graphics, y, "Recovery", diagnostics.recovery());
-        y = row(graphics, y, "WorldEdit / Axiom",
-                diagnostics.worldEdit() + " / " + diagnostics.axiom());
-        row(graphics, y, "Used JVM heap", diagnostics.usedHeapMiB() + " MiB");
+        renderRows(graphics);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);
         }
     }
 
-    private int row(GuiGraphics graphics, int y, String label, String value) {
-        graphics.drawString(font, label, panelX + 20, y,
+    private void renderRows(GuiGraphics graphics) {
+        List<Map.Entry<String, String>> rows = List.of(
+                Map.entry("Dimension", diagnostics.dimension()),
+                Map.entry("Workspace", diagnostics.workspace()),
+                Map.entry("Branch", diagnostics.branch()),
+                Map.entry("Pending keys", Integer.toString(diagnostics.pendingKeys())),
+                Map.entry("Operation", diagnostics.operation()),
+                Map.entry("Recovery", diagnostics.recovery()),
+                Map.entry("WorldEdit / Axiom",
+                        diagnostics.worldEdit() + " / " + diagnostics.axiom()),
+                Map.entry("Used JVM heap", diagnostics.usedHeapMiB() + " MiB"));
+        int top = panelY + 70 + contentOffset;
+        int availableHeight = Math.max(1,
+                panelY + panelHeight - 8 - top);
+        int columns = rowColumns(availableHeight);
+        int rowsPerColumn = (rows.size() + columns - 1) / columns;
+        int stride = rowStride(availableHeight, rowsPerColumn);
+        int columnWidth = (panelWidth - 40) / columns;
+        for (int index = 0; index < rows.size(); index++) {
+            int column = index / rowsPerColumn;
+            int row = index % rowsPerColumn;
+            Map.Entry<String, String> entry = rows.get(index);
+            row(graphics, panelX + 20 + column * columnWidth,
+                    top + row * stride, columnWidth,
+                    entry.getKey(), entry.getValue());
+        }
+    }
+
+    private void row(
+            GuiGraphics graphics, int x, int y, int width,
+            String label, String value) {
+        int labelWidth = Math.min(82, Math.max(42, width / 2));
+        graphics.drawString(font,
+                font.plainSubstrByWidth(label, labelWidth - 4), x, y,
                 LegacyLumiTheme.MUTED, false);
-        graphics.drawString(font, font.plainSubstrByWidth(value, panelWidth - 155),
-                panelX + 145, y, LegacyLumiTheme.TEXT, false);
-        return y + 21;
+        graphics.drawString(font,
+                font.plainSubstrByWidth(value, Math.max(1, width - labelWidth)),
+                x + labelWidth, y, LegacyLumiTheme.TEXT, false);
+    }
+
+    static LegacyModalLayout fitPanel(
+            int screenWidth, int screenHeight, int contentOffset) {
+        int panelWidth = Math.min(430, Math.max(1, screenWidth - 16));
+        int panelHeight = Math.min(
+                BASE_PANEL_HEIGHT + Math.max(0, contentOffset),
+                Math.max(1, screenHeight - 16));
+        return new LegacyModalLayout(
+                Math.max(0, (screenWidth - panelWidth) / 2),
+                Math.max(0, (screenHeight - panelHeight) / 2),
+                panelWidth, panelHeight);
+    }
+
+    static int rowAreaHeight(int panelHeight, int contentOffset) {
+        return Math.max(1, panelHeight - 68 - Math.max(0, contentOffset));
+    }
+
+    static int rowColumns(int availableHeight) {
+        return availableHeight >= 97 ? 1 : 2;
+    }
+
+    static int rowStride(int availableHeight, int rowsPerColumn) {
+        if (rowsPerColumn <= 1) return 0;
+        return Math.max(1, Math.min(21,
+                (Math.max(1, availableHeight) - 9) / (rowsPerColumn - 1)));
     }
 
     @Override public boolean isPauseScreen() { return false; }
