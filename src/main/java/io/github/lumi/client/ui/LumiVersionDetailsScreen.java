@@ -19,7 +19,7 @@ import net.minecraft.network.chat.Component;
 /** Legacy-style details and display metadata for one saved version. */
 public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     private static final int PANEL_WIDTH = 540;
-    private static final int PANEL_HEIGHT = 286;
+    private static final int PANEL_HEIGHT = 314;
     private static final int PREVIEW_WIDTH = 240;
     private static final int PREVIEW_HEIGHT = 135;
     private static final int MAX_PREVIEW_ZOOM = 4;
@@ -32,6 +32,9 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     private final ClientVersionPreviewStore previews;
     private final Runnable restore;
     private final Optional<Runnable> compareToParent;
+    private final Optional<Runnable> createBranch;
+    private final Optional<Runnable> amend;
+    private final Optional<Runnable> partialRestore;
     private final Runnable delete;
     private final Consumer<VersionTags> updateTags;
     private final Consumer<String> rename;
@@ -56,6 +59,9 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
             ClientVersionPreviewStore previews,
             Runnable restore,
             Optional<Runnable> compareToParent,
+            Optional<Runnable> createBranch,
+            Optional<Runnable> amend,
+            Optional<Runnable> partialRestore,
             Runnable delete,
             Consumer<VersionTags> updateTags,
             Consumer<String> rename) {
@@ -68,6 +74,10 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         this.restore = Objects.requireNonNull(restore, "restore");
         this.compareToParent = Objects.requireNonNull(
                 compareToParent, "compareToParent");
+        this.createBranch = Objects.requireNonNull(createBranch, "createBranch");
+        this.amend = Objects.requireNonNull(amend, "amend");
+        this.partialRestore = Objects.requireNonNull(
+                partialRestore, "partialRestore");
         this.delete = Objects.requireNonNull(delete, "delete");
         this.updateTags = Objects.requireNonNull(updateTags, "updateTags");
         this.rename = Objects.requireNonNull(rename, "rename");
@@ -81,7 +91,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
-        int buttonWidth = Math.max(52, (panelWidth - 52) / 4);
+        int buttonWidth = Math.max(52, (panelWidth - 40) / 3);
         int buttonY = panelY + PANEL_HEIGHT - 30;
         addLegacyButton(panelX + 16, buttonY, buttonWidth,
                 Component.translatable("luma.action.restore"),
@@ -93,11 +103,9 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                 LumiLegacyButton.Kind.NORMAL);
         compare.active = compareToParent.isPresent();
         addLegacyButton(panelX + 24 + buttonWidth * 2, buttonY, buttonWidth,
-                Component.translatable("luma.action.delete_save"),
-                delete, LumiLegacyButton.Kind.DANGER);
-        addLegacyButton(panelX + 28 + buttonWidth * 3, buttonY, buttonWidth,
                 Component.translatable("luma.action.back"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
+        addSecondaryActions(panelWidth, buttonY - 28);
 
         if (editingName) {
             nameEditor = new EditBox(font, panelX + 20, panelY + 12,
@@ -139,6 +147,28 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                     }, LumiLegacyButton.Kind.NORMAL);
         }
         addPreviewControls();
+    }
+
+    private void addSecondaryActions(int panelWidth, int y) {
+        LumiLegacyButton branch = addLegacyIconButton(panelX + 16, y, "branch",
+                Component.translatable("luma.save_details.create_idea"),
+                () -> createBranch.ifPresent(Runnable::run),
+                LumiLegacyButton.Kind.NORMAL);
+        branch.active = createBranch.isPresent();
+        int buttonWidth = Math.max(52, (panelWidth - 100) / 2);
+        LumiLegacyButton replace = addLegacyButton(panelX + 48, y, buttonWidth,
+                Component.translatable("luma.action.amend_version"),
+                () -> amend.ifPresent(Runnable::run), LumiLegacyButton.Kind.NORMAL);
+        replace.active = amend.isPresent();
+        LumiLegacyButton partial = addLegacyButton(
+                panelX + 52 + buttonWidth, y, buttonWidth,
+                Component.translatable("luma.action.restore_selected_area"),
+                () -> partialRestore.ifPresent(Runnable::run),
+                LumiLegacyButton.Kind.NORMAL);
+        partial.active = partialRestore.isPresent();
+        addLegacyIconButton(panelX + panelWidth - 40, y, "trash",
+                Component.translatable("luma.action.delete_save"),
+                delete, LumiLegacyButton.Kind.DANGER);
     }
 
     @Override

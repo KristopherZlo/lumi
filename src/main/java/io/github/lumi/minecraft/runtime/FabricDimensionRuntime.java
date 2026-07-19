@@ -850,10 +850,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public BranchRef createBranch(BranchName name) throws IOException {
+        return createBranch(name, activeRef().commit());
+    }
+
+    public BranchRef createBranch(BranchName name, CommitId startingPoint)
+            throws IOException {
         requireNoRecovery();
+        UUID workspaceId = activeWorkspaceId();
+        restores.requireTargetInWorkspace(startingPoint, workspaceId);
         return branches.create(
-                WorkspaceService.branchName(activeWorkspaceId(), name),
-                activeRef().commit());
+                WorkspaceService.branchName(workspaceId, name), startingPoint);
     }
 
     public void deleteBranch(BranchName name) throws IOException {

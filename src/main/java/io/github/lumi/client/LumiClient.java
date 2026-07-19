@@ -44,6 +44,7 @@ import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.telemetry.TelemetryService;
 import io.github.lumi.update.UpdateChecker;
 import io.github.lumi.update.ClientUpdatePreferenceRepository;
+import java.util.Optional;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -233,9 +234,26 @@ public final class LumiClient implements ClientModInitializer {
         var compare = new VersionCompareController()
                 .target(snapshot.versions(), index)
                 .map(target -> (Runnable) () -> openCompare(parent, target));
+        boolean idle = !snapshot.operationActive();
+        var createBranch = idle ? Optional.of((Runnable) () ->
+                client.setScreen(new LumiBranchScreen(
+                        client.screen, version.message(),
+                        new BranchNameController(name ->
+                                NETWORKING.createBranchAt(name, version.id())))))
+                : Optional.<Runnable>empty();
+        var amend = idle && snapshot.pendingKeys() > 0
+                && snapshot.head().equals(version.id())
+                ? Optional.of((Runnable) () -> {
+                    NETWORKING.amend(version.message(), version.tags());
+                    client.setScreen(parent);
+                }) : Optional.<Runnable>empty();
+        var partialRestore = idle && SELECTION.bounds().isPresent()
+                ? Optional.of((Runnable) () -> openRestore(parent, version))
+                : Optional.<Runnable>empty();
         client.setScreen(new LumiVersionDetailsScreen(
                 parent, snapshot.dimensionId(), version, PREVIEW_STORE,
                 () -> openRestore(parent, version), compare,
+                createBranch, amend, partialRestore,
                 () -> openDelete(parent, version),
                 tags -> NETWORKING.updateVersionTags(version.id(), tags),
                 name -> NETWORKING.renameVersion(version.id(), name)));

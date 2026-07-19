@@ -161,6 +161,13 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), HistoryCommandPayload.Kind.BRANCH_CREATE,
                 "idea", id('2'), 43);
         assertEquals(createBranch, roundTrip(HistoryCommandPayload.CODEC, createBranch));
+        HistoryCommandPayload createBranchAt = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.BRANCH_CREATE_AT,
+                new BranchCreateArgument(
+                        new io.github.lumi.domain.model.BranchName("idea-from-save"),
+                        id('1')).encode(), id('2'), 43);
+        assertEquals(createBranchAt,
+                roundTrip(HistoryCommandPayload.CODEC, createBranchAt));
         HistoryCommandPayload deleteBranch = new HistoryCommandPayload(
                 UUID.randomUUID(), HistoryCommandPayload.Kind.BRANCH_DELETE,
                 "workspace/lab/idea", id('2'), 43);

@@ -28,6 +28,9 @@ class LumiVersionDetailsScreenTest {
         assertTrue(details.contains("updateTags.accept(tags)"));
         assertTrue(details.contains("luma.action.rename_save"));
         assertTrue(details.contains("rename.accept(replacement.value())"));
+        assertTrue(details.contains("luma.save_details.create_idea"));
+        assertTrue(details.contains("luma.action.amend_version"));
+        assertTrue(details.contains("luma.action.restore_selected_area"));
         assertTrue(details.contains("luma.action.zoom_out"));
         assertTrue(details.contains("luma.action.zoom_in"));
         assertTrue(details.contains("luma.action.preview_pan_up"));
@@ -39,5 +42,7 @@ class LumiVersionDetailsScreenTest {
         assertTrue(client.contains("() -> openDelete(parent, version)"));
         assertTrue(client.contains("NETWORKING.updateVersionTags(version.id(), tags)"));
         assertTrue(client.contains("NETWORKING.renameVersion(version.id(), name)"));
+        assertTrue(client.contains("NETWORKING.createBranchAt(name, version.id())"));
+        assertTrue(client.contains("NETWORKING.amend(version.message(), version.tags())"));
     }
 }

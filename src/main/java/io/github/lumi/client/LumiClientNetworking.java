@@ -11,6 +11,7 @@ import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.network.HistoryCommandPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.BranchCreateArgument;
 import io.github.lumi.network.CompareArgument;
 import io.github.lumi.network.CompareResultPayload;
 import io.github.lumi.network.MergeArgument;
@@ -139,6 +140,14 @@ public final class LumiClientNetworking {
     public UUID createBranch(String branchName) {
         return send(HistoryCommandPayload.Kind.BRANCH_CREATE,
                 Objects.requireNonNull(branchName, "branchName"));
+    }
+
+    public UUID createBranchAt(String branchName, CommitId startingPoint) {
+        return send(HistoryCommandPayload.Kind.BRANCH_CREATE_AT,
+                new BranchCreateArgument(
+                        new io.github.lumi.domain.model.BranchName(
+                                Objects.requireNonNull(branchName, "branchName")),
+                        Objects.requireNonNull(startingPoint, "startingPoint")).encode());
     }
 
     public UUID deleteBranch(String branchName) {

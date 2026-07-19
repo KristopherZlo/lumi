@@ -115,6 +115,16 @@ public final class LumiServerNetworking {
                 broadcastSnapshot(runtime);
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.BRANCH_CREATE_AT) {
+                BranchCreateArgument argument =
+                        BranchCreateArgument.parse(payload.argument());
+                runtime.createBranch(argument.name(), argument.startingPoint());
+                sendEvent(player, payload, runtime,
+                        OperationEventPayload.State.SUCCEEDED,
+                        "luma.status.variant_created");
+                broadcastSnapshot(runtime);
+                return;
+            }
             if (payload.kind() == HistoryCommandPayload.Kind.BRANCH_DELETE) {
                 runtime.deleteBranch(new BranchName(payload.argument()));
                 sendEvent(player, payload, runtime,
@@ -483,7 +493,7 @@ public final class LumiServerNetworking {
                 yield runtime.startZoneRestore(
                         zone.target(), zone.zoneId(), author, terminal);
             }
-            case BRANCH_CREATE -> throw new IllegalStateException(
+            case BRANCH_CREATE, BRANCH_CREATE_AT -> throw new IllegalStateException(
                     "Branch creation does not use the mutation queue");
             case BRANCH_DELETE -> throw new IllegalStateException(
                     "Branch deletion does not use the mutation queue");
