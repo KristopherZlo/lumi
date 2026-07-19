@@ -15,7 +15,7 @@ import net.minecraft.network.chat.Component;
 
 /** Thin workspace-zone screen backed by immutable server snapshots. */
 public final class LumiZonesScreen extends LumiLegacyPageScreen {
-    private static final int PAGE_SIZE = 5;
+    private static final int MAX_ROWS = 8;
     private final ClientHistoryStore history;
     private final ZoneScreenController controller;
     private final Consumer<HistorySnapshotPayload.ZoneView> openDetails;
@@ -31,7 +31,7 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
     private int panelY;
     private int panelWidth;
     private int panelHeight;
-    private int page;
+    private int scroll;
     private String error = "";
 
     public LumiZonesScreen(
@@ -95,17 +95,6 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
                 overlayLabel.get(), this::cycleOverlay,
                 LumiLegacyButton.Kind.NORMAL);
         addZoneRows(panelWidth);
-        addLegacyButton(panelX + 20, panelY + 298, 28,
-                Component.literal("<"), () -> changePage(-1),
-                LumiLegacyButton.Kind.NORMAL).active = page > 0;
-        int count = snapshot == null ? 0 : snapshot.zones().size();
-        addLegacyButton(panelX + 52, panelY + 298, 28,
-                Component.literal(">"), () -> changePage(1),
-                LumiLegacyButton.Kind.NORMAL)
-                .active = (page + 1) * PAGE_SIZE < count;
-        addLegacyButton(panelX + panelWidth - 140, panelY + 298, 120,
-                Component.translatable("luma.action.close"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     private void cycleOverlay() {
@@ -115,18 +104,20 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
 
     private void addZoneRows(int panelWidth) {
         if (snapshot == null) return;
-        int start = Math.min(page * PAGE_SIZE, snapshot.zones().size());
-        int end = Math.min(start + PAGE_SIZE, snapshot.zones().size());
+        int start = Math.min(scroll, snapshot.zones().size());
+        int end = Math.min(start + visibleRows(), snapshot.zones().size());
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.ZoneView zone = snapshot.zones().get(index);
             int rowY = panelY + 126 + (index - start) * 32;
-            addLegacyIconButton(panelX + panelWidth - 228, rowY + 4,
+            int right = panelX + panelWidth - 24;
+            addLegacyIconButton(right - 26, rowY + 4,
                     "trash", Component.translatable("luma.zones.delete"),
                     () -> delete.accept(zone), LumiLegacyButton.Kind.DANGER);
-            addLegacyButton(panelX + panelWidth - 196, rowY + 4, 72,
+            addLegacyIconButton(right - 58, rowY + 4, "folder",
                     Component.translatable("luma.action.open_details"),
                     () -> openDetails.accept(zone), LumiLegacyButton.Kind.NORMAL);
-            addLegacyButton(panelX + panelWidth - 116, rowY + 4, 96,
+            addLegacyIconButton(right - 90, rowY + 4,
+                    zone.active() ? "leave" : "join",
                     Component.translatable(zone.active()
                             ? "luma.zones.leave" : "luma.zones.enter"),
                     () -> select(zone), zone.active()
@@ -161,11 +152,6 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
             error = failed.getMessage() == null
                     ? "Lumi zone could not be updated" : failed.getMessage();
         }
-    }
-
-    private void changePage(int delta) {
-        page = Math.max(0, page + delta);
-        rebuildWidgets();
     }
 
     private void feedback(String key) {
@@ -239,30 +225,48 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
                     panelX + 20, panelY + 134, LegacyLumiTheme.MUTED, false);
             return;
         }
-        int start = Math.min(page * PAGE_SIZE, snapshot.zones().size());
-        int end = Math.min(start + PAGE_SIZE, snapshot.zones().size());
+        int start = Math.min(scroll, snapshot.zones().size());
+        int end = Math.min(start + visibleRows(), snapshot.zones().size());
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.ZoneView zone = snapshot.zones().get(index);
             int rowY = panelY + 126 + (index - start) * 32;
             renderLegacyPanel(graphics, panelX + 20, rowY,
                     panelWidth - 40, 28);
+            graphics.fill(
+                    panelX + 27, rowY + 6, panelX + 32, rowY + 11, zone.color());
             graphics.drawString(font,
-                    font.plainSubstrByWidth(zone.name(), panelWidth - 250),
-                    panelX + 28, rowY + 5, zone.color(), false);
-            Component metadata = Component.translatable(
-                            "luma.zones.zone_meta",
-                            Component.translatable(zone.active()
-                                    ? "luma.zones.active" : "luma.zones.no_zone"),
-                            zone.cells());
-            if (zone.sharedCells() > 0) {
-                metadata = metadata.copy().append(" | ").append(
-                        Component.translatable(
-                                "luma.zones.shared_cells", zone.sharedCells()));
-            }
+                    font.plainSubstrByWidth(zone.name(), panelWidth - 150),
+                    panelX + 38, rowY + 5, LegacyLumiTheme.TEXT, false);
+            Component metadata = Component.literal(zone.cells() + " cells");
             graphics.drawString(font,
-                    font.plainSubstrByWidth(metadata.getString(), panelWidth - 250),
-                    panelX + 28, rowY + 17, LegacyLumiTheme.MUTED, false);
+                    font.plainSubstrByWidth(metadata.getString(), panelWidth - 150),
+                    panelX + 38, rowY + 17, LegacyLumiTheme.MUTED, false);
         }
+    }
+
+    private int visibleRows() {
+        return Math.min(MAX_ROWS, Math.max(1, (panelHeight - 126) / 32));
+    }
+
+    @Override
+    public boolean mouseScrolled(
+            double mouseX, double mouseY,
+            double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        if (snapshot != null && x >= panelX && x < panelX + panelWidth
+                && y >= panelY + 126 && y < panelY + panelHeight) {
+            int maximum = Math.max(0, snapshot.zones().size() - visibleRows());
+            int replacement = Math.max(0, Math.min(
+                    maximum, scroll + (verticalAmount < 0 ? 1 : -1)));
+            if (replacement != scroll) {
+                scroll = replacement;
+                rebuildWidgets();
+            }
+            return true;
+        }
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     @Override public boolean isPauseScreen() { return false; }

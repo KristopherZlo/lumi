@@ -224,14 +224,21 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void openZones(Screen parent) {
         Minecraft client = Minecraft.getInstance();
-        client.setScreen(new LumiZonesScreen(
+        LumiZonesScreen zones = new LumiZonesScreen(
                 parent, HISTORY,
                 new ZoneScreenController(NETWORKING::createZone),
                 zone -> openZoneDetails(client.screen, zone),
                 zone -> client.setScreen(new LumiDeleteZoneScreen(
                         client.screen, zone, NETWORKING::deleteZone)),
                 ZONE_OVERLAY::label, ZONE_OVERLAY::cycle,
-                NETWORKING::enterZone, NETWORKING::leaveZone));
+                NETWORKING::enterZone, NETWORKING::leaveZone);
+        HISTORY.state().snapshot().stream()
+                .flatMap(snapshot -> snapshot.zones().stream())
+                .filter(HistorySnapshotPayload.ZoneView::active)
+                .findFirst()
+                .ifPresentOrElse(
+                        zone -> openZoneDetails(zones, zone),
+                        () -> client.setScreen(zones));
     }
 
     private static void openWorkspaces(Screen parent) {

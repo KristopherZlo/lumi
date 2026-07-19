@@ -36,6 +36,9 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("luma.tab.variants"));
         assertTrue(source.contains("luma.action.settings"));
         assertTrue(source.contains("addCompactSidebarButtons"));
+        assertTrue(source.contains("activeZoneColor()"));
+        assertTrue(source.contains(
+                "activeZoneColor().orElse(LegacyLumiTheme.WINDOW_BORDER)"));
         assertTrue(source.contains("\"rollback\", \"luma.action.restore\""));
         assertTrue(source.contains("\"folder\", \"luma.action.open_details\""));
         assertTrue(source.contains("\"tags\""));

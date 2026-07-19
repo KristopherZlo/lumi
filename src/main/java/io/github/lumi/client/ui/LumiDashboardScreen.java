@@ -313,14 +313,15 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         int x = layout.windowX() + 12;
         int width = layout.sidebarWidth() - 24;
         int y = layout.windowY() + 112;
+        Integer zoneColor = activeZoneColor().orElse(null);
         addButton(x, y, width, "luma.tab.history", this::showHistory,
                 tabKind(LegacyProjectTab.HISTORY));
         addButton(x, y + 27, width, "luma.tab.zones",
                 () -> openTab(LegacyProjectTab.ZONES, openZones),
-                tabKind(LegacyProjectTab.ZONES));
+                tabKind(LegacyProjectTab.ZONES), zoneColor);
         addButton(x, y + 54, width, "luma.tab.variants",
                 () -> openTab(LegacyProjectTab.VARIANTS, openBranches),
-                tabKind(LegacyProjectTab.VARIANTS));
+                tabKind(LegacyProjectTab.VARIANTS), zoneColor);
         addButton(x, y + 81, width, "luma.tab.compare", this::showCompare,
                 tabKind(LegacyProjectTab.COMPARE));
         addButton(x, y + 108, width, "luma.tab.import_export",
@@ -338,14 +339,15 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private void addCompactSidebarButtons() {
         int x = layout.windowX() + 12;
         int y = layout.windowY() + 60;
+        Integer zoneColor = activeZoneColor().orElse(null);
         addIconButton(x, y, "graph", "luma.tab.history", this::showHistory,
                 tabKind(LegacyProjectTab.HISTORY));
         addIconButton(x + 32, y, "bookmarks", "luma.tab.zones",
                 () -> openTab(LegacyProjectTab.ZONES, openZones),
-                tabKind(LegacyProjectTab.ZONES));
+                tabKind(LegacyProjectTab.ZONES), zoneColor);
         addIconButton(x, y + 26, "branch", "luma.tab.variants",
                 () -> openTab(LegacyProjectTab.VARIANTS, openBranches),
-                tabKind(LegacyProjectTab.VARIANTS));
+                tabKind(LegacyProjectTab.VARIANTS), zoneColor);
         addIconButton(x + 32, y + 26, "see-changes", "luma.tab.compare",
                 this::showCompare, tabKind(LegacyProjectTab.COMPARE));
         addIconButton(x, y + 52, "folder", "luma.tab.import_export",
@@ -480,15 +482,29 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private void addButton(
             int x, int y, int width, String translation,
             Runnable action, LumiLegacyButton.Kind kind) {
+        addButton(x, y, width, translation, action, kind, null);
+    }
+
+    private void addButton(
+            int x, int y, int width, String translation,
+            Runnable action, LumiLegacyButton.Kind kind, Integer accent) {
         addRenderableWidget(new LumiLegacyButton(
                 x, y, width, 20, Component.translatable(translation),
-                ignored -> action.run(), kind));
+                ignored -> action.run(), kind, null, accent));
     }
 
     private void addIconButton(
             int x, int y, String icon, String translation,
             Runnable action, LumiLegacyButton.Kind kind) {
         addLegacyIconButton(x, y, icon, Component.translatable(translation), action, kind);
+    }
+
+    private void addIconButton(
+            int x, int y, String icon, String translation,
+            Runnable action, LumiLegacyButton.Kind kind, Integer accent) {
+        addRenderableWidget(new LumiLegacyButton(
+                x, y, 26, 20, Component.translatable(translation),
+                ignored -> action.run(), kind, icon, accent));
     }
 
     @Override
@@ -523,7 +539,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         int y = layout.windowY();
         int right = x + layout.windowWidth();
         int bottom = y + layout.windowHeight();
-        graphics.fill(x, y, right, bottom, LegacyLumiTheme.WINDOW_BORDER);
+        graphics.fill(x, y, right, bottom,
+                activeZoneColor().orElse(LegacyLumiTheme.WINDOW_BORDER));
         graphics.fill(x + 1, y + 1, right - 1, bottom - 1,
                 LegacyLumiTheme.WINDOW);
         graphics.fill(x + 1, y + 1, layout.contentX(), bottom - 1,
@@ -746,6 +763,13 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             case "minecraft:the_end" -> "End";
             default -> "Overworld";
         };
+    }
+
+    private Optional<Integer> activeZoneColor() {
+        return snapshot == null ? Optional.empty() : snapshot.zones().stream()
+                .filter(HistorySnapshotPayload.ZoneView::active)
+                .map(HistorySnapshotPayload.ZoneView::color)
+                .findFirst();
     }
 
     private boolean compactSidebar() {

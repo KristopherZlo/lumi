@@ -19,6 +19,7 @@ public final class LumiLegacyButton extends Button {
     private final Kind kind;
     private final Identifier icon;
     private final Identifier disabledIcon;
+    private final Integer accentColor;
 
     public LumiLegacyButton(
             int x, int y, int width, int height,
@@ -29,11 +30,19 @@ public final class LumiLegacyButton extends Button {
     public LumiLegacyButton(
             int x, int y, int width, int height,
             Component message, OnPress onPress, Kind kind, String iconName) {
+        this(x, y, width, height, message, onPress, kind, iconName, null);
+    }
+
+    public LumiLegacyButton(
+            int x, int y, int width, int height,
+            Component message, OnPress onPress, Kind kind,
+            String iconName, Integer accentColor) {
         super(
                 x, y, iconName == null ? contentWidth(width, message) : ICON_BUTTON_WIDTH,
                 CONTROL_HEIGHT,
                 message, onPress, DEFAULT_NARRATION);
         this.kind = kind;
+        this.accentColor = accentColor;
         boolean sliders = "sliders".equals(iconName);
         this.icon = iconName == null ? null : Identifier.fromNamespaceAndPath(
                 LumiMod.MOD_ID, sliders
@@ -57,7 +66,19 @@ public final class LumiLegacyButton extends Button {
     protected void renderContents(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         int fill = active ? kind.fill(isHoveredOrFocused()) : 0xff18191b;
-        graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), fill);
+        if (active && accentColor != null) {
+            graphics.fill(
+                    getX(), getY(), getX() + getWidth(), getY() + getHeight(),
+                    accentColor);
+            fill = (isHoveredOrFocused() ? 0xbb000000 : 0x88000000)
+                    | (accentColor & 0x00ffffff);
+            graphics.fill(
+                    getX() + 1, getY() + 1,
+                    getX() + getWidth() - 1, getY() + getHeight() - 1, fill);
+        } else {
+            graphics.fill(
+                    getX(), getY(), getX() + getWidth(), getY() + getHeight(), fill);
+        }
         if (icon != null) {
             int preferredSize = LumiUiScale.current().targetGuiScale() == 3 ? 8 : 12;
             int size = Math.min(preferredSize, Math.min(getWidth(), getHeight()));

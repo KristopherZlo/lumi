@@ -16,8 +16,11 @@ class LumiZonesScreenTest {
         assertTrue(source.contains("cycleOverlay.run()"));
         assertTrue(source.contains("luma.zones.delete"));
         assertTrue(source.contains("luma.action.open_details"));
-        assertTrue(source.contains("luma.zones.enter"));
-        assertTrue(source.contains("luma.zones.leave"));
-        assertTrue(source.contains("zone.sharedCells()"));
+        assertTrue(source.contains("zone.active() ? \"leave\" : \"join\""));
+        assertTrue(source.contains("\"folder\""));
+        assertTrue(source.contains("\"trash\""));
+        assertTrue(source.contains("zone.color()"));
+        assertTrue(source.contains("zone.cells() + \" cells\""));
+        assertTrue(source.contains("public boolean mouseScrolled("));
     }
 }
