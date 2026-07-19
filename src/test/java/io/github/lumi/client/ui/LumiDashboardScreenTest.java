@@ -26,14 +26,19 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("luma.action.amend_version"));
         assertTrue(source.contains("luma.action.see_changes"));
         assertTrue(source.contains("new EditBox("));
-        assertTrue(source.contains("searchController.filter("));
+        assertTrue(source.contains("historyView.visible("));
         assertTrue(source.contains("visibleVersions()"));
+        assertTrue(source.contains("HistoryViewController.Mode.CARDS"));
+        assertTrue(source.contains("HistoryViewController.Mode.GRAPH"));
+        assertTrue(source.contains("new LumiHistoryGraphView("));
+        assertTrue(source.contains("graphView.renderHover("));
         assertTrue(source.contains("new LumiComparePickerScreen("));
         assertTrue(source.contains("luma.tab.variants"));
         assertTrue(source.contains("luma.action.settings"));
         assertTrue(source.contains("addCompactSidebarButtons"));
         assertTrue(source.contains("\"rollback\", \"luma.action.restore\""));
-        assertTrue(source.contains("\"trash\", \"luma.action.delete\""));
+        assertTrue(source.contains("\"branch\", \"luma.action.create_idea\""));
+        assertTrue(source.contains("version.statistics().blocks()"));
         assertTrue(source.contains("previews.texture(snapshot.dimensionId(), version.id())"));
         assertTrue(source.contains("NO_PREVIEW_ICON"));
         assertTrue(source.contains(

@@ -110,7 +110,7 @@ public final class LumiClient implements ClientModInitializer {
                                 NETWORKING::quickRollback,
                                 version -> openVersionDetails(client.screen, version),
                                 version -> openRestore(client.screen, version),
-                                version -> openDelete(client.screen, version),
+                                version -> openBranchAt(client.screen, version),
                                 LumiClient::showCompareChanges));
                     }
 
@@ -252,10 +252,7 @@ public final class LumiClient implements ClientModInitializer {
                 .map(target -> (Runnable) () -> showCompareChanges(target));
         boolean idle = !snapshot.operationActive();
         var createBranch = idle ? Optional.of((Runnable) () ->
-                client.setScreen(new LumiBranchScreen(
-                        client.screen, version.message(),
-                        new BranchNameController(name ->
-                                NETWORKING.createBranchAt(name, version.id())))))
+                openBranchAt(client.screen, version))
                 : Optional.<Runnable>empty();
         var amend = idle && snapshot.pendingKeys() > 0
                 && snapshot.head().equals(version.id())
@@ -273,6 +270,14 @@ public final class LumiClient implements ClientModInitializer {
                 () -> openDelete(parent, version),
                 tags -> NETWORKING.updateVersionTags(version.id(), tags),
                 name -> NETWORKING.renameVersion(version.id(), name)));
+    }
+
+    private static void openBranchAt(
+            Screen parent, HistorySnapshotPayload.Version version) {
+        Minecraft.getInstance().setScreen(new LumiBranchScreen(
+                parent, version.message(),
+                new BranchNameController(name ->
+                        NETWORKING.createBranchAt(name, version.id()))));
     }
 
     private static void openRestore(

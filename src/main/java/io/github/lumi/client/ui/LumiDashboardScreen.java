@@ -5,6 +5,9 @@ import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.network.HistorySnapshotPayload;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -24,6 +27,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private static final int PREVIEW_WIDTH = 40;
     private static final int PREVIEW_HEIGHT = 22;
     private static final int ICON_TEXTURE_SIZE = 24;
+    private static final DateTimeFormatter HISTORY_TIME =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+                    .withZone(ZoneId.systemDefault());
     private static final Identifier NO_PREVIEW_ICON = Identifier.fromNamespaceAndPath(
             LumiMod.MOD_ID, "textures/gui/new-icons/image.png");
     private final Screen parent;
@@ -40,10 +46,10 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private final Runnable quickRollback;
     private final Consumer<HistorySnapshotPayload.Version> openDetails;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
-    private final Consumer<HistorySnapshotPayload.Version> openDelete;
+    private final Consumer<HistorySnapshotPayload.Version> createBranch;
     private final Consumer<VersionCompareController.Target> openCompare;
-    private final VersionCompareController compareController = new VersionCompareController();
-    private final HistorySearchController searchController = new HistorySearchController();
+    private final HistoryViewController historyView = new HistoryViewController();
+    private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
     private HistorySnapshotPayload snapshot;
     private LegacyWorkspaceLayout layout;
     private EditBox search;
@@ -51,6 +57,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private boolean searchResultsDirty;
     private boolean refocusSearch;
     private LegacyProjectTab activeTab = LegacyProjectTab.HISTORY;
+    private LumiHistoryGraphView graphView;
     private int historyY;
     private int historyHeight;
 
@@ -69,7 +76,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             Runnable quickRollback,
             Consumer<HistorySnapshotPayload.Version> openDetails,
             Consumer<HistorySnapshotPayload.Version> openRestore,
-            Consumer<HistorySnapshotPayload.Version> openDelete,
+            Consumer<HistorySnapshotPayload.Version> createBranch,
             Consumer<VersionCompareController.Target> openCompare) {
         super(Component.translatable("luma.screen.dashboard.title"));
         this.parent = parent;
@@ -86,7 +93,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         this.quickRollback = Objects.requireNonNull(quickRollback, "quickRollback");
         this.openDetails = Objects.requireNonNull(openDetails, "openDetails");
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
-        this.openDelete = Objects.requireNonNull(openDelete, "openDelete");
+        this.createBranch = Objects.requireNonNull(createBranch, "createBranch");
         this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
     }
 
@@ -131,10 +138,30 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         if (snapshot == null) {
             return;
         }
-        int searchWidth = Math.min(160, Math.max(80, layout.bodyWidth() / 3));
+        int toolbarX = layout.bodyX() + 58;
+        addIconButton(toolbarX, historyY + 7, "unordered-list",
+                "luma.history.view_cards",
+                () -> showHistoryMode(HistoryViewController.Mode.CARDS),
+                historyView.mode() == HistoryViewController.Mode.CARDS
+                        ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
+        addIconButton(toolbarX + 32, historyY + 7, "graph",
+                "luma.history.view_graph",
+                () -> showHistoryMode(HistoryViewController.Mode.GRAPH),
+                historyView.mode() == HistoryViewController.Mode.GRAPH
+                        ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
+        int searchWidth = Math.min(100, Math.max(70, layout.bodyWidth() / 4));
+        int searchX = layout.bodyX() + layout.bodyWidth() - searchWidth - 14;
+        int branchX = toolbarX + 64;
+        int branchWidth = Math.max(38, searchX - branchX - 6);
+        addRenderableWidget(new LumiLegacyButton(
+                branchX, historyY + 7, branchWidth, 18,
+                historyView.branch().isEmpty()
+                        ? Component.translatable("luma.history.filter_all")
+                        : Component.literal(historyView.branch()),
+                ignored -> cycleHistoryBranch(), LumiLegacyButton.Kind.NORMAL));
         search = new EditBox(
                 font,
-                layout.bodyX() + layout.bodyWidth() - searchWidth - 14,
+                searchX,
                 historyY + 7,
                 searchWidth,
                 18,
@@ -152,25 +179,34 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
         int rows = visibleHistoryRows(historyHeight, versions.size());
+        if (historyView.mode() == HistoryViewController.Mode.GRAPH) {
+            List<HistoryGraphLayout.Node> nodes = graphLayout
+                    .build(versions, snapshot.branches()).stream()
+                    .limit(rows)
+                    .toList();
+            graphView = new LumiHistoryGraphView(
+                    snapshot.dimensionId(), previews, nodes, snapshot.zones(),
+                    layout.bodyX() + 10,
+                    historyY + HISTORY_FIRST_ROW_OFFSET,
+                    layout.bodyWidth() - 20);
+            graphView.buttons(openDetails).forEach(this::addRenderableWidget);
+            return;
+        }
+        graphView = null;
         for (int index = 0; index < rows; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
             int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
                     + index * HISTORY_ROW_STRIDE;
             int right = layout.bodyX() + layout.bodyWidth() - 14;
-            int sourceIndex = snapshot.versions().indexOf(version);
-            addIconButton(right - 122, rowY + 6,
+            addIconButton(right - 90, rowY + 6,
                     "eye-open", "luma.action.open_details",
                     () -> openDetails.accept(version), LumiLegacyButton.Kind.NORMAL);
-            compareController.target(snapshot.versions(), sourceIndex).ifPresent(target ->
-                    addIconButton(right - 90, rowY + 6,
-                            "see-changes", "luma.action.compare",
-                            () -> openCompare.accept(target), LumiLegacyButton.Kind.NORMAL));
             addIconButton(right - 58, rowY + 6,
                     "rollback", "luma.action.restore",
                     () -> openRestore.accept(version), LumiLegacyButton.Kind.PRIMARY);
             addIconButton(right - 26, rowY + 6,
-                    "trash", "luma.action.delete",
-                    () -> openDelete.accept(version), LumiLegacyButton.Kind.DANGER);
+                    "branch", "luma.action.create_idea",
+                    () -> createBranch.accept(version), LumiLegacyButton.Kind.NORMAL);
         }
     }
 
@@ -285,7 +321,17 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
 
     private List<HistorySnapshotPayload.Version> visibleVersions() {
         return snapshot == null
-                ? List.of() : searchController.filter(snapshot.versions(), searchQuery);
+                ? List.of() : historyView.visible(snapshot, searchQuery);
+    }
+
+    private void showHistoryMode(HistoryViewController.Mode mode) {
+        historyView.show(mode);
+        rebuildWidgets();
+    }
+
+    private void cycleHistoryBranch() {
+        historyView.nextBranch(snapshot.branches());
+        rebuildWidgets();
     }
 
     private LumiLegacyButton.Kind tabKind(LegacyProjectTab tab) {
@@ -326,6 +372,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             drawWorkspace(graphics);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        if (graphView != null) {
+            graphView.renderHover(graphics, font, render.mouseX(), render.mouseY());
+        }
         } finally {
             endLegacyRender(graphics);
         }
@@ -396,8 +445,12 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     LegacyLumiTheme.INSET_BORDER);
         }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
+        if (graphView != null) {
+            graphView.renderConnections(graphics);
+        }
         int rows = visibleHistoryRows(historyHeight, versions.size());
-        for (int index = 0; index < rows; index++) {
+        for (int index = 0;
+                graphView == null && index < rows; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
             int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
                     + index * HISTORY_ROW_STRIDE;
@@ -408,7 +461,13 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     font.plainSubstrByWidth(
                             version.message(), Math.max(0, width - 212)),
                     x + 64, rowY + 5, LegacyLumiTheme.TEXT, false);
-            graphics.drawString(font, version.author(),
+            String tags = version.tags().values().isEmpty() ? ""
+                    : " · #" + String.join(" #", version.tags().values());
+            String meta = version.author() + " · "
+                    + HISTORY_TIME.format(Instant.ofEpochMilli(version.timestampMillis()))
+                    + " · " + version.statistics().blocks() + " blocks" + tags;
+            graphics.drawString(font,
+                    font.plainSubstrByWidth(meta, Math.max(0, width - 212)),
                     x + 64, rowY + 17, LegacyLumiTheme.MUTED, false);
         }
         if (versions.isEmpty()) {
