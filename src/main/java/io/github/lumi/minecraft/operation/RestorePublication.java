@@ -11,4 +11,11 @@ public interface RestorePublication {
     default boolean isDurable() {
         return true;
     }
+
+    /** Reconciles durable pending state when target failure verifies the return state. */
+    default void publishReturn(PreparedRestore restore) throws IOException { }
+
+    default boolean isReturnDurable() {
+        return true;
+    }
 }

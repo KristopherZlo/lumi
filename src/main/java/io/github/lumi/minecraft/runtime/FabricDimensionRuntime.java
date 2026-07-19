@@ -19,6 +19,8 @@ import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestoreOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestorePreparation;
 import io.github.lumi.minecraft.operation.WorkspaceSwitchRestorePublication;
+import io.github.lumi.minecraft.operation.WorkingIndexClearPublication;
+import io.github.lumi.minecraft.operation.WorkingIndexRecoveryPublication;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.BranchSwitchPlan;
@@ -501,7 +503,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private RestorePublication recoveryPublication(
             OperationJournal journal, RecoveryChoice choice) throws IOException {
-        if (choice == RecoveryChoice.RETURN_CHECKPOINT) {
+        if (choice == RecoveryChoice.RETURN_CHECKPOINT
+                && journal.kind() != OperationKind.QUICK_ROLLBACK) {
             return ignored -> { };
         }
         if (journal.kind() == OperationKind.BRANCH_SWITCH) {
@@ -535,7 +538,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             return new PendingRestorePublication(mutations);
         }
         if (journal.kind() == OperationKind.QUICK_ROLLBACK) {
-            return ignored -> mutations.clear(mutations.snapshot());
+            var action = choice == RecoveryChoice.RESUME_TARGET
+                    ? WorkingIndexRecoveryPublication.TargetAction.CLEAR
+                    : WorkingIndexRecoveryPublication.TargetAction.RESTORE;
+            return new WorkingIndexRecoveryPublication(
+                    mutations, journal.capturedGenerations(), action);
         }
         return new BranchRefRestorePublication(refs);
     }
@@ -1423,10 +1430,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         var prepared = restores.prepare(
                                 expected, saved.commitId(), expected.commit());
                         return RestoreOperation.startQuickRollback(
-                                prepared, worldApply,
-                                ignored -> mutations.clear(saved.capturedGenerations()),
+                                prepared, worldApply, new WorkingIndexClearPublication(
+                                        mutations, saved.capturedGenerations()),
                                 journals, operationId, restoreStateListener,
-                                saved.commitId());
+                                saved.commitId(), saved.capturedGenerations());
                     } catch (IOException failed) {
                         throw new CompletionException(failed);
                     }

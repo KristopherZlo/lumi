@@ -11,7 +11,7 @@ import java.util.Objects;
 /** Publishes an applied partial Restore as ordinary pending world work. */
 public final class PendingRestorePublication implements RestorePublication {
     private final MutationDurabilityTracker mutations;
-    private WorkingIndexSnapshot boundary;
+    private MutationDurabilityTracker.DurabilityBoundary boundary;
 
     public PendingRestorePublication(MutationDurabilityTracker mutations) {
         this.mutations = Objects.requireNonNull(mutations, "mutations");
@@ -29,7 +29,7 @@ public final class PendingRestorePublication implements RestorePublication {
         restore.entities().forEach((key, ignored) -> generations.put(key,
                 mutations.registerEntityMutation(
                         key, () -> restore.returnEntities().get(key))));
-        boundary = new WorkingIndexSnapshot(generations);
+        boundary = mutations.durabilityBoundary(new WorkingIndexSnapshot(generations));
     }
 
     @Override

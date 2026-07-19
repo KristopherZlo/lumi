@@ -185,14 +185,20 @@ class RestoreOperationTest {
                 source, source.commit(), Map.of(), Map.of(), Map.of(), Map.of());
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
 
-        RestoreOperation.startQuickRollback(
+        RestoreOperation operation = RestoreOperation.startQuickRollback(
                 restore, new RepairThenVerify(), ignored -> { }, journals,
-                UUID.randomUUID(), RestoreStateListener.NONE, checkpoint);
+                UUID.randomUUID(), RestoreStateListener.NONE, checkpoint,
+                io.github.lumi.domain.model.WorkingIndexSnapshot.empty());
+        assertTrue(journals.read().isEmpty());
+
+        operation.tick(Long.MAX_VALUE);
 
         var journal = journals.read().orElseThrow();
         assertEquals(io.github.lumi.domain.model.OperationKind.QUICK_ROLLBACK, journal.kind());
         assertEquals(Optional.of(source.commit()), journal.target().target());
         assertEquals(Optional.of(checkpoint), journal.target().returnPoint());
+        assertEquals(Optional.of(io.github.lumi.domain.model.WorkingIndexSnapshot.empty()),
+                journal.capturedGenerations());
     }
 
     @Test
@@ -399,6 +405,29 @@ class RestoreOperationTest {
     }
 
     @Test
+    void retainsJournalUntilReturnPublicationBecomesDurable() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('d'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        DelayedPublication publication = new DelayedPublication();
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('e'), Map.of(), Map.of(), Map.of(), Map.of()),
+                new ReturnAfterMismatch(true), publication, journals, UUID.randomUUID());
+
+        activate(operation, journals);
+        for (int tick = 0; tick < 6; tick++) {
+            operation.tick(Long.MAX_VALUE);
+        }
+
+        assertEquals(RestoreStatus.RETURNING, operation.status());
+        assertTrue(publication.returnPublished);
+        assertEquals(OperationPhase.ROLLING_BACK, journals.read().orElseThrow().phase());
+        publication.returnDurable = true;
+        operation.tick(Long.MAX_VALUE);
+        assertEquals(RestoreStatus.RETURNED, operation.status());
+        assertTrue(journals.read().isEmpty());
+    }
+
+    @Test
     void doesNotReturnAfterPublicationFailure() throws IOException {
         var expected = new BranchRef(new BranchName("main"), id('d'), 1);
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
@@ -584,8 +613,14 @@ class RestoreOperationTest {
     private static final class DelayedPublication implements RestorePublication {
         private boolean published;
         private boolean durable;
+        private boolean returnPublished;
+        private boolean returnDurable;
         @Override public void publish(PreparedRestore restore) { published = true; }
         @Override public boolean isDurable() { return published && durable; }
+        @Override public void publishReturn(PreparedRestore restore) { returnPublished = true; }
+        @Override public boolean isReturnDurable() {
+            return returnPublished && returnDurable;
+        }
     }
 
     private static final class TwoStepApply implements TestWorldApply {

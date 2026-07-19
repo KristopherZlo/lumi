@@ -220,8 +220,10 @@ public final class RestoreOperation implements DimensionMutation {
             OperationJournalRepository journals,
             UUID operationId,
             RestoreStateListener stateListener,
-            CommitId returnPoint) throws IOException {
+            CommitId returnPoint,
+            WorkingIndexSnapshot capturedGenerations) throws IOException {
         Objects.requireNonNull(returnPoint, "returnPoint");
+        Objects.requireNonNull(capturedGenerations, "capturedGenerations");
         if (!restore.targetCommit().equals(restore.expectedRef().commit())) {
             throw new IOException("Quick Rollback target must be the active HEAD");
         }
@@ -230,7 +232,8 @@ public final class RestoreOperation implements DimensionMutation {
                 restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
                 Optional.of(returnPoint));
         return start(restore, world, publication, journals, operationId,
-                stateListener, OperationKind.QUICK_ROLLBACK, target);
+                stateListener, OperationKind.QUICK_ROLLBACK, target,
+                Optional.of(capturedGenerations));
     }
 
     public static RestoreOperation start(
@@ -460,6 +463,13 @@ public final class RestoreOperation implements DimensionMutation {
             } else if (returnPhase == ReturnPhase.VERIFYING) {
                 WorldStateApply.Verification verification = returnSession.verifyUntil(deadlineNanos);
                 if (verification == WorldStateApply.Verification.VERIFIED) {
+                    if (!returnPublicationStarted) {
+                        publication.publishReturn(restore);
+                        returnPublicationStarted = true;
+                    }
+                    if (!publication.isReturnDurable()) {
+                        return;
+                    }
                     journal = journals.advance(journal, OperationPhase.COMPLETE);
                     journals.clear(journal);
                     returnSession.close();
