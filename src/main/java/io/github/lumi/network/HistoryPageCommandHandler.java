@@ -49,16 +49,18 @@ final class HistoryPageCommandHandler {
                         request.offset(), request.limit())
                 : runtime.historyPage(
                         request.branch(), request.offset(), request.limit());
-        future.whenComplete((page, failure) ->
-                context.server().execute(() -> {
+        future.whenComplete((page, failure) -> {
+            HistoryPagePayload result = failure == null
+                    ? success(request, runtime, page)
+                    : failure(request, failureMessage.apply(failure));
+            context.server().execute(() -> {
                     if (context.server().getPlayerList()
                             .getPlayer(player.getUUID()) != player) {
                         return;
                     }
-                    results.send(player, failure == null
-                            ? success(request, runtime, page)
-                            : failure(request, failureMessage.apply(failure)));
-                }));
+                    results.send(player, result);
+                });
+        });
     }
 
     private static HistoryPagePayload success(
