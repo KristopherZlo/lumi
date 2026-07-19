@@ -122,6 +122,31 @@ public final class ZoneService {
         return changed;
     }
 
+    public synchronized Zone updateActiveForActor(
+            UUID workspaceId,
+            UUID actor,
+            Set<SectionKey> changes,
+            boolean add) throws IOException {
+        Objects.requireNonNull(actor, "actor");
+        Set<SectionKey> requested = Set.copyOf(
+                Objects.requireNonNull(changes, "changes"));
+        Zone current = list(workspaceId).stream()
+                .filter(zone -> zone.activeActors().contains(actor))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Enter a zone before editing its cells"));
+        if (requested.isEmpty()) {
+            return current;
+        }
+        var cells = new HashSet<>(current.cells());
+        boolean changed = add
+                ? cells.addAll(requested) : cells.removeAll(requested);
+        return changed
+                ? zones.replace(current, copy(
+                        current, cells, current.activeActors()))
+                : current;
+    }
+
     private static int nextColor(List<Zone> existing) {
         Set<Integer> used = existing.stream()
                 .map(Zone::color)

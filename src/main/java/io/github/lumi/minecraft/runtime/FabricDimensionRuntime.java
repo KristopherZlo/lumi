@@ -1370,6 +1370,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return startQuickRollback(Optional.empty(), author, terminalObserver);
     }
 
+    public io.github.lumi.domain.model.Zone editActiveZone(
+            UUID actor, BlockBox area, boolean add) throws IOException {
+        requireZoneMetadataMutable();
+        var workspace = activeWorkspace();
+        java.util.Set<SectionKey> selected = area.sectionCells(65_536);
+        if (selected.stream().anyMatch(cell -> !workspace.includes(cell))) {
+            throw new IllegalArgumentException(
+                    "Zone edit extends outside the active workspace");
+        }
+        return zones.updateActiveForActor(
+                workspace.id(), Objects.requireNonNull(actor, "actor"),
+                selected, add);
+    }
+
     public synchronized DimensionMutation startQuickRollback(
             Optional<BlockBox> selection,
             CommitAuthor author,

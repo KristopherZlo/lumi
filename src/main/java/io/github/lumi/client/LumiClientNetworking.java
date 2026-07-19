@@ -24,6 +24,7 @@ import io.github.lumi.network.QuickRollbackArgument;
 import io.github.lumi.network.SaveArgument;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.network.ZoneCreateArgument;
+import io.github.lumi.network.ZoneCellsArgument;
 import io.github.lumi.network.ZoneCompareArgument;
 import io.github.lumi.network.ZoneRestoreArgument;
 import io.github.lumi.network.ZoneSaveArgument;
@@ -224,6 +225,12 @@ public final class LumiClientNetworking {
 
     public UUID saveZone(UUID zoneId, String message) {
         return saveZone(zoneId, message, VersionTags.empty());
+    }
+
+    public UUID editActiveZone(boolean add, BlockBox area) {
+        return send(HistoryCommandPayload.Kind.ZONE_CELLS,
+                new ZoneCellsArgument(
+                        add, Objects.requireNonNull(area, "area")).encode());
     }
 
     public UUID saveZone(UUID zoneId, String message, VersionTags tags) {

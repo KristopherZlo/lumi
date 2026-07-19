@@ -89,4 +89,23 @@ class ZoneServiceTest {
         assertEquals(Set.of(actor),
                 service.require(workspace, second.id()).activeActors());
     }
+
+    @Test
+    void addsAndRemovesCellsOnlyFromTheActorsActiveZone() throws Exception {
+        ZoneService service = new ZoneService(new ZoneRepository(repositoryRoot));
+        UUID workspace = new UUID(0, 1);
+        UUID actor = new UUID(0, 2);
+        var zone = service.createActive(
+                new UUID(0, 3), workspace, "Gate", actor);
+        SectionKey first = new SectionKey(-1, 0, -2);
+        SectionKey second = new SectionKey(1, 2, 3);
+
+        service.updateActiveForActor(
+                workspace, actor, Set.of(first, second), true);
+        service.updateActiveForActor(
+                workspace, actor, Set.of(second), false);
+
+        assertEquals(Set.of(first),
+                service.require(workspace, zone.id()).cells());
+    }
 }

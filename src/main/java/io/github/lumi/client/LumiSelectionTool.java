@@ -3,10 +3,12 @@ package io.github.lumi.client;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientSelection;
 import io.github.lumi.client.state.SelectionResizeSideResolver;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.BlockPosition;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
@@ -22,14 +24,17 @@ public final class LumiSelectionTool {
     private final ClientSelection selection;
     private final ClientHistoryStore history;
     private final Consumer<String> feedback;
+    private final BiConsumer<Boolean, BlockBox> editZone;
 
     public LumiSelectionTool(
             ClientSelection selection,
             ClientHistoryStore history,
-            Consumer<String> feedback) {
+            Consumer<String> feedback,
+            BiConsumer<Boolean, BlockBox> editZone) {
         this.selection = Objects.requireNonNull(selection, "selection");
         this.history = Objects.requireNonNull(history, "history");
         this.feedback = Objects.requireNonNull(feedback, "feedback");
+        this.editZone = Objects.requireNonNull(editZone, "editZone");
     }
 
     public void register() {
@@ -66,6 +71,11 @@ public final class LumiSelectionTool {
         Optional<InteractionHand> hand = toolHand(client);
         if (hand.isEmpty()) return false;
         activateScope(client);
+        if (controlDown(client)) {
+            editZone(client, button == GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            client.player.swing(hand.orElseThrow());
+            return true;
+        }
         if (actionModifierDown(client)) {
             if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
                 selection.toggleMode();
@@ -93,6 +103,25 @@ public final class LumiSelectionTool {
         }
         client.player.swing(hand.orElseThrow());
         return true;
+    }
+
+    private void editZone(Minecraft client, boolean add) {
+        Optional<BlockBox> area = selection.bounds().or(() ->
+                target(client).map(position -> new BlockBox(
+                        position.x(), position.y(), position.z(),
+                        position.x(), position.y(), position.z())));
+        if (area.isEmpty()) {
+            feedback.accept("luma.selection.no_target");
+            return;
+        }
+        try {
+            editZone.accept(add, area.orElseThrow());
+            feedback.accept(add
+                    ? "luma.selection.zone_added"
+                    : "luma.selection.zone_removed");
+        } catch (RuntimeException failed) {
+            feedback.accept("luma.selection.zone_failed");
+        }
     }
 
     private boolean onScroll(
@@ -151,5 +180,14 @@ public final class LumiSelectionTool {
 
     private static boolean actionModifierDown(Minecraft client) {
         return LumiHotkeys.actionModifierDown(client.options.keyMappings);
+    }
+
+    private static boolean controlDown(Minecraft client) {
+        return com.mojang.blaze3d.platform.InputConstants.isKeyDown(
+                client.getWindow(),
+                com.mojang.blaze3d.platform.InputConstants.KEY_LCONTROL)
+                || com.mojang.blaze3d.platform.InputConstants.isKeyDown(
+                        client.getWindow(),
+                        com.mojang.blaze3d.platform.InputConstants.KEY_RCONTROL);
     }
 }

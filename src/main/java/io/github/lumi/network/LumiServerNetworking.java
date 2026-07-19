@@ -234,7 +234,8 @@ public final class LumiServerNetworking {
     private static boolean isZoneMetadata(HistoryCommandPayload.Kind kind) {
         return kind == HistoryCommandPayload.Kind.ZONE_CREATE
                 || kind == HistoryCommandPayload.Kind.ZONE_ENTER
-                || kind == HistoryCommandPayload.Kind.ZONE_LEAVE;
+                || kind == HistoryCommandPayload.Kind.ZONE_LEAVE
+                || kind == HistoryCommandPayload.Kind.ZONE_CELLS;
     }
 
     private static boolean isPackageCommand(HistoryCommandPayload.Kind kind) {
@@ -342,6 +343,12 @@ public final class LumiServerNetworking {
             ZoneCreateArgument argument = ZoneCreateArgument.parse(payload.argument());
             runtime.createZone(argument.name(), player.getUUID());
             message = "Zone created";
+        } else if (payload.kind() == HistoryCommandPayload.Kind.ZONE_CELLS) {
+            ZoneCellsArgument argument = ZoneCellsArgument.parse(payload.argument());
+            runtime.editActiveZone(
+                    player.getUUID(), argument.area(), argument.add());
+            message = argument.add()
+                    ? "Zone cells added" : "Zone cells removed";
         } else {
             UUID zoneId = UUID.fromString(payload.argument());
             boolean active = payload.kind() == HistoryCommandPayload.Kind.ZONE_ENTER;
@@ -574,7 +581,8 @@ public final class LumiServerNetworking {
                     "Compare cancellation does not use the mutation queue");
             case MERGE -> throw new IllegalStateException(
                     "Merge preparation starts before the mutation queue");
-            case ZONE_CREATE, ZONE_ENTER, ZONE_LEAVE -> throw new IllegalStateException(
+            case ZONE_CREATE, ZONE_ENTER, ZONE_LEAVE, ZONE_CELLS ->
+                    throw new IllegalStateException(
                     "Zone metadata does not use the mutation queue");
             case DELETE_VERSION -> throw new IllegalStateException(
                     "Version deletion does not use the mutation queue");

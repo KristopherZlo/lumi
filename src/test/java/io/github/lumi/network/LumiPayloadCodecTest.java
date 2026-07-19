@@ -97,6 +97,12 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_CREATE,
                 zoneCreate.encode(), id('1'), 42);
         assertEquals(createZone, roundTrip(HistoryCommandPayload.CODEC, createZone));
+        var zoneCells = new ZoneCellsArgument(
+                false, new io.github.lumi.domain.model.BlockBox(1, 2, 3, 4, 5, 6));
+        HistoryCommandPayload editZone = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_CELLS,
+                zoneCells.encode(), id('1'), 42);
+        assertEquals(editZone, roundTrip(HistoryCommandPayload.CODEC, editZone));
         for (HistoryCommandPayload.Kind kind : java.util.List.of(
                 HistoryCommandPayload.Kind.ZONE_ENTER,
                 HistoryCommandPayload.Kind.ZONE_LEAVE)) {

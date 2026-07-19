@@ -18,6 +18,9 @@ class LumiSelectionToolTest {
         assertTrue(tool.contains("getOffhandItem().is(Items.WOODEN_SWORD)"));
         assertTrue(tool.contains("selection.toggleMode()"));
         assertTrue(tool.contains("selection.clear()"));
+        assertTrue(tool.contains("controlDown(client)"));
+        assertTrue(tool.contains("editZone.accept(add"));
+        assertTrue(tool.contains("selection.bounds().or("));
         assertTrue(tool.contains("SelectionResizeSideResolver.resolve("));
         assertTrue(tool.contains("client.screen == null"));
         assertTrue(mixin.contains("callback.cancel()"));
