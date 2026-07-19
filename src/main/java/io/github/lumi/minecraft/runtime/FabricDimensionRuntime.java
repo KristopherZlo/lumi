@@ -969,6 +969,29 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return historyViews.history(limit);
     }
 
+    public CompletableFuture<io.github.lumi.domain.model.HistoryPage> historyPage(
+            BranchName branch, int offset, int limit) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return historyViews.historyPage(branch, offset, limit);
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+    }
+
+    public CompletableFuture<io.github.lumi.domain.model.HistoryPage> zoneHistoryPage(
+            BranchName branch, UUID zoneId, int offset, int limit) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return historyViews.zoneHistoryPage(
+                        branch, zoneId, offset, limit);
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+    }
+
     public VersionTags versionTags(CommitId target) {
         try {
             return versionTagService.read(target);

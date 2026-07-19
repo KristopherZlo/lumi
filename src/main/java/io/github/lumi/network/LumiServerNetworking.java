@@ -48,6 +48,10 @@ public final class LumiServerNetworking {
             new ZoneOverlayCommandHandler(
                     LumiServerNetworking::failureMessage,
                     LumiServerNetworking::send);
+    private static final HistoryPageCommandHandler HISTORY_PAGES =
+            new HistoryPageCommandHandler(
+                    LumiServerNetworking::failureMessage,
+                    LumiServerNetworking::send);
     private static final ConcurrentHashMap<UUID, PendingPackage> PACKAGE_INSPECTIONS =
             new ConcurrentHashMap<>();
     private static final HistorySnapshotFactory SNAPSHOTS = new HistorySnapshotFactory();
@@ -59,6 +63,8 @@ public final class LumiServerNetworking {
                 HistoryCommandPayload.TYPE, HistoryCommandPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(
                 OperationCancelPayload.TYPE, OperationCancelPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(
+                HistoryPageRequestPayload.TYPE, HistoryPageRequestPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 HistorySnapshotPayload.TYPE, HistorySnapshotPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
@@ -73,10 +79,14 @@ public final class LumiServerNetworking {
                 PartialRestorePlanPayload.TYPE, PartialRestorePlanPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 ZoneOverlayPayload.TYPE, ZoneOverlayPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                HistoryPagePayload.TYPE, HistoryPagePayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(
                 HistoryCommandPayload.TYPE, LumiServerNetworking::receive);
         ServerPlayNetworking.registerGlobalReceiver(
                 OperationCancelPayload.TYPE, LumiServerNetworking::cancel);
+        ServerPlayNetworking.registerGlobalReceiver(
+                HistoryPageRequestPayload.TYPE, LumiServerNetworking::historyPage);
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 LumiMod.serverRuntime().find(handler.getPlayer().level()).ifPresent(runtime ->
                         sendSnapshot(handler.getPlayer(), runtime)));
@@ -469,6 +479,38 @@ public final class LumiServerNetworking {
         }
         String message = cause.getMessage();
         return message == null || message.isBlank() ? "Operation failed" : message;
+    }
+
+    private static void historyPage(
+            HistoryPageRequestPayload request,
+            ServerPlayNetworking.Context context) {
+        ServerPlayer player = context.player();
+        FabricDimensionRuntime runtime = LumiMod.serverRuntime()
+                .find(player.level()).orElse(null);
+        PermissionDecision permission;
+        try {
+            permission = LumiMod.serverRuntime().permission(player);
+        } catch (IOException failed) {
+            sendHistoryPageFailure(player, request, failureMessage(failed));
+            return;
+        }
+        if (runtime == null || permission != PermissionDecision.ALLOWED) {
+            sendHistoryPageFailure(player, request, runtime == null
+                    ? "Lumi is not ready for this dimension"
+                    : permissionMessage(permission));
+            return;
+        }
+        HISTORY_PAGES.start(player, runtime, request, context);
+    }
+
+    private static void sendHistoryPageFailure(
+            ServerPlayer player,
+            HistoryPageRequestPayload request,
+            String message) {
+        send(player, new HistoryPagePayload(
+                request.requestId(), request.dimensionId(),
+                request.workspaceId(), request.branch(), request.zoneId(),
+                request.offset(), false, java.util.List.of(), message));
     }
 
     private static void partialRestorePlan(
