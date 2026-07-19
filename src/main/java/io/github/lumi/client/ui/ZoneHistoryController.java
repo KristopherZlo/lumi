@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /** Owns branch and page state for one zone's bounded history query. */
-final class ZoneHistoryController {
+public final class ZoneHistoryController {
     static final int PAGE_SIZE = 3;
     private final HistorySnapshotPayload snapshot;
     private final UUID zoneId;
@@ -101,7 +101,7 @@ final class ZoneHistoryController {
     }
 
     @FunctionalInterface
-    interface Requester {
+    public interface Requester {
         UUID request(
                 BranchName branch,
                 Optional<UUID> zoneId,
