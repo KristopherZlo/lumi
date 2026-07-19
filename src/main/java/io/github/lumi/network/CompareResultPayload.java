@@ -1,6 +1,7 @@
 package io.github.lumi.network;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.model.BlockChange;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import java.util.ArrayList;
@@ -22,10 +23,15 @@ public record CompareResultPayload(
         int changedEntityChunks,
         List<ChangedSection> sectionPreview,
         List<Material> materials,
-        String error) implements CustomPacketPayload {
+        String error,
+        int batchIndex,
+        boolean complete,
+        List<BlockChange> blockChanges,
+        long changedBlocks) implements CustomPacketPayload {
     private static final int MAX_TEXT_BYTES = 1024;
     private static final int MAX_MATERIALS = 128;
     private static final int MAX_PREVIEW_SECTIONS = 512;
+    public static final int MAX_BLOCK_CHANGES = 4_096;
     public static final Type<CompareResultPayload> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "compare_result"));
     public static final StreamCodec<FriendlyByteBuf, CompareResultPayload> CODEC =
@@ -40,12 +46,31 @@ public record CompareResultPayload(
                 Objects.requireNonNull(sectionPreview, "sectionPreview"));
         materials = List.copyOf(Objects.requireNonNull(materials, "materials"));
         Objects.requireNonNull(error, "error");
+        blockChanges = List.copyOf(
+                Objects.requireNonNull(blockChanges, "blockChanges"));
         if (dimensionId.isBlank() || changedSections < 0 || changedEntityChunks < 0
                 || sectionPreview.size() > MAX_PREVIEW_SECTIONS
                 || sectionPreview.size() > changedSections
-                || materials.size() > MAX_MATERIALS) {
+                || materials.size() > MAX_MATERIALS || batchIndex < 0
+                || blockChanges.size() > MAX_BLOCK_CHANGES || changedBlocks < 0
+                || (!complete && !error.isEmpty())) {
             throw new IllegalArgumentException("Invalid Compare result");
         }
+    }
+
+    public CompareResultPayload(
+            UUID requestId,
+            String dimensionId,
+            CommitId before,
+            CommitId after,
+            int changedSections,
+            int changedEntityChunks,
+            List<ChangedSection> sectionPreview,
+            List<Material> materials,
+            String error) {
+        this(requestId, dimensionId, before, after, changedSections,
+                changedEntityChunks, sectionPreview, materials, error,
+                0, true, List.of(), 0);
     }
 
     public CompareResultPayload(
@@ -73,6 +98,16 @@ public record CompareResultPayload(
         buffer.writeVarInt(materials.size());
         materials.forEach(material -> material.write(buffer));
         buffer.writeUtf(error, MAX_TEXT_BYTES);
+        buffer.writeVarInt(batchIndex);
+        buffer.writeBoolean(complete);
+        buffer.writeVarInt(blockChanges.size());
+        blockChanges.forEach(change -> {
+            buffer.writeInt(change.x());
+            buffer.writeInt(change.y());
+            buffer.writeInt(change.z());
+            buffer.writeByte(change.kind().ordinal());
+        });
+        buffer.writeVarLong(changedBlocks);
     }
 
     private static CompareResultPayload read(FriendlyByteBuf buffer) {
@@ -98,9 +133,29 @@ public record CompareResultPayload(
         for (int index = 0; index < count; index++) {
             materials.add(Material.read(buffer));
         }
+        String error = buffer.readUtf(MAX_TEXT_BYTES);
+        int batchIndex = buffer.readVarInt();
+        boolean complete = buffer.readBoolean();
+        int blockCount = buffer.readVarInt();
+        if (blockCount < 0 || blockCount > MAX_BLOCK_CHANGES) {
+            throw new IllegalArgumentException("Invalid Compare block count");
+        }
+        ArrayList<BlockChange> blocks = new ArrayList<>(blockCount);
+        for (int index = 0; index < blockCount; index++) {
+            int x = buffer.readInt();
+            int y = buffer.readInt();
+            int z = buffer.readInt();
+            int kind = buffer.readUnsignedByte();
+            if (kind >= BlockChange.Kind.values().length) {
+                throw new IllegalArgumentException("Invalid Compare block kind");
+            }
+            blocks.add(new BlockChange(
+                    x, y, z, BlockChange.Kind.values()[kind]));
+        }
         return new CompareResultPayload(
                 request, dimension, before, after, sections, entities,
-                sectionPreview, materials, buffer.readUtf(MAX_TEXT_BYTES));
+                sectionPreview, materials, error, batchIndex, complete,
+                blocks, buffer.readVarLong());
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

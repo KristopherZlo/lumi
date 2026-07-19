@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.BlockChange;
 import io.github.lumi.domain.model.ObjectId;
 import io.netty.buffer.Unpooled;
 import java.util.List;
@@ -22,7 +23,11 @@ class ComparePayloadTest {
                 argument.before(), argument.after(), 4, 2,
                 List.of(new CompareResultPayload.ChangedSection(1, 2, 3)),
                 List.of(new CompareResultPayload.Material(
-                        "minecraft:stone", 10, 14)), "");
+                        "minecraft:stone", 10, 14)), "",
+                3, false, List.of(
+                        new BlockChange(16, 32, 48, BlockChange.Kind.ADDED),
+                        new BlockChange(-1, 0, 9, BlockChange.Kind.REMOVED)),
+                2);
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         try {
             CompareResultPayload.CODEC.encode(buffer, result);

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.BlockChange;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.network.CompareResultPayload;
 import java.util.List;
@@ -63,6 +64,23 @@ class ClientCompareStoreTest {
         assertTrue(store.visibleResult().isPresent());
     }
 
+    @Test
+    void accumulatesOnlyOrderedCorrelatedBatches() {
+        ClientCompareStore store = new ClientCompareStore();
+        UUID request = UUID.randomUUID();
+        store.begin(request, "minecraft:overworld", BEFORE, AFTER);
+        store.accept(batch(request, 1, false, BlockChange.Kind.REMOVED));
+        assertTrue(store.visibleChanges().isEmpty());
+
+        store.accept(batch(request, 0, false, BlockChange.Kind.ADDED));
+        store.accept(batch(request, 1, true, BlockChange.Kind.REMOVED));
+
+        assertEquals(List.of(
+                new BlockChange(0, 1, 2, BlockChange.Kind.ADDED),
+                new BlockChange(1, 1, 2, BlockChange.Kind.REMOVED)),
+                store.visibleChanges());
+    }
+
     private static CompareResultPayload result(UUID request, String dimension) {
         return new CompareResultPayload(
                 request, dimension, BEFORE, AFTER, 1, 0, List.of(), "");
@@ -73,5 +91,13 @@ class ClientCompareStoreTest {
                 request, "minecraft:overworld", BEFORE, AFTER, 1, 0,
                 List.of(new CompareResultPayload.ChangedSection(0, 4, 0)),
                 List.of(), "");
+    }
+
+    private static CompareResultPayload batch(
+            UUID request, int index, boolean complete, BlockChange.Kind kind) {
+        return new CompareResultPayload(
+                request, "minecraft:overworld", BEFORE, AFTER, 1, 0,
+                List.of(), List.of(), "", index, complete,
+                List.of(new BlockChange(index, 1, 2, kind)), index + 1L);
     }
 }

@@ -1,7 +1,10 @@
 package io.github.lumi.client.state;
 
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.BlockChange;
 import io.github.lumi.network.CompareResultPayload;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,6 +13,8 @@ import java.util.UUID;
 public final class ClientCompareStore {
     private Pending pending;
     private CompareResultPayload result;
+    private final List<BlockChange> changes = new ArrayList<>();
+    private int nextBatch;
     private boolean highlightVisible = true;
 
     public synchronized void begin(
@@ -19,13 +24,23 @@ public final class ClientCompareStore {
             CommitId after) {
         pending = new Pending(requestId, dimensionId, before, after);
         result = null;
+        changes.clear();
+        nextBatch = 0;
         highlightVisible = true;
     }
 
     public synchronized void accept(CompareResultPayload candidate) {
         Objects.requireNonNull(candidate, "candidate");
-        if (pending != null && pending.matches(candidate)) {
-            result = candidate;
+        if (pending != null && pending.matches(candidate)
+                && candidate.batchIndex() == nextBatch) {
+            nextBatch++;
+            changes.addAll(candidate.blockChanges());
+            if (candidate.complete()) {
+                result = candidate;
+                if (!candidate.error().isEmpty()) {
+                    changes.clear();
+                }
+            }
         }
     }
 
@@ -35,6 +50,10 @@ public final class ClientCompareStore {
 
     public synchronized Optional<CompareResultPayload> visibleResult() {
         return highlightVisible ? highlight() : Optional.empty();
+    }
+
+    public synchronized List<BlockChange> visibleChanges() {
+        return highlightVisible ? List.copyOf(changes) : List.of();
     }
 
     public synchronized Optional<Boolean> toggleVisibility() {
@@ -56,13 +75,16 @@ public final class ClientCompareStore {
     public synchronized void clear() {
         pending = null;
         result = null;
+        changes.clear();
+        nextBatch = 0;
         highlightVisible = true;
     }
 
     private Optional<CompareResultPayload> highlight() {
         return Optional.ofNullable(result)
                 .filter(candidate -> candidate.error().isEmpty())
-                .filter(candidate -> !candidate.sectionPreview().isEmpty());
+                .filter(candidate -> !changes.isEmpty()
+                        || !candidate.sectionPreview().isEmpty());
     }
 
     private record Pending(
