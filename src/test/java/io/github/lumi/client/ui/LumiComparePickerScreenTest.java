@@ -41,4 +41,16 @@ class LumiComparePickerScreenTest {
         assertEquals(108, LumiComparePickerScreen.columnWidth(271));
         assertEquals(55, LumiComparePickerScreen.columnWidth(164));
     }
+
+    @Test
+    void everySupportedViewportKeepsSelectableRowsAboveTheFooter() {
+        int[] heights = {160, 220, 340};
+        int[] expectedRows = {1, 2, 4};
+        for (int index = 0; index < heights.length; index++) {
+            int rows = LumiComparePickerScreen.visibleRows(heights[index]);
+
+            assertEquals(expectedRows[index], rows);
+            assertTrue(88 + (rows - 1) * 46 + 42 <= heights[index] - 28);
+        }
+    }
 }

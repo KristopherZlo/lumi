@@ -16,6 +16,7 @@ import net.minecraft.network.chat.Component;
 /** Thin workspace-zone screen backed by immutable server snapshots. */
 public final class LumiZonesScreen extends LumiLegacyPageScreen {
     private static final int MAX_ROWS = 8;
+    private static final int COMPACT_ROWS_OFFSET = 118;
     private final ClientHistoryStore history;
     private final ZoneScreenController controller;
     private final Consumer<HistorySnapshotPayload.ZoneView> openDetails;
@@ -83,8 +84,8 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         compact = panelWidth < 300;
         int contentX = panelX + (compact ? 16 : 20);
         int contentWidth = panelWidth - (compact ? 32 : 40);
-        int fieldY = panelY + (compact ? 56 : 73);
-        rowsY = panelY + (compact ? 136 : 126);
+        int fieldY = panelY + (compact ? 60 : 73);
+        rowsY = panelY + (compact ? COMPACT_ROWS_OFFSET : 126);
         rowHeight = compact ? 42 : 28;
         rowStride = compact ? 46 : 32;
         name = new EditBox(font, contentX, fieldY,
@@ -97,19 +98,22 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         name.setResponder(value -> updateCreateButton());
         addRenderableWidget(name);
         Component createLabel = Component.translatable("luma.zones.create_button");
-        create = compact
-                ? addLegacyContentButton(contentX, panelY + 76, contentWidth,
-                        createLabel, this::create, LumiLegacyButton.Kind.PRIMARY)
-                : addLegacyButton(contentX + contentWidth - 132, panelY + 72, 132,
-                        createLabel, this::create, LumiLegacyButton.Kind.PRIMARY);
-        updateCreateButton();
-        Component overlay = overlayLabel.get();
         if (compact) {
-            addLegacyContentButton(contentX, panelY + 98, contentWidth,
-                    overlay, this::cycleOverlay, LumiLegacyButton.Kind.NORMAL);
+            int actionWidth = Math.max(1, (contentWidth - 6) / 2);
+            create = addLegacyButton(contentX, panelY + 82, actionWidth,
+                    createLabel, this::create, LumiLegacyButton.Kind.PRIMARY);
+            addLegacyButton(contentX + actionWidth + 6, panelY + 82, actionWidth,
+                    overlayLabel.get(), this::cycleOverlay,
+                    LumiLegacyButton.Kind.NORMAL);
         } else {
+            create = addLegacyButton(contentX + contentWidth - 132, panelY + 72, 132,
+                    createLabel, this::create, LumiLegacyButton.Kind.PRIMARY);
+        }
+        updateCreateButton();
+        if (!compact) {
             addLegacyButton(panelX + panelWidth - 140, panelY + 102, 120,
-                    overlay, this::cycleOverlay, LumiLegacyButton.Kind.NORMAL);
+                    overlayLabel.get(), this::cycleOverlay,
+                    LumiLegacyButton.Kind.NORMAL);
         }
         addZoneRows(panelWidth);
     }
@@ -204,12 +208,20 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         Component heading = snapshot == null
                 ? title : Component.translatable(
                         "luma.screen.zones.title", snapshot.workspaceName());
-        graphics.drawCenteredString(font, heading, panelX + panelWidth / 2, panelY + 16,
+        graphics.drawCenteredString(font, clippedCenteredHeader(
+                        heading, panelX + panelWidth / 2,
+                        panelX + 16, panelX + panelWidth - 16),
+                panelX + panelWidth / 2, panelY + 16,
                 LegacyLumiTheme.TEXT);
-        graphics.drawCenteredString(font, activeZoneText(),
+        graphics.drawCenteredString(font, font.plainSubstrByWidth(
+                        activeZoneText().getString(), Math.max(1, panelWidth - 32)),
                 panelX + panelWidth / 2, panelY + 36, LegacyLumiTheme.MUTED);
-        graphics.drawString(font, Component.translatable("luma.zones.create_help"),
-                panelX + (compact ? 16 : 20), panelY + (compact ? 43 : 56),
+        int textX = panelX + (compact ? 16 : 20);
+        int textWidth = Math.max(1, panelWidth - (compact ? 32 : 40));
+        graphics.drawString(font, font.plainSubstrByWidth(
+                        Component.translatable("luma.zones.create_help").getString(),
+                        textWidth),
+                textX, panelY + (compact ? 47 : 56),
                 LegacyLumiTheme.MUTED, false);
         LegacyLumiTheme.outlined(graphics,
                 name.getX() - 2, name.getY() - 4,
@@ -217,18 +229,21 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         boolean errorReplacesListTitle = compact && panelHeight < 220
                 && !error.isEmpty();
+        Component listLabel = errorReplacesListTitle
+                ? errorText(error)
+                : Component.translatable("luma.zones.list_title");
         graphics.drawString(font,
-                errorReplacesListTitle
-                        ? errorText(error)
-                        : Component.translatable("luma.zones.list_title"),
+                font.plainSubstrByWidth(listLabel.getString(), textWidth),
                 panelX + (compact ? 16 : 20),
-                panelY + (compact ? 123 : 106),
+                panelY + (compact ? 104 : 106),
                 errorReplacesListTitle
                         ? LegacyLumiTheme.DANGER : LegacyLumiTheme.TEXT,
                 false);
         renderZoneRows(graphics, panelWidth);
         if (!error.isEmpty() && !errorReplacesListTitle) {
-            graphics.drawString(font, errorText(error), panelX + 20,
+            graphics.drawString(font, font.plainSubstrByWidth(
+                            errorText(error).getString(), Math.max(1, panelWidth - 40)),
+                    panelX + 20,
                     panelY + panelHeight - 14,
                     LegacyLumiTheme.DANGER, false);
         }
@@ -293,10 +308,17 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
     }
 
     private int visibleRows() {
-        int available = panelY + panelHeight - rowsY;
-        if (available < rowHeight) return 0;
+        return visibleRows(panelHeight, compact);
+    }
+
+    static int visibleRows(int panelHeight, boolean compact) {
+        int rowOffset = compact ? COMPACT_ROWS_OFFSET : 126;
+        int height = compact ? 42 : 28;
+        int stride = compact ? 46 : 32;
+        int available = panelHeight - rowOffset;
+        if (available < height) return 0;
         return Math.min(MAX_ROWS,
-                1 + (available - rowHeight) / rowStride);
+                1 + (available - height) / stride);
     }
 
     @Override

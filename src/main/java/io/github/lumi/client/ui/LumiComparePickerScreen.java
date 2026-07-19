@@ -191,12 +191,15 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         try {
             renderLegacyPage(
                     graphics, layout.x(), layout.y(), layout.width(), layout.height());
-            graphics.drawString(font, title,
-                    layout.x() + 16, layout.y() + 14,
+            int headerX = layout.x() + 16;
+            int contentRight = layout.x() + layout.width() - 16;
+            graphics.drawString(font, clippedHeader(title, headerX, contentRight),
+                    headerX, layout.y() + 14,
                     LegacyLumiTheme.TEXT, false);
-            graphics.drawString(font,
-                    Component.translatable("luma.compare.pick_help"),
-                    layout.x() + 16, layout.y() + 32,
+            graphics.drawString(font, clippedHeader(
+                            Component.translatable("luma.compare.pick_help"),
+                            headerX, contentRight),
+                    headerX, layout.y() + 32,
                     LegacyLumiTheme.MUTED, false);
             renderColumn(graphics, true);
             renderColumn(graphics, false);
@@ -218,10 +221,11 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         List<HistorySnapshotPayload.Version> versions = versions(left);
         if (versions.isEmpty()) {
             String error = history(left).error();
+            Component message = error.isEmpty()
+                    ? Component.translatable("luma.history.empty")
+                    : Component.literal(error);
             graphics.drawCenteredString(font,
-                    error.isEmpty()
-                            ? Component.translatable("luma.history.empty")
-                            : Component.literal(error),
+                    font.plainSubstrByWidth(message.getString(), Math.max(1, width - 4)),
                     x + width / 2, rowsY() + 8, LegacyLumiTheme.MUTED);
             return;
         }
@@ -343,7 +347,14 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
     }
 
     private int visibleRows() {
-        return Math.min(MAX_ROWS, Math.max(0, (layout.height() - 130) / ROW_STRIDE));
+        return visibleRows(layout.height());
+    }
+
+    static int visibleRows(int layoutHeight) {
+        int available = layoutHeight - 116;
+        if (available < ROW_HEIGHT) return 0;
+        return Math.min(MAX_ROWS,
+                1 + (available - ROW_HEIGHT) / ROW_STRIDE);
     }
 
     private WorkspaceHistoryController history(boolean left) {
@@ -370,7 +381,7 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         double x = virtualCoordinate(mouseX);
         double y = virtualCoordinate(mouseY);
         boolean left = x < dividerX();
-        if (y >= rowsY() && y < layout.y() + layout.height() - 32
+        if (y >= rowsY() && y < layout.y() + layout.height() - 28
                 && x >= (left ? leftX() : dividerX())
                 && x < (left ? dividerX() : layout.x() + layout.width())) {
             List<HistorySnapshotPayload.Version> versions = versions(left);
