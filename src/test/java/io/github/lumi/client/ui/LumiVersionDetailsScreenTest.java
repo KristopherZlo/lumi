@@ -26,6 +26,8 @@ class LumiVersionDetailsScreenTest {
         assertTrue(details.contains("luma.action.edit_tags"));
         assertTrue(details.contains("luma.action.save_tags"));
         assertTrue(details.contains("updateTags.accept(tags)"));
+        assertTrue(details.contains("luma.action.rename_save"));
+        assertTrue(details.contains("rename.accept(replacement.value())"));
         assertTrue(details.contains("luma.action.zoom_out"));
         assertTrue(details.contains("luma.action.zoom_in"));
         assertTrue(details.contains("luma.action.preview_pan_up"));
@@ -36,5 +38,6 @@ class LumiVersionDetailsScreenTest {
         assertTrue(client.contains("() -> openRestore(parent, version)"));
         assertTrue(client.contains("() -> openDelete(parent, version)"));
         assertTrue(client.contains("NETWORKING.updateVersionTags(version.id(), tags)"));
+        assertTrue(client.contains("NETWORKING.renameVersion(version.id(), name)"));
     }
 }

@@ -21,7 +21,8 @@ final class HistorySnapshotFactory {
                 .toList();
         var versions = runtime.history(32).stream()
                 .map(entry -> new HistorySnapshotPayload.Version(
-                        entry.id(), entry.commit().message(),
+                        entry.id(), runtime.versionDisplayName(
+                                entry.id(), entry.commit().message()),
                         entry.commit().author().name(),
                         entry.commit().timestamp().toEpochMilli(),
                         entry.commit().kind(), runtime.versionTags(entry.id())))
@@ -41,7 +42,8 @@ final class HistorySnapshotFactory {
                         zone.revision(), zone.activeActors().contains(player.getUUID()),
                         zoneHistories.getOrDefault(zone.id(), java.util.List.of()).stream()
                                 .map(entry -> new HistorySnapshotPayload.Version(
-                                        entry.id(), entry.commit().message(),
+                                        entry.id(), runtime.versionDisplayName(
+                                                entry.id(), entry.commit().message()),
                                         entry.commit().author().name(),
                                         entry.commit().timestamp().toEpochMilli(),
                                         entry.commit().kind(),
@@ -50,7 +52,8 @@ final class HistorySnapshotFactory {
                 .toList();
         var deleted = runtime.deletedVersions(64).stream()
                 .map(entry -> new HistorySnapshotPayload.Version(
-                        entry.id(), entry.commit().message(),
+                        entry.id(), runtime.versionDisplayName(
+                                entry.id(), entry.commit().message()),
                         entry.commit().author().name(),
                         entry.commit().timestamp().toEpochMilli(),
                         entry.commit().kind(), runtime.versionTags(entry.id())))

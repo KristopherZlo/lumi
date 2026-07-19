@@ -80,6 +80,9 @@ public record HistoryCommandPayload(
         if (kind == Kind.UPDATE_VERSION_TAGS) {
             VersionTagsArgument.parse(argument);
         }
+        if (kind == Kind.RENAME_VERSION) {
+            VersionRenameArgument.parse(argument);
+        }
         if (kind == Kind.DELETE_VERSION || kind == Kind.CLEANUP_VERSION
                 || kind == Kind.RESTORE_DELETED_VERSION) {
             new ObjectId(argument);
@@ -132,7 +135,7 @@ public record HistoryCommandPayload(
         PACKAGE_EXPORT(22), PACKAGE_INSPECT(23), PACKAGE_IMPORT(24),
         WORKSPACE_CREATE(25), WORKSPACE_SWITCH(26), ZONE_COMPARE(27),
         SNAPSHOT_REFRESH(28), WORKSPACE_SETTINGS(29), UPDATE_VERSION_TAGS(30),
-        BRANCH_DELETE(31), RESTORE_DELETED_VERSION(32);
+        BRANCH_DELETE(31), RESTORE_DELETED_VERSION(32), RENAME_VERSION(33);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

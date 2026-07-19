@@ -173,6 +173,16 @@ public final class LumiServerNetworking {
                 broadcastSnapshot(runtime);
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.RENAME_VERSION) {
+                VersionRenameArgument argument =
+                        VersionRenameArgument.parse(payload.argument());
+                runtime.renameVersion(argument.target(), argument.replacement());
+                sendEvent(player, payload, runtime,
+                        OperationEventPayload.State.SUCCEEDED,
+                        "luma.status.version_renamed");
+                broadcastSnapshot(runtime);
+                return;
+            }
             if (payload.kind() == HistoryCommandPayload.Kind.RESTORE_DELETED_VERSION) {
                 runtime.restoreTombstone(
                         new CommitId(new ObjectId(payload.argument())));
@@ -500,6 +510,8 @@ public final class LumiServerNetworking {
                     "Workspace settings do not use the mutation queue");
             case UPDATE_VERSION_TAGS -> throw new IllegalStateException(
                     "Version tags do not use the mutation queue");
+            case RENAME_VERSION -> throw new IllegalStateException(
+                    "Version rename does not use the mutation queue");
             case SNAPSHOT_REFRESH -> throw new IllegalStateException(
                     "Snapshot refresh does not use the mutation queue");
         };

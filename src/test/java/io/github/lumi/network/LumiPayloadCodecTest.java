@@ -9,6 +9,7 @@ import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.model.VersionTags;
+import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.minecraft.operation.OperationProgress;
 import io.netty.buffer.Unpooled;
@@ -58,6 +59,18 @@ class LumiPayloadCodecTest {
                 () -> VersionTagsArgument.parse(id('a').hex()));
         assertThrows(IllegalArgumentException.class,
                 () -> VersionTagsArgument.parse(id('a').hex() + "\nroof\ncastle"));
+    }
+
+    @Test
+    void versionRenameArgumentRoundTripsAndRejectsAmbiguousInput() {
+        var argument = new VersionRenameArgument(
+                id('a'), new VersionDisplayName("Clock tower"));
+
+        assertEquals(argument, VersionRenameArgument.parse(argument.encode()));
+        assertThrows(IllegalArgumentException.class,
+                () -> VersionRenameArgument.parse(id('a').hex()));
+        assertThrows(IllegalArgumentException.class,
+                () -> VersionRenameArgument.parse(id('a').hex() + "\nA\nB"));
     }
 
     @Test
@@ -177,6 +190,13 @@ class LumiPayloadCodecTest {
                         id('3'), VersionTags.parse("roof, castle")).encode(),
                 id('2'), 43);
         assertEquals(updateTags, roundTrip(HistoryCommandPayload.CODEC, updateTags));
+        HistoryCommandPayload renameVersion = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.RENAME_VERSION,
+                new VersionRenameArgument(
+                        id('3'), new VersionDisplayName("Clock tower")).encode(),
+                id('2'), 43);
+        assertEquals(renameVersion,
+                roundTrip(HistoryCommandPayload.CODEC, renameVersion));
         HistoryCommandPayload restoreWithoutEntities = new HistoryCommandPayload(
                 UUID.randomUUID(), HistoryCommandPayload.Kind.RESTORE_NO_ENTITIES,
                 id('3').hex(), id('2'), 43);

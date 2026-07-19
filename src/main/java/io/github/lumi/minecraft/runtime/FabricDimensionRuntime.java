@@ -34,6 +34,7 @@ import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
@@ -59,6 +60,7 @@ import io.github.lumi.domain.service.ZoneScope;
 import io.github.lumi.domain.service.ZoneService;
 import io.github.lumi.domain.service.TombstoneService;
 import io.github.lumi.domain.service.VersionTagService;
+import io.github.lumi.domain.service.VersionDisplayNameService;
 import io.github.lumi.minecraft.world.BlockEntityBaselineStore;
 import io.github.lumi.minecraft.world.BatchedWorldStateCapture;
 import io.github.lumi.minecraft.world.ChunkLoadingSavePreparation;
@@ -93,6 +95,7 @@ import io.github.lumi.storage.repository.WorkspaceRepository;
 import io.github.lumi.storage.repository.ZoneRepository;
 import io.github.lumi.storage.repository.TombstoneRepository;
 import io.github.lumi.storage.repository.VersionTagRepository;
+import io.github.lumi.storage.repository.VersionDisplayNameRepository;
 import io.github.lumi.storage.repository.GarbageCollector;
 import io.github.lumi.telemetry.TelemetryService;
 import java.io.IOException;
@@ -148,6 +151,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final AutoVersionService autoVersions;
     private final TombstoneService tombstones;
     private final VersionTagService versionTagService;
+    private final VersionDisplayNameService versionDisplayNames;
     private final DimensionHistoryViewService historyViews;
     private final CausalZoneGrowthTracker zoneGrowth;
     private final ReturnPointRestorePreparation returnPointRestores;
@@ -214,6 +218,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 commits, refs, new TombstoneRepository(repository));
         versionTagService = new VersionTagService(
                 commits, new VersionTagRepository(repository));
+        versionDisplayNames = new VersionDisplayNameService(
+                commits, new VersionDisplayNameRepository(repository));
         historyViews = new DimensionHistoryViewService(
                 commits,
                 new HistoryQueryService(
@@ -911,6 +917,23 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             throws IOException {
         requireHistoryMetadataMutable();
         versionTagService.replace(target, activeWorkspaceId(), tags);
+    }
+
+    public String versionDisplayName(CommitId target, String commitMessage) {
+        try {
+            return versionDisplayNames.read(target, commitMessage);
+        } catch (IOException failed) {
+            LumiMod.LOGGER.warn(
+                    "Cannot read non-authoritative Lumi name for commit {}",
+                    target, failed);
+            return commitMessage;
+        }
+    }
+
+    public void renameVersion(CommitId target, VersionDisplayName replacement)
+            throws IOException {
+        requireHistoryMetadataMutable();
+        versionDisplayNames.replace(target, activeWorkspaceId(), replacement);
     }
 
     public Map<UUID, List<io.github.lumi.domain.model.HistoryEntry>> zoneHistories(

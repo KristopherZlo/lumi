@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.domain.model.VersionTags;
+import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.network.HistoryCommandPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.CompareArgument;
@@ -25,6 +26,7 @@ import io.github.lumi.network.ZoneSaveArgument;
 import io.github.lumi.network.WorkspaceCreateArgument;
 import io.github.lumi.network.WorkspaceSettingsArgument;
 import io.github.lumi.network.VersionTagsArgument;
+import io.github.lumi.network.VersionRenameArgument;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -213,6 +215,13 @@ public final class LumiClientNetworking {
                 new VersionTagsArgument(
                         Objects.requireNonNull(target, "target"),
                         Objects.requireNonNull(tags, "tags")).encode());
+    }
+
+    public UUID renameVersion(CommitId target, String replacement) {
+        return send(HistoryCommandPayload.Kind.RENAME_VERSION,
+                new VersionRenameArgument(
+                        Objects.requireNonNull(target, "target"),
+                        new VersionDisplayName(replacement)).encode());
     }
 
     public UUID exportPackage(String name) {

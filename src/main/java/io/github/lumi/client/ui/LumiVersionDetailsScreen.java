@@ -2,6 +2,7 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.domain.model.VersionTags;
+import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -15,7 +16,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 
-/** Read-only legacy-style details for one saved version. */
+/** Legacy-style details and display metadata for one saved version. */
 public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     private static final int PANEL_WIDTH = 540;
     private static final int PANEL_HEIGHT = 286;
@@ -33,6 +34,11 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     private final Optional<Runnable> compareToParent;
     private final Runnable delete;
     private final Consumer<VersionTags> updateTags;
+    private final Consumer<String> rename;
+    private String displayedName;
+    private boolean editingName;
+    private EditBox nameEditor;
+    private String nameError = "";
     private VersionTags displayedTags;
     private boolean editingTags;
     private EditBox tagEditor;
@@ -51,7 +57,8 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
             Runnable restore,
             Optional<Runnable> compareToParent,
             Runnable delete,
-            Consumer<VersionTags> updateTags) {
+            Consumer<VersionTags> updateTags,
+            Consumer<String> rename) {
         super(parent, Component.translatable(
                 "luma.screen.save_details.title", version.message()));
         this.parent = parent;
@@ -63,6 +70,8 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                 compareToParent, "compareToParent");
         this.delete = Objects.requireNonNull(delete, "delete");
         this.updateTags = Objects.requireNonNull(updateTags, "updateTags");
+        this.rename = Objects.requireNonNull(rename, "rename");
+        this.displayedName = version.message();
         this.displayedTags = version.tags();
     }
 
@@ -89,6 +98,25 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         addLegacyButton(panelX + 28 + buttonWidth * 3, buttonY, buttonWidth,
                 Component.translatable("luma.action.back"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
+
+        if (editingName) {
+            nameEditor = new EditBox(font, panelX + 20, panelY + 12,
+                    Math.max(20, panelWidth - 150), 20,
+                    Component.translatable("luma.save_details.rename_title"));
+            nameEditor.setMaxLength(VersionDisplayName.MAX_LENGTH);
+            nameEditor.setValue(displayedName);
+            addRenderableWidget(nameEditor);
+            addLegacyButton(panelX + panelWidth - 122, panelY + 13, 102,
+                    Component.translatable("luma.action.rename_save"),
+                    this::saveName, LumiLegacyButton.Kind.PRIMARY);
+        } else {
+            addLegacyButton(panelX + panelWidth - 122, panelY + 13, 102,
+                    Component.translatable("luma.action.rename_save"), () -> {
+                        editingName = true;
+                        nameError = "";
+                        rebuildWidgets();
+                    }, LumiLegacyButton.Kind.NORMAL);
+        }
 
         int metadataX = panelX + 280;
         int metadataWidth = Math.max(0, panelWidth - 300);
@@ -121,9 +149,16 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
             int panelWidth = Math.min(PANEL_WIDTH, width - 32);
             renderLegacyWindow(
                     graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
-            graphics.drawString(font,
-                    font.plainSubstrByWidth(version.message(), panelWidth - 40),
-                    panelX + 20, panelY + 18, LegacyLumiTheme.TEXT, false);
+            if (!editingName) {
+                graphics.drawString(font,
+                        font.plainSubstrByWidth(displayedName, panelWidth - 160),
+                        panelX + 20, panelY + 18, LegacyLumiTheme.TEXT, false);
+            }
+            if (!nameError.isEmpty()) {
+                graphics.drawString(font,
+                        font.plainSubstrByWidth(nameError, panelWidth - 40),
+                        panelX + 20, panelY + 38, LegacyLumiTheme.DANGER, false);
+            }
             renderPreview(graphics);
             int metadataX = panelX + 280;
             int metadataWidth = Math.max(0, panelWidth - 300);
@@ -247,6 +282,21 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         } catch (RuntimeException failed) {
             tagError = failed.getMessage() == null
                     ? "Lumi could not update tags" : failed.getMessage();
+        }
+    }
+
+    private void saveName() {
+        try {
+            VersionDisplayName replacement =
+                    new VersionDisplayName(nameEditor.getValue());
+            rename.accept(replacement.value());
+            displayedName = replacement.value();
+            editingName = false;
+            nameError = "";
+            rebuildWidgets();
+        } catch (RuntimeException failed) {
+            nameError = failed.getMessage() == null
+                    ? "Lumi could not rename this Save" : failed.getMessage();
         }
     }
 
