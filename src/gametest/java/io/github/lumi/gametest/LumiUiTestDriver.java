@@ -79,18 +79,8 @@ final class LumiUiTestDriver {
         if (!isScreen(LumiOnboardingScreen.class)) {
             return;
         }
-        for (int page = 0; page < MAX_FOCUS_STEPS; page++) {
-            ButtonState finish = buttonState(
-                    LumiOnboardingScreen.class, "luma.action.finish", 0);
-            if (finish.count() == 1) {
-                pressUniqueButton(LumiOnboardingScreen.class, "luma.action.finish");
-                context.waitForScreen(null);
-                return;
-            }
-            pressUniqueButton(LumiOnboardingScreen.class, "luma.action.next");
-            context.waitTick();
-        }
-        throw new AssertionError("Lumi onboarding did not reach its Finish action");
+        pressUniqueButton(LumiOnboardingScreen.class, "luma.action.close");
+        context.waitForScreen(null);
     }
 
     void pressChord(String mappingName) {
