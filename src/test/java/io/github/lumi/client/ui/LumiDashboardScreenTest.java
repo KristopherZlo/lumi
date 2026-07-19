@@ -13,15 +13,19 @@ class LumiDashboardScreenTest {
     void keepsDashboardBandsSeparatedAtReferenceAndSmallViewports() {
         LegacyWorkspaceLayout reference = LegacyWorkspaceLayout.fit(640, 360);
         var referenceGeometry = LumiDashboardScreen.dashboardGeometry(
-                reference.bodyY(), reference.bodyHeight(), 0);
+                reference.bodyY(), reference.bodyHeight(), reference.bodyWidth(), 0);
         LegacyWorkspaceLayout small = LegacyWorkspaceLayout.fit(427, 240);
         var smallGeometry = LumiDashboardScreen.dashboardGeometry(
-                small.bodyY(), small.bodyHeight(), 0);
+                small.bodyY(), small.bodyHeight(), small.bodyWidth(), 0);
 
         assertEquals(5, referenceGeometry.latestY()
                 - (reference.bodyY() + referenceGeometry.buildPanelHeight()));
         assertEquals(5, referenceGeometry.historyY()
                 - (referenceGeometry.latestY() + referenceGeometry.latestHeight()));
+        assertEquals(LumiDashboardScreen.historyRowHeight(reference.bodyWidth()),
+                referenceGeometry.latestHeight());
+        assertEquals(LumiDashboardScreen.historyRowHeight(small.bodyWidth()),
+                smallGeometry.latestHeight());
         assertEquals(reference.bodyY() + reference.bodyHeight(),
                 referenceGeometry.historyY() + referenceGeometry.historyHeight());
         assertEquals(3, LumiDashboardScreen.visibleHistoryRows(
@@ -42,9 +46,14 @@ class LumiDashboardScreenTest {
         assertTrue(LumiDashboardScreen.historyActionX(bodyX, bodyWidth, 0)
                 >= bodyX + 6);
         assertTrue(LumiDashboardScreen.historyActionX(bodyX, bodyWidth, 3) + 26
-                <= bodyX + bodyWidth - 6);
+                <= bodyX + bodyWidth - 12);
         assertTrue(LumiDashboardScreen.historyActionY(100, bodyWidth) + 18
                 <= 100 + LumiDashboardScreen.historyRowHeight(bodyWidth));
+
+        LegacyWorkspaceLayout wide = LegacyWorkspaceLayout.fit(640, 360);
+        assertEquals(wide.bodyX() + wide.bodyWidth() - 12,
+                LumiDashboardScreen.historyActionX(
+                        wide.bodyX(), wide.bodyWidth(), 3) + 26);
     }
 
     @Test
@@ -52,7 +61,7 @@ class LumiDashboardScreenTest {
         LegacyWorkspaceLayout layout = LegacyWorkspaceLayout.fit(640, 360);
         int hintHeight = 54;
         var geometry = LumiDashboardScreen.dashboardGeometry(
-                layout.bodyY(), layout.bodyHeight(), hintHeight);
+                layout.bodyY(), layout.bodyHeight(), layout.bodyWidth(), hintHeight);
 
         assertEquals(geometry.hintY() + hintHeight + 5, geometry.actionY());
         assertEquals(geometry.actionY() + 18 + 6,
@@ -67,7 +76,7 @@ class LumiDashboardScreenTest {
         LegacyWorkspaceLayout layout = LegacyWorkspaceLayout.fit(320, 200);
         int hintHeight = 70;
         var geometry = LumiDashboardScreen.dashboardGeometry(
-                layout.bodyY(), layout.bodyHeight(), hintHeight);
+                layout.bodyY(), layout.bodyHeight(), layout.bodyWidth(), hintHeight);
         int bodyBottom = layout.bodyY() + layout.bodyHeight();
 
         assertEquals(geometry.hintY() + hintHeight + 5, geometry.actionY());
@@ -121,10 +130,14 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("pagedHistory.next()"));
         assertFalse(source.contains("addHistoryPageButtons"));
         assertTrue(source.contains("public boolean mouseScrolled("));
-        assertTrue(source.contains("addBranchTabs()"));
+        assertTrue(source.contains("addBranchTabs("));
         assertTrue(source.contains("addLegacyContentButton("));
         assertTrue(source.contains("pagedHistory.selectBranch(branch)"));
         assertTrue(source.contains("latestCreated()"));
+        assertTrue(source.contains(
+                "latestCreated().ifPresent(version -> addVersionActions("));
+        assertTrue(source.contains(
+                "latestCreated().ifPresent(version -> renderVersionCard("));
         assertTrue(source.contains("snapshot.head().equals(version.id())"));
         assertTrue(source.contains("new LumiVersionTagsScreen("));
         assertTrue(source.contains("updateTags.accept(version.id(), replacement)"));
@@ -145,7 +158,7 @@ class LumiDashboardScreenTest {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));
         int start = source.indexOf("private void search(String value)");
-        int end = source.indexOf("private void addBranchTabs()", start);
+        int end = source.indexOf("private void addBranchTabs(", start);
         String searchMethod = source.substring(start, end);
 
         assertTrue(searchMethod.contains("searchResultsDirty = true;"));
