@@ -506,6 +506,7 @@
   "luma.settings.hud_title": "HUD",
   "luma.settings.hud_help": "Control the persistent in-world Lumi panel.",
   "luma.settings.workspace_hud": "Show top-right Lumi panel",
+  "luma.settings.automatic_versions": "Show and create automatic versions",
   "luma.settings.workspace_hud_help": "Hide this if you only want menu and hotkey feedback.",
   "luma.settings.history_title": "History",
   "luma.settings.history_help": "Control which saves appear in the global history.",

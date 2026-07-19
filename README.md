@@ -18,8 +18,10 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   changed block/section counts, and requires a clean-state preview before Apply.
 - Singleplayer and multiplayer use the same server-authoritative path.
 - Idle play performs no history work when nothing is dirty.
-- Dirty work receives a ref-neutral automatic version every five minutes;
-  the latest 64 per branch remain available in normal history.
+- Automatic versions are opt-in per workspace. When enabled, dirty work
+  receives a ref-neutral version every five minutes and the latest 64 per
+  branch appear in normal history; they are neither created nor shown by
+  default.
 - Alt+Z/Y is session-only and separate from durable commits.
 - Alt+S opens the Save form; R rolls back only pending builder-root work
   inside the active workspace and reports when the current saved version has

@@ -8,24 +8,28 @@ public record WorkspaceSettingsArgument(
         boolean hideZoneCommits,
         boolean includeEntitiesOnRestore,
         boolean previewGenerationEnabled,
-        boolean workspaceHudEnabled) {
+        boolean workspaceHudEnabled,
+        boolean automaticVersionsEnabled) {
     public WorkspaceSettingsArgument(WorkspaceSettings settings) {
         this(
                 Objects.requireNonNull(settings, "settings").hideZoneCommits(),
                 settings.includeEntitiesOnRestore(),
                 settings.previewGenerationEnabled(),
-                settings.workspaceHudEnabled());
+                settings.workspaceHudEnabled(),
+                settings.automaticVersionsEnabled());
     }
 
     public String encode() {
         return flag(hideZoneCommits) + "," + flag(includeEntitiesOnRestore)
-                + "," + flag(previewGenerationEnabled) + "," + flag(workspaceHudEnabled);
+                + "," + flag(previewGenerationEnabled) + "," + flag(workspaceHudEnabled)
+                + "," + flag(automaticVersionsEnabled);
     }
 
     public WorkspaceSettings settings() {
         return new WorkspaceSettings(
                 hideZoneCommits, includeEntitiesOnRestore,
-                previewGenerationEnabled, workspaceHudEnabled);
+                previewGenerationEnabled, workspaceHudEnabled,
+                automaticVersionsEnabled);
     }
 
     public static WorkspaceSettingsArgument parse(String encoded) {
@@ -33,15 +37,17 @@ public record WorkspaceSettingsArgument(
         if (encoded.length() == 3 && encoded.charAt(1) == ',') {
             return new WorkspaceSettingsArgument(
                     parseFlag(encoded.charAt(0)), parseFlag(encoded.charAt(2)),
-                    true, true);
+                    true, true, false);
         }
-        if (encoded.length() != 7 || encoded.charAt(1) != ','
+        if ((encoded.length() != 7 && encoded.length() != 9)
+                || encoded.charAt(1) != ','
                 || encoded.charAt(3) != ',' || encoded.charAt(5) != ',') {
             throw new IllegalArgumentException("Invalid workspace settings argument");
         }
         return new WorkspaceSettingsArgument(
                 parseFlag(encoded.charAt(0)), parseFlag(encoded.charAt(2)),
-                parseFlag(encoded.charAt(4)), parseFlag(encoded.charAt(6)));
+                parseFlag(encoded.charAt(4)), parseFlag(encoded.charAt(6)),
+                encoded.length() == 9 && parseFlag(encoded.charAt(8)));
     }
 
     private static char flag(boolean value) {

@@ -25,16 +25,11 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private boolean includeEntitiesOnRestore;
     private boolean previewGenerationEnabled;
     private boolean workspaceHudEnabled;
-    private boolean narrow;
+    private boolean automaticVersionsEnabled;
     private int panelX;
     private int panelY;
     private int panelWidth;
     private int panelHeight;
-    private int cardsY;
-    private int cardHeight;
-    private int cardWidth;
-    private int diagnosticsY;
-    private int diagnosticsHeight;
     private int contentOffset;
     private boolean survivalRequested;
     private long survivalRevision = -1;
@@ -74,59 +69,7 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
         contentOffset = addContextualHint(
                 ClientContextualHelpHint.SETTINGS,
                 panelX + 12, panelY + 36, panelWidth - 24) ? 56 : 0;
-        narrow = panelWidth < 360 || panelHeight < 220 + contentOffset;
-        if (narrow) {
-            addNarrowControls();
-            return;
-        }
-        cardsY = panelY + 38 + contentOffset;
-        cardHeight = panelHeight < 300 ? 78 : 92;
-        cardWidth = (panelWidth - 32) / 2;
-        diagnosticsY = cardsY + cardHeight + 8;
-        diagnosticsHeight = Math.max(
-                68, panelY + panelHeight - 12 - diagnosticsY);
-        int historyX = panelX + 12;
-        int restoreX = historyX + cardWidth + 8;
-        addLegacyButton(historyX + 8, cardsY + cardHeight - 26, cardWidth - 16,
-                toggleLabel("luma.settings.show_hidden_commits", showZoneSaves),
-                this::toggleZoneSaves, showZoneSaves
-                        ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(restoreX + 8, cardsY + cardHeight - 26, cardWidth - 16,
-                toggleLabel(
-                        "luma.settings.restore_entities", includeEntitiesOnRestore),
-                this::toggleRestoreEntities, includeEntitiesOnRestore
-                        ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        boolean telemetryEnabled = telemetry.settings().enabled();
-        int controlWidth = (panelWidth - 48) / 2;
-        int displayY = diagnosticsY + (panelHeight < 300 ? 34 : 42);
-        addLegacyButton(panelX + 20, displayY, controlWidth,
-                toggleLabel("luma.settings.preview_generation", previewGenerationEnabled),
-                this::togglePreviewGeneration, previewGenerationEnabled
-                        ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(panelX + 28 + controlWidth, displayY, controlWidth,
-                toggleLabel("luma.settings.workspace_hud", workspaceHudEnabled),
-                this::toggleWorkspaceHud, workspaceHudEnabled
-                        ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        int survivalY = displayY + 24;
-        var survival = survivalSettings.snapshot().orElse(
-                new ClientSurvivalSettingsStore.Snapshot(false, false));
-        LumiLegacyButton survivalButton = addLegacyButton(
-                panelX + 20, survivalY, controlWidth,
-                toggleLabel("luma.settings.survival_mode", survival.enabled()),
-                this::toggleSurvival, survival.enabled()
-                        ? LumiLegacyButton.Kind.SELECTED
-                        : LumiLegacyButton.Kind.NORMAL);
-        survivalButton.active = survival.configurable();
-        addLegacyButton(panelX + 28 + controlWidth, survivalY, controlWidth,
-                toggleLabel("luma.settings.telemetry_enabled", telemetryEnabled),
-                this::toggleTelemetry, telemetryEnabled
-                        ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(panelX + 20, survivalY + 24, panelWidth - 40,
-                Component.translatable("luma.settings.telemetry_clear_queue"),
-                () -> {
-                    telemetry.clearLocalQueue();
-                    rebuildWidgets();
-                }, LumiLegacyButton.Kind.DANGER);
+        addNarrowControls();
     }
 
     @Override
@@ -136,11 +79,7 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
             renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
             graphics.drawString(font, title, panelX + 16, panelY + 18,
                     LegacyLumiTheme.TEXT, false);
-            if (narrow) {
-                renderNarrow(graphics);
-            } else {
-                renderCards(graphics);
-            }
+            renderNarrow(graphics);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);
@@ -170,17 +109,23 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
         var survival = survivalSettings.snapshot().orElse(
                 new ClientSurvivalSettingsStore.Snapshot(false, false));
         addLegacyButton(x, panelY + 140 + contentOffset, width,
+                toggleLabel(
+                        "luma.settings.automatic_versions", automaticVersionsEnabled),
+                this::toggleAutomaticVersions, automaticVersionsEnabled
+                        ? LumiLegacyButton.Kind.SELECTED
+                        : LumiLegacyButton.Kind.NORMAL);
+        addLegacyButton(x, panelY + 164 + contentOffset, width,
                 toggleLabel("luma.settings.survival_mode", survival.enabled()),
                 this::toggleSurvival, survival.enabled()
                         ? LumiLegacyButton.Kind.SELECTED
                         : LumiLegacyButton.Kind.NORMAL).active =
                 survival.configurable();
         boolean enabled = telemetry.settings().enabled();
-        addLegacyButton(x, panelY + 164 + contentOffset, width,
+        addLegacyButton(x, panelY + 188 + contentOffset, width,
                 toggleLabel("luma.settings.telemetry_enabled", enabled),
                 this::toggleTelemetry, enabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x, panelY + 188 + contentOffset, width,
+        addLegacyButton(x, panelY + 212 + contentOffset, width,
                 Component.translatable("luma.settings.telemetry_clear_queue"),
                 () -> {
                     telemetry.clearLocalQueue();
@@ -191,64 +136,17 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private void renderNarrow(GuiGraphics graphics) {
         renderLegacyPanel(graphics, panelX + 12, panelY + 36,
                 panelWidth - 24, Math.max(1, panelHeight - 46));
-        if (panelHeight >= 240 + contentOffset) {
+        if (panelHeight >= 264 + contentOffset) {
             graphics.drawString(font,
                     Component.translatable("luma.settings.telemetry_pending",
                             telemetry.pendingEventCount()),
-                    panelX + 16, panelY + 214 + contentOffset,
+                    panelX + 16, panelY + 238 + contentOffset,
                     LegacyLumiTheme.MUTED, false);
             graphics.drawString(font,
                     Component.translatable("luma.settings.telemetry_last_send",
                             telemetry.lastSendSummary()),
-                    panelX + 16, panelY + 226 + contentOffset,
+                    panelX + 16, panelY + 250 + contentOffset,
                     LegacyLumiTheme.MUTED, false);
-        }
-    }
-
-    private void renderCards(GuiGraphics graphics) {
-        int historyX = panelX + 12;
-        int restoreX = historyX + cardWidth + 8;
-        renderLegacyPanel(graphics, historyX, cardsY, cardWidth, cardHeight);
-        renderLegacyPanel(graphics, restoreX, cardsY, cardWidth, cardHeight);
-        renderLegacyPanel(graphics, panelX + 12, diagnosticsY,
-                panelWidth - 24, diagnosticsHeight);
-        renderSection(graphics, historyX, cardsY, cardWidth, cardHeight - 28,
-                "luma.settings.history_title", "luma.settings.show_hidden_commits_help");
-        renderSection(graphics, restoreX, cardsY, cardWidth, cardHeight - 28,
-                "luma.action.restore", "luma.settings.restore_entities_help");
-        renderSection(graphics, panelX + 12, diagnosticsY, panelWidth - 24,
-                panelHeight < 300 ? 32 : 48,
-                "luma.settings.preview_title", "luma.settings.preview_help");
-        int statusY = diagnosticsY + (panelHeight < 300 ? 84 : 92);
-        if (statusY + 20 < diagnosticsY + diagnosticsHeight) {
-            graphics.drawString(font,
-                    Component.translatable("luma.settings.telemetry_pending",
-                            telemetry.pendingEventCount()),
-                    panelX + 20, statusY, LegacyLumiTheme.MUTED, false);
-            graphics.drawString(font,
-                    Component.translatable("luma.settings.telemetry_last_send",
-                            telemetry.lastSendSummary()),
-                    panelX + 20, statusY + 12, LegacyLumiTheme.MUTED, false);
-        }
-    }
-
-    private void renderSection(
-            GuiGraphics graphics,
-            int x,
-            int y,
-            int width,
-            int textHeight,
-            String titleKey,
-            String helpKey) {
-        graphics.drawString(font, Component.translatable(titleKey),
-                x + 8, y + 8, LegacyLumiTheme.ACCENT, false);
-        int lineY = y + 21;
-        for (var line : font.split(
-                Component.translatable(helpKey), Math.max(0, width - 16))) {
-            if (lineY + 9 > y + textHeight) break;
-            graphics.drawString(font, line, x + 8, lineY,
-                    LegacyLumiTheme.MUTED, false);
-            lineY += 10;
         }
     }
 
@@ -269,6 +167,9 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
                 : active.previewGenerationEnabled();
         workspaceHudEnabled = active == null
                 ? defaults.workspaceHudEnabled() : active.workspaceHudEnabled();
+        automaticVersionsEnabled = active == null
+                ? defaults.automaticVersionsEnabled()
+                : active.automaticVersionsEnabled();
         settingsLoaded = true;
     }
 
@@ -285,7 +186,8 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private void publishWorkspaceSettings() {
         updateWorkspace.accept(new WorkspaceSettings(
                 !showZoneSaves, includeEntitiesOnRestore,
-                previewGenerationEnabled, workspaceHudEnabled));
+                previewGenerationEnabled, workspaceHudEnabled,
+                automaticVersionsEnabled));
         rebuildWidgets();
     }
 
@@ -296,6 +198,11 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
 
     private void toggleWorkspaceHud() {
         workspaceHudEnabled = !workspaceHudEnabled;
+        publishWorkspaceSettings();
+    }
+
+    private void toggleAutomaticVersions() {
+        automaticVersionsEnabled = !automaticVersionsEnabled;
         publishWorkspaceSettings();
     }
 

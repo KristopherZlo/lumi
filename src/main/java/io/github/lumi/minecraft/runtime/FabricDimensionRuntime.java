@@ -406,7 +406,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         || mutations.hasPendingChanges());
     }
 
-    private void scheduleAutoVersion() {
+    private void scheduleAutoVersion() throws IOException {
+        if (!workspaces.active().settings().automaticVersionsEnabled()) return;
         long now = level.getGameTime();
         if (now < nextAutoVersionTick || autoVersionScheduled.get()) {
             return;

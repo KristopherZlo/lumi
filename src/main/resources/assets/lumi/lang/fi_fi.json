@@ -434,6 +434,7 @@
   "luma.settings.hud_title": "HUD",
   "luma.settings.hud_help": "Hallitse jatkuvaa maailman sisäistä Lumi-paneelia.",
   "luma.settings.workspace_hud": "Näytä oikean yläkulman Lumi-paneeli",
+  "luma.settings.automatic_versions": "Luo ja näytä automaattiset versiot",
   "luma.settings.workspace_hud_help": "Piilota tämä, jos haluat vain palautetta valikoista ja pikanäppäimistä.",
   "luma.settings.history_title": "Historia",
   "luma.settings.history_help": "Hallitse, mitkä talletukset näkyvät globaalissa historiassa.",

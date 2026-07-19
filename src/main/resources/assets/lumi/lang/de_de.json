@@ -434,6 +434,7 @@
   "luma.settings.hud_title": "HUD",
   "luma.settings.hud_help": "Steuern Sie das persistente In-World-Panel Lumi.",
   "luma.settings.workspace_hud": "Lumi-Panel oben rechts anzeigen",
+  "luma.settings.automatic_versions": "Automatische Versionen erstellen und anzeigen",
   "luma.settings.workspace_hud_help": "Blenden Sie dies aus, wenn Sie nur Menü- und Hotkey-Feedback wünschen.",
   "luma.settings.history_title": "Geschichte",
   "luma.settings.history_help": "Steuern Sie, welche Speicherungen im globalen Verlauf angezeigt werden.",

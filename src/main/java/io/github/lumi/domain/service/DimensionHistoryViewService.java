@@ -67,11 +67,6 @@ public final class DimensionHistoryViewService {
     }
 
     public HistoryPage historyPage(
-            BranchName branch, int offset, int limit) throws IOException {
-        return historyPage(branch, offset, limit, "");
-    }
-
-    public HistoryPage historyPage(
             BranchName branch, int offset, int limit, String query)
             throws IOException {
         Workspace workspace = activeWorkspace();
@@ -82,12 +77,6 @@ public final class DimensionHistoryViewService {
         List<HistoryEntry> queried = combinedHistory(
                 branch, workspace, queryLimit);
         return page(offset, limit, filter(queried, normalized));
-    }
-
-    public HistoryPage zoneHistoryPage(
-            BranchName branch, UUID zoneId, int offset, int limit)
-            throws IOException {
-        return zoneHistoryPage(branch, zoneId, offset, limit, "");
     }
 
     public HistoryPage zoneHistoryPage(
@@ -142,9 +131,11 @@ public final class DimensionHistoryViewService {
         var visible = history.firstParent(
                 branch, workspace.id(),
                 !workspace.settings().hideZoneCommits(), limit);
+        List<HistoryEntry> automatic = workspace.settings().automaticVersionsEnabled()
+                ? autoVersions.list(branch, workspace.id(), limit) : List.of();
         return Stream.concat(
                         visible.stream(),
-                        autoVersions.list(branch, workspace.id(), limit).stream())
+                        automatic.stream())
                 .collect(Collectors.toMap(
                         HistoryEntry::id, entry -> entry,
                         (first, ignored) -> first))

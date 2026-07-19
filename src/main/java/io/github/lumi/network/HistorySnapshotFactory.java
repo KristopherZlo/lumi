@@ -19,7 +19,8 @@ final class HistorySnapshotFactory {
                         visible.settings().hideZoneCommits(),
                         visible.settings().includeEntitiesOnRestore(),
                         visible.settings().previewGenerationEnabled(),
-                        visible.settings().workspaceHudEnabled()))
+                        visible.settings().workspaceHudEnabled(),
+                        visible.settings().automaticVersionsEnabled()))
                 .toList();
         var versions = runtime.history(32).stream()
                 .map(entry -> new HistorySnapshotPayload.Version(

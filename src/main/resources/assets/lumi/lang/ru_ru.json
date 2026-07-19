@@ -448,6 +448,7 @@
   "luma.settings.hud_title": "HUD",
   "luma.settings.hud_help": "Настройте постоянную панель Lumi в мире.",
   "luma.settings.workspace_hud": "Показывать панель Lumi справа сверху",
+  "luma.settings.automatic_versions": "Создавать и показывать автоматические версии",
   "luma.settings.workspace_hud_help": "Скройте ее, если нужны только меню и сообщения горячих клавиш.",
   "luma.settings.history_title": "История",
   "luma.settings.history_help": "Настраивает, какие сохранения видны в глобальной истории.",

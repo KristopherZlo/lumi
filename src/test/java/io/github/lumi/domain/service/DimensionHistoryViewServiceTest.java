@@ -9,6 +9,7 @@ import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.storage.repository.ActiveBranchRepository;
 import io.github.lumi.storage.repository.ActiveWorkspaceRepository;
 import io.github.lumi.storage.repository.BranchRefRepository;
@@ -96,12 +97,16 @@ class DimensionHistoryViewServiceTest {
         assertEquals(workspaceId, view.activeWorkspace().id());
         assertEquals(List.of(workspaceId),
                 view.workspaces().stream().map(workspace -> workspace.id()).toList());
-        assertEquals(List.of(automatic, manual),
+        assertEquals(List.of(manual),
                 view.history(10).stream().map(entry -> entry.id()).toList());
-        var historyPage = view.historyPage(new BranchName("main"), 1, 1);
+        var historyPage = view.historyPage(new BranchName("main"), 0, 1, "");
         assertEquals(List.of(manual),
                 historyPage.entries().stream().map(entry -> entry.id()).toList());
         assertEquals(false, historyPage.hasMore());
+        workspaces.updateActiveSettings(
+                new WorkspaceSettings(true, true, true, true, true));
+        assertEquals(List.of(automatic, manual),
+                view.history(10).stream().map(entry -> entry.id()).toList());
         assertEquals(List.of(manual),
                 view.historyPage(
                         new BranchName("main"), 0, 1,
@@ -111,7 +116,7 @@ class DimensionHistoryViewServiceTest {
                 view.zoneHistories(Set.of(zoneId), 10).get(zoneId).stream()
                         .map(entry -> entry.id()).toList());
         assertEquals(List.of(zone),
-                view.zoneHistoryPage(new BranchName("main"), zoneId, 0, 1)
+                view.zoneHistoryPage(new BranchName("main"), zoneId, 0, 1, "")
                         .entries().stream().map(entry -> entry.id()).toList());
         assertEquals(List.of(new BranchName("main")),
                 view.branches().stream().map(ref -> ref.name()).toList());

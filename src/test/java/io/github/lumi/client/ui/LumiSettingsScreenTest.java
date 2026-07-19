@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -22,14 +23,17 @@ class LumiSettingsScreenTest {
         assertTrue(source.contains("luma.settings.restore_entities"));
         assertTrue(source.contains("luma.settings.preview_generation"));
         assertTrue(source.contains("luma.settings.workspace_hud"));
+        assertTrue(source.contains("luma.settings.automatic_versions"));
         assertTrue(source.contains("active.previewGenerationEnabled()"));
         assertTrue(source.contains("active.workspaceHudEnabled()"));
+        assertTrue(source.contains("active.automaticVersionsEnabled()"));
+        assertTrue(source.contains("toggleAutomaticVersions"));
         assertTrue(source.contains("luma.settings.telemetry_enabled"));
         assertTrue(source.contains("luma.settings.survival_mode"));
         assertTrue(source.contains("ClientSurvivalSettingsStore"));
         assertTrue(source.contains("requestSurvivalSettings.run()"));
         assertTrue(source.contains("updateSurvivalSettings.accept"));
-        assertTrue(source.contains("panelWidth < 360"));
+        assertFalse(source.contains("renderCards("));
         assertTrue(source.contains("ClientContextualHelpHint.SETTINGS"));
         assertTrue(source.contains("contentOffset"));
     }

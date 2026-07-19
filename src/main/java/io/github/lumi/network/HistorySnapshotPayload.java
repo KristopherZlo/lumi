@@ -313,7 +313,8 @@ public record HistorySnapshotPayload(
             boolean hideZoneCommits,
             boolean includeEntitiesOnRestore,
             boolean previewGenerationEnabled,
-            boolean workspaceHudEnabled) {
+            boolean workspaceHudEnabled,
+            boolean automaticVersionsEnabled) {
         public WorkspaceView(
                 UUID id,
                 String name,
@@ -322,7 +323,7 @@ public record HistorySnapshotPayload(
                 boolean hideZoneCommits,
                 boolean includeEntitiesOnRestore) {
             this(id, name, active, bounded, hideZoneCommits,
-                    includeEntitiesOnRestore, true, true);
+                    includeEntitiesOnRestore, true, true, false);
         }
 
         public WorkspaceView {
@@ -344,6 +345,7 @@ public record HistorySnapshotPayload(
             buffer.writeBoolean(includeEntitiesOnRestore);
             buffer.writeBoolean(previewGenerationEnabled);
             buffer.writeBoolean(workspaceHudEnabled);
+            buffer.writeBoolean(automaticVersionsEnabled);
         }
 
         private static WorkspaceView read(FriendlyByteBuf buffer) {
@@ -351,7 +353,8 @@ public record HistorySnapshotPayload(
                     buffer.readUUID(), buffer.readUtf(MAX_TEXT_BYTES),
                     buffer.readBoolean(), buffer.readBoolean(),
                     buffer.readBoolean(), buffer.readBoolean(),
-                    buffer.readBoolean(), buffer.readBoolean());
+                    buffer.readBoolean(), buffer.readBoolean(),
+                    buffer.readBoolean());
         }
     }
 
