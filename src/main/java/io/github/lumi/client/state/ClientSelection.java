@@ -2,86 +2,89 @@ package io.github.lumi.client.state;
 
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.BlockPosition;
-import java.util.ArrayDeque;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
-/** Session-only two-corner selection with bounded local undo/redo. */
+/** Project/dimension-scoped wooden-sword selections with a bounded LRU. */
 public final class ClientSelection {
-    private static final int MAX_HISTORY = 64;
-    private final ArrayDeque<State> undo = new ArrayDeque<>();
-    private final ArrayDeque<State> redo = new ArrayDeque<>();
-    private State current = new State(Optional.empty(), Optional.empty());
+    static final int MAX_SCOPES = 32;
+    private static final Scope FALLBACK =
+            new Scope(new UUID(0, 0), "unscoped");
+    private final Map<Scope, SelectionState> states =
+            new LinkedHashMap<>(16, 0.75F, true) {
+                @Override
+                protected boolean removeEldestEntry(
+                        Map.Entry<Scope, SelectionState> eldest) {
+                    return size() > MAX_SCOPES;
+                }
+            };
+    private Scope active = FALLBACK;
 
-    public void setFirst(BlockPosition position) {
-        update(new State(Optional.of(Objects.requireNonNull(position, "position")), current.second));
+    public synchronized void activate(UUID workspaceId, String dimensionId) {
+        active = new Scope(workspaceId, dimensionId);
+        state();
     }
 
-    public void setSecond(BlockPosition position) {
-        update(new State(current.first, Optional.of(Objects.requireNonNull(position, "position"))));
+    public synchronized void setFirst(BlockPosition position) {
+        state().selectPrimary(position);
     }
 
-    public void clear() {
-        update(new State(Optional.empty(), Optional.empty()));
+    public synchronized void setSecond(BlockPosition position) {
+        state().selectSecondary(position);
     }
 
-    public void reset() {
-        current = new State(Optional.empty(), Optional.empty());
-        undo.clear();
-        redo.clear();
+    public synchronized void toggleMode() {
+        state().toggleMode();
     }
 
-    public boolean undo() {
-        if (undo.isEmpty()) {
-            return false;
-        }
-        redo.addLast(current);
-        current = undo.removeLast();
-        return true;
+    public synchronized SelectionMode mode() {
+        return state().mode();
     }
 
-    public boolean redo() {
-        if (redo.isEmpty()) {
-            return false;
-        }
-        push(undo, current);
-        current = redo.removeLast();
-        return true;
+    public synchronized void resize(SelectionSide side, int amount) {
+        state().resize(side, amount);
     }
 
-    public Optional<BlockBox> bounds() {
-        if (current.first.isEmpty() || current.second.isEmpty()) {
-            return Optional.empty();
-        }
-        BlockPosition first = current.first.orElseThrow();
-        BlockPosition second = current.second.orElseThrow();
-        return Optional.of(new BlockBox(
-                first.x(), first.y(), first.z(),
-                second.x(), second.y(), second.z()));
+    public synchronized void clear() {
+        state().clear();
     }
 
-    private void update(State next) {
-        if (current.equals(next)) {
-            return;
-        }
-        push(undo, current);
-        redo.clear();
-        current = next;
+    public synchronized void reset() {
+        states.clear();
+        active = FALLBACK;
     }
 
-    private static void push(ArrayDeque<State> history, State state) {
-        if (history.size() == MAX_HISTORY) {
-            history.removeFirst();
-        }
-        history.addLast(state);
+    public synchronized boolean undo() {
+        return state().undo();
     }
 
-    private record State(
-            Optional<BlockPosition> first,
-            Optional<BlockPosition> second) {
-        private State {
-            Objects.requireNonNull(first, "first");
-            Objects.requireNonNull(second, "second");
+    public synchronized boolean redo() {
+        return state().redo();
+    }
+
+    public synchronized Optional<BlockBox> bounds() {
+        return state().bounds();
+    }
+
+    synchronized int retainedScopes() {
+        return states.size();
+    }
+
+    private SelectionState state() {
+        return states.computeIfAbsent(active, ignored -> new SelectionState());
+    }
+
+    private record Scope(UUID workspaceId, String dimensionId) {
+        private Scope {
+            Objects.requireNonNull(workspaceId, "workspaceId");
+            Objects.requireNonNull(dimensionId, "dimensionId");
+            if (dimensionId.isBlank()) {
+                throw new IllegalArgumentException(
+                        "Selection dimension cannot be blank");
+            }
         }
     }
 }

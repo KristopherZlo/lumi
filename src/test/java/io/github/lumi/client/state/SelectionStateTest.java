@@ -39,7 +39,7 @@ class SelectionStateTest {
     void resizeAndModeParticipateInUndoRedo() {
         selection.selectPrimary(point(0, 0, 0));
         selection.selectSecondary(point(2, 2, 2));
-        selection.resize(SelectionState.Side.MIN_X, 1);
+        selection.resize(SelectionSide.MIN_X, 1);
         assertEquals(new BlockBox(-1, 0, 0, 2, 2, 2),
                 selection.bounds().orElseThrow());
 

@@ -14,7 +14,7 @@ final class SelectionState {
     private SelectionMode mode = SelectionMode.CORNERS;
     private BlockPosition first;
     private BlockPosition second;
-    private Side lastResizeSide;
+    private SelectionSide lastResizeSide;
     private int lastResizeAmount;
     private boolean lastResizeFirst;
 
@@ -60,7 +60,7 @@ final class SelectionState {
         clearResizeDrag();
     }
 
-    void resize(Side side, int amount) {
+    void resize(SelectionSide side, int amount) {
         Objects.requireNonNull(side, "side");
         Optional<BlockBox> current = bounds();
         if (amount == 0 || current.isEmpty()) {
@@ -127,7 +127,7 @@ final class SelectionState {
                 Math.max(box.maxZ(), point.z()));
     }
 
-    private boolean firstOn(Side side) {
+    private boolean firstOn(SelectionSide side) {
         return switch (side) {
             case MIN_X -> first.x() <= second.x();
             case MAX_X -> first.x() >= second.x();
@@ -139,7 +139,7 @@ final class SelectionState {
     }
 
     private static BlockPosition move(
-            BlockPosition point, Side side, int amount) {
+            BlockPosition point, SelectionSide side, int amount) {
         return switch (side) {
             case MIN_X -> new BlockPosition(point.x() - amount, point.y(), point.z());
             case MAX_X -> new BlockPosition(point.x() + amount, point.y(), point.z());
@@ -179,10 +179,6 @@ final class SelectionState {
         lastResizeSide = null;
         lastResizeAmount = 0;
         lastResizeFirst = false;
-    }
-
-    enum Side {
-        MIN_X, MAX_X, MIN_Y, MAX_Y, MIN_Z, MAX_Z
     }
 
     private record Snapshot(
