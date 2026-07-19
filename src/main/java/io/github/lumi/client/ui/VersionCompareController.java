@@ -10,7 +10,13 @@ import java.util.Optional;
 public final class VersionCompareController {
     public Optional<Target> target(
             List<HistorySnapshotPayload.Version> versions, int selectedIndex) {
-        return target(versions, selectedIndex + 1, selectedIndex);
+        Objects.requireNonNull(versions, "versions");
+        if (selectedIndex < 0 || selectedIndex >= versions.size()) {
+            return Optional.empty();
+        }
+        var after = versions.get(selectedIndex);
+        return after.parents().stream().findFirst()
+                .map(parent -> new Target(parent, after.id(), after.message()));
     }
 
     public Optional<Target> target(

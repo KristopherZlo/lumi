@@ -12,12 +12,13 @@ import org.junit.jupiter.api.Test;
 
 class VersionCompareControllerTest {
     @Test
-    void comparesASelectedVersionWithItsFirstParentRow() {
-        var newest = version('2', "newest");
+    void comparesASelectedVersionWithItsRecordedFirstParent() {
+        var newest = version('2', "newest", id('1'));
+        var unrelated = version('9', "unrelated");
         var parent = version('1', "parent");
 
         var target = new VersionCompareController()
-                .target(List.of(newest, parent), 0)
+                .target(List.of(newest, unrelated, parent), 0)
                 .orElseThrow();
 
         assertEquals(parent.id(), target.before());
@@ -58,10 +59,18 @@ class VersionCompareControllerTest {
         assertTrue(controller.target(versions, 0, 1).isEmpty());
     }
 
-    private static HistorySnapshotPayload.Version version(char digit, String message) {
+    private static HistorySnapshotPayload.Version version(
+            char digit, String message, CommitId... parents) {
         return new HistorySnapshotPayload.Version(
-                new CommitId(new ObjectId(
-                        String.valueOf(digit).repeat(ObjectId.HEX_LENGTH))),
-                message, "Builder", 1L, CommitKind.MANUAL);
+                id(digit), message, "Builder", 1L, CommitKind.MANUAL,
+                io.github.lumi.domain.model.VersionTags.empty(),
+                List.of(parents),
+                new io.github.lumi.domain.model.CommitStatistics(0, 0, 0, 0),
+                java.util.Optional.empty());
+    }
+
+    private static CommitId id(char digit) {
+        return new CommitId(new ObjectId(
+                String.valueOf(digit).repeat(ObjectId.HEX_LENGTH)));
     }
 }

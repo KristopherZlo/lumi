@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.model.VersionTags;
@@ -302,7 +303,10 @@ class LumiPayloadCodecTest {
                                 false, false, true)),
                 java.util.List.of(new HistorySnapshotPayload.Version(
                         id('a'), "Clock works", "Builder", 1234,
-                        CommitKind.MANUAL, VersionTags.parse("redstone, stable"))),
+                        CommitKind.MANUAL, VersionTags.parse("redstone, stable"),
+                        java.util.List.of(id('9')),
+                        new CommitStatistics(4, 2, 8192, 3),
+                        Optional.of(new UUID(0, 8)))),
                 java.util.List.of(
                         new HistorySnapshotPayload.Branch("main", id('a'), true),
                         new HistorySnapshotPayload.Branch("idea", id('b'), false)),

@@ -4,6 +4,7 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.VersionTags;
 import java.util.List;
@@ -360,7 +361,10 @@ public record HistorySnapshotPayload(
             String author,
             long timestampMillis,
             CommitKind kind,
-            VersionTags tags) {
+            VersionTags tags,
+            List<CommitId> parents,
+            CommitStatistics statistics,
+            Optional<UUID> zoneId) {
         public Version(
                 CommitId id,
                 String message,
@@ -370,16 +374,31 @@ public record HistorySnapshotPayload(
             this(id, message, author, timestampMillis, kind, VersionTags.empty());
         }
 
+        public Version(
+                CommitId id,
+                String message,
+                String author,
+                long timestampMillis,
+                CommitKind kind,
+                VersionTags tags) {
+            this(id, message, author, timestampMillis, kind, tags, List.of(),
+                    new CommitStatistics(0, 0, 0, 0), Optional.empty());
+        }
+
         public Version {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(message, "message");
             Objects.requireNonNull(author, "author");
             Objects.requireNonNull(kind, "kind");
             Objects.requireNonNull(tags, "tags");
+            parents = List.copyOf(Objects.requireNonNull(parents, "parents"));
+            Objects.requireNonNull(statistics, "statistics");
+            zoneId = Objects.requireNonNull(zoneId, "zoneId");
             if (message.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_TEXT_BYTES
                     || author.isBlank()
                     || author.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                    > MAX_TEXT_BYTES) {
+                    > MAX_TEXT_BYTES || parents.size() > 2
+                    || new java.util.HashSet<>(parents).size() != parents.size()) {
                 throw new IllegalArgumentException("Invalid history version metadata");
             }
         }
@@ -393,6 +412,15 @@ public record HistorySnapshotPayload(
             buffer.writeVarInt(tags.values().size());
             tags.values().forEach(tag ->
                     buffer.writeUtf(tag, VersionTags.MAX_TAG_LENGTH * 2));
+            buffer.writeVarInt(parents.size());
+            parents.forEach(parent ->
+                    buffer.writeUtf(parent.hex(), ObjectId.HEX_LENGTH));
+            buffer.writeVarInt(statistics.sections());
+            buffer.writeVarInt(statistics.entityChunks());
+            buffer.writeVarLong(statistics.blocks());
+            buffer.writeVarInt(statistics.entities());
+            buffer.writeBoolean(zoneId.isPresent());
+            zoneId.ifPresent(buffer::writeUUID);
         }
 
         private static Version read(FriendlyByteBuf buffer) {
@@ -410,8 +438,23 @@ public record HistorySnapshotPayload(
             for (int index = 0; index < count; index++) {
                 tags.add(buffer.readUtf(VersionTags.MAX_TAG_LENGTH * 2));
             }
-            return new Version(
-                    id, message, author, timestamp, kind, new VersionTags(tags));
+            int parentCount = buffer.readVarInt();
+            if (parentCount < 0 || parentCount > 2) {
+                throw new IllegalArgumentException("Invalid history parent count");
+            }
+            java.util.ArrayList<CommitId> parents =
+                    new java.util.ArrayList<>(parentCount);
+            for (int index = 0; index < parentCount; index++) {
+                parents.add(new CommitId(
+                        new ObjectId(buffer.readUtf(ObjectId.HEX_LENGTH))));
+            }
+            var statistics = new CommitStatistics(
+                    buffer.readVarInt(), buffer.readVarInt(),
+                    buffer.readVarLong(), buffer.readVarInt());
+            Optional<UUID> zoneId = buffer.readBoolean()
+                    ? Optional.of(buffer.readUUID()) : Optional.empty();
+            return new Version(id, message, author, timestamp, kind,
+                    new VersionTags(tags), parents, statistics, zoneId);
         }
     }
 
