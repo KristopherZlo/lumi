@@ -2,6 +2,7 @@ package io.github.lumi.client;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
+import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientZoneOverlayStore;
 import io.github.lumi.domain.model.CommitId;
@@ -12,6 +13,8 @@ import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.network.HistoryCommandPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.HistoryPagePayload;
+import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.BranchCreateArgument;
 import io.github.lumi.network.CompareArgument;
 import io.github.lumi.network.CompareResultPayload;
@@ -46,6 +49,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 /** Thin client sender/receiver; all history decisions stay on the server. */
 public final class LumiClientNetworking {
     private final ClientHistoryStore history;
+    private final ClientHistoryPageStore historyPages;
     private final ClientCompareStore comparisons;
     private final ClientZoneOverlayStore zoneOverlays;
     private final Consumer<HistorySnapshotPayload> snapshotListener;
@@ -57,6 +61,7 @@ public final class LumiClientNetworking {
 
     public LumiClientNetworking(
             ClientHistoryStore history,
+            ClientHistoryPageStore historyPages,
             ClientCompareStore comparisons,
             ClientZoneOverlayStore zoneOverlays,
             Consumer<HistorySnapshotPayload> snapshotListener,
@@ -66,6 +71,7 @@ public final class LumiClientNetworking {
             Consumer<CleanupResultPayload> cleanupListener,
             Consumer<PartialRestorePlanPayload> partialRestoreListener) {
         this.history = Objects.requireNonNull(history, "history");
+        this.historyPages = Objects.requireNonNull(historyPages, "historyPages");
         this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
         this.zoneOverlays = Objects.requireNonNull(zoneOverlays, "zoneOverlays");
         this.snapshotListener = Objects.requireNonNull(snapshotListener, "snapshotListener");
@@ -98,6 +104,9 @@ public final class LumiClientNetworking {
                             }
                         }));
         ClientPlayNetworking.registerGlobalReceiver(
+                HistoryPagePayload.TYPE, (payload, context) ->
+                        context.client().execute(() -> historyPages.accept(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(
                 PackageInspectionPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> packageListener.accept(payload)));
         ClientPlayNetworking.registerGlobalReceiver(
@@ -111,6 +120,7 @@ public final class LumiClientNetworking {
                         context.client().execute(() -> zoneOverlays.accept(payload)));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             history.clear();
+            historyPages.clear();
             comparisons.clear();
             zoneOverlays.clear();
         });
@@ -386,6 +396,29 @@ public final class LumiClientNetworking {
 
     public UUID refreshSnapshot() {
         return send(HistoryCommandPayload.Kind.SNAPSHOT_REFRESH, "");
+    }
+
+    public UUID requestHistoryPage(
+            io.github.lumi.domain.model.BranchName branch,
+            Optional<UUID> zoneId,
+            int offset,
+            int limit) {
+        var snapshot = history.state().snapshot().orElseThrow(
+                () -> new IllegalStateException(
+                        "Lumi history has not synchronized yet"));
+        if (!ClientPlayNetworking.canSend(HistoryPageRequestPayload.TYPE)) {
+            throw new IllegalStateException(
+                    "The connected server does not support paged history");
+        }
+        UUID requestId = UUID.randomUUID();
+        historyPages.begin(
+                requestId, snapshot.dimensionId(), snapshot.workspaceId(),
+                Objects.requireNonNull(branch, "branch"),
+                Objects.requireNonNull(zoneId, "zoneId"), offset);
+        ClientPlayNetworking.send(new HistoryPageRequestPayload(
+                requestId, snapshot.dimensionId(), snapshot.workspaceId(),
+                branch, zoneId, offset, limit));
+        return requestId;
     }
 
     public UUID requestZoneOverlay(ZoneOverlayArgument.Mode mode) {
