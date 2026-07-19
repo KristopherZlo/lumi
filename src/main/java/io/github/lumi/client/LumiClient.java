@@ -18,6 +18,8 @@ import io.github.lumi.client.ui.LumiDeletedVersionsScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiBranchesScreen;
 import io.github.lumi.client.ui.LumiCompareScreen;
+import io.github.lumi.client.ui.LumiComparePickerScreen;
+import io.github.lumi.client.ui.LumiCleanupScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
 import io.github.lumi.client.ui.LumiMoreScreen;
 import io.github.lumi.client.ui.LumiOnboardingScreen;
@@ -40,6 +42,7 @@ import io.github.lumi.client.ui.ZoneDetailsController;
 import io.github.lumi.client.ui.WorkspaceScreenController;
 import io.github.lumi.client.ui.VersionCompareController;
 import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.CleanupResultPayload;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.telemetry.TelemetryService;
 import io.github.lumi.update.UpdateChecker;
@@ -70,7 +73,8 @@ public final class LumiClient implements ClientModInitializer {
             new LumiClientNetworking(
                     HISTORY, COMPARISONS, LumiClient::acceptSnapshot,
                     PREVIEW_CAPTURE::accept,
-                    LumiClient::showPackageInspection);
+                    LumiClient::showPackageInspection,
+                    LumiClient::showCleanupResult);
 
     @Override
     public void onInitializeClient() {
@@ -313,7 +317,17 @@ public final class LumiClient implements ClientModInitializer {
                         parent, HISTORY, TELEMETRY,
                         NETWORKING::updateWorkspaceSettings)),
                 () -> client.setScreen(new LumiUpdateScreen(
-                        client.screen, UPDATE_CHECKER, UPDATE_PREFERENCES))));
+                        client.screen, UPDATE_CHECKER, UPDATE_PREFERENCES)),
+                () -> client.setScreen(new LumiCleanupScreen(
+                        client.screen,
+                        NETWORKING::inspectCleanup, NETWORKING::applyCleanup)),
+                () -> {
+                    var snapshot = HISTORY.state().snapshot().orElseThrow();
+                    Screen more = client.screen;
+                    client.setScreen(new LumiComparePickerScreen(
+                            more, snapshot.versions(),
+                            target -> openCompare(more, target)));
+                }));
     }
 
     private static void openZoneDetails(
@@ -376,6 +390,12 @@ public final class LumiClient implements ClientModInitializer {
         client.setScreen(new LumiPackageInspectionScreen(
                 packages, inspection,
                 () -> NETWORKING.importPackage(inspection.requestId())));
+    }
+
+    private static void showCleanupResult(CleanupResultPayload result) {
+        if (Minecraft.getInstance().screen instanceof LumiCleanupScreen cleanup) {
+            cleanup.accept(result);
+        }
     }
 
     private static String currentBranch() {

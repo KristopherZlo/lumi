@@ -1012,6 +1012,8 @@
   "luma.cleanup.results_title": "Лишние файлы",
   "luma.cleanup.applied_title": "Очистка выполнена",
   "luma.cleanup.results_help": "%s файлов, можно освободить %s.",
+  "luma.cleanup.results_counts": "Старая недоступная история: %s коммитов, %s объектов.",
+  "luma.cleanup.applied_counts": "Удалено: %s коммитов, %s объектов.",
   "luma.cleanup.empty": "Лишних файлов не найдено.",
   "luma.cleanup.candidate": "%s | %s | %s",
   "luma.status.partial_restore_selection_applied": "Выделенная область Lumi скопирована в границы восстановления.",

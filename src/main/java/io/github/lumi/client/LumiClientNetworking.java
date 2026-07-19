@@ -14,6 +14,7 @@ import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.BranchCreateArgument;
 import io.github.lumi.network.CompareArgument;
 import io.github.lumi.network.CompareResultPayload;
+import io.github.lumi.network.CleanupResultPayload;
 import io.github.lumi.network.MergeArgument;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
@@ -42,18 +43,21 @@ public final class LumiClientNetworking {
     private final Consumer<HistorySnapshotPayload> snapshotListener;
     private final Consumer<OperationEventPayload> eventListener;
     private final Consumer<PackageInspectionPayload> packageListener;
+    private final Consumer<CleanupResultPayload> cleanupListener;
 
     public LumiClientNetworking(
             ClientHistoryStore history,
             ClientCompareStore comparisons,
             Consumer<HistorySnapshotPayload> snapshotListener,
             Consumer<OperationEventPayload> eventListener,
-            Consumer<PackageInspectionPayload> packageListener) {
+            Consumer<PackageInspectionPayload> packageListener,
+            Consumer<CleanupResultPayload> cleanupListener) {
         this.history = Objects.requireNonNull(history, "history");
         this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
         this.snapshotListener = Objects.requireNonNull(snapshotListener, "snapshotListener");
         this.eventListener = Objects.requireNonNull(eventListener, "eventListener");
         this.packageListener = Objects.requireNonNull(packageListener, "packageListener");
+        this.cleanupListener = Objects.requireNonNull(cleanupListener, "cleanupListener");
     }
 
     public void register() {
@@ -75,6 +79,9 @@ public final class LumiClientNetworking {
         ClientPlayNetworking.registerGlobalReceiver(
                 PackageInspectionPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> packageListener.accept(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(
+                CleanupResultPayload.TYPE, (payload, context) ->
+                        context.client().execute(() -> cleanupListener.accept(payload)));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             history.clear();
             comparisons.clear();
@@ -212,6 +219,14 @@ public final class LumiClientNetworking {
     public UUID cleanupVersion(CommitId target) {
         return send(HistoryCommandPayload.Kind.CLEANUP_VERSION,
                 Objects.requireNonNull(target, "target").hex());
+    }
+
+    public UUID inspectCleanup() {
+        return send(HistoryCommandPayload.Kind.CLEANUP_INSPECT, "");
+    }
+
+    public UUID applyCleanup() {
+        return send(HistoryCommandPayload.Kind.CLEANUP_APPLY, "");
     }
 
     public UUID restoreDeletedVersion(CommitId target) {

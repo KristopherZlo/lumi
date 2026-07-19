@@ -24,6 +24,8 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
     private final Runnable diagnostics;
     private final Runnable settings;
     private final Runnable updates;
+    private final Runnable cleanup;
+    private final Runnable manualCompare;
     private int panelX;
     private int panelY;
     private int panelWidth;
@@ -31,6 +33,7 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
     private int coffeeX;
     private int paypalX;
     private int supportY;
+    private int creditY;
 
     public LumiMoreScreen(
             Screen parent,
@@ -41,7 +44,9 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
             Runnable thanks,
             Runnable diagnostics,
             Runnable settings,
-            Runnable updates) {
+            Runnable updates,
+            Runnable cleanup,
+            Runnable manualCompare) {
         super(parent, Component.translatable("luma.screen.more.title"),
                 LegacyProjectTab.MORE);
         this.workspaces = Objects.requireNonNull(workspaces, "workspaces");
@@ -53,6 +58,8 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.updates = Objects.requireNonNull(updates, "updates");
+        this.cleanup = Objects.requireNonNull(cleanup, "cleanup");
+        this.manualCompare = Objects.requireNonNull(manualCompare, "manualCompare");
     }
 
     @Override
@@ -71,11 +78,14 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         button("luma.action.open_diagnostics", diagnostics, 1, 2);
         button("luma.action.settings", settings, 0, 3);
         button("luma.action.check_updates", updates, 1, 3);
+        button("luma.action.open_cleanup", cleanup, 0, 4);
+        button("luma.action.manual_compare", manualCompare, 1, 4);
         coffeeX = button("luma.action.buy_me_a_coffee", () -> Util.getPlatform().openUri(
-                java.net.URI.create("https://buymeacoffee.com/zl0yxp")), 0, 4);
+                java.net.URI.create("https://buymeacoffee.com/zl0yxp")), 0, 5);
         paypalX = button("luma.action.paypal_donate", () -> Util.getPlatform().openUri(
-                java.net.URI.create("https://www.paypal.com/donate/?hosted_button_id=CY7A2U64JWY4W")), 1, 4);
-        supportY = panelY + 58 + 4 * 28;
+                java.net.URI.create("https://www.paypal.com/donate/?hosted_button_id=CY7A2U64JWY4W")), 1, 5);
+        supportY = panelY + 58 + 5 * 28;
+        creditY = supportY + 31;
     }
 
     private int button(String key, Runnable action, int column, int row) {
@@ -105,9 +115,9 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
                 .map(container -> container.getMetadata().getVersion().getFriendlyString())
                 .orElse("?");
         graphics.drawString(font, Component.translatable("luma.window.credit"),
-                panelX + 16, panelY + 201, LegacyLumiTheme.MUTED, false);
+                panelX + 16, creditY, LegacyLumiTheme.MUTED, false);
         graphics.drawString(font, Component.translatable("luma.window.mod_version", version),
-                panelX + 16, panelY + 211, LegacyLumiTheme.MUTED, false);
+                panelX + 16, creditY + 11, LegacyLumiTheme.MUTED, false);
         } finally {
             endLegacyRender(graphics);
         }

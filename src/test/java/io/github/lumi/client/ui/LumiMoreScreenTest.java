@@ -1,0 +1,28 @@
+package io.github.lumi.client.ui;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.junit.jupiter.api.Test;
+
+class LumiMoreScreenTest {
+    @Test
+    void retainsLegacyCleanupAndManualCompareRoutes() throws Exception {
+        String more = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiMoreScreen.java"));
+        String client = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/LumiClient.java"));
+        String cleanup = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiCleanupScreen.java"));
+
+        assertTrue(more.contains("luma.action.open_cleanup"));
+        assertTrue(more.contains("luma.action.manual_compare"));
+        assertTrue(client.contains("new LumiCleanupScreen("));
+        assertTrue(client.contains("new LumiComparePickerScreen("));
+        assertTrue(cleanup.contains("luma.action.inspect_unused_files"));
+        assertTrue(cleanup.contains("luma.action.clean_up"));
+        assertTrue(cleanup.contains("!result.applied()"));
+        assertTrue(cleanup.contains("response.requestId().equals(pendingRequest)"));
+    }
+}

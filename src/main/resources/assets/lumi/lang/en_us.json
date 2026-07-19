@@ -761,6 +761,8 @@
   "luma.cleanup.results_title": "Unused files",
   "luma.cleanup.applied_title": "Cleaned up",
   "luma.cleanup.results_help": "%s files, %s reclaimable.",
+  "luma.cleanup.results_counts": "Old unreachable history: %s commits, %s objects.",
+  "luma.cleanup.applied_counts": "Removed %s commits and %s objects.",
   "luma.cleanup.empty": "No unused files found.",
   "luma.cleanup.candidate": "%s | %s | %s",
 
