@@ -13,26 +13,31 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   and saved player spawn positions.
 - Published commits and refs survive crashes.
 - Restore verifies the applied result before publishing a ref.
-- Save details retain legacy full and partial Restore controls. Partial Restore
-  accepts manual XYZ bounds or the wooden-sword selection, shows exact changed
-  block/section counts, and requires that clean-state preview before Apply.
+- Full Restore is a minimal confirmation. Partial Restore is a separate save
+  action that consumes only the current wooden-sword selection, shows exact
+  changed block/section counts, and requires a clean-state preview before Apply.
 - Singleplayer and multiplayer use the same server-authoritative path.
 - Idle play performs no history work when nothing is dirty.
 - Dirty work receives a ref-neutral automatic version every five minutes;
   the latest 64 per branch remain available in normal history.
 - Alt+Z/Y is session-only and separate from durable commits.
-- Alt+S opens the Save form; Alt+R rolls back only pending builder-root work
+- Alt+S opens the Save form; R rolls back only pending builder-root work
   inside the active workspace and reports when the current saved version has
   nothing to restore.
 - The same form can replace the latest version with a crash-safe Amend.
 - Another branch can be merged through the same verified apply pipeline;
   overlapping conflicts explicitly use the source branch.
-- Alt+L opens the current workspace history from the immutable server snapshot.
-  History exposes separate Save/Amend actions, compact version actions and a
-  branch browser for Create, Switch and Merge. Restoring an older version keeps
-  its still-restorable forward versions visible, matching the legacy menu.
+- Alt+L opens paged Cards/Graph history with branch and tag/text filtering.
+  Cards expose preview, Open, Restore and Create branch; the branch browser
+  supports Create, Switch, Merge, protected Delete and persistent explicit
+  Action+1..0 assignments. Restoring an older version keeps its still-restorable
+  forward versions visible, matching the legacy menu.
 - Successful integrated Save and Amend operations capture a bounded world
-  thumbnail for their new history entry; missing previews fall back safely.
+  transparent isometric render for their new history entry; no player
+  framebuffer or open menu is captured.
+- Work zones support empty color-assigned creation, exclusive Enter/Leave,
+  sword cell editing, merged Focused/All/Hidden world shells, overlap counts,
+  metadata-only Delete, and paged Cards/Graph commit management.
 - First-run onboarding opens once per client installation and remains replayable
   from More. Contextual tips can be dismissed independently and restored with
   More > Show tips again without replaying onboarding; Alt+I opens the live
