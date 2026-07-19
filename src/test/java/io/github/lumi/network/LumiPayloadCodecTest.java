@@ -92,8 +92,7 @@ class LumiPayloadCodecTest {
                 new MergeArgument("workspace/lab/idea", "Merge idea").encode(),
                 id('1'), 42);
         assertEquals(merge, roundTrip(HistoryCommandPayload.CODEC, merge));
-        var zoneCreate = new ZoneCreateArgument(
-                "Clock", new io.github.lumi.domain.model.BlockBox(1, 2, 3, 4, 5, 6));
+        var zoneCreate = new ZoneCreateArgument("Clock");
         HistoryCommandPayload createZone = new HistoryCommandPayload(
                 UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_CREATE,
                 zoneCreate.encode(), id('1'), 42);

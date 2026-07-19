@@ -206,11 +206,10 @@ public final class LumiClientNetworking {
                         Objects.requireNonNull(settings, "settings")).encode());
     }
 
-    public UUID createZone(String name, BlockBox area) {
+    public UUID createZone(String name) {
         return send(HistoryCommandPayload.Kind.ZONE_CREATE,
                 new ZoneCreateArgument(
-                        Objects.requireNonNull(name, "name"),
-                        Objects.requireNonNull(area, "area")).encode());
+                        Objects.requireNonNull(name, "name")).encode());
     }
 
     public UUID enterZone(UUID zoneId) {

@@ -9,9 +9,16 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 /** Owns explicit zone membership and actor-authorized causal growth. */
 public final class ZoneService {
+    private static final int[] DYE_COLORS = {
+            0xFFF9FFFE, 0xFFF9801D, 0xFFC74EBD, 0xFF3AB3DA,
+            0xFFFED83D, 0xFF80C71F, 0xFFF38BAA, 0xFF474F52,
+            0xFF9D9D97, 0xFF169C9C, 0xFF8932B8, 0xFF3C44AA,
+            0xFF835432, 0xFF5E7C16, 0xFFB02E26, 0xFF1D1D21
+    };
     private final ZoneRepository zones;
 
     public ZoneService(ZoneRepository zones) {
@@ -26,6 +33,14 @@ public final class ZoneService {
             Set<SectionKey> cells) throws IOException {
         return zones.create(new Zone(
                 id, workspaceId, name, color, cells, Set.of()));
+    }
+
+    public synchronized Zone createActive(
+            UUID id, UUID workspaceId, String name, UUID actor) throws IOException {
+        Objects.requireNonNull(actor, "actor");
+        Zone created = create(
+                id, workspaceId, name, nextColor(list(workspaceId)), Set.of());
+        return setActorActive(workspaceId, created.id(), actor, true);
     }
 
     public Zone require(UUID workspaceId, UUID zoneId) throws IOException {
@@ -50,6 +65,18 @@ public final class ZoneService {
     public synchronized Zone setActorActive(
             UUID workspaceId, UUID zoneId, UUID actor, boolean enabled) throws IOException {
         Objects.requireNonNull(actor, "actor");
+        if (enabled) {
+            for (Zone candidate : list(workspaceId)) {
+                if (candidate.id().equals(zoneId)
+                        || !candidate.activeActors().contains(actor)) {
+                    continue;
+                }
+                var remaining = new HashSet<>(candidate.activeActors());
+                remaining.remove(actor);
+                zones.replace(candidate, copy(
+                        candidate, candidate.cells(), remaining));
+            }
+        }
         Zone current = require(workspaceId, zoneId);
         var actors = new HashSet<>(current.activeActors());
         if (!(enabled ? actors.add(actor) : actors.remove(actor))) {
@@ -93,6 +120,22 @@ public final class ZoneService {
             }
         }
         return changed;
+    }
+
+    private static int nextColor(List<Zone> existing) {
+        Set<Integer> used = existing.stream()
+                .map(Zone::color)
+                .collect(java.util.stream.Collectors.toSet());
+        for (int color : DYE_COLORS) {
+            if (!used.contains(color)) {
+                return color;
+            }
+        }
+        int candidate;
+        do {
+            candidate = 0xFF000000 | ThreadLocalRandom.current().nextInt(0x1000000);
+        } while (used.contains(candidate));
+        return candidate;
     }
 
     private static Zone copy(Zone source, Set<SectionKey> cells, Set<UUID> actors) {

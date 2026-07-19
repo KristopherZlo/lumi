@@ -1,8 +1,6 @@
 package io.github.lumi.client.ui;
 
-import io.github.lumi.domain.model.BlockBox;
 import java.util.Objects;
-import java.util.Optional;
 
 /** Validates zone creation before sending one immutable selection intent. */
 public final class ZoneScreenController {
@@ -13,9 +11,8 @@ public final class ZoneScreenController {
         this.sender = Objects.requireNonNull(sender, "sender");
     }
 
-    public Submission create(String value, Optional<BlockBox> selection) {
+    public Submission create(String value) {
         String name = Objects.requireNonNull(value, "value").trim();
-        Optional<BlockBox> selected = Objects.requireNonNull(selection, "selection");
         if (name.isEmpty()) {
             return new Submission(false, "luma.status.zone_name_required");
         }
@@ -23,11 +20,8 @@ public final class ZoneScreenController {
                 || name.codePoints().anyMatch(Character::isISOControl)) {
             return new Submission(false, "Invalid zone name");
         }
-        if (selected.isEmpty()) {
-            return new Submission(false, "luma.selection.no_selection");
-        }
         try {
-            sender.send(name, selected.orElseThrow());
+            sender.send(name);
             return new Submission(true, "");
         } catch (RuntimeException failed) {
             return new Submission(false, failed.getMessage() == null
@@ -43,6 +37,6 @@ public final class ZoneScreenController {
 
     @FunctionalInterface
     public interface ZoneCreateSender {
-        void send(String name, BlockBox area);
+        void send(String name);
     }
 }

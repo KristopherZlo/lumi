@@ -340,8 +340,7 @@ public final class LumiServerNetworking {
         String message;
         if (payload.kind() == HistoryCommandPayload.Kind.ZONE_CREATE) {
             ZoneCreateArgument argument = ZoneCreateArgument.parse(payload.argument());
-            runtime.createZone(argument.name(), 0xff4aa3ff,
-                    argument.area().sectionCells(1_000_000));
+            runtime.createZone(argument.name(), player.getUUID());
             message = "Zone created";
         } else {
             UUID zoneId = UUID.fromString(payload.argument());

@@ -263,7 +263,7 @@
   "luma.zones.current_zone": "New changes and zone saves use %s.",
   "luma.zones.no_zone": "No zone",
   "luma.zones.create_title": "New zone",
-  "luma.zones.create_help": "Create a zone from the current wooden-sword selection.",
+  "luma.zones.create_help": "Create an empty zone, then build in it or edit its cells with the wooden sword.",
   "luma.zones.create_button": "Create zone",
   "luma.zones.list_title": "Zones",
   "luma.zones.list_help": "Enter the zone that describes what you are building now.",

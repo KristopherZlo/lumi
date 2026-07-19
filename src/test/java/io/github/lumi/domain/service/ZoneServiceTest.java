@@ -71,4 +71,22 @@ class ZoneServiceTest {
         assertEquals(2, grown.revision());
         assertEquals(Set.of(), service.require(workspace, inactiveZone).cells());
     }
+
+    @Test
+    void createsEmptyZonesWithDyeColorsAndOneActiveZonePerActor() throws Exception {
+        ZoneService service = new ZoneService(new ZoneRepository(repositoryRoot));
+        UUID workspace = new UUID(0, 1);
+        UUID actor = new UUID(0, 2);
+        var first = service.createActive(
+                new UUID(0, 3), workspace, "First", actor);
+        var second = service.createActive(
+                new UUID(0, 4), workspace, "Second", actor);
+
+        assertEquals(0xFFF9FFFE, first.color());
+        assertEquals(0xFFF9801D, second.color());
+        assertTrue(first.cells().isEmpty());
+        assertEquals(Set.of(), service.require(workspace, first.id()).activeActors());
+        assertEquals(Set.of(actor),
+                service.require(workspace, second.id()).activeActors());
+    }
 }

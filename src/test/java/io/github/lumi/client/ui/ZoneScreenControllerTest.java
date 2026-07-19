@@ -3,40 +3,34 @@ package io.github.lumi.client.ui;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.github.lumi.domain.model.BlockBox;
 import java.util.ArrayList;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class ZoneScreenControllerTest {
     @Test
-    void requiresSelectionAndSendsOneTrimmedCreateIntent() {
+    void createsAnEmptyZoneWithOneTrimmedIntent() {
         var requests = new ArrayList<String>();
         ZoneScreenController controller = new ZoneScreenController(
-                (name, area) -> requests.add(name + ":" + area.minX()));
-        BlockBox area = new BlockBox(4, 5, 6, 7, 8, 9);
+                requests::add);
 
         assertEquals("luma.status.zone_name_required",
-                controller.create(" ", Optional.of(area)).error());
-        assertEquals("luma.selection.no_selection",
-                controller.create("Clock", Optional.empty()).error());
+                controller.create(" ").error());
         ZoneScreenController.Submission accepted =
-                controller.create("  Clock  ", Optional.of(area));
+                controller.create("  Clock  ");
 
         assertTrue(accepted.accepted());
-        assertEquals(java.util.List.of("Clock:4"), requests);
+        assertEquals(java.util.List.of("Clock"), requests);
     }
 
     @Test
     void reportsRejectedCreateIntent() {
-        ZoneScreenController controller = new ZoneScreenController((name, area) -> {
-            throw new IllegalStateException("Zone is outside the workspace");
+        ZoneScreenController controller = new ZoneScreenController(name -> {
+            throw new IllegalStateException("Zone could not be created");
         });
 
-        ZoneScreenController.Submission result = controller.create(
-                "Clock", Optional.of(new BlockBox(0, 0, 0, 0, 0, 0)));
+        ZoneScreenController.Submission result = controller.create("Clock");
 
         assertEquals(false, result.accepted());
-        assertEquals("Zone is outside the workspace", result.error());
+        assertEquals("Zone could not be created", result.error());
     }
 }

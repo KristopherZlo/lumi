@@ -2,13 +2,10 @@ package io.github.lumi.client.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.state.ClientHistoryStore;
-import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -19,7 +16,6 @@ import net.minecraft.network.chat.Component;
 public final class LumiZonesScreen extends LumiLegacyPageScreen {
     private static final int PAGE_SIZE = 5;
     private final ClientHistoryStore history;
-    private final Supplier<Optional<BlockBox>> selection;
     private final ZoneScreenController controller;
     private final Consumer<HistorySnapshotPayload.ZoneView> openDetails;
     private final Consumer<UUID> enter;
@@ -37,14 +33,12 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
     public LumiZonesScreen(
             Screen parent,
             ClientHistoryStore history,
-            Supplier<Optional<BlockBox>> selection,
             ZoneScreenController controller,
             Consumer<HistorySnapshotPayload.ZoneView> openDetails,
             Consumer<UUID> enter,
             Consumer<UUID> leave) {
         super(parent, Component.translatable("luma.tab.zones"), LegacyProjectTab.ZONES);
         this.history = Objects.requireNonNull(history, "history");
-        this.selection = Objects.requireNonNull(selection, "selection");
         this.controller = Objects.requireNonNull(controller, "controller");
         this.openDetails = Objects.requireNonNull(openDetails, "openDetails");
         this.enter = Objects.requireNonNull(enter, "enter");
@@ -109,13 +103,13 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
 
     private void updateCreateButton() {
         if (create != null && name != null) {
-            create.active = !name.getValue().trim().isEmpty() && selection.get().isPresent();
+            create.active = !name.getValue().trim().isEmpty();
         }
     }
 
     private void create() {
         ZoneScreenController.Submission submission =
-                controller.create(name.getValue(), selection.get());
+                controller.create(name.getValue());
         error = submission.error();
         if (submission.accepted()) {
             feedback("luma.status.zone_created");

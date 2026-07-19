@@ -193,7 +193,7 @@ public final class LumiClient implements ClientModInitializer {
     private static void openZones(Screen parent) {
         Minecraft client = Minecraft.getInstance();
         client.setScreen(new LumiZonesScreen(
-                parent, HISTORY, SELECTION::bounds,
+                parent, HISTORY,
                 new ZoneScreenController(NETWORKING::createZone),
                 zone -> openZoneDetails(client.screen, zone),
                 NETWORKING::enterZone, NETWORKING::leaveZone));

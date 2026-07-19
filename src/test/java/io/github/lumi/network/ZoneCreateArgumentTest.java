@@ -3,24 +3,22 @@ package io.github.lumi.network;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.github.lumi.domain.model.BlockBox;
 import org.junit.jupiter.api.Test;
 
 class ZoneCreateArgumentTest {
     @Test
-    void roundTripsNameAndNormalizedSelection() {
-        ZoneCreateArgument argument = new ZoneCreateArgument(
-                "Clock", new BlockBox(8, 9, 10, 2, 3, 4));
+    void roundTripsTrimmedNameWithoutASelection() {
+        ZoneCreateArgument argument = new ZoneCreateArgument("  Clock  ");
 
         assertEquals(argument, ZoneCreateArgument.parse(argument.encode()));
-        assertEquals(new BlockBox(2, 3, 4, 8, 9, 10), argument.area());
+        assertEquals("Clock", argument.name());
     }
 
     @Test
     void rejectsBlankOrMalformedValues() {
         assertThrows(IllegalArgumentException.class,
-                () -> new ZoneCreateArgument(" ", new BlockBox(0, 0, 0, 0, 0, 0)));
+                () -> new ZoneCreateArgument(" "));
         assertThrows(IllegalArgumentException.class,
-                () -> ZoneCreateArgument.parse("Clock\n1,2"));
+                () -> ZoneCreateArgument.parse("Clock\ncell"));
     }
 }
