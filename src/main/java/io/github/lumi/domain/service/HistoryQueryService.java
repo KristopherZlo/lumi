@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.HistoryEntry;
+import io.github.lumi.domain.model.HistoryPage;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.TombstoneRepository;
@@ -60,6 +61,28 @@ public final class HistoryQueryService {
         Objects.requireNonNull(zoneId, "zoneId");
         return firstParentByZone(branch, workspaceId, Set.of(zoneId), limit)
                 .getOrDefault(zoneId, List.of());
+    }
+
+    public HistoryPage firstParentPage(
+            BranchName branch,
+            UUID workspaceId,
+            boolean includeZoneCommits,
+            int offset,
+            int limit) throws IOException {
+        int queryLimit = pageQueryLimit(offset, limit);
+        return page(offset, limit, firstParent(
+                branch, workspaceId, includeZoneCommits, queryLimit));
+    }
+
+    public HistoryPage firstParentZonePage(
+            BranchName branch,
+            UUID workspaceId,
+            UUID zoneId,
+            int offset,
+            int limit) throws IOException {
+        int queryLimit = pageQueryLimit(offset, limit);
+        return page(offset, limit, firstParentForZone(
+                branch, workspaceId, zoneId, queryLimit));
     }
 
     public Map<UUID, List<HistoryEntry>> firstParentByZone(
@@ -191,5 +214,24 @@ public final class HistoryQueryService {
             throw new IllegalArgumentException(
                     "History limit must be between 1 and " + MAX_QUERY);
         }
+    }
+
+    private static int pageQueryLimit(int offset, int limit) {
+        if (offset < 0 || limit < 1 || limit > 64
+                || offset > MAX_QUERY - limit) {
+            throw new IllegalArgumentException(
+                    "History page exceeds the bounded query window");
+        }
+        return Math.min(MAX_QUERY, offset + limit + 1);
+    }
+
+    private static HistoryPage page(
+            int offset, int limit, List<HistoryEntry> queried) {
+        if (offset >= queried.size()) {
+            return new HistoryPage(offset, List.of(), false);
+        }
+        int end = Math.min(queried.size(), offset + limit);
+        return new HistoryPage(
+                offset, queried.subList(offset, end), queried.size() > end);
     }
 }
