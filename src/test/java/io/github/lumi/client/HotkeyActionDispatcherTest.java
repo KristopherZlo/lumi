@@ -19,6 +19,10 @@ class HotkeyActionDispatcherTest {
                     @Override public boolean redoSelection() { return false; }
                     @Override public void undo() { calls.add("undo"); }
                     @Override public void redo() { calls.add("redo"); }
+                    @Override public String toggleCompareOverlay() {
+                        calls.add("compare");
+                        return "luma.status.compare_overlay_hidden";
+                    }
                     @Override public void quickRollback() { calls.add("rollback"); }
                     @Override public void switchBranch(int slot) {
                         calls.add("branch-" + slot);
@@ -30,9 +34,10 @@ class HotkeyActionDispatcherTest {
         }
 
         assertEquals(java.util.List.of(
-                "dashboard", "save", "hotkeys", "undo", "redo", "rollback"), calls);
+                "dashboard", "save", "hotkeys", "undo", "redo", "compare", "rollback"), calls);
         assertEquals(java.util.List.of(
                 "luma.status.undo_started", "luma.status.redo_started",
+                "luma.status.compare_overlay_hidden",
                 "luma.status.quick_rollback_started"), statuses);
 
         dispatcher.switchBranch(9);
@@ -52,6 +57,7 @@ class HotkeyActionDispatcherTest {
                     @Override public boolean redoSelection() { return true; }
                     @Override public void undo() { calls.add("world-undo"); }
                     @Override public void redo() { calls.add("world-redo"); }
+                    @Override public String toggleCompareOverlay() { return ""; }
                     @Override public void quickRollback() { }
                     @Override public void switchBranch(int slot) { }
                 }, statuses::add);

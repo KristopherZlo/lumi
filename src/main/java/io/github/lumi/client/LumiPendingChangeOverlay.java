@@ -45,8 +45,7 @@ public final class LumiPendingChangeOverlay {
     private void render(WorldRenderContext context) {
         Minecraft client = Minecraft.getInstance();
         var snapshot = history.state().snapshot().orElse(null);
-        var comparison = comparisons.result()
-                .filter(result -> result.error().isEmpty()).orElse(null);
+        var comparison = comparisons.visibleResult().orElse(null);
         boolean showPending = snapshot != null && client.screen == null
                 && altDown(client) && !snapshot.pendingBlocks().isEmpty();
         if (client.player == null || (!showPending

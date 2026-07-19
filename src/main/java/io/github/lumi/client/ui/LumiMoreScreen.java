@@ -1,12 +1,21 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.LumiMod;
 import java.util.Objects;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Util;
 
 /** Secondary client-only tools kept away from the main history workflow. */
 public final class LumiMoreScreen extends LumiLegacyPageScreen {
+    private static final Identifier COFFEE_ICON = Identifier.fromNamespaceAndPath(
+            LumiMod.MOD_ID, "textures/gui/buymeacoffee.png");
+    private static final Identifier PAYPAL_ICON = Identifier.fromNamespaceAndPath(
+            LumiMod.MOD_ID, "textures/gui/paypal.png");
     private final Runnable workspaces;
     private final Runnable deletedVersions;
     private final Runnable onboarding;
@@ -19,6 +28,9 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
     private int panelY;
     private int panelWidth;
     private int panelHeight;
+    private int coffeeX;
+    private int paypalX;
+    private int supportY;
 
     public LumiMoreScreen(
             Screen parent,
@@ -51,19 +63,28 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         panelY = page.windowY();
         panelWidth = page.contentWidth();
         panelHeight = page.windowHeight();
-        button("luma.action.workspaces", workspaces, 58);
-        button("luma.more.deleted_saves_title", deletedVersions, 86);
-        button("luma.more.onboarding_title", onboarding, 114);
-        button("luma.hotkeys.title", hotkeys, 142);
-        button("luma.more.special_thanks_title", thanks, 170);
-        button("luma.action.open_diagnostics", diagnostics, 198);
-        button("luma.action.settings", settings, 226);
-        button("luma.action.check_updates", updates, 254);
+        button("luma.action.workspaces", workspaces, 0, 0);
+        button("luma.more.deleted_saves_title", deletedVersions, 1, 0);
+        button("luma.more.onboarding_title", onboarding, 0, 1);
+        button("luma.hotkeys.title", hotkeys, 1, 1);
+        button("luma.more.special_thanks_title", thanks, 0, 2);
+        button("luma.action.open_diagnostics", diagnostics, 1, 2);
+        button("luma.action.settings", settings, 0, 3);
+        button("luma.action.check_updates", updates, 1, 3);
+        coffeeX = button("luma.action.buy_me_a_coffee", () -> Util.getPlatform().openUri(
+                java.net.URI.create("https://buymeacoffee.com/zl0yxp")), 0, 4);
+        paypalX = button("luma.action.paypal_donate", () -> Util.getPlatform().openUri(
+                java.net.URI.create("https://www.paypal.com/donate/?hosted_button_id=CY7A2U64JWY4W")), 1, 4);
+        supportY = panelY + 58 + 4 * 28;
     }
 
-    private void button(String key, Runnable action, int offset) {
-        addLegacyButton(panelX + 16, panelY + offset, panelWidth - 32,
+    private int button(String key, Runnable action, int column, int row) {
+        int gap = 4;
+        int width = (panelWidth - 36) / 2;
+        int x = panelX + 16 + column * (width + gap);
+        addLegacyButton(x, panelY + 58 + row * 28, width,
                 Component.translatable(key), action, LumiLegacyButton.Kind.NORMAL);
+        return x;
     }
 
     @Override
@@ -78,9 +99,24 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         graphics.drawString(font, Component.translatable("luma.more.help"),
                 panelX + 16, panelY + 40, LegacyLumiTheme.MUTED, false);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        drawSupportIcon(graphics, COFFEE_ICON, coffeeX + 3, supportY + 1);
+        drawSupportIcon(graphics, PAYPAL_ICON, paypalX + 3, supportY + 1);
+        String version = FabricLoader.getInstance().getModContainer(LumiMod.MOD_ID)
+                .map(container -> container.getMetadata().getVersion().getFriendlyString())
+                .orElse("?");
+        graphics.drawString(font, Component.translatable("luma.window.credit"),
+                panelX + 16, panelY + 201, LegacyLumiTheme.MUTED, false);
+        graphics.drawString(font, Component.translatable("luma.window.mod_version", version),
+                panelX + 16, panelY + 211, LegacyLumiTheme.MUTED, false);
         } finally {
             endLegacyRender(graphics);
         }
+    }
+
+    private static void drawSupportIcon(
+            GuiGraphics graphics, Identifier icon, int x, int y) {
+        graphics.blit(RenderPipelines.GUI_TEXTURED, icon,
+                x, y, 0, 0, 16, 16, 16, 16, 16, 16);
     }
 
     @Override public boolean isPauseScreen() { return false; }

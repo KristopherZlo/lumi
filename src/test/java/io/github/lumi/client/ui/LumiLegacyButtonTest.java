@@ -21,7 +21,8 @@ class LumiLegacyButtonTest {
         assertTrue(source.contains("\"textures/gui/icons/\" + iconName + \".png\""));
         assertTrue(source.contains("\"textures/gui/icons/\" + iconName + \"_disabled.png\""));
         assertTrue(source.contains("active ? icon : disabledIcon"));
-        assertFalse(source.contains("textures/gui/new-icons/"));
+        assertTrue(source.contains("textures/gui/new-icons/sliders.png"));
+        assertTrue(source.contains("boolean sliders = \"sliders\".equals(iconName)"));
         assertFalse(source.contains("kind.border()"));
         assertTrue(source.contains("Tooltip.create"));
         assertFalse(source.toLowerCase(Locale.ROOT).contains("owo"));

@@ -33,10 +33,15 @@ public final class LumiLegacyButton extends Button {
                 x, y, iconName == null ? width : ICON_BUTTON_WIDTH, CONTROL_HEIGHT,
                 message, onPress, DEFAULT_NARRATION);
         this.kind = kind;
+        boolean sliders = "sliders".equals(iconName);
         this.icon = iconName == null ? null : Identifier.fromNamespaceAndPath(
-                LumiMod.MOD_ID, "textures/gui/icons/" + iconName + ".png");
-        this.disabledIcon = iconName == null ? null : Identifier.fromNamespaceAndPath(
-                LumiMod.MOD_ID, "textures/gui/icons/" + iconName + "_disabled.png");
+                LumiMod.MOD_ID, sliders
+                        ? "textures/gui/new-icons/sliders.png"
+                        : "textures/gui/icons/" + iconName + ".png");
+        this.disabledIcon = sliders ? icon : iconName == null ? null
+                : Identifier.fromNamespaceAndPath(
+                        LumiMod.MOD_ID,
+                        "textures/gui/icons/" + iconName + "_disabled.png");
         if (icon != null) {
             setTooltip(Tooltip.create(message));
         }

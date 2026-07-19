@@ -10,6 +10,7 @@ import java.util.UUID;
 public final class ClientCompareStore {
     private Pending pending;
     private CompareResultPayload result;
+    private boolean highlightVisible = true;
 
     public synchronized void begin(
             UUID requestId,
@@ -18,6 +19,7 @@ public final class ClientCompareStore {
             CommitId after) {
         pending = new Pending(requestId, dimensionId, before, after);
         result = null;
+        highlightVisible = true;
     }
 
     public synchronized void accept(CompareResultPayload candidate) {
@@ -31,9 +33,36 @@ public final class ClientCompareStore {
         return Optional.ofNullable(result);
     }
 
+    public synchronized Optional<CompareResultPayload> visibleResult() {
+        return highlightVisible ? highlight() : Optional.empty();
+    }
+
+    public synchronized Optional<Boolean> toggleVisibility() {
+        if (highlight().isEmpty()) {
+            return Optional.empty();
+        }
+        highlightVisible = !highlightVisible;
+        return Optional.of(highlightVisible);
+    }
+
+    public synchronized boolean highlightVisible() {
+        return highlightVisible && highlight().isPresent();
+    }
+
+    public synchronized boolean hasHighlight() {
+        return highlight().isPresent();
+    }
+
     public synchronized void clear() {
         pending = null;
         result = null;
+        highlightVisible = true;
+    }
+
+    private Optional<CompareResultPayload> highlight() {
+        return Optional.ofNullable(result)
+                .filter(candidate -> candidate.error().isEmpty())
+                .filter(candidate -> !candidate.sectionPreview().isEmpty());
     }
 
     private record Pending(

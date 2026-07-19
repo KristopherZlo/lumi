@@ -19,6 +19,11 @@ class LumiHotkeysTest {
     }
 
     @Test
+    void compareHighlightKeepsTheLegacyHBinding() {
+        assertEquals(InputConstants.KEY_H, LumiHotkeys.defaultCompareOverlayKey());
+    }
+
+    @Test
     void altLIsConsumedBeforeVanillaAdvancements() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiHotkeys.java"));

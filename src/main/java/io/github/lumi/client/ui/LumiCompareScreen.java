@@ -25,6 +25,7 @@ public final class LumiCompareScreen extends LumiLegacyModalScreen {
     private String localError = "";
     private int panelX;
     private int panelY;
+    private LumiLegacyButton highlight;
 
     public LumiCompareScreen(
             Screen parent,
@@ -46,7 +47,12 @@ public final class LumiCompareScreen extends LumiLegacyModalScreen {
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(16, (height - PANEL_HEIGHT) / 2);
-        addLegacyButton(width / 2 - 60, panelY + PANEL_HEIGHT - 30, 120,
+        highlight = addLegacyButton(width / 2 - 124,
+                panelY + PANEL_HEIGHT - 30, 120,
+                Component.translatable("luma.action.hide_highlight"),
+                () -> comparisons.toggleVisibility(), LumiLegacyButton.Kind.PRIMARY);
+        highlight.active = false;
+        addLegacyButton(width / 2 + 4, panelY + PANEL_HEIGHT - 30, 120,
                 Component.translatable("luma.action.back"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
         if (!requested) {
@@ -78,6 +84,9 @@ public final class LumiCompareScreen extends LumiLegacyModalScreen {
                     result -> drawResult(graphics, result),
                     () -> drawLoading(graphics));
         }
+        highlight.active = comparisons.hasHighlight();
+        highlight.setMessage(Component.translatable(comparisons.highlightVisible()
+                ? "luma.action.hide_highlight" : "luma.action.show_highlight"));
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);
@@ -137,10 +146,12 @@ public final class LumiCompareScreen extends LumiLegacyModalScreen {
     @Override public boolean isPauseScreen() { return false; }
     @Override
     public void onClose() {
-        if (requestId != null) {
+        if (requestId != null && comparisons.result().isEmpty()) {
             cancel.accept(requestId);
-            requestId = null;
+        } else if (!comparisons.hasHighlight()) {
+            comparisons.clear();
         }
+        requestId = null;
         minecraft.setScreen(parent);
     }
 }

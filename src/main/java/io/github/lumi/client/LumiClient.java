@@ -122,6 +122,13 @@ public final class LumiClient implements ClientModInitializer {
                     @Override public boolean redoSelection() { return SELECTION.redo(); }
                     @Override public void undo() { NETWORKING.undo(); }
                     @Override public void redo() { NETWORKING.redo(); }
+                    @Override public String toggleCompareOverlay() {
+                        return COMPARISONS.toggleVisibility()
+                                .map(visible -> visible
+                                        ? "luma.status.compare_overlay_enabled"
+                                        : "luma.status.compare_overlay_hidden")
+                                .orElse("luma.status.compare_failed");
+                    }
                     @Override public void quickRollback() { NETWORKING.quickRollback(); }
                     @Override public void switchBranch(int slot) {
                         var snapshot = HISTORY.state().snapshot().orElseThrow(

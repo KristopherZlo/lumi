@@ -38,6 +38,7 @@ public final class HotkeyActionDispatcher {
                         feedback.accept("luma.status.redo_started");
                     }
                 }
+                case COMPARE_OVERLAY -> feedback.accept(actions.toggleCompareOverlay());
                 case QUICK_ROLLBACK -> {
                     actions.quickRollback();
                     feedback.accept("luma.status.quick_rollback_started");
@@ -66,7 +67,9 @@ public final class HotkeyActionDispatcher {
         }
     }
 
-    public enum Action { DASHBOARD, SAVE, HOTKEYS, UNDO, REDO, QUICK_ROLLBACK }
+    public enum Action {
+        DASHBOARD, SAVE, HOTKEYS, UNDO, REDO, COMPARE_OVERLAY, QUICK_ROLLBACK
+    }
 
     public interface Actions {
         void openDashboard();
@@ -76,6 +79,7 @@ public final class HotkeyActionDispatcher {
         boolean redoSelection();
         void undo();
         void redo();
+        String toggleCompareOverlay();
         void quickRollback();
         void switchBranch(int slot);
     }

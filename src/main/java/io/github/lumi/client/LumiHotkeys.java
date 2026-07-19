@@ -20,6 +20,8 @@ public final class LumiHotkeys {
     private final KeyMapping save = mapping("key.lumi.quick_save", InputConstants.KEY_S);
     private final KeyMapping undo = mapping("key.lumi.undo", InputConstants.KEY_Z);
     private final KeyMapping redo = mapping("key.lumi.redo", InputConstants.KEY_Y);
+    private final KeyMapping compare = mapping(
+            "key.lumi.toggle_compare_overlay", defaultCompareOverlayKey());
     private final KeyMapping rollback = mapping(
             "key.lumi.quick_rollback", InputConstants.KEY_R);
     private final KeyMapping info = mapping("key.lumi.hotkey_info", InputConstants.KEY_I);
@@ -45,6 +47,7 @@ public final class LumiHotkeys {
         KeyBindingHelper.registerKeyBinding(save);
         KeyBindingHelper.registerKeyBinding(undo);
         KeyBindingHelper.registerKeyBinding(redo);
+        KeyBindingHelper.registerKeyBinding(compare);
         KeyBindingHelper.registerKeyBinding(rollback);
         KeyBindingHelper.registerKeyBinding(info);
         for (KeyMapping branch : branches) {
@@ -62,6 +65,7 @@ public final class LumiHotkeys {
             }
             dispatcher.dispatch(HotkeyActionDispatcher.Action.DASHBOARD);
         }
+        consume(compare, normalPlay, HotkeyActionDispatcher.Action.COMPARE_OVERLAY);
         boolean canUseChord = normalPlay && altDown;
         consume(save, canUseChord, HotkeyActionDispatcher.Action.SAVE);
         consume(undo, canUseChord, HotkeyActionDispatcher.Action.UNDO);
@@ -77,6 +81,10 @@ public final class LumiHotkeys {
 
     static int defaultDashboardKey() {
         return InputConstants.KEY_L;
+    }
+
+    static int defaultCompareOverlayKey() {
+        return InputConstants.KEY_H;
     }
 
     static boolean canOpenDashboard(boolean normalPlay, boolean altDown) {
@@ -121,6 +129,8 @@ public final class LumiHotkeys {
                         mapping(mappings, "key.lumi.undo")),
                 shortcut("luma.hotkeys.redo", "luma.hotkeys.redo_help",
                         mapping(mappings, "key.lumi.redo")),
+                shortcut("luma.hotkeys.compare_overlay", "luma.hotkeys.compare_overlay_help",
+                        mapping(mappings, "key.lumi.toggle_compare_overlay")),
                 shortcut("luma.hotkeys.quick_rollback",
                         "luma.hotkeys.quick_rollback_help",
                         mapping(mappings, "key.lumi.quick_rollback")),
