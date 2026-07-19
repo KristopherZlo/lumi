@@ -43,6 +43,7 @@ import io.github.lumi.client.ui.WorkspaceScreenController;
 import io.github.lumi.client.ui.VersionCompareController;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.CleanupResultPayload;
+import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.network.PartialRestorePlanPayload;
 import io.github.lumi.telemetry.TelemetryService;
@@ -73,7 +74,7 @@ public final class LumiClient implements ClientModInitializer {
     private static final LumiClientNetworking NETWORKING =
             new LumiClientNetworking(
                     HISTORY, COMPARISONS, LumiClient::acceptSnapshot,
-                    PREVIEW_CAPTURE::accept,
+                    LumiClient::acceptOperationEvent,
                     LumiClient::showPackageInspection,
                     LumiClient::showCleanupResult,
                     LumiClient::showPartialRestorePlan);
@@ -167,6 +168,14 @@ public final class LumiClient implements ClientModInitializer {
         Component message = value.startsWith("luma.")
                 ? Component.translatable(value) : Component.literal(value);
         player.displayClientMessage(message, true);
+    }
+
+    private static void acceptOperationEvent(OperationEventPayload event) {
+        PREVIEW_CAPTURE.accept(event);
+        if (event.state() == OperationEventPayload.State.SUCCEEDED
+                && event.message().startsWith("luma.")) {
+            showFeedback(event.message());
+        }
     }
 
     private static void openZones(Screen parent) {

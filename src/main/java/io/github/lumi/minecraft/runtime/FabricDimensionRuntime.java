@@ -6,6 +6,7 @@ import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.DeferredDimensionMutation;
 import io.github.lumi.minecraft.operation.GarbageCollectionOperation;
 import io.github.lumi.minecraft.operation.LiveActionOperation;
+import io.github.lumi.minecraft.operation.NoChangeMutation;
 import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
 import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
 import io.github.lumi.minecraft.operation.BranchRefRestorePublication;
@@ -38,6 +39,7 @@ import io.github.lumi.domain.model.PartialRestorePlan;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.domain.model.VersionTags;
+import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
 import io.github.lumi.domain.service.DimensionHistoryViewService;
@@ -1345,8 +1347,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         Objects.requireNonNull(author, "author");
-        var operation = new DeferredDimensionMutation(() -> new LiveRecordedMutation(
-                liveActions, author.id(), createQuickRollback(author)));
+        var operation = new DeferredDimensionMutation(true, () -> {
+            var workspace = activeWorkspace();
+            WorkingIndexSnapshot builder = mutations.builderSnapshot(workspace::includes);
+            return builder.generations().isEmpty()
+                    ? new NoChangeMutation("luma.status.nothing_to_restore")
+                    : new LiveRecordedMutation(
+                            liveActions, author.id(), createQuickRollback(author, builder));
+        });
         operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
         return operation;
     }
@@ -1391,7 +1399,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
     }
 
-    private ReturnPointRestoreOperation createQuickRollback(CommitAuthor author)
+    private ReturnPointRestoreOperation createQuickRollback(
+            CommitAuthor author, WorkingIndexSnapshot builder)
             throws IOException {
         BranchRef expected = activeRef();
         UUID operationId = UUID.randomUUID();
@@ -1401,7 +1410,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 "Checkpoint before Quick Rollback", Instant.now(), activeWorkspaceId(),
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
         SaveCaptureOperation checkpoint = createChunkReadySave(
-                checkpointRequest, savePreparation,
+                checkpointRequest,
+                scopedSavePreparation(builder.generations()::containsKey),
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
                 ignored -> { });
         var operation = new ReturnPointRestoreOperation(checkpoint, saved ->

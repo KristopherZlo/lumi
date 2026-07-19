@@ -600,6 +600,7 @@
   "luma.status.version_delete_confirm": "Confirm save deletion.",
   "luma.status.version_delete_blocked": "Only non-root leaf saves can be deleted.",
   "luma.status.no_changes_to_save": "There are no unsaved changes to save.",
+  "luma.status.nothing_to_restore": "Nothing to restore.",
   "luma.status.preview_refreshed": "Preview refreshed.",
   "luma.status.preview_requested": "Preview refresh queued.",
   "luma.status.recovery_ready": "Recovery actions are available.",

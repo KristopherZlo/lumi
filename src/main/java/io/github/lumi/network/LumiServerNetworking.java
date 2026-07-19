@@ -620,6 +620,8 @@ public final class LumiServerNetworking {
         OperationEventPayload.State state = eventState(operation.terminalState());
         String message = operation.failure().map(Throwable::getMessage)
                 .filter(value -> value != null && !value.isBlank())
+                .or(() -> operation.completionMessage()
+                        .filter(value -> !value.isBlank()))
                 .orElseGet(() -> terminalMessage(operation.terminalState()));
         sendEvent(player, payload, runtime, state, message);
         broadcastSnapshot(runtime);

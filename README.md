@@ -21,7 +21,9 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - Dirty work receives a ref-neutral automatic version every five minutes;
   the latest 64 per branch remain available in normal history.
 - Alt+Z/Y is session-only and separate from durable commits.
-- Alt+S opens the Save form; Alt+R starts Quick Rollback through the same server path.
+- Alt+S opens the Save form; Alt+R rolls back only pending builder-root work
+  inside the active workspace and reports when the current saved version has
+  nothing to restore.
 - The same form can replace the latest version with a crash-safe Amend.
 - Another branch can be merged through the same verified apply pipeline;
   overlapping conflicts explicitly use the source branch.

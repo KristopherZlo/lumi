@@ -249,7 +249,11 @@ public final class LumiCommands {
             return 0;
         }
         try {
-            runtime.startQuickRollback(author(source), ignored -> { });
+            runtime.startQuickRollback(author(source), operation ->
+                    operation.completionMessage().ifPresent(message ->
+                            source.sendSuccess(() -> message.startsWith("luma.")
+                                    ? Component.translatable(message)
+                                    : Component.literal(message), false)));
             source.sendSuccess(() -> Component.literal("Lumi Quick Rollback started"), false);
             return 1;
         } catch (IOException | IllegalStateException failed) {

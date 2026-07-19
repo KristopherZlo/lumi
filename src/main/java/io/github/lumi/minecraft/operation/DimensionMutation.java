@@ -27,6 +27,11 @@ public interface DimensionMutation extends AutoCloseable {
         return Optional.empty();
     }
 
+    /** Optional user-facing message for a successful terminal outcome. */
+    default Optional<String> completionMessage() {
+        return Optional.empty();
+    }
+
     /**
      * Fail-closed state used when {@link #advance(long)} unexpectedly escapes.
      * Operations that cannot mutate the world may return {@link MutationTerminalState#FAILED}.

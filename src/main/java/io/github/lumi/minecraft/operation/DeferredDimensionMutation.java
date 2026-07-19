@@ -7,17 +7,23 @@ import java.util.Optional;
 /** Resolves current refs and scope only when queued work becomes active. */
 public final class DeferredDimensionMutation implements DimensionMutation {
     private final Factory factory;
+    private final boolean initialFreeze;
     private DimensionMutation delegate;
     private Throwable failure;
     private boolean cancelled;
 
     public DeferredDimensionMutation(Factory factory) {
+        this(false, factory);
+    }
+
+    public DeferredDimensionMutation(boolean initialFreeze, Factory factory) {
+        this.initialFreeze = initialFreeze;
         this.factory = Objects.requireNonNull(factory, "factory");
     }
 
     @Override
     public boolean requiresFreeze() {
-        return delegate != null && delegate.requiresFreeze();
+        return delegate == null ? initialFreeze : delegate.requiresFreeze();
     }
 
     @Override
@@ -64,6 +70,11 @@ public final class DeferredDimensionMutation implements DimensionMutation {
     public Optional<Throwable> failure() {
         return failure != null ? Optional.of(failure)
                 : delegate == null ? Optional.empty() : delegate.failure();
+    }
+
+    @Override
+    public Optional<String> completionMessage() {
+        return delegate == null ? Optional.empty() : delegate.completionMessage();
     }
 
     @Override public OperationProgress progress() {

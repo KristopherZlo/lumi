@@ -42,6 +42,21 @@ class DeferredDimensionMutationTest {
     }
 
     @Test
+    void canFreezeBeforeResolvingANoChangeOutcome() throws Exception {
+        DeferredDimensionMutation deferred = new DeferredDimensionMutation(
+                true, () -> new NoChangeMutation("luma.status.nothing_to_restore"));
+
+        assertTrue(deferred.requiresFreeze());
+        deferred.advance(1);
+
+        assertTrue(deferred.isTerminal());
+        assertTrue(deferred.isSafeToRelease());
+        assertEquals(MutationTerminalState.SUCCEEDED, deferred.terminalState());
+        assertEquals("luma.status.nothing_to_restore",
+                deferred.completionMessage().orElseThrow());
+    }
+
+    @Test
     void cancelsBeforeCreatingQueuedDelegate() throws Exception {
         AtomicInteger creations = new AtomicInteger();
         DeferredDimensionMutation deferred = new DeferredDimensionMutation(() -> {
