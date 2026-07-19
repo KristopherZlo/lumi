@@ -447,7 +447,7 @@ public final class LumiClientNetworking {
         }
         ClientPlayNetworking.send(new HistoryPageRequestPayload(
                 requestId, snapshot.dimensionId(), snapshot.workspaceId(),
-                requestedBranch, requestedZone, offset, limit));
+                requestedBranch, requestedZone, offset, limit, ""));
         return requestId;
     }
 

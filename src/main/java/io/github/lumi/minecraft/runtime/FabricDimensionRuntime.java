@@ -236,7 +236,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 commits,
                 new HistoryQueryService(
                         commits, refs, new TombstoneRepository(repository)),
-                tombstones, branches, workspaces, zones, autoVersions);
+                tombstones, branches, workspaces, zones, autoVersions,
+                versionDisplayNames, versionTagService);
         selectedWorkspaceId = activeWorkspaceId;
         nextAutoVersionTick = level.getGameTime() + AUTO_VERSION_INTERVAL_TICKS;
         zoneGrowth = new CausalZoneGrowthTracker(zones, background,
@@ -971,9 +972,15 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public CompletableFuture<io.github.lumi.domain.model.HistoryPage> historyPage(
             BranchName branch, int offset, int limit) {
+        return historyPage(branch, offset, limit, "");
+    }
+
+    public CompletableFuture<io.github.lumi.domain.model.HistoryPage> historyPage(
+            BranchName branch, int offset, int limit, String query) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return historyViews.historyPage(branch, offset, limit);
+                return historyViews.historyPage(
+                        branch, offset, limit, query);
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }
@@ -982,10 +989,19 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public CompletableFuture<io.github.lumi.domain.model.HistoryPage> zoneHistoryPage(
             BranchName branch, UUID zoneId, int offset, int limit) {
+        return zoneHistoryPage(branch, zoneId, offset, limit, "");
+    }
+
+    public CompletableFuture<io.github.lumi.domain.model.HistoryPage> zoneHistoryPage(
+            BranchName branch,
+            UUID zoneId,
+            int offset,
+            int limit,
+            String query) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return historyViews.zoneHistoryPage(
-                        branch, zoneId, offset, limit);
+                        branch, zoneId, offset, limit, query);
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }

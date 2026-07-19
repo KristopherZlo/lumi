@@ -46,9 +46,10 @@ final class HistoryPageCommandHandler {
         var future = request.zoneId().isPresent()
                 ? runtime.zoneHistoryPage(
                         request.branch(), request.zoneId().orElseThrow(),
-                        request.offset(), request.limit())
+                        request.offset(), request.limit(), request.query())
                 : runtime.historyPage(
-                        request.branch(), request.offset(), request.limit());
+                        request.branch(), request.offset(), request.limit(),
+                        request.query());
         future.whenComplete((page, failure) -> {
             HistoryPagePayload result = failure == null
                     ? success(request, runtime, page)

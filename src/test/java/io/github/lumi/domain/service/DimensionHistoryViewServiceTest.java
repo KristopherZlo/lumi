@@ -14,6 +14,8 @@ import io.github.lumi.storage.repository.ActiveWorkspaceRepository;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.TombstoneRepository;
+import io.github.lumi.storage.repository.VersionDisplayNameRepository;
+import io.github.lumi.storage.repository.VersionTagRepository;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorkspaceRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -69,6 +71,18 @@ class DimensionHistoryViewServiceTest {
                 tree, List.of(), foreignWorkspaceId, Optional.empty(),
                 CommitKind.MANUAL, "Foreign", 40));
         refs.create(new BranchName("foreign"), foreign);
+        var displayNames = new VersionDisplayNameService(
+                commits, new VersionDisplayNameRepository(repository));
+        var versionTags = new VersionTagService(
+                commits, new VersionTagRepository(repository));
+        displayNames.replace(
+                manual, workspaceId,
+                new io.github.lumi.domain.model.VersionDisplayName(
+                        "Golden tower"));
+        versionTags.replace(
+                manual, workspaceId,
+                new io.github.lumi.domain.model.VersionTags(
+                        List.of("clockwork")));
 
         var view = new DimensionHistoryViewService(
                 commits,
@@ -76,7 +90,8 @@ class DimensionHistoryViewServiceTest {
                         commits, refs, new TombstoneRepository(repository)),
                 new TombstoneService(
                         commits, refs, new TombstoneRepository(repository)),
-                branches, workspaces, zones, autoVersions);
+                branches, workspaces, zones, autoVersions,
+                displayNames, versionTags);
 
         assertEquals(workspaceId, view.activeWorkspace().id());
         assertEquals(List.of(workspaceId),
@@ -87,6 +102,11 @@ class DimensionHistoryViewServiceTest {
         assertEquals(List.of(manual),
                 historyPage.entries().stream().map(entry -> entry.id()).toList());
         assertEquals(false, historyPage.hasMore());
+        assertEquals(List.of(manual),
+                view.historyPage(
+                        new BranchName("main"), 0, 1,
+                        "gold clkwrk")
+                        .entries().stream().map(entry -> entry.id()).toList());
         assertEquals(List.of(zone),
                 view.zoneHistories(Set.of(zoneId), 10).get(zoneId).stream()
                         .map(entry -> entry.id()).toList());

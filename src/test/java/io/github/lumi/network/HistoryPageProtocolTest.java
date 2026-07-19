@@ -24,7 +24,7 @@ class HistoryPageProtocolTest {
         BranchName branch = new BranchName("idea/clock");
         var requestPayload = new HistoryPageRequestPayload(
                 request, "minecraft:overworld", workspace, branch,
-                Optional.of(zone), 24, 12);
+                Optional.of(zone), 24, 12, "clock #stone");
         var version = new HistorySnapshotPayload.Version(
                 id('1'), "Clock face", "Builder", 42,
                 CommitKind.ZONE);
@@ -43,7 +43,7 @@ class HistoryPageProtocolTest {
                 () -> new HistoryPageRequestPayload(
                         UUID.randomUUID(), "minecraft:overworld",
                         UUID.randomUUID(), new BranchName("main"),
-                        Optional.empty(), 950, 64));
+                        Optional.empty(), 950, 64, ""));
         assertThrows(IllegalArgumentException.class,
                 () -> new HistoryPagePayload(
                         UUID.randomUUID(), "minecraft:overworld",

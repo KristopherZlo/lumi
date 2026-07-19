@@ -18,7 +18,8 @@ public record HistoryPageRequestPayload(
         BranchName branch,
         Optional<UUID> zoneId,
         int offset,
-        int limit) implements CustomPacketPayload {
+        int limit,
+        String query) implements CustomPacketPayload {
     private static final int MAX_TEXT_BYTES = 1024;
     public static final Type<HistoryPageRequestPayload> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "history_page_request"));
@@ -33,8 +34,11 @@ public record HistoryPageRequestPayload(
         Objects.requireNonNull(workspaceId, "workspaceId");
         Objects.requireNonNull(branch, "branch");
         zoneId = Objects.requireNonNull(zoneId, "zoneId");
+        query = Objects.requireNonNull(query, "query").trim();
         if (dimensionId.isBlank() || offset < 0 || limit < 1 || limit > 64
-                || offset > 1_000 - limit) {
+                || offset > 1_000 - limit
+                || query.codePointCount(0, query.length()) > 128
+                || query.codePoints().anyMatch(Character::isISOControl)) {
             throw new IllegalArgumentException("Invalid history page request");
         }
     }
@@ -48,6 +52,7 @@ public record HistoryPageRequestPayload(
         zoneId.ifPresent(buffer::writeUUID);
         buffer.writeVarInt(offset);
         buffer.writeVarInt(limit);
+        buffer.writeUtf(query, MAX_TEXT_BYTES);
     }
 
     private static HistoryPageRequestPayload read(FriendlyByteBuf buffer) {
@@ -59,7 +64,8 @@ public record HistoryPageRequestPayload(
                 ? Optional.of(buffer.readUUID()) : Optional.empty();
         return new HistoryPageRequestPayload(
                 request, dimension, workspace, branch, zone,
-                buffer.readVarInt(), buffer.readVarInt());
+                buffer.readVarInt(), buffer.readVarInt(),
+                buffer.readUtf(MAX_TEXT_BYTES));
     }
 
     @Override
