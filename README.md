@@ -47,7 +47,9 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 
 The implementation grows only through tested vertical slices. See
 [`modules.md`](modules.md) for code ownership and `docs/architecture.md` for
-the fixed boundaries.
+the fixed boundaries. The evidence-backed legacy workflow audit and ordered V2
+parity work are tracked in
+[`docs/legacy-user-parity-plan.md`](docs/legacy-user-parity-plan.md).
 
 ## Build
 
