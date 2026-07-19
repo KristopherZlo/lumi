@@ -46,17 +46,18 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        panelWidth = Math.min(430, width - 24);
-        panelHeight = Math.min(292, Math.max(180, height - 24));
-        panelX = (width - panelWidth) / 2;
-        panelY = Math.max(12, (height - panelHeight) / 2);
+        LegacyModalLayout layout = fitPanel(width, height);
+        panelWidth = layout.width();
+        panelHeight = layout.height();
+        panelX = layout.x();
+        panelY = layout.y();
         if (!started) {
             startCheck();
         }
-        int bottomY = panelY + panelHeight - 28;
+        int bottomY = panelY + bottomActionOffset(panelHeight);
         if (result != null && result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE) {
             int buttonWidth = (panelWidth - 40) / 2;
-            int firstRow = bottomY - 26;
+            int firstRow = panelY + firstActionOffset(panelHeight);
             addLegacyButton(panelX + 16, firstRow, buttonWidth,
                     Component.translatable("luma.action.download_update"),
                     this::openDownload,
@@ -70,7 +71,7 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
             addLegacyButton(panelX + 24 + buttonWidth, bottomY, buttonWidth,
                     Component.translatable("luma.action.dont_show_version"),
                     this::dismissVersion, LumiLegacyButton.Kind.DANGER);
-            resultBottom = firstRow - 8;
+            resultBottom = panelY + updateResultBottomOffset(panelHeight);
             return;
         }
         resultBottom = panelY + panelHeight - 16;
@@ -140,7 +141,8 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
         graphics.drawString(font, heading, panelX + 22, panelY + 76,
                 LegacyLumiTheme.ACCENT, false);
         int y = drawWrapped(graphics, body, panelY + 98, LegacyLumiTheme.TEXT);
-        if (result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE) {
+        if (result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE
+                && fitsResultLine(y + 8, resultBottom)) {
             graphics.drawString(font, Component.translatable("luma.update.changes_title"),
                     panelX + 22, y + 8, LegacyLumiTheme.TEXT, false);
             drawWrapped(graphics,
@@ -152,13 +154,37 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
     private int drawWrapped(GuiGraphics graphics, Component text, int startY, int color) {
         int y = startY;
         for (var line : font.split(text, panelWidth - 44)) {
-            if (y > resultBottom - 12) {
+            if (!fitsResultLine(y, resultBottom)) {
                 break;
             }
             graphics.drawString(font, line, panelX + 22, y, color, false);
             y += 11;
         }
         return y;
+    }
+
+    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+        int width = Math.min(430, Math.max(1, screenWidth - 24));
+        int height = Math.min(292, Math.max(1, screenHeight - 24));
+        return new LegacyModalLayout(
+                Math.max(0, (screenWidth - width) / 2),
+                Math.max(0, (screenHeight - height) / 2), width, height);
+    }
+
+    static int bottomActionOffset(int panelHeight) {
+        return panelHeight - 28;
+    }
+
+    static int firstActionOffset(int panelHeight) {
+        return bottomActionOffset(panelHeight) - 26;
+    }
+
+    static int updateResultBottomOffset(int panelHeight) {
+        return firstActionOffset(panelHeight) - 8;
+    }
+
+    static boolean fitsResultLine(int y, int resultBottom) {
+        return y <= resultBottom - 12;
     }
 
     private void openDownload() {

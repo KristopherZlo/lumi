@@ -1,7 +1,8 @@
 package io.github.lumi.client.ui;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,5 +24,25 @@ class LumiUpdateScreenTest {
         assertTrue(source.contains("startCheck();"));
         assertTrue(source.contains("luma.action.checking_updates"));
         assertFalse(source.contains("this::check"));
+    }
+
+    @Test
+    void releaseActionsFitTheMinimumViewport() {
+        for (int[] viewport : new int[][] {{640, 360}, {427, 240}, {320, 180}}) {
+            LegacyModalLayout layout = LumiUpdateScreen.fitPanel(
+                    viewport[0], viewport[1]);
+            int height = layout.height();
+            assertTrue(layout.x() + layout.width() <= viewport[0]);
+            assertTrue(layout.y() + height <= viewport[1]);
+            assertTrue(LumiUpdateScreen.updateResultBottomOffset(height)
+                    < LumiUpdateScreen.firstActionOffset(height));
+            assertTrue(LumiUpdateScreen.firstActionOffset(height) + 20
+                    <= LumiUpdateScreen.bottomActionOffset(height));
+            assertTrue(LumiUpdateScreen.bottomActionOffset(height) + 20 <= height);
+        }
+        int height = LumiUpdateScreen.fitPanel(320, 180).height();
+        assertEquals(156, height);
+        assertFalse(LumiUpdateScreen.fitsResultLine(98,
+                LumiUpdateScreen.updateResultBottomOffset(height)));
     }
 }

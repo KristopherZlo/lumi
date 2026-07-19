@@ -26,6 +26,8 @@ public final class LumiPartialRestoreScreen extends LumiLegacyModalScreen {
     private LumiLegacyButton apply;
     private int panelX;
     private int panelY;
+    private int panelWidth;
+    private int panelHeight;
     private String localError = "";
 
     public LumiPartialRestoreScreen(
@@ -48,26 +50,30 @@ public final class LumiPartialRestoreScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        panelX = (width - panelWidth) / 2;
-        panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
+        LegacyModalLayout layout = fitPanel(width, height);
+        panelX = layout.x();
+        panelY = layout.y();
+        panelWidth = layout.width();
+        panelHeight = layout.height();
         int innerWidth = panelWidth - 32;
         int half = (innerWidth - 8) / 2;
-        addLegacyButton(panelX + 16, panelY + 62, half,
+        addLegacyButton(panelX + 16, panelY + modeOffset(panelHeight), half,
                 Component.translatable("luma.partial_restore.mode_selected_area"),
                 () -> selectMode(false), form.outside()
                         ? LumiLegacyButton.Kind.NORMAL : LumiLegacyButton.Kind.SELECTED);
-        addLegacyButton(panelX + 24 + half, panelY + 62, half,
+        addLegacyButton(panelX + 24 + half, panelY + modeOffset(panelHeight), half,
                 Component.translatable("luma.partial_restore.mode_outside_selection"),
                 () -> selectMode(true), form.outside()
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        preview = addLegacyButton(panelX + 16, panelY + 98, half,
+        preview = addLegacyButton(panelX + 16, panelY + previewOffset(panelHeight), half,
                 Component.translatable("luma.action.preview_partial_restore"),
                 this::preview, LumiLegacyButton.Kind.NORMAL);
-        apply = addLegacyButton(panelX + 24 + half, panelY + 98, half,
+        apply = addLegacyButton(panelX + 24 + half,
+                panelY + previewOffset(panelHeight), half,
                 Component.translatable("luma.action.apply_partial_restore"),
                 this::apply, LumiLegacyButton.Kind.PRIMARY);
-        addLegacyButton(width / 2 - 60, panelY + PANEL_HEIGHT - 28, 120,
+        addLegacyButton(width / 2 - 60,
+                panelY + cancelOffset(panelHeight), 120,
                 Component.translatable("luma.action.cancel"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
         updateButtons();
@@ -119,9 +125,8 @@ public final class LumiPartialRestoreScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-            int panelWidth = Math.min(PANEL_WIDTH, width - 32);
             renderLegacyWindow(
-                    graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+                    graphics, panelX, panelY, panelWidth, panelHeight);
             graphics.drawCenteredString(font,
                     Component.translatable("luma.partial_restore.title"),
                     width / 2, panelY + 16, LegacyLumiTheme.TEXT);
@@ -155,8 +160,32 @@ public final class LumiPartialRestoreScreen extends LumiLegacyModalScreen {
             graphics.drawCenteredString(font,
                     font.plainSubstrByWidth(
                             status.getString(), Math.max(1, panelWidth - 40)),
-                    width / 2, panelY + 128, color);
+                    width / 2, panelY + statusOffset(panelHeight), color);
         }
+    }
+
+    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+        int width = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 32));
+        int height = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
+        return new LegacyModalLayout(
+                Math.max(0, (screenWidth - width) / 2),
+                Math.max(0, (screenHeight - height) / 2), width, height);
+    }
+
+    static int cancelOffset(int panelHeight) {
+        return panelHeight - 28;
+    }
+
+    static int previewOffset(int panelHeight) {
+        return Math.min(98, cancelOffset(panelHeight) - 56);
+    }
+
+    static int modeOffset(int panelHeight) {
+        return Math.min(62, previewOffset(panelHeight) - 28);
+    }
+
+    static int statusOffset(int panelHeight) {
+        return Math.min(128, cancelOffset(panelHeight) - 26);
     }
 
     private static String message(RuntimeException failed, String fallback) {

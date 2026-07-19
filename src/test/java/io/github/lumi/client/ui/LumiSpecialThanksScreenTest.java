@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -28,5 +29,23 @@ class LumiSpecialThanksScreenTest {
         assertTrue(source.contains("scaled(x + width, uiScale)"));
         assertFalse(source.contains("owo"));
         assertFalse(source.contains("Cape"));
+        assertTrue(source.contains("public boolean mouseScrolled("));
+    }
+
+    @Test
+    void cardsFitAndBecomeScrollableAsTheCatalogGrows() {
+        assertCardGeometry(156, 2, 1);
+        assertCardGeometry(176, 2, 2);
+        assertCardGeometry(216, 2, 2);
+        assertCardGeometry(320, 5, 4);
+    }
+
+    private static void assertCardGeometry(
+            int panelHeight, int entries, int expectedRows) {
+        int rows = LumiSpecialThanksScreen.visibleCardRows(panelHeight, entries);
+        int height = LumiSpecialThanksScreen.cardHeight(panelHeight, rows);
+        assertEquals(expectedRows, rows);
+        assertTrue(58 + rows * height + Math.max(0, rows - 1) * 8
+                <= panelHeight - 12);
     }
 }

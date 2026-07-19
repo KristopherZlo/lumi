@@ -19,6 +19,8 @@ public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
     private final ClientBranchSlotStore slots;
     private int panelX;
     private int panelY;
+    private int panelWidth;
+    private int panelHeight;
 
     public LumiBranchSlotScreen(
             Screen parent,
@@ -36,11 +38,13 @@ public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        panelX = (width - panelWidth) / 2;
-        panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
+        LegacyModalLayout layout = fitPanel(width, height);
+        panelX = layout.x();
+        panelY = layout.y();
+        panelWidth = layout.width();
+        panelHeight = layout.height();
         addLegacyButton(
-                panelX + 20, panelY + 168, panelWidth - 40,
+                panelX + 20, panelY + actionOffset(panelHeight), panelWidth - 40,
                 Component.translatable("luma.action.clear_bind"),
                 this::clear, LumiLegacyButton.Kind.DANGER);
     }
@@ -80,9 +84,8 @@ public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
         LegacyRenderContext render =
                 beginLegacyRender(graphics, mouseX, mouseY);
         try {
-            int panelWidth = Math.min(PANEL_WIDTH, width - 32);
             renderLegacyWindow(
-                    graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+                    graphics, panelX, panelY, panelWidth, panelHeight);
             graphics.drawCenteredString(
                     font, title, width / 2, panelY + 18,
                     LegacyLumiTheme.TEXT);
@@ -103,6 +106,18 @@ public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
     private static String shortName(String name) {
         int slash = name.lastIndexOf('/');
         return slash < 0 ? name : name.substring(slash + 1);
+    }
+
+    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+        int width = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 32));
+        int height = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
+        return new LegacyModalLayout(
+                Math.max(0, (screenWidth - width) / 2),
+                Math.max(0, (screenHeight - height) / 2), width, height);
+    }
+
+    static int actionOffset(int panelHeight) {
+        return panelHeight - 42;
     }
 
     @Override public boolean isPauseScreen() { return false; }

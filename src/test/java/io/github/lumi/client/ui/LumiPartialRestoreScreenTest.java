@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -28,5 +29,24 @@ class LumiPartialRestoreScreenTest {
         assertFalse(fullRestore.contains("restore_without_entities"));
         assertFalse(fullRestore.contains("restore_whole_save"));
         assertFalse(fullRestore.contains("includeEntities"));
+    }
+
+    @Test
+    void selectionActionsFitTheMinimumViewport() {
+        for (int[] viewport : new int[][] {{640, 360}, {427, 240}, {320, 180}}) {
+            LegacyModalLayout layout = LumiPartialRestoreScreen.fitPanel(
+                    viewport[0], viewport[1]);
+            int height = layout.height();
+            assertTrue(layout.x() + layout.width() <= viewport[0]);
+            assertTrue(layout.y() + height <= viewport[1]);
+            assertTrue(LumiPartialRestoreScreen.modeOffset(height) + 20
+                    <= LumiPartialRestoreScreen.previewOffset(height));
+            assertTrue(LumiPartialRestoreScreen.previewOffset(height) + 20
+                    <= LumiPartialRestoreScreen.statusOffset(height));
+            assertTrue(LumiPartialRestoreScreen.statusOffset(height) + 9
+                    <= LumiPartialRestoreScreen.cancelOffset(height));
+            assertTrue(LumiPartialRestoreScreen.cancelOffset(height) + 20 <= height);
+        }
+        assertEquals(164, LumiPartialRestoreScreen.fitPanel(320, 180).height());
     }
 }

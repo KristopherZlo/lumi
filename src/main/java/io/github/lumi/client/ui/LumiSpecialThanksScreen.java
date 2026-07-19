@@ -14,6 +14,10 @@ import net.minecraft.world.entity.player.PlayerSkin;
 
 /** Bundled credits with lazily resolved, non-blocking player skin previews. */
 public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
+    private static final int CARDS_TOP = 58;
+    private static final int CARD_GAP = 8;
+    private static final int MIN_CARD_HEIGHT = 46;
+    private static final int BOTTOM_PADDING = 12;
     private static final float MODEL_HEIGHT = 2.125F;
     private static final float FIT_SCALE = 0.97F;
     private static final float PIVOT_Y = -1.0625F;
@@ -27,6 +31,7 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
     private int panelY;
     private int panelWidth;
     private int panelHeight;
+    private int scroll;
     private PlayerModel wideModel;
     private PlayerModel slimModel;
 
@@ -44,6 +49,7 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
         panelHeight = Math.min(320, height - 24);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - panelHeight) / 2);
+        scroll = Math.min(scroll, Math.max(0, entries.size() - visibleRows()));
         var models = minecraft.getEntityModels();
         wideModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER), false);
         slimModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER_SLIM), true);
@@ -58,12 +64,13 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
                 LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.special_thanks.help"),
                 panelX + 16, panelY + 42, LegacyLumiTheme.MUTED, false);
-        int cardHeight = Math.max(46, (panelHeight - 74) / 2);
-        int y = panelY + 58;
+        int rows = visibleRows();
+        int cardHeight = cardHeight(panelHeight, rows);
+        int y = panelY + CARDS_TOP;
         long now = System.currentTimeMillis();
-        for (SpecialThanksEntry entry : entries) {
-            entry(graphics, y, cardHeight, entry, now);
-            y += cardHeight + 8;
+        for (int index = 0; index < rows; index++) {
+            entry(graphics, y, cardHeight, entries.get(scroll + index), now);
+            y += cardHeight + CARD_GAP;
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -147,6 +154,42 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
 
     private static int scaled(int coordinate, float scale) {
         return Math.round(coordinate * scale);
+    }
+
+    @Override
+    public boolean mouseScrolled(
+            double mouseX, double mouseY,
+            double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        if (x >= panelX && x < panelX + panelWidth
+                && y >= panelY + CARDS_TOP && y < panelY + panelHeight) {
+            int maximum = Math.max(0, entries.size() - visibleRows());
+            int replacement = Math.max(0, Math.min(
+                    maximum, scroll + (verticalAmount < 0 ? 1 : -1)));
+            if (replacement != scroll) scroll = replacement;
+            return true;
+        }
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    private int visibleRows() {
+        return visibleCardRows(panelHeight, entries.size());
+    }
+
+    static int visibleCardRows(int panelHeight, int entryCount) {
+        if (entryCount == 0) return 0;
+        int available = Math.max(0, panelHeight - CARDS_TOP - BOTTOM_PADDING);
+        int capacity = Math.max(1,
+                (available + CARD_GAP) / (MIN_CARD_HEIGHT + CARD_GAP));
+        return Math.min(entryCount, capacity);
+    }
+
+    static int cardHeight(int panelHeight, int rows) {
+        if (rows == 0) return 0;
+        int available = Math.max(1, panelHeight - CARDS_TOP - BOTTOM_PADDING);
+        return Math.max(1, (available - (rows - 1) * CARD_GAP) / rows);
     }
 
     @Override public boolean isPauseScreen() { return false; }
