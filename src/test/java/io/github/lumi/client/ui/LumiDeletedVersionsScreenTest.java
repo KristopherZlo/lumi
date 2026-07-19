@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class LumiDeletedVersionsScreenTest {
     @Test
-    void exposesRestoreAndConfirmedCleanupInsideTheVisiblePageHeight() throws Exception {
+    void exposesRestoreCleanupAndScrollInsideTheVisibleHeight() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDeletedVersionsScreen.java"));
 
@@ -17,5 +17,6 @@ class LumiDeletedVersionsScreenTest {
         assertTrue(source.contains("pendingCleanup"));
         assertTrue(source.contains("panelY + panelHeight - 28"));
         assertTrue(source.contains("visibleRows()"));
+        assertTrue(source.contains("mouseScrolled("));
     }
 }

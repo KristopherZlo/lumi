@@ -104,7 +104,6 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
         addTabs(x, contentWidth);
         if (browser.pendingDelete().isPresent()) addDeleteConfirmation(x, contentWidth);
         else addRows();
-        addPaging(x);
     }
 
     private void addTabs(int x, int width) {
@@ -170,19 +169,6 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
                 }, LumiLegacyButton.Kind.NORMAL);
     }
 
-    private void addPaging(int x) {
-        int rows = visibleRows();
-        int y = panelY + panelHeight - 26;
-        LumiLegacyButton previous = addLegacyIconButton(
-                x, y, "chevron-left", Component.literal("<"),
-                () -> changePage(-1), LumiLegacyButton.Kind.NORMAL);
-        previous.active = browser.hasPrevious();
-        LumiLegacyButton next = addLegacyIconButton(
-                x + 28, y, "chevron-right", Component.literal(">"),
-                () -> changePage(1), LumiLegacyButton.Kind.NORMAL);
-        next.active = browser.hasNext(rows);
-    }
-
     private void submit(String value, PackageScreenController.Action action) {
         var result = controller.submit(
                 value, action, action == PackageScreenController.Action.EXPORT
@@ -213,11 +199,6 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
                     ? "Lumi package folder could not be opened"
                     : failure.getMessage();
         }
-    }
-
-    private void changePage(int delta) {
-        browser.changePage(delta);
-        rebuildWidgets();
     }
 
     private void selectTab(boolean imported) {
@@ -263,6 +244,28 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
             return true;
         }
         return super.keyPressed(event);
+    }
+
+    @Override
+    public boolean mouseScrolled(
+            double mouseX, double mouseY,
+            double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        int rows = visibleRows();
+        int top = panelY + 148 + contentOffset + OPTIONS_HEIGHT;
+        if (browser.pendingDelete().isEmpty()
+                && x >= panelX && x < panelX + panelWidth
+                && y >= top && y < panelY + panelHeight) {
+            int before = browser.start(rows);
+            browser.scroll(verticalAmount < 0 ? 1 : -1, rows);
+            if (browser.start(rows) != before) {
+                rebuildWidgets();
+            }
+            return true;
+        }
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     @Override

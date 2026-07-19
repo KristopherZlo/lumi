@@ -14,7 +14,7 @@ final class PackageBrowserState {
     private final List<HistorySnapshotPayload.Branch> importedBranches;
     private List<LumiPackageDirectory.Entry> localPackages = List.of();
     private boolean showImported;
-    private int page;
+    private int scroll;
     private HistorySnapshotPayload.Branch pendingDelete;
 
     PackageBrowserState(
@@ -46,7 +46,7 @@ final class PackageBrowserState {
 
     void selectTab(boolean imported) {
         showImported = imported;
-        page = 0;
+        scroll = 0;
         pendingDelete = null;
     }
 
@@ -55,7 +55,7 @@ final class PackageBrowserState {
     }
 
     int start(int rows) {
-        return Math.min(page * rows, size());
+        return Math.min(scroll, Math.max(0, size() - rows));
     }
 
     int end(int rows) {
@@ -70,16 +70,9 @@ final class PackageBrowserState {
         return importedBranches.get(index);
     }
 
-    void changePage(int delta) {
-        page = Math.max(0, page + delta);
-    }
-
-    boolean hasPrevious() {
-        return page > 0;
-    }
-
-    boolean hasNext(int rows) {
-        return rows > 0 && (page + 1) * rows < size();
+    void scroll(int delta, int rows) {
+        int maximum = Math.max(0, size() - rows);
+        scroll = Math.max(0, Math.min(maximum, scroll + delta));
     }
 
     Optional<HistorySnapshotPayload.Branch> pendingDelete() {

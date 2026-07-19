@@ -12,7 +12,7 @@ import net.minecraft.network.chat.Component;
 
 /** Bounded tombstone list with an explicit legacy permanent-cleanup confirmation. */
 public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
-    private static final int MAX_PAGE_SIZE = 5;
+    private static final int MAX_VISIBLE_ROWS = 5;
     private final ClientHistoryStore history;
     private final Consumer<CommitId> restore;
     private final Consumer<CommitId> cleanup;
@@ -21,7 +21,7 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
     private int panelY;
     private int panelWidth;
     private int panelHeight;
-    private int page;
+    private int scroll;
     private String error = "";
     private HistorySnapshotPayload.Version pendingCleanup;
 
@@ -52,7 +52,8 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
             return;
         }
         int rows = visibleRows();
-        int start = rows == 0 ? 0 : Math.min(page * rows, versions.size());
+        scroll = Math.min(scroll, Math.max(0, versions.size() - rows));
+        int start = Math.min(scroll, versions.size());
         int end = Math.min(start + rows, versions.size());
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
@@ -64,15 +65,6 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
                     "trash", Component.translatable("luma.screen.cleanup.title"),
                     () -> confirm(version), LumiLegacyButton.Kind.DANGER);
         }
-        int footerY = panelY + panelHeight - 28;
-        LumiLegacyButton previous = addLegacyButton(
-                panelX + 20, footerY, 28, Component.literal("<"),
-                () -> changePage(-1), LumiLegacyButton.Kind.NORMAL);
-        previous.active = page > 0;
-        LumiLegacyButton next = addLegacyButton(
-                panelX + 52, footerY, 28, Component.literal(">"),
-                () -> changePage(1), LumiLegacyButton.Kind.NORMAL);
-        next.active = rows > 0 && (page + 1) * rows < versions.size();
     }
 
     private void confirm(HistorySnapshotPayload.Version version) {
@@ -117,11 +109,6 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
         }
     }
 
-    private void changePage(int delta) {
-        page = Math.max(0, page + delta);
-        rebuildWidgets();
-    }
-
     private void feedback(String key) {
         if (minecraft.player != null) {
             minecraft.player.displayClientMessage(Component.translatable(key), true);
@@ -162,7 +149,7 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
             return;
         }
         int rows = visibleRows();
-        int start = rows == 0 ? 0 : Math.min(page * rows, versions.size());
+        int start = Math.min(scroll, versions.size());
         int end = Math.min(start + rows, versions.size());
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
@@ -193,7 +180,30 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
     }
 
     private int visibleRows() {
-        return Math.min(MAX_PAGE_SIZE, Math.max(0, (panelHeight - 100) / 38));
+        return Math.min(
+                MAX_VISIBLE_ROWS, Math.max(0, (panelHeight - 100) / 38));
+    }
+
+    @Override
+    public boolean mouseScrolled(
+            double mouseX, double mouseY,
+            double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        if (pendingCleanup == null
+                && x >= panelX && x < panelX + panelWidth
+                && y >= panelY + 62 && y < panelY + panelHeight) {
+            int maximum = Math.max(0, versions.size() - visibleRows());
+            int replacement = Math.max(0, Math.min(
+                    maximum, scroll + (verticalAmount < 0 ? 1 : -1)));
+            if (replacement != scroll) {
+                scroll = replacement;
+                rebuildWidgets();
+            }
+            return true;
+        }
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     @Override public boolean isPauseScreen() { return false; }

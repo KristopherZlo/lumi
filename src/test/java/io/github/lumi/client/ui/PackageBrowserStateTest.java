@@ -2,7 +2,6 @@ package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
@@ -13,7 +12,7 @@ import org.junit.jupiter.api.Test;
 
 class PackageBrowserStateTest {
     @Test
-    void exposesOnlyImportedBranchesAndKeepsPagingBounded() throws Exception {
+    void exposesOnlyImportedBranchesAndKeepsScrollingBounded() throws Exception {
         var regular = branch("workspace/1/main", true, 'a');
         var imported = branch("import/clock-deadbeef", false, 'b');
         var namespaced = branch("workspace/1/import/roof-cafebabe", false, 'c');
@@ -28,11 +27,12 @@ class PackageBrowserStateTest {
         assertEquals(2, state.size());
         assertEquals(imported, state.imported(0));
         assertEquals(namespaced, state.imported(1));
-        assertTrue(state.hasNext(1));
-        state.changePage(1);
+        state.scroll(1, 1);
         assertEquals(1, state.start(1));
-        assertTrue(state.hasPrevious());
-        assertFalse(state.hasNext(1));
+        state.scroll(1, 1);
+        assertEquals(1, state.start(1));
+        state.scroll(-1, 1);
+        assertEquals(0, state.start(1));
 
         state.confirmDelete(namespaced);
         assertEquals(Optional.of(namespaced), state.pendingDelete());
