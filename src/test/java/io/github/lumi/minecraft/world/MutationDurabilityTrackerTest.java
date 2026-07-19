@@ -9,6 +9,7 @@ import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -155,6 +156,151 @@ class MutationDurabilityTrackerTest {
     }
 
     @Test
+    void clearsOnlyCapturedBuilderGenerationsAndIgnoresAmbientChanges()
+            throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        SectionKey key = new SectionKey(0, 0, 0);
+        BlockPosition first = new BlockPosition(1, 2, 3);
+        BlockPosition later = new BlockPosition(4, 5, 6);
+
+        long builder = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBuilderBlockMutation(first, builder);
+        assertTrue(tracker.hasPendingBuilderChanges());
+        var captured = tracker.snapshot();
+
+        long ambient = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBlockMutation(first, ambient);
+        tracker.clear(captured);
+
+        assertFalse(tracker.hasPendingBuilderChanges());
+        assertEquals(ambient, tracker.snapshot().generations().get(key));
+
+        long newerBuilder = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBuilderBlockMutation(later, newerBuilder);
+        tracker.clear(captured);
+
+        assertTrue(tracker.hasPendingBuilderChanges());
+    }
+
+    @Test
+    void reopensAmbientDirtyWorkWithoutInventingABuilderDraft() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        SectionKey key = new SectionKey(1, 2, 3);
+        BlockPosition position = new BlockPosition(17, 33, 49);
+
+        long generation = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBlockMutation(position, generation);
+        background.runNext();
+        background.runNext();
+
+        MutationDurabilityTracker reopened = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), Runnable::run);
+        assertEquals(generation, reopened.snapshot().generations().get(key));
+        assertFalse(reopened.hasPendingBuilderChanges());
+    }
+
+    @Test
+    void persistsBuilderMarkerAddedAfterTheDirtyIndexWriterRan() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        RecordingChunkRetention retention = new RecordingChunkRetention();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background, retention);
+        SectionKey key = new SectionKey(1, 2, 3);
+        BlockPosition position = new BlockPosition(17, 33, 49);
+
+        long generation = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        background.runNext();
+        background.runNext();
+        assertTrue(tracker.canPublishChunk(1, 3));
+
+        tracker.recordBuilderBlockMutation(position, generation);
+        assertFalse(tracker.canPublishChunk(1, 3));
+        assertEquals(1, background.size());
+        var boundary = tracker.durabilityBoundary();
+        assertFalse(tracker.isDurable(boundary));
+        background.runNext();
+        assertTrue(tracker.canPublishChunk(1, 3));
+        assertTrue(tracker.isDurable(boundary));
+
+        MutationDurabilityTracker reopened = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), Runnable::run);
+        assertEquals(Map.of(key, generation), reopened.builderSnapshot().generations());
+    }
+
+    @Test
+    void builderBoundaryExcludesAndPreservesAmbientOnlyKeys() throws Exception {
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), command -> { });
+        SectionKey ambient = new SectionKey(0, 0, 0);
+        SectionKey builder = new SectionKey(1, 0, 0);
+        long ambientGeneration = tracker.registerSectionMutation(
+                ambient, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBlockMutation(new BlockPosition(1, 2, 3), ambientGeneration);
+        long builderGeneration = tracker.registerSectionMutation(
+                builder, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBuilderBlockMutation(
+                new BlockPosition(17, 2, 3), builderGeneration);
+
+        var boundary = tracker.builderSnapshot();
+        assertEquals(Map.of(builder, builderGeneration), boundary.generations());
+        assertEquals(boundary, tracker.builderSnapshot(builder::equals));
+        assertEquals(WorkingIndexSnapshot.empty(),
+                tracker.builderSnapshot(ambient::equals));
+
+        tracker.clear(boundary);
+
+        assertEquals(Map.of(ambient, ambientGeneration), tracker.snapshot().generations());
+        assertFalse(tracker.hasPendingBuilderChanges());
+    }
+
+    @Test
+    void durableClearBoundaryPreservesMutationStartedBeforeJournalCleanup() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        SectionKey key = new SectionKey(2, 0, 3);
+        BlockPosition first = new BlockPosition(33, 2, 49);
+        long generation = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBuilderBlockMutation(first, generation);
+        background.runNext();
+        background.runNext();
+        var captured = tracker.builderSnapshot();
+
+        MutationDurabilityTracker.IndexRevision clear = tracker.clearAndRevision(captured);
+        assertFalse(tracker.isDurable(clear));
+        long later = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBuilderBlockMutation(new BlockPosition(34, 2, 49), later);
+        assertEquals(2L, later);
+
+        background.runNext();
+
+        assertTrue(tracker.isDurable(clear));
+        var reopened = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), Runnable::run);
+        assertEquals(Map.of(key, later), reopened.snapshot().generations());
+        assertEquals(Map.of(key, later), reopened.builderSnapshot().generations());
+    }
+
+    @Test
     void drainsManyDistinctOriginsThroughOneBoundedBackgroundTask() throws Exception {
         ManualExecutor background = new ManualExecutor();
         MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
@@ -181,11 +327,13 @@ class MutationDurabilityTrackerTest {
         SectionKey key = new SectionKey(2, 3, 4);
 
         assertThrows(IllegalStateException.class, () -> tracker.markTrackedSection(key));
-        tracker.registerSectionMutation(key, MutationDurabilityTrackerTest::airSection);
+        long cleared = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
         tracker.clear(tracker.snapshot());
 
-        assertEquals(1L, tracker.markTrackedSection(key));
-        assertEquals(1L, tracker.snapshot().generations().get(key));
+        long next = tracker.markTrackedSection(key);
+        assertTrue(next > cleared);
+        assertEquals(next, tracker.snapshot().generations().get(key));
     }
 
     @Test

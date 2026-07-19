@@ -16,6 +16,7 @@ import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -42,7 +43,9 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private final WorkingIndex working;
     private final Set<HistoryKey> durableOrigins;
     private final Map<HistoryKey, Long> durableGenerations;
+    private final Map<HistoryKey, Long> durableBuilderGenerations;
     private final Map<HistoryKey, Long> committedGenerations = new HashMap<>();
+    private final Map<HistoryKey, Long> builderGenerations;
     private final Map<HistoryKey, Long> publicationRequirements = new HashMap<>();
     private final LinkedHashMap<BlockPosition, PendingBlock> pendingBlocks =
             new LinkedHashMap<>();
@@ -60,16 +63,18 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             WorkingIndexRepository indexRepository,
             Executor background,
             ChunkDurabilityRetention chunkRetention,
-            WorkingIndexSnapshot persisted,
+            WorkingIndexRepository.State persisted,
             Set<HistoryKey> durableOrigins) {
         this.objects = objects;
         this.origins = origins;
         this.indexRepository = indexRepository;
         this.background = background;
         this.chunkRetention = chunkRetention;
-        working = new WorkingIndex(persisted);
+        working = new WorkingIndex(persisted.working());
         this.durableOrigins = new HashSet<>(durableOrigins);
-        durableGenerations = new HashMap<>(persisted.generations());
+        durableGenerations = new HashMap<>(persisted.working().generations());
+        durableBuilderGenerations = new HashMap<>(persisted.builder().generations());
+        builderGenerations = new HashMap<>(persisted.builder().generations());
     }
 
     /** Must be called off the server thread because it reads repository indexes. */
@@ -96,7 +101,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         Objects.requireNonNull(chunkRetention, "chunkRetention");
         return new MutationDurabilityTracker(
                 objects, origins, indexRepository, background, chunkRetention,
-                indexRepository.read(), origins.entries().keySet());
+                indexRepository.readState(), origins.entries().keySet());
     }
 
     public long registerSectionMutation(SectionKey key, Supplier<SectionBlob> preMutationCapture) {
@@ -136,17 +141,10 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 scheduleOrigins = !originWriterScheduled;
                 originWriterScheduled = true;
             }
-            generation = working.markDirty(key);
-            if (generation == 1) {
-                committedGenerations.remove(key);
-            }
-            if (publicationRequirements.put(key, generation) == null) {
-                ChunkCoordinate coordinate = chunk(key);
-                if (!blockedChunks.containsKey(coordinate)) {
-                    chunkRetention.retain(coordinate.x(), coordinate.z());
-                }
-                blockedChunks.merge(coordinate, 1, Integer::sum);
-            }
+            generation = working.markDirty(
+                    key, committedGenerations.getOrDefault(key, 0L));
+            committedGenerations.remove(key);
+            requirePublicationLocked(key, generation);
             indexRevision++;
             scheduleIndex = !indexWriterScheduled;
             indexWriterScheduled = true;
@@ -181,6 +179,48 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         return !working.isEmpty();
     }
 
+    public synchronized boolean hasPendingBuilderChanges() {
+        return !builderGenerations.isEmpty();
+    }
+
+    public synchronized WorkingIndexSnapshot builderSnapshot() {
+        return new WorkingIndexSnapshot(builderGenerations);
+    }
+
+    public synchronized WorkingIndexSnapshot builderSnapshot(Predicate<HistoryKey> includes) {
+        Objects.requireNonNull(includes, "includes");
+        Map<HistoryKey, Long> selected = new LinkedHashMap<>();
+        builderGenerations.forEach((key, generation) -> {
+            if (includes.test(key)) {
+                selected.put(key, generation);
+            }
+        });
+        return new WorkingIndexSnapshot(selected);
+    }
+
+    /** Captures one atomic working/builder/index revision for preparation durability. */
+    public synchronized DurabilityBoundary durabilityBoundary() {
+        return new DurabilityBoundary(
+                working.snapshot(), new WorkingIndexSnapshot(builderGenerations),
+                new IndexRevision(indexRevision));
+    }
+
+    /** Attaches the current index revision and matching builder markers to a focused boundary. */
+    public synchronized DurabilityBoundary durabilityBoundary(
+            WorkingIndexSnapshot captured) {
+        Objects.requireNonNull(captured, "captured");
+        Map<HistoryKey, Long> builders = new LinkedHashMap<>();
+        builderGenerations.forEach((key, generation) -> {
+            Long capturedGeneration = captured.generations().get(key);
+            if (capturedGeneration != null && generation <= capturedGeneration) {
+                builders.put(key, generation);
+            }
+        });
+        return new DurabilityBoundary(
+                captured, new WorkingIndexSnapshot(builders),
+                new IndexRevision(indexRevision));
+    }
+
     public synchronized WorkingIndexPreview preview(
             Predicate<HistoryKey> scope, int maximumBlocks) {
         if (maximumBlocks < 0) {
@@ -205,6 +245,52 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
 
     public synchronized void recordBlockMutation(
             BlockPosition position, long generation) {
+        recordBlockMutationLocked(position, generation);
+    }
+
+    public void recordBuilderBlockMutation(
+            BlockPosition position, long generation) {
+        boolean scheduleIndex;
+        synchronized (this) {
+            recordBlockMutationLocked(position, generation);
+            scheduleIndex = markBuilderMutationLocked(section(position), generation);
+        }
+        if (scheduleIndex) {
+            scheduleIndexWriter();
+        }
+    }
+
+    public boolean markBuilderMutation(HistoryKey key) {
+        Objects.requireNonNull(key, "key");
+        boolean scheduleIndex;
+        synchronized (this) {
+            Long generation = working.generation(key);
+            if (generation == null) {
+                return false;
+            }
+            scheduleIndex = markBuilderMutationLocked(key, generation);
+        }
+        if (scheduleIndex) {
+            scheduleIndexWriter();
+        }
+        return true;
+    }
+
+    private boolean markBuilderMutationLocked(HistoryKey key, long generation) {
+        Long previous = builderGenerations.get(key);
+        if (previous != null && previous >= generation) {
+            return false;
+        }
+        builderGenerations.put(key, generation);
+        requirePublicationLocked(key, generation);
+        indexRevision++;
+        boolean scheduleIndex = !indexWriterScheduled;
+        indexWriterScheduled = true;
+        return scheduleIndex;
+    }
+
+    private void recordBlockMutationLocked(
+            BlockPosition position, long generation) {
         Objects.requireNonNull(position, "position");
         SectionKey section = section(position);
         Long current = working.generation(section);
@@ -224,21 +310,50 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         return durableKeyCount(captured) == captured.generations().size();
     }
 
+    public synchronized boolean isDurable(DurabilityBoundary captured) {
+        Objects.requireNonNull(captured, "captured");
+        return durableIndexRevision >= captured.revision().value()
+                && durableKeyCount(captured) == captured.working().generations().size();
+    }
+
     public synchronized int durableKeyCount(WorkingIndexSnapshot captured) {
         Objects.requireNonNull(captured, "captured");
         return (int) captured.generations().entrySet().stream().filter(entry ->
                 durableOrigins.contains(entry.getKey())
                         && durableGenerations.getOrDefault(entry.getKey(), 0L)
-                        >= entry.getValue()).count();
+                        >= entry.getValue()
+                        && isBuilderMarkerDurable(entry.getKey(), entry.getValue())).count();
+    }
+
+    public synchronized int durableKeyCount(DurabilityBoundary captured) {
+        Objects.requireNonNull(captured, "captured");
+        return (int) captured.working().generations().entrySet().stream()
+                .filter(entry -> isBoundaryEntryDurable(
+                        entry.getKey(), entry.getValue(), captured.builder()))
+                .count();
     }
 
     @Override
     public void clear(WorkingIndexSnapshot captured) {
+        clearAndRevision(captured);
+    }
+
+    @Override
+    public void complete(WorkingIndexSnapshot captured) throws IOException {
+        awaitDurable(clearAndRevision(captured));
+    }
+
+    public IndexRevision clearAndRevision(WorkingIndexSnapshot captured) {
         boolean scheduleIndex;
+        IndexRevision revision;
         synchronized (this) {
             WorkingIndexSnapshot before = working.snapshot();
             working.clearCaptured(captured);
             WorkingIndexSnapshot after = working.snapshot();
+            builderGenerations.entrySet().removeIf(entry -> {
+                Long generation = captured.generations().get(entry.getKey());
+                return generation != null && generation >= entry.getValue();
+            });
             captured.generations().forEach((key, generation) -> {
                 if (Objects.equals(before.generations().get(key), generation)
                         && !after.generations().containsKey(key)) {
@@ -251,11 +366,77 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 return generation != null && entry.getValue().generation() <= generation;
             });
             indexRevision++;
+            revision = new IndexRevision(indexRevision);
             scheduleIndex = !indexWriterScheduled;
             indexWriterScheduled = true;
         }
         if (scheduleIndex) {
             scheduleIndexWriter();
+        }
+        return revision;
+    }
+
+    public IndexRevision restoreAndRevision(WorkingIndexSnapshot captured) {
+        Objects.requireNonNull(captured, "captured");
+        boolean scheduleIndex;
+        IndexRevision revision;
+        synchronized (this) {
+            working.restoreCaptured(captured);
+            captured.generations().forEach((key, generation) -> {
+                builderGenerations.merge(key, generation, Math::max);
+                requirePublicationLocked(
+                        key, Objects.requireNonNull(working.generation(key)));
+            });
+            indexRevision++;
+            revision = new IndexRevision(indexRevision);
+            scheduleIndex = !indexWriterScheduled;
+            indexWriterScheduled = true;
+        }
+        if (scheduleIndex) {
+            scheduleIndexWriter();
+        }
+        return revision;
+    }
+
+    /** Reconstructs builder tracking for a legacy journal that predates generation sidecars. */
+    public IndexRevision trackRestoredBuilderAndRevision(
+            Collection<? extends HistoryKey> restoredKeys) {
+        Objects.requireNonNull(restoredKeys, "restoredKeys");
+        boolean scheduleIndex;
+        IndexRevision revision;
+        synchronized (this) {
+            for (HistoryKey key : restoredKeys) {
+                requireTracked(key);
+                long generation = working.markDirty(
+                        key, committedGenerations.getOrDefault(key, 0L));
+                committedGenerations.remove(key);
+                builderGenerations.put(key, generation);
+                requirePublicationLocked(key, generation);
+            }
+            indexRevision++;
+            revision = new IndexRevision(indexRevision);
+            scheduleIndex = !indexWriterScheduled;
+            indexWriterScheduled = true;
+        }
+        if (scheduleIndex) {
+            scheduleIndexWriter();
+        }
+        return revision;
+    }
+
+    public synchronized boolean isDurable(IndexRevision revision) {
+        return durableIndexRevision >= Objects.requireNonNull(revision, "revision").value();
+    }
+
+    private synchronized void awaitDurable(IndexRevision revision) throws IOException {
+        while (!isDurable(revision)) {
+            try {
+                wait();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IOException(
+                        "Interrupted while finalizing the Lumi working index", interrupted);
+            }
         }
     }
 
@@ -322,18 +503,19 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
 
     private void writeIndexUntilCurrent() {
         while (true) {
-            WorkingIndexSnapshot snapshot;
+            WorkingIndexRepository.State state;
             long revision;
             synchronized (this) {
-                snapshot = working.snapshot();
+                state = new WorkingIndexRepository.State(
+                        working.snapshot(), new WorkingIndexSnapshot(builderGenerations));
                 revision = indexRevision;
-                if (!durableOrigins.containsAll(snapshot.generations().keySet())) {
+                if (!durableOrigins.containsAll(state.working().generations().keySet())) {
                     indexWriterScheduled = false;
                     return;
                 }
             }
             try {
-                indexRepository.write(snapshot);
+                indexRepository.write(state);
             } catch (IOException failed) {
                 synchronized (this) {
                     indexWriterScheduled = false;
@@ -344,8 +526,11 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             synchronized (this) {
                 durableIndexRevision = revision;
                 durableGenerations.clear();
-                durableGenerations.putAll(snapshot.generations());
+                durableGenerations.putAll(state.working().generations());
+                durableBuilderGenerations.clear();
+                durableBuilderGenerations.putAll(state.builder().generations());
                 Set.copyOf(publicationRequirements.keySet()).forEach(this::releaseSatisfied);
+                notifyAll();
                 if (revision == indexRevision) {
                     indexWriterScheduled = false;
                     return;
@@ -378,11 +563,14 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
 
     private void releaseSatisfied(HistoryKey key) {
         Long required = publicationRequirements.get(key);
+        Long requiredBuilder = builderGenerations.get(key);
         long durable = Math.max(
                 durableGenerations.getOrDefault(key, 0L),
                 committedGenerations.getOrDefault(key, 0L));
         if (required == null || !durableOrigins.contains(key)
-                || durable < required) {
+                || durable < required
+                || requiredBuilder != null
+                && durableBuilderGenerations.getOrDefault(key, 0L) < requiredBuilder) {
             return;
         }
         publicationRequirements.remove(key);
@@ -395,6 +583,40 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         } else {
             blockedChunks.put(coordinate, count - 1);
         }
+    }
+
+    private void requirePublicationLocked(HistoryKey key, long generation) {
+        Long previous = publicationRequirements.put(key, generation);
+        if (previous != null) {
+            if (previous > generation) {
+                publicationRequirements.put(key, previous);
+            }
+            return;
+        }
+        ChunkCoordinate coordinate = chunk(key);
+        if (!blockedChunks.containsKey(coordinate)) {
+            chunkRetention.retain(coordinate.x(), coordinate.z());
+        }
+        blockedChunks.merge(coordinate, 1, Integer::sum);
+    }
+
+    private boolean isBuilderMarkerDurable(HistoryKey key, long capturedGeneration) {
+        Long builderGeneration = builderGenerations.get(key);
+        return builderGeneration == null || builderGeneration > capturedGeneration
+                || durableBuilderGenerations.getOrDefault(key, 0L) >= builderGeneration;
+    }
+
+    private boolean isBoundaryEntryDurable(
+            HistoryKey key,
+            long generation,
+            WorkingIndexSnapshot builders) {
+        if (!durableOrigins.contains(key)
+                || durableGenerations.getOrDefault(key, 0L) < generation) {
+            return false;
+        }
+        Long builderGeneration = builders.generations().get(key);
+        return builderGeneration == null
+                || durableBuilderGenerations.getOrDefault(key, 0L) >= builderGeneration;
     }
 
     private static ChunkCoordinate chunk(HistoryKey key) {
@@ -426,4 +648,30 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             BlockPosition position, SectionKey section, long generation) { }
 
     private record ChunkCoordinate(int x, int z) { }
+
+    public record IndexRevision(long value) {
+        public IndexRevision {
+            if (value < 0) {
+                throw new IllegalArgumentException("Index revision cannot be negative");
+            }
+        }
+    }
+
+    public record DurabilityBoundary(
+            WorkingIndexSnapshot working,
+            WorkingIndexSnapshot builder,
+            IndexRevision revision) {
+        public DurabilityBoundary {
+            Objects.requireNonNull(working, "working");
+            Objects.requireNonNull(builder, "builder");
+            Objects.requireNonNull(revision, "revision");
+            builder.generations().forEach((key, generation) -> {
+                Long workingGeneration = working.generations().get(key);
+                if (workingGeneration == null || generation > workingGeneration) {
+                    throw new IllegalArgumentException(
+                            "Builder boundary must be within the working boundary");
+                }
+            });
+        }
+    }
 }
