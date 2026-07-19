@@ -27,7 +27,7 @@ class WorkspaceRepositoryTest {
         repository.create(created);
         Workspace updated = new Workspace(
                 id, "Fast redstone lab", created.bounds(),
-                new WorkspaceSettings(false, false));
+                new WorkspaceSettings(false, false, false, false));
         repository.replace(created, updated);
 
         assertEquals(Optional.of(updated), repository.read(id));

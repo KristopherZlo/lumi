@@ -6,28 +6,42 @@ import java.util.Objects;
 /** Canonical trust-boundary encoding for active-workspace settings. */
 public record WorkspaceSettingsArgument(
         boolean hideZoneCommits,
-        boolean includeEntitiesOnRestore) {
+        boolean includeEntitiesOnRestore,
+        boolean previewGenerationEnabled,
+        boolean workspaceHudEnabled) {
     public WorkspaceSettingsArgument(WorkspaceSettings settings) {
         this(
                 Objects.requireNonNull(settings, "settings").hideZoneCommits(),
-                settings.includeEntitiesOnRestore());
+                settings.includeEntitiesOnRestore(),
+                settings.previewGenerationEnabled(),
+                settings.workspaceHudEnabled());
     }
 
     public String encode() {
-        return flag(hideZoneCommits) + "," + flag(includeEntitiesOnRestore);
+        return flag(hideZoneCommits) + "," + flag(includeEntitiesOnRestore)
+                + "," + flag(previewGenerationEnabled) + "," + flag(workspaceHudEnabled);
     }
 
     public WorkspaceSettings settings() {
-        return new WorkspaceSettings(hideZoneCommits, includeEntitiesOnRestore);
+        return new WorkspaceSettings(
+                hideZoneCommits, includeEntitiesOnRestore,
+                previewGenerationEnabled, workspaceHudEnabled);
     }
 
     public static WorkspaceSettingsArgument parse(String encoded) {
         Objects.requireNonNull(encoded, "encoded");
-        if (encoded.length() != 3 || encoded.charAt(1) != ',') {
+        if (encoded.length() == 3 && encoded.charAt(1) == ',') {
+            return new WorkspaceSettingsArgument(
+                    parseFlag(encoded.charAt(0)), parseFlag(encoded.charAt(2)),
+                    true, true);
+        }
+        if (encoded.length() != 7 || encoded.charAt(1) != ','
+                || encoded.charAt(3) != ',' || encoded.charAt(5) != ',') {
             throw new IllegalArgumentException("Invalid workspace settings argument");
         }
         return new WorkspaceSettingsArgument(
-                parseFlag(encoded.charAt(0)), parseFlag(encoded.charAt(2)));
+                parseFlag(encoded.charAt(0)), parseFlag(encoded.charAt(2)),
+                parseFlag(encoded.charAt(4)), parseFlag(encoded.charAt(6)));
     }
 
     private static char flag(boolean value) {

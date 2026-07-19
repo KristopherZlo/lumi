@@ -38,6 +38,14 @@ public final class ClientVersionPreviewCapture {
             UUID requestId, HistorySnapshotPayload snapshot) {
         Objects.requireNonNull(requestId, "requestId");
         Objects.requireNonNull(snapshot, "snapshot");
+        boolean enabled = snapshot.workspaces().stream()
+                .filter(HistorySnapshotPayload.WorkspaceView::active)
+                .findFirst()
+                .map(HistorySnapshotPayload.WorkspaceView::previewGenerationEnabled)
+                .orElse(true);
+        if (!enabled) {
+            return;
+        }
         PendingCapture replaced = pending.put(requestId, new PendingCapture(
                 snapshot.dimensionId(), snapshot.head(), snapshot.pendingBounds(),
                 false, null, null));

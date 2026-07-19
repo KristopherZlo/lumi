@@ -17,7 +17,9 @@ final class HistorySnapshotFactory {
                         visible.id(), visible.name(), visible.id().equals(workspace.id()),
                         visible.bounds().isPresent(),
                         visible.settings().hideZoneCommits(),
-                        visible.settings().includeEntitiesOnRestore()))
+                        visible.settings().includeEntitiesOnRestore(),
+                        visible.settings().previewGenerationEnabled(),
+                        visible.settings().workspaceHudEnabled()))
                 .toList();
         var versions = runtime.history(32).stream()
                 .map(entry -> new HistorySnapshotPayload.Version(

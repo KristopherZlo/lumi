@@ -23,12 +23,14 @@ class LumiPayloadCodecTest {
     @Test
     void workspaceSettingsArgumentIsCanonicalAndStrict() {
         var argument = new WorkspaceSettingsArgument(
-                new WorkspaceSettings(false, true));
+                new WorkspaceSettings(false, true, false, false));
 
-        assertEquals("0,1", argument.encode());
+        assertEquals("0,1,0,0", argument.encode());
         assertEquals(argument, WorkspaceSettingsArgument.parse(argument.encode()));
         assertEquals(argument.settings(),
                 WorkspaceSettingsArgument.parse(argument.encode()).settings());
+        assertEquals(new WorkspaceSettings(false, true, true, true),
+                WorkspaceSettingsArgument.parse("0,1").settings());
         assertThrows(IllegalArgumentException.class,
                 () -> WorkspaceSettingsArgument.parse("false,true"));
         assertThrows(IllegalArgumentException.class,

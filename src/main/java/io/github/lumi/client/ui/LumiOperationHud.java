@@ -57,6 +57,14 @@ public final class LumiOperationHud {
         if (snapshot == null || client.player == null) {
             return 10;
         }
+        boolean enabled = snapshot.workspaces().stream()
+                .filter(io.github.lumi.network.HistorySnapshotPayload.WorkspaceView::active)
+                .findFirst()
+                .map(io.github.lumi.network.HistorySnapshotPayload.WorkspaceView::workspaceHudEnabled)
+                .orElse(true);
+        if (!enabled) {
+            return 10;
+        }
         boolean expanded = InputConstants.isKeyDown(
                 client.getWindow(), InputConstants.KEY_LALT)
                 || InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RALT);

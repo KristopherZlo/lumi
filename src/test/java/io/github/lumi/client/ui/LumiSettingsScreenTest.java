@@ -20,6 +20,10 @@ class LumiSettingsScreenTest {
         assertTrue(source.contains("!showZoneSaves, includeEntitiesOnRestore"));
         assertTrue(source.contains("luma.settings.show_hidden_commits"));
         assertTrue(source.contains("luma.settings.restore_entities"));
+        assertTrue(source.contains("luma.settings.preview_generation"));
+        assertTrue(source.contains("luma.settings.workspace_hud"));
+        assertTrue(source.contains("active.previewGenerationEnabled()"));
+        assertTrue(source.contains("active.workspaceHudEnabled()"));
         assertTrue(source.contains("luma.settings.telemetry_enabled"));
         assertTrue(source.contains("panelWidth < 360"));
     }

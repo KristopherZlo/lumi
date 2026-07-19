@@ -105,6 +105,8 @@ public final class WorkspaceRepository {
             }
             output.writeBoolean(workspace.settings().hideZoneCommits());
             output.writeBoolean(workspace.settings().includeEntitiesOnRestore());
+            output.writeBoolean(workspace.settings().previewGenerationEnabled());
+            output.writeBoolean(workspace.settings().workspaceHudEnabled());
         }
         return bytes.toByteArray();
     }
@@ -126,9 +128,17 @@ public final class WorkspaceRepository {
             int bounded = readFlag(input, "workspace bounds");
             Optional<BlockBox> bounds = bounded == 1
                     ? Optional.of(readBounds(input)) : Optional.empty();
-            WorkspaceSettings settings = new WorkspaceSettings(
-                    readFlag(input, "hide-zone-commits setting") == 1,
-                    readFlag(input, "restore-entities setting") == 1);
+            boolean hideZoneCommits = readFlag(input, "hide-zone-commits setting") == 1;
+            boolean restoreEntities = readFlag(input, "restore-entities setting") == 1;
+            if (input.available() != 0 && input.available() != 2) {
+                throw new IOException("Invalid workspace settings extension");
+            }
+            WorkspaceSettings settings = input.available() == 0
+                    ? new WorkspaceSettings(hideZoneCommits, restoreEntities)
+                    : new WorkspaceSettings(
+                            hideZoneCommits, restoreEntities,
+                            readFlag(input, "preview-generation setting") == 1,
+                            readFlag(input, "workspace-hud setting") == 1);
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in workspace");
             }

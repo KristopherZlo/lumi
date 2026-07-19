@@ -20,5 +20,7 @@ class ClientVersionPreviewCaptureTest {
         assertTrue(source.contains("HEIGHT = 180"));
         assertTrue(source.contains("MAX_PENDING = 4"));
         assertTrue(source.contains("snapshot.pendingBounds()"));
+        assertTrue(source.contains("WorkspaceView::active"));
+        assertTrue(source.contains("WorkspaceView::previewGenerationEnabled"));
     }
 }
