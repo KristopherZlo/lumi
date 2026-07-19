@@ -31,7 +31,8 @@ class LumiLegacyScreenScaleTest {
         for (Path screen : screens) {
             String source = Files.readString(screen);
             assertTrue(source.contains("beginLegacyInit();"), screen.toString());
-            assertTrue(source.contains("beginLegacyRender(graphics, mouseX, mouseY)"),
+            assertTrue(source.matches(
+                            "(?s).*beginLegacyRender\\(\\s*graphics,\\s*mouseX,\\s*mouseY\\).*"),
                     screen.toString());
             assertTrue(source.contains("endLegacyRender(graphics);"), screen.toString());
         }
