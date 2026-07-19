@@ -13,6 +13,8 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
     private int panelX;
     private int panelY;
     private int panelWidth;
+    private int panelHeight;
+    private int scroll;
 
     public LumiHotkeyScreen(Screen parent, List<LumiHotkeys.Shortcut> shortcuts) {
         super(Component.translatable("luma.screen.hotkeys.title"));
@@ -25,15 +27,15 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
         beginLegacyInit();
         panelWidth = Math.min(430, width - 24);
         panelX = (width - panelWidth) / 2;
-        int panelHeight = 76 + shortcuts.size() * 34;
+        panelHeight = fittedPanelHeight(height, shortcuts.size());
         panelY = Math.max(12, (height - panelHeight) / 2);
+        scroll = Math.min(scroll, Math.max(0, shortcuts.size() - visibleRows()));
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        int panelHeight = 76 + shortcuts.size() * 34;
         renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         graphics.drawString(font, title, panelX + 16, panelY + 17,
                 LegacyLumiTheme.TEXT, false);
@@ -41,8 +43,9 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
                 panelX + 16, panelY + 38, LegacyLumiTheme.MUTED, false);
         String modifier = LumiHotkeys.bindingLabel(
                 minecraft.options.keyMappings, "key.lumi.action_modifier");
-        for (int index = 0; index < shortcuts.size(); index++) {
-            LumiHotkeys.Shortcut shortcut = shortcuts.get(index);
+        int count = Math.min(visibleRows(), shortcuts.size() - scroll);
+        for (int index = 0; index < count; index++) {
+            LumiHotkeys.Shortcut shortcut = shortcuts.get(scroll + index);
             int y = panelY + 62 + index * 34;
             renderLegacyPanel(graphics,
                     panelX + 12, y - 5, panelWidth - 24, 30);
@@ -60,6 +63,36 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
         } finally {
             endLegacyRender(graphics);
         }
+    }
+
+    @Override
+    public boolean mouseScrolled(
+            double mouseX, double mouseY,
+            double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        if (x >= panelX && x < panelX + panelWidth
+                && y >= panelY && y < panelY + panelHeight) {
+            int maximum = Math.max(0, shortcuts.size() - visibleRows());
+            int replacement = Math.max(0, Math.min(
+                    maximum, scroll + (verticalAmount < 0 ? 1 : -1)));
+            if (replacement != scroll) scroll = replacement;
+            return true;
+        }
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    private int visibleRows() {
+        return visibleShortcutRows(panelHeight, shortcuts.size());
+    }
+
+    static int fittedPanelHeight(int screenHeight, int shortcutCount) {
+        return Math.min(76 + shortcutCount * 34, Math.max(1, screenHeight - 24));
+    }
+
+    static int visibleShortcutRows(int panelHeight, int shortcutCount) {
+        return Math.min(shortcutCount, Math.max(0, (panelHeight - 54) / 34));
     }
 
     @Override public boolean isPauseScreen() { return false; }

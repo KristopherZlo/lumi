@@ -30,6 +30,7 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
     private int panelX;
     private int panelY;
     private int panelWidth;
+    private int panelHeight;
     private OnboardingSpotlightLayout.Placement spotlight;
     private long lastHoldSampleMillis;
     private boolean completionSent;
@@ -71,8 +72,9 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
     private void initPanel() {
         panelWidth = Math.min(390, width - 24);
         panelX = (width - panelWidth) / 2;
-        panelY = Math.max(12, (height - PANEL_HEIGHT) / 2);
-        int actionY = panelY + PANEL_HEIGHT - 30;
+        panelHeight = fittedPanelHeight(height);
+        panelY = Math.max(12, (height - panelHeight) / 2);
+        int actionY = panelY + panelActionOffset(panelHeight);
         addBack(panelX + 16, actionY);
         OnboardingTour.Page page = tour.current();
         if (page.worldStep() || page.kind() == OnboardingTour.Kind.INFO) {
@@ -226,7 +228,7 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
                 renderer.panel(
                         graphics, font, minecraft.options.keyMappings,
                         tour, holdGate,
-                        panelX, panelY, panelWidth, PANEL_HEIGHT);
+                        panelX, panelY, panelWidth, panelHeight);
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -254,6 +256,14 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
             completionSent = true;
             actions.completed().run();
         }
+    }
+
+    static int fittedPanelHeight(int screenHeight) {
+        return Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 24));
+    }
+
+    static int panelActionOffset(int panelHeight) {
+        return panelHeight - 30;
     }
 
     public record Actions(

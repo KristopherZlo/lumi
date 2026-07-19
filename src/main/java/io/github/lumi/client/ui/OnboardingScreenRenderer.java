@@ -20,18 +20,27 @@ final class OnboardingScreenRenderer {
             int y,
             int width,
             int height) {
+        OnboardingTour.Page page = tour.current();
+        boolean compact = height < 224;
+        int actionY = y + height - 30;
+        int contentY = compact ? y + 8 : y + 36;
+        int contentHeight = compact ? height - 44 : 140;
+        int textY = compact ? y + 16 : y + 48;
+        int shortcutY = compact ? actionY - 38 : y + 126;
         LegacyLumiTheme.outlined(
                 graphics, x, y, width, height,
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
         LegacyLumiTheme.outlined(
-                graphics, x + 12, y + 36, width - 24, 140,
+                graphics, x + 12, contentY, width - 24, contentHeight,
                 LegacyLumiTheme.PANEL, LegacyLumiTheme.PANEL_BORDER);
-        pageText(graphics, font, tour, x + 24, y + 48, width - 48);
-        OnboardingTour.Page page = tour.current();
+        int textBottom = compact
+                ? (page.holdStep() ? shortcutY - 5 : actionY - 6)
+                : y + 126;
+        pageText(graphics, font, tour, x + 24, textY, width - 48, textBottom);
         if (!page.holdStep()) return;
-        shortcut(graphics, font, mappings, page, x + 24, y + 126);
+        shortcut(graphics, font, mappings, page, x + 24, shortcutY);
         int barX = x + 24;
-        int barY = y + 162;
+        int barY = compact ? actionY - 10 : y + 162;
         int barWidth = width - 48;
         graphics.fill(
                 barX, barY, barX + barWidth, barY + 3,
@@ -68,7 +77,8 @@ final class OnboardingScreenRenderer {
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
         pageText(
                 graphics, font, tour,
-                prompt.x() + 10, prompt.y() + 12, prompt.width() - 20);
+                prompt.x() + 10, prompt.y() + 12, prompt.width() - 20,
+                prompt.bottom() - 30);
     }
 
     private static void pageText(
@@ -77,7 +87,8 @@ final class OnboardingScreenRenderer {
             OnboardingTour tour,
             int x,
             int y,
-            int textWidth) {
+            int textWidth,
+            int textBottom) {
         graphics.drawString(
                 font,
                 Component.translatable(
@@ -90,10 +101,10 @@ final class OnboardingScreenRenderer {
         int lineY = y + 36;
         for (var line : font.split(
                 Component.translatable(tour.current().helpKey()), textWidth)) {
+            if (lineY + 9 > textBottom) break;
             graphics.drawString(
                     font, line, x, lineY, LegacyLumiTheme.TEXT, false);
             lineY += 11;
-            if (lineY > y + 78) break;
         }
     }
 
