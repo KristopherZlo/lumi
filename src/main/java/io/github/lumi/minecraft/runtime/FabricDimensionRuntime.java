@@ -34,6 +34,7 @@ import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.PackageName;
+import io.github.lumi.domain.model.PartialRestorePlan;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.domain.model.VersionTags;
@@ -174,6 +175,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             new MinecraftBlockEntityBaselineCapture();
     private final MinecraftEntityChunkCapture entityCapture = new MinecraftEntityChunkCapture();
     private OperationJournal pendingRecovery;
+    private PartialRestorePreview partialRestorePreview;
     private io.github.lumi.minecraft.world.DimensionFreeze.Lease recoveryLease;
     private volatile UUID selectedWorkspaceId;
     private final AtomicBoolean autoVersionScheduled = new AtomicBoolean();
@@ -1004,6 +1006,47 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return compare(before, after, () -> false);
     }
 
+    public synchronized CompletableFuture<PartialRestorePreview> planPartialRestore(
+            CommitId target, BlockAreaTarget area) throws IOException {
+        requireNoRecovery();
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(area, "area");
+        requireCleanPartialPreview();
+        BranchRef expected = activeRef();
+        UUID workspaceId = activeWorkspaceId();
+        restores.requireTargetInWorkspace(target, workspaceId);
+        UUID token = UUID.randomUUID();
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return restores.planPartial(expected, target, area);
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background).thenApply(plan -> acceptPartialRestorePreview(
+                token, workspaceId, expected, plan));
+    }
+
+    private synchronized PartialRestorePreview acceptPartialRestorePreview(
+            UUID token,
+            UUID workspaceId,
+            BranchRef expected,
+            PartialRestorePlan plan) {
+        try {
+            requireNoRecovery();
+            requireCleanPartialPreview();
+            if (!activeRef().equals(expected)
+                    || !activeWorkspaceId().equals(workspaceId)) {
+                throw new IOException(
+                        "History changed during partial Restore preview");
+            }
+            partialRestorePreview = new PartialRestorePreview(
+                    token, workspaceId, expected, plan);
+            return partialRestorePreview;
+        } catch (IOException | IllegalStateException failed) {
+            throw new CompletionException(failed);
+        }
+    }
+
     public CompletableFuture<ImportExportService.PackageInspection> exportPackage(
             PackageName name, BranchRef expected) {
         return packages.exportPackage(name, expected);
@@ -1289,6 +1332,46 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 liveActions, author.id(), createQuickRollback(author)));
         operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
         return operation;
+    }
+
+    public synchronized DimensionMutation startPlannedPartialRestore(
+            UUID token,
+            CommitAuthor author,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        requireNoRecovery();
+        Objects.requireNonNull(token, "token");
+        Objects.requireNonNull(author, "author");
+        PartialRestorePreview preview = partialRestorePreview;
+        if (preview == null || !preview.token().equals(token)) {
+            throw new IllegalStateException(
+                    "Partial Restore preview is missing; preview again");
+        }
+        var operation = new DeferredDimensionMutation(
+                () -> createPlannedPartialRestore(token, author));
+        operations.enqueue(operation, OperationPriority.NORMAL, terminalObserver);
+        return operation;
+    }
+
+    private synchronized ReturnPointRestoreOperation createPlannedPartialRestore(
+            UUID token, CommitAuthor author) throws IOException {
+        requireNoRecovery();
+        PartialRestorePreview preview = partialRestorePreview;
+        if (preview == null || !preview.token().equals(token)
+                || !activeRef().equals(preview.expectedRef())
+                || !activeWorkspaceId().equals(preview.workspaceId())) {
+            throw new IOException("Partial Restore preview is stale; preview again");
+        }
+        requireCleanPartialPreview();
+        partialRestorePreview = null;
+        return createPartialRestore(
+                preview.plan().target(), preview.plan().area(), author);
+    }
+
+    private void requireCleanPartialPreview() {
+        if (!mutations.snapshot().generations().isEmpty()) {
+            throw new IllegalStateException(
+                    "Save or roll back current work before partial Restore preview");
+        }
     }
 
     private ReturnPointRestoreOperation createQuickRollback(CommitAuthor author)

@@ -64,6 +64,8 @@ public final class LumiServerNetworking {
                 PackageInspectionPayload.TYPE, PackageInspectionPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 CleanupResultPayload.TYPE, CleanupResultPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                PartialRestorePlanPayload.TYPE, PartialRestorePlanPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(
                 HistoryCommandPayload.TYPE, LumiServerNetworking::receive);
         ServerPlayNetworking.registerGlobalReceiver(
@@ -109,6 +111,10 @@ public final class LumiServerNetworking {
             if (!actual.commit().equals(payload.expectedCommit())
                     || actual.revision() != payload.expectedRevision()) {
                 reject(player, payload, runtime, "History changed; refresh and try again");
+                return;
+            }
+            if (payload.kind() == HistoryCommandPayload.Kind.RESTORE_AREA_PLAN) {
+                partialRestorePlan(player, runtime, payload, context);
                 return;
             }
             if (payload.kind() == HistoryCommandPayload.Kind.BRANCH_CREATE) {
@@ -440,6 +446,44 @@ public final class LumiServerNetworking {
         return message == null || message.isBlank() ? "Operation failed" : message;
     }
 
+    private static void partialRestorePlan(
+            ServerPlayer player,
+            FabricDimensionRuntime runtime,
+            HistoryCommandPayload payload,
+            ServerPlayNetworking.Context context) {
+        PartialRestoreArgument partial = PartialRestoreArgument.parse(payload.argument());
+        try {
+            runtime.planPartialRestore(partial.target(), partial.area())
+                    .whenComplete((preview, failure) -> context.server().execute(() -> {
+                        if (failure != null) {
+                            sendPartialRestorePlanFailure(
+                                    player, runtime, payload, partial,
+                                    failureMessage(failure));
+                            return;
+                        }
+                        var plan = preview.plan();
+                        send(player, new PartialRestorePlanPayload(
+                                payload.requestId(), preview.token(), dimension(runtime),
+                                plan.target(), plan.area(), plan.changedSections(),
+                                plan.changedBlocks(), ""));
+                    }));
+        } catch (IOException | IllegalStateException failed) {
+            sendPartialRestorePlanFailure(
+                    player, runtime, payload, partial, failureMessage(failed));
+        }
+    }
+
+    private static void sendPartialRestorePlanFailure(
+            ServerPlayer player,
+            FabricDimensionRuntime runtime,
+            HistoryCommandPayload payload,
+            PartialRestoreArgument partial,
+            String error) {
+        send(player, new PartialRestorePlanPayload(
+                payload.requestId(), new UUID(0, 0), dimension(runtime),
+                partial.target(), partial.area(), 0, 0, error));
+    }
+
     private static void sendCleanupResult(
             ServerPlayer player,
             HistoryCommandPayload payload,
@@ -488,6 +532,8 @@ public final class LumiServerNetworking {
                 yield runtime.startPartialRestore(
                         partial.target(), partial.area(), author, terminal);
             }
+            case RESTORE_AREA_APPLY -> runtime.startPlannedPartialRestore(
+                    UUID.fromString(payload.argument()), author, terminal);
             case QUICK_ROLLBACK -> runtime.startQuickRollback(author, terminal);
             case UNDO -> runtime.startLiveAction(
                     player.getUUID(), LiveActionJournal.Direction.UNDO, terminal);
@@ -547,6 +593,8 @@ public final class LumiServerNetworking {
                     "Version rename does not use the mutation queue");
             case SNAPSHOT_REFRESH -> throw new IllegalStateException(
                     "Snapshot refresh does not use the mutation queue");
+            case RESTORE_AREA_PLAN -> throw new IllegalStateException(
+                    "Partial Restore planning does not use the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
