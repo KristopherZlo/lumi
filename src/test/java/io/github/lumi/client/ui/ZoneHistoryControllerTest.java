@@ -1,0 +1,70 @@
+package io.github.lumi.client.ui;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import io.github.lumi.client.state.ClientHistoryPageStore;
+import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.network.HistoryPagePayload;
+import io.github.lumi.network.HistorySnapshotPayload;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Test;
+
+class ZoneHistoryControllerTest {
+    @Test
+    void pagesAndCyclesBranchesWithoutSharingState() {
+        UUID workspace = new UUID(0, 1);
+        UUID zone = new UUID(0, 2);
+        UUID request = new UUID(0, 3);
+        ClientHistoryPageStore pages = new ClientHistoryPageStore();
+        AtomicReference<BranchName> requestedBranch = new AtomicReference<>();
+        HistorySnapshotPayload snapshot = snapshot(workspace);
+        ZoneHistoryController controller = new ZoneHistoryController(
+                snapshot, zone, pages, (branch, ignored, offset, limit) -> {
+                    requestedBranch.set(branch);
+                    pages.begin(request, snapshot.dimensionId(), workspace,
+                            branch, Optional.of(zone), offset);
+                    return request;
+                });
+
+        controller.request();
+        assertEquals(new BranchName("main"), requestedBranch.get());
+        assertTrue(pages.accept(new HistoryPagePayload(
+                request, snapshot.dimensionId(), workspace,
+                new BranchName("main"), Optional.of(zone), 0, true,
+                List.of(version()), "")));
+        assertTrue(controller.hasNext());
+
+        controller.nextBranch(snapshot.branches());
+        assertEquals(new BranchName("idea"), requestedBranch.get());
+        assertEquals(0, controller.offset());
+        assertFalse(controller.hasPrevious());
+    }
+
+    private static HistorySnapshotPayload snapshot(UUID workspace) {
+        return new HistorySnapshotPayload(
+                "minecraft:overworld", id('1'), 0, 0, false, false,
+                workspace, "Build", "main", List.of(),
+                List.of(version()),
+                List.of(
+                        new HistorySnapshotPayload.Branch("main", id('1'), true),
+                        new HistorySnapshotPayload.Branch("idea", id('1'), false)),
+                List.of(), List.of());
+    }
+
+    private static HistorySnapshotPayload.Version version() {
+        return new HistorySnapshotPayload.Version(
+                id('1'), "Save", "Builder", 1, CommitKind.ZONE);
+    }
+
+    private static CommitId id(char digit) {
+        return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
+    }
+}

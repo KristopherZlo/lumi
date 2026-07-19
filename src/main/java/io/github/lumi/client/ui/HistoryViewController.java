@@ -54,7 +54,7 @@ final class HistoryViewController {
             HistorySnapshotPayload snapshot, String query) {
         Objects.requireNonNull(snapshot, "snapshot");
         List<HistorySnapshotPayload.Version> matching =
-                search.filter(snapshot.versions(), query);
+                filtered(snapshot.versions(), query);
         if (branch.isEmpty()) {
             return matching;
         }
@@ -71,6 +71,12 @@ final class HistoryViewController {
         return matching.stream()
                 .filter(version -> reachable.contains(version.id()))
                 .toList();
+    }
+
+    List<HistorySnapshotPayload.Version> filtered(
+            List<HistorySnapshotPayload.Version> versions, String query) {
+        return search.filter(
+                Objects.requireNonNull(versions, "versions"), query);
     }
 
     private Set<CommitId> reachableFrom(
