@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.network.CompareResultPayload;
 import java.util.Objects;
@@ -25,6 +26,7 @@ public final class LumiCompareScreen extends LumiLegacyModalScreen {
     private String localError = "";
     private int panelX;
     private int panelY;
+    private int contentOffset;
     private LumiLegacyButton highlight;
 
     public LumiCompareScreen(
@@ -47,6 +49,9 @@ public final class LumiCompareScreen extends LumiLegacyModalScreen {
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(16, (height - PANEL_HEIGHT) / 2);
+        contentOffset = addContextualHint(
+                ClientContextualHelpHint.COMPARE,
+                panelX + 16, panelY + 52, panelWidth - 32) ? 56 : 0;
         highlight = addLegacyButton(width / 2 - 124,
                 panelY + PANEL_HEIGHT - 30, 120,
                 Component.translatable("luma.action.hide_highlight"),
@@ -96,10 +101,10 @@ public final class LumiCompareScreen extends LumiLegacyModalScreen {
     private void drawLoading(GuiGraphics graphics) {
         graphics.drawCenteredString(font,
                 Component.translatable("luma.compare.loading_title"),
-                width / 2, panelY + 82, LegacyLumiTheme.TEXT);
+                width / 2, panelY + 82 + contentOffset, LegacyLumiTheme.TEXT);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.compare.loading"),
-                width / 2, panelY + 102, LegacyLumiTheme.MUTED);
+                width / 2, panelY + 102 + contentOffset, LegacyLumiTheme.MUTED);
     }
 
     private void drawResult(GuiGraphics graphics, CompareResultPayload result) {
@@ -111,28 +116,32 @@ public final class LumiCompareScreen extends LumiLegacyModalScreen {
                 Component.translatable(
                         "luma.compare.section_summary",
                         result.changedSections(), result.changedEntityChunks()),
-                panelX + 20, panelY + 62, LegacyLumiTheme.TEXT, false);
+                panelX + 20, panelY + 62 + contentOffset,
+                LegacyLumiTheme.TEXT, false);
         graphics.drawString(font,
                 Component.translatable("luma.compare.materials_title"),
-                panelX + 20, panelY + 82, LegacyLumiTheme.ACCENT, false);
-        int visible = Math.min(MAX_VISIBLE_MATERIALS, result.materials().size());
+                panelX + 20, panelY + 82 + contentOffset,
+                LegacyLumiTheme.ACCENT, false);
+        int visible = Math.min(visibleMaterialLimit(), result.materials().size());
         for (int index = 0; index < visible; index++) {
             CompareResultPayload.Material material = result.materials().get(index);
             long delta = Math.subtractExact(material.after(), material.before());
             graphics.drawString(font,
                     Component.translatable("luma.compare.material_entry", material.id(), delta),
-                    panelX + 28, panelY + 100 + index * 14,
+                    panelX + 28, panelY + 100 + contentOffset + index * 14,
                     LegacyLumiTheme.TEXT, false);
         }
         if (result.materials().isEmpty()) {
             graphics.drawString(font,
                     Component.translatable("luma.materials.empty"),
-                    panelX + 28, panelY + 100, LegacyLumiTheme.MUTED, false);
+                    panelX + 28, panelY + 100 + contentOffset,
+                    LegacyLumiTheme.MUTED, false);
         } else if (result.materials().size() > visible) {
             graphics.drawString(font,
                     Component.translatable(
                             "luma.materials.more", result.materials().size() - visible),
-                    panelX + 28, panelY + 100 + visible * 14,
+                    panelX + 28,
+                    panelY + 100 + contentOffset + visible * 14,
                     LegacyLumiTheme.MUTED, false);
         }
     }
@@ -140,7 +149,12 @@ public final class LumiCompareScreen extends LumiLegacyModalScreen {
     private void drawError(GuiGraphics graphics, String error) {
         graphics.drawCenteredString(font,
                 Component.literal(font.plainSubstrByWidth(error, PANEL_WIDTH - 48)),
-                width / 2, panelY + 88, LegacyLumiTheme.DANGER);
+                width / 2, panelY + 88 + contentOffset, LegacyLumiTheme.DANGER);
+    }
+
+    private int visibleMaterialLimit() {
+        return Math.min(MAX_VISIBLE_MATERIALS,
+                Math.max(1, (PANEL_HEIGHT - 142 - contentOffset) / 14));
     }
 
     @Override public boolean isPauseScreen() { return false; }

@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.diagnostics.ClientDiagnostics;
 import io.github.lumi.client.state.ClientHistoryStore;
 import net.fabricmc.loader.api.FabricLoader;
@@ -9,12 +10,16 @@ import net.minecraft.network.chat.Component;
 
 /** Read-only support screen; it never scans chunks or mutates history. */
 public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
+    private static final int BASE_PANEL_HEIGHT = 260;
+    private static final int HINT_PANEL_HEIGHT = 316;
     private final Screen parent;
     private final ClientHistoryStore history;
     private ClientDiagnostics diagnostics;
     private int panelX;
     private int panelY;
     private int panelWidth;
+    private int panelHeight;
+    private int contentOffset;
 
     public LumiDiagnosticsScreen(Screen parent, ClientHistoryStore history) {
         super(Component.translatable("luma.screen.diagnostics.title"));
@@ -33,7 +38,16 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
                 (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024));
         panelWidth = Math.min(430, width - 24);
         panelX = (width - panelWidth) / 2;
-        panelY = Math.max(12, (height - 260) / 2);
+        panelHeight = HINT_PANEL_HEIGHT;
+        panelY = Math.max(12, (height - panelHeight) / 2);
+        boolean hintVisible = addContextualHint(
+                ClientContextualHelpHint.DIAGNOSTICS,
+                panelX + 12, panelY + 58, panelWidth - 24);
+        contentOffset = hintVisible ? 56 : 0;
+        if (!hintVisible) {
+            panelHeight = BASE_PANEL_HEIGHT;
+            panelY = Math.max(12, (height - panelHeight) / 2);
+        }
         addLegacyButton(panelX + panelWidth - 76, panelY + 10, 60,
                 Component.translatable("luma.action.close"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
@@ -43,14 +57,15 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, 260);
-        renderLegacyPanel(graphics, panelX + 12, panelY + 60,
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
+        renderLegacyPanel(graphics, panelX + 12,
+                panelY + 60 + contentOffset,
                 panelWidth - 24, 180);
         graphics.drawString(font, title, panelX + 16, panelY + 18,
                 LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.diagnostics.help"),
                 panelX + 16, panelY + 42, LegacyLumiTheme.MUTED, false);
-        int y = panelY + 70;
+        int y = panelY + 70 + contentOffset;
         y = row(graphics, y, "Dimension", diagnostics.dimension());
         y = row(graphics, y, "Workspace", diagnostics.workspace());
         y = row(graphics, y, "Branch", diagnostics.branch());

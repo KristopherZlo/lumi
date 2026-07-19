@@ -16,5 +16,7 @@ class LumiCompareScreenTest {
         assertTrue(source.contains("luma.action.show_highlight"));
         assertTrue(source.contains("comparisons.toggleVisibility()"));
         assertTrue(source.contains("comparisons.result().isEmpty()"));
+        assertTrue(source.contains("ClientContextualHelpHint.COMPARE"));
+        assertTrue(source.contains("contentOffset"));
     }
 }
