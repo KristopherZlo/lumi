@@ -103,6 +103,12 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_CELLS,
                 zoneCells.encode(), id('1'), 42);
         assertEquals(editZone, roundTrip(HistoryCommandPayload.CODEC, editZone));
+        var zoneDelete = new ZoneDeleteArgument(UUID.randomUUID(), 7);
+        HistoryCommandPayload deleteZone = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_DELETE,
+                zoneDelete.encode(), id('1'), 42);
+        assertEquals(deleteZone, roundTrip(
+                HistoryCommandPayload.CODEC, deleteZone));
         for (HistoryCommandPayload.Kind kind : java.util.List.of(
                 HistoryCommandPayload.Kind.ZONE_ENTER,
                 HistoryCommandPayload.Kind.ZONE_LEAVE)) {

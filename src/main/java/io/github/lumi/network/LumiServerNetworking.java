@@ -235,7 +235,8 @@ public final class LumiServerNetworking {
         return kind == HistoryCommandPayload.Kind.ZONE_CREATE
                 || kind == HistoryCommandPayload.Kind.ZONE_ENTER
                 || kind == HistoryCommandPayload.Kind.ZONE_LEAVE
-                || kind == HistoryCommandPayload.Kind.ZONE_CELLS;
+                || kind == HistoryCommandPayload.Kind.ZONE_CELLS
+                || kind == HistoryCommandPayload.Kind.ZONE_DELETE;
     }
 
     private static boolean isPackageCommand(HistoryCommandPayload.Kind kind) {
@@ -349,6 +350,11 @@ public final class LumiServerNetworking {
                     player.getUUID(), argument.area(), argument.add());
             message = argument.add()
                     ? "Zone cells added" : "Zone cells removed";
+        } else if (payload.kind() == HistoryCommandPayload.Kind.ZONE_DELETE) {
+            ZoneDeleteArgument argument = ZoneDeleteArgument.parse(
+                    payload.argument());
+            runtime.deleteZone(argument.zoneId(), argument.expectedRevision());
+            message = "Zone deleted";
         } else {
             UUID zoneId = UUID.fromString(payload.argument());
             boolean active = payload.kind() == HistoryCommandPayload.Kind.ZONE_ENTER;
@@ -581,7 +587,7 @@ public final class LumiServerNetworking {
                     "Compare cancellation does not use the mutation queue");
             case MERGE -> throw new IllegalStateException(
                     "Merge preparation starts before the mutation queue");
-            case ZONE_CREATE, ZONE_ENTER, ZONE_LEAVE, ZONE_CELLS ->
+            case ZONE_CREATE, ZONE_ENTER, ZONE_LEAVE, ZONE_CELLS, ZONE_DELETE ->
                     throw new IllegalStateException(
                     "Zone metadata does not use the mutation queue");
             case DELETE_VERSION -> throw new IllegalStateException(

@@ -2,6 +2,7 @@ package io.github.lumi.storage.repository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.Zone;
@@ -31,5 +32,24 @@ class ZoneRepositoryTest {
         assertEquals(updated, repository.read(workspace, created.id()).orElseThrow());
         assertEquals(java.util.List.of(updated), repository.list(workspace));
         assertThrows(RefConflictException.class, () -> repository.replace(created, updated));
+    }
+
+    @Test
+    void deletesOnlyTheExactZoneRevision() throws Exception {
+        ZoneRepository repository = new ZoneRepository(repositoryRoot);
+        UUID workspace = new UUID(0, 1);
+        Zone created = new Zone(
+                new UUID(0, 2), workspace, "Gate", 0xff22aa44,
+                Set.of(), Set.of());
+        repository.create(created);
+        Zone stale = new Zone(
+                created.id(), workspace, created.name(), created.color(),
+                Set.of(new SectionKey(1, 2, 3)), Set.of(), 1);
+
+        assertThrows(RefConflictException.class,
+                () -> repository.delete(stale));
+        repository.delete(created);
+
+        assertTrue(repository.read(workspace, created.id()).isEmpty());
     }
 }

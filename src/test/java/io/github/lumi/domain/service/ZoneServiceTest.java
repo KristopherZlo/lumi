@@ -108,4 +108,18 @@ class ZoneServiceTest {
         assertEquals(Set.of(first),
                 service.require(workspace, zone.id()).cells());
     }
+
+    @Test
+    void deletesMetadataOnlyAtTheExpectedRevision() throws Exception {
+        ZoneService service = new ZoneService(new ZoneRepository(repositoryRoot));
+        UUID workspace = new UUID(0, 1);
+        var zone = service.create(
+                new UUID(0, 2), workspace, "Gate", 0, Set.of());
+
+        assertThrows(IllegalStateException.class,
+                () -> service.delete(workspace, zone.id(), 1));
+        service.delete(workspace, zone.id(), 0);
+
+        assertTrue(service.list(workspace).isEmpty());
+    }
 }

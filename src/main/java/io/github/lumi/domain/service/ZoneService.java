@@ -52,6 +52,17 @@ public final class ZoneService {
         return zones.list(workspaceId);
     }
 
+    public synchronized void delete(
+            UUID workspaceId, UUID zoneId, long expectedRevision)
+            throws IOException {
+        Zone current = require(workspaceId, zoneId);
+        if (current.revision() != expectedRevision) {
+            throw new IllegalStateException(
+                    "Zone changed; reopen it before deleting");
+        }
+        zones.delete(current);
+    }
+
     public Zone requireActorActive(UUID workspaceId, UUID zoneId, UUID actor)
             throws IOException {
         Objects.requireNonNull(actor, "actor");

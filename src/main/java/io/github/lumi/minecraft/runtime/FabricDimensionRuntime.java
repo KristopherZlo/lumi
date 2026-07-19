@@ -1384,6 +1384,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 selected, add);
     }
 
+    public void deleteZone(UUID zoneId, long expectedRevision)
+            throws IOException {
+        requireZoneMetadataMutable();
+        zones.delete(activeWorkspaceId(), zoneId, expectedRevision);
+    }
+
     public synchronized DimensionMutation startQuickRollback(
             Optional<BlockBox> selection,
             CommitAuthor author,

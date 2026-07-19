@@ -94,6 +94,20 @@ public final class ZoneRepository {
         return List.copyOf(zones);
     }
 
+    public synchronized void delete(Zone expected) throws IOException {
+        Objects.requireNonNull(expected, "expected");
+        Zone current = read(expected.workspaceId(), expected.id()).orElseThrow(
+                () -> new RefConflictException(
+                        "Zone no longer exists: " + expected.id()));
+        if (!current.equals(expected)) {
+            throw new RefConflictException("Zone changed since it was read");
+        }
+        if (!Files.deleteIfExists(file(expected.workspaceId(), expected.id()))) {
+            throw new RefConflictException(
+                    "Zone no longer exists: " + expected.id());
+        }
+    }
+
     private byte[] encode(Zone zone) throws IOException {
         byte[] name = zone.name().getBytes(StandardCharsets.UTF_8);
         if (name.length > MAX_NAME_BYTES || zone.cells().size() > MAX_CELLS
