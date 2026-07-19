@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.Executor;
@@ -95,6 +96,37 @@ class DurableSavePreparationTest {
         assertEquals(List.of(included), reads);
         assertEquals(java.util.Set.of(included),
                 session.finish().generations().keySet());
+    }
+
+    @Test
+    void waitsForBuilderMarkerRevisionAfterDirtyGenerationIsAlreadyDurable()
+            throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        SectionKey key = new SectionKey(4, 5, 6);
+        long generation = mutations.registerSectionMutation(key, () -> new SectionBlob(
+                new ArrayList<>(java.util.Collections.nCopies(
+                        SectionBlob.BLOCK_COUNT, "minecraft:air")), java.util.Map.of()));
+        background.runNext();
+        background.runNext();
+        mutations.recordBuilderBlockMutation(
+                new io.github.lumi.domain.model.BlockPosition(65, 81, 97), generation);
+        SavePreparation.Session session = new DurableSavePreparation(
+                new WorldStateReader() {
+                    @Override public SectionBlob read(SectionKey ignored) {
+                        throw new AssertionError("No section read is expected");
+                    }
+                    @Override public EntityChunkBlob read(EntityChunkKey ignored) {
+                        throw new AssertionError("No entity read is expected");
+                    }
+                }, new EntityChunkDurabilityGate(mutations), mutations).begin();
+
+        assertFalse(session.prepareUntil(Long.MAX_VALUE));
+        background.runNext();
+        assertTrue(session.prepareUntil(Long.MAX_VALUE));
+        assertEquals(Map.of(key, generation), session.finish().generations());
     }
 
     private static EntityChunkBlob entities(int marker) {

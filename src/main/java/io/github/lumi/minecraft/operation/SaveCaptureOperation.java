@@ -111,11 +111,11 @@ public final class SaveCaptureOperation implements DimensionMutation {
 
     private SaveResult publish(CapturedWorldState captured) {
         try {
-            SaveResult saved = publisher.save(request, captured, this::recordProgress);
+            SaveResult saved = publisher.save(
+                    request, captured, this::recordProgress, completion);
             if (!saved.capturedGenerations().equals(dirty)) {
                 throw new IOException("Save result generations differ from capture");
             }
-            completion.clear(saved.capturedGenerations());
             return saved;
         } catch (IOException failed) {
             throw new CompletionException(failed);

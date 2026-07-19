@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -56,15 +57,24 @@ class SaveServiceTest {
                 new WorkingIndexSnapshot(Map.of(key, 3L)),
                 new CommitStatistics(1, 0, 1, 0), Map.of(player, spawn));
         VersionTagRepository tags = new VersionTagRepository(repositoryRoot);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
         SaveService service = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
-                new OperationJournalRepository(repositoryRoot), tags);
+                journals, tags);
         var progress = new ArrayList<SavePublicationProgress>();
+        var completionCalled = new AtomicBoolean();
 
         SaveResult result = service.save(new SaveRequest(
                 initialRef, author(), "Tower", Instant.parse("2026-07-15T12:00:00Z"),
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 Optional.empty(), CommitKind.MANUAL,
-                VersionTags.parse("#tower, stone")), captured, progress::add);
+                VersionTags.parse("#tower, stone")), captured, progress::add,
+                boundary -> {
+                    var journal = journals.read().orElseThrow();
+                    assertEquals(io.github.lumi.domain.model.OperationPhase.REF_PUBLISHED,
+                            journal.phase());
+                    assertEquals(Optional.of(boundary), journal.capturedGenerations());
+                    completionCalled.set(true);
+                });
 
         Commit saved = commits.read(result.commitId());
         assertEquals(List.of(initialId), saved.parents());
@@ -73,13 +83,14 @@ class SaveServiceTest {
         assertEquals(Map.of(player, spawn), saved.playerSpawns());
         assertEquals(VersionTags.parse("tower, stone"), tags.read(result.commitId()));
         assertTrue(new OperationJournalRepository(repositoryRoot).read().isEmpty());
+        assertTrue(completionCalled.get());
         assertTrue(progress.contains(new SavePublicationProgress(
                 "Save: writing captured state", 1, 1)));
         assertTrue(progress.contains(new SavePublicationProgress(
                 "Save: building history tree", 3, 3)));
         assertTrue(progress.stream().anyMatch(value ->
                 value.phase().equals("Save: writing version tags")));
-        assertEquals("Save: publishing branch", progress.getLast().phase());
+        assertEquals("Save: finalizing working index", progress.getLast().phase());
         try (var files = Files.walk(repositoryRoot.resolve("objects").resolve("packs"))) {
             assertEquals(1, files.filter(path -> path.toString().endsWith(".pack")).count());
         }

@@ -15,4 +15,15 @@ public interface SavePublisher {
         Objects.requireNonNull(progress, "progress");
         return save(request, captured);
     }
+
+    default SaveResult save(
+            SaveRequest request,
+            CapturedWorldState captured,
+            Consumer<SavePublicationProgress> progress,
+            SavePublicationCompletion completion) throws IOException {
+        Objects.requireNonNull(completion, "completion");
+        SaveResult saved = save(request, captured, progress);
+        completion.complete(saved.capturedGenerations());
+        return saved;
+    }
 }

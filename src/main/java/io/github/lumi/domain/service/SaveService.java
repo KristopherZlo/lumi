@@ -58,9 +58,19 @@ public final class SaveService implements SavePublisher {
             SaveRequest request,
             CapturedWorldState captured,
             Consumer<SavePublicationProgress> progress) throws IOException {
+        return save(request, captured, progress, ignored -> { });
+    }
+
+    @Override
+    public SaveResult save(
+            SaveRequest request,
+            CapturedWorldState captured,
+            Consumer<SavePublicationProgress> progress,
+            SavePublicationCompletion completion) throws IOException {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(captured, "captured");
         Objects.requireNonNull(progress, "progress");
+        Objects.requireNonNull(completion, "completion");
         CommitId commitId = writeCommit(request, captured, progress);
         if (!request.tags().isEmpty()) {
             progress.accept(SavePublicationProgress.indeterminate(
@@ -77,9 +87,13 @@ public final class SaveService implements SavePublisher {
                         request.expectedRef().commit(),
                         request.expectedRef().revision(),
                         Optional.of(commitId),
-                        Optional.empty())));
+                        Optional.empty()),
+                Optional.of(captured.generations())));
         var branch = refs.compareAndSet(request.expectedRef(), commitId);
         journal = journals.advance(journal, OperationPhase.REF_PUBLISHED);
+        progress.accept(SavePublicationProgress.indeterminate(
+                "Save: finalizing working index"));
+        completion.complete(captured.generations());
         journal = journals.advance(journal, OperationPhase.COMPLETE);
         journals.clear(journal);
         return new SaveResult(commitId, branch, captured.generations());

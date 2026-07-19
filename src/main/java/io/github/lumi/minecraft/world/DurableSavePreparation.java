@@ -65,7 +65,7 @@ public final class DurableSavePreparation implements SavePreparation {
     private final class PreparationSession implements Session {
         private final List<EntityChunkKey> keys;
         private int next;
-        private WorkingIndexSnapshot boundary;
+        private MutationDurabilityTracker.DurabilityBoundary boundary;
         private boolean complete;
 
         private PreparationSession(List<EntityChunkKey> keys) {
@@ -82,7 +82,7 @@ public final class DurableSavePreparation implements SavePreparation {
                 return false;
             }
             if (boundary == null) {
-                boundary = mutations.snapshot();
+                boundary = mutations.durabilityBoundary();
             }
             complete = mutations.isDurable(boundary);
             return complete;
@@ -93,7 +93,7 @@ public final class DurableSavePreparation implements SavePreparation {
             if (!complete) {
                 throw new IllegalStateException("Save preparation is not durable");
             }
-            return boundary;
+            return boundary.working();
         }
 
         @Override
@@ -102,14 +102,14 @@ public final class DurableSavePreparation implements SavePreparation {
                 return new OperationProgress(
                         "Save: checking loaded entities", next, keys.size());
             }
-            if (boundary == null || boundary.generations().isEmpty()) {
+            if (boundary == null || boundary.working().generations().isEmpty()) {
                 return OperationProgress.indeterminate(
                         "Save: establishing durable boundary");
             }
             return new OperationProgress(
                     "Save: waiting for pending writes",
                     mutations.durableKeyCount(boundary),
-                    boundary.generations().size());
+                    boundary.working().generations().size());
         }
     }
 }

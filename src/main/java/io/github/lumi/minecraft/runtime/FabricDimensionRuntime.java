@@ -291,11 +291,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var active = new ActiveBranchRepository(repository);
         var journals = new OperationJournalRepository(repository);
         var origins = new OriginStore(repository);
+        var working = new WorkingIndexRepository(repository);
         new DimensionHistoryInitializer(objects, commits, refs, active)
                 .initialize(UUID.randomUUID());
         var interrupted = journals.read();
         if (interrupted.filter(journal -> journal.kind() == OperationKind.SAVE).isPresent()) {
-            new SaveJournalRecovery(commits, refs, journals)
+            new SaveJournalRecovery(commits, refs, journals, working)
                     .recover(interrupted.orElseThrow());
             interrupted = Optional.empty();
         }
@@ -311,7 +312,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
         UUID activeWorkspaceId = workspaceService.active().id();
         var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
-        var working = new WorkingIndexRepository(repository);
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
                 objects, origins, working, durabilityBackground,
                 new MinecraftChunkDurabilityRetention(level));

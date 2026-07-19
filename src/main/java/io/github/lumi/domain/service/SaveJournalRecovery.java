@@ -7,6 +7,7 @@ import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.OperationJournalRepository;
+import io.github.lumi.storage.repository.WorkingIndexRepository;
 import java.io.IOException;
 import java.util.Objects;
 
@@ -15,14 +16,24 @@ public final class SaveJournalRecovery {
     private final CommitRepository commits;
     private final BranchRefRepository refs;
     private final OperationJournalRepository journals;
+    private final WorkingIndexRepository working;
 
     public SaveJournalRecovery(
             CommitRepository commits,
             BranchRefRepository refs,
             OperationJournalRepository journals) {
+        this(commits, refs, journals, null);
+    }
+
+    public SaveJournalRecovery(
+            CommitRepository commits,
+            BranchRefRepository refs,
+            OperationJournalRepository journals,
+            WorkingIndexRepository working) {
         this.commits = Objects.requireNonNull(commits, "commits");
         this.refs = Objects.requireNonNull(refs, "refs");
         this.journals = Objects.requireNonNull(journals, "journals");
+        this.working = working;
     }
 
     public void recover(OperationJournal journal) throws IOException {
@@ -48,6 +59,13 @@ public final class SaveJournalRecovery {
         }
         if (!actual.equals(published)) {
             throw new IOException("Interrupted Save ref changed independently");
+        }
+        if (journal.capturedGenerations().isPresent()) {
+            if (working == null) {
+                throw new IOException(
+                        "Interrupted Save has a generation boundary but no working index");
+            }
+            working.clearCaptured(journal.capturedGenerations().orElseThrow());
         }
         if (journal.phase() == OperationPhase.COMPLETE) {
             journals.clear(journal);
