@@ -1,6 +1,7 @@
 package io.github.lumi.gametest;
 
 import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -69,24 +70,40 @@ final class LumiStressBehaviorScenario {
         checks.waitUntil("ignite_128_tnt_started", 20,
                 () -> actions.hasPrimedTnt(ignition));
         checks.waitTicks("partial_128_tnt_explosion_6s", 120);
-        LumiWorldSnapshot partialExplosion = checks.snapshot(
-                "tnt_128_partial_explosion", area);
+        checks.snapshot("tnt_128_partial_explosion_before_undo", area);
 
-        operations.undo("tnt_128_partial_explosion");
-        checks.assertSnapshot("undo_tnt_128_partial_explosion", area, allTnt);
-        operations.redo("tnt_128_partial_explosion");
-        checks.assertSnapshot("redo_tnt_128_partial_explosion", area, partialExplosion);
+        var partialUndo = operations.undo("tnt_128_partial_explosion", area);
+        LumiWorldSnapshot partialExplosionEndpoint = partialUndo.before();
+        checks.assertSnapshot("undo_tnt_128_partial_explosion",
+                partialUndo.after(), allTnt);
+        var partialRedo = operations.redo("tnt_128_partial_explosion", area);
+        checks.assertSnapshot("redo_tnt_128_input",
+                partialRedo.before(), allTnt);
+        checks.assertSnapshot("redo_tnt_128_partial_explosion",
+                partialRedo.after(), partialExplosionEndpoint);
+
+        var repeatabilityUndo = operations.undo(
+                "tnt_128_partial_repeatability", area);
+        LumiWorldSnapshot repeatabilityEndpoint = repeatabilityUndo.before();
+        checks.assertSnapshot("undo_tnt_128_partial_repeatability",
+                repeatabilityUndo.after(), allTnt);
+        var repeatabilityRedo = operations.redo(
+                "tnt_128_partial_repeatability", area);
+        checks.assertSnapshot("redo_tnt_128_partial_repeatability_input",
+                repeatabilityRedo.before(), allTnt);
+        checks.assertSnapshot("redo_tnt_128_partial_repeatability",
+                repeatabilityRedo.after(), repeatabilityEndpoint);
 
         for (int undo = 1; undo <= 5; undo++) {
-            operations.undo("tnt_128_repeat_" + undo);
+            var boundary = operations.undo("tnt_128_repeat_" + undo, area);
             int expectedCount = undo == 1 ? 128 : 129 - undo;
             checks.assertSnapshot("undo_tnt_128_repeat_" + undo,
-                    area, placedStates.get(expectedCount));
+                    boundary.after(), placedStates.get(expectedCount));
         }
         for (int redo = 1; redo <= 4; redo++) {
-            operations.redo("tnt_128_rebuild_" + redo);
+            var boundary = operations.redo("tnt_128_rebuild_" + redo, area);
             checks.assertSnapshot("redo_tnt_128_rebuild_" + redo,
-                    area, placedStates.get(124 + redo));
+                    boundary.after(), placedStates.get(124 + redo));
         }
 
         runEndCrystal(allTnt);
@@ -135,24 +152,29 @@ final class LumiStressBehaviorScenario {
         actions.attackEntity("punch_end_crystal", crystal, Items.AIR);
         checks.waitTicks("punched_end_crystal_explosion_2s", 40);
         checks.snapshot("punched_end_crystal_exploded", area);
-        operations.undo("punched_end_crystal");
-        checks.assertSnapshot("undo_punched_end_crystal", area, crystalPlaced);
+        var punchedUndo = operations.undo("punched_end_crystal", area);
+        checks.assertSnapshot("undo_punched_end_crystal",
+                punchedUndo.after(), crystalPlaced);
 
         actions.shootEndCrystal(crystal);
         checks.waitTicks("arrow_end_crystal_explosion_1s", 20);
         checks.snapshot("arrow_end_crystal_exploded", area);
-        operations.undo("arrow_end_crystal");
-        checks.assertSnapshot("undo_arrow_end_crystal", area, crystalPlaced);
-        operations.undo("remove_end_crystal");
-        checks.assertSnapshot("undo_end_crystal_placement", area, obsidianOnly);
-        operations.undo("remove_crystal_obsidian");
-        checks.assertSnapshot("undo_crystal_obsidian", area, allTnt);
+        var arrowUndo = operations.undo("arrow_end_crystal", area);
+        checks.assertSnapshot("undo_arrow_end_crystal",
+                arrowUndo.after(), crystalPlaced);
+        var crystalUndo = operations.undo("remove_end_crystal", area);
+        checks.assertSnapshot("undo_end_crystal_placement",
+                crystalUndo.after(), obsidianOnly);
+        var obsidianUndo = operations.undo("remove_crystal_obsidian", area);
+        checks.assertSnapshot("undo_crystal_obsidian",
+                obsidianUndo.after(), allTnt);
     }
 
     private void runSavedHistoryAndEntities(LumiWorldSnapshot allTnt)
             throws IOException {
-        CommitId tntCommit = operations.save("tnt");
-        checks.assertSnapshot("save_tnt", area, allTnt);
+        var tntSave = operations.save("tnt", area);
+        CommitId tntCommit = tntSave.commit();
+        LumiWorldSnapshot savedTnt = tntSave.snapshot();
         List<BlockPos> ignited = actions.igniteTnt("ignite_all_128_tnt", tnt);
         if (ignited.size() != tnt.size()) {
             report.event("diagnostic", "ignite_all_128_tnt", "observed", 0, 0,
@@ -172,94 +194,123 @@ final class LumiStressBehaviorScenario {
             throw timeout;
         }
         checks.waitTicks("all_128_tnt_settle", 20);
-        LumiWorldSnapshot afterTnt = checks.snapshot("after_all_tnt", area);
-        CommitId afterTntCommit = operations.save("after tnt");
-        checks.assertSnapshot("save_after_tnt", area, afterTnt);
+        checks.snapshot("after_all_tnt_before_save", area);
+        var afterTntSave = operations.save("after tnt", area);
+        LumiWorldSnapshot afterTnt = afterTntSave.snapshot();
+        List<BranchName> afterTntBranches = new ArrayList<>();
+        for (int index = 1; index <= 4; index++) {
+            afterTntBranches.add(operations.createBranch(
+                    "stress-after-tnt-" + index).name());
+        }
 
-        restoreAndAssert("spam_tnt_1", tntCommit, allTnt);
-        restoreAndAssert("spam_after_tnt_1", afterTntCommit, afterTnt);
-        restoreAndAssert("spam_tnt_2", tntCommit, allTnt);
-        restoreAndAssert("spam_after_tnt_2", afterTntCommit, afterTnt);
-        restoreAndAssert("spam_tnt_3", tntCommit, allTnt);
-        restoreAndAssert("spam_after_tnt_3", afterTntCommit, afterTnt);
-        restoreAndAssert("spam_tnt_4", tntCommit, allTnt);
+        restoreAndAssert("spam_tnt_1", tntCommit, savedTnt);
+        switchBranchAndAssert("spam_after_tnt_1", afterTntBranches.get(0), afterTnt);
+        restoreAndAssert("spam_tnt_2", tntCommit, savedTnt);
+        switchBranchAndAssert("spam_after_tnt_2", afterTntBranches.get(1), afterTnt);
+        restoreAndAssert("spam_tnt_3", tntCommit, savedTnt);
+        switchBranchAndAssert("spam_after_tnt_3", afterTntBranches.get(2), afterTnt);
+        restoreAndAssert("spam_tnt_4", tntCommit, savedTnt);
 
         actions.destroyBlocks("break_tnt_before_quick_reset",
                 List.of(tnt.get(0), tnt.get(1)));
         checks.snapshot("tnt_manually_broken", area);
-        operations.quickRollback("broken_tnt");
-        checks.assertSnapshot("quick_reset_broken_tnt", area, allTnt);
-        restoreAndAssert("after_quick_reset", afterTntCommit, afterTnt);
+        var brokenTntRollback = operations.quickRollback("broken_tnt", area);
+        checks.assertSnapshot("quick_reset_broken_tnt",
+                brokenTntRollback.after(), savedTnt);
+        switchBranchAndAssert(
+                "after_quick_reset", afterTntBranches.get(3), afterTnt);
 
         List<BlockPos> smoothPositions = randomSurfacePositions(
                 RANDOM_SEED, 10, Set.of());
         actions.placeBlocks("place_10_smooth_stone",
                 Items.SMOOTH_STONE, smoothPositions);
-        LumiWorldSnapshot smooth = checks.snapshot("ten_smooth_stone", area);
-        operations.save("smooth");
-        checks.assertSnapshot("save_smooth", area, smooth);
-        operations.quickRollback("clean_smooth");
-        checks.assertSnapshot("quick_restore_clean_noop", area, smooth);
+        checks.snapshot("ten_smooth_stone_before_save", area);
+        operations.save("smooth", area);
+        var smoothRollback = operations.quickRollback("clean_smooth", area);
+        checks.assertValue("quick_restore_clean_message",
+                smoothRollback.completionMessage().orElse(""),
+                "luma.status.nothing_to_restore");
+        checks.assertSnapshot("quick_restore_clean_noop",
+                smoothRollback.after(), smoothRollback.before());
 
         List<BlockPos> glassPositions = randomSurfacePositions(
                 RANDOM_SEED + 1, 10, new HashSet<>(smoothPositions));
         actions.placeBlocks("place_10_glass", Items.GLASS, glassPositions);
         checks.snapshot("ten_glass_after_smooth", area);
-        restoreAndAssert("glass_to_tnt", tntCommit, allTnt);
+        restoreAndAssert("glass_to_tnt", tntCommit, savedTnt);
 
         runArmorStandAndChickenChecks();
     }
 
     private void runArmorStandAndChickenChecks() throws IOException {
+        int arenaY = tnt.stream().mapToInt(BlockPos::getY).max().orElseThrow() + 12;
+        BlockPos arenaCenter = new BlockPos(
+                origin.getX() + 24, arenaY, origin.getZ());
+        actions.buildArmorStandArena(arenaCenter);
+        checks.snapshot("armor_stand_arena", area);
         List<BlockPos> standPositions = List.of(
-                actions.surfacePosition(origin.getX() + 24, origin.getZ() - 3),
-                actions.surfacePosition(origin.getX() + 24, origin.getZ()),
-                actions.surfacePosition(origin.getX() + 24, origin.getZ() + 3));
+                arenaCenter.north(), arenaCenter.east(), arenaCenter.south());
         List<UUID> stands = actions.placeArmorStands(standPositions);
+        checks.waitTicks("armor_stands_settle", 2);
+        checks.waitUntil("armor_stands_grounded", 0,
+                () -> actions.armorStandsGrounded(stands));
+        checks.snapshot("three_armor_stands_placed", area);
         actions.equipArmorStands(stands, RANDOM_SEED);
-        LumiWorldSnapshot armoredStands = checks.snapshot(
-                "three_armored_stands", area);
+        checks.snapshot("three_armored_stands", area);
 
-        actions.attackEntity("break_armored_stand", stands.getFirst(), Items.AIR);
+        LumiWorldSnapshot armoredStands = actions.snapshotAndAttackEntity(
+                "break_armored_stand", stands.getFirst(), Items.AIR, area);
         checks.waitUntil("armored_stand_removed", 20,
                 () -> !actions.hasEntity(stands.getFirst()));
         checks.snapshot("one_armored_stand_broken", area);
-        operations.undo("broken_armored_stand");
-        checks.assertSnapshot("undo_broken_armored_stand", area, armoredStands);
+        var standUndo = operations.undo("broken_armored_stand", area);
+        checks.assertSnapshot("undo_broken_armored_stand",
+                standUndo.after(), armoredStands);
 
-        BlockPos standTnt = actions.surfacePosition(
-                origin.getX() + 21, origin.getZ());
+        BlockPos standTnt = arenaCenter;
         actions.placeTnt(standTnt);
-        LumiWorldSnapshot standsWithTnt = checks.snapshot(
-                "armored_stands_with_tnt", area);
-        actions.igniteTnt("ignite_armor_stand_tnt", standTnt);
+        checks.snapshot("armored_stands_with_tnt", area);
+        LumiWorldSnapshot standsWithTnt = actions.snapshotAndIgniteTnt(
+                "ignite_armor_stand_tnt", standTnt, area);
         checks.waitUntil("ignite_armor_stand_tnt_started", 20,
                 () -> actions.hasPrimedTnt(standTnt));
         checks.waitTicks("armor_stand_tnt_explosion_5s", 100);
+        checks.waitUntil("armor_stands_destroyed_by_tnt", 0,
+                () -> stands.stream().noneMatch(actions::hasEntity));
         checks.snapshot("armored_stands_after_tnt", area);
-        operations.undo("armor_stand_tnt");
-        checks.assertSnapshot("undo_armor_stand_tnt", area, standsWithTnt);
+        var standTntUndo = operations.undo("armor_stand_tnt", area);
+        checks.assertSnapshot("undo_armor_stand_tnt",
+                standTntUndo.after(), standsWithTnt);
 
         BlockPos chickenPosition = actions.surfacePosition(
                 origin.getX() + 24, origin.getZ() + 8);
         UUID chicken = actions.spawnChicken(chickenPosition);
         actions.holdItem("equip_chicken_sword", Items.DIAMOND_SWORD);
         checks.waitTicks("charge_chicken_sword", 20);
-        LumiWorldSnapshot liveChicken = checks.snapshot("live_chicken", area);
-        actions.attackEntity("kill_chicken", chicken, Items.DIAMOND_SWORD);
+        checks.snapshot("live_chicken", area);
+        LumiWorldSnapshot liveChicken = actions.snapshotAndAttackEntity(
+                "kill_chicken", chicken, Items.DIAMOND_SWORD, area);
         checks.waitTicks("dead_chicken_settle_1s", 20);
         checks.waitUntil("chicken_removed_after_1s", 0,
                 () -> !actions.hasEntity(chicken));
         checks.snapshot("dead_chicken", area);
-        operations.undo("killed_chicken");
-        checks.assertSnapshot("undo_killed_chicken", area, liveChicken);
+        var chickenUndo = operations.undo("killed_chicken", area);
+        checks.assertSnapshot("undo_killed_chicken",
+                chickenUndo.after(), liveChicken);
     }
 
     private void restoreAndAssert(
             String name, CommitId commit, LumiWorldSnapshot expected)
             throws IOException {
-        operations.restore(name, commit);
-        checks.assertSnapshot("restore_" + name, area, expected);
+        var boundary = operations.restore(name, commit, area);
+        checks.assertSnapshot("restore_" + name, boundary.after(), expected);
+    }
+
+    private void switchBranchAndAssert(
+            String name, BranchName branch, LumiWorldSnapshot expected)
+            throws IOException {
+        var boundary = operations.switchBranch(name, branch, area);
+        checks.assertSnapshot("switch_" + name, boundary.after(), expected);
     }
 
     private List<BlockPos> randomSurfacePositions(

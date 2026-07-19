@@ -184,6 +184,17 @@ final class LumiBehaviorActions {
         });
     }
 
+    boolean armorStandsGrounded(List<UUID> ids) {
+        return server.computeOnServer(minecraft -> {
+            ServerLevel level = player(minecraft).level();
+            return ids.stream().allMatch(id -> {
+                Entity entity = level.getEntityInAnyDimension(id);
+                return entity instanceof ArmorStand stand
+                        && !stand.isRemoved() && stand.onGround();
+            });
+        });
+    }
+
     UUID placeEndCrystal(BlockPos obsidian) {
         return timed("place_end_crystal", () -> server.computeOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
@@ -357,6 +368,17 @@ final class LumiBehaviorActions {
                 }
             }
         }));
+    }
+
+    void buildArmorStandArena(BlockPos center) {
+        BlockPos floorMin = center.offset(-3, -1, -3);
+        BlockPos floorMax = center.offset(3, -1, 3);
+        BlockPos airMax = center.offset(3, 4, 3);
+        playerCommand("build_armor_stand_arena", "fill " + coordinates(floorMin)
+                + " " + coordinates(floorMax) + " minecraft:smooth_stone");
+        playerCommand("clear_armor_stand_arena", "fill " + coordinates(
+                center.offset(-3, 0, -3)) + " " + coordinates(airMax)
+                + " minecraft:air");
     }
 
     void worldEditCylinder() {

@@ -17,6 +17,7 @@ final class LumiBehaviorScenario {
     private final BlockPos origin;
     private final List<BlockPos> tnt;
     private final List<BlockBox> tntArea;
+    private final List<BlockBox> quickRollbackAmbientArea;
     private final List<BlockBox> unmodifiedControlArea;
     private final List<BlockBox> platformArea;
     private final List<BlockBox> allAreas;
@@ -47,6 +48,10 @@ final class LumiBehaviorScenario {
         BlockBox initialVolume = new BlockBox(
                 origin.getX() - 24, world.minY(), origin.getZ() - 24,
                 origin.getX() + 24, world.maxY(), origin.getZ() + 24);
+        quickRollbackAmbientArea = List.of(new BlockBox(
+                initialVolume.minX(), initialVolume.minY(), initialVolume.minZ(),
+                initialVolume.maxX(), tntArea.getFirst().minY() - 1,
+                initialVolume.maxZ()));
         unmodifiedControlArea = List.of(new BlockBox(
                 initialVolume.minX(), initialVolume.minY(), initialVolume.minZ(),
                 initialVolume.minX(), initialVolume.maxY(), initialVolume.maxZ()));
@@ -62,6 +67,8 @@ final class LumiBehaviorScenario {
         CommitId initialCommit = initialSave.commit();
         BranchName mainBranch = operations.activeBranch();
         LumiWorldSnapshot initial = initialSave.snapshot();
+        LumiWorldSnapshot initialTnt = checks.snapshot(
+                "initial_tnt_control", tntArea);
         LumiWorldSnapshot initialControl = checks.snapshot(
                 "initial_unmodified_control", unmodifiedControlArea);
 
@@ -84,8 +91,13 @@ final class LumiBehaviorScenario {
         checks.snapshot("second_explosion_20s", tntArea);
         checks.assertSnapshot("before_quick_rollback_unmodified_control",
                 unmodifiedControlArea, initialControl);
-        operations.quickRollback();
-        checks.assertSnapshot("quick_rollback_initial", allAreas, initial);
+        var quickRollback = operations.quickRollback(
+                "initial", quickRollbackAmbientArea);
+        checks.assertSnapshot("quick_rollback_preserves_ambient",
+                quickRollback.after(), quickRollback.before());
+        checks.assertSnapshot("quick_rollback_initial_tnt", tntArea, initialTnt);
+        checks.assertSnapshot("after_quick_rollback_unmodified_control",
+                unmodifiedControlArea, initialControl);
         checks.screenshot("quick-rollback-initial");
 
         LumiBehaviorActions.Platform platform = actions.buildPlatform(origin);
@@ -104,15 +116,16 @@ final class LumiBehaviorScenario {
 
         actions.worldEditGreen();
         checks.snapshot("worldedit_green", platformArea);
-        CommitId test2Commit = operations.save("test2");
+        operations.save("test2");
         LumiWorldSnapshot test2 = checks.snapshot("test2_saved", platformArea);
+        var test2Branch = operations.createBranch("behavior-test2");
 
         actions.placeAndIgniteFiveTnt(platform.center());
         checks.waitTicks("platform_explosion_8s", 160);
         checks.snapshot("platform_explosion_8s", platformArea);
         operations.restore("test1_first", test1Commit);
         checks.assertSnapshot("restore_test1_first", platformArea, test1);
-        operations.restore("test2", test2Commit);
+        operations.switchBranch("test2", test2Branch.name());
         checks.assertSnapshot("restore_test2", platformArea, test2);
 
         operations.restore("test1_for_branch", test1Commit);
@@ -127,7 +140,7 @@ final class LumiBehaviorScenario {
         checks.snapshot("branch_test1_saved", platformArea);
         actions.buildOakCube(platform.center());
         checks.snapshot("branch_oak_cube", platformArea);
-        CommitId branchTest2Commit = operations.save("branch_test2");
+        operations.save("branch_test2");
         LumiWorldSnapshot branchTest2 = checks.snapshot(
                 "branch_test2_saved", platformArea);
 
@@ -138,7 +151,7 @@ final class LumiBehaviorScenario {
 
         operations.restore("test1_final", test1Commit);
         checks.assertSnapshot("restore_test1_final", platformArea, test1);
-        operations.restore("branch_test2_final", branchTest2Commit);
+        operations.switchBranch("branch_test2_final", branch.name());
         checks.assertSnapshot("restore_branch_test2_final", platformArea, branchTest2);
         operations.restore("initial_final", initialCommit);
         checks.assertSnapshot("restore_initial_final", allAreas, initial);

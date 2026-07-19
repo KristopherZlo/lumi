@@ -162,7 +162,8 @@ public final class LumiLiveActionGameTests {
                     for (int index = 0; index < leaves.size(); index++) {
                         helper.setBlock(leaves.get(index),
                                 Blocks.OAK_LEAVES.defaultBlockState()
-                                        .setValue(LeavesBlock.DISTANCE, index + 1));
+                                        .setValue(LeavesBlock.DISTANCE, index + 1)
+                                        .setValue(LeavesBlock.PERSISTENT, true));
                     }
                     try (var ignored = DirectLiveActionContext.open(
                             runtime.liveActions(), player)) {
@@ -190,7 +191,8 @@ public final class LumiLiveActionGameTests {
                     for (int index = 0; index < leaves.size(); index++) {
                         helper.assertBlockState(leaves.get(index),
                                 Blocks.OAK_LEAVES.defaultBlockState()
-                                        .setValue(LeavesBlock.DISTANCE, index + 1));
+                                        .setValue(LeavesBlock.DISTANCE, index + 1)
+                                        .setValue(LeavesBlock.PERSISTENT, true));
                     }
                 })
                 .thenExecute(() -> LumiGameTestLease.release(test))

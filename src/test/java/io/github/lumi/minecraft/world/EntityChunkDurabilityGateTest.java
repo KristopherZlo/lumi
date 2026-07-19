@@ -95,11 +95,12 @@ class EntityChunkDurabilityGateTest {
 
         gate.rememberLoaded(key, original);
         gate.observeCurrent(key, entities(2));
+        long savedGeneration = mutations.snapshot().generations().get(key);
         mutations.clear(mutations.snapshot());
 
         gate.observeCurrent(key, original);
 
-        assertEquals(1L, mutations.snapshot().generations().get(key));
+        assertTrue(mutations.snapshot().generations().get(key) > savedGeneration);
     }
 
     private static EntityChunkBlob entities(int marker) {

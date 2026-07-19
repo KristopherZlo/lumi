@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
+import io.github.lumi.minecraft.world.MinecraftNbtCodec;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -112,8 +113,7 @@ final class LumiWorldSnapshot {
             }
         }
         if (!entities.equals(expected.entities)) {
-            return "durable entities differ: expected "
-                    + describe(expected.entities) + " but was " + describe(entities);
+            return describeEntityDifference(expected.entities, entities);
         }
         return "digest differs despite equal decoded state";
     }
@@ -189,6 +189,31 @@ final class LumiWorldSnapshot {
         blob.entities().forEach(entity -> descriptions.add(
                 entity.type() + "[" + entity.id() + "]"));
         return descriptions.toString();
+    }
+
+    private static String describeEntityDifference(
+            EntityChunkBlob expected, EntityChunkBlob actual) {
+        if (expected.entities().size() == actual.entities().size()) {
+            for (int index = 0; index < expected.entities().size(); index++) {
+                EntityState wanted = expected.entities().get(index);
+                EntityState found = actual.entities().get(index);
+                if (wanted.id().equals(found.id())
+                        && wanted.type().equals(found.type())
+                        && !wanted.nbt().equals(found.nbt())) {
+                    try {
+                        return "durable entity NBT differs for " + wanted.type()
+                                + "[" + wanted.id() + "]: expected "
+                                + MinecraftNbtCodec.decode(wanted.nbt()) + " but was "
+                                + MinecraftNbtCodec.decode(found.nbt());
+                    } catch (IOException invalid) {
+                        return "durable entity NBT differs for " + wanted.type()
+                                + "[" + wanted.id() + "]: " + invalid.getMessage();
+                    }
+                }
+            }
+        }
+        return "durable entities differ: expected "
+                + describe(expected) + " but was " + describe(actual);
     }
 
     private static void update(MessageDigest digest, String value) {

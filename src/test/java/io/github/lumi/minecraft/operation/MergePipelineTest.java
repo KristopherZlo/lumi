@@ -12,6 +12,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
+import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.RegionCoordinate;
 import io.github.lumi.domain.model.RegionTree;
 import io.github.lumi.domain.model.SectionBlob;
@@ -64,6 +65,10 @@ class MergePipelineTest {
                 restore, world, new BranchRefRestorePublication(refs), journals,
                 UUID.randomUUID(), RestoreStateListener.NONE);
 
+        assertEquals(current, refs.read(currentRef.name()).orElseThrow().commit());
+        assertTrue(journals.read().isEmpty());
+        operation.tick(Long.MAX_VALUE);
+        assertEquals(OperationPhase.PREPARED, journals.read().orElseThrow().phase());
         assertEquals(current, refs.read(currentRef.name()).orElseThrow().commit());
         operation.tick(Long.MAX_VALUE);
         assertEquals(current, refs.read(currentRef.name()).orElseThrow().commit());

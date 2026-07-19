@@ -82,6 +82,16 @@ final class LumiBehaviorChecks {
         }
     }
 
+    void assertValue(String name, String actual, String expected) {
+        if (actual.equals(expected)) {
+            report.event("assertion", name, "succeeded", 0, 0, "");
+            return;
+        }
+        String mismatch = name + " expected " + expected + " but was " + actual;
+        failures.add(mismatch);
+        report.event("assertion", name, "failed", 0, 0, mismatch);
+    }
+
     void waitTicks(String name, int ticks) {
         long started = System.nanoTime();
         context.waitTicks(ticks);
