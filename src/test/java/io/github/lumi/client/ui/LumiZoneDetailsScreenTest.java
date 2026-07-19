@@ -28,5 +28,12 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains("\"tags\""));
         assertTrue(source.contains("actions.updateTags().accept"));
         assertTrue(source.contains("optimisticTags"));
+        assertTrue(source.contains("new LumiVersionTagsScreen("));
+
+        int restore = source.indexOf("luma.action.restore");
+        int open = source.indexOf("luma.action.open_details", restore);
+        int branch = source.indexOf("luma.action.create_idea", open);
+        int tags = source.indexOf("luma.action.edit_tags", branch);
+        assertTrue(restore < open && open < branch && branch < tags);
     }
 }

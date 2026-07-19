@@ -60,11 +60,18 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("pagedHistory.selectBranch(branch)"));
         assertTrue(source.contains("latestCreated()"));
         assertTrue(source.contains("snapshot.head().equals(version.id())"));
-        assertTrue(source.contains("updateTags.accept(editingTags, replacement)"));
+        assertTrue(source.contains("new LumiVersionTagsScreen("));
+        assertTrue(source.contains("updateTags.accept(version.id(), replacement)"));
         assertTrue(source.contains("!Objects.equals(renderedPage, latestPage)"));
         assertTrue(source.contains(
                 "PendingStatisticsText.summary(result.workspace())"));
         assertTrue(source.contains("requestPendingStatistics.run()"));
+
+        int restore = source.indexOf("\"rollback\", \"luma.action.restore\"");
+        int open = source.indexOf("\"folder\", \"luma.action.open_details\"", restore);
+        int branch = source.indexOf("\"branch\", \"luma.action.create_idea\"", open);
+        int tags = source.indexOf("\"tags\", \"luma.action.edit_tags\"", branch);
+        assertTrue(restore < open && open < branch && branch < tags);
     }
 
     @Test
