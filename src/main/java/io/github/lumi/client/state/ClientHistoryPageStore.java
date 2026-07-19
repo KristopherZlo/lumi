@@ -10,9 +10,16 @@ import java.util.UUID;
 /** Bounded latest-request-wins owner for independently paged history scopes. */
 public final class ClientHistoryPageStore {
     private static final int MAX_SCOPES = 16;
-    private final LinkedHashMap<Scope, Pending> pending = new LinkedHashMap<>();
-    private final LinkedHashMap<Scope, HistoryPagePayload> pages =
+    private static final Channel DEFAULT_CHANNEL =
+            new Channel(new UUID(0L, 0L));
+    private final LinkedHashMap<PageScope, Pending> pending =
             new LinkedHashMap<>();
+    private final LinkedHashMap<PageScope, HistoryPagePayload> pages =
+            new LinkedHashMap<>();
+
+    public static Channel createChannel() {
+        return new Channel(UUID.randomUUID());
+    }
 
     public synchronized void begin(
             UUID requestId,
@@ -21,7 +28,20 @@ public final class ClientHistoryPageStore {
             BranchName branch,
             Optional<UUID> zoneId,
             int offset) {
-        Scope scope = new Scope(dimensionId, workspaceId, branch, zoneId);
+        begin(DEFAULT_CHANNEL, requestId, dimensionId, workspaceId,
+                branch, zoneId, offset);
+    }
+
+    public synchronized void begin(
+            Channel channel,
+            UUID requestId,
+            String dimensionId,
+            UUID workspaceId,
+            BranchName branch,
+            Optional<UUID> zoneId,
+            int offset) {
+        PageScope scope = new PageScope(
+                channel, new Scope(dimensionId, workspaceId, branch, zoneId));
         pending.remove(scope);
         pending.put(scope, new Pending(requestId, offset));
         pages.remove(scope);
@@ -33,15 +53,20 @@ public final class ClientHistoryPageStore {
         Scope scope = new Scope(
                 payload.dimensionId(), payload.workspaceId(),
                 payload.branch(), payload.zoneId());
-        Pending expected = pending.get(scope);
-        if (expected == null
-                || !expected.requestId().equals(payload.requestId())
-                || expected.offset() != payload.offset()) {
+        PageScope pageScope = pending.entrySet().stream()
+                .filter(entry -> entry.getKey().scope().equals(scope))
+                .filter(entry -> entry.getValue().requestId().equals(
+                        payload.requestId()))
+                .filter(entry -> entry.getValue().offset() == payload.offset())
+                .map(java.util.Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
+        if (pageScope == null) {
             return false;
         }
-        pending.remove(scope);
-        pages.remove(scope);
-        pages.put(scope, payload);
+        pending.remove(pageScope);
+        pages.remove(pageScope);
+        pages.put(pageScope, payload);
         trim(pages);
         return true;
     }
@@ -51,8 +76,18 @@ public final class ClientHistoryPageStore {
             UUID workspaceId,
             BranchName branch,
             Optional<UUID> zoneId) {
-        return Optional.ofNullable(pages.get(new Scope(
-                dimensionId, workspaceId, branch, zoneId)));
+        return page(DEFAULT_CHANNEL, dimensionId, workspaceId, branch, zoneId);
+    }
+
+    public synchronized Optional<HistoryPagePayload> page(
+            Channel channel,
+            String dimensionId,
+            UUID workspaceId,
+            BranchName branch,
+            Optional<UUID> zoneId) {
+        return Optional.ofNullable(pages.get(new PageScope(
+                channel, new Scope(
+                        dimensionId, workspaceId, branch, zoneId))));
     }
 
     public synchronized void clear() {
@@ -67,6 +102,19 @@ public final class ClientHistoryPageStore {
     }
 
     private record Pending(UUID requestId, int offset) { }
+
+    public record Channel(UUID id) {
+        public Channel {
+            Objects.requireNonNull(id, "id");
+        }
+    }
+
+    private record PageScope(Channel channel, Scope scope) {
+        private PageScope {
+            Objects.requireNonNull(channel, "channel");
+            Objects.requireNonNull(scope, "scope");
+        }
+    }
 
     private record Scope(
             String dimensionId,

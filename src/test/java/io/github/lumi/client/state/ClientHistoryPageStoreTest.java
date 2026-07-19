@@ -49,6 +49,30 @@ class ClientHistoryPageStoreTest {
                 Optional.of(zone), 0, false, List.of(), "")));
     }
 
+    @Test
+    void keepsTwoConsumersOnTheSameBranchIndependent() {
+        ClientHistoryPageStore store = new ClientHistoryPageStore();
+        var left = new ClientHistoryPageStore.Channel(new UUID(0, 7));
+        var right = new ClientHistoryPageStore.Channel(new UUID(0, 8));
+        UUID leftRequest = new UUID(0, 9);
+        UUID rightRequest = new UUID(0, 10);
+        store.begin(left, leftRequest, "minecraft:overworld", WORKSPACE,
+                MAIN, Optional.empty(), 0);
+        store.begin(right, rightRequest, "minecraft:overworld", WORKSPACE,
+                MAIN, Optional.empty(), 12);
+
+        assertTrue(store.accept(page(leftRequest, 0)));
+        assertTrue(store.accept(page(rightRequest, 12)));
+        assertTrue(store.page(
+                left, "minecraft:overworld", WORKSPACE, MAIN, Optional.empty())
+                .filter(page -> page.offset() == 0)
+                .isPresent());
+        assertTrue(store.page(
+                right, "minecraft:overworld", WORKSPACE, MAIN, Optional.empty())
+                .filter(page -> page.offset() == 12)
+                .isPresent());
+    }
+
     private static HistoryPagePayload page(UUID request, int offset) {
         return new HistoryPagePayload(
                 request, "minecraft:overworld", WORKSPACE, MAIN,
