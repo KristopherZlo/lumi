@@ -44,6 +44,14 @@ abstract class LumiLegacyModalScreen extends Screen {
                 x, y, width, 20, label, ignored -> action.run(), kind));
     }
 
+    protected final LumiLegacyButton addLegacyContentButton(
+            int x, int y, int maximumWidth, Component label,
+            Runnable action, LumiLegacyButton.Kind kind) {
+        return addLegacyButton(
+                x, y, LumiLegacyButton.contentWidth(maximumWidth, label),
+                label, action, kind);
+    }
+
     protected final LumiLegacyButton addLegacyIconButton(
             int x, int y, String icon, Component label,
             Runnable action, LumiLegacyButton.Kind kind) {

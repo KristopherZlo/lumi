@@ -90,43 +90,43 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private void addNarrowControls() {
         int x = panelX + 16;
         int width = panelWidth - 32;
-        addLegacyButton(x, panelY + 44 + contentOffset, width,
+        addLegacyContentButton(x, panelY + 44 + contentOffset, width,
                 toggleLabel("luma.settings.show_hidden_commits", showZoneSaves),
                 this::toggleZoneSaves, showZoneSaves
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x, panelY + 68 + contentOffset, width,
+        addLegacyContentButton(x, panelY + 68 + contentOffset, width,
                 toggleLabel(
                         "luma.settings.restore_entities", includeEntitiesOnRestore),
                 this::toggleRestoreEntities, includeEntitiesOnRestore
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x, panelY + 92 + contentOffset, width,
+        addLegacyContentButton(x, panelY + 92 + contentOffset, width,
                 toggleLabel("luma.settings.preview_generation", previewGenerationEnabled),
                 this::togglePreviewGeneration, previewGenerationEnabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x, panelY + 116 + contentOffset, width,
+        addLegacyContentButton(x, panelY + 116 + contentOffset, width,
                 toggleLabel("luma.settings.workspace_hud", workspaceHudEnabled),
                 this::toggleWorkspaceHud, workspaceHudEnabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
         var survival = survivalSettings.snapshot().orElse(
                 new ClientSurvivalSettingsStore.Snapshot(false, false));
-        addLegacyButton(x, panelY + 140 + contentOffset, width,
+        addLegacyContentButton(x, panelY + 140 + contentOffset, width,
                 toggleLabel(
                         "luma.settings.automatic_versions", automaticVersionsEnabled),
                 this::toggleAutomaticVersions, automaticVersionsEnabled
                         ? LumiLegacyButton.Kind.SELECTED
                         : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x, panelY + 164 + contentOffset, width,
+        addLegacyContentButton(x, panelY + 164 + contentOffset, width,
                 toggleLabel("luma.settings.survival_mode", survival.enabled()),
                 this::toggleSurvival, survival.enabled()
                         ? LumiLegacyButton.Kind.SELECTED
                         : LumiLegacyButton.Kind.NORMAL).active =
                 survival.configurable();
         boolean enabled = telemetry.settings().enabled();
-        addLegacyButton(x, panelY + 188 + contentOffset, width,
+        addLegacyContentButton(x, panelY + 188 + contentOffset, width,
                 toggleLabel("luma.settings.telemetry_enabled", enabled),
                 this::toggleTelemetry, enabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x, panelY + 212 + contentOffset, width,
+        addLegacyContentButton(x, panelY + 212 + contentOffset, width,
                 Component.translatable("luma.settings.telemetry_clear_queue"),
                 () -> {
                     telemetry.clearLocalQueue();

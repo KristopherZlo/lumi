@@ -38,7 +38,7 @@ public final class LumiLegacyButton extends Button {
             Component message, OnPress onPress, Kind kind,
             String iconName, Integer accentColor) {
         super(
-                x, y, iconName == null ? contentWidth(width, message) : ICON_BUTTON_WIDTH,
+                x, y, iconName == null ? width : ICON_BUTTON_WIDTH,
                 CONTROL_HEIGHT,
                 message, onPress, DEFAULT_NARRATION);
         this.kind = kind;
@@ -60,9 +60,13 @@ public final class LumiLegacyButton extends Button {
         }
     }
 
-    private static int contentWidth(int maximum, Component label) {
-        return Math.min(maximum, Math.max(CONTROL_HEIGHT,
-                Minecraft.getInstance().font.width(label) + 12));
+    static int contentWidth(int maximum, Component label) {
+        return fittedWidth(maximum, Minecraft.getInstance().font.width(label));
+    }
+
+    static int fittedWidth(int maximum, int textWidth) {
+        return Math.min(Math.max(0, maximum),
+                Math.max(CONTROL_HEIGHT, Math.max(0, textWidth) + 12));
     }
 
     @Override

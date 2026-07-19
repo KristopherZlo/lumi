@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -15,7 +16,7 @@ class LumiLegacyButtonTest {
                 "src/main/java/io/github/lumi/client/ui/LumiLegacyButton.java"));
 
         assertTrue(source.contains("font.plainSubstrByWidth"));
-        assertTrue(source.contains("contentWidth(width, message)"));
+        assertTrue(source.contains("iconName == null ? width : ICON_BUTTON_WIDTH"));
         assertTrue(source.contains("graphics.enableScissor"));
         assertTrue(source.contains("private static final int CONTROL_HEIGHT = 18;"));
         assertTrue(source.contains("private static final int ICON_BUTTON_WIDTH = 26;"));
@@ -29,5 +30,13 @@ class LumiLegacyButtonTest {
         assertFalse(source.contains("kind.border()"));
         assertTrue(source.contains("Tooltip.create"));
         assertFalse(source.toLowerCase(Locale.ROOT).contains("owo"));
+    }
+
+    @Test
+    void contentWidthIsBoundedWithoutChangingFixedGridSlots() {
+        assertEquals(18, LumiLegacyButton.fittedWidth(100, 0));
+        assertEquals(42, LumiLegacyButton.fittedWidth(100, 30));
+        assertEquals(32, LumiLegacyButton.fittedWidth(32, 100));
+        assertEquals(0, LumiLegacyButton.fittedWidth(0, 100));
     }
 }
