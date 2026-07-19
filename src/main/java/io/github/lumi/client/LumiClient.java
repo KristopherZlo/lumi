@@ -113,38 +113,7 @@ public final class LumiClient implements ClientModInitializer {
                 new HotkeyActionDispatcher.Actions() {
                     @Override public void openDashboard() {
                         Minecraft client = Minecraft.getInstance();
-                        client.setScreen(new LumiDashboardScreen(
-                                client.screen, HISTORY, PREVIEW_STORE,
-                                HISTORY_PAGES, NETWORKING::requestHistoryPage,
-                                NETWORKING::requestHistoryPage,
-                                PENDING_STATISTICS,
-                                NETWORKING::requestPendingStatistics,
-                                () -> LumiClient.openSave(client.screen,
-                                        SaveScreenController.Intent.SAVE, ""),
-                                () -> LumiClient.openSave(client.screen,
-                                        SaveScreenController.Intent.AMEND,
-                                        latestVersionMessage()),
-                                LumiClient::openBranches,
-                                LumiClient::openZones,
-                                LumiClient::openPackages,
-                                LumiClient::openMore,
-                                parent -> client.setScreen(new LumiSettingsScreen(
-                                        parent, HISTORY, TELEMETRY,
-                                        NETWORKING::updateWorkspaceSettings,
-                                        SURVIVAL_SETTINGS,
-                                        NETWORKING::requestSurvivalSettings,
-                                        NETWORKING::updateSurvivalSettings)),
-                                () -> {
-                                    NETWORKING.refreshSnapshot();
-                                    showFeedback("luma.hotkeys.pending_preview_help");
-                                    client.setScreen(null);
-                                },
-                                () -> NETWORKING.quickRollback(SELECTION.bounds()),
-                                version -> openVersionDetails(client.screen, version),
-                                version -> openRestore(client.screen, version),
-                                version -> openBranchAt(client.screen, version),
-                                NETWORKING::updateVersionTags,
-                                LumiClient::showCompareChanges));
+                        client.setScreen(dashboard(client.screen));
                     }
 
                     @Override public void openSave() {
@@ -205,6 +174,42 @@ public final class LumiClient implements ClientModInitializer {
         new LumiPendingChangeOverlay(
                 HISTORY, COMPARISONS, NETWORKING::refreshSnapshot).register();
         LumiMod.LOGGER.info("Lumi V2 client initialized");
+    }
+
+    private static LumiDashboardScreen dashboard(Screen parent) {
+        Minecraft client = Minecraft.getInstance();
+        return new LumiDashboardScreen(
+                parent, HISTORY, PREVIEW_STORE,
+                HISTORY_PAGES, NETWORKING::requestHistoryPage,
+                NETWORKING::requestHistoryPage,
+                PENDING_STATISTICS,
+                NETWORKING::requestPendingStatistics,
+                () -> LumiClient.openSave(client.screen,
+                        SaveScreenController.Intent.SAVE, ""),
+                () -> LumiClient.openSave(client.screen,
+                        SaveScreenController.Intent.AMEND,
+                        latestVersionMessage()),
+                LumiClient::openBranches,
+                LumiClient::openZones,
+                LumiClient::openPackages,
+                LumiClient::openMore,
+                screen -> client.setScreen(new LumiSettingsScreen(
+                        screen, HISTORY, TELEMETRY,
+                        NETWORKING::updateWorkspaceSettings,
+                        SURVIVAL_SETTINGS,
+                        NETWORKING::requestSurvivalSettings,
+                        NETWORKING::updateSurvivalSettings)),
+                () -> {
+                    NETWORKING.refreshSnapshot();
+                    showFeedback("luma.hotkeys.pending_preview_help");
+                    client.setScreen(null);
+                },
+                () -> NETWORKING.quickRollback(SELECTION.bounds()),
+                version -> openVersionDetails(client.screen, version),
+                version -> openRestore(client.screen, version),
+                version -> openBranchAt(client.screen, version),
+                NETWORKING::updateVersionTags,
+                LumiClient::showCompareChanges);
     }
 
     private static void showFeedback(String value) {
