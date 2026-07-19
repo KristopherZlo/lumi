@@ -25,5 +25,7 @@ class LumiBranchesScreenTest {
         assertTrue(source.contains("contentOffset"));
         assertTrue(source.contains("luma.action.bind_branch"));
         assertTrue(source.contains("bindSlot.accept(branch)"));
+        assertTrue(source.contains("luma.screen.zone_ideas.title"));
+        assertTrue(source.contains("luma.ideas.zone_badge"));
     }
 }

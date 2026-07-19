@@ -233,11 +233,21 @@ public final class LumiClient implements ClientModInitializer {
         var snapshot = HISTORY.state().snapshot().orElseThrow(
                 () -> new IllegalStateException(
                         "Lumi history has not synchronized yet"));
+        var activeZone = snapshot.zones().stream()
+                .filter(HistorySnapshotPayload.ZoneView::active)
+                .findFirst();
         client.setScreen(new LumiBranchesScreen(
-                parent, snapshot.branches(),
-                () -> client.setScreen(new LumiBranchScreen(
-                        client.screen, currentBranch(),
-                        new BranchNameController(NETWORKING::createBranch))),
+                parent, activeZone, snapshot.branches(),
+                () -> activeZone.ifPresentOrElse(
+                        zone -> openBranchAt(
+                                client.screen, zone.versions().stream()
+                                        .findFirst()
+                                        .orElseThrow(() -> new IllegalStateException(
+                                                "Save the active zone before creating a branch"))),
+                        () -> client.setScreen(new LumiBranchScreen(
+                                client.screen, currentBranch(),
+                                new BranchNameController(
+                                        NETWORKING::createBranch)))),
                 () -> client.setScreen(new LumiMergeScreen(
                         client.screen, snapshot.branchName(),
                         snapshot.branches(), NETWORKING::merge)),

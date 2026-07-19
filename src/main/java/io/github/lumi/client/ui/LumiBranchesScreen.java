@@ -4,6 +4,7 @@ import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -13,6 +14,7 @@ import net.minecraft.network.chat.Component;
 public final class LumiBranchesScreen extends LumiLegacyPageScreen {
     private static final int MAX_ROWS = 6;
     private final List<HistorySnapshotPayload.Branch> branches;
+    private final Optional<HistorySnapshotPayload.ZoneView> activeZone;
     private final Runnable create;
     private final Runnable merge;
     private final Consumer<String> switcher;
@@ -26,14 +28,20 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
 
     public LumiBranchesScreen(
             Screen parent,
+            Optional<HistorySnapshotPayload.ZoneView> activeZone,
             List<HistorySnapshotPayload.Branch> branches,
             Runnable create,
             Runnable merge,
             Consumer<String> switcher,
             Consumer<String> deleter,
             Consumer<HistorySnapshotPayload.Branch> bindSlot) {
-        super(parent, Component.translatable("luma.variants.overview_title"),
+        super(parent, activeZone.isPresent()
+                        ? Component.translatable(
+                                "luma.screen.zone_ideas.title",
+                                activeZone.orElseThrow().name())
+                        : Component.translatable("luma.variants.overview_title"),
                 LegacyProjectTab.VARIANTS);
+        this.activeZone = Objects.requireNonNull(activeZone, "activeZone");
         this.branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
         this.create = Objects.requireNonNull(create, "create");
         this.merge = Objects.requireNonNull(merge, "merge");
@@ -52,12 +60,14 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         int x = layout.x();
         int y = layout.y();
         int contentWidth = Math.max(0, layout.width() - 32);
-        contentOffset = addContextualHint(
+        int zoneOffset = activeZone.isPresent() ? 18 : 0;
+        contentOffset = zoneOffset + (addContextualHint(
                 ClientContextualHelpHint.BRANCHES,
-                x + 16, y + 36, contentWidth) ? 56 : 0;
+                x + 16, y + 36 + zoneOffset, contentWidth) ? 56 : 0);
         int actionWidth = Math.max(0, (contentWidth - 8) / 2);
         addLegacyButton(x + 16, y + 38 + contentOffset, actionWidth,
-                Component.translatable("luma.action.variant_create"), create,
+                Component.translatable("luma.action.variant_create"),
+                this::createBranch,
                 LumiLegacyButton.Kind.PRIMARY);
         addLegacyButton(x + 24 + actionWidth, y + 38 + contentOffset, actionWidth,
                 Component.translatable("luma.action.merge_into_current"), merge,
@@ -115,6 +125,16 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         }
     }
 
+    private void createBranch() {
+        try {
+            create.run();
+        } catch (RuntimeException failed) {
+            error = failed.getMessage() == null
+                    ? "Lumi branch could not be created"
+                    : failed.getMessage();
+        }
+    }
+
     private void confirmDelete(HistorySnapshotPayload.Branch branch) {
         pendingDelete = branch;
         error = "";
@@ -160,6 +180,10 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         renderLegacyPage(graphics, layout.x(), layout.y(), layout.width(), layout.height());
         graphics.drawString(font, title, layout.x() + 16, layout.y() + 14,
                 LegacyLumiTheme.TEXT, false);
+        activeZone.ifPresent(zone -> graphics.drawString(
+                font,
+                Component.translatable("luma.ideas.zone_badge", zone.name()),
+                layout.x() + 16, layout.y() + 32, zone.color(), false));
         if (pendingDelete == null) {
             int rows = visibleRows();
             int start = rows == 0 ? 0 : Math.min(page * rows, branches.size());
