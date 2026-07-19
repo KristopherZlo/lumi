@@ -22,5 +22,8 @@ class LumiZonesScreenTest {
         assertTrue(source.contains("zone.color()"));
         assertTrue(source.contains("\"luma.zones.cells\", zone.cells()"));
         assertTrue(source.contains("public boolean mouseScrolled("));
+        assertTrue(source.contains("compact = panelWidth < 300"));
+        assertTrue(source.contains("rowHeight = compact ? 42 : 28"));
+        assertTrue(source.contains("name.getWidth() + 4"));
     }
 }
