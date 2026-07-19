@@ -46,6 +46,8 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
     private HistoryPagePayload renderedRightPage;
     private HistorySnapshotPayload.Version leftSelection;
     private HistorySnapshotPayload.Version rightSelection;
+    private int leftScroll;
+    private int rightScroll;
 
     public LumiComparePickerScreen(
             Screen parent,
@@ -99,8 +101,8 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                 shell.contentWidth(), shell.windowHeight());
         int rows = visibleRows();
         if (rows > 0) {
-            leftHistory.ensurePageSize(rows);
-            rightHistory.ensurePageSize(rows);
+            leftHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS);
+            rightHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS);
         }
         renderedLeftPage = leftHistory.page().orElse(null);
         renderedRightPage = rightHistory.page().orElse(null);
@@ -113,10 +115,6 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                 Component.translatable("luma.action.see_changes"),
                 this::compareSelected, LumiLegacyButton.Kind.PRIMARY);
         submit.active = target().isPresent();
-        addLegacyIconButton(
-                layout.x() + layout.width() - 42, footerY, "close",
-                Component.translatable("luma.action.close"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     private void addColumnButtons(boolean left) {
@@ -129,10 +127,12 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                 Component.literal(history.branch().value()),
                 ignored -> changeBranch(left), LumiLegacyButton.Kind.NORMAL));
         int rows = visibleRows();
-        int end = Math.min(rows, versions.size());
-        for (int index = 0; index < end; index++) {
+        int scroll = scroll(left);
+        int end = Math.min(scroll + rows, versions.size());
+        for (int index = scroll; index < end; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
             int rowY = rowsY() + index * ROW_STRIDE;
+            rowY -= scroll * ROW_STRIDE;
             boolean selected = version.equals(
                     left ? leftSelection : rightSelection);
             addLegacyButton(
@@ -145,15 +145,6 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                             ? LumiLegacyButton.Kind.SELECTED
                             : LumiLegacyButton.Kind.NORMAL);
         }
-        int footerY = layout.y() + layout.height() - 28;
-        LumiLegacyButton previous = addLegacyIconButton(
-                x, footerY, "chevron-left", Component.literal("<"),
-                () -> changePage(left, -1), LumiLegacyButton.Kind.NORMAL);
-        previous.active = history.hasPrevious();
-        LumiLegacyButton next = addLegacyIconButton(
-                x + 32, footerY, "chevron-right", Component.literal(">"),
-                () -> changePage(left, 1), LumiLegacyButton.Kind.NORMAL);
-        next.active = history.hasNext();
     }
 
     private void select(
@@ -168,6 +159,7 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
 
     private void changeBranch(boolean left) {
         history(left).nextBranch(snapshot.branches());
+        setScroll(left, 0);
         if (left) {
             leftSelection = null;
         } else {
@@ -185,16 +177,6 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
 
     private java.util.Optional<VersionCompareController.Target> target() {
         return controller.target(leftSelection, rightSelection);
-    }
-
-    private void changePage(boolean left, int delta) {
-        WorkspaceHistoryController history = history(left);
-        if (delta < 0) {
-            history.previous();
-        } else {
-            history.next();
-        }
-        rebuildWidgets();
     }
 
     @Override
@@ -238,11 +220,14 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
             return;
         }
         int rows = visibleRows();
-        int end = Math.min(rows, versions.size());
-        for (int index = 0; index < end; index++) {
+        int scroll = scroll(left);
+        int end = Math.min(scroll + rows, versions.size());
+        for (int index = scroll; index < end; index++) {
+            HistorySnapshotPayload.Version version = versions.get(index);
             renderCard(
-                    graphics, versions.get(index), x,
-                    rowsY() + index * ROW_STRIDE, width);
+                    graphics, version, x,
+                    rowsY() + (index - scroll) * ROW_STRIDE, width,
+                    version.equals(left ? leftSelection : rightSelection));
         }
     }
 
@@ -251,8 +236,12 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
             HistorySnapshotPayload.Version version,
             int x,
             int y,
-            int width) {
-        renderLegacyPanel(graphics, x, y, width, ROW_HEIGHT);
+            int width,
+            boolean selected) {
+        LegacyLumiTheme.outlined(
+                graphics, x, y, width, ROW_HEIGHT,
+                LegacyLumiTheme.PANEL,
+                selected ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.PANEL_BORDER);
         drawPreview(graphics, version, x + 5, y + 6);
         int textX = x + PREVIEW_WIDTH + 11;
         int textWidth = Math.max(0, width - PREVIEW_WIDTH - 80);
@@ -335,6 +324,41 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
 
     private List<HistorySnapshotPayload.Version> versions(boolean left) {
         return history(left).versions();
+    }
+
+    private int scroll(boolean left) {
+        return left ? leftScroll : rightScroll;
+    }
+
+    private void setScroll(boolean left, int value) {
+        if (left) leftScroll = value;
+        else rightScroll = value;
+    }
+
+    @Override
+    public boolean mouseScrolled(
+            double mouseX, double mouseY,
+            double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        boolean left = x < dividerX();
+        if (y >= rowsY() && y < layout.y() + layout.height() - 32
+                && x >= (left ? leftX() : dividerX())
+                && x < (left ? dividerX() : layout.x() + layout.width())) {
+            List<HistorySnapshotPayload.Version> versions = versions(left);
+            int maximum = Math.max(0, versions.size() - visibleRows());
+            int replacement = Math.max(0, Math.min(maximum,
+                    scroll(left) + (verticalAmount < 0 ? 1 : -1)));
+            if (replacement != scroll(left)) {
+                setScroll(left, replacement);
+                rebuildWidgets();
+            } else if (verticalAmount < 0 && history(left).hasNext()) {
+                history(left).next();
+            }
+            return true;
+        }
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     @Override
