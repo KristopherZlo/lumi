@@ -65,7 +65,8 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
                 ClientContextualHelpHint.MORE,
                 panelX + 12, panelY + 50, panelWidth - 24);
         actionX = panelX + 16;
-        actionY = panelY + (hintVisible ? 106 : 58);
+        actionY = panelY + 58
+                + (hintVisible ? contextualHintOffset(8) : 0);
         actionRight = panelX + panelWidth - 16;
         button("luma.action.dimensions", dimensions);
         button("luma.more.deleted_saves_title", deletedVersions);

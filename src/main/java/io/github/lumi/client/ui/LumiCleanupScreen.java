@@ -13,7 +13,6 @@ import net.minecraft.network.chat.Component;
 public final class LumiCleanupScreen extends LumiLegacyModalScreen {
     private static final int PANEL_WIDTH = 460;
     private static final int BASE_PANEL_HEIGHT = 220;
-    private static final int HINT_PANEL_HEIGHT = 276;
     private final Screen parent;
     private final Supplier<UUID> inspect;
     private final Supplier<UUID> apply;
@@ -38,15 +37,16 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
         beginLegacyInit();
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
-        panelHeight = HINT_PANEL_HEIGHT;
+        panelHeight = BASE_PANEL_HEIGHT;
         panelY = Math.max(8, (height - panelHeight) / 2);
         boolean hintVisible = addContextualHint(
                 ClientContextualHelpHint.CLEANUP,
                 panelX + 16, panelY + 76, panelWidth - 32);
-        contentOffset = hintVisible ? 56 : 0;
-        if (!hintVisible) {
-            panelHeight = BASE_PANEL_HEIGHT;
-            panelY = Math.max(8, (height - panelHeight) / 2);
+        contentOffset = hintVisible ? contextualHintOffset(8) : 0;
+        panelHeight = BASE_PANEL_HEIGHT + contentOffset;
+        panelY = Math.max(8, (height - panelHeight) / 2);
+        if (hintVisible) {
+            moveContextualHint(panelX + 16, panelY + 76);
         }
         int buttonWidth = (panelWidth - 48) / 3;
         int y = panelY + panelHeight - 30;

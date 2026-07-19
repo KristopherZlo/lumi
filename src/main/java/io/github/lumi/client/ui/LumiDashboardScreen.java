@@ -172,7 +172,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         layout = LegacyWorkspaceLayout.fit(width, height);
         addSidebarButtons();
         addSupportButtons();
-        int actionY = layout.bodyY() + 56;
+        boolean hintVisible = addDashboardHint();
+        int contentOffset = hintVisible ? contextualHintOffset(8) : 0;
+        int actionY = layout.bodyY() + 56 + contentOffset;
         int x = layout.bodyX() + 14;
         int available = Math.max(0, layout.bodyWidth() - 28);
         int buttonWidth = Math.max(0, (available - 70) / 2);
@@ -190,9 +192,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             onClose();
         }, LumiLegacyButton.Kind.DANGER);
 
-        historyY = layout.bodyY() + HISTORY_TOP_OFFSET;
-        historyHeight = layout.bodyHeight() - HISTORY_TOP_OFFSET;
-        addDashboardHint();
+        historyY = layout.bodyY() + HISTORY_TOP_OFFSET + contentOffset;
+        historyHeight = layout.bodyHeight() - HISTORY_TOP_OFFSET - contentOffset;
         if (snapshot == null) {
             return;
         }
@@ -295,22 +296,27 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         }
     }
 
-    private void addDashboardHint() {
+    private boolean addDashboardHint() {
         int x = layout.bodyX() + 14;
         int y = layout.bodyY() + 50;
         int width = Math.max(1, layout.bodyWidth() - 28);
         if (addContextualHint(ClientContextualHelpHint.HISTORY, x, y, width)
-                || addContextualHint(ClientContextualHelpHint.SHORTCUTS, x, y, width)
-                || snapshot == null) {
-            return;
+                || addContextualHint(
+                        ClientContextualHelpHint.SHORTCUTS, x, y, width)) {
+            return true;
+        }
+        if (snapshot == null) {
+            return false;
         }
         if (snapshot.pendingKeys() == 0) {
-            addContextualHint(ClientContextualHelpHint.CLEAN_STATE, x, y, width);
-            return;
+            return addContextualHint(
+                    ClientContextualHelpHint.CLEAN_STATE, x, y, width);
         }
-        if (!addContextualHint(ClientContextualHelpHint.SAVE, x, y, width)) {
-            addContextualHint(ClientContextualHelpHint.QUICK_ROLLBACK, x, y, width);
+        if (addContextualHint(ClientContextualHelpHint.SAVE, x, y, width)) {
+            return true;
         }
+        return addContextualHint(
+                ClientContextualHelpHint.QUICK_ROLLBACK, x, y, width);
     }
 
     private void addSidebarButtons() {

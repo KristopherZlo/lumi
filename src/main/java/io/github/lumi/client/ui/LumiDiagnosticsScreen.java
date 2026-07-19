@@ -11,7 +11,6 @@ import net.minecraft.network.chat.Component;
 /** Read-only support screen; it never scans chunks or mutates history. */
 public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
     private static final int BASE_PANEL_HEIGHT = 260;
-    private static final int HINT_PANEL_HEIGHT = 316;
     private final Screen parent;
     private final ClientHistoryStore history;
     private ClientDiagnostics diagnostics;
@@ -38,19 +37,17 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
                 (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024));
         panelWidth = Math.min(430, width - 24);
         panelX = (width - panelWidth) / 2;
-        panelHeight = HINT_PANEL_HEIGHT;
+        panelHeight = BASE_PANEL_HEIGHT;
         panelY = Math.max(12, (height - panelHeight) / 2);
         boolean hintVisible = addContextualHint(
                 ClientContextualHelpHint.DIAGNOSTICS,
                 panelX + 12, panelY + 58, panelWidth - 24);
-        contentOffset = hintVisible ? 56 : 0;
-        if (!hintVisible) {
-            panelHeight = BASE_PANEL_HEIGHT;
-            panelY = Math.max(12, (height - panelHeight) / 2);
+        contentOffset = hintVisible ? contextualHintOffset(8) : 0;
+        panelHeight = BASE_PANEL_HEIGHT + contentOffset;
+        panelY = Math.max(12, (height - panelHeight) / 2);
+        if (hintVisible) {
+            moveContextualHint(panelX + 12, panelY + 58);
         }
-        addLegacyButton(panelX + panelWidth - 76, panelY + 10, 60,
-                Component.translatable("luma.action.close"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     @Override

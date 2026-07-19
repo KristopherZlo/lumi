@@ -66,9 +66,10 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
         panelHeight = page.windowHeight();
         loadWorkspaceSettings();
         requestSurvivalSettings();
-        contentOffset = addContextualHint(
+        boolean hintVisible = addContextualHint(
                 ClientContextualHelpHint.SETTINGS,
-                panelX + 12, panelY + 36, panelWidth - 24) ? 56 : 0;
+                panelX + 12, panelY + 36, panelWidth - 24);
+        contentOffset = hintVisible ? contextualHintOffset(8) : 0;
         addNarrowControls();
     }
 

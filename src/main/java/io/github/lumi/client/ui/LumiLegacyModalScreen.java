@@ -77,9 +77,20 @@ abstract class LumiLegacyModalScreen extends Screen {
         hintX = x;
         hintY = y;
         hintWidth = width;
-        hintHeight = 28 + font.split(
+        hintHeight = 30 + font.split(
                 Component.translatable(hint.bodyKey()), Math.max(1, width - 14)).size() * 10;
         return true;
+    }
+
+    protected final int contextualHintOffset(int gap) {
+        return contextualHint == null ? 0 : hintHeight + Math.max(0, gap);
+    }
+
+    protected final void moveContextualHint(int x, int y) {
+        if (contextualHint != null) {
+            hintX = x;
+            hintY = y;
+        }
     }
 
     protected final void resetContextualHints() {
@@ -97,26 +108,26 @@ abstract class LumiLegacyModalScreen extends Screen {
             String title = font.plainSubstrByWidth(
                     Component.translatable(contextualHint.titleKey()).getString(),
                     Math.max(1, hintWidth - 44));
-            graphics.drawString(font, title, hintX + 7, hintY + 7,
+            graphics.drawString(font, title, hintX + 8, hintY + 8,
                     LegacyLumiTheme.ACCENT, false);
-            int lineY = hintY + 21;
+            int lineY = hintY + 23;
             for (var line : font.split(
                     Component.translatable(contextualHint.bodyKey()),
                     Math.max(1, hintWidth - 14))) {
-                graphics.drawString(font, line, hintX + 7, lineY,
+                graphics.drawString(font, line, hintX + 8, lineY,
                         LegacyLumiTheme.TEXT, false);
                 lineY += 10;
             }
-            int closeX = hintX + hintWidth - 28;
-            boolean hovered = mouseX >= closeX && mouseX < closeX + 22
-                    && mouseY >= hintY + 4 && mouseY < hintY + 22;
+            int closeX = hintX + hintWidth - 26;
+            boolean hovered = mouseX >= closeX && mouseX < closeX + 18
+                    && mouseY >= hintY + 6 && mouseY < hintY + 24;
             LegacyLumiTheme.outlined(
-                    graphics, closeX, hintY + 4, 22, 18,
+                    graphics, closeX, hintY + 6, 18, 18,
                     hovered ? LegacyLumiTheme.CHIP : LegacyLumiTheme.INSET,
                     LegacyLumiTheme.STATUS_BORDER);
             graphics.blit(
                     RenderPipelines.GUI_TEXTURED, HINT_CLOSE_ICON,
-                    closeX + 5, hintY + 7, 0, 0, 12, 12,
+                    closeX + 3, hintY + 9, 0, 0, 12, 12,
                     24, 24, 24, 24);
         }
         updateCursor(mouseX, mouseY);
@@ -162,9 +173,9 @@ abstract class LumiLegacyModalScreen extends Screen {
         if (contextualHint != null
                 && virtual.x() >= hintX && virtual.x() < hintX + hintWidth
                 && virtual.y() >= hintY && virtual.y() < hintY + hintHeight) {
-            int closeX = hintX + hintWidth - 28;
-            if (virtual.x() >= closeX && virtual.x() < closeX + 22
-                    && virtual.y() >= hintY + 4 && virtual.y() < hintY + 22) {
+            int closeX = hintX + hintWidth - 26;
+            if (virtual.x() >= closeX && virtual.x() < closeX + 18
+                    && virtual.y() >= hintY + 6 && virtual.y() < hintY + 24) {
                 contextualHelp.dismissHint(contextualHint);
                 rebuildWidgets();
             }

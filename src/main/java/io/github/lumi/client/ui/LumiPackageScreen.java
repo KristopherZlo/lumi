@@ -61,9 +61,10 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
         panelY = layout.windowY();
         panelWidth = layout.contentWidth();
         panelHeight = layout.windowHeight();
-        contentOffset = addContextualHint(
+        boolean hintVisible = addContextualHint(
                 ClientContextualHelpHint.IMPORT_EXPORT,
-                panelX + 16, panelY + 48, panelWidth - 32) ? 56 : 0;
+                panelX + 16, panelY + 48, panelWidth - 32);
+        contentOffset = hintVisible ? contextualHintOffset(8) : 0;
         loadLocalPackages();
         int x = panelX + 16;
         int contentWidth = panelWidth - 32;

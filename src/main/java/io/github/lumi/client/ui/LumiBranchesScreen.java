@@ -73,9 +73,11 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         int y = layout.y();
         int contentWidth = Math.max(0, layout.width() - 32);
         int zoneOffset = activeZone.isPresent() ? 18 : 0;
-        contentOffset = zoneOffset + (addContextualHint(
+        boolean hintVisible = addContextualHint(
                 ClientContextualHelpHint.BRANCHES,
-                x + 16, y + 36 + zoneOffset, contentWidth) ? 56 : 0);
+                x + 16, y + 36 + zoneOffset, contentWidth);
+        contentOffset = zoneOffset
+                + (hintVisible ? contextualHintOffset(8) : 0);
         name = new EditBox(
                 font, x + 18, y + 41 + contentOffset,
                 Math.max(20, contentWidth - 120), 16,
