@@ -73,9 +73,6 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
                 panelX + 52, footerY, 28, Component.literal(">"),
                 () -> changePage(1), LumiLegacyButton.Kind.NORMAL);
         next.active = rows > 0 && (page + 1) * rows < versions.size();
-        addLegacyButton(panelX + panelWidth - 140, footerY, 120,
-                Component.translatable("luma.action.close"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     private void confirm(HistorySnapshotPayload.Version version) {

@@ -27,9 +27,6 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
         panelX = (width - panelWidth) / 2;
         int panelHeight = 76 + shortcuts.size() * 34;
         panelY = Math.max(12, (height - panelHeight) / 2);
-        addLegacyButton(panelX + panelWidth - 76, panelY + 10, 60,
-                Component.translatable("luma.action.close"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     @Override

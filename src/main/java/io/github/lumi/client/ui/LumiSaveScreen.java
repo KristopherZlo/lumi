@@ -91,9 +91,6 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         int actionY = y + layout.height() - 28;
         int fieldY = y + 65;
 
-        addLegacyIconButton(x + layout.width() - 32, y + 6, "close",
-                Component.translatable("luma.action.close"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
         addLegacyIconButton(x + layout.width() - 32, y + 34, "see-changes",
                 Component.translatable("luma.action.refresh_preview"),
                 this::refreshPreview, LumiLegacyButton.Kind.NORMAL);
@@ -118,21 +115,18 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         tags.setTextColor(LegacyLumiTheme.TEXT);
         addRenderableWidget(tags);
 
-        int contentWidth = layout.width() - 12;
-        int buttonWidth = (contentWidth - 8) / 3;
+        int buttonWidth = Math.max(80, (layout.width() - 18) / 2);
         save = addLegacyButton(x + 6, actionY, buttonWidth,
                 Component.translatable("luma.action.save_build"),
                 () -> submit(SaveScreenController.Intent.SAVE),
                 preferredIntent == SaveScreenController.Intent.SAVE
                         ? LumiLegacyButton.Kind.PRIMARY : LumiLegacyButton.Kind.NORMAL);
-        amend = addLegacyButton(x + 10 + buttonWidth, actionY, buttonWidth,
+        amend = addLegacyButton(
+                save.getX() + save.getWidth() + 4, actionY, buttonWidth,
                 Component.translatable("luma.action.amend_version"),
                 () -> submit(SaveScreenController.Intent.AMEND),
                 preferredIntent == SaveScreenController.Intent.AMEND
                         ? LumiLegacyButton.Kind.PRIMARY : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x + 14 + buttonWidth * 2, actionY, buttonWidth,
-                Component.translatable("luma.action.cancel"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
         setSubmitActive(!initialMessage.trim().isEmpty());
         refreshPreview();
     }

@@ -92,9 +92,6 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
                 Component.translatable("luma.action.open_packages_folder"),
                 this::openFolder, LumiLegacyButton.Kind.NORMAL);
         folder.active = browser.canOpenFolder();
-        addLegacyIconButton(panelX + panelWidth - 42, panelY + 12, "close",
-                Component.translatable("luma.action.close"), this::onClose,
-                LumiLegacyButton.Kind.NORMAL);
         updateActions();
         addLegacyButton(x, panelY + 118 + contentOffset, contentWidth,
                 toggleLabel("luma.share.include_previews", includePreview),
