@@ -1,12 +1,20 @@
 package io.github.lumi.gametest;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.model.CommitAuthor;
+import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.service.LiveActionJournal;
+import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
+import io.github.lumi.minecraft.world.MinecraftSectionCapture;
+import java.io.IOException;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -23,6 +31,7 @@ import net.minecraft.world.phys.Vec3;
 /** Exact continuation gate for projectile-triggered world actions. */
 public final class LumiProjectileGameTests {
     private static final BlockPos CRYSTAL = new BlockPos(4, 3, 4);
+    private static final BlockPos AMBIENT = new BlockPos(1, 2, 1);
 
     @GameTest(maxTicks = 300000)
     public void arrowImpactRemainsOwnedThroughCrystalExplosion(GameTestHelper helper) {
@@ -61,6 +70,134 @@ public final class LumiProjectileGameTests {
                 .thenExecute(() -> helper.assertEntityNotPresent(EntityType.ITEM))
                 .thenExecute(() -> LumiGameTestLease.release(test))
                 .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void ownedEntityRemovalAfterSaveStillTriggersQuickRollback(
+            GameTestHelper helper) {
+        FabricDimensionRuntime runtime = runtime(helper);
+        UUID player = UUID.randomUUID();
+        UUID test = UUID.randomUUID();
+        CommitAuthor author = new CommitAuthor(player, "Projectile gate");
+        AtomicReference<Arrow> arrow = new AtomicReference<>();
+        AtomicReference<UUID> action = new AtomicReference<>();
+        AtomicReference<MutationTerminalState> saveTerminal = new AtomicReference<>();
+        AtomicReference<MutationTerminalState> rollbackTerminal = new AtomicReference<>();
+        AtomicReference<MutationTerminalState> secondRollbackTerminal = new AtomicReference<>();
+        AtomicReference<String> secondRollbackMessage = new AtomicReference<>();
+        AtomicReference<SectionKey> ambientKey = new AtomicReference<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    Arrow spawned = createArrow(helper);
+                    spawned.setNoGravity(true);
+                    spawned.setDeltaMovement(Vec3.ZERO);
+                    try (var ignored = DirectLiveActionContext.open(
+                            runtime.liveActions(), player)) {
+                        action.set(DirectLiveActionContext.current(
+                                runtime.liveActions()).orElseThrow());
+                        helper.assertTrue(helper.getLevel().addFreshEntity(spawned),
+                                "Cannot add saved arrow");
+                    }
+                    arrow.set(spawned);
+                    helper.assertTrue(runtime.mutations().hasPendingBuilderChanges(),
+                            "Arrow spawn did not create a builder draft");
+                    startSave(helper, runtime, author, saveTerminal);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                            saveTerminal.get(), "Arrow baseline Save must succeed");
+                    helper.assertFalse(runtime.mutations().hasPendingBuilderChanges(),
+                            "Save did not clear the captured builder draft");
+                    helper.setBlock(AMBIENT, Blocks.DIAMOND_BLOCK);
+                    ambientKey.set(MinecraftSectionCapture.key(helper.absolutePos(AMBIENT)));
+                    try (var ignored = DirectLiveActionContext.resume(
+                            runtime.liveActions(), action.get())) {
+                        arrow.get().discard();
+                    }
+                    runtime.causalTicks().finishedCarrier(arrow.get());
+                    helper.assertTrue(arrow.get().isRemoved(),
+                            "Saved arrow was not removed");
+                    helper.assertTrue(runtime.mutations().hasPendingBuilderChanges(),
+                            "Post-Save removal was hidden by the action's root baseline");
+                    try {
+                        runtime.startQuickRollback(author,
+                                operation -> rollbackTerminal.set(
+                                        operation.terminalState()));
+                    } catch (IOException failed) {
+                        throw helper.assertionException(
+                                "Cannot start Quick Rollback: %s", failed.getMessage());
+                    }
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                            rollbackTerminal.get(), "Quick Rollback must succeed");
+                    helper.assertTrue(helper.getLevel().getEntityInAnyDimension(
+                                    arrow.get().getUUID()) instanceof Arrow,
+                            "Quick Rollback did not restore the saved arrow");
+                    helper.assertBlockState(
+                            AMBIENT, Blocks.DIAMOND_BLOCK.defaultBlockState());
+                    helper.assertTrue(runtime.mutations().snapshot().generations()
+                                    .containsKey(ambientKey.get()),
+                            "Quick Rollback cleared ambient-only pending work");
+                    helper.assertTrue(runtime.mutations().builderSnapshot()
+                                    .generations().isEmpty(),
+                            "Authorized entity Restore recreated a builder marker");
+                    try {
+                        runtime.startQuickRollback(author, operation -> {
+                            secondRollbackTerminal.set(operation.terminalState());
+                            secondRollbackMessage.set(
+                                    operation.completionMessage().orElse(""));
+                        });
+                    } catch (IOException failed) {
+                        throw helper.assertionException(
+                                "Cannot start second Quick Rollback: %s",
+                                failed.getMessage());
+                    }
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                            secondRollbackTerminal.get(),
+                            "Second Quick Rollback must be a successful no-op");
+                    helper.assertValueEqual("luma.status.nothing_to_restore",
+                            secondRollbackMessage.get(),
+                            "Second Quick Rollback did not report a clean builder draft");
+                    helper.assertTrue(runtime.mutations().snapshot().generations()
+                                    .containsKey(ambientKey.get()),
+                            "No-op Quick Rollback cleared ambient-only pending work");
+                })
+                .thenExecute(() -> LumiGameTestLease.release(test))
+                .thenSucceed();
+    }
+
+    private static Arrow createArrow(GameTestHelper helper) {
+        Arrow arrow = EntityType.ARROW.create(
+                helper.getLevel(), EntitySpawnReason.COMMAND);
+        if (arrow == null) {
+            throw helper.assertionException("Cannot create arrow");
+        }
+        arrow.setPos(Vec3.atCenterOf(helper.absolutePos(new BlockPos(3, 4, 3))));
+        return arrow;
+    }
+
+    private static void startSave(
+            GameTestHelper helper,
+            FabricDimensionRuntime runtime,
+            CommitAuthor author,
+            AtomicReference<MutationTerminalState> terminal) {
+        try {
+            runtime.startSave(new SaveRequest(
+                    runtime.activeRef(), author, "Saved carrier baseline", Instant.now(),
+                    runtime.activeWorkspaceId(), Optional.empty(), CommitKind.MANUAL),
+                    operation -> terminal.set(operation.terminalState()));
+        } catch (IOException failed) {
+            throw helper.assertionException(
+                    "Cannot start carrier baseline Save: %s", failed.getMessage());
+        }
     }
 
     private static EndCrystal spawnCrystal(GameTestHelper helper) {
