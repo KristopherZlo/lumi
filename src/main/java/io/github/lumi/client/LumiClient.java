@@ -435,7 +435,6 @@ public final class LumiClient implements ClientModInitializer {
         Minecraft client = Minecraft.getInstance();
         client.setScreen(new LumiMoreScreen(
                 parent,
-                () -> openWorkspaces(client.screen),
                 () -> client.setScreen(new LumiDeletedVersionsScreen(
                         client.screen, HISTORY,
                         NETWORKING::restoreDeletedVersion,
@@ -447,12 +446,6 @@ public final class LumiClient implements ClientModInitializer {
                         LumiHotkeys.shortcuts(client.options.keyMappings))),
                 () -> client.setScreen(new LumiSpecialThanksScreen(client.screen)),
                 () -> client.setScreen(new LumiDiagnosticsScreen(client.screen, HISTORY)),
-                () -> client.setScreen(new LumiSettingsScreen(
-                        parent, HISTORY, TELEMETRY,
-                        NETWORKING::updateWorkspaceSettings,
-                        SURVIVAL_SETTINGS,
-                        NETWORKING::requestSurvivalSettings,
-                        NETWORKING::updateSurvivalSettings)),
                 () -> client.setScreen(new LumiUpdateScreen(
                         client.screen, UPDATE_CHECKER, UPDATE_PREFERENCES)),
                 () -> client.setScreen(new LumiCleanupScreen(

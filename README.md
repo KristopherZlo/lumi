@@ -47,11 +47,13 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   from More. Contextual tips can be dismissed independently and restored with
   More > Show tips again without replaying onboarding; Alt+I opens the live
   hotkey guide.
-- More > Settings persists whether work-zone saves join active-workspace
-  history and whether full Restore includes durable entities by default.
-  Diagnostic telemetry remains a separate client-local allowlisted control.
-- More > Check updates performs a manual bounded lookup against Lumi's fixed
-  GitHub-hosted release manifest.
+- Settings persists workspace history, Restore, preview, HUD and automatic
+  version defaults; diagnostic telemetry remains client-local. More is a
+  compact secondary-action row and does not duplicate Settings or support.
+- Check updates immediately performs a bounded lookup against Lumi's fixed
+  GitHub-hosted release manifest and shows progress/result in the same modal.
+- The project sidebar keeps More with the navigation and a bottom Support Lumi
+  block for Buy me a coffee, PayPal and GitHub bug reports.
 - A one-time native Minecraft world backup can be requested before first V2
   history creation with `-Dlumi.preModBackup.maxMiB=<limit>`; it is off by default.
 

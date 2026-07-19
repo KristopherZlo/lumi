@@ -29,6 +29,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.Util;
 
 /** Legacy project-window presentation backed by the immutable V2 history snapshot. */
 public final class LumiDashboardScreen extends LumiLegacyModalScreen {
@@ -44,6 +45,12 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     .withZone(ZoneId.systemDefault());
     private static final Identifier NO_PREVIEW_ICON = Identifier.fromNamespaceAndPath(
             LumiMod.MOD_ID, "textures/gui/new-icons/image.png");
+    private static final java.net.URI COFFEE_URI =
+            java.net.URI.create("https://buymeacoffee.com/zl0yxp");
+    private static final java.net.URI PAYPAL_URI = java.net.URI.create(
+            "https://www.paypal.com/donate/?hosted_button_id=CY7A2U64JWY4W");
+    private static final java.net.URI BUG_URI =
+            java.net.URI.create("https://github.com/KristopherZlo/lumi/issues/new");
     private final Screen parent;
     private final ClientHistoryStore history;
     private final ClientHistoryPageStore historyPages;
@@ -164,6 +171,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         snapshot = history.state().snapshot().orElse(null);
         layout = LegacyWorkspaceLayout.fit(width, height);
         addSidebarButtons();
+        addSupportButtons();
         int actionY = layout.bodyY() + 56;
         int x = layout.bodyX() + 14;
         int available = Math.max(0, layout.bodyWidth() - 28);
@@ -312,26 +320,25 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         }
         int x = layout.windowX() + 12;
         int width = layout.sidebarWidth() - 24;
-        int y = layout.windowY() + 112;
+        int y = layout.windowY() + 108;
         Integer zoneColor = activeZoneColor().orElse(null);
         addButton(x, y, width, "luma.tab.history", this::showHistory,
                 tabKind(LegacyProjectTab.HISTORY));
-        addButton(x, y + 27, width, "luma.tab.zones",
+        addButton(x, y + 22, width, "luma.tab.zones",
                 () -> openTab(LegacyProjectTab.ZONES, openZones),
                 tabKind(LegacyProjectTab.ZONES), zoneColor);
-        addButton(x, y + 54, width, "luma.tab.variants",
+        addButton(x, y + 44, width, "luma.tab.variants",
                 () -> openTab(LegacyProjectTab.VARIANTS, openBranches),
                 tabKind(LegacyProjectTab.VARIANTS), zoneColor);
-        addButton(x, y + 81, width, "luma.tab.compare", this::showCompare,
+        addButton(x, y + 66, width, "luma.tab.compare", this::showCompare,
                 tabKind(LegacyProjectTab.COMPARE));
-        addButton(x, y + 108, width, "luma.tab.import_export",
+        addButton(x, y + 88, width, "luma.tab.import_export",
                 () -> openTab(LegacyProjectTab.IMPORT_EXPORT, openPackages),
                 tabKind(LegacyProjectTab.IMPORT_EXPORT));
-        addButton(x, y + 135, width, "luma.action.settings",
+        addButton(x, y + 110, width, "luma.action.settings",
                 () -> openTab(LegacyProjectTab.SETTINGS, openSettings),
                 tabKind(LegacyProjectTab.SETTINGS));
-        addButton(x, layout.windowY() + layout.windowHeight() - 36,
-                width, "luma.action.more",
+        addButton(x, y + 132, width, "luma.action.more",
                 () -> openTab(LegacyProjectTab.MORE, openMore),
                 tabKind(LegacyProjectTab.MORE));
     }
@@ -378,6 +385,20 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         if (minecraft.screen != this) {
             minecraft.setScreen(this);
         }
+    }
+
+    private void addSupportButtons() {
+        int x = layout.windowX() + 16;
+        int y = layout.windowY() + layout.windowHeight() - 36;
+        addIconButton(x, y, "buymeacoffee", "luma.action.buy_me_a_coffee",
+                () -> Util.getPlatform().openUri(COFFEE_URI),
+                LumiLegacyButton.Kind.NORMAL);
+        addIconButton(x + 32, y, "paypal", "luma.action.paypal_donate",
+                () -> Util.getPlatform().openUri(PAYPAL_URI),
+                LumiLegacyButton.Kind.NORMAL);
+        addIconButton(x + 64, y, "bug", "luma.action.report_bug",
+                () -> Util.getPlatform().openUri(BUG_URI),
+                LumiLegacyButton.Kind.NORMAL);
     }
 
     public void openBranchHistory(String branch) {
@@ -563,6 +584,13 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                 LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.window.mode"),
                 x + 14, y + 43, LegacyLumiTheme.MUTED, false);
+        int supportY = y + layout.windowHeight() - 58;
+        LegacyLumiTheme.outlined(
+                graphics, x + 10, supportY,
+                layout.sidebarWidth() - 20, 48,
+                LegacyLumiTheme.PANEL, LegacyLumiTheme.PANEL_BORDER);
+        graphics.drawString(font, Component.translatable("luma.window.support"),
+                x + 16, supportY + 7, LegacyLumiTheme.MUTED, false);
         if (snapshot != null) {
             if (!compactSidebar()) {
                 drawChip(graphics, x + 14, y + 62,

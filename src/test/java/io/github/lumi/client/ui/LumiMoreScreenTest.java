@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,6 +22,10 @@ class LumiMoreScreenTest {
         assertTrue(more.contains("ClientContextualHelpHint.MORE"));
         assertTrue(more.contains("luma.action.reset_contextual_hints"));
         assertTrue(more.contains("resetContextualHints"));
+        assertTrue(more.contains("actionX += width + 4"));
+        assertFalse(more.contains("luma.action.settings"));
+        assertFalse(more.contains("luma.action.buy_me_a_coffee"));
+        assertFalse(more.contains("luma.action.paypal_donate"));
         assertTrue(client.contains("new LumiCleanupScreen("));
         assertTrue(client.contains("new LumiComparePickerScreen("));
         assertTrue(cleanup.contains("luma.action.inspect_unused_files"));

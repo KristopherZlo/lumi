@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,5 +20,8 @@ class LumiUpdateScreenTest {
         assertTrue(source.contains("changelogUri()"));
         assertTrue(source.contains("preferences.ignored(release.version())"));
         assertTrue(source.contains("preferences.dismiss("));
+        assertTrue(source.contains("startCheck();"));
+        assertTrue(source.contains("luma.action.checking_updates"));
+        assertFalse(source.contains("this::check"));
     }
 }

@@ -35,6 +35,11 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("new LumiComparePickerScreen("));
         assertTrue(source.contains("luma.tab.variants"));
         assertTrue(source.contains("luma.action.settings"));
+        assertTrue(source.contains("luma.action.buy_me_a_coffee"));
+        assertTrue(source.contains("luma.action.paypal_donate"));
+        assertTrue(source.contains("luma.action.report_bug"));
+        assertTrue(source.contains("luma.window.support"));
+        assertTrue(source.contains("addButton(x, y + 132, width, \"luma.action.more\""));
         assertTrue(source.contains("addCompactSidebarButtons"));
         assertTrue(source.contains("activeZoneColor()"));
         assertTrue(source.contains(

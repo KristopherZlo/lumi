@@ -44,11 +44,14 @@ public final class LumiLegacyButton extends Button {
         this.kind = kind;
         this.accentColor = accentColor;
         boolean sliders = "sliders".equals(iconName);
+        boolean support = "buymeacoffee".equals(iconName)
+                || "paypal".equals(iconName);
         this.icon = iconName == null ? null : Identifier.fromNamespaceAndPath(
-                LumiMod.MOD_ID, sliders
-                        ? "textures/gui/new-icons/sliders.png"
+                LumiMod.MOD_ID, support
+                        ? "textures/gui/" + iconName + ".png"
+                        : sliders ? "textures/gui/new-icons/sliders.png"
                         : "textures/gui/icons/" + iconName + ".png");
-        this.disabledIcon = sliders ? icon : iconName == null ? null
+        this.disabledIcon = sliders || support ? icon : iconName == null ? null
                 : Identifier.fromNamespaceAndPath(
                         LumiMod.MOD_ID,
                         "textures/gui/icons/" + iconName + "_disabled.png");

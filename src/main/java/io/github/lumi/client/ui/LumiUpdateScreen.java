@@ -25,6 +25,7 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
     private final ClientUpdatePreferenceRepository preferences;
     private UpdateCheckResult result;
     private boolean checking;
+    private boolean started;
     private int panelX;
     private int panelY;
     private int panelWidth;
@@ -49,6 +50,9 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
         panelHeight = Math.min(292, Math.max(180, height - 24));
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - panelHeight) / 2);
+        if (!started) {
+            startCheck();
+        }
         int bottomY = panelY + panelHeight - 28;
         if (result != null && result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE) {
             int buttonWidth = (panelWidth - 40) / 2;
@@ -69,22 +73,13 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
             resultBottom = firstRow - 8;
             return;
         }
-        LumiLegacyButton check = addLegacyButton(
-                panelX + 16, bottomY, panelWidth - 102,
-                Component.translatable(checking
-                        ? "luma.action.checking_updates" : "luma.action.check_updates"),
-                this::check, LumiLegacyButton.Kind.NORMAL);
-        check.active = !checking;
-        addLegacyButton(panelX + panelWidth - 76, bottomY, 60,
-                Component.translatable("luma.action.close"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
-        resultBottom = bottomY - 8;
+        resultBottom = panelY + panelHeight - 16;
     }
 
-    private void check() {
+    private void startCheck() {
+        started = true;
         checking = true;
         result = null;
-        rebuildWidgets();
         CompletableFuture.supplyAsync(checker::check, EXECUTOR)
                 .exceptionally(failed -> UpdateCheckResult.failed())
                 .thenAccept(outcome -> Minecraft.getInstance().execute(() -> {
@@ -119,7 +114,13 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
     }
 
     private void renderResult(GuiGraphics graphics) {
-        if (checking || result == null) {
+        if (checking) {
+            graphics.drawString(font,
+                    Component.translatable("luma.action.checking_updates"),
+                    panelX + 22, panelY + 76, LegacyLumiTheme.ACCENT, false);
+            return;
+        }
+        if (result == null) {
             return;
         }
         Component heading;
