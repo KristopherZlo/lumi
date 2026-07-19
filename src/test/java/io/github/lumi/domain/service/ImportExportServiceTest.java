@@ -55,7 +55,7 @@ class ImportExportServiceTest {
                 new ImportExportService("minecraft:overworld", repository);
 
         ImportExportService.PackageInspection exported =
-                service.export(source, archive);
+                service.export(source, archive, false);
         ImportExportService.PackageInspection inspected = service.inspect(archive);
 
         assertTrue(java.nio.file.Files.isRegularFile(archive));
@@ -83,7 +83,7 @@ class ImportExportServiceTest {
                 new CommitStatistics(1, 0, SectionBlob.BLOCK_COUNT, 0)));
         Path archive = directory.resolve("import.lumi");
         new ImportExportService("minecraft:overworld", sourceRepository)
-                .export(sourceCommit, archive);
+                .export(sourceCommit, archive, false);
 
         Path targetRepository = directory.resolve("target");
         WorldObjectRepository targetObjects =
@@ -133,7 +133,7 @@ class ImportExportServiceTest {
                 firstRepository, "minecraft:stone", "Confirmed");
         Path archive = directory.resolve("replaced.lumi");
         new ImportExportService("minecraft:overworld", firstRepository)
-                .export(confirmed, archive);
+                .export(confirmed, archive, false);
 
         Path targetRepository = directory.resolve("replacement-target");
         WorldObjectRepository targetObjects =
@@ -156,7 +156,7 @@ class ImportExportServiceTest {
         var replacement = packageWithSection(
                 replacementRepository, "minecraft:gold_block", "Replacement");
         new ImportExportService("minecraft:overworld", replacementRepository)
-                .export(replacement, archive);
+                .export(replacement, archive, false);
 
         assertThrows(java.io.IOException.class, () -> target.importPackage(
                 archive, inspection, main, new BranchName("import/replaced"),

@@ -33,7 +33,8 @@ class LumiPackageArchiveTest {
         Path target = directory.resolve("clock.lumi");
         LumiPackageArchive archive = new LumiPackageArchive();
 
-        archive.write(target, manifest, commit, payloads::get);
+        archive.write(
+                target, manifest, commit, payloads::get, Optional.empty());
 
         Map<ObjectId, byte[]> restored = new LinkedHashMap<>();
         LumiPackageManifest read = archive.read(target, new LumiPackageArchive.PayloadConsumer() {

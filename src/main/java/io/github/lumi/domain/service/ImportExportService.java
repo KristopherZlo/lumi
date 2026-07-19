@@ -53,10 +53,6 @@ public final class ImportExportService {
         previews = new VersionPreviewRepository(dimensionRepository);
     }
 
-    public PackageInspection export(CommitId source, Path target) throws IOException {
-        return export(source, target, false);
-    }
-
     public PackageInspection export(
             CommitId source, Path target, boolean includePreview) throws IOException {
         Commit commit = commits.read(Objects.requireNonNull(source, "source"));
@@ -147,9 +143,8 @@ public final class ImportExportService {
                 preview[0] = png;
             }
         });
-        return new PackageRead(
-                new PackageInspection(
-                        manifest, Objects.requireNonNull(decoded[0], "package commit")),
+        return new PackageRead(new PackageInspection(
+                manifest, Objects.requireNonNull(decoded[0], "package commit")),
                 Optional.ofNullable(preview[0]));
     }
 
@@ -204,8 +199,7 @@ public final class ImportExportService {
     }
 
     private record PackageRead(
-            PackageInspection inspection,
-            Optional<byte[]> preview) {
+            PackageInspection inspection, Optional<byte[]> preview) {
         private PackageRead {
             Objects.requireNonNull(inspection, "inspection");
             preview = Objects.requireNonNull(preview, "preview");

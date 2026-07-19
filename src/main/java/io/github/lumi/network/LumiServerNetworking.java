@@ -125,8 +125,7 @@ public final class LumiServerNetworking {
                 dimension(runtime), payload.expectedRevision());
         try {
             if (payload.kind() == HistoryCommandPayload.Kind.SURVIVAL_STATUS
-                    || payload.kind()
-                    == HistoryCommandPayload.Kind.SURVIVAL_SETTINGS) {
+                    || payload.kind() == HistoryCommandPayload.Kind.SURVIVAL_SETTINGS) {
                 survivalSettings(player, payload, runtime);
                 return;
             }
@@ -505,24 +504,20 @@ public final class LumiServerNetworking {
         return message == null || message.isBlank() ? "Operation failed" : message;
     }
 
-    private static void survivalSettings(
-            ServerPlayer player,
-            HistoryCommandPayload payload,
-            FabricDimensionRuntime runtime) throws IOException {
+    private static void survivalSettings(ServerPlayer player,
+            HistoryCommandPayload payload, FabricDimensionRuntime runtime) throws IOException {
         boolean configurable = LumiMod.serverRuntime().mayConfigure(player);
         if (payload.kind() == HistoryCommandPayload.Kind.SURVIVAL_SETTINGS) {
             if (!configurable) {
                 throw new IOException(
                         "Only an operator can change Lumi Survival access");
             }
-            LumiMod.serverRuntime().setSurvivalEnabled(
-                    player, payload.argument().equals("1"));
+            LumiMod.serverRuntime().setSurvivalEnabled(player, payload.argument().equals("1"));
             sendEvent(player, payload, runtime,
                     OperationEventPayload.State.SUCCEEDED,
                     "Survival setting updated");
         }
-        send(player, new SurvivalSettingsPayload(
-                payload.requestId(),
+        send(player, new SurvivalSettingsPayload(payload.requestId(),
                 LumiMod.serverRuntime().isSurvivalEnabled(player),
                 configurable));
     }

@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
 class LumiPackageManifestCodecTest {
@@ -53,6 +54,27 @@ class LumiPackageManifestCodecTest {
                 Optional.of(new LumiPackageManifest.Preview(id('d'), 24)));
 
         assertEquals(manifest, codec.decode(codec.encode(manifest)));
+    }
+
+    @Test
+    void readsSchemaOnePackagesWithoutPreviewMetadata() throws Exception {
+        byte[] dimension = "minecraft:overworld".getBytes(StandardCharsets.UTF_8);
+        var bytes = new java.io.ByteArrayOutputStream();
+        try (var output = new java.io.DataOutputStream(bytes)) {
+            output.writeInt(0x4C504B32);
+            output.writeInt(1);
+            output.writeInt(dimension.length);
+            output.write(dimension);
+            output.write(java.util.HexFormat.of().parseHex(id('c').hex()));
+            output.writeInt(40);
+            output.writeInt(0);
+        }
+
+        assertEquals(
+                new LumiPackageManifest(
+                        "minecraft:overworld", new CommitId(id('c')),
+                        40, Map.of()),
+                codec.decode(bytes.toByteArray()));
     }
 
     private static ObjectId id(char digit) {
