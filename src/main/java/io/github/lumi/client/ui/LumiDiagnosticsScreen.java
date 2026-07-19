@@ -132,12 +132,14 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
     }
 
     static int rowColumns(int availableHeight) {
-        return availableHeight >= 97 ? 1 : 2;
+        int rowsThatFit = Math.max(1,
+                1 + (Math.max(1, availableHeight) - 9) / 12);
+        return Math.max(1, (8 + rowsThatFit - 1) / rowsThatFit);
     }
 
     static int rowStride(int availableHeight, int rowsPerColumn) {
         if (rowsPerColumn <= 1) return 0;
-        return Math.max(1, Math.min(21,
+        return Math.max(9, Math.min(21,
                 (Math.max(1, availableHeight) - 9) / (rowsPerColumn - 1)));
     }
 

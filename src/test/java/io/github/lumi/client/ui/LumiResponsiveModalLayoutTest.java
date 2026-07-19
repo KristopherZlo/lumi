@@ -7,7 +7,8 @@ import org.junit.jupiter.api.Test;
 class LumiResponsiveModalLayoutTest {
     @Test
     void saveAndPackageInspectionKeepFieldsAndActionsInsideNarrowViewports() {
-        for (int[] viewport : new int[][] {{427, 240}, {320, 200}}) {
+        for (int[] viewport : new int[][] {
+                {427, 240}, {320, 200}, {320, 180}}) {
             LegacyModalLayout save = LumiSaveScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertInside(viewport, save);
@@ -24,7 +25,8 @@ class LumiResponsiveModalLayoutTest {
 
     @Test
     void mergeReflowsRowsAndPreviewsAboveItsFooter() {
-        for (int[] viewport : new int[][] {{427, 240}, {320, 200}}) {
+        for (int[] viewport : new int[][] {
+                {427, 240}, {320, 200}, {320, 180}}) {
             LegacyModalLayout layout = LumiMergeScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertInside(viewport, layout);
@@ -34,12 +36,16 @@ class LumiResponsiveModalLayoutTest {
             assertTrue(LumiMergeScreen.previewWidth(layout.width()) * 2 + 14
                     <= layout.width());
             assertTrue(LumiMergeScreen.previewHeight(layout.height()) > 0);
+            assertTrue(LumiMergeScreen.confirmationTextOffset(
+                    layout.height(), true) + 9
+                    <= LumiMergeScreen.actionOffset(layout.height()) - 13);
         }
     }
 
     @Test
     void diagnosticsFitsItsHintAndRowsInsideNarrowPanels() {
-        for (int[] viewport : new int[][] {{427, 240}, {320, 200}}) {
+        for (int[] viewport : new int[][] {
+                {427, 240}, {320, 200}, {320, 180}}) {
             LegacyModalLayout layout = LumiDiagnosticsScreen.fitPanel(
                     viewport[0], viewport[1], 48);
             assertInside(viewport, layout);
@@ -47,15 +53,18 @@ class LumiResponsiveModalLayoutTest {
                     layout.height(), 48);
             int columns = LumiDiagnosticsScreen.rowColumns(rowAreaHeight - 10);
             int rowsPerColumn = (8 + columns - 1) / columns;
-            assertTrue(LumiDiagnosticsScreen.rowStride(
-                    rowAreaHeight - 10, rowsPerColumn) * (rowsPerColumn - 1) + 9
+            int stride = LumiDiagnosticsScreen.rowStride(
+                    rowAreaHeight - 10, rowsPerColumn);
+            assertTrue(stride >= 9);
+            assertTrue(stride * (rowsPerColumn - 1) + 9
                     <= rowAreaHeight - 10);
         }
     }
 
     @Test
     void versionDetailsReflowsPreviewAndActionsInsideNarrowPanels() {
-        for (int[] viewport : new int[][] {{427, 240}, {320, 200}}) {
+        for (int[] viewport : new int[][] {
+                {427, 240}, {320, 200}, {320, 180}}) {
             LegacyModalLayout layout = LumiVersionDetailsScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertInside(viewport, layout);

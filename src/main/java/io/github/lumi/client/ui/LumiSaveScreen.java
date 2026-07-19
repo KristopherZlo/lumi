@@ -15,6 +15,7 @@ import net.minecraft.network.chat.Component;
 public final class LumiSaveScreen extends LumiLegacyModalScreen {
     private static final int DIALOG_HEIGHT = 226;
     private static final int COMPACT_HEIGHT = 206;
+    private static final int TINY_HEIGHT = 180;
 
     private final Screen parent;
     private final ClientHistoryStore history;
@@ -202,8 +203,9 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         int x = layout.x();
         int y = layout.y();
         boolean compact = layout.height() < COMPACT_HEIGHT;
+        boolean tiny = layout.height() < TINY_HEIGHT;
         int fieldY = y + (compact ? 62 : 65);
-        int tagPanelY = y + (compact ? 106 : 137);
+        int tagPanelY = y + (tiny ? 98 : compact ? 106 : 137);
         graphics.drawString(font, title, x + 10, y + 12,
                 LegacyLumiTheme.TEXT, false);
 
@@ -218,7 +220,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
                 x + 12, y + 43, statusColor, false);
 
         LegacyLumiTheme.outlined(graphics, x + 6, fieldY,
-                layout.width() - 12, compact ? 42 : 67,
+                layout.width() - 12, tiny ? 34 : compact ? 42 : 67,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         graphics.drawString(font, Component.translatable("luma.save.name_input"),
                 x + 12, fieldY + 8, LegacyLumiTheme.TEXT, false);
@@ -233,7 +235,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.PANEL_BORDER);
 
         LegacyLumiTheme.outlined(graphics, x + 6, tagPanelY,
-                layout.width() - 12, compact ? 40 : 43,
+                layout.width() - 12, tiny ? 32 : compact ? 40 : 43,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         graphics.drawString(font, Component.translatable("luma.save.tags_title"),
                 x + 12, tagPanelY + 6, LegacyLumiTheme.TEXT, false);
@@ -256,11 +258,13 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
     }
 
     private static int messageOffset(int panelHeight) {
-        return panelHeight < COMPACT_HEIGHT ? 85 : 103;
+        return panelHeight < TINY_HEIGHT
+                ? 76 : panelHeight < COMPACT_HEIGHT ? 85 : 103;
     }
 
     private static int tagsOffset(int panelHeight) {
-        return panelHeight < COMPACT_HEIGHT ? 127 : 156;
+        return panelHeight < TINY_HEIGHT
+                ? 110 : panelHeight < COMPACT_HEIGHT ? 127 : 156;
     }
 
     private Component status() {

@@ -204,7 +204,10 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
                         "luma.merge.confirm_source",
                         shortName(pendingSource.name())),
                 width / 2,
-                Math.min(actionY - 14, previewY + previewHeight + 18),
+                Math.min(
+                        panelY + confirmationTextOffset(
+                                panelHeight, !error.isEmpty()),
+                        previewY + previewHeight + 18),
                 LegacyLumiTheme.TEXT);
         if (!error.isEmpty()) {
             graphics.drawCenteredString(
@@ -265,6 +268,11 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
     static int previewHeight(int panelHeight) {
         return Math.min(72,
                 Math.max(32, actionOffset(panelHeight) - 109));
+    }
+
+    static int confirmationTextOffset(
+            int panelHeight, boolean errorVisible) {
+        return actionOffset(panelHeight) - (errorVisible ? 24 : 14);
     }
 
     private static String shortName(String name) {
