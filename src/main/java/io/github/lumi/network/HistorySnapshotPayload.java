@@ -403,7 +403,7 @@ public record HistorySnapshotPayload(
             }
         }
 
-        private void write(FriendlyByteBuf buffer) {
+        void write(FriendlyByteBuf buffer) {
             buffer.writeUtf(id.hex(), ObjectId.HEX_LENGTH);
             buffer.writeUtf(message, MAX_TEXT_BYTES);
             buffer.writeUtf(author, MAX_TEXT_BYTES);
@@ -423,7 +423,7 @@ public record HistorySnapshotPayload(
             zoneId.ifPresent(buffer::writeUUID);
         }
 
-        private static Version read(FriendlyByteBuf buffer) {
+        static Version read(FriendlyByteBuf buffer) {
             CommitId id = new CommitId(
                     new ObjectId(buffer.readUtf(ObjectId.HEX_LENGTH)));
             String message = buffer.readUtf(MAX_TEXT_BYTES);
