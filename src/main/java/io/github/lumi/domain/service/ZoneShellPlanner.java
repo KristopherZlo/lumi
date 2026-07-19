@@ -19,13 +19,26 @@ public final class ZoneShellPlanner {
             return List.of();
         }
         Set<SectionKey> occupied = new HashSet<>(cells);
+        return plan(occupied, occupied);
+    }
+
+    public List<ZoneShellFace> plan(
+            Collection<SectionKey> occupiedCells,
+            Collection<SectionKey> visibleCells) {
+        if (occupiedCells == null || occupiedCells.isEmpty()
+                || visibleCells == null || visibleCells.isEmpty()) {
+            return List.of();
+        }
+        Set<SectionKey> occupied = new HashSet<>(occupiedCells);
         Set<UnitFace> exposed = new TreeSet<>(Comparator
                 .comparing(UnitFace::side)
                 .thenComparingInt(UnitFace::plane)
                 .thenComparingInt(UnitFace::a)
                 .thenComparingInt(UnitFace::b));
-        for (SectionKey cell : occupied) {
-            collect(cell, occupied, exposed);
+        for (SectionKey cell : visibleCells) {
+            if (occupied.contains(cell)) {
+                collect(cell, occupied, exposed);
+            }
         }
         return merge(exposed);
     }

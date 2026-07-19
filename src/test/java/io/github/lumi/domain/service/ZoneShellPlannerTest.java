@@ -39,4 +39,17 @@ class ZoneShellPlannerTest {
         assertTrue(faces.contains(new ZoneShellFace(
                 ZoneShellFace.Side.UP, 16, -16, 16, -16, 0)));
     }
+
+    @Test
+    void visibleSubsetDoesNotExposeWallsAgainstHiddenNeighbors() {
+        SectionKey visible = new SectionKey(0, 0, 0);
+        List<ZoneShellFace> faces = planner.plan(
+                List.of(visible, new SectionKey(1, 0, 0)),
+                List.of(visible));
+
+        assertEquals(5, faces.size());
+        assertFalse(faces.stream().anyMatch(face ->
+                face.side() == ZoneShellFace.Side.EAST
+                        && face.plane() == 16));
+    }
 }
