@@ -4,11 +4,12 @@ import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistorySnapshotPayload;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Owns branch and bounded page state for the workspace history screen. */
+/** Owns branch-filtered, incrementally loaded history for the scroll view. */
 final class WorkspaceHistoryController {
     private final HistorySnapshotPayload snapshot;
     private final ClientHistoryPageStore pages;
@@ -18,6 +19,8 @@ final class WorkspaceHistoryController {
     private int offset;
     private int pageSize;
     private String query = "";
+    private final List<HistorySnapshotPayload.Version> loaded = new ArrayList<>();
+    private int loadedOffset = -1;
 
     WorkspaceHistoryController(
             HistorySnapshotPayload snapshot,
@@ -67,10 +70,15 @@ final class WorkspaceHistoryController {
     }
 
     List<HistorySnapshotPayload.Version> versions() {
-        return page().map(HistoryPagePayload::versions)
-                .orElseGet(() -> offset == 0
-                        && branch.value().equals(snapshot.branchName())
-                        ? snapshot.versions() : List.of());
+        page().filter(current -> current.offset() != loadedOffset)
+                .ifPresent(current -> {
+                    if (current.offset() == 0) loaded.clear();
+                    loaded.addAll(current.versions());
+                    loadedOffset = current.offset();
+                });
+        if (!loaded.isEmpty()) return List.copyOf(loaded);
+        return offset == 0 && branch.value().equals(snapshot.branchName())
+                ? snapshot.versions() : List.of();
     }
 
     BranchName branch() {
@@ -114,12 +122,15 @@ final class WorkspaceHistoryController {
                 break;
             }
         }
-        branch = new BranchName(branches.get(
-                (current + 1) % branches.size()).name());
-        offset = 0;
-        if (pageSize > 0) {
-            request();
-        }
+        selectBranch(branches.get((current + 1) % branches.size()).name());
+    }
+
+    void selectBranch(String replacement) {
+        BranchName selected = new BranchName(replacement);
+        if (branch.equals(selected)) return;
+        branch = selected;
+        reset();
+        if (pageSize > 0) request();
     }
 
     void search(String replacement) {
@@ -129,7 +140,7 @@ final class WorkspaceHistoryController {
             return;
         }
         query = normalized;
-        offset = 0;
+        reset();
         if (pageSize > 0) {
             request();
         }
@@ -137,6 +148,12 @@ final class WorkspaceHistoryController {
 
     String error() {
         return page().map(HistoryPagePayload::error).orElse("");
+    }
+
+    private void reset() {
+        offset = 0;
+        loaded.clear();
+        loadedOffset = -1;
     }
 
     private void request() {

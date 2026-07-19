@@ -88,6 +88,39 @@ class WorkspaceHistoryControllerTest {
         assertEquals("tower", requestedQuery.get());
     }
 
+    @Test
+    void appendsServerPagesAndResetsWhenATabSelectsAnotherBranch() {
+        HistorySnapshotPayload snapshot = snapshot();
+        ClientHistoryPageStore pages = new ClientHistoryPageStore();
+        AtomicInteger sequence = new AtomicInteger();
+        AtomicReference<UUID> request = new AtomicReference<>();
+        WorkspaceHistoryController controller = new WorkspaceHistoryController(
+                snapshot, pages, (branch, zone, offset, limit, query) -> {
+                    UUID id = new UUID(0, sequence.incrementAndGet());
+                    request.set(id);
+                    pages.begin(id, snapshot.dimensionId(),
+                            snapshot.workspaceId(), branch, zone, offset);
+                    return id;
+                });
+        controller.ensurePageSize(2);
+        assertTrue(pages.accept(new HistoryPagePayload(
+                request.get(), snapshot.dimensionId(), snapshot.workspaceId(),
+                new BranchName("main"), Optional.empty(), 0, true,
+                List.of(version('1'), version('2')), "")));
+        assertEquals(2, controller.versions().size());
+
+        controller.next();
+        assertTrue(pages.accept(new HistoryPagePayload(
+                request.get(), snapshot.dimensionId(), snapshot.workspaceId(),
+                new BranchName("main"), Optional.empty(), 2, false,
+                List.of(version('3')), "")));
+        assertEquals(3, controller.versions().size());
+
+        controller.selectBranch("idea");
+        assertTrue(controller.versions().isEmpty());
+        assertEquals("idea", controller.branch().value());
+    }
+
     private static HistorySnapshotPayload snapshot() {
         return new HistorySnapshotPayload(
                 "minecraft:overworld", id('1'), 0, 0, false, false,
@@ -98,8 +131,12 @@ class WorkspaceHistoryControllerTest {
     }
 
     private static HistorySnapshotPayload.Version version() {
+        return version('1');
+    }
+
+    private static HistorySnapshotPayload.Version version(char digit) {
         return new HistorySnapshotPayload.Version(
-                id('1'), "Save", "Builder", 1, CommitKind.MANUAL);
+                id(digit), "Save " + digit, "Builder", digit, CommitKind.MANUAL);
     }
 
     private static CommitId id(char digit) {
