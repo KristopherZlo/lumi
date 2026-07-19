@@ -22,6 +22,7 @@ class ComparisonSummaryTest {
         sections.clear();
 
         assertEquals(5, summary.materials().get("minecraft:stone").change());
+        assertEquals(0, summary.changedBlocks());
         assertEquals(java.util.List.of(new SectionKey(1, 2, 3)),
                 summary.sectionPreview());
         assertThrows(UnsupportedOperationException.class,

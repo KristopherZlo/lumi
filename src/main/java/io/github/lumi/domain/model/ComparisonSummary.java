@@ -10,6 +10,7 @@ public record ComparisonSummary(
         CommitId after,
         int changedSections,
         int changedEntityChunks,
+        long changedBlocks,
         List<SectionKey> sectionPreview,
         Map<String, MaterialDelta> materials) {
     public ComparisonSummary {
@@ -21,7 +22,7 @@ public record ComparisonSummary(
         if (before.equals(after)) {
             throw new IllegalArgumentException("Comparison commits must differ");
         }
-        if (changedSections < 0 || changedEntityChunks < 0
+        if (changedSections < 0 || changedEntityChunks < 0 || changedBlocks < 0
                 || sectionPreview.size() > changedSections) {
             throw new IllegalArgumentException("Comparison counts cannot be negative");
         }
@@ -32,7 +33,19 @@ public record ComparisonSummary(
             CommitId after,
             int changedSections,
             int changedEntityChunks,
+            List<SectionKey> sectionPreview,
             Map<String, MaterialDelta> materials) {
-        this(before, after, changedSections, changedEntityChunks, List.of(), materials);
+        this(before, after, changedSections, changedEntityChunks, 0,
+                sectionPreview, materials);
+    }
+
+    public ComparisonSummary(
+            CommitId before,
+            CommitId after,
+            int changedSections,
+            int changedEntityChunks,
+            Map<String, MaterialDelta> materials) {
+        this(before, after, changedSections, changedEntityChunks, 0,
+                List.of(), materials);
     }
 }
