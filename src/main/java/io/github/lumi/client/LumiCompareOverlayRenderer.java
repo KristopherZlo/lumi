@@ -37,6 +37,7 @@ final class LumiCompareOverlayRenderer {
             renderSolidBox(
                     context.matrices(), fills,
                     (float) x, (float) y, (float) z,
+                    (float) x + 1, (float) y + 1, (float) z + 1,
                     (color >> 16) & 255, (color >> 8) & 255, color & 255, alpha);
             ShapeRenderer.renderShape(
                     context.matrices(), lines, Shapes.block(),
@@ -56,32 +57,28 @@ final class LumiCompareOverlayRenderer {
         return x * x + y * y + z * z;
     }
 
-    private static void renderSolidBox(
+    static void renderSolidBox(
             PoseStack matrices,
             VertexConsumer consumer,
-            float x,
-            float y,
-            float z,
+            float x1, float y1, float z1,
+            float x2, float y2, float z2,
             int red,
             int green,
             int blue,
             int alpha) {
         PoseStack.Pose pose = matrices.last();
         quad(pose, consumer, red, green, blue, alpha,
-                x, y, z, x + 1, y, z, x + 1, y + 1, z, x, y + 1, z);
+                x1, y1, z1, x2, y1, z1, x2, y2, z1, x1, y2, z1);
         quad(pose, consumer, red, green, blue, alpha,
-                x, y, z + 1, x, y + 1, z + 1,
-                x + 1, y + 1, z + 1, x + 1, y, z + 1);
+                x1, y1, z2, x1, y2, z2, x2, y2, z2, x2, y1, z2);
         quad(pose, consumer, red, green, blue, alpha,
-                x, y, z, x, y + 1, z, x, y + 1, z + 1, x, y, z + 1);
+                x1, y1, z1, x1, y2, z1, x1, y2, z2, x1, y1, z2);
         quad(pose, consumer, red, green, blue, alpha,
-                x + 1, y, z, x + 1, y, z + 1,
-                x + 1, y + 1, z + 1, x + 1, y + 1, z);
+                x2, y1, z1, x2, y1, z2, x2, y2, z2, x2, y2, z1);
         quad(pose, consumer, red, green, blue, alpha,
-                x, y, z, x, y, z + 1, x + 1, y, z + 1, x + 1, y, z);
+                x1, y1, z1, x1, y1, z2, x2, y1, z2, x2, y1, z1);
         quad(pose, consumer, red, green, blue, alpha,
-                x, y + 1, z, x + 1, y + 1, z,
-                x + 1, y + 1, z + 1, x, y + 1, z + 1);
+                x1, y2, z1, x2, y2, z1, x2, y2, z2, x1, y2, z2);
     }
 
     private static void quad(
