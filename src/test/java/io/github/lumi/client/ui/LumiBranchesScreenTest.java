@@ -23,5 +23,7 @@ class LumiBranchesScreenTest {
         assertTrue(source.contains("addDeleteConfirmation"));
         assertTrue(source.contains("ClientContextualHelpHint.BRANCHES"));
         assertTrue(source.contains("contentOffset"));
+        assertTrue(source.contains("luma.action.bind_branch"));
+        assertTrue(source.contains("bindSlot.accept(branch)"));
     }
 }

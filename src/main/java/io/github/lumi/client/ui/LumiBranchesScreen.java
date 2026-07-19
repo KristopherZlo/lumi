@@ -17,6 +17,7 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
     private final Runnable merge;
     private final Consumer<String> switcher;
     private final Consumer<String> deleter;
+    private final Consumer<HistorySnapshotPayload.Branch> bindSlot;
     private LegacyModalLayout layout;
     private int page;
     private int contentOffset;
@@ -29,7 +30,8 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
             Runnable create,
             Runnable merge,
             Consumer<String> switcher,
-            Consumer<String> deleter) {
+            Consumer<String> deleter,
+            Consumer<HistorySnapshotPayload.Branch> bindSlot) {
         super(parent, Component.translatable("luma.variants.overview_title"),
                 LegacyProjectTab.VARIANTS);
         this.branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
@@ -37,6 +39,7 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         this.merge = Objects.requireNonNull(merge, "merge");
         this.switcher = Objects.requireNonNull(switcher, "switcher");
         this.deleter = Objects.requireNonNull(deleter, "deleter");
+        this.bindSlot = Objects.requireNonNull(bindSlot, "bindSlot");
     }
 
     @Override
@@ -70,8 +73,11 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         int end = Math.min(start + rows, branches.size());
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.Branch branch = branches.get(index);
+            int rowY = y + 70 + contentOffset + (index - start) * 30;
+            addLegacyIconButton(x + layout.width() - 104, rowY + 3,
+                    "bookmark", Component.translatable("luma.action.bind_branch"),
+                    () -> bindSlot.accept(branch), LumiLegacyButton.Kind.NORMAL);
             if (!branch.active()) {
-                int rowY = y + 70 + contentOffset + (index - start) * 30;
                 addLegacyIconButton(x + layout.width() - 76, rowY + 3,
                         "join", Component.translatable("luma.action.variant_switch"),
                         () -> switchBranch(branch.name()), LumiLegacyButton.Kind.PRIMARY);

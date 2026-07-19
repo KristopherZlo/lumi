@@ -44,6 +44,16 @@ class LumiHotkeysTest {
     }
 
     @Test
+    void branchNumbersResolveExplicitPersistentAssignments() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/LumiClient.java"));
+
+        assertTrue(source.contains("BRANCH_SLOTS.branch(snapshot, slot)"));
+        assertTrue(source.contains("BRANCH_SLOTS.synchronize(snapshot)"));
+        assertFalse(source.contains("snapshot.branches().get(slot)"));
+    }
+
+    @Test
     void onlyChordedShortcutsDisplayTheActionModifier() {
         var chorded = new LumiHotkeys.Shortcut(
                 "label", "help", "S", true);

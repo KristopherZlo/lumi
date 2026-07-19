@@ -3,6 +3,7 @@ package io.github.lumi.client;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
+import io.github.lumi.client.state.ClientBranchSlotStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientSelection;
 import io.github.lumi.client.state.ClientZoneOverlayStore;
@@ -19,6 +20,7 @@ import io.github.lumi.client.ui.LumiDeleteVersionScreen;
 import io.github.lumi.client.ui.LumiDeleteZoneScreen;
 import io.github.lumi.client.ui.LumiDeletedVersionsScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
+import io.github.lumi.client.ui.LumiBranchSlotScreen;
 import io.github.lumi.client.ui.LumiBranchesScreen;
 import io.github.lumi.client.ui.LumiComparePickerScreen;
 import io.github.lumi.client.ui.LumiCleanupScreen;
@@ -65,6 +67,8 @@ public final class LumiClient implements ClientModInitializer {
     private static final ClientHistoryStore HISTORY = new ClientHistoryStore();
     private static final ClientHistoryPageStore HISTORY_PAGES =
             new ClientHistoryPageStore();
+    private static final ClientBranchSlotStore BRANCH_SLOTS =
+            new ClientBranchSlotStore();
     private static final ClientCompareStore COMPARISONS = new ClientCompareStore();
     private static final ClientSelection SELECTION = new ClientSelection();
     private static final ClientZoneOverlayStore ZONE_OVERLAYS =
@@ -165,11 +169,9 @@ public final class LumiClient implements ClientModInitializer {
                         var snapshot = HISTORY.state().snapshot().orElseThrow(
                                 () -> new IllegalStateException(
                                         "Lumi history has not synchronized yet"));
-                        if (slot >= snapshot.branches().size()) {
-                            throw new IllegalStateException(
-                                    "No Lumi branch is bound to this number");
-                        }
-                        var branch = snapshot.branches().get(slot);
+                        var branch = BRANCH_SLOTS.branch(snapshot, slot)
+                                .orElseThrow(() -> new IllegalStateException(
+                                        "No Lumi branch is bound to this number"));
                         if (!branch.active()) {
                             NETWORKING.switchBranch(branch.name());
                         }
@@ -240,7 +242,9 @@ public final class LumiClient implements ClientModInitializer {
                         client.screen, snapshot.branchName(),
                         snapshot.branches(), NETWORKING::merge)),
                 NETWORKING::switchBranch,
-                NETWORKING::deleteBranch));
+                NETWORKING::deleteBranch,
+                branch -> client.setScreen(new LumiBranchSlotScreen(
+                        client.screen, snapshot, branch, BRANCH_SLOTS))));
     }
 
     private static void openPackages(Screen parent) {
@@ -473,6 +477,7 @@ public final class LumiClient implements ClientModInitializer {
     }
 
     private static void acceptSnapshot(HistorySnapshotPayload snapshot) {
+        BRANCH_SLOTS.synchronize(snapshot);
         showRecovery(snapshot);
         Minecraft client = Minecraft.getInstance();
         if (snapshot.recoveryPending() || snapshot.operationActive()
