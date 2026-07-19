@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -71,6 +72,34 @@ class LumiPackageArchiveTest {
         writeZip(corrupt, corruptEntries);
         assertThrows(IOException.class,
                 () -> new LumiPackageArchive().read(corrupt, discard()));
+    }
+
+    @Test
+    void writesAndValidatesAnOptionalPreview() throws Exception {
+        byte[] commit = "commit".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] preview = "png-preview".getBytes(
+                java.nio.charset.StandardCharsets.UTF_8);
+        CommitId commitId = new CommitId(ObjectId.hash(commit));
+        var manifest = new LumiPackageManifest(
+                "minecraft:overworld", commitId, commit.length, Map.of(),
+                Optional.of(new LumiPackageManifest.Preview(
+                        ObjectId.hash(preview), preview.length)));
+        Path target = directory.resolve("preview.lumi");
+        LumiPackageArchive archive = new LumiPackageArchive();
+
+        archive.write(
+                target, manifest, commit, ignored -> null, Optional.of(preview));
+
+        byte[][] restored = new byte[1][];
+        assertEquals(manifest, archive.read(
+                target, new LumiPackageArchive.PayloadConsumer() {
+                    @Override public void commit(CommitId id, byte[] payload) { }
+                    @Override public void object(ObjectId id, byte[] payload) { }
+                    @Override public void preview(CommitId id, byte[] png) {
+                        restored[0] = png;
+                    }
+                }));
+        assertArrayEquals(preview, restored[0]);
     }
 
     private static LumiPackageArchive.PayloadConsumer discard() {

@@ -13,6 +13,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Comparator;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -29,11 +30,24 @@ public final class LumiPackageArchive {
             LumiPackageManifest manifest,
             byte[] commit,
             PayloadReader objects) throws IOException {
+        write(target, manifest, commit, objects, Optional.empty());
+    }
+
+    public void write(
+            Path target,
+            LumiPackageManifest manifest,
+            byte[] commit,
+            PayloadReader objects,
+            Optional<byte[]> preview) throws IOException {
         Path output = packagePath(target);
         Objects.requireNonNull(manifest, "manifest");
         Objects.requireNonNull(commit, "commit");
         Objects.requireNonNull(objects, "objects");
+        preview = Objects.requireNonNull(preview, "preview");
         validate(manifest.commit().value(), manifest.commitBytes(), commit, "commit");
+        if (manifest.preview().isPresent() != preview.isPresent()) {
+            throw new IOException("Package preview and manifest disagree");
+        }
         Files.createDirectories(output.getParent());
         Path temporary = Files.createTempFile(output.getParent(), ".lumi-", ".tmp");
         try {
@@ -51,6 +65,12 @@ public final class LumiPackageArchive {
                             objects.read(entry.getKey()), "object payload");
                     validate(entry.getKey(), entry.getValue(), payload, "object");
                     writeEntry(zip, objectPath(entry.getKey()), payload);
+                }
+                if (preview.isPresent()) {
+                    byte[] payload = preview.orElseThrow();
+                    var expected = manifest.preview().orElseThrow();
+                    validate(expected.hash(), expected.bytes(), payload, "preview");
+                    writeEntry(zip, previewPath(manifest.commit()), payload);
                 }
                 zip.finish();
                 zip.flush();
@@ -106,6 +126,14 @@ public final class LumiPackageArchive {
                 byte[] payload = readExact(zip, expected.getValue());
                 validate(expected.getKey(), expected.getValue(), payload, "object");
                 consumer.object(expected.getKey(), payload);
+                zip.closeEntry();
+            }
+            if (manifest.preview().isPresent()) {
+                var expected = manifest.preview().orElseThrow();
+                requireEntry(zip.getNextEntry(), previewPath(manifest.commit()));
+                byte[] payload = readExact(zip, expected.bytes());
+                validate(expected.hash(), expected.bytes(), payload, "preview");
+                consumer.preview(manifest.commit(), payload);
                 zip.closeEntry();
             }
             if (zip.getNextEntry() != null) {
@@ -181,6 +209,10 @@ public final class LumiPackageArchive {
         return "objects/" + id.hex() + ".bin";
     }
 
+    private static String previewPath(CommitId id) {
+        return "previews/" + id.hex() + ".png";
+    }
+
     @FunctionalInterface
     public interface PayloadReader {
         byte[] read(ObjectId id) throws IOException;
@@ -189,5 +221,6 @@ public final class LumiPackageArchive {
     public interface PayloadConsumer {
         void commit(CommitId id, byte[] payload) throws IOException;
         void object(ObjectId id, byte[] payload) throws IOException;
+        default void preview(CommitId id, byte[] png) throws IOException { }
     }
 }

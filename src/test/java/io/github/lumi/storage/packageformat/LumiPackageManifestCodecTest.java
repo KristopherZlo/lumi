@@ -9,6 +9,7 @@ import io.github.lumi.domain.model.ObjectId;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class LumiPackageManifestCodecTest {
@@ -42,6 +43,16 @@ class LumiPackageManifestCodecTest {
         assertThrows(IllegalArgumentException.class, () -> new LumiPackageManifest(
                 "minecraft:overworld", new CommitId(id('c')), 40,
                 Map.of(id('a'), LumiPackageManifest.MAX_ENTRY_BYTES + 1)));
+    }
+
+    @Test
+    void roundTripsOptionalPreviewIntegrityMetadata() throws Exception {
+        var manifest = new LumiPackageManifest(
+                "minecraft:overworld", new CommitId(id('c')), 40,
+                Map.of(id('a'), 10),
+                Optional.of(new LumiPackageManifest.Preview(id('d'), 24)));
+
+        assertEquals(manifest, codec.decode(codec.encode(manifest)));
     }
 
     private static ObjectId id(char digit) {

@@ -11,10 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 
-/** Canonical binary codec for the first .lumi package manifest. */
+/** Canonical binary codec for backward-compatible .lumi package manifests. */
 public final class LumiPackageManifestCodec {
     private static final int MAGIC = 0x4C504B32;
-    private static final int SCHEMA = 1;
+    private static final int SCHEMA = 2;
     private static final int MAX_DIMENSION_BYTES = 256;
 
     public byte[] encode(LumiPackageManifest manifest) throws IOException {
@@ -34,6 +34,12 @@ public final class LumiPackageManifestCodec {
                 writeId(output, entry.getKey());
                 output.writeInt(entry.getValue());
             }
+            output.writeBoolean(manifest.preview().isPresent());
+            if (manifest.preview().isPresent()) {
+                var preview = manifest.preview().orElseThrow();
+                writeId(output, preview.hash());
+                output.writeInt(preview.bytes());
+            }
         }
         return bytes.toByteArray();
     }
@@ -41,7 +47,11 @@ public final class LumiPackageManifestCodec {
     public LumiPackageManifest decode(byte[] payload) throws IOException {
         try (DataInputStream input = new DataInputStream(
                 new ByteArrayInputStream(payload))) {
-            if (input.readInt() != MAGIC || input.readInt() != SCHEMA) {
+            if (input.readInt() != MAGIC) {
+                throw new IOException("Unsupported Lumi package manifest");
+            }
+            int schema = input.readInt();
+            if (schema < 1 || schema > SCHEMA) {
                 throw new IOException("Unsupported Lumi package manifest");
             }
             int dimensionLength = input.readInt();
@@ -69,12 +79,19 @@ public final class LumiPackageManifestCodec {
                 previous = id;
                 objects.put(id, size);
             }
+            java.util.Optional<LumiPackageManifest.Preview> preview =
+                    java.util.Optional.empty();
+            if (schema >= 2 && input.readBoolean()) {
+                preview = java.util.Optional.of(
+                        new LumiPackageManifest.Preview(
+                                readId(input), input.readInt()));
+            }
             if (input.available() != 0) {
                 throw new IOException("Trailing package manifest bytes");
             }
             return new LumiPackageManifest(
                     new String(dimension, StandardCharsets.UTF_8),
-                    commit, commitBytes, objects);
+                    commit, commitBytes, objects, preview);
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid Lumi package manifest", invalid);
         }

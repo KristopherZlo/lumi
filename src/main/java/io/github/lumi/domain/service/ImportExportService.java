@@ -20,6 +20,7 @@ import io.github.lumi.storage.repository.MerkleTreeEditor;
 import io.github.lumi.storage.repository.RefConflictException;
 import io.github.lumi.storage.repository.WorldObjectGraph;
 import io.github.lumi.storage.repository.WorldObjectRepository;
+import io.github.lumi.storage.repository.VersionPreviewRepository;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -37,6 +38,7 @@ public final class ImportExportService {
     private final WorldObjectGraph graph;
     private final BranchRefRepository refs;
     private final MerkleTreeEditor trees;
+    private final VersionPreviewRepository previews;
     private final LumiPackageArchive archive = new LumiPackageArchive();
     private final CommitCodec commitCodec = new CommitCodec();
 
@@ -48,23 +50,34 @@ public final class ImportExportService {
         graph = new WorldObjectGraph(objects);
         refs = new BranchRefRepository(dimensionRepository);
         trees = new MerkleTreeEditor(objects);
+        previews = new VersionPreviewRepository(dimensionRepository);
     }
 
     public PackageInspection export(CommitId source, Path target) throws IOException {
+        return export(source, target, false);
+    }
+
+    public PackageInspection export(
+            CommitId source, Path target, boolean includePreview) throws IOException {
         Commit commit = commits.read(Objects.requireNonNull(source, "source"));
         byte[] commitPayload = commits.readCanonical(source);
         Map<ObjectId, Integer> inventory = new HashMap<>();
         for (ObjectId id : graph.scan(commit.tree()).reachable()) {
             inventory.put(id, objects.readCanonical(id).length);
         }
+        Optional<byte[]> preview = includePreview
+                ? previews.load(source) : Optional.empty();
         LumiPackageManifest manifest = new LumiPackageManifest(
-                dimensionId, source, commitPayload.length, inventory);
-        archive.write(target, manifest, commitPayload, objects::readCanonical);
+                dimensionId, source, commitPayload.length, inventory,
+                preview.map(payload -> new LumiPackageManifest.Preview(
+                        ObjectId.hash(payload), payload.length)));
+        archive.write(
+                target, manifest, commitPayload, objects::readCanonical, preview);
         return new PackageInspection(manifest, commit);
     }
 
     public PackageInspection inspect(Path source) throws IOException {
-        return readPackage(source, false, null);
+        return readPackage(source, false, null).inspection();
     }
 
     public synchronized ImportResult importPackage(
@@ -86,29 +99,35 @@ public final class ImportExportService {
         if (refs.read(target).isPresent()) {
             throw new RefConflictException("Import branch already exists: " + target);
         }
-        PackageInspection actual = readPackage(
+        PackageRead actual = readPackage(
                 source, true, expected.manifest());
-        if (!actual.equals(expected)) {
+        if (!actual.inspection().equals(expected)) {
             throw new IOException("Lumi package changed after confirmation");
         }
-        var importedTree = graph.scan(actual.source().tree());
+        var importedTree = graph.scan(actual.inspection().source().tree());
         Commit localBase = commits.read(base.commit());
         ObjectId tree = trees.update(
                 Optional.of(localBase.tree()), importedTree.leaves());
         CommitStatistics statistics = statistics(importedTree.leaves());
         CommitId commit = commits.write(new Commit(
-                tree, List.of(base.commit()), author, actual.source().message(),
+                tree, List.of(base.commit()), author,
+                actual.inspection().source().message(),
                 timestamp, localBase.workspaceId(), Optional.empty(),
-                CommitKind.IMPORT, statistics, actual.source().playerSpawns()));
+                CommitKind.IMPORT, statistics,
+                actual.inspection().source().playerSpawns()));
+        if (actual.preview().isPresent()) {
+            previews.save(commit, actual.preview().orElseThrow());
+        }
         requireCurrent(base);
         return new ImportResult(commit, refs.create(target, commit));
     }
 
-    private PackageInspection readPackage(
+    private PackageRead readPackage(
             Path source,
             boolean persistObjects,
             LumiPackageManifest expected) throws IOException {
         Commit[] decoded = new Commit[1];
+        byte[][] preview = new byte[1][];
         LumiPackageManifest manifest = archive.read(
                 source, expected, new LumiPackageArchive.PayloadConsumer() {
             @Override
@@ -122,9 +141,16 @@ public final class ImportExportService {
                     objects.writeCanonical(id, payload);
                 }
             }
+
+            @Override
+            public void preview(CommitId id, byte[] png) {
+                preview[0] = png;
+            }
         });
-        return new PackageInspection(
-                manifest, Objects.requireNonNull(decoded[0], "package commit"));
+        return new PackageRead(
+                new PackageInspection(
+                        manifest, Objects.requireNonNull(decoded[0], "package commit")),
+                Optional.ofNullable(preview[0]));
     }
 
     private void requireCurrent(BranchRef expected) throws IOException {
@@ -174,6 +200,15 @@ public final class ImportExportService {
         public ImportResult {
             Objects.requireNonNull(commit, "commit");
             Objects.requireNonNull(branch, "branch");
+        }
+    }
+
+    private record PackageRead(
+            PackageInspection inspection,
+            Optional<byte[]> preview) {
+        private PackageRead {
+            Objects.requireNonNull(inspection, "inspection");
+            preview = Objects.requireNonNull(preview, "preview");
         }
     }
 }

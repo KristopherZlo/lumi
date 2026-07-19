@@ -1,6 +1,7 @@
 package io.github.lumi.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -19,6 +20,7 @@ import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.MerkleTreeEditor;
 import io.github.lumi.storage.repository.WorldObjectGraph;
 import io.github.lumi.storage.repository.WorldObjectRepository;
+import io.github.lumi.storage.repository.VersionPreviewRepository;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -161,6 +163,47 @@ class ImportExportServiceTest {
                 new CommitAuthor(new UUID(0, 23), "Importer"), Instant.EPOCH));
         assertEquals(objectsBefore, objectFileCount(targetRepository));
         assertTrue(refs.read(new BranchName("import/replaced")).isEmpty());
+    }
+
+    @Test
+    void optionallyTransfersTheSourcePreviewToTheImportedCommit() throws Exception {
+        Path sourceRepository = directory.resolve("preview-source");
+        CommitId source = packageWithSection(
+                sourceRepository, "minecraft:stone", "Previewed");
+        byte[] png = new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47};
+        new VersionPreviewRepository(sourceRepository).save(source, png);
+        Path archive = directory.resolve("preview.lumi");
+        var sourceService = new ImportExportService(
+                "minecraft:overworld", sourceRepository);
+
+        var exported = sourceService.export(source, archive, true);
+
+        assertTrue(exported.manifest().preview().isPresent());
+        Path targetRepository = directory.resolve("preview-target");
+        WorldObjectRepository targetObjects =
+                new WorldObjectRepository(targetRepository);
+        var emptyTree = new MerkleTreeEditor(targetObjects).update(
+                Optional.empty(), Map.of());
+        UUID workspace = new UUID(0, 42);
+        CommitRepository targetCommits = new CommitRepository(targetRepository);
+        CommitId base = targetCommits.write(new Commit(
+                emptyTree, List.of(), new CommitAuthor(new UUID(0, 43), "Target"),
+                "Base", Instant.EPOCH, workspace, Optional.empty(),
+                CommitKind.MANUAL, new CommitStatistics(0, 0, 0, 0)));
+        BranchRefRepository refs = new BranchRefRepository(targetRepository);
+        var main = refs.create(new BranchName("main"), base);
+        var target = new ImportExportService(
+                "minecraft:overworld", targetRepository);
+
+        var result = target.importPackage(
+                archive, target.inspect(archive), main,
+                new BranchName("import/preview"),
+                new CommitAuthor(new UUID(0, 44), "Importer"), Instant.EPOCH);
+
+        assertArrayEquals(
+                png,
+                new VersionPreviewRepository(targetRepository)
+                        .load(result.commit()).orElseThrow());
     }
 
     private CommitId packageWithSection(
