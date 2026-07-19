@@ -119,6 +119,9 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
     @Override
     public void tick() {
         super.tick();
+        if (background instanceof LumiDashboardScreen dashboard) {
+            dashboard.tick();
+        }
         OnboardingTour.Page page = tour.current();
         if (!page.holdStep() || shortcutUnbound(page)) {
             holdGate.reset();
