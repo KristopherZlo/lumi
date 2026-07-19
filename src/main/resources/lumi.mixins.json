@@ -23,6 +23,9 @@
     "ThreadedLevelLightEngineMixin",
     "TransientCarrierEntityMixin"
   ],
+  "client": [
+    "client.MouseHandlerMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

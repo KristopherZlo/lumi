@@ -127,8 +127,14 @@ public final class LumiClient implements ClientModInitializer {
                                 LumiHotkeys.shortcuts(client.options.keyMappings)));
                     }
 
-                    @Override public boolean undoSelection() { return SELECTION.undo(); }
-                    @Override public boolean redoSelection() { return SELECTION.redo(); }
+                    @Override public boolean undoSelection() {
+                        return LumiSelectionTool.held(Minecraft.getInstance())
+                                && SELECTION.undo();
+                    }
+                    @Override public boolean redoSelection() {
+                        return LumiSelectionTool.held(Minecraft.getInstance())
+                                && SELECTION.redo();
+                    }
                     @Override public void undo() { NETWORKING.undo(); }
                     @Override public void redo() { NETWORKING.redo(); }
                     @Override public String toggleCompareOverlay() {
@@ -156,7 +162,8 @@ public final class LumiClient implements ClientModInitializer {
                     }
                 }, LumiClient::showFeedback));
         hotkeys.register();
-        new LumiSelectionTool(SELECTION, LumiClient::showFeedback).register();
+        new LumiSelectionTool(
+                SELECTION, HISTORY, LumiClient::showFeedback).register();
         new LumiOperationHud(HISTORY).register();
         new LumiPendingChangeOverlay(
                 HISTORY, COMPARISONS, NETWORKING::refreshSnapshot).register();
