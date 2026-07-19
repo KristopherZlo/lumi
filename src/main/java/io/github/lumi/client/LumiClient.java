@@ -4,6 +4,7 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientSelection;
+import io.github.lumi.client.state.ClientZoneOverlayStore;
 import io.github.lumi.client.preview.ClientVersionPreviewCapture;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.onboarding.ClientOnboardingStateRepository;
@@ -61,6 +62,8 @@ public final class LumiClient implements ClientModInitializer {
     private static final ClientHistoryStore HISTORY = new ClientHistoryStore();
     private static final ClientCompareStore COMPARISONS = new ClientCompareStore();
     private static final ClientSelection SELECTION = new ClientSelection();
+    private static final ClientZoneOverlayStore ZONE_OVERLAYS =
+            new ClientZoneOverlayStore();
     private static final ClientOnboardingStateRepository ONBOARDING =
             new ClientOnboardingStateRepository();
     private static final TelemetryService TELEMETRY = TelemetryService.getInstance();
@@ -74,7 +77,8 @@ public final class LumiClient implements ClientModInitializer {
     private static boolean onboardingShown;
     private static final LumiClientNetworking NETWORKING =
             new LumiClientNetworking(
-                    HISTORY, COMPARISONS, LumiClient::acceptSnapshot,
+                    HISTORY, COMPARISONS, ZONE_OVERLAYS,
+                    LumiClient::acceptSnapshot,
                     LumiClient::acceptOperationEvent,
                     LumiClient::acceptCompareResult,
                     LumiClient::showPackageInspection,

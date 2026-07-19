@@ -3,6 +3,7 @@ package io.github.lumi.client;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientCompareStore;
+import io.github.lumi.client.state.ClientZoneOverlayStore;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
@@ -26,6 +27,8 @@ import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.network.ZoneCreateArgument;
 import io.github.lumi.network.ZoneCellsArgument;
 import io.github.lumi.network.ZoneDeleteArgument;
+import io.github.lumi.network.ZoneOverlayArgument;
+import io.github.lumi.network.ZoneOverlayPayload;
 import io.github.lumi.network.ZoneCompareArgument;
 import io.github.lumi.network.ZoneRestoreArgument;
 import io.github.lumi.network.ZoneSaveArgument;
@@ -44,6 +47,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 public final class LumiClientNetworking {
     private final ClientHistoryStore history;
     private final ClientCompareStore comparisons;
+    private final ClientZoneOverlayStore zoneOverlays;
     private final Consumer<HistorySnapshotPayload> snapshotListener;
     private final Consumer<OperationEventPayload> eventListener;
     private final Consumer<CompareResultPayload> compareListener;
@@ -54,6 +58,7 @@ public final class LumiClientNetworking {
     public LumiClientNetworking(
             ClientHistoryStore history,
             ClientCompareStore comparisons,
+            ClientZoneOverlayStore zoneOverlays,
             Consumer<HistorySnapshotPayload> snapshotListener,
             Consumer<OperationEventPayload> eventListener,
             Consumer<CompareResultPayload> compareListener,
@@ -62,6 +67,7 @@ public final class LumiClientNetworking {
             Consumer<PartialRestorePlanPayload> partialRestoreListener) {
         this.history = Objects.requireNonNull(history, "history");
         this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
+        this.zoneOverlays = Objects.requireNonNull(zoneOverlays, "zoneOverlays");
         this.snapshotListener = Objects.requireNonNull(snapshotListener, "snapshotListener");
         this.eventListener = Objects.requireNonNull(eventListener, "eventListener");
         this.compareListener = Objects.requireNonNull(compareListener, "compareListener");
@@ -100,9 +106,13 @@ public final class LumiClientNetworking {
         ClientPlayNetworking.registerGlobalReceiver(
                 PartialRestorePlanPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> partialRestoreListener.accept(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(
+                ZoneOverlayPayload.TYPE, (payload, context) ->
+                        context.client().execute(() -> zoneOverlays.accept(payload)));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             history.clear();
             comparisons.clear();
+            zoneOverlays.clear();
         });
     }
 
@@ -376,6 +386,21 @@ public final class LumiClientNetworking {
 
     public UUID refreshSnapshot() {
         return send(HistoryCommandPayload.Kind.SNAPSHOT_REFRESH, "");
+    }
+
+    public UUID requestZoneOverlay(ZoneOverlayArgument.Mode mode) {
+        var snapshot = history.state().snapshot().orElseThrow(
+                () -> new IllegalStateException(
+                        "Lumi history has not synchronized yet"));
+        UUID requestId = UUID.randomUUID();
+        zoneOverlays.begin(
+                requestId, snapshot.dimensionId(), snapshot.workspaceId());
+        sendCommand(
+                requestId, HistoryCommandPayload.Kind.ZONE_OVERLAY,
+                new ZoneOverlayArgument(
+                        Objects.requireNonNull(mode, "mode")).encode(),
+                snapshot);
+        return requestId;
     }
 
     public UUID cancel(UUID originalRequest) {
