@@ -1,6 +1,7 @@
 package io.github.lumi.domain.service;
 
 import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.ChunkInRegion;
 import io.github.lumi.domain.model.ChunkTree;
@@ -10,6 +11,7 @@ import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.domain.model.PartialRestorePlan;
 import io.github.lumi.domain.model.RegionCoordinate;
 import io.github.lumi.domain.model.RegionTree;
 import io.github.lumi.domain.model.SectionBlob;
@@ -88,6 +90,28 @@ public final class RestoreService {
             boolean outside) throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
                 targetCommit, Objects.requireNonNull(area, "area"), outside, false, null);
+    }
+
+    public PartialRestorePlan planPartial(
+            BranchRef currentRef, CommitId targetCommit, BlockAreaTarget area)
+            throws IOException {
+        Objects.requireNonNull(currentRef, "currentRef");
+        return planPartial(
+                currentRef, currentRef.commit(), targetCommit, area);
+    }
+
+    public PartialRestorePlan planPartial(
+            BranchRef expectedRef,
+            CommitId sourceCommit,
+            CommitId targetCommit,
+            BlockAreaTarget area) throws IOException {
+        Objects.requireNonNull(area, "area");
+        PreparedRestore prepared = preparePartial(
+                expectedRef, sourceCommit, targetCommit,
+                area.area(), area.outside());
+        return new PartialRestorePlan(
+                targetCommit, area, prepared.sections().size(),
+                changedBlockCount(prepared));
     }
 
     public PreparedRestore prepareZone(
@@ -261,6 +285,23 @@ public final class RestoreService {
 
     private ObjectId origin(io.github.lumi.domain.model.HistoryKey key) throws IOException {
         return origins.read(key).orElseThrow(() -> new IOException("Missing origin for " + key));
+    }
+
+    private static long changedBlockCount(PreparedRestore prepared) {
+        long changed = 0;
+        for (var entry : prepared.sections().entrySet()) {
+            SectionBlob after = entry.getValue();
+            SectionBlob before = prepared.returnSections().get(entry.getKey());
+            for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+                if (!after.blockStates().get(index).equals(before.blockStates().get(index))
+                        || !Objects.equals(
+                                after.blockEntities().get(index),
+                                before.blockEntities().get(index))) {
+                    changed = Math.addExact(changed, 1);
+                }
+            }
+        }
+        return changed;
     }
 
     private static <T> Set<T> union(Set<T> first, Set<T> second) {

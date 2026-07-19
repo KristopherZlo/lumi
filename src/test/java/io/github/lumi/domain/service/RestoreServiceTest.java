@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.ChunkInRegion;
 import io.github.lumi.domain.model.ChunkTree;
@@ -20,6 +21,7 @@ import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.RegionCoordinate;
 import io.github.lumi.domain.model.RegionTree;
 import io.github.lumi.domain.model.PlayerSpawn;
+import io.github.lumi.domain.model.PartialRestorePlan;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.Zone;
@@ -117,6 +119,34 @@ class RestoreServiceTest {
                         currentRef, checkpoint, target);
         assertEquals("minecraft:gold_block", fullFromCheckpoint.returnSections()
                 .get(new SectionKey(0, 0, 0)).blockStates().get(0));
+    }
+
+    @Test
+    void partialRestorePlanCountsOnlyActuallyChangedSelectedBlocks()
+            throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        var targetSection = new ArrayList<>(section("minecraft:stone").blockStates());
+        targetSection.set(0, "minecraft:air");
+        targetSection.set(1, "minecraft:dirt");
+        var targetBlob = objects.write(new SectionBlob(targetSection, Map.of()));
+        var currentBlob = objects.write(section("minecraft:stone"));
+        var target = commits.write(commit(tree(objects, objects.write(new ChunkTree(
+                Map.of(0, targetBlob), Optional.empty()))), List.of()));
+        var current = commits.write(commit(tree(objects, objects.write(new ChunkTree(
+                Map.of(0, currentBlob), Optional.empty()))), List.of(target)));
+        var currentRef = new BranchRef(new BranchName("main"), current, 1);
+        BlockAreaTarget area = new BlockAreaTarget(
+                new BlockBox(0, 0, 0, 0, 0, 0), false);
+
+        PartialRestorePlan plan = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot))
+                .planPartial(currentRef, target, area);
+
+        assertEquals(target, plan.target());
+        assertEquals(area, plan.area());
+        assertEquals(1, plan.changedSections());
+        assertEquals(1, plan.changedBlocks());
     }
 
     @Test
