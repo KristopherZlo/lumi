@@ -1,7 +1,10 @@
 package io.github.lumi.client.onboarding;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class OnboardingTourTest {
@@ -19,6 +22,20 @@ class OnboardingTourTest {
         tour.next();
         assertEquals("finish", tour.current().id());
         tour.previous();
-        assertEquals("safe_restore", tour.current().id());
+        assertEquals("commit_navigation", tour.current().id());
+        assertEquals(List.of(
+                "welcome", "break_block", "preview_changes", "save_shortcut",
+                "open", "save_spotlight", "changes_spotlight",
+                "commit_navigation", "finish"), OnboardingTour.pageIds());
+    }
+
+    @Test
+    void advancesOnlyFromTheMatchingWorldStep() {
+        OnboardingTour tour = new OnboardingTour();
+        assertFalse(tour.advanceWorldEdit());
+        tour.next();
+        assertTrue(tour.advanceWorldEdit());
+        assertTrue(tour.advancePendingPreview());
+        assertEquals("save_shortcut", tour.current().id());
     }
 }
