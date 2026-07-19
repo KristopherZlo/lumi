@@ -26,6 +26,11 @@ class LumiVersionDetailsScreenTest {
         assertTrue(details.contains("luma.action.edit_tags"));
         assertTrue(details.contains("luma.action.save_tags"));
         assertTrue(details.contains("updateTags.accept(tags)"));
+        assertTrue(details.contains("luma.action.zoom_out"));
+        assertTrue(details.contains("luma.action.zoom_in"));
+        assertTrue(details.contains("luma.action.preview_pan_up"));
+        assertTrue(details.contains("luma.action.preview_pan_down"));
+        assertTrue(details.contains("sourceWidth, sourceHeight"));
         assertTrue(dashboard.contains("\"eye-open\", \"luma.action.open_details\""));
         assertTrue(client.contains("new LumiVersionDetailsScreen("));
         assertTrue(client.contains("() -> openRestore(parent, version)"));

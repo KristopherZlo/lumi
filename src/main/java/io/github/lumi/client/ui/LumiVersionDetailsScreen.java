@@ -21,6 +21,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     private static final int PANEL_HEIGHT = 286;
     private static final int PREVIEW_WIDTH = 240;
     private static final int PREVIEW_HEIGHT = 135;
+    private static final int MAX_PREVIEW_ZOOM = 4;
     private static final DateTimeFormatter DATE_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
                     .withZone(ZoneId.systemDefault());
@@ -36,6 +37,9 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     private boolean editingTags;
     private EditBox tagEditor;
     private String tagError = "";
+    private int previewZoom = 1;
+    private int previewPanX;
+    private int previewPanY;
     private int panelX;
     private int panelY;
 
@@ -106,6 +110,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                         rebuildWidgets();
                     }, LumiLegacyButton.Kind.NORMAL);
         }
+        addPreviewControls();
     }
 
     @Override
@@ -180,11 +185,55 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                     LegacyLumiTheme.MUTED);
             return;
         }
+        int sourceWidth = Math.max(1, texture.width() / previewZoom);
+        int sourceHeight = Math.max(1, texture.height() / previewZoom);
+        clampPreviewPan(texture.width(), texture.height(), sourceWidth, sourceHeight);
         graphics.blit(
                 RenderPipelines.GUI_TEXTURED, texture.id(),
-                x, y, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT,
-                texture.width(), texture.height(),
+                x, y, previewPanX, previewPanY, PREVIEW_WIDTH, PREVIEW_HEIGHT,
+                sourceWidth, sourceHeight,
                 texture.width(), texture.height());
+    }
+
+    private void addPreviewControls() {
+        int y = panelY + 194;
+        addLegacyIconButton(panelX + 20, y, "minus",
+                Component.translatable("luma.action.zoom_out"),
+                () -> zoomPreview(-1), LumiLegacyButton.Kind.NORMAL);
+        addLegacyIconButton(panelX + 48, y, "plus",
+                Component.translatable("luma.action.zoom_in"),
+                () -> zoomPreview(1), LumiLegacyButton.Kind.NORMAL);
+        addLegacyIconButton(panelX + 104, y, "chevron-left",
+                Component.translatable("luma.action.back"),
+                () -> panPreview(-1, 0), LumiLegacyButton.Kind.NORMAL);
+        addLegacyIconButton(panelX + 132, y, "chevron-up",
+                Component.translatable("luma.action.preview_pan_up"),
+                () -> panPreview(0, -1), LumiLegacyButton.Kind.NORMAL);
+        addLegacyIconButton(panelX + 160, y, "chevron-down",
+                Component.translatable("luma.action.preview_pan_down"),
+                () -> panPreview(0, 1), LumiLegacyButton.Kind.NORMAL);
+        addLegacyIconButton(panelX + 188, y, "chevron-right",
+                Component.translatable("luma.action.next"),
+                () -> panPreview(1, 0), LumiLegacyButton.Kind.NORMAL);
+    }
+
+    private void zoomPreview(int delta) {
+        previewZoom = Math.max(1, Math.min(MAX_PREVIEW_ZOOM, previewZoom + delta));
+    }
+
+    private void panPreview(int horizontal, int vertical) {
+        previews.texture(dimensionId, version.id()).ifPresent(texture -> {
+            int stepX = Math.max(1, texture.width() / previewZoom / 4);
+            int stepY = Math.max(1, texture.height() / previewZoom / 4);
+            previewPanX += horizontal * stepX;
+            previewPanY += vertical * stepY;
+        });
+    }
+
+    private void clampPreviewPan(
+            int textureWidth, int textureHeight, int sourceWidth, int sourceHeight) {
+        previewPanX = Math.max(0, Math.min(textureWidth - sourceWidth, previewPanX));
+        previewPanY = Math.max(0, Math.min(textureHeight - sourceHeight, previewPanY));
     }
 
     private void saveTags() {
