@@ -85,10 +85,7 @@ public final class LumiClient implements ClientModInitializer {
                                         latestVersionMessage()),
                                 LumiClient::openBranches,
                                 LumiClient::openZones,
-                                parent -> client.setScreen(new LumiPackageScreen(
-                                        parent, new PackageScreenController(
-                                                NETWORKING::exportPackage,
-                                                NETWORKING::inspectPackage))),
+                                LumiClient::openPackages,
                                 LumiClient::openMore,
                                 parent -> client.setScreen(new LumiSettingsScreen(
                                         parent, HISTORY, TELEMETRY,
@@ -194,6 +191,15 @@ public final class LumiClient implements ClientModInitializer {
                         snapshot.branches(), NETWORKING::merge)),
                 NETWORKING::switchBranch,
                 NETWORKING::deleteBranch));
+    }
+
+    private static void openPackages(Screen parent) {
+        Minecraft client = Minecraft.getInstance();
+        client.setScreen(new LumiPackageScreen(
+                parent,
+                new PackageScreenController(
+                        NETWORKING::exportPackage, NETWORKING::inspectPackage),
+                ClientPackageAccess.integrated()));
     }
 
     private static void openSave(
