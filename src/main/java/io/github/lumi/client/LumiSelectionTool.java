@@ -160,6 +160,10 @@ public final class LumiSelectionTool {
             return Optional.empty();
         }
         var position = block.getBlockPos();
+        if (!client.level.hasChunkAt(position)
+                || client.level.getBlockState(position).isAir()) {
+            return Optional.empty();
+        }
         return Optional.of(new BlockPosition(
                 position.getX(), position.getY(), position.getZ()));
     }
