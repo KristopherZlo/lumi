@@ -5,9 +5,11 @@ import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientHistoryStore;
+import io.github.lumi.client.state.ClientPendingStatisticsStore;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.PendingStatisticsPayload;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -40,6 +42,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private final ClientHistoryPageStore historyPages;
     private final ZoneHistoryController.Requester requestPage;
     private final LumiComparePickerScreen.PageRequester requestComparePage;
+    private final ClientPendingStatisticsStore pendingStatistics;
+    private final Runnable requestPendingStatistics;
     private final ClientVersionPreviewStore previews;
     private final Runnable openSave;
     private final Runnable openAmend;
@@ -66,6 +70,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private LumiHistoryGraphView graphView;
     private WorkspaceHistoryController pagedHistory;
     private HistoryPagePayload renderedPage;
+    private PendingStatisticsPayload renderedStatistics;
     private int historyY;
     private int historyHeight;
 
@@ -76,6 +81,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             ClientHistoryPageStore historyPages,
             ZoneHistoryController.Requester requestPage,
             LumiComparePickerScreen.PageRequester requestComparePage,
+            ClientPendingStatisticsStore pendingStatistics,
+            Runnable requestPendingStatistics,
             Runnable openSave,
             Runnable openAmend,
             Consumer<Screen> openBranches,
@@ -97,6 +104,10 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         this.requestPage = Objects.requireNonNull(requestPage, "requestPage");
         this.requestComparePage = Objects.requireNonNull(
                 requestComparePage, "requestComparePage");
+        this.pendingStatistics = Objects.requireNonNull(
+                pendingStatistics, "pendingStatistics");
+        this.requestPendingStatistics = Objects.requireNonNull(
+                requestPendingStatistics, "requestPendingStatistics");
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openAmend = Objects.requireNonNull(openAmend, "openAmend");
         this.openBranches = Objects.requireNonNull(openBranches, "openBranches");
@@ -118,12 +129,16 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         HistorySnapshotPayload latest = history.state().snapshot().orElse(null);
         HistoryPagePayload latestPage = pagedHistory == null
                 ? null : pagedHistory.page().orElse(null);
+        PendingStatisticsPayload latestStatistics = latest == null
+                ? null : pendingStatistics.result(latest).orElse(null);
         if (!Objects.equals(snapshot, latest)
                 || !Objects.equals(renderedPage, latestPage)
+                || !Objects.equals(renderedStatistics, latestStatistics)
                 || searchResultsDirty) {
             refocusSearch = search != null && search.isFocused();
             searchResultsDirty = false;
             renderedPage = latestPage;
+            renderedStatistics = latestStatistics;
             rebuildWidgets();
         }
     }
@@ -158,6 +173,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         if (snapshot == null) {
             return;
         }
+        requestPendingStatistics();
         if (pagedHistory == null || !pagedHistory.matches(snapshot)) {
             pagedHistory = new WorkspaceHistoryController(
                     snapshot, historyPages, requestPage);
@@ -167,6 +183,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         pagedHistory.ensurePageSize(pageSize);
         pagedHistory.search(searchQuery);
         renderedPage = pagedHistory.page().orElse(null);
+        renderedStatistics = pendingStatistics.result(snapshot).orElse(null);
         int toolbarX = layout.bodyX() + 58;
         addIconButton(toolbarX, historyY + 7, "unordered-list",
                 "luma.history.view_cards",
@@ -491,6 +508,13 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                 pending == 0
                         ? LegacyLumiTheme.MUTED : LegacyLumiTheme.ACCENT,
                 false);
+        pendingStatistics.result(snapshot)
+                .filter(result -> result.error().isEmpty())
+                .ifPresent(result -> graphics.drawString(
+                        font,
+                        PendingStatisticsText.summary(result.workspace()),
+                        x + 14, layout.bodyY() + 50,
+                        LegacyLumiTheme.ACCENT, false));
 
         drawPanel(graphics, x, historyY, width, historyHeight);
         graphics.drawString(font, Component.translatable("luma.project.history_title"),
@@ -565,6 +589,14 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private static void drawPanel(GuiGraphics graphics, int x, int y, int width, int height) {
         LegacyLumiTheme.outlined(graphics, x, y, width, height,
                 LegacyLumiTheme.PANEL, LegacyLumiTheme.PANEL_BORDER);
+    }
+
+    private void requestPendingStatistics() {
+        if (snapshot.pendingKeys() > 0
+                && pendingStatistics.result(snapshot).isEmpty()
+                && !pendingStatistics.pending(snapshot)) {
+            requestPendingStatistics.run();
+        }
     }
 
     static int visibleHistoryRows(int historyHeight, int availableVersions) {

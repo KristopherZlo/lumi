@@ -113,6 +113,8 @@ public final class LumiClient implements ClientModInitializer {
                                 client.screen, HISTORY, PREVIEW_STORE,
                                 HISTORY_PAGES, NETWORKING::requestHistoryPage,
                                 NETWORKING::requestHistoryPage,
+                                PENDING_STATISTICS,
+                                NETWORKING::requestPendingStatistics,
                                 () -> LumiClient.openSave(client.screen,
                                         SaveScreenController.Intent.SAVE, ""),
                                 () -> LumiClient.openSave(client.screen,
@@ -432,7 +434,9 @@ public final class LumiClient implements ClientModInitializer {
         client.setScreen(new LumiZoneDetailsScreen(
                 zones, snapshot, zone, new ZoneDetailsController(
                         NETWORKING::saveZone, NETWORKING::amendZone),
-                HISTORY_PAGES, NETWORKING::requestHistoryPage, PREVIEW_STORE,
+                HISTORY_PAGES, NETWORKING::requestHistoryPage,
+                PENDING_STATISTICS, NETWORKING::requestPendingStatistics,
+                PREVIEW_STORE,
                 new ZoneHistoryActions(
                         version -> openZoneVersionDetails(
                                 client.screen, zones, zone, version),

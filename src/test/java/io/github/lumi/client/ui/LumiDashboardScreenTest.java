@@ -45,6 +45,9 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("pagedHistory.next()"));
         assertTrue(source.contains("pagedHistory.previous()"));
         assertTrue(source.contains("!Objects.equals(renderedPage, latestPage)"));
+        assertTrue(source.contains(
+                "PendingStatisticsText.summary(result.workspace())"));
+        assertTrue(source.contains("requestPendingStatistics.run()"));
     }
 
     @Test

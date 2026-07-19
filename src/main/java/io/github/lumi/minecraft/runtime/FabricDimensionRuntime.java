@@ -981,9 +981,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
         var workspace = activeWorkspace();
         WorkingIndexSnapshot boundary = pendingBoundary(workspace);
+        ChunkLoadSession chunks = new ChunkLoadSession(
+                new MinecraftChunkLoadAccess(level));
+        chunks.retain(boundary.generations().keySet());
         var operation = new PendingStatisticsOperation(
                 expected.commit(), boundary, historyViews.zones(), worldReader,
-                () -> pendingBoundary(workspace), pendingStatistics, background);
+                () -> pendingBoundary(workspace), pendingStatistics,
+                background, chunks);
         operations.enqueue(
                 operation, OperationPriority.NORMAL,
                 Objects.requireNonNull(terminalObserver, "terminalObserver"));

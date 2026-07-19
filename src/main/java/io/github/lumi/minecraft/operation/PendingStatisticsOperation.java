@@ -7,6 +7,7 @@ import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.model.Zone;
 import io.github.lumi.domain.service.PendingChangeStatisticsService;
 import io.github.lumi.minecraft.world.WorldStateReader;
+import io.github.lumi.minecraft.world.ChunkLoadSession;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,11 +32,14 @@ public final class PendingStatisticsOperation implements DimensionMutation {
     private final Calculator calculator;
     private final Executor background;
     private final LongSupplier nanoTime;
+    private final ChunkLoadSession chunks;
     private final Map<SectionKey, SectionBlob> captured = new HashMap<>();
     private int next;
     private CompletableFuture<PendingChangeStatisticsService.Result> future;
     private PendingChangeStatisticsService.Result result;
     private Throwable failure;
+    private boolean chunksReady;
+    private boolean chunksReleased;
 
     public PendingStatisticsOperation(
             CommitId head,
@@ -46,7 +50,21 @@ public final class PendingStatisticsOperation implements DimensionMutation {
             PendingChangeStatisticsService calculator,
             Executor background) {
         this(head, boundary, zones, reader, currentBoundary,
-                calculator::calculate, background, System::nanoTime);
+                calculator::calculate, background, System::nanoTime, null);
+    }
+
+    public PendingStatisticsOperation(
+            CommitId head,
+            WorkingIndexSnapshot boundary,
+            List<Zone> zones,
+            WorldStateReader reader,
+            Supplier<WorkingIndexSnapshot> currentBoundary,
+            PendingChangeStatisticsService calculator,
+            Executor background,
+            ChunkLoadSession chunks) {
+        this(head, boundary, zones, reader, currentBoundary,
+                calculator::calculate, background, System::nanoTime,
+                Objects.requireNonNull(chunks, "chunks"));
     }
 
     PendingStatisticsOperation(
@@ -58,6 +76,20 @@ public final class PendingStatisticsOperation implements DimensionMutation {
             Calculator calculator,
             Executor background,
             LongSupplier nanoTime) {
+        this(head, boundary, zones, reader, currentBoundary,
+                calculator, background, nanoTime, null);
+    }
+
+    private PendingStatisticsOperation(
+            CommitId head,
+            WorkingIndexSnapshot boundary,
+            List<Zone> zones,
+            WorldStateReader reader,
+            Supplier<WorkingIndexSnapshot> currentBoundary,
+            Calculator calculator,
+            Executor background,
+            LongSupplier nanoTime,
+            ChunkLoadSession chunks) {
         this.head = Objects.requireNonNull(head, "head");
         this.boundary = Objects.requireNonNull(boundary, "boundary");
         this.zones = List.copyOf(Objects.requireNonNull(zones, "zones"));
@@ -67,6 +99,7 @@ public final class PendingStatisticsOperation implements DimensionMutation {
         this.calculator = Objects.requireNonNull(calculator, "calculator");
         this.background = Objects.requireNonNull(background, "background");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
+        this.chunks = chunks;
         sections = boundary.generations().keySet().stream()
                 .filter(SectionKey.class::isInstance)
                 .map(SectionKey.class::cast)
@@ -89,6 +122,12 @@ public final class PendingStatisticsOperation implements DimensionMutation {
             return;
         }
         if (future == null) {
+            if (!chunksReady) {
+                if (chunks != null && !chunks.loadUntil(deadlineNanos)) {
+                    return;
+                }
+                chunksReady = true;
+            }
             while (next < sections.size() && nanoTime.getAsLong() < deadlineNanos) {
                 SectionKey key = sections.get(next++);
                 captured.put(key, reader.read(key));
@@ -97,8 +136,8 @@ public final class PendingStatisticsOperation implements DimensionMutation {
                 return;
             }
             if (!boundary.equals(currentBoundary.get())) {
-                failure = new IOException(
-                        "Pending changes moved while statistics were captured");
+                fail(new IOException(
+                        "Pending changes moved while statistics were captured"));
                 return;
             }
             future = CompletableFuture.supplyAsync(this::calculate, background);
@@ -110,13 +149,14 @@ public final class PendingStatisticsOperation implements DimensionMutation {
         try {
             PendingChangeStatisticsService.Result calculated = future.join();
             if (!boundary.equals(currentBoundary.get())) {
-                failure = new IOException(
-                        "Pending changes moved while statistics were calculated");
+                fail(new IOException(
+                        "Pending changes moved while statistics were calculated"));
                 return;
             }
             result = calculated;
+            releaseChunks();
         } catch (CompletionException failed) {
-            failure = failed.getCause() == null ? failed : failed.getCause();
+            fail(failed.getCause() == null ? failed : failed.getCause());
         }
     }
 
@@ -165,6 +205,11 @@ public final class PendingStatisticsOperation implements DimensionMutation {
 
     @Override
     public OperationProgress progress() {
+        if (!chunksReady && chunks != null) {
+            return new OperationProgress(
+                    "Loading pending-statistics chunks",
+                    chunks.completedChunks(), chunks.totalChunks());
+        }
         if (future != null) {
             return OperationProgress.indeterminate(
                     "Calculating pending block statistics");
@@ -177,6 +222,19 @@ public final class PendingStatisticsOperation implements DimensionMutation {
     public void close() {
         if (future != null && !future.isDone()) {
             future.cancel(true);
+        }
+        releaseChunks();
+    }
+
+    private void fail(Throwable failed) {
+        failure = Objects.requireNonNull(failed, "failed");
+        releaseChunks();
+    }
+
+    private void releaseChunks() {
+        if (!chunksReleased && chunks != null) {
+            chunks.close();
+            chunksReleased = true;
         }
     }
 

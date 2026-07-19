@@ -20,5 +20,7 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains("actions.openDetails()"));
         assertTrue(source.contains("actions.createBranch()"));
         assertTrue(source.contains("zoneHistory.nextBranch"));
+        assertTrue(source.contains("zoneStatistics()"));
+        assertTrue(source.contains("PendingStatisticsText::summary"));
     }
 }

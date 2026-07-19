@@ -3,9 +3,11 @@ package io.github.lumi.client.ui;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
+import io.github.lumi.client.state.ClientPendingStatisticsStore;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.PendingStatisticsPayload;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -32,6 +34,8 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
     private final ClientVersionPreviewStore previews;
     private final ZoneHistoryActions actions;
     private final ZoneHistoryController zoneHistory;
+    private final ClientPendingStatisticsStore pendingStatistics;
+    private final Runnable requestPendingStatistics;
     private final HistoryViewController historyView = new HistoryViewController();
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
     private final Runnable showChanges;
@@ -51,6 +55,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
     private boolean searchDirty;
     private boolean focusSearchAfterInit;
     private HistoryPagePayload renderedPage;
+    private PendingStatisticsPayload renderedStatistics;
     private LumiHistoryGraphView graphView;
 
     public LumiZoneDetailsScreen(
@@ -60,6 +65,8 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
             ZoneDetailsController controller,
             ClientHistoryPageStore pages,
             ZoneHistoryController.Requester requestPage,
+            ClientPendingStatisticsStore pendingStatistics,
+            Runnable requestPendingStatistics,
             ClientVersionPreviewStore previews,
             ZoneHistoryActions actions,
             Runnable showChanges) {
@@ -70,6 +77,10 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
         this.controller = Objects.requireNonNull(controller, "controller");
         this.previews = Objects.requireNonNull(previews, "previews");
         this.actions = Objects.requireNonNull(actions, "actions");
+        this.pendingStatistics = Objects.requireNonNull(
+                pendingStatistics, "pendingStatistics");
+        this.requestPendingStatistics = Objects.requireNonNull(
+                requestPendingStatistics, "requestPendingStatistics");
         zoneHistory = new ZoneHistoryController(
                 snapshot, zone.id(), pages, requestPage);
         this.showChanges = Objects.requireNonNull(showChanges, "showChanges");
@@ -79,8 +90,13 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
     public void tick() {
         super.tick();
         HistoryPagePayload latest = zoneHistory.page().orElse(null);
-        if (!Objects.equals(renderedPage, latest) || searchDirty) {
+        PendingStatisticsPayload latestStatistics =
+                pendingStatistics.result(snapshot).orElse(null);
+        if (!Objects.equals(renderedPage, latest)
+                || !Objects.equals(renderedStatistics, latestStatistics)
+                || searchDirty) {
             renderedPage = latest;
+            renderedStatistics = latestStatistics;
             searchDirty = false;
             rebuildWidgets();
         }
@@ -89,6 +105,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
+        requestPendingStatistics();
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
@@ -319,8 +336,16 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
                 Component.translatable(zone.active()
                         ? "luma.zones.details_active" : "luma.zones.details_inactive"),
                 width / 2, panelY + 36, LegacyLumiTheme.MUTED);
-        graphics.drawString(font, Component.translatable("luma.zones.save_help"),
-                panelX + 20, panelY + 52, LegacyLumiTheme.MUTED, false);
+        var statistics = zoneStatistics();
+        graphics.drawString(
+                font,
+                statistics.<Component>map(PendingStatisticsText::summary)
+                        .orElseGet(() -> Component.translatable(
+                                "luma.zones.save_help")),
+                panelX + 20, panelY + 52,
+                statistics.isPresent()
+                        ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.MUTED,
+                false);
         LegacyLumiTheme.outlined(graphics, panelX + 18, panelY + 66,
                 panelWidth - 236, 24,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
@@ -380,6 +405,23 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
                     font.plainSubstrByWidth(meta, panelWidth - 238),
                     panelX + 72, rowY + 21, LegacyLumiTheme.MUTED, false);
         }
+    }
+
+    private void requestPendingStatistics() {
+        if (snapshot.pendingKeys() > 0
+                && pendingStatistics.result(snapshot).isEmpty()
+                && !pendingStatistics.pending(snapshot)) {
+            requestPendingStatistics.run();
+        }
+        renderedStatistics = pendingStatistics.result(snapshot).orElse(null);
+    }
+
+    private java.util.Optional<io.github.lumi.domain.model.PendingChangeStatistics>
+            zoneStatistics() {
+        return pendingStatistics.result(snapshot)
+                .filter(result -> result.error().isEmpty())
+                .map(result -> result.zones().get(zone.id()))
+                .filter(Objects::nonNull);
     }
 
     private void drawPreview(
