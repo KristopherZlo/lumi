@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import java.util.Objects;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphics;
@@ -34,6 +35,8 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
     private int paypalX;
     private int supportY;
     private int creditY;
+    private int buttonTop;
+    private int rowStep;
 
     public LumiMoreScreen(
             Screen parent,
@@ -70,6 +73,12 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         panelY = page.windowY();
         panelWidth = page.contentWidth();
         panelHeight = page.windowHeight();
+        boolean hintVisible = addContextualHint(
+                ClientContextualHelpHint.MORE,
+                panelX + 12, panelY + 50, panelWidth - 24);
+        buttonTop = panelY + (hintVisible ? 106 : panelHeight < 260 ? 50 : 58);
+        rowStep = Math.min(28, Math.max(20,
+                (panelHeight - (buttonTop - panelY) - 38) / 6));
         button("luma.action.workspaces", workspaces, 0, 0);
         button("luma.more.deleted_saves_title", deletedVersions, 1, 0);
         button("luma.more.onboarding_title", onboarding, 0, 1);
@@ -80,19 +89,21 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         button("luma.action.check_updates", updates, 1, 3);
         button("luma.action.open_cleanup", cleanup, 0, 4);
         button("luma.action.manual_compare", manualCompare, 1, 4);
+        button("luma.action.reset_contextual_hints",
+                this::resetContextualHints, 0, 5);
         coffeeX = button("luma.action.buy_me_a_coffee", () -> Util.getPlatform().openUri(
-                java.net.URI.create("https://buymeacoffee.com/zl0yxp")), 0, 5);
+                java.net.URI.create("https://buymeacoffee.com/zl0yxp")), 0, 6);
         paypalX = button("luma.action.paypal_donate", () -> Util.getPlatform().openUri(
-                java.net.URI.create("https://www.paypal.com/donate/?hosted_button_id=CY7A2U64JWY4W")), 1, 5);
-        supportY = panelY + 58 + 5 * 28;
-        creditY = supportY + 31;
+                java.net.URI.create("https://www.paypal.com/donate/?hosted_button_id=CY7A2U64JWY4W")), 1, 6);
+        supportY = buttonTop + 6 * rowStep;
+        creditY = supportY + 25;
     }
 
     private int button(String key, Runnable action, int column, int row) {
         int gap = 4;
         int width = (panelWidth - 36) / 2;
         int x = panelX + 16 + column * (width + gap);
-        addLegacyButton(x, panelY + 58 + row * 28, width,
+        addLegacyButton(x, buttonTop + row * rowStep, width,
                 Component.translatable(key), action, LumiLegacyButton.Kind.NORMAL);
         return x;
     }

@@ -29,7 +29,9 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - Successful integrated Save and Amend operations capture a bounded world
   thumbnail for their new history entry; missing previews fall back safely.
 - First-run onboarding opens once per client installation and remains replayable
-  from More; Alt+I opens the live hotkey guide.
+  from More. Contextual tips can be dismissed independently and restored with
+  More > Show tips again without replaying onboarding; Alt+I opens the live
+  hotkey guide.
 - More > Settings persists whether work-zone saves join active-workspace
   history and whether full Restore includes durable entities by default.
   Diagnostic telemetry remains a separate client-local allowlisted control.

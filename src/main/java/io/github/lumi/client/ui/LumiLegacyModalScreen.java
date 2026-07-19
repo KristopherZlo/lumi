@@ -1,6 +1,8 @@
 package io.github.lumi.client.ui;
 
 import com.mojang.blaze3d.platform.Window;
+import io.github.lumi.client.onboarding.ClientContextualHelpHint;
+import io.github.lumi.client.onboarding.ClientContextualHelpService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -10,7 +12,14 @@ import net.minecraft.network.chat.Component;
 /** Shared legacy window chrome for V2 modal workflows. */
 abstract class LumiLegacyModalScreen extends Screen {
     private final Screen background;
+    private final ClientContextualHelpService contextualHelp =
+            new ClientContextualHelpService();
     private LumiUiScale uiScale = LumiUiScale.forFramebuffer(1280, 720);
+    private ClientContextualHelpHint contextualHint;
+    private int hintX;
+    private int hintY;
+    private int hintWidth;
+    private int hintHeight;
 
     protected LumiLegacyModalScreen(Component title) {
         this(Minecraft.getInstance().screen, title);
@@ -36,11 +45,61 @@ abstract class LumiLegacyModalScreen extends Screen {
     }
 
     protected final void beginLegacyInit() {
+        contextualHint = null;
         Window window = Minecraft.getInstance().getWindow();
         int currentGuiScale = currentGuiScale();
         uiScale = LumiUiScale.current();
         width = uiScale.virtualSize(window.getGuiScaledWidth(), currentGuiScale);
         height = uiScale.virtualSize(window.getGuiScaledHeight(), currentGuiScale);
+    }
+
+    protected final boolean addContextualHint(
+            ClientContextualHelpHint hint, int x, int y, int width) {
+        if (!contextualHelp.shouldShowHint(hint)) {
+            return false;
+        }
+        contextualHint = hint;
+        hintX = x;
+        hintY = y;
+        hintWidth = width;
+        hintHeight = 28 + font.split(
+                Component.translatable(hint.bodyKey()), Math.max(1, width - 14)).size() * 10;
+        addLegacyIconButton(
+                x + width - 30, y + 4, "close",
+                Component.translatable("luma.action.dismiss_hint"),
+                () -> {
+                    contextualHelp.dismissHint(hint);
+                    rebuildWidgets();
+                }, LumiLegacyButton.Kind.NORMAL);
+        return true;
+    }
+
+    protected final void resetContextualHints() {
+        contextualHelp.resetHints();
+        rebuildWidgets();
+    }
+
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        if (contextualHint != null) {
+            LegacyLumiTheme.outlined(
+                    graphics, hintX, hintY, hintWidth, hintHeight,
+                    LegacyLumiTheme.STATUS, LegacyLumiTheme.STATUS_BORDER);
+            String title = font.plainSubstrByWidth(
+                    Component.translatable(contextualHint.titleKey()).getString(),
+                    Math.max(1, hintWidth - 44));
+            graphics.drawString(font, title, hintX + 7, hintY + 7,
+                    LegacyLumiTheme.ACCENT, false);
+            int lineY = hintY + 21;
+            for (var line : font.split(
+                    Component.translatable(contextualHint.bodyKey()),
+                    Math.max(1, hintWidth - 14))) {
+                graphics.drawString(font, line, hintX + 7, lineY,
+                        LegacyLumiTheme.TEXT, false);
+                lineY += 10;
+            }
+        }
+        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     protected final LegacyRenderContext beginLegacyRender(

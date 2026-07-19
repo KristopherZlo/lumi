@@ -18,6 +18,9 @@ class LumiMoreScreenTest {
 
         assertTrue(more.contains("luma.action.open_cleanup"));
         assertTrue(more.contains("luma.action.manual_compare"));
+        assertTrue(more.contains("ClientContextualHelpHint.MORE"));
+        assertTrue(more.contains("luma.action.reset_contextual_hints"));
+        assertTrue(more.contains("resetContextualHints"));
         assertTrue(client.contains("new LumiCleanupScreen("));
         assertTrue(client.contains("new LumiComparePickerScreen("));
         assertTrue(cleanup.contains("luma.action.inspect_unused_files"));
