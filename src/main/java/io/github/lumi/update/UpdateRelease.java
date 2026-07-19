@@ -7,11 +7,13 @@ public record UpdateRelease(
         String version,
         String minecraftVersion,
         String summary,
-        URI downloadUri) {
+        URI downloadUri,
+        URI changelogUri) {
     public UpdateRelease {
         Objects.requireNonNull(version, "version");
         Objects.requireNonNull(minecraftVersion, "minecraftVersion");
         Objects.requireNonNull(summary, "summary");
         Objects.requireNonNull(downloadUri, "downloadUri");
+        Objects.requireNonNull(changelogUri, "changelogUri");
     }
 }

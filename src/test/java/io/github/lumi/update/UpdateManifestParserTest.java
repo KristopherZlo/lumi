@@ -14,12 +14,15 @@ class UpdateManifestParserTest {
         UpdateCheckResult result = parser.parse(manifest("""
                 {"version":"0.2.0","minecraftVersions":["1.21.11"],
                  "loader":"fabric","summary":"Fast restore",
-                 "downloadUrl":"https://github.com/KristopherZlo/lumi/releases/tag/v0.2.0"}
+                 "downloadUrl":"https://github.com/KristopherZlo/lumi/releases/tag/v0.2.0",
+                 "changelogUrl":"https://github.com/KristopherZlo/lumi/releases/tag/v0.2.0-notes"}
                 """), "0.2.0-dev", "1.21.11");
 
         assertEquals(UpdateCheckResult.Status.UPDATE_AVAILABLE, result.status());
         assertEquals("0.2.0", result.release().orElseThrow().version());
         assertEquals("Fast restore", result.release().orElseThrow().summary());
+        assertEquals("https://github.com/KristopherZlo/lumi/releases/tag/v0.2.0-notes",
+                result.release().orElseThrow().changelogUri().toString());
     }
 
     @Test
@@ -43,6 +46,18 @@ class UpdateManifestParserTest {
                  "loader":"fabric","summary":"Bad link",
                  "downloadUrl":"https://example.com/lumi.jar"}
                 """), "0.1.0", "1.21.11"));
+    }
+
+    @Test
+    void fallsBackToReleasePageWhenChangelogIsAbsent() {
+        UpdateCheckResult result = parser.parse(manifest("""
+                {"version":"0.2.0","minecraftVersions":["1.21.11"],
+                 "loader":"fabric","summary":"Notes",
+                 "downloadUrl":"https://github.com/KristopherZlo/lumi/releases/tag/v0.2.0"}
+                """), "0.1.0", "1.21.11");
+
+        assertEquals(result.release().orElseThrow().downloadUri(),
+                result.release().orElseThrow().changelogUri());
     }
 
     private static byte[] manifest(String releases) {

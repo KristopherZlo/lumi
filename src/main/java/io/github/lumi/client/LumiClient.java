@@ -43,6 +43,7 @@ import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.telemetry.TelemetryService;
 import io.github.lumi.update.UpdateChecker;
+import io.github.lumi.update.ClientUpdatePreferenceRepository;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -57,6 +58,8 @@ public final class LumiClient implements ClientModInitializer {
             new ClientOnboardingStateRepository();
     private static final TelemetryService TELEMETRY = TelemetryService.getInstance();
     private static final UpdateChecker UPDATE_CHECKER = UpdateChecker.createDefault();
+    private static final ClientUpdatePreferenceRepository UPDATE_PREFERENCES =
+            new ClientUpdatePreferenceRepository();
     private static final ClientVersionPreviewStore PREVIEW_STORE =
             new ClientVersionPreviewStore();
     private static final ClientVersionPreviewCapture PREVIEW_CAPTURE =
@@ -292,7 +295,7 @@ public final class LumiClient implements ClientModInitializer {
                         parent, HISTORY, TELEMETRY,
                         NETWORKING::updateWorkspaceSettings)),
                 () -> client.setScreen(new LumiUpdateScreen(
-                        client.screen, UPDATE_CHECKER))));
+                        client.screen, UPDATE_CHECKER, UPDATE_PREFERENCES))));
     }
 
     private static void openZoneDetails(

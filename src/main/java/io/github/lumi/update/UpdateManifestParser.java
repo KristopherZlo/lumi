@@ -56,15 +56,23 @@ public final class UpdateManifestParser {
                 .map(element -> element.getAsString())
                 .peek(item -> require(item.length() <= 32, "Minecraft version is too long"))
                 .anyMatch(minecraftVersion::equals);
-        URI download = URI.create(text(value, "downloadUrl", 512));
-        require("https".equals(download.getScheme())
-                        && "github.com".equalsIgnoreCase(download.getHost()),
-                "Untrusted update download host");
+        URI download = trustedReleaseUri(text(value, "downloadUrl", 512));
+        URI changelog = value.has("changelogUrl")
+                ? trustedReleaseUri(text(value, "changelogUrl", 512))
+                : download;
         UpdateRelease release = new UpdateRelease(
-                version, minecraftVersion, summary, download);
+                version, minecraftVersion, summary, download, changelog);
         return compatible
                 ? Optional.of(new Candidate(VersionNumber.parse(version), release))
                 : Optional.empty();
+    }
+
+    private static URI trustedReleaseUri(String value) {
+        URI uri = URI.create(value);
+        require("https".equals(uri.getScheme())
+                        && "github.com".equalsIgnoreCase(uri.getHost()),
+                "Untrusted update release host");
+        return uri;
     }
 
     private static String text(JsonObject object, String name, int maxLength) {

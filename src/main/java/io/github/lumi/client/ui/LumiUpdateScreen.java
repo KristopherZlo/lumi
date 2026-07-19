@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.update.ClientUpdatePreferenceRepository;
 import io.github.lumi.update.UpdateCheckResult;
 import io.github.lumi.update.UpdateChecker;
 import java.util.concurrent.CompletableFuture;
@@ -21,40 +22,63 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
             });
     private final Screen parent;
     private final UpdateChecker checker;
+    private final ClientUpdatePreferenceRepository preferences;
     private UpdateCheckResult result;
     private boolean checking;
     private int panelX;
     private int panelY;
     private int panelWidth;
+    private int panelHeight;
+    private int resultBottom;
 
-    public LumiUpdateScreen(Screen parent, UpdateChecker checker) {
+    public LumiUpdateScreen(
+            Screen parent,
+            UpdateChecker checker,
+            ClientUpdatePreferenceRepository preferences) {
         super(Component.translatable("luma.more.updates_title"));
         this.parent = parent;
         this.checker = java.util.Objects.requireNonNull(checker, "checker");
+        this.preferences = java.util.Objects.requireNonNull(
+                preferences, "preferences");
     }
 
     @Override
     protected void init() {
         beginLegacyInit();
         panelWidth = Math.min(430, width - 24);
+        panelHeight = Math.min(292, Math.max(180, height - 24));
         panelX = (width - panelWidth) / 2;
-        panelY = Math.max(12, (height - 292) / 2);
+        panelY = Math.max(12, (height - panelHeight) / 2);
+        int bottomY = panelY + panelHeight - 28;
         if (result != null && result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE) {
-            addLegacyButton(panelX + 16, panelY + 214, panelWidth - 32,
+            int buttonWidth = (panelWidth - 40) / 2;
+            int firstRow = bottomY - 26;
+            addLegacyButton(panelX + 16, firstRow, buttonWidth,
                     Component.translatable("luma.action.download_update"),
-                    () -> Util.getPlatform().openUri(
-                            result.release().orElseThrow().downloadUri()),
+                    this::openDownload,
                     LumiLegacyButton.Kind.PRIMARY);
+            addLegacyButton(panelX + 24 + buttonWidth, firstRow, buttonWidth,
+                    Component.translatable("luma.action.open_changelog"),
+                    this::openChangelog, LumiLegacyButton.Kind.NORMAL);
+            addLegacyButton(panelX + 16, bottomY, buttonWidth,
+                    Component.translatable("luma.action.later"),
+                    this::later, LumiLegacyButton.Kind.NORMAL);
+            addLegacyButton(panelX + 24 + buttonWidth, bottomY, buttonWidth,
+                    Component.translatable("luma.action.dont_show_version"),
+                    this::dismissVersion, LumiLegacyButton.Kind.DANGER);
+            resultBottom = firstRow - 8;
+            return;
         }
         LumiLegacyButton check = addLegacyButton(
-                panelX + 16, panelY + 242, panelWidth - 102,
+                panelX + 16, bottomY, panelWidth - 102,
                 Component.translatable(checking
                         ? "luma.action.checking_updates" : "luma.action.check_updates"),
                 this::check, LumiLegacyButton.Kind.NORMAL);
         check.active = !checking;
-        addLegacyButton(panelX + panelWidth - 76, panelY + 242, 60,
+        addLegacyButton(panelX + panelWidth - 76, bottomY, 60,
                 Component.translatable("luma.action.close"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
+        resultBottom = bottomY - 8;
     }
 
     private void check() {
@@ -68,7 +92,10 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
                         return;
                     }
                     checking = false;
-                    result = outcome;
+                    result = outcome.release()
+                            .filter(release -> preferences.ignored(release.version()))
+                            .map(ignored -> UpdateCheckResult.upToDate())
+                            .orElse(outcome);
                     rebuildWidgets();
                 }));
     }
@@ -77,13 +104,13 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, 292);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         graphics.drawString(font, title, panelX + 16, panelY + 18,
                 LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.more.updates_help"),
                 panelX + 16, panelY + 42, LegacyLumiTheme.MUTED, false);
         renderLegacyPanel(graphics, panelX + 12, panelY + 66,
-                panelWidth - 24, 136);
+                panelWidth - 24, Math.max(1, resultBottom - panelY - 66));
         renderResult(graphics);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -124,13 +151,35 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
     private int drawWrapped(GuiGraphics graphics, Component text, int startY, int color) {
         int y = startY;
         for (var line : font.split(text, panelWidth - 44)) {
-            if (y > panelY + 198) {
+            if (y > resultBottom - 12) {
                 break;
             }
             graphics.drawString(font, line, panelX + 22, y, color, false);
             y += 11;
         }
         return y;
+    }
+
+    private void openDownload() {
+        openUri(result.release().orElseThrow().downloadUri());
+    }
+
+    private void openChangelog() {
+        openUri(result.release().orElseThrow().changelogUri());
+    }
+
+    private void openUri(java.net.URI uri) {
+        Util.getPlatform().openUri(uri);
+        later();
+    }
+
+    private void later() {
+        minecraft.setScreen(parent);
+    }
+
+    private void dismissVersion() {
+        preferences.dismiss(result.release().orElseThrow().version());
+        minecraft.setScreen(parent);
     }
 
     @Override public boolean isPauseScreen() { return false; }
