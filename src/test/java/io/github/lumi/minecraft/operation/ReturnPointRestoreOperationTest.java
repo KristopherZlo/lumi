@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.operation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BranchName;
@@ -141,6 +142,31 @@ class ReturnPointRestoreOperationTest {
         assertTrue(operation.isSafeToRelease());
     }
 
+    @Test
+    void closesRestoreThatFinishesPreparationAfterShutdown() throws Exception {
+        WorkingIndexSnapshot clean = WorkingIndexSnapshot.empty();
+        SaveResult returnPoint = new SaveResult(
+                id('2'), new BranchRef(new BranchName("main"), id('2'), 1), clean);
+        SaveCaptureOperation save = new SaveCaptureOperation(
+                request(), clean,
+                dirty -> immediateCapture(new CapturedWorldState(
+                        Map.of(), Map.of(), clean,
+                        new io.github.lumi.domain.model.CommitStatistics(0, 0, 0, 0))),
+                (request, captured) -> returnPoint, ignored -> { }, Runnable::run);
+        CompletableFuture<DimensionMutation> future = new CompletableFuture<>();
+        ReturnPointRestoreOperation operation = new ReturnPointRestoreOperation(
+                save, ignored -> future);
+        CloseTrackingMutation restore = new CloseTrackingMutation();
+
+        operation.advance(Long.MAX_VALUE);
+        operation.advance(Long.MAX_VALUE);
+        operation.close();
+        assertFalse(future.isCancelled());
+        future.complete(restore);
+
+        assertEquals(1, restore.closeCalls);
+    }
+
     private static io.github.lumi.minecraft.world.WorldStateCapture.CaptureSession immediateCapture(
             CapturedWorldState captured) {
         return new io.github.lumi.minecraft.world.WorldStateCapture.CaptureSession() {
@@ -165,6 +191,14 @@ class ReturnPointRestoreOperationTest {
         @Override public void advance(long deadlineNanos) { complete = true; }
         @Override public boolean isTerminal() { return complete; }
         @Override public boolean isSafeToRelease() { return complete; }
+    }
+
+    private static final class CloseTrackingMutation implements DimensionMutation {
+        private int closeCalls;
+        @Override public void advance(long deadlineNanos) { }
+        @Override public boolean isTerminal() { return false; }
+        @Override public boolean isSafeToRelease() { return false; }
+        @Override public void close() { closeCalls++; }
     }
 
     private static final class ManualExecutor implements Executor {

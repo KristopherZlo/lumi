@@ -9,7 +9,7 @@ import java.util.concurrent.CompletionException;
 /** Owns an operation while it prepares off-thread, then validates and delegates under freeze. */
 public final class BackgroundPreparedMutation<T extends DimensionMutation>
         implements DimensionMutation {
-    private final CompletableFuture<T> preparation;
+    private final PreparedMutationOwnership<T> preparation;
     private final FrozenValidation validation;
     private final PreparedDiscard<T> discard;
     private final boolean freezeDuringPreparation;
@@ -39,9 +39,10 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
             PreparedDiscard<T> discard,
             boolean freezeDuringPreparation,
             boolean degradeOnFailure) {
-        this.preparation = Objects.requireNonNull(preparation, "preparation");
         this.validation = Objects.requireNonNull(validation, "validation");
         this.discard = Objects.requireNonNull(discard, "discard");
+        this.preparation = new PreparedMutationOwnership<>(
+                Objects.requireNonNull(preparation, "preparation"), this::discardPrepared);
         this.freezeDuringPreparation = freezeDuringPreparation;
         this.degradeOnFailure = degradeOnFailure;
     }
@@ -59,7 +60,7 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
         }
         if (delegate == null) {
             try {
-                delegate = Objects.requireNonNull(preparation.join(), "prepared mutation");
+                delegate = preparation.claim();
                 validation.validate();
                 return;
             } catch (CompletionException failed) {
@@ -142,7 +143,7 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
                 || preparation.isCancelled()) {
             return false;
         }
-        T prepared = Objects.requireNonNull(preparation.join(), "prepared mutation");
+        T prepared = preparation.claim();
         discardPrepared(prepared);
         cancelled = true;
         return true;
@@ -154,13 +155,7 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
             delegate.close();
             return;
         }
-        if (preparation.isDone() && !preparation.isCompletedExceptionally()
-                && !preparation.isCancelled()) {
-            discardPrepared(Objects.requireNonNull(
-                    preparation.join(), "prepared mutation"));
-        } else {
-            preparation.cancel(true);
-        }
+        preparation.close();
         cancelled = true;
     }
 

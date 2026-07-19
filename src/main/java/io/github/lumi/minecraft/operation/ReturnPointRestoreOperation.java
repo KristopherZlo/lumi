@@ -12,7 +12,7 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
     private final SaveCaptureOperation returnPointSave;
     private final RestorePreparation restorePreparation;
     private Phase phase = Phase.SAVING_RETURN_POINT;
-    private CompletableFuture<? extends DimensionMutation> preparation;
+    private PreparedMutationOwnership<DimensionMutation> preparation;
     private DimensionMutation restore;
     private SaveResult returnPoint;
     private Throwable failure;
@@ -49,8 +49,10 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
         returnPoint = returnPointSave.result().orElseThrow(
                 () -> new IllegalStateException("Completed return-point Save has no result"));
         try {
-            preparation = Objects.requireNonNull(
+            CompletableFuture<? extends DimensionMutation> prepared = Objects.requireNonNull(
                     restorePreparation.prepare(returnPoint), "restore preparation");
+            preparation = new PreparedMutationOwnership<>(
+                    prepared.thenApply(operation -> operation), DimensionMutation::close);
             phase = Phase.PREPARING_RESTORE;
         } catch (RuntimeException failed) {
             failure = failed;
@@ -62,7 +64,7 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
             return;
         }
         try {
-            restore = Objects.requireNonNull(preparation.join(), "prepared restore");
+            restore = preparation.claim();
             phase = Phase.RESTORING;
             restore.advance(deadlineNanos);
         } catch (CompletionException failed) {
@@ -136,13 +138,8 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
         returnPointSave.close();
         if (restore != null) {
             restore.close();
-        } else if (preparation != null && preparation.isDone()
-                && !preparation.isCompletedExceptionally()
-                && !preparation.isCancelled()) {
-            preparation.join().close();
-        }
-        if (preparation != null && !preparation.isDone()) {
-            preparation.cancel(true);
+        } else if (preparation != null) {
+            preparation.close();
         }
         cancelled = true;
     }
@@ -152,7 +149,7 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
                 || preparation.isCancelled()) {
             return false;
         }
-        restore = Objects.requireNonNull(preparation.join(), "prepared restore");
+        restore = preparation.claim();
         phase = Phase.RESTORING;
         return restore.cancel();
     }

@@ -158,6 +158,22 @@ class BackgroundPreparedMutationTest {
     }
 
     @Test
+    void discardsPreparationThatCompletesAfterShutdown() throws Exception {
+        CompletableFuture<TestMutation> future = new CompletableFuture<>();
+        AtomicInteger discards = new AtomicInteger();
+        BackgroundPreparedMutation<TestMutation> prepared = new BackgroundPreparedMutation<>(
+                future, () -> { }, ignored -> discards.incrementAndGet());
+        TestMutation delegate = new TestMutation();
+
+        prepared.close();
+        assertFalse(future.isCancelled());
+        future.complete(delegate);
+
+        assertEquals(1, discards.get());
+        assertEquals(1, delegate.closeCalls);
+    }
+
+    @Test
     void refusesCancellationOfRecoveryPreparation() throws Exception {
         BackgroundPreparedMutation<TestMutation> prepared = new BackgroundPreparedMutation<>(
                 CompletableFuture.completedFuture(new TestMutation()),
