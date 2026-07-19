@@ -212,9 +212,10 @@ public final class LumiDimensionHistoryScreen extends LumiLegacyPageScreen {
         if (loaded.isEmpty()) {
             String error = page().map(HistoryPagePayload::error).orElse("");
             graphics.drawString(font,
-                    error.isEmpty()
+                    font.plainSubstrByWidth((error.isEmpty()
                             ? Component.translatable("luma.dimensions.loading")
-                            : Component.literal(error),
+                            : Component.literal(error)).getString(),
+                            Math.max(1, panelWidth - 44)),
                     panelX + 22, panelY + 88,
                     error.isEmpty() ? LegacyLumiTheme.MUTED : LegacyLumiTheme.DANGER,
                     false);
@@ -225,6 +226,13 @@ public final class LumiDimensionHistoryScreen extends LumiLegacyPageScreen {
     public boolean mouseScrolled(
             double mouseX, double mouseY,
             double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        if (x < panelX || x >= panelX + panelWidth
+                || y < panelY + 84 || y >= panelY + panelHeight - 12) {
+            return super.mouseScrolled(
+                    mouseX, mouseY, horizontalAmount, verticalAmount);
+        }
         int maximum = Math.max(0, loaded.size() - capacity());
         int replacement = Math.max(
                 0, Math.min(maximum, scroll + (verticalAmount < 0 ? 1 : -1)));

@@ -63,10 +63,16 @@ public final class LumiDimensionsScreen extends LumiLegacyPageScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
             renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
-            graphics.drawString(font, title, panelX + 16, panelY + 18,
+            int headerX = panelX + 16;
+            int textWidth = Math.max(1, panelWidth - 32);
+            graphics.drawString(font, clippedHeader(
+                            title, headerX, panelX + panelWidth - 16),
+                    headerX, panelY + 18,
                     LegacyLumiTheme.TEXT, false);
-            graphics.drawString(font, Component.translatable("luma.dimensions.help"),
-                    panelX + 16, panelY + 40, LegacyLumiTheme.MUTED, false);
+            graphics.drawString(font, font.plainSubstrByWidth(
+                            Component.translatable("luma.dimensions.help").getString(),
+                            textWidth),
+                    headerX, panelY + 40, LegacyLumiTheme.MUTED, false);
             renderLegacyPanel(graphics, panelX + 12, panelY + 62,
                     panelWidth - 24, Math.max(1, panelHeight - 74));
             String current = currentDimension.get();
@@ -85,13 +91,18 @@ public final class LumiDimensionsScreen extends LumiLegacyPageScreen {
                         panelX + 28, y + 6, LegacyLumiTheme.TEXT, false);
                 if (dimension.equals(current)) {
                     graphics.drawString(font,
-                            Component.translatable("luma.dimensions.current"),
+                            font.plainSubstrByWidth(
+                                    Component.translatable(
+                                            "luma.dimensions.current").getString(),
+                                    Math.max(1, panelWidth - 100)),
                             panelX + 28, y + 16, LegacyLumiTheme.ACCENT, false);
                 }
             }
             if (visible.isEmpty()) {
                 graphics.drawString(font,
-                        Component.translatable("luma.dimensions.empty"),
+                        font.plainSubstrByWidth(
+                                Component.translatable("luma.dimensions.empty").getString(),
+                                Math.max(1, panelWidth - 48)),
                         panelX + 24, panelY + 76, LegacyLumiTheme.MUTED, false);
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
@@ -104,14 +115,21 @@ public final class LumiDimensionsScreen extends LumiLegacyPageScreen {
     public boolean mouseScrolled(
             double mouseX, double mouseY,
             double horizontalAmount, double verticalAmount) {
-        int maximum = Math.max(0, visible.size() - capacity());
-        int replacement = Math.max(
-                0, Math.min(maximum, scroll + (verticalAmount < 0 ? 1 : -1)));
-        if (replacement != scroll) {
-            scroll = replacement;
-            rebuildWidgets();
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        if (x >= panelX && x < panelX + panelWidth
+                && y >= panelY + 62 && y < panelY + panelHeight) {
+            int maximum = Math.max(0, visible.size() - capacity());
+            int replacement = Math.max(
+                    0, Math.min(maximum, scroll + (verticalAmount < 0 ? 1 : -1)));
+            if (replacement != scroll) {
+                scroll = replacement;
+                rebuildWidgets();
+            }
+            return true;
         }
-        return true;
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     private int capacity() {

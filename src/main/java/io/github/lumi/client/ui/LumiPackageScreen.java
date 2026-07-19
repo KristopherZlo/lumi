@@ -286,13 +286,16 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
             renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
-            graphics.drawString(font, title, panelX + 16,
-                    panelY + geometry.titleY(),
+            int headerX = panelX + 16;
+            int contentRight = panelX + panelWidth - 16;
+            graphics.drawString(font, clippedHeader(title, headerX, contentRight),
+                    headerX, panelY + geometry.titleY(),
                     LegacyLumiTheme.TEXT, false);
             if (!geometry.compact()) {
-                graphics.drawString(font,
-                        Component.translatable("luma.simple.share_help"),
-                        panelX + 16, panelY + 38,
+                graphics.drawString(font, clippedHeader(
+                                Component.translatable("luma.simple.share_help"),
+                                headerX, contentRight),
+                        headerX, panelY + 38,
                         LegacyLumiTheme.MUTED, false);
             }
             if (browser.pendingDelete().isPresent()) renderDeleteConfirmation(graphics);
@@ -327,9 +330,11 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
         if (start == end) {
             if (geometry.listY() + 9 > geometry.listBottom()) return;
             graphics.drawString(font,
-                    Component.translatable(browser.showImported()
-                            ? "luma.share.imported_empty"
-                            : "luma.share.package_files_empty"),
+                    font.plainSubstrByWidth(
+                            Component.translatable(browser.showImported()
+                                    ? "luma.share.imported_empty"
+                                    : "luma.share.package_files_empty").getString(),
+                            Math.max(1, panelWidth - 40)),
                     panelX + 20, panelY + geometry.listY() + 6,
                     LegacyLumiTheme.MUTED, false);
             return;
@@ -359,7 +364,9 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
                 LegacyLumiTheme.DANGER);
         if (geometry.deleteHeight() >= 58) {
             graphics.drawCenteredString(font,
-                    shortName(browser.pendingDelete().orElseThrow().name()),
+                    font.plainSubstrByWidth(
+                            shortName(browser.pendingDelete().orElseThrow().name()),
+                            Math.max(1, panelWidth - 48)),
                     panelX + panelWidth / 2,
                     panelY + geometry.deleteY() + 22,
                     LegacyLumiTheme.TEXT);

@@ -23,6 +23,7 @@ class LumiDeletedVersionsScreenTest {
 
     @Test
     void compactConfirmationKeepsEveryLineAboveItsFooter() {
+        assertEquals(124, LumiDeletedVersionsScreen.contentTextWidth(164));
         assertConfirmationGeometry(160, 56, 64, 80, 96, 112, 132);
         assertConfirmationGeometry(180, 66, 82, 100, 116, 132, 152);
         assertConfirmationGeometry(220, 66, 82, 108, 140, 156, 192);
