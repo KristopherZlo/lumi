@@ -28,6 +28,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
     private final HashMap<OperationTicket, Consumer<OperationProgress>> progressObservers =
             new HashMap<>();
     private final HashMap<OperationTicket, Runnable> freezeObservers = new HashMap<>();
+    private final HashMap<OperationTicket, Runnable> freezeReleaseObservers = new HashMap<>();
     private final HashMap<OperationTicket, Consumer<DimensionMutation>> terminalObservers =
             new HashMap<>();
     private final HashMap<OperationTicket, OperationProgress> publishedProgress = new HashMap<>();
@@ -201,6 +202,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
 
     private void releaseFreezeIfSafe() {
         if (lease != null && active.isSafeToRelease()) {
+            reportFreezeRelease();
             lease.release();
             lease = null;
             freezeReleased = true;
@@ -212,6 +214,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             positionObservers.remove(activeTicket);
             progressObservers.remove(activeTicket);
             freezeObservers.remove(activeTicket);
+            freezeReleaseObservers.remove(activeTicket);
             terminalObservers.remove(activeTicket);
             publishedProgress.remove(activeTicket);
             active = null;
@@ -322,6 +325,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             positionObservers.remove(ticket);
             progressObservers.remove(ticket);
             freezeObservers.remove(ticket);
+            freezeReleaseObservers.remove(ticket);
             terminalObservers.remove(ticket);
             publishedProgress.remove(ticket);
             notifyPositions();
@@ -381,6 +385,20 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         terminalObservers.put(ticket, observer);
     }
 
+    /** Runs once immediately before this operation releases its dimension freeze. */
+    public synchronized void observeBeforeFreezeRelease(
+            OperationTicket ticket, Runnable observer) {
+        Objects.requireNonNull(ticket, "ticket");
+        Objects.requireNonNull(observer, "observer");
+        if (ticket.equals(activeTicket) && freezeReleased) {
+            throw new IllegalStateException("Operation freeze has already been released");
+        }
+        if (queuePosition(ticket).isEmpty()) {
+            throw new IllegalArgumentException("Unknown operation ticket");
+        }
+        freezeReleaseObservers.put(ticket, observer);
+    }
+
     /** Runs once after the dimension is frozen and before the first mutation step. */
     public synchronized void observeFreezeAcquired(
             OperationTicket ticket, Runnable observer) {
@@ -405,6 +423,18 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             observer.run();
         } catch (RuntimeException failed) {
             reportObserverFailure("freeze boundary", failed);
+        }
+    }
+
+    private void reportFreezeRelease() {
+        Runnable observer = freezeReleaseObservers.remove(activeTicket);
+        if (observer == null) {
+            return;
+        }
+        try {
+            observer.run();
+        } catch (RuntimeException failed) {
+            reportObserverFailure("freeze release boundary", failed);
         }
     }
 
@@ -481,6 +511,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         positionObservers.clear();
         progressObservers.clear();
         freezeObservers.clear();
+        freezeReleaseObservers.clear();
         terminalObservers.clear();
         publishedProgress.clear();
         nextEnqueueObserver = null;

@@ -301,13 +301,14 @@ class DimensionOperationCoordinatorTest {
             order.add("enqueued");
             coordinator.observeFreezeAcquired(ticket, () -> order.add("frozen"));
             coordinator.observeTerminal(ticket, ignored -> order.add("terminal"));
+            coordinator.observeBeforeFreezeRelease(ticket, () -> order.add("release"));
         });
 
         coordinator.start(mutation);
         coordinator.tick();
 
         assertEquals(java.util.List.of(
-                "enqueued", "frozen", "advance", "terminal"), order);
+                "enqueued", "frozen", "advance", "terminal", "release"), order);
         assertTrue(!coordinator.hasActiveOperation());
     }
 
