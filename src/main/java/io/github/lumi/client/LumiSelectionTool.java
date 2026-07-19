@@ -1,6 +1,5 @@
 package io.github.lumi.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientSelection;
 import io.github.lumi.client.state.SelectionResizeSideResolver;
@@ -151,7 +150,6 @@ public final class LumiSelectionTool {
     }
 
     private static boolean actionModifierDown(Minecraft client) {
-        return InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_LALT)
-                || InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RALT);
+        return LumiHotkeys.actionModifierDown(client.options.keyMappings);
     }
 }

@@ -34,6 +34,16 @@ class LumiHotkeysTest {
     }
 
     @Test
+    void actionModifierIsARealRemappableBinding() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/LumiHotkeys.java"));
+        assertTrue(source.contains("\"key.lumi.action_modifier\""));
+        assertTrue(source.contains("actionModifier.isDown()"));
+        assertTrue(source.contains(
+                "KeyBindingHelper.registerKeyBinding(actionModifier)"));
+    }
+
+    @Test
     void altLIsConsumedBeforeVanillaAdvancements() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiHotkeys.java"));

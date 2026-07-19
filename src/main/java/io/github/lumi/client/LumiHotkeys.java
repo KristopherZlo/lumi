@@ -22,6 +22,8 @@ public final class LumiHotkeys {
     private final KeyMapping redo = mapping("key.lumi.redo", InputConstants.KEY_Y);
     private final KeyMapping compare = mapping(
             "key.lumi.toggle_compare_overlay", defaultCompareOverlayKey());
+    private final KeyMapping actionModifier = mapping(
+            "key.lumi.action_modifier", InputConstants.KEY_LALT);
     private final KeyMapping rollback = mapping(
             "key.lumi.quick_rollback", InputConstants.KEY_R);
     private final KeyMapping info = mapping("key.lumi.hotkey_info", InputConstants.KEY_I);
@@ -48,6 +50,7 @@ public final class LumiHotkeys {
         KeyBindingHelper.registerKeyBinding(undo);
         KeyBindingHelper.registerKeyBinding(redo);
         KeyBindingHelper.registerKeyBinding(compare);
+        KeyBindingHelper.registerKeyBinding(actionModifier);
         KeyBindingHelper.registerKeyBinding(rollback);
         KeyBindingHelper.registerKeyBinding(info);
         for (KeyMapping branch : branches) {
@@ -58,7 +61,7 @@ public final class LumiHotkeys {
 
     private void tick(Minecraft client) {
         boolean normalPlay = client.player != null && client.screen == null;
-        boolean altDown = altDown(client);
+        boolean altDown = actionModifier.isDown();
         if (consume(dashboard) && canOpenDashboard(normalPlay, altDown)) {
             if (dashboard.same(client.options.keyAdvancements)) {
                 consume(client.options.keyAdvancements);
@@ -77,6 +80,7 @@ public final class LumiHotkeys {
                 dispatcher.switchBranch(slot);
             }
         }
+        consume(actionModifier);
     }
 
     static int defaultDashboardKey() {
@@ -110,11 +114,6 @@ public final class LumiHotkeys {
         return clicked;
     }
 
-    private static boolean altDown(Minecraft client) {
-        return InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_LALT)
-                || InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RALT);
-    }
-
     private static KeyMapping mapping(String translationKey, int key) {
         return new KeyMapping(translationKey, InputConstants.Type.KEYSYM, key, CATEGORY);
     }
@@ -131,6 +130,9 @@ public final class LumiHotkeys {
                         mapping(mappings, "key.lumi.redo")),
                 shortcut("luma.hotkeys.compare_overlay", "luma.hotkeys.compare_overlay_help",
                         mapping(mappings, "key.lumi.toggle_compare_overlay")),
+                shortcut("luma.hotkeys.action_modifier",
+                        "luma.hotkeys.action_modifier_help",
+                        mapping(mappings, "key.lumi.action_modifier")),
                 shortcut("luma.hotkeys.quick_rollback",
                         "luma.hotkeys.quick_rollback_help",
                         mapping(mappings, "key.lumi.quick_rollback")),
@@ -146,6 +148,14 @@ public final class LumiHotkeys {
             }
         }
         throw new IllegalStateException("Missing Lumi key mapping: " + name);
+    }
+
+    static boolean actionModifierDown(KeyMapping[] mappings) {
+        return mapping(mappings, "key.lumi.action_modifier").isDown();
+    }
+
+    static String bindingLabel(KeyMapping[] mappings, String name) {
+        return mapping(mappings, name).getTranslatedKeyMessage().getString();
     }
 
     private static Shortcut shortcut(String labelKey, String helpKey, KeyMapping key) {
