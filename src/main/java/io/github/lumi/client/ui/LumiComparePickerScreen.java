@@ -24,10 +24,13 @@ import net.minecraft.resources.Identifier;
 public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
     private static final int MAX_ROWS = 5;
     private static final int COLUMN_GAP = 42;
+    private static final int NARROW_COLUMN_GAP = 22;
     private static final int ROW_HEIGHT = 42;
     private static final int ROW_STRIDE = 46;
     private static final int PREVIEW_WIDTH = 44;
     private static final int PREVIEW_HEIGHT = 30;
+    private static final int COMPACT_PREVIEW_WIDTH = 24;
+    private static final int COMPACT_PREVIEW_HEIGHT = 16;
     private static final Identifier CENTER_ICON = Identifier.fromNamespaceAndPath(
             LumiMod.MOD_ID, "textures/gui/icons/see-changes.png");
     private static final Identifier NO_PREVIEW_ICON = Identifier.fromNamespaceAndPath(
@@ -135,8 +138,11 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
             rowY -= scroll * ROW_STRIDE;
             boolean selected = version.equals(
                     left ? leftSelection : rightSelection);
+            boolean compact = compactCards();
             addLegacyButton(
-                    x + width - 58, rowY + 12, 50,
+                    compact ? x + 6 : x + width - 58,
+                    compact ? rowY + 22 : rowY + 12,
+                    compact ? Math.max(1, width - 12) : 50,
                     Component.translatable(selected
                             ? "luma.compare.selected_save"
                             : "luma.compare.select_save"),
@@ -242,41 +248,47 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                 graphics, x, y, width, ROW_HEIGHT,
                 LegacyLumiTheme.PANEL,
                 selected ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.PANEL_BORDER);
-        drawPreview(graphics, version, x + 5, y + 6);
-        int textX = x + PREVIEW_WIDTH + 11;
-        int textWidth = Math.max(0, width - PREVIEW_WIDTH - 80);
+        boolean compact = compactCards();
+        int previewWidth = compact ? COMPACT_PREVIEW_WIDTH : PREVIEW_WIDTH;
+        int previewHeight = compact ? COMPACT_PREVIEW_HEIGHT : PREVIEW_HEIGHT;
+        drawPreview(graphics, version, x + 5, y + (compact ? 3 : 6),
+                previewWidth, previewHeight);
+        int textX = x + previewWidth + 11;
+        int textWidth = Math.max(0,
+                width - previewWidth - (compact ? 16 : 80));
         graphics.drawString(font,
                 font.plainSubstrByWidth(version.message(), textWidth),
                 textX, y + 6, LegacyLumiTheme.TEXT, false);
-        String metadata = version.author() + " · " + DATE_FORMAT.format(
-                Instant.ofEpochMilli(version.timestampMillis()));
-        graphics.drawString(font,
-                font.plainSubstrByWidth(metadata, textWidth),
-                textX, y + 20, LegacyLumiTheme.MUTED, false);
+        if (!compact) {
+            String metadata = version.author() + " · " + DATE_FORMAT.format(
+                    Instant.ofEpochMilli(version.timestampMillis()));
+            graphics.drawString(font,
+                    font.plainSubstrByWidth(metadata, textWidth),
+                    textX, y + 20, LegacyLumiTheme.MUTED, false);
+        }
     }
 
     private void drawPreview(
             GuiGraphics graphics,
             HistorySnapshotPayload.Version version,
-            int x,
-            int y) {
+            int x, int y, int width, int height) {
         var texture = previews.texture(
                 snapshot.dimensionId(), version.id()).orElse(null);
         if (texture != null) {
             graphics.blit(
                     RenderPipelines.GUI_TEXTURED, texture.id(),
-                    x, y, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT,
+                    x, y, 0, 0, width, height,
                     texture.width(), texture.height(),
                     texture.width(), texture.height());
             return;
         }
         LegacyLumiTheme.outlined(
-                graphics, x, y, PREVIEW_WIDTH, PREVIEW_HEIGHT,
+                graphics, x, y, width, height,
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.INSET_BORDER);
         graphics.blit(
                 RenderPipelines.GUI_TEXTURED, NO_PREVIEW_ICON,
-                x + (PREVIEW_WIDTH - 12) / 2,
-                y + (PREVIEW_HEIGHT - 12) / 2,
+                x + (width - 12) / 2,
+                y + (height - 12) / 2,
                 0, 0, 12, 12, 24, 24, 24, 24);
     }
 
@@ -299,15 +311,31 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
     }
 
     private int rightX() {
-        return leftX() + columnWidth() + COLUMN_GAP;
+        return leftX() + columnWidth() + columnGap();
     }
 
     private int columnWidth() {
-        return Math.max(1, (layout.width() - 32 - COLUMN_GAP) / 2);
+        return columnWidth(layout.width());
+    }
+
+    static int columnWidth(int layoutWidth) {
+        return Math.max(1, (layoutWidth - 32 - columnGap(layoutWidth)) / 2);
+    }
+
+    private int columnGap() {
+        return columnGap(layout.width());
+    }
+
+    private static int columnGap(int layoutWidth) {
+        return layoutWidth < 360 ? NARROW_COLUMN_GAP : COLUMN_GAP;
+    }
+
+    private boolean compactCards() {
+        return columnWidth() < 150;
     }
 
     private int dividerX() {
-        return leftX() + columnWidth() + COLUMN_GAP / 2;
+        return leftX() + columnWidth() + columnGap() / 2;
     }
 
     private int rowsY() {

@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -32,5 +33,12 @@ class LumiComparePickerScreenTest {
         assertTrue(source.contains(
                 "selected ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.PANEL_BORDER"));
         assertTrue(source.contains("snapshot.dimensionId(), version.id()"));
+    }
+
+    @Test
+    void narrowColumnsKeepBothCardsInsideThePage() {
+        assertEquals(205, LumiComparePickerScreen.columnWidth(484));
+        assertEquals(108, LumiComparePickerScreen.columnWidth(271));
+        assertEquals(55, LumiComparePickerScreen.columnWidth(164));
     }
 }
