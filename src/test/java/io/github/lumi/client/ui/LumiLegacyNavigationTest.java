@@ -25,7 +25,8 @@ class LumiLegacyNavigationTest {
         for (String page : List.of(
                 "LumiZonesScreen.java",
                 "LumiBranchesScreen.java",
-                "LumiWorkspacesScreen.java",
+                "LumiDimensionsScreen.java",
+                "LumiDimensionHistoryScreen.java",
                 "LumiPackageScreen.java",
                 "LumiSettingsScreen.java",
                 "LumiDeletedVersionsScreen.java",
@@ -57,7 +58,8 @@ class LumiLegacyNavigationTest {
                 "LumiZonesScreen.java",
                 "LumiZoneDetailsScreen.java",
                 "LumiPackageScreen.java",
-                "LumiWorkspacesScreen.java",
+                "LumiDimensionsScreen.java",
+                "LumiDimensionHistoryScreen.java",
                 "LumiDeleteZoneScreen.java")) {
             String source = Files.readString(ui.resolve(screen));
             assertFalse(source.matches("(?s).*new EditBox\\([^;]+, 20,\\s*Component.*"),
