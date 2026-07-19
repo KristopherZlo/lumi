@@ -4,6 +4,7 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
@@ -272,6 +273,7 @@ public final class LumiHistoryGameTests {
             var expected = runtime.activeRef();
             current.set(runtime.startZoneSave(
                     expected, AUTHOR, AUTHOR.id(), zoneId, message,
+                    VersionTags.empty(), false,
                     operation -> terminal.set(operation.terminalState())));
         } catch (IOException failed) {
             throw helper.assertionException(
