@@ -12,6 +12,7 @@ import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
 import io.github.lumi.minecraft.operation.BranchRefRestorePublication;
 import io.github.lumi.minecraft.operation.CapturedGenerationCompletion;
 import io.github.lumi.minecraft.operation.PendingRestorePublication;
+import io.github.lumi.minecraft.operation.PendingStatisticsOperation;
 import io.github.lumi.minecraft.operation.OperationPriority;
 import io.github.lumi.minecraft.operation.RestoreOperation;
 import io.github.lumi.minecraft.operation.RestorePublication;
@@ -65,6 +66,7 @@ import io.github.lumi.domain.service.RecoveryChoice;
 import io.github.lumi.domain.service.RecoveryService;
 import io.github.lumi.domain.service.SaveJournalRecovery;
 import io.github.lumi.domain.service.PublishedApplyRecovery;
+import io.github.lumi.domain.service.PendingChangeStatisticsService;
 import io.github.lumi.domain.service.WorkspaceService;
 import io.github.lumi.domain.service.ZoneScope;
 import io.github.lumi.domain.service.ZoneService;
@@ -163,6 +165,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final VersionTagService versionTagService;
     private final VersionDisplayNameService versionDisplayNames;
     private final DimensionHistoryViewService historyViews;
+    private final PendingChangeStatisticsService pendingStatistics;
     private final CausalZoneGrowthTracker zoneGrowth;
     private final ReturnPointRestorePreparation returnPointRestores;
     private final DimensionPackageService packages;
@@ -232,6 +235,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 commits, new VersionTagRepository(repository));
         versionDisplayNames = new VersionDisplayNameService(
                 commits, new VersionDisplayNameRepository(repository));
+        pendingStatistics = new PendingChangeStatisticsService(
+                new WorldObjectRepository(repository), commits,
+                new OriginStore(repository));
         historyViews = new DimensionHistoryViewService(
                 commits,
                 new HistoryQueryService(
@@ -963,6 +969,36 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             int maximumSections) throws IOException {
         var workspace = activeWorkspace();
         return mutations.preview(workspace::includes, maximumSections);
+    }
+
+    public synchronized PendingStatisticsOperation startPendingStatistics(
+            BranchRef expected,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        requireNoRecovery();
+        if (!activeRef().equals(Objects.requireNonNull(expected, "expected"))) {
+            throw new IOException(
+                    "History changed before pending statistics started");
+        }
+        var workspace = activeWorkspace();
+        WorkingIndexSnapshot boundary = pendingBoundary(workspace);
+        var operation = new PendingStatisticsOperation(
+                expected.commit(), boundary, historyViews.zones(), worldReader,
+                () -> pendingBoundary(workspace), pendingStatistics, background);
+        operations.enqueue(
+                operation, OperationPriority.NORMAL,
+                Objects.requireNonNull(terminalObserver, "terminalObserver"));
+        return operation;
+    }
+
+    private WorkingIndexSnapshot pendingBoundary(
+            io.github.lumi.domain.model.Workspace workspace) {
+        Map<HistoryKey, Long> selected = new java.util.LinkedHashMap<>();
+        mutations.snapshot().generations().forEach((key, generation) -> {
+            if (workspace.includes(key)) {
+                selected.put(key, generation);
+            }
+        });
+        return new WorkingIndexSnapshot(selected);
     }
 
     public List<io.github.lumi.domain.model.HistoryEntry> history(int limit)
