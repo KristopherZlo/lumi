@@ -36,6 +36,8 @@ final class HistorySnapshotFactory {
                         ref.name().value(), ref.commit(), ref.name().equals(head.name())))
                 .toList();
         var visibleZones = runtime.visibleZones().stream().limit(64).toList();
+        var sharedCells = new io.github.lumi.domain.service.ZoneOverlapCounter()
+                .count(visibleZones);
         var zoneHistories = runtime.zoneHistories(
                 visibleZones.stream().map(io.github.lumi.domain.model.Zone::id)
                         .collect(Collectors.toSet()),
@@ -43,6 +45,7 @@ final class HistorySnapshotFactory {
         var zoneViews = visibleZones.stream()
                 .map(zone -> new HistorySnapshotPayload.ZoneView(
                         zone.id(), zone.name(), zone.color(), zone.cells().size(),
+                        sharedCells.getOrDefault(zone.id(), 0),
                         zone.revision(), zone.activeActors().contains(player.getUUID()),
                         zoneHistories.getOrDefault(zone.id(), java.util.List.of()).stream()
                                 .map(entry -> new HistorySnapshotPayload.Version(

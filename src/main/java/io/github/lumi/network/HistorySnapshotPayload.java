@@ -488,6 +488,7 @@ public record HistorySnapshotPayload(
             String name,
             int color,
             int cells,
+            int sharedCells,
             long revision,
             boolean active,
             List<Version> versions) {
@@ -497,7 +498,8 @@ public record HistorySnapshotPayload(
             versions = List.copyOf(Objects.requireNonNull(versions, "versions"));
             if (name.isBlank()
                     || name.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                    > MAX_TEXT_BYTES || cells < 0 || revision < 0
+                    > MAX_TEXT_BYTES || cells < 0 || sharedCells < 0
+                    || sharedCells > cells || revision < 0
                     || versions.size() > MAX_ZONE_VERSIONS
                     || versions.stream().anyMatch(version -> version.kind() != CommitKind.ZONE)) {
                 throw new IllegalArgumentException("Invalid zone metadata");
@@ -506,7 +508,13 @@ public record HistorySnapshotPayload(
 
         public ZoneView(
                 UUID id, String name, int color, int cells, long revision, boolean active) {
-            this(id, name, color, cells, revision, active, List.of());
+            this(id, name, color, cells, 0, revision, active, List.of());
+        }
+
+        public ZoneView(
+                UUID id, String name, int color, int cells, long revision,
+                boolean active, List<Version> versions) {
+            this(id, name, color, cells, 0, revision, active, versions);
         }
 
         private void write(FriendlyByteBuf buffer) {
@@ -514,6 +522,7 @@ public record HistorySnapshotPayload(
             buffer.writeUtf(name, MAX_TEXT_BYTES);
             buffer.writeInt(color);
             buffer.writeVarInt(cells);
+            buffer.writeVarInt(sharedCells);
             buffer.writeVarLong(revision);
             buffer.writeBoolean(active);
             buffer.writeVarInt(versions.size());
@@ -525,6 +534,7 @@ public record HistorySnapshotPayload(
             String name = buffer.readUtf(MAX_TEXT_BYTES);
             int color = buffer.readInt();
             int cells = buffer.readVarInt();
+            int sharedCells = buffer.readVarInt();
             long revision = buffer.readVarLong();
             boolean active = buffer.readBoolean();
             int count = buffer.readVarInt();
@@ -535,7 +545,9 @@ public record HistorySnapshotPayload(
             for (int index = 0; index < count; index++) {
                 versions.add(Version.read(buffer));
             }
-            return new ZoneView(id, name, color, cells, revision, active, versions);
+            return new ZoneView(
+                    id, name, color, cells, sharedCells,
+                    revision, active, versions);
         }
     }
 }

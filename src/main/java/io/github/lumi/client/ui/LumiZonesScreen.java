@@ -231,11 +231,18 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
             graphics.drawString(font,
                     font.plainSubstrByWidth(zone.name(), panelWidth - 250),
                     panelX + 28, rowY + 5, zone.color(), false);
-            graphics.drawString(font, Component.translatable(
+            Component metadata = Component.translatable(
                             "luma.zones.zone_meta",
                             Component.translatable(zone.active()
                                     ? "luma.zones.active" : "luma.zones.no_zone"),
-                            zone.cells()),
+                            zone.cells());
+            if (zone.sharedCells() > 0) {
+                metadata = metadata.copy().append(" | ").append(
+                        Component.translatable(
+                                "luma.zones.shared_cells", zone.sharedCells()));
+            }
+            graphics.drawString(font,
+                    font.plainSubstrByWidth(metadata.getString(), panelWidth - 250),
                     panelX + 28, rowY + 17, LegacyLumiTheme.MUTED, false);
         }
     }
