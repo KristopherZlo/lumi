@@ -206,9 +206,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         search = new EditBox(
                 font,
                 searchX,
-                historyY + 7,
+                historyY + 8,
                 searchWidth,
-                18,
+                16,
                 Component.translatable("luma.dashboard.search"));
         search.setBordered(false);
         search.setMaxLength(HistoryPageRequestPayload.MAX_QUERY_LENGTH);

@@ -37,11 +37,31 @@ class LumiLegacyNavigationTest {
 
         String modal = Files.readString(ui.resolve("LumiLegacyModalScreen.java"));
         assertTrue(modal.contains("background.render("));
+        assertTrue(modal.contains("GLFW_HAND_CURSOR"));
+        assertTrue(modal.contains("page ? \"chevron-left\" : \"close\""));
         assertFalse(modal.contains("background.mouseClicked("));
         assertFalse(modal.contains("background.mouseReleased("));
         String page = Files.readString(ui.resolve("LumiLegacyPageScreen.java"));
         assertFalse(page.contains("forwardsParentInput"));
         assertTrue(page.contains("x < layout.contentX()"));
         assertTrue(page.contains("dashboard.mouseClicked(click, doubled)"));
+    }
+
+    @Test
+    void textInputsUseCompactSingleLineHeight() throws Exception {
+        Path ui = Path.of("src/main/java/io/github/lumi/client/ui");
+        for (String screen : List.of(
+                "LumiDashboardScreen.java",
+                "LumiSaveScreen.java",
+                "LumiBranchScreen.java",
+                "LumiZonesScreen.java",
+                "LumiZoneDetailsScreen.java",
+                "LumiPackageScreen.java",
+                "LumiWorkspacesScreen.java",
+                "LumiDeleteZoneScreen.java")) {
+            String source = Files.readString(ui.resolve(screen));
+            assertFalse(source.matches("(?s).*new EditBox\\([^;]+, 20,\\s*Component.*"),
+                    screen);
+        }
     }
 }

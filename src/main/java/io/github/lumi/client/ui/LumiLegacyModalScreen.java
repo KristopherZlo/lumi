@@ -11,6 +11,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import org.lwjgl.glfw.GLFW;
 
 /** Shared legacy window chrome for V2 modal workflows. */
 abstract class LumiLegacyModalScreen extends Screen {
@@ -25,6 +26,7 @@ abstract class LumiLegacyModalScreen extends Screen {
     private int hintY;
     private int hintWidth;
     private int hintHeight;
+    private static long handCursor;
 
     protected LumiLegacyModalScreen(Component title) {
         this(Minecraft.getInstance().screen, title);
@@ -56,6 +58,14 @@ abstract class LumiLegacyModalScreen extends Screen {
         uiScale = LumiUiScale.current();
         width = uiScale.virtualSize(window.getGuiScaledWidth(), currentGuiScale);
         height = uiScale.virtualSize(window.getGuiScaledHeight(), currentGuiScale);
+        if (!(this instanceof LumiRecoveryScreen)) {
+            boolean page = this instanceof LumiLegacyPageScreen;
+            addLegacyIconButton(
+                    width - 36, 12, page ? "chevron-left" : "close",
+                    Component.translatable(page
+                            ? "luma.action.back" : "luma.action.close"),
+                    this::onClose, LumiLegacyButton.Kind.NORMAL);
+        }
     }
 
     protected final boolean addContextualHint(
@@ -109,6 +119,25 @@ abstract class LumiLegacyModalScreen extends Screen {
                     closeX + 5, hintY + 7, 0, 0, 12, 12,
                     24, 24, 24, 24);
         }
+        updateCursor(mouseX, mouseY);
+    }
+
+    private void updateCursor(int mouseX, int mouseY) {
+        boolean hovered = children().stream().anyMatch(child ->
+                child instanceof LumiLegacyButton button
+                        && button.isMouseOver(mouseX, mouseY));
+        if (hovered && handCursor == 0L) {
+            handCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_HAND_CURSOR);
+        }
+        GLFW.glfwSetCursor(
+                Minecraft.getInstance().getWindow().handle(),
+                hovered ? handCursor : 0L);
+    }
+
+    @Override
+    public void removed() {
+        GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().handle(), 0L);
+        super.removed();
     }
 
     protected final LegacyRenderContext beginLegacyRender(

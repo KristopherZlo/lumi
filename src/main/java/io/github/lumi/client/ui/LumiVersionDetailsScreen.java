@@ -109,7 +109,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
 
         if (editingName) {
             nameEditor = new EditBox(font, panelX + 20, panelY + 12,
-                    Math.max(20, panelWidth - 150), 20,
+                    Math.max(20, panelWidth - 150), 16,
                     Component.translatable("luma.save_details.rename_title"));
             nameEditor.setMaxLength(VersionDisplayName.MAX_LENGTH);
             nameEditor.setValue(displayedName);
@@ -130,7 +130,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         int metadataWidth = Math.max(0, panelWidth - 300);
         if (editingTags) {
             tagEditor = new EditBox(font, metadataX, panelY + 143,
-                    Math.max(20, metadataWidth - 30), 20,
+                    Math.max(20, metadataWidth - 30), 16,
                     Component.translatable("luma.history.tags_input"));
             tagEditor.setMaxLength(VersionTags.MAX_SERIALIZED_LENGTH);
             tagEditor.setValue(displayedTags.serialize());

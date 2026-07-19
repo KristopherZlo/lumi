@@ -30,7 +30,8 @@ public final class LumiLegacyButton extends Button {
             int x, int y, int width, int height,
             Component message, OnPress onPress, Kind kind, String iconName) {
         super(
-                x, y, iconName == null ? width : ICON_BUTTON_WIDTH, CONTROL_HEIGHT,
+                x, y, iconName == null ? contentWidth(width, message) : ICON_BUTTON_WIDTH,
+                CONTROL_HEIGHT,
                 message, onPress, DEFAULT_NARRATION);
         this.kind = kind;
         boolean sliders = "sliders".equals(iconName);
@@ -45,6 +46,11 @@ public final class LumiLegacyButton extends Button {
         if (icon != null) {
             setTooltip(Tooltip.create(message));
         }
+    }
+
+    private static int contentWidth(int maximum, Component label) {
+        return Math.min(maximum, Math.max(CONTROL_HEIGHT,
+                Minecraft.getInstance().font.width(label) + 12));
     }
 
     @Override

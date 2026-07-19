@@ -67,7 +67,7 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
         loadLocalPackages();
         int x = panelX + 16;
         int contentWidth = panelWidth - 32;
-        name = new EditBox(font, x, panelY + 62 + contentOffset, contentWidth, 20,
+        name = new EditBox(font, x, panelY + 63 + contentOffset, contentWidth, 16,
                 Component.translatable("luma.share.package_name"));
         name.setMaxLength(PackageScreenController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.share.package_name"));
@@ -281,7 +281,7 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
                     LegacyLumiTheme.TEXT, false);
             LegacyLumiTheme.outlined(graphics, panelX + 14,
                     panelY + 60 + contentOffset,
-                    panelWidth - 28, 24,
+                    panelWidth - 28, 20,
                     LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
             if (browser.pendingDelete().isPresent()) renderDeleteConfirmation(graphics);
             else renderRows(graphics);

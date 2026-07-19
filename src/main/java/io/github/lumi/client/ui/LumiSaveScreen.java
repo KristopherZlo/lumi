@@ -84,7 +84,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
                 this::refreshPreview, LumiLegacyButton.Kind.NORMAL);
 
         message = new EditBox(
-                font, x + 14, fieldY + 37, layout.width() - 28, 20,
+                font, x + 14, fieldY + 38, layout.width() - 28, 16,
                 Component.translatable("luma.save.name_input"));
         message.setMaxLength(SaveScreenController.MAX_NAME_LENGTH);
         message.setHint(Component.translatable("luma.save.name_input"));
@@ -95,7 +95,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         message.setValue(initialMessage);
 
         tags = new EditBox(
-                font, x + 14, fieldY + 90, layout.width() - 28, 20,
+                font, x + 14, fieldY + 91, layout.width() - 28, 16,
                 Component.translatable("luma.history.tags_input"));
         tags.setMaxLength(io.github.lumi.domain.model.VersionTags.MAX_SERIALIZED_LENGTH);
         tags.setHint(Component.translatable("luma.history.tags_input"));
@@ -213,7 +213,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         graphics.drawString(font, Component.translatable("luma.quick_save.name_help"),
                 x + 12, fieldY + 20, LegacyLumiTheme.MUTED, false);
         LegacyLumiTheme.outlined(graphics, x + 11, fieldY + 34,
-                layout.width() - 22, 24,
+                layout.width() - 22, 20,
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.PANEL_BORDER);
 
         LegacyLumiTheme.outlined(graphics, x + 6, fieldY + 72,
@@ -222,7 +222,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         graphics.drawString(font, Component.translatable("luma.save.tags_title"),
                 x + 12, fieldY + 78, LegacyLumiTheme.TEXT, false);
         LegacyLumiTheme.outlined(graphics, x + 11, fieldY + 87,
-                layout.width() - 22, 24,
+                layout.width() - 22, 20,
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.PANEL_BORDER);
     }
 

@@ -57,7 +57,7 @@ public final class LumiWorkspacesScreen extends LumiLegacyPageScreen {
         int contentX = panelX + 20;
         int contentWidth = panelWidth - 40;
         name = new EditBox(
-                font, contentX, panelY + 72, contentWidth - 240, 20,
+                font, contentX, panelY + 73, contentWidth - 240, 16,
                 Component.translatable("luma.create_project.name"));
         name.setMaxLength(WorkspaceScreenController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.create_project.name"));
@@ -166,7 +166,7 @@ public final class LumiWorkspacesScreen extends LumiLegacyPageScreen {
         graphics.drawString(font, Component.translatable("luma.screen.create_project.title"),
                 panelX + 20, panelY + 56, LegacyLumiTheme.TEXT, false);
         LegacyLumiTheme.outlined(graphics, panelX + 18, panelY + 69,
-                panelWidth - 278, 26,
+                panelWidth - 278, 20,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         renderWorkspaceRows(graphics, panelWidth);
         if (!error.isEmpty()) {

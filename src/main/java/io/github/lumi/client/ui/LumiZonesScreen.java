@@ -78,7 +78,7 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         panelHeight = shell.windowHeight();
         int contentX = panelX + 20;
         int contentWidth = panelWidth - 40;
-        name = new EditBox(font, contentX, panelY + 72, contentWidth - 140, 20,
+        name = new EditBox(font, contentX, panelY + 73, contentWidth - 140, 16,
                 Component.translatable("luma.zones.create_title"));
         name.setMaxLength(ZoneScreenController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.zones.create_title"));
@@ -207,7 +207,7 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         graphics.drawString(font, Component.translatable("luma.zones.create_help"),
                 panelX + 20, panelY + 56, LegacyLumiTheme.MUTED, false);
         LegacyLumiTheme.outlined(graphics, panelX + 18, panelY + 69,
-                panelWidth - 178, 26,
+                panelWidth - 178, 20,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         graphics.drawString(font, Component.translatable("luma.zones.list_title"),
                 panelX + 20, panelY + 106, LegacyLumiTheme.TEXT, false);

@@ -111,7 +111,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
         panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
         int contentWidth = panelWidth - 40;
         message = new EditBox(
-                font, panelX + 20, panelY + 68, contentWidth - 200, 20,
+                font, panelX + 20, panelY + 69, contentWidth - 200, 16,
                 Component.translatable("luma.zones.save_input"));
         message.setMaxLength(ZoneDetailsController.MAX_MESSAGE_LENGTH);
         message.setHint(Component.translatable("luma.zones.save_input"));
@@ -130,7 +130,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
                 Component.translatable("luma.action.amend_version"),
                 this::amend, LumiLegacyButton.Kind.NORMAL);
         tags = new EditBox(
-                font, panelX + 20, panelY + 96, contentWidth - 40, 20,
+                font, panelX + 20, panelY + 97, contentWidth - 40, 16,
                 Component.translatable("luma.history.tags_input"));
         tags.setMaxLength(io.github.lumi.domain.model.VersionTags.MAX_SERIALIZED_LENGTH);
         tags.setHint(Component.translatable("luma.history.tags_input"));
@@ -185,7 +185,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
                     rebuildWidgets();
                 }, LumiLegacyButton.Kind.NORMAL);
         search = new EditBox(
-                font, panelX + panelWidth - 160, panelY + 126, 140, 18,
+                font, panelX + panelWidth - 160, panelY + 127, 140, 16,
                 Component.translatable("luma.dashboard.search"));
         search.setBordered(false);
         search.setMaxLength(HistoryPageRequestPayload.MAX_QUERY_LENGTH);
@@ -347,10 +347,10 @@ public final class LumiZoneDetailsScreen extends LumiLegacyModalScreen {
                         ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.MUTED,
                 false);
         LegacyLumiTheme.outlined(graphics, panelX + 18, panelY + 66,
-                panelWidth - 236, 24,
+                panelWidth - 236, 20,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         LegacyLumiTheme.outlined(graphics, panelX + 18, panelY + 94,
-                panelWidth - 76, 24,
+                panelWidth - 76, 20,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         if (search != null) {
             LegacyLumiTheme.outlined(
