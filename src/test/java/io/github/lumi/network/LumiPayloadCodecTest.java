@@ -109,6 +109,15 @@ class LumiPayloadCodecTest {
                 zoneDelete.encode(), id('1'), 42);
         assertEquals(deleteZone, roundTrip(
                 HistoryCommandPayload.CODEC, deleteZone));
+        ZoneOverlayPayload overlay = new ZoneOverlayPayload(
+                UUID.randomUUID(), "minecraft:overworld", new UUID(0, 7),
+                0, true, Optional.of(new ZoneOverlayPayload.ZoneBatch(
+                        new UUID(0, 8), "Clock", 0xff336699, 3, true,
+                        java.util.List.of(new io.github.lumi.domain.model.ZoneShellFace(
+                                io.github.lumi.domain.model.ZoneShellFace.Side.UP,
+                                16, 0, 16, 0, 16)))),
+                "");
+        assertEquals(overlay, roundTrip(ZoneOverlayPayload.CODEC, overlay));
         for (HistoryCommandPayload.Kind kind : java.util.List.of(
                 HistoryCommandPayload.Kind.ZONE_ENTER,
                 HistoryCommandPayload.Kind.ZONE_LEAVE)) {
