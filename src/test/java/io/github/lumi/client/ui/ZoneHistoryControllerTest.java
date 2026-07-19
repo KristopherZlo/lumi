@@ -50,6 +50,37 @@ class ZoneHistoryControllerTest {
     }
 
     @Test
+    void appendsLoadedZonePagesForTheScrollView() {
+        UUID workspace = new UUID(0, 21);
+        UUID zone = new UUID(0, 22);
+        ClientHistoryPageStore pages = new ClientHistoryPageStore();
+        AtomicReference<UUID> request = new AtomicReference<>();
+        ZoneHistoryController controller = new ZoneHistoryController(
+                snapshot(workspace), zone, pages,
+                (branch, ignored, offset, limit, query) -> {
+                    UUID id = UUID.randomUUID();
+                    request.set(id);
+                    pages.begin(id, "minecraft:overworld", workspace,
+                            branch, Optional.of(zone), offset);
+                    return id;
+                });
+        controller.request();
+        assertTrue(pages.accept(new HistoryPagePayload(
+                request.get(), "minecraft:overworld", workspace,
+                new BranchName("main"), Optional.of(zone), 0, true,
+                List.of(version()), "")));
+        assertEquals(1, controller.versions(List.of()).size());
+
+        controller.next();
+        assertTrue(pages.accept(new HistoryPagePayload(
+                request.get(), "minecraft:overworld", workspace,
+                new BranchName("main"), Optional.of(zone),
+                ZoneHistoryController.PAGE_SIZE, false,
+                List.of(version('2')), "")));
+        assertEquals(2, controller.versions(List.of()).size());
+    }
+
+    @Test
     void resetsPagingWhenTheServerSearchChanges() {
         UUID workspace = new UUID(0, 11);
         UUID zone = new UUID(0, 12);
@@ -78,8 +109,12 @@ class ZoneHistoryControllerTest {
     }
 
     private static HistorySnapshotPayload.Version version() {
+        return version('1');
+    }
+
+    private static HistorySnapshotPayload.Version version(char digit) {
         return new HistorySnapshotPayload.Version(
-                id('1'), "Save", "Builder", 1, CommitKind.ZONE);
+                id(digit), "Save", "Builder", digit, CommitKind.ZONE);
     }
 
     private static CommitId id(char digit) {

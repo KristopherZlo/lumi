@@ -4,14 +4,15 @@ import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistorySnapshotPayload;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Owns branch and page state for one zone's bounded history query. */
+/** Owns branch-filtered, incrementally loaded history for one zone. */
 public final class ZoneHistoryController {
-    static final int PAGE_SIZE = 3;
+    static final int PAGE_SIZE = HistoryPagePayload.MAX_VERSIONS;
     private final HistorySnapshotPayload snapshot;
     private final UUID zoneId;
     private final ClientHistoryPageStore pages;
@@ -19,6 +20,8 @@ public final class ZoneHistoryController {
     private BranchName branch;
     private int offset;
     private String query = "";
+    private final List<HistorySnapshotPayload.Version> loaded = new ArrayList<>();
+    private int loadedOffset = -1;
 
     ZoneHistoryController(
             HistorySnapshotPayload snapshot,
@@ -45,10 +48,15 @@ public final class ZoneHistoryController {
 
     List<HistorySnapshotPayload.Version> versions(
             List<HistorySnapshotPayload.Version> initial) {
-        return page().map(HistoryPagePayload::versions)
-                .orElseGet(() -> offset == 0
-                        && branch.value().equals(snapshot.branchName())
-                        ? List.copyOf(initial) : List.of());
+        page().filter(current -> current.offset() != loadedOffset)
+                .ifPresent(current -> {
+                    if (current.offset() == 0) loaded.clear();
+                    loaded.addAll(current.versions());
+                    loadedOffset = current.offset();
+                });
+        if (!loaded.isEmpty()) return List.copyOf(loaded);
+        return offset == 0 && branch.value().equals(snapshot.branchName())
+                ? List.copyOf(initial) : List.of();
     }
 
     BranchName branch() {
@@ -92,9 +100,14 @@ public final class ZoneHistoryController {
                 break;
             }
         }
-        branch = new BranchName(branches.get(
-                (current + 1) % branches.size()).name());
-        offset = 0;
+        selectBranch(branches.get((current + 1) % branches.size()).name());
+    }
+
+    void selectBranch(String replacement) {
+        BranchName selected = new BranchName(replacement);
+        if (branch.equals(selected)) return;
+        branch = selected;
+        reset();
         request();
     }
 
@@ -105,12 +118,18 @@ public final class ZoneHistoryController {
             return;
         }
         query = normalized;
-        offset = 0;
+        reset();
         request();
     }
 
     String error() {
         return page().map(HistoryPagePayload::error).orElse("");
+    }
+
+    private void reset() {
+        offset = 0;
+        loaded.clear();
+        loadedOffset = -1;
     }
 
     @FunctionalInterface
