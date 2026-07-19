@@ -12,6 +12,8 @@ class LumiPartialRestoreScreenTest {
     void usesOnlySwordBoundsAndKeepsExactPreviewBeforeApply() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiPartialRestoreScreen.java"));
+        String fullRestore = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiRestoreScreen.java"));
 
         assertTrue(source.contains("BlockBox selection"));
         assertTrue(source.contains("form.beginPreview"));
@@ -19,5 +21,8 @@ class LumiPartialRestoreScreenTest {
         assertTrue(source.contains("mode_outside_selection"));
         assertFalse(source.contains("EditBox"));
         assertFalse(source.contains("setMinX"));
+        assertFalse(fullRestore.contains("BlockBox"));
+        assertFalse(fullRestore.contains("PartialRestorePlanPayload"));
+        assertFalse(fullRestore.contains("EditBox"));
     }
 }

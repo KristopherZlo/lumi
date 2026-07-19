@@ -278,15 +278,13 @@ public final class LumiClient implements ClientModInitializer {
     private static void openRestore(
             Screen parent, HistorySnapshotPayload.Version version) {
         Minecraft.getInstance().setScreen(new LumiRestoreScreen(
-                parent, version.id(), version.message(), SELECTION::bounds,
-                (target, includeEntities) -> {
+                parent, version.id(), version.message(), (target, includeEntities) -> {
                     if (includeEntities) {
                         NETWORKING.restore(target);
                     } else {
                         NETWORKING.restoreWithoutEntities(target);
                     }
-                }, NETWORKING::previewRestoreArea,
-                NETWORKING::applyRestoreArea));
+                }));
     }
 
     private static void openPartialRestore(
