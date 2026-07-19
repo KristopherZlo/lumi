@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.network.HistorySnapshotPayload;
@@ -124,6 +125,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
 
         historyY = layout.bodyY() + HISTORY_TOP_OFFSET;
         historyHeight = layout.bodyHeight() - HISTORY_TOP_OFFSET;
+        addDashboardHint();
         if (snapshot == null) {
             return;
         }
@@ -167,6 +169,24 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             addIconButton(right - 26, rowY + 6,
                     "trash", "luma.action.delete",
                     () -> openDelete.accept(version), LumiLegacyButton.Kind.DANGER);
+        }
+    }
+
+    private void addDashboardHint() {
+        int x = layout.bodyX() + 14;
+        int y = layout.bodyY() + 50;
+        int width = Math.max(1, layout.bodyWidth() - 28);
+        if (addContextualHint(ClientContextualHelpHint.HISTORY, x, y, width)
+                || addContextualHint(ClientContextualHelpHint.SHORTCUTS, x, y, width)
+                || snapshot == null) {
+            return;
+        }
+        if (snapshot.pendingKeys() == 0) {
+            addContextualHint(ClientContextualHelpHint.CLEAN_STATE, x, y, width);
+            return;
+        }
+        if (!addContextualHint(ClientContextualHelpHint.SAVE, x, y, width)) {
+            addContextualHint(ClientContextualHelpHint.QUICK_ROLLBACK, x, y, width);
         }
     }
 

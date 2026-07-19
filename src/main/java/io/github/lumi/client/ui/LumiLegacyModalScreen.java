@@ -1,16 +1,21 @@
 package io.github.lumi.client.ui;
 
 import com.mojang.blaze3d.platform.Window;
+import io.github.lumi.LumiMod;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.onboarding.ClientContextualHelpService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 /** Shared legacy window chrome for V2 modal workflows. */
 abstract class LumiLegacyModalScreen extends Screen {
+    private static final Identifier HINT_CLOSE_ICON = Identifier.fromNamespaceAndPath(
+            LumiMod.MOD_ID, "textures/gui/icons/close.png");
     private final Screen background;
     private final ClientContextualHelpService contextualHelp =
             new ClientContextualHelpService();
@@ -64,13 +69,6 @@ abstract class LumiLegacyModalScreen extends Screen {
         hintWidth = width;
         hintHeight = 28 + font.split(
                 Component.translatable(hint.bodyKey()), Math.max(1, width - 14)).size() * 10;
-        addLegacyIconButton(
-                x + width - 30, y + 4, "close",
-                Component.translatable("luma.action.dismiss_hint"),
-                () -> {
-                    contextualHelp.dismissHint(hint);
-                    rebuildWidgets();
-                }, LumiLegacyButton.Kind.NORMAL);
         return true;
     }
 
@@ -81,6 +79,7 @@ abstract class LumiLegacyModalScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
         if (contextualHint != null) {
             LegacyLumiTheme.outlined(
                     graphics, hintX, hintY, hintWidth, hintHeight,
@@ -98,8 +97,18 @@ abstract class LumiLegacyModalScreen extends Screen {
                         LegacyLumiTheme.TEXT, false);
                 lineY += 10;
             }
+            int closeX = hintX + hintWidth - 28;
+            boolean hovered = mouseX >= closeX && mouseX < closeX + 22
+                    && mouseY >= hintY + 4 && mouseY < hintY + 22;
+            LegacyLumiTheme.outlined(
+                    graphics, closeX, hintY + 4, 22, 18,
+                    hovered ? LegacyLumiTheme.CHIP : LegacyLumiTheme.INSET,
+                    LegacyLumiTheme.STATUS_BORDER);
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED, HINT_CLOSE_ICON,
+                    closeX + 5, hintY + 7, 0, 0, 12, 12,
+                    24, 24, 24, 24);
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     protected final LegacyRenderContext beginLegacyRender(
@@ -120,7 +129,19 @@ abstract class LumiLegacyModalScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
-        return super.mouseClicked(virtualClick(click), doubled);
+        MouseButtonEvent virtual = virtualClick(click);
+        if (contextualHint != null
+                && virtual.x() >= hintX && virtual.x() < hintX + hintWidth
+                && virtual.y() >= hintY && virtual.y() < hintY + hintHeight) {
+            int closeX = hintX + hintWidth - 28;
+            if (virtual.x() >= closeX && virtual.x() < closeX + 22
+                    && virtual.y() >= hintY + 4 && virtual.y() < hintY + 22) {
+                contextualHelp.dismissHint(contextualHint);
+                rebuildWidgets();
+            }
+            return true;
+        }
+        return super.mouseClicked(virtual, doubled);
     }
 
     @Override
