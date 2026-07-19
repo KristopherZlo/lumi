@@ -15,6 +15,9 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
     private static final int MAX_VISIBLE_BRANCHES = 6;
     private static final int PANEL_WIDTH = 520;
     private static final int PANEL_HEIGHT = 300;
+    private static final int LIST_Y = 54;
+    private static final int ROW_HEIGHT = 20;
+    private static final int ROW_STRIDE = 21;
     private final Screen parent;
     private final String dimensionId;
     private final String currentBranch;
@@ -25,6 +28,8 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
     private String error = "";
     private int panelX;
     private int panelY;
+    private int panelWidth;
+    private int panelHeight;
 
     public LumiMergeScreen(
             Screen parent,
@@ -53,35 +58,44 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        panelX = (width - panelWidth) / 2;
-        panelY = Math.max(16, (height - PANEL_HEIGHT) / 2);
+        LegacyModalLayout layout = fitPanel(width, height);
+        panelX = layout.x();
+        panelY = layout.y();
+        panelWidth = layout.width();
+        panelHeight = layout.height();
         if (pendingSource != null) {
-            addConfirmation(panelWidth);
+            addConfirmation();
             return;
         }
+        int visibleRows = visibleBranchRows(panelHeight);
+        int buttonWidth = Math.min(148, Math.max(80, panelWidth / 3));
         int row = 0;
         for (HistorySnapshotPayload.Branch branch : branches) {
-            if (branch.active() || row == MAX_VISIBLE_BRANCHES) continue;
-            int rowY = panelY + 92 + row * 28;
-            addLegacyButton(panelX + panelWidth - 168, rowY + 4, 148,
+            if (branch.active()) continue;
+            if (row == visibleRows) break;
+            int rowY = panelY + LIST_Y + row * ROW_STRIDE;
+            addLegacyButton(
+                    panelX + panelWidth - buttonWidth - 18,
+                    rowY + 1, buttonWidth,
                     Component.translatable("luma.action.preview"),
                     () -> preview(branch), LumiLegacyButton.Kind.NORMAL);
             row++;
         }
-        addLegacyButton(width / 2 - 60, panelY + PANEL_HEIGHT - 28, 120,
+        addLegacyButton(width / 2 - 60,
+                panelY + actionOffset(panelHeight), 120,
                 Component.translatable("luma.action.cancel"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
-    private void addConfirmation(int panelWidth) {
+    private void addConfirmation() {
         int buttonWidth = (panelWidth - 48) / 2;
-        addLegacyButton(panelX + 20, panelY + PANEL_HEIGHT - 34, buttonWidth,
+        int actionY = panelY + actionOffset(panelHeight);
+        addLegacyButton(panelX + 20, actionY, buttonWidth,
                 Component.translatable("luma.action.merge_into_current"),
                 () -> submit(pendingSource.name()),
                 LumiLegacyButton.Kind.PRIMARY);
         addLegacyButton(panelX + 28 + buttonWidth,
-                panelY + PANEL_HEIGHT - 34, buttonWidth,
+                actionY, buttonWidth,
                 Component.translatable("luma.action.cancel"), () -> {
                     pendingSource = null;
                     error = "";
@@ -113,8 +127,7 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         graphics.drawCenteredString(font, title, width / 2, panelY + 16,
                 LegacyLumiTheme.TEXT);
         graphics.drawCenteredString(font,
@@ -124,18 +137,24 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
                 Component.translatable("luma.merge.source_wins"),
                 width / 2, panelY + 52, LegacyLumiTheme.ACCENT);
         if (pendingSource != null) {
-            renderConfirmation(graphics, panelWidth);
+            renderConfirmation(graphics);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
             return;
         }
+        int visibleRows = visibleBranchRows(panelHeight);
+        int buttonWidth = Math.min(148, Math.max(80, panelWidth / 3));
         int row = 0;
         for (HistorySnapshotPayload.Branch branch : branches) {
-            if (branch.active() || row == MAX_VISIBLE_BRANCHES) continue;
-            int rowY = panelY + 92 + row * 28;
+            if (branch.active()) continue;
+            if (row == visibleRows) break;
+            int rowY = panelY + LIST_Y + row * ROW_STRIDE;
             renderLegacyPanel(graphics, panelX + 20, rowY,
-                    panelWidth - 40, 28);
-            graphics.drawString(font, shortName(branch.name()),
-                    panelX + 28, rowY + 10, LegacyLumiTheme.TEXT, false);
+                    panelWidth - 40, ROW_HEIGHT);
+            graphics.drawString(font,
+                    font.plainSubstrByWidth(
+                            shortName(branch.name()),
+                            panelWidth - buttonWidth - 54),
+                    panelX + 28, rowY + 6, LegacyLumiTheme.TEXT, false);
             row++;
         }
         if (row == 0) {
@@ -153,36 +172,43 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
         }
     }
 
-    private void renderConfirmation(GuiGraphics graphics, int panelWidth) {
+    private void renderConfirmation(GuiGraphics graphics) {
         HistorySnapshotPayload.Branch target = branches.stream()
                 .filter(HistorySnapshotPayload.Branch::active)
                 .findFirst().orElse(null);
-        int previewWidth = 128;
-        int previewHeight = 72;
-        int gap = 34;
+        int previewWidth = previewWidth(panelWidth);
+        int previewHeight = previewHeight(panelHeight);
+        int gap = 14;
+        int previewY = panelY + 66;
         int startX = panelX + (panelWidth - previewWidth * 2 - gap) / 2;
-        drawPreview(graphics, pendingSource, startX, panelY + 92,
+        drawPreview(graphics, pendingSource, startX, previewY,
+                previewWidth, previewHeight,
                 "luma.ideas.merge_source_preview",
                 LegacyLumiTheme.ACCENT);
         if (target != null) {
             drawPreview(graphics, target,
-                    startX + previewWidth + gap, panelY + 92,
+                    startX + previewWidth + gap, previewY,
+                    previewWidth, previewHeight,
                     "luma.ideas.merge_target_preview",
                     LegacyLumiTheme.TEXT);
         }
         graphics.drawCenteredString(
                 font, Component.literal("→"),
-                panelX + panelWidth / 2, panelY + 128,
+                panelX + panelWidth / 2,
+                previewY + previewHeight / 2 - 4,
                 LegacyLumiTheme.ACCENT);
+        int actionY = panelY + actionOffset(panelHeight);
         graphics.drawCenteredString(
                 font,
                 Component.translatable(
                         "luma.merge.confirm_source",
                         shortName(pendingSource.name())),
-                width / 2, panelY + 188, LegacyLumiTheme.TEXT);
+                width / 2,
+                Math.min(actionY - 14, previewY + previewHeight + 18),
+                LegacyLumiTheme.TEXT);
         if (!error.isEmpty()) {
             graphics.drawCenteredString(
-                    font, errorText(error), width / 2, panelY + 218,
+                    font, errorText(error), width / 2, actionY - 13,
                     LegacyLumiTheme.DANGER);
         }
     }
@@ -192,23 +218,53 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
             HistorySnapshotPayload.Branch branch,
             int x,
             int y,
+            int previewWidth,
+            int previewHeight,
             String label,
             int color) {
         graphics.drawCenteredString(
                 font, Component.translatable(label),
-                x + 64, y - 14, color);
+                x + previewWidth / 2, y - 12, color);
         LegacyLumiTheme.outlined(
-                graphics, x, y, 128, 72,
+                graphics, x, y, previewWidth, previewHeight,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         previews.texture(dimensionId, branch.head()).ifPresent(texture ->
                 graphics.blit(
                         RenderPipelines.GUI_TEXTURED, texture.id(),
-                        x, y, 0, 0, 128, 72,
+                        x, y, 0, 0, previewWidth, previewHeight,
                         texture.width(), texture.height(),
                         texture.width(), texture.height()));
         graphics.drawCenteredString(
                 font, shortName(branch.name()),
-                x + 64, y + 78, color);
+                x + previewWidth / 2, y + previewHeight + 5, color);
+    }
+
+    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+        int panelWidth = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 16));
+        int panelHeight = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
+        return new LegacyModalLayout(
+                Math.max(0, (screenWidth - panelWidth) / 2),
+                Math.max(0, (screenHeight - panelHeight) / 2),
+                panelWidth, panelHeight);
+    }
+
+    static int actionOffset(int panelHeight) {
+        return panelHeight - 28;
+    }
+
+    static int visibleBranchRows(int panelHeight) {
+        return Math.min(MAX_VISIBLE_BRANCHES,
+                Math.max(0,
+                        (actionOffset(panelHeight) - LIST_Y - 4) / ROW_STRIDE));
+    }
+
+    static int previewWidth(int panelWidth) {
+        return Math.min(128, Math.max(1, (panelWidth - 46) / 2));
+    }
+
+    static int previewHeight(int panelHeight) {
+        return Math.min(72,
+                Math.max(32, actionOffset(panelHeight) - 109));
     }
 
     private static String shortName(String name) {
