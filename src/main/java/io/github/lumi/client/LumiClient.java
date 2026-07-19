@@ -14,6 +14,7 @@ import io.github.lumi.client.ui.LumiOperationHud;
 import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.LumiDiagnosticsScreen;
 import io.github.lumi.client.ui.LumiDeleteVersionScreen;
+import io.github.lumi.client.ui.LumiDeleteZoneScreen;
 import io.github.lumi.client.ui.LumiDeletedVersionsScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiBranchesScreen;
@@ -197,6 +198,8 @@ public final class LumiClient implements ClientModInitializer {
                 parent, HISTORY,
                 new ZoneScreenController(NETWORKING::createZone),
                 zone -> openZoneDetails(client.screen, zone),
+                zone -> client.setScreen(new LumiDeleteZoneScreen(
+                        client.screen, zone, NETWORKING::deleteZone)),
                 NETWORKING::enterZone, NETWORKING::leaveZone));
     }
 

@@ -18,6 +18,7 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
     private final ClientHistoryStore history;
     private final ZoneScreenController controller;
     private final Consumer<HistorySnapshotPayload.ZoneView> openDetails;
+    private final Consumer<HistorySnapshotPayload.ZoneView> delete;
     private final Consumer<UUID> enter;
     private final Consumer<UUID> leave;
     private HistorySnapshotPayload snapshot;
@@ -35,14 +36,26 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
             ClientHistoryStore history,
             ZoneScreenController controller,
             Consumer<HistorySnapshotPayload.ZoneView> openDetails,
+            Consumer<HistorySnapshotPayload.ZoneView> delete,
             Consumer<UUID> enter,
             Consumer<UUID> leave) {
         super(parent, Component.translatable("luma.tab.zones"), LegacyProjectTab.ZONES);
         this.history = Objects.requireNonNull(history, "history");
         this.controller = Objects.requireNonNull(controller, "controller");
         this.openDetails = Objects.requireNonNull(openDetails, "openDetails");
+        this.delete = Objects.requireNonNull(delete, "delete");
         this.enter = Objects.requireNonNull(enter, "enter");
         this.leave = Objects.requireNonNull(leave, "leave");
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        HistorySnapshotPayload latest =
+                history.state().snapshot().orElse(null);
+        if (!Objects.equals(snapshot, latest)) {
+            rebuildWidgets();
+        }
     }
 
     @Override
@@ -89,6 +102,9 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.ZoneView zone = snapshot.zones().get(index);
             int rowY = panelY + 126 + (index - start) * 32;
+            addLegacyIconButton(panelX + panelWidth - 228, rowY + 4,
+                    "trash", Component.translatable("luma.zones.delete"),
+                    () -> delete.accept(zone), LumiLegacyButton.Kind.DANGER);
             addLegacyButton(panelX + panelWidth - 196, rowY + 4, 72,
                     Component.translatable("luma.action.open_details"),
                     () -> openDetails.accept(zone), LumiLegacyButton.Kind.NORMAL);
