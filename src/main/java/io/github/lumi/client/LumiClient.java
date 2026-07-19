@@ -32,6 +32,7 @@ import io.github.lumi.client.ui.LumiZoneDetailsScreen;
 import io.github.lumi.client.ui.LumiZoneRestoreScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.client.ui.LumiRestoreScreen;
+import io.github.lumi.client.ui.LumiPartialRestoreScreen;
 import io.github.lumi.client.ui.LumiVersionDetailsScreen;
 import io.github.lumi.client.ui.BranchNameController;
 import io.github.lumi.client.ui.SaveScreenController;
@@ -262,8 +263,8 @@ public final class LumiClient implements ClientModInitializer {
                     NETWORKING.amend(version.message(), version.tags());
                     client.setScreen(parent);
                 }) : Optional.<Runnable>empty();
-        var partialRestore = idle
-                ? Optional.of((Runnable) () -> openRestore(parent, version))
+        var partialRestore = idle && SELECTION.bounds().isPresent()
+                ? Optional.of((Runnable) () -> openPartialRestore(parent, version))
                 : Optional.<Runnable>empty();
         client.setScreen(new LumiVersionDetailsScreen(
                 parent, snapshot.dimensionId(), version, PREVIEW_STORE,
@@ -285,6 +286,17 @@ public final class LumiClient implements ClientModInitializer {
                         NETWORKING.restoreWithoutEntities(target);
                     }
                 }, NETWORKING::previewRestoreArea,
+                NETWORKING::applyRestoreArea));
+    }
+
+    private static void openPartialRestore(
+            Screen parent, HistorySnapshotPayload.Version version) {
+        Minecraft.getInstance().setScreen(new LumiPartialRestoreScreen(
+                parent, version.id(), version.message(),
+                SELECTION.bounds().orElseThrow(
+                        () -> new IllegalStateException(
+                                "Select an area with the wooden sword first")),
+                NETWORKING::previewRestoreArea,
                 NETWORKING::applyRestoreArea));
     }
 
@@ -441,7 +453,8 @@ public final class LumiClient implements ClientModInitializer {
     }
 
     private static void showPartialRestorePlan(PartialRestorePlanPayload result) {
-        if (Minecraft.getInstance().screen instanceof LumiRestoreScreen restore) {
+        if (Minecraft.getInstance().screen
+                instanceof LumiPartialRestoreScreen restore) {
             restore.accept(result);
         }
     }
