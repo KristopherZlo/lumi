@@ -27,8 +27,7 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
             new CommitPreviewSnapshotReader();
     private final PreviewRenderMeshBuilder meshes =
             new PreviewRenderMeshBuilder();
-    private final TexturedPreviewCaptureService capture =
-            new TexturedPreviewCaptureService();
+    private TexturedPreviewCaptureService capture;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(
             runnable -> {
                 Thread thread = new Thread(
@@ -97,7 +96,7 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
                     PreviewRenderMesh mesh = item.build().join();
                     Pending withMesh = item.withMesh(mesh);
                     pending.put(requestId, withMesh.withCapture(
-                            capture.capture(
+                            capture().capture(
                                     Minecraft.getInstance(), item.bounds(),
                                     mesh, worker)));
                     return;
@@ -156,6 +155,11 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
         closeCapture(requestId, removed);
     }
 
+    private TexturedPreviewCaptureService capture() {
+        if (capture == null) capture = new TexturedPreviewCaptureService();
+        return capture;
+    }
+
     private void closeCapture(UUID ignored, Pending item) {
         if (item == null) return;
         if (item.build() != null && !item.build().isDone()) {
@@ -175,7 +179,7 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
     @Override
     public synchronized void close() {
         clear();
-        capture.close();
+        if (capture != null) capture.close();
         worker.shutdownNow();
     }
 

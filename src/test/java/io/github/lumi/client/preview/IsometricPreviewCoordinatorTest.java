@@ -17,7 +17,9 @@ class IsometricPreviewCoordinatorTest {
         assertTrue(source.contains("case SUCCEEDED"));
         assertTrue(source.contains("snapshots.read("));
         assertTrue(source.contains("meshes.scheduleBuild("));
-        assertTrue(source.contains("capture.capture("));
+        assertTrue(source.contains("capture().capture("));
+        assertTrue(source.contains("if (capture == null)"));
+        assertTrue(source.contains("if (capture != null) capture.close()"));
         assertTrue(source.contains("store.save(item.dimensionId(), target, image)"));
         assertTrue(source.contains("worker.shutdownNow()"));
     }
