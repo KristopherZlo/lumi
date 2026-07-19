@@ -209,7 +209,8 @@ public final class LumiClient implements ClientModInitializer {
         client.setScreen(new LumiVersionDetailsScreen(
                 parent, snapshot.dimensionId(), version, PREVIEW_STORE,
                 () -> openRestore(parent, version), compare,
-                () -> openDelete(parent, version)));
+                () -> openDelete(parent, version),
+                tags -> NETWORKING.updateVersionTags(version.id(), tags)));
     }
 
     private static void openRestore(

@@ -1,13 +1,16 @@
 package io.github.lumi.client.ui;
 
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
+import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
@@ -28,6 +31,11 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     private final Runnable restore;
     private final Optional<Runnable> compareToParent;
     private final Runnable delete;
+    private final Consumer<VersionTags> updateTags;
+    private VersionTags displayedTags;
+    private boolean editingTags;
+    private EditBox tagEditor;
+    private String tagError = "";
     private int panelX;
     private int panelY;
 
@@ -38,7 +46,8 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
             ClientVersionPreviewStore previews,
             Runnable restore,
             Optional<Runnable> compareToParent,
-            Runnable delete) {
+            Runnable delete,
+            Consumer<VersionTags> updateTags) {
         super(parent, Component.translatable(
                 "luma.screen.save_details.title", version.message()));
         this.parent = parent;
@@ -49,6 +58,8 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         this.compareToParent = Objects.requireNonNull(
                 compareToParent, "compareToParent");
         this.delete = Objects.requireNonNull(delete, "delete");
+        this.updateTags = Objects.requireNonNull(updateTags, "updateTags");
+        this.displayedTags = version.tags();
     }
 
     @Override
@@ -74,6 +85,27 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         addLegacyButton(panelX + 28 + buttonWidth * 3, buttonY, buttonWidth,
                 Component.translatable("luma.action.back"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
+
+        int metadataX = panelX + 280;
+        int metadataWidth = Math.max(0, panelWidth - 300);
+        if (editingTags) {
+            tagEditor = new EditBox(font, metadataX, panelY + 143,
+                    Math.max(20, metadataWidth - 30), 20,
+                    Component.translatable("luma.history.tags_input"));
+            tagEditor.setMaxLength(VersionTags.MAX_SERIALIZED_LENGTH);
+            tagEditor.setValue(displayedTags.serialize());
+            addRenderableWidget(tagEditor);
+            addLegacyIconButton(panelX + panelWidth - 44, panelY + 139, "save",
+                    Component.translatable("luma.action.save_tags"),
+                    this::saveTags, LumiLegacyButton.Kind.PRIMARY);
+        } else {
+            addLegacyIconButton(panelX + panelWidth - 44, panelY + 139, "tags",
+                    Component.translatable("luma.action.edit_tags"), () -> {
+                        editingTags = true;
+                        tagError = "";
+                        rebuildWidgets();
+                    }, LumiLegacyButton.Kind.NORMAL);
+        }
     }
 
     @Override
@@ -104,13 +136,28 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                     Component.translatable(
                             "luma.save_details.raw_info_type", version.kind().name()),
                     metadataX, panelY + 102, LegacyLumiTheme.TEXT, false);
+            graphics.drawString(font, Component.translatable("luma.save.tags_title"),
+                    metadataX, panelY + 126, LegacyLumiTheme.MUTED, false);
+            if (!editingTags) {
+                String tags = displayedTags.isEmpty()
+                        ? Component.translatable("luma.history.tags_empty").getString()
+                        : displayedTags.display();
+                graphics.drawString(font,
+                        font.plainSubstrByWidth(tags, Math.max(0, metadataWidth - 30)),
+                        metadataX, panelY + 147, LegacyLumiTheme.TEXT, false);
+            }
+            if (!tagError.isEmpty()) {
+                graphics.drawString(font,
+                        font.plainSubstrByWidth(tagError, metadataWidth),
+                        metadataX, panelY + 166, LegacyLumiTheme.DANGER, false);
+            }
             graphics.drawString(font,
                     Component.translatable("luma.save_details.raw_info_title"),
-                    metadataX, panelY + 132, LegacyLumiTheme.MUTED, false);
+                    metadataX, panelY + 184, LegacyLumiTheme.MUTED, false);
             graphics.drawWordWrap(font,
                     Component.translatable(
                             "luma.save_details.raw_info_id", version.id().hex()),
-                    metadataX, panelY + 150, metadataWidth,
+                    metadataX, panelY + 202, metadataWidth,
                     LegacyLumiTheme.TEXT);
             super.render(
                     graphics, render.mouseX(), render.mouseY(), partialTick);
@@ -138,6 +185,20 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                 x, y, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT,
                 texture.width(), texture.height(),
                 texture.width(), texture.height());
+    }
+
+    private void saveTags() {
+        try {
+            VersionTags tags = VersionTags.parse(tagEditor.getValue());
+            updateTags.accept(tags);
+            displayedTags = tags;
+            editingTags = false;
+            tagError = "";
+            rebuildWidgets();
+        } catch (RuntimeException failed) {
+            tagError = failed.getMessage() == null
+                    ? "Lumi could not update tags" : failed.getMessage();
+        }
     }
 
     @Override public boolean isPauseScreen() { return false; }

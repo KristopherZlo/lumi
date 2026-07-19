@@ -13,7 +13,7 @@ import net.minecraft.network.chat.Component;
 
 /** Focused legacy-style Save form retained for the Alt+S workflow. */
 public final class LumiSaveScreen extends LumiLegacyModalScreen {
-    private static final int DIALOG_HEIGHT = 194;
+    private static final int DIALOG_HEIGHT = 226;
 
     private final Screen parent;
     private final ClientHistoryStore history;
@@ -24,6 +24,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
     private final Consumer<UUID> previewCapture;
     private LegacyModalLayout layout;
     private EditBox message;
+    private EditBox tags;
     private LumiLegacyButton save;
     private LumiLegacyButton amend;
     private String error = "";
@@ -93,6 +94,15 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         addRenderableWidget(message);
         message.setValue(initialMessage);
 
+        tags = new EditBox(
+                font, x + 14, fieldY + 90, layout.width() - 28, 20,
+                Component.translatable("luma.history.tags_input"));
+        tags.setMaxLength(io.github.lumi.domain.model.VersionTags.MAX_SERIALIZED_LENGTH);
+        tags.setHint(Component.translatable("luma.history.tags_input"));
+        tags.setBordered(false);
+        tags.setTextColor(LegacyLumiTheme.TEXT);
+        addRenderableWidget(tags);
+
         int contentWidth = layout.width() - 12;
         int buttonWidth = (contentWidth - 8) / 3;
         save = addLegacyButton(x + 6, actionY, buttonWidth,
@@ -141,7 +151,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
 
     private void submit(SaveScreenController.Intent intent) {
         SaveScreenController.Submission submission =
-                controller.submit(message.getValue(), intent);
+                controller.submit(message.getValue(), tags.getValue(), intent);
         error = submission.error();
         if (submission.accepted()) {
             submission.requestId().ifPresent(previewCapture);
@@ -203,6 +213,15 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         graphics.drawString(font, Component.translatable("luma.quick_save.name_help"),
                 x + 12, fieldY + 20, LegacyLumiTheme.MUTED, false);
         LegacyLumiTheme.outlined(graphics, x + 11, fieldY + 34,
+                layout.width() - 22, 24,
+                LegacyLumiTheme.WINDOW, LegacyLumiTheme.PANEL_BORDER);
+
+        LegacyLumiTheme.outlined(graphics, x + 6, fieldY + 72,
+                layout.width() - 12, 43,
+                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+        graphics.drawString(font, Component.translatable("luma.save.tags_title"),
+                x + 12, fieldY + 78, LegacyLumiTheme.TEXT, false);
+        LegacyLumiTheme.outlined(graphics, x + 11, fieldY + 87,
                 layout.width() - 22, 24,
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.PANEL_BORDER);
     }

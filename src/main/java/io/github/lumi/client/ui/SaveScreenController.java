@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.domain.model.VersionTags;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,7 +17,12 @@ public final class SaveScreenController {
     }
 
     public Submission submit(String value, Intent intent) {
+        return submit(value, "", intent);
+    }
+
+    public Submission submit(String value, String tagValue, Intent intent) {
         String message = Objects.requireNonNull(value, "value").trim();
+        Objects.requireNonNull(tagValue, "tagValue");
         Objects.requireNonNull(intent, "intent");
         if (message.isEmpty()) {
             return new Submission(false, "luma.status.save_name_required", Optional.empty());
@@ -25,7 +31,8 @@ public final class SaveScreenController {
             return new Submission(false, "Save name is too long", Optional.empty());
         }
         try {
-            UUID requestId = (intent == Intent.SAVE ? save : amend).send(message);
+            VersionTags tags = VersionTags.parse(tagValue);
+            UUID requestId = (intent == Intent.SAVE ? save : amend).send(message, tags);
             return new Submission(true, "", Optional.of(requestId));
         } catch (RuntimeException failed) {
             return new Submission(false, failed.getMessage() == null
@@ -48,6 +55,6 @@ public final class SaveScreenController {
 
     @FunctionalInterface
     public interface SaveIntentSender {
-        UUID send(String message);
+        UUID send(String message, VersionTags tags);
     }
 }

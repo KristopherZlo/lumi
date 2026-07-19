@@ -17,5 +17,7 @@ class LumiSaveScreenTest {
         assertTrue(source.contains("submit(preferredIntent)"));
         assertTrue(source.contains("addLegacyIconButton"));
         assertTrue(source.contains("submission.requestId().ifPresent(previewCapture)"));
+        assertTrue(source.contains("luma.history.tags_input"));
+        assertTrue(source.contains("tags.getValue()"));
     }
 }

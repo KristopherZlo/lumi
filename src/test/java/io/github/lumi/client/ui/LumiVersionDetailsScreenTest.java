@@ -23,9 +23,13 @@ class LumiVersionDetailsScreenTest {
         assertTrue(details.contains("luma.action.restore"));
         assertTrue(details.contains("compare.active = compareToParent.isPresent()"));
         assertTrue(details.contains("luma.action.delete_save"));
+        assertTrue(details.contains("luma.action.edit_tags"));
+        assertTrue(details.contains("luma.action.save_tags"));
+        assertTrue(details.contains("updateTags.accept(tags)"));
         assertTrue(dashboard.contains("\"eye-open\", \"luma.action.open_details\""));
         assertTrue(client.contains("new LumiVersionDetailsScreen("));
         assertTrue(client.contains("() -> openRestore(parent, version)"));
         assertTrue(client.contains("() -> openDelete(parent, version)"));
+        assertTrue(client.contains("NETWORKING.updateVersionTags(version.id(), tags)"));
     }
 }
