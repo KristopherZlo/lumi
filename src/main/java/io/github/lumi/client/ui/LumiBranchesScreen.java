@@ -84,7 +84,7 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
                 + (hintVisible ? contextualHintOffset(8) : 0);
         name = new EditBox(
                 font, x + 18, y + 41 + contentOffset,
-                Math.max(20, contentWidth - 120), 16,
+                Math.max(20, contentWidth - 120), INPUT_HEIGHT,
                 Component.translatable("luma.variant.name_input"));
         name.setMaxLength(BranchNameController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.variant.name_input"));

@@ -12,7 +12,7 @@ import net.minecraft.network.chat.Component;
 
 /** Focused editor for the mutable tags attached to one saved version. */
 public final class LumiVersionTagsScreen extends LumiLegacyModalScreen {
-    private static final int DIALOG_HEIGHT = 148;
+    private static final int DIALOG_HEIGHT = 124;
     private final Screen parent;
     private final VersionTags initialTags;
     private final Consumer<VersionTags> update;
@@ -31,11 +31,11 @@ public final class LumiVersionTagsScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        layout = LegacyModalLayout.fit(width, height, DIALOG_HEIGHT);
+        layout = fitPanel(width, height);
         int x = layout.x();
         int y = layout.y();
         tags = new EditBox(
-                font, x + 14, y + 63, layout.width() - 28, 16,
+                font, x + 14, y + 63, layout.width() - 28, INPUT_HEIGHT,
                 Component.translatable("luma.history.tags_input"));
         tags.setMaxLength(VersionTags.MAX_SERIALIZED_LENGTH);
         tags.setHint(Component.translatable("luma.history.tags_input"));
@@ -98,17 +98,21 @@ public final class LumiVersionTagsScreen extends LumiLegacyModalScreen {
                     LegacyLumiTheme.MUTED, false);
             LegacyLumiTheme.outlined(
                     graphics, layout.x() + 10, layout.y() + 59,
-                    layout.width() - 20, 20,
+                    layout.width() - 20, INPUT_FRAME_HEIGHT,
                     LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
             if (!error.isEmpty()) {
                 graphics.drawString(font, errorText(error),
-                        layout.x() + 12, layout.y() + 87,
+                        layout.x() + 12, layout.y() + 82,
                         LegacyLumiTheme.DANGER, false);
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);
         }
+    }
+
+    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+        return LegacyModalLayout.fit(screenWidth, screenHeight, DIALOG_HEIGHT);
     }
 
     @Override public boolean isPauseScreen() { return false; }

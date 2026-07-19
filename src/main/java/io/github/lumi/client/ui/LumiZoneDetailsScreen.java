@@ -126,7 +126,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
                 font,
                 panelX + geometry.messageX() + 2,
                 panelY + geometry.messageFieldY() + 3,
-                Math.max(0, geometry.messageWidth() - 4), 16,
+                Math.max(0, geometry.messageWidth() - 4), INPUT_HEIGHT,
                 Component.translatable("luma.zones.save_input"));
         message.setMaxLength(ZoneDetailsController.MAX_MESSAGE_LENGTH);
         message.setHint(Component.translatable("luma.zones.save_input"));
@@ -143,7 +143,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
                 font,
                 panelX + geometry.tagsX() + 2,
                 panelY + geometry.tagsFieldY() + 3,
-                Math.max(0, geometry.tagsWidth() - 4), 16,
+                Math.max(0, geometry.tagsWidth() - 4), INPUT_HEIGHT,
                 Component.translatable("luma.history.tags_input"));
         tags.setMaxLength(io.github.lumi.domain.model.VersionTags.MAX_SERIALIZED_LENGTH);
         tags.setHint(Component.translatable("luma.history.tags_input"));
@@ -220,7 +220,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
                 font,
                 panelX + geometry.innerLeft() + 2,
                 panelY + geometry.toolbarY() + 3,
-                Math.max(0, geometry.searchWidth() - 4), 16,
+                Math.max(0, geometry.searchWidth() - 4), INPUT_HEIGHT,
                 Component.translatable("luma.dashboard.search"));
         search.setBordered(false);
         search.setMaxLength(HistoryPageRequestPayload.MAX_QUERY_LENGTH);
@@ -434,20 +434,20 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
                 graphics,
                 panelX + geometry.messageX(),
                 panelY + geometry.messageFieldY(),
-                geometry.messageWidth(), 20,
+                geometry.messageWidth(), INPUT_FRAME_HEIGHT,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         LegacyLumiTheme.outlined(
                 graphics,
                 panelX + geometry.tagsX(),
                 panelY + geometry.tagsFieldY(),
-                geometry.tagsWidth(), 20,
+                geometry.tagsWidth(), INPUT_FRAME_HEIGHT,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         if (search != null) {
             LegacyLumiTheme.outlined(
                     graphics,
                     panelX + geometry.innerLeft(),
                     panelY + geometry.toolbarY(),
-                    geometry.searchWidth(), 20,
+                    geometry.searchWidth(), INPUT_FRAME_HEIGHT,
                     LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         }
         renderHistory(graphics);

@@ -98,7 +98,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
 
         message = new EditBox(
                 font, x + 14, y + messageOffset(layout.height()),
-                layout.width() - 28, 16,
+                layout.width() - 28, INPUT_HEIGHT,
                 Component.translatable("luma.save.name_input"));
         message.setMaxLength(SaveScreenController.MAX_NAME_LENGTH);
         message.setHint(Component.translatable("luma.save.name_input"));
@@ -110,7 +110,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
 
         tags = new EditBox(
                 font, x + 14, y + tagsOffset(layout.height()),
-                layout.width() - 28, 16,
+                layout.width() - 28, INPUT_HEIGHT,
                 Component.translatable("luma.history.tags_input"));
         tags.setMaxLength(io.github.lumi.domain.model.VersionTags.MAX_SERIALIZED_LENGTH);
         tags.setHint(Component.translatable("luma.history.tags_input"));

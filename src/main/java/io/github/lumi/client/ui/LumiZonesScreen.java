@@ -89,7 +89,8 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         rowHeight = compact ? 42 : 28;
         rowStride = compact ? 46 : 32;
         name = new EditBox(font, contentX, fieldY,
-                compact ? contentWidth : Math.max(20, contentWidth - 140), 16,
+                compact ? contentWidth : Math.max(20, contentWidth - 140),
+                INPUT_HEIGHT,
                 Component.translatable("luma.zones.create_title"));
         name.setMaxLength(ZoneScreenController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.zones.create_title"));
@@ -224,8 +225,8 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
                 textX, panelY + (compact ? 47 : 56),
                 LegacyLumiTheme.MUTED, false);
         LegacyLumiTheme.outlined(graphics,
-                name.getX() - 2, name.getY() - 4,
-                name.getWidth() + 4, 20,
+                name.getX() - 2, name.getY() - 2,
+                name.getWidth() + 4, name.getHeight() + 4,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         boolean errorReplacesListTitle = compact && panelHeight < 220
                 && !error.isEmpty();

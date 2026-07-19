@@ -73,6 +73,17 @@ class LumiResponsiveModalLayoutTest {
     }
 
     @Test
+    void tagEditorUsesOnlyTheHeightNeededByItsFieldAndActions() {
+        for (int[] viewport : new int[][] {
+                {320, 180}, {427, 240}, {640, 360}}) {
+            LegacyModalLayout layout = LumiVersionTagsScreen.fitPanel(
+                    viewport[0], viewport[1]);
+            assertInside(viewport, layout);
+            assertEquals(124, layout.height());
+        }
+    }
+
+    @Test
     void diagnosticsFitsItsHintAndRowsInsideNarrowPanels() {
         for (int[] viewport : new int[][] {
                 {427, 240}, {320, 200}, {320, 180}}) {

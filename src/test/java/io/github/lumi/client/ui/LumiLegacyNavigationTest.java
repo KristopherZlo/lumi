@@ -40,6 +40,7 @@ class LumiLegacyNavigationTest {
         assertTrue(modal.contains("background.render("));
         assertTrue(modal.contains("GLFW_HAND_CURSOR"));
         assertTrue(modal.contains("page ? \"chevron-left\" : \"close\""));
+        assertTrue(modal.contains("legacy.legacyInitialized"));
         assertFalse(modal.contains("background.mouseClicked("));
         assertFalse(modal.contains("background.mouseReleased("));
         String page = Files.readString(ui.resolve("LumiLegacyPageScreen.java"));
@@ -50,6 +51,8 @@ class LumiLegacyNavigationTest {
 
     @Test
     void textInputsUseCompactSingleLineHeight() throws Exception {
+        assertEquals(14, LumiLegacyModalScreen.INPUT_HEIGHT);
+        assertEquals(18, LumiLegacyModalScreen.INPUT_FRAME_HEIGHT);
         Path ui = Path.of("src/main/java/io/github/lumi/client/ui");
         for (String screen : List.of(
                 "LumiDashboardScreen.java",

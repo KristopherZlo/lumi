@@ -88,7 +88,7 @@ public final class LumiDimensionHistoryScreen extends LumiLegacyPageScreen {
                         ? LumiLegacyButton.Kind.SELECTED
                         : LumiLegacyButton.Kind.NORMAL);
         search = new EditBox(font, panelX + 18, panelY + 52,
-                Math.min(120, Math.max(70, panelWidth / 3)), 16,
+                Math.min(120, Math.max(70, panelWidth / 3)), INPUT_HEIGHT,
                 Component.translatable("luma.dashboard.search"));
         search.setBordered(false);
         search.setMaxLength(HistoryPageRequestPayload.MAX_QUERY_LENGTH);

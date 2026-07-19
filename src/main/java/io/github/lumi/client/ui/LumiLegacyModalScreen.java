@@ -15,6 +15,8 @@ import org.lwjgl.glfw.GLFW;
 
 /** Shared legacy window chrome for V2 modal workflows. */
 abstract class LumiLegacyModalScreen extends Screen {
+    protected static final int INPUT_HEIGHT = 14;
+    protected static final int INPUT_FRAME_HEIGHT = 18;
     private static final int TOP_RIGHT_CONTROL_LEFT_OFFSET = 36;
     private static final int HEADER_CONTROL_GAP = 8;
     private static final Identifier HINT_CLOSE_ICON = Identifier.fromNamespaceAndPath(
@@ -28,6 +30,7 @@ abstract class LumiLegacyModalScreen extends Screen {
     private int hintY;
     private int hintWidth;
     private int hintHeight;
+    private boolean legacyInitialized;
     private static long handCursor;
 
     protected LumiLegacyModalScreen(Component title) {
@@ -62,6 +65,7 @@ abstract class LumiLegacyModalScreen extends Screen {
     }
 
     protected final void beginLegacyInit() {
+        legacyInitialized = true;
         contextualHint = null;
         Window window = Minecraft.getInstance().getWindow();
         int currentGuiScale = currentGuiScale();
@@ -163,7 +167,9 @@ abstract class LumiLegacyModalScreen extends Screen {
 
     protected final LegacyRenderContext beginLegacyRender(
             GuiGraphics graphics, int mouseX, int mouseY) {
-        if (background != null && background != this) {
+        if (background != null && background != this
+                && (!(background instanceof LumiLegacyModalScreen legacy)
+                        || legacy.legacyInitialized)) {
             background.render(graphics, -1, -1, 0.0F);
         }
         float scale = renderScale();

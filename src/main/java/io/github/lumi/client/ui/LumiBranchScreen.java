@@ -39,7 +39,7 @@ public final class LumiBranchScreen extends LumiLegacyModalScreen {
         int contentX = panelX + 20;
         int contentWidth = panelWidth - 40;
         name = new EditBox(
-                font, contentX, panelY + 70, contentWidth, 16,
+                font, contentX, panelY + 70, contentWidth, INPUT_HEIGHT,
                 Component.translatable("luma.variant.name_input"));
         name.setMaxLength(BranchNameController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.variant.name_input"));
@@ -105,7 +105,7 @@ public final class LumiBranchScreen extends LumiLegacyModalScreen {
                     headerX, contentRight),
                     headerX, panelY + 34, LegacyLumiTheme.MUTED, false);
             LegacyLumiTheme.outlined(graphics, panelX + 14, panelY + 66,
-                    panelWidth - 28, 20,
+                    panelWidth - 28, INPUT_FRAME_HEIGHT,
                     LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
             graphics.drawString(font,
                     Component.translatable("luma.variant.name_input"),

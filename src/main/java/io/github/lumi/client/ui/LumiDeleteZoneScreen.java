@@ -45,7 +45,7 @@ public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
         panelWidth = layout.width();
         panelHeight = layout.height();
         confirmation = new EditBox(
-                font, panelX + 22, panelY + 83, panelWidth - 44, 16,
+                font, panelX + 22, panelY + 83, panelWidth - 44, INPUT_HEIGHT,
                 Component.translatable("luma.zones.delete_input"));
         confirmation.setMaxLength(256);
         confirmation.setHint(Component.translatable("luma.zones.delete_input"));
@@ -130,7 +130,8 @@ public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
                             centerX, contentLeft, contentRight),
                     centerX, panelY + 46, LegacyLumiTheme.MUTED);
             LegacyLumiTheme.outlined(
-                    graphics, panelX + 20, panelY + 80, panelWidth - 40, 20,
+                    graphics, panelX + 20, panelY + 80, panelWidth - 40,
+                    INPUT_FRAME_HEIGHT,
                     LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
             if (!error.isEmpty()) {
                 graphics.drawCenteredString(

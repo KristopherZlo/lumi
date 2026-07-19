@@ -133,7 +133,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         int renameX = Math.min(panelX + panelWidth - 122, width - 150);
         if (!readOnly && editingName) {
             nameEditor = new EditBox(font, panelX + 20, panelY + 12,
-                    Math.max(20, renameX - panelX - 28), 16,
+                    Math.max(20, renameX - panelX - 28), INPUT_HEIGHT,
                     Component.translatable("luma.save_details.rename_title"));
             nameEditor.setMaxLength(VersionDisplayName.MAX_LENGTH);
             nameEditor.setValue(displayedName);

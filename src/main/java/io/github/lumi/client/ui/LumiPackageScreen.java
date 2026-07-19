@@ -80,7 +80,8 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
         if (!geometry.contentVisible()) {
             return;
         }
-        name = new EditBox(font, x, panelY + geometry.fieldY() + 3, contentWidth, 16,
+        name = new EditBox(font, x, panelY + geometry.fieldY() + 3,
+                contentWidth, INPUT_HEIGHT,
                 Component.translatable("luma.share.package_name"));
         name.setMaxLength(PackageScreenController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.share.package_name"));
@@ -306,7 +307,7 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
                         LegacyLumiTheme.TEXT, false);
                 LegacyLumiTheme.outlined(graphics, panelX + 14,
                         panelY + geometry.fieldY(),
-                        panelWidth - 28, 20,
+                        panelWidth - 28, INPUT_FRAME_HEIGHT,
                         LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
                 renderRows(graphics);
             }
