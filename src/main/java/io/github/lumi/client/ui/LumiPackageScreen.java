@@ -18,6 +18,7 @@ import net.minecraft.network.chat.Component;
 /** Legacy Import/Export form with integrated-world package browsing. */
 public final class LumiPackageScreen extends LumiLegacyPageScreen {
     private static final int MAX_ROWS = 6;
+    private static final int OPTIONS_HEIGHT = 26;
     private final PackageScreenController controller;
     private final PackageBrowserState browser;
     private final Consumer<String> switchBranch;
@@ -33,6 +34,7 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
     private int contentOffset;
     private String status = "";
     private boolean failed;
+    private boolean includePreview;
 
     public LumiPackageScreen(
             Screen parent,
@@ -93,6 +95,14 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
                 Component.translatable("luma.action.close"), this::onClose,
                 LumiLegacyButton.Kind.NORMAL);
         updateActions();
+        addLegacyButton(x, panelY + 118 + contentOffset, contentWidth,
+                toggleLabel("luma.share.include_previews", includePreview),
+                () -> {
+                    includePreview = !includePreview;
+                    rebuildWidgets();
+                }, includePreview
+                        ? LumiLegacyButton.Kind.SELECTED
+                        : LumiLegacyButton.Kind.NORMAL);
         addTabs(x, contentWidth);
         if (browser.pendingDelete().isPresent()) addDeleteConfirmation(x, contentWidth);
         else addRows();
@@ -101,12 +111,12 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
 
     private void addTabs(int x, int width) {
         int tabWidth = Math.max(40, (width - 6) / 2);
-        addLegacyButton(x, panelY + 118 + contentOffset, tabWidth,
+        addLegacyButton(x, panelY + 118 + contentOffset + OPTIONS_HEIGHT, tabWidth,
                 Component.translatable("luma.share.package_files_title"),
                 () -> selectTab(false), browser.showImported()
                         ? LumiLegacyButton.Kind.NORMAL : LumiLegacyButton.Kind.SELECTED);
         addLegacyButton(x + tabWidth + 6,
-                panelY + 118 + contentOffset, tabWidth,
+                panelY + 118 + contentOffset + OPTIONS_HEIGHT, tabWidth,
                 Component.translatable("luma.import_export.packages_title"),
                 () -> selectTab(true), browser.showImported()
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
@@ -115,7 +125,7 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
     private void addRows() {
         int rows = visibleRows();
         for (int index = browser.start(rows); index < browser.end(rows); index++) {
-            int y = panelY + 148 + contentOffset
+            int y = panelY + 148 + contentOffset + OPTIONS_HEIGHT
                     + (index - browser.start(rows)) * 28;
             if (browser.showImported()) addImportedActions(browser.imported(index), y);
             else {
@@ -149,13 +159,13 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
 
     private void addDeleteConfirmation(int x, int width) {
         int buttonWidth = Math.max(40, (width - 6) / 2);
-        addLegacyButton(x, panelY + 178 + contentOffset, buttonWidth,
+        addLegacyButton(x, panelY + 178 + contentOffset + OPTIONS_HEIGHT, buttonWidth,
                 Component.translatable("luma.action.delete_package"),
                 () -> runBranchAction(deleteBranch,
                         browser.pendingDelete().orElseThrow().name(), true),
                 LumiLegacyButton.Kind.DANGER);
         addLegacyButton(x + buttonWidth + 6,
-                panelY + 178 + contentOffset, buttonWidth,
+                panelY + 178 + contentOffset + OPTIONS_HEIGHT, buttonWidth,
                 Component.translatable("luma.action.cancel"), () -> {
                     browser.cancelDelete();
                     rebuildWidgets();
@@ -176,7 +186,9 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
     }
 
     private void submit(String value, PackageScreenController.Action action) {
-        var result = controller.submit(value, action);
+        var result = controller.submit(
+                value, action, action == PackageScreenController.Action.EXPORT
+                        && includePreview);
         failed = !result.accepted();
         status = result.accepted() ? (action == PackageScreenController.Action.EXPORT
                 ? "Export started" : "Inspecting package") : result.error();
@@ -235,7 +247,8 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
 
     private int visibleRows() {
         return Math.min(MAX_ROWS,
-                Math.max(1, (panelHeight - 168 - contentOffset) / 28));
+                Math.max(1, (panelHeight - 168 - contentOffset
+                        - OPTIONS_HEIGHT) / 28));
     }
 
     @Override
@@ -294,12 +307,13 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
                     Component.translatable(browser.showImported()
                             ? "luma.share.imported_empty"
                             : "luma.share.package_files_empty"),
-                    panelX + 20, panelY + 154 + contentOffset,
+                    panelX + 20, panelY + 154 + contentOffset + OPTIONS_HEIGHT,
                     LegacyLumiTheme.MUTED, false);
             return;
         }
         for (int index = start; index < end; index++) {
-            int y = panelY + 148 + contentOffset + (index - start) * 28;
+            int y = panelY + 148 + contentOffset + OPTIONS_HEIGHT
+                    + (index - start) * 28;
             renderLegacyPanel(graphics, panelX + 16, y, panelWidth - 32, 24);
             String label = browser.showImported()
                     ? shortName(browser.imported(index).name())
@@ -312,21 +326,28 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
 
     private void renderDeleteConfirmation(GuiGraphics graphics) {
         renderLegacyPanel(graphics, panelX + 16,
-                panelY + 148 + contentOffset,
+                panelY + 148 + contentOffset + OPTIONS_HEIGHT,
                 panelWidth - 32, 48);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.action.delete_package"),
                 panelX + panelWidth / 2,
-                panelY + 158 + contentOffset, LegacyLumiTheme.DANGER);
+                panelY + 158 + contentOffset + OPTIONS_HEIGHT,
+                LegacyLumiTheme.DANGER);
         graphics.drawCenteredString(font,
                 shortName(browser.pendingDelete().orElseThrow().name()),
                 panelX + panelWidth / 2,
-                panelY + 174 + contentOffset, LegacyLumiTheme.TEXT);
+                panelY + 174 + contentOffset + OPTIONS_HEIGHT,
+                LegacyLumiTheme.TEXT);
     }
 
     private static String shortName(String branch) {
         int prefix = branch.indexOf("import/");
         return prefix < 0 ? branch : branch.substring(prefix + 7);
+    }
+
+    private static Component toggleLabel(String key, boolean enabled) {
+        return Component.translatable(key).append(": ").append(
+                Component.translatable(enabled ? "options.on" : "options.off"));
     }
 
     @Override public boolean isPauseScreen() { return false; }

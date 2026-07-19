@@ -105,7 +105,10 @@ public record HistoryCommandPayload(
                 || kind == Kind.RESTORE_DELETED_VERSION) {
             new ObjectId(argument);
         }
-        if (kind == Kind.PACKAGE_EXPORT || kind == Kind.PACKAGE_INSPECT) {
+        if (kind == Kind.PACKAGE_EXPORT) {
+            PackageExportArgument.parse(argument);
+        }
+        if (kind == Kind.PACKAGE_INSPECT) {
             new PackageName(argument);
         }
         if (kind == Kind.PACKAGE_IMPORT) {

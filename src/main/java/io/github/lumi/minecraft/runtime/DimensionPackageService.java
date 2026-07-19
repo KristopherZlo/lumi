@@ -37,7 +37,7 @@ final class DimensionPackageService {
     }
 
     CompletableFuture<ImportExportService.PackageInspection> exportPackage(
-            PackageName name, BranchRef expected) {
+            PackageName name, BranchRef expected, boolean includePreview) {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(expected, "expected");
         return CompletableFuture.supplyAsync(() -> {
@@ -45,7 +45,8 @@ final class DimensionPackageService {
                 if (!currentBranch.read().equals(expected)) {
                     throw new IOException("Active branch changed before package export");
                 }
-                return history.export(expected.commit(), directory.resolve(name));
+                return history.export(
+                        expected.commit(), directory.resolve(name), includePreview);
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }

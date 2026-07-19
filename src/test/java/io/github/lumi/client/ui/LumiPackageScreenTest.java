@@ -23,5 +23,7 @@ class LumiPackageScreenTest {
         assertTrue(source.contains("\"trash\""));
         assertTrue(source.contains("ClientContextualHelpHint.IMPORT_EXPORT"));
         assertTrue(source.contains("contentOffset"));
+        assertTrue(source.contains("luma.share.include_previews"));
+        assertTrue(source.contains("includePreview"));
     }
 }

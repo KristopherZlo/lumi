@@ -12,7 +12,10 @@ class PackageScreenControllerTest {
         var exports = new ArrayList<String>();
         var inspections = new ArrayList<String>();
         PackageScreenController controller =
-                new PackageScreenController(exports::add, inspections::add);
+                new PackageScreenController(
+                        (name, includePreview) -> exports.add(
+                                name + ":" + includePreview),
+                        inspections::add);
 
         assertEquals(false, controller.submit(
                 "../outside", PackageScreenController.Action.EXPORT).accepted());
@@ -23,7 +26,7 @@ class PackageScreenControllerTest {
 
         assertTrue(exported.accepted());
         assertTrue(inspected.accepted());
-        assertEquals(java.util.List.of("clock-v2"), exports);
+        assertEquals(java.util.List.of("clock-v2:false"), exports);
         assertEquals(java.util.List.of("clock-v2"), inspections);
     }
 }

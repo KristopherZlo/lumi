@@ -334,9 +334,12 @@ public final class LumiClientNetworking {
                         new VersionDisplayName(replacement)).encode());
     }
 
-    public UUID exportPackage(String name) {
+    public UUID exportPackage(String name, boolean includePreview) {
         return send(HistoryCommandPayload.Kind.PACKAGE_EXPORT,
-                Objects.requireNonNull(name, "name"));
+                new io.github.lumi.network.PackageExportArgument(
+                        new io.github.lumi.domain.model.PackageName(
+                                Objects.requireNonNull(name, "name")),
+                        includePreview).encode());
     }
 
     public UUID inspectPackage(String name) {

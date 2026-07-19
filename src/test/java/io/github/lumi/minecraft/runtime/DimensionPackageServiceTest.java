@@ -41,7 +41,8 @@ class DimensionPackageServiceTest {
 
         CompletionException failure = assertThrows(
                 CompletionException.class,
-                () -> service.exportPackage(new PackageName("clock"), stale).join());
+                () -> service.exportPackage(
+                        new PackageName("clock"), stale, false).join());
 
         assertInstanceOf(IOException.class, failure.getCause());
         assertTrue(Files.notExists(world.resolve("lumi/packages/clock.lumi")));

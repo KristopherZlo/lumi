@@ -1160,8 +1160,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public CompletableFuture<ImportExportService.PackageInspection> exportPackage(
-            PackageName name, BranchRef expected) {
-        return packages.exportPackage(name, expected);
+            PackageName name, BranchRef expected, boolean includePreview) {
+        return packages.exportPackage(name, expected, includePreview);
     }
 
     public CompletableFuture<ImportExportService.PackageInspection> inspectPackage(

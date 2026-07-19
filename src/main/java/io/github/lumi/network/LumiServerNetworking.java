@@ -287,13 +287,17 @@ public final class LumiServerNetworking {
             importPackage(player, runtime, expected, payload, context);
             return;
         }
-        PackageName name = new PackageName(payload.argument());
+        PackageExportArgument export = payload.kind()
+                == HistoryCommandPayload.Kind.PACKAGE_EXPORT
+                ? PackageExportArgument.parse(payload.argument()) : null;
+        PackageName name = export == null
+                ? new PackageName(payload.argument()) : export.name();
         sendEvent(player, payload, runtime,
                 OperationEventPayload.State.ACCEPTED,
                 payload.kind() == HistoryCommandPayload.Kind.PACKAGE_EXPORT
                         ? "Exporting package" : "Inspecting package");
         var future = payload.kind() == HistoryCommandPayload.Kind.PACKAGE_EXPORT
-                ? runtime.exportPackage(name, expected)
+                ? runtime.exportPackage(name, expected, export.includePreview())
                 : runtime.inspectPackage(name);
         future.whenComplete((inspection, failure) -> context.server().execute(() -> {
             if (failure != null) {
