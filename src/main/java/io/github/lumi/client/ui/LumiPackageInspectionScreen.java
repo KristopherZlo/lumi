@@ -15,6 +15,8 @@ public final class LumiPackageInspectionScreen extends LumiLegacyModalScreen {
     private final Runnable importPackage;
     private int panelX;
     private int panelY;
+    private int panelWidth;
+    private int panelHeight;
     private String error = "";
 
     public LumiPackageInspectionScreen(
@@ -30,14 +32,17 @@ public final class LumiPackageInspectionScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        panelX = (width - panelWidth) / 2;
-        panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
+        LegacyModalLayout layout = fitPanel(width, height);
+        panelX = layout.x();
+        panelY = layout.y();
+        panelWidth = layout.width();
+        panelHeight = layout.height();
         int buttonWidth = (panelWidth - 48) / 2;
-        addLegacyButton(panelX + 20, panelY + 202, buttonWidth,
+        int actionY = panelY + actionOffset(panelHeight);
+        addLegacyButton(panelX + 20, actionY, buttonWidth,
                 Component.translatable("luma.action.import_package"),
                 this::confirm, LumiLegacyButton.Kind.PRIMARY);
-        addLegacyButton(panelX + 28 + buttonWidth, panelY + 202, buttonWidth,
+        addLegacyButton(panelX + 28 + buttonWidth, actionY, buttonWidth,
                 Component.translatable("luma.action.cancel"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
@@ -56,33 +61,43 @@ public final class LumiPackageInspectionScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         graphics.drawCenteredString(font, title, width / 2, panelY + 16,
                 LegacyLumiTheme.TEXT);
         int warningBottom = drawWrapped(
                 graphics,
                 Component.translatable("luma.share.package_safety_warning"),
-                panelX + 20, panelY + 40, panelWidth - 40,
+                panelX + 20, panelY + 36, panelWidth - 40,
                 LegacyLumiTheme.ACCENT);
-        int detailsY = Math.max(panelY + 82, warningBottom + 8);
-        renderLegacyPanel(graphics, panelX + 20, detailsY, panelWidth - 40, 92);
+        int actionY = panelY + actionOffset(panelHeight);
+        int errorSpace = error.isEmpty() ? 0 : 14;
+        int detailsY = Math.max(panelY + 68, warningBottom + 6);
+        int detailsHeight = Math.max(1,
+                actionY - detailsY - 8 - errorSpace);
+        int lineStride = Math.max(9, Math.min(16,
+                Math.max(0, detailsHeight - 17) / 3));
+        renderLegacyPanel(
+                graphics, panelX + 20, detailsY, panelWidth - 40, detailsHeight);
         graphics.drawString(font, inspection.packageName() + ".lumi",
-                panelX + 30, detailsY + 12, LegacyLumiTheme.TEXT, false);
+                panelX + 30, detailsY + 7, LegacyLumiTheme.TEXT, false);
         graphics.drawString(font,
                 font.plainSubstrByWidth(inspection.message(), panelWidth - 60),
-                panelX + 30, detailsY + 32, LegacyLumiTheme.TEXT, false);
+                panelX + 30, detailsY + 7 + lineStride,
+                LegacyLumiTheme.TEXT, false);
         graphics.drawString(font,
                 font.plainSubstrByWidth(inspection.author(), panelWidth - 60),
-                panelX + 30, detailsY + 48, LegacyLumiTheme.MUTED, false);
+                panelX + 30, detailsY + 7 + lineStride * 2,
+                LegacyLumiTheme.MUTED, false);
+        String metadata = Component.translatable(
+                "luma.share.package_safety_metadata",
+                inspection.totalBytes(), inspection.objectCount()).getString();
         graphics.drawString(font,
-                Component.translatable(
-                        "luma.share.package_safety_metadata",
-                        inspection.totalBytes(), inspection.objectCount()),
-                panelX + 30, detailsY + 66, LegacyLumiTheme.MUTED, false);
+                font.plainSubstrByWidth(metadata, panelWidth - 60),
+                panelX + 30, detailsY + 7 + lineStride * 3,
+                LegacyLumiTheme.MUTED, false);
         if (!error.isEmpty()) {
             graphics.drawCenteredString(font, errorText(error),
-                    width / 2, panelY + 186, LegacyLumiTheme.DANGER);
+                    width / 2, actionY - 13, LegacyLumiTheme.DANGER);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -103,6 +118,19 @@ public final class LumiPackageInspectionScreen extends LumiLegacyModalScreen {
             lineY += 11;
         }
         return lineY;
+    }
+
+    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+        int panelWidth = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 32));
+        int panelHeight = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
+        return new LegacyModalLayout(
+                Math.max(0, (screenWidth - panelWidth) / 2),
+                Math.max(0, (screenHeight - panelHeight) / 2),
+                panelWidth, panelHeight);
+    }
+
+    static int actionOffset(int panelHeight) {
+        return panelHeight - 28;
     }
 
     @Override public boolean isPauseScreen() { return false; }

@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Component;
 /** Focused legacy-style Save form retained for the Alt+S workflow. */
 public final class LumiSaveScreen extends LumiLegacyModalScreen {
     private static final int DIALOG_HEIGHT = 226;
+    private static final int COMPACT_HEIGHT = 206;
 
     private final Screen parent;
     private final ClientHistoryStore history;
@@ -85,18 +86,18 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        layout = LegacyModalLayout.fit(width, height, DIALOG_HEIGHT);
+        layout = fitPanel(width, height);
         int x = layout.x();
         int y = layout.y();
-        int actionY = y + layout.height() - 28;
-        int fieldY = y + 65;
+        int actionY = y + actionOffset(layout.height());
 
         addLegacyIconButton(x + layout.width() - 32, y + 34, "see-changes",
                 Component.translatable("luma.action.refresh_preview"),
                 this::refreshPreview, LumiLegacyButton.Kind.NORMAL);
 
         message = new EditBox(
-                font, x + 14, fieldY + 38, layout.width() - 28, 16,
+                font, x + 14, y + messageOffset(layout.height()),
+                layout.width() - 28, 16,
                 Component.translatable("luma.save.name_input"));
         message.setMaxLength(SaveScreenController.MAX_NAME_LENGTH);
         message.setHint(Component.translatable("luma.save.name_input"));
@@ -107,7 +108,8 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         message.setValue(initialMessage);
 
         tags = new EditBox(
-                font, x + 14, fieldY + 91, layout.width() - 28, 16,
+                font, x + 14, y + tagsOffset(layout.height()),
+                layout.width() - 28, 16,
                 Component.translatable("luma.history.tags_input"));
         tags.setMaxLength(io.github.lumi.domain.model.VersionTags.MAX_SERIALIZED_LENGTH);
         tags.setHint(Component.translatable("luma.history.tags_input"));
@@ -199,9 +201,9 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
     private void drawDialog(GuiGraphics graphics) {
         int x = layout.x();
         int y = layout.y();
-        int actionY = y + layout.height() - 28;
-        int fieldY = y + 65;
-        int fieldHeight = Math.min(67, actionY - fieldY - 8);
+        boolean compact = layout.height() < COMPACT_HEIGHT;
+        int fieldY = y + (compact ? 62 : 65);
+        int tagPanelY = y + (compact ? 106 : 137);
         graphics.drawString(font, title, x + 10, y + 12,
                 LegacyLumiTheme.TEXT, false);
 
@@ -216,24 +218,49 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
                 x + 12, y + 43, statusColor, false);
 
         LegacyLumiTheme.outlined(graphics, x + 6, fieldY,
-                layout.width() - 12, fieldHeight,
+                layout.width() - 12, compact ? 42 : 67,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         graphics.drawString(font, Component.translatable("luma.save.name_input"),
                 x + 12, fieldY + 8, LegacyLumiTheme.TEXT, false);
-        graphics.drawString(font, Component.translatable("luma.quick_save.name_help"),
-                x + 12, fieldY + 20, LegacyLumiTheme.MUTED, false);
-        LegacyLumiTheme.outlined(graphics, x + 11, fieldY + 34,
+        if (!compact) {
+            graphics.drawString(
+                    font, Component.translatable("luma.quick_save.name_help"),
+                    x + 12, fieldY + 20, LegacyLumiTheme.MUTED, false);
+        }
+        LegacyLumiTheme.outlined(graphics, x + 11,
+                y + messageOffset(layout.height()) - 3,
                 layout.width() - 22, 20,
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.PANEL_BORDER);
 
-        LegacyLumiTheme.outlined(graphics, x + 6, fieldY + 72,
-                layout.width() - 12, 43,
+        LegacyLumiTheme.outlined(graphics, x + 6, tagPanelY,
+                layout.width() - 12, compact ? 40 : 43,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
         graphics.drawString(font, Component.translatable("luma.save.tags_title"),
-                x + 12, fieldY + 78, LegacyLumiTheme.TEXT, false);
-        LegacyLumiTheme.outlined(graphics, x + 11, fieldY + 87,
+                x + 12, tagPanelY + 6, LegacyLumiTheme.TEXT, false);
+        LegacyLumiTheme.outlined(graphics, x + 11,
+                y + tagsOffset(layout.height()) - 3,
                 layout.width() - 22, 20,
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.PANEL_BORDER);
+    }
+
+    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+        return LegacyModalLayout.fit(screenWidth, screenHeight, DIALOG_HEIGHT);
+    }
+
+    static int actionOffset(int panelHeight) {
+        return panelHeight - 28;
+    }
+
+    static int tagsBottom(int panelHeight) {
+        return tagsOffset(panelHeight) + 16;
+    }
+
+    private static int messageOffset(int panelHeight) {
+        return panelHeight < COMPACT_HEIGHT ? 85 : 103;
+    }
+
+    private static int tagsOffset(int panelHeight) {
+        return panelHeight < COMPACT_HEIGHT ? 127 : 156;
     }
 
     private Component status() {
