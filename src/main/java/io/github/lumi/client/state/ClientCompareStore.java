@@ -14,6 +14,7 @@ public final class ClientCompareStore {
     private Pending pending;
     private CompareResultPayload result;
     private final List<BlockChange> changes = new ArrayList<>();
+    private List<BlockChange> publishedChanges = List.of();
     private int nextBatch;
     private boolean highlightVisible = true;
 
@@ -25,6 +26,7 @@ public final class ClientCompareStore {
         pending = new Pending(requestId, dimensionId, before, after);
         result = null;
         changes.clear();
+        publishedChanges = List.of();
         nextBatch = 0;
         highlightVisible = true;
     }
@@ -35,10 +37,12 @@ public final class ClientCompareStore {
                 && candidate.batchIndex() == nextBatch) {
             nextBatch++;
             changes.addAll(candidate.blockChanges());
+            publishedChanges = List.copyOf(changes);
             if (candidate.complete()) {
                 result = candidate;
                 if (!candidate.error().isEmpty()) {
                     changes.clear();
+                    publishedChanges = List.of();
                 }
             }
         }
@@ -53,7 +57,7 @@ public final class ClientCompareStore {
     }
 
     public synchronized List<BlockChange> visibleChanges() {
-        return highlightVisible ? List.copyOf(changes) : List.of();
+        return highlightVisible ? publishedChanges : List.of();
     }
 
     public synchronized Optional<Boolean> toggleVisibility() {
@@ -76,6 +80,7 @@ public final class ClientCompareStore {
         pending = null;
         result = null;
         changes.clear();
+        publishedChanges = List.of();
         nextBatch = 0;
         highlightVisible = true;
     }

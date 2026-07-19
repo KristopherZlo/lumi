@@ -16,11 +16,12 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 /** Renders bounded changed-block outlines while Alt is held in normal play. */
 public final class LumiPendingChangeOverlay {
     private static final VoxelShape BLOCK = Shapes.block();
-    private static final VoxelShape SECTION = Shapes.box(0, 0, 0, 16, 16, 16);
     private static final double MAX_DISTANCE_SQUARED = 256.0 * 256.0;
     private final ClientHistoryStore history;
     private final ClientCompareStore comparisons;
     private final PendingPreviewRefreshController refresh;
+    private final LumiCompareOverlayRenderer compareOverlay =
+            new LumiCompareOverlayRenderer();
 
     public LumiPendingChangeOverlay(
             ClientHistoryStore history,
@@ -45,11 +46,11 @@ public final class LumiPendingChangeOverlay {
     private void render(WorldRenderContext context) {
         Minecraft client = Minecraft.getInstance();
         var snapshot = history.state().snapshot().orElse(null);
-        var comparison = comparisons.visibleResult().orElse(null);
+        var comparison = comparisons.visibleChanges();
         boolean showPending = snapshot != null && client.screen == null
                 && altDown(client) && !snapshot.pendingBlocks().isEmpty();
         if (client.player == null || (!showPending
-                && (comparison == null || comparison.sectionPreview().isEmpty()))) {
+                && comparison.isEmpty())) {
             return;
         }
         var camera = context.worldState().cameraRenderState.pos;
@@ -62,14 +63,7 @@ public final class LumiPendingChangeOverlay {
                         0xffffd166);
             }
         }
-        if (comparison != null) {
-            for (var section : comparison.sectionPreview()) {
-                renderSection(
-                        context, lines, camera,
-                        section.chunkX(), section.sectionY(), section.chunkZ(),
-                        0xff68c7ff);
-            }
-        }
+        compareOverlay.render(context, comparison, altDown(client));
     }
 
     private static void renderBlock(
@@ -89,30 +83,6 @@ public final class LumiPendingChangeOverlay {
         }
         ShapeRenderer.renderShape(
                 context.matrices(), lines, BLOCK,
-                x - camera.x, y - camera.y, z - camera.z,
-                color, 1.0F);
-    }
-
-    private static void renderSection(
-            WorldRenderContext context,
-            com.mojang.blaze3d.vertex.VertexConsumer lines,
-            net.minecraft.world.phys.Vec3 camera,
-            int chunkX,
-            int sectionY,
-            int chunkZ,
-            int color) {
-        double x = (long) chunkX * 16;
-        double y = (long) sectionY * 16;
-        double z = (long) chunkZ * 16;
-        double centerX = x + 8 - camera.x;
-        double centerY = y + 8 - camera.y;
-        double centerZ = z + 8 - camera.z;
-        if (centerX * centerX + centerY * centerY + centerZ * centerZ
-                > MAX_DISTANCE_SQUARED) {
-            return;
-        }
-        ShapeRenderer.renderShape(
-                context.matrices(), lines, SECTION,
                 x - camera.x, y - camera.y, z - camera.z,
                 color, 1.0F);
     }
