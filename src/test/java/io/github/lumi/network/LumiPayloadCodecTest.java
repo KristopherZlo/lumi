@@ -118,6 +118,13 @@ class LumiPayloadCodecTest {
                                 16, 0, 16, 0, 16)))),
                 "");
         assertEquals(overlay, roundTrip(ZoneOverlayPayload.CODEC, overlay));
+        HistoryCommandPayload overlayRequest = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_OVERLAY,
+                new ZoneOverlayArgument(
+                        ZoneOverlayArgument.Mode.ALL).encode(),
+                id('1'), 42);
+        assertEquals(overlayRequest, roundTrip(
+                HistoryCommandPayload.CODEC, overlayRequest));
         for (HistoryCommandPayload.Kind kind : java.util.List.of(
                 HistoryCommandPayload.Kind.ZONE_ENTER,
                 HistoryCommandPayload.Kind.ZONE_LEAVE)) {

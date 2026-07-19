@@ -44,6 +44,10 @@ public final class LumiServerNetworking {
             new ConcurrentHashMap<>();
     private static final CompareCommandHandler COMPARES = new CompareCommandHandler(
             LumiServerNetworking::failureMessage, LumiServerNetworking::send);
+    private static final ZoneOverlayCommandHandler ZONE_OVERLAYS =
+            new ZoneOverlayCommandHandler(
+                    LumiServerNetworking::failureMessage,
+                    LumiServerNetworking::send);
     private static final ConcurrentHashMap<UUID, PendingPackage> PACKAGE_INSPECTIONS =
             new ConcurrentHashMap<>();
     private static final HistorySnapshotFactory SNAPSHOTS = new HistorySnapshotFactory();
@@ -67,6 +71,8 @@ public final class LumiServerNetworking {
                 CleanupResultPayload.TYPE, CleanupResultPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 PartialRestorePlanPayload.TYPE, PartialRestorePlanPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                ZoneOverlayPayload.TYPE, ZoneOverlayPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(
                 HistoryCommandPayload.TYPE, LumiServerNetworking::receive);
         ServerPlayNetworking.registerGlobalReceiver(
@@ -219,6 +225,10 @@ public final class LumiServerNetworking {
             if (payload.kind() == HistoryCommandPayload.Kind.COMPARE
                     || payload.kind() == HistoryCommandPayload.Kind.ZONE_COMPARE) {
                 COMPARES.start(player, runtime, payload, context);
+                return;
+            }
+            if (payload.kind() == HistoryCommandPayload.Kind.ZONE_OVERLAY) {
+                ZONE_OVERLAYS.start(player, runtime, payload, context);
                 return;
             }
             if (payload.kind() == HistoryCommandPayload.Kind.MERGE) {
@@ -434,6 +444,7 @@ public final class LumiServerNetworking {
 
     private static void cleanupPlayer(UUID playerId) {
         COMPARES.cleanupPlayer(playerId);
+        ZONE_OVERLAYS.cleanupPlayer(playerId);
         PACKAGE_INSPECTIONS.remove(playerId);
         TICKET_OWNERS.forEach((ticketId, owner) -> {
             if (owner.playerId().equals(playerId)
@@ -445,6 +456,7 @@ public final class LumiServerNetworking {
 
     private static void clearState() {
         COMPARES.clear();
+        ZONE_OVERLAYS.clear();
         BOSS_BARS.keySet().forEach(LumiServerNetworking::removeBossBar);
         TICKET_OWNERS.clear();
         PACKAGE_INSPECTIONS.clear();
@@ -590,6 +602,8 @@ public final class LumiServerNetworking {
             case ZONE_CREATE, ZONE_ENTER, ZONE_LEAVE, ZONE_CELLS, ZONE_DELETE ->
                     throw new IllegalStateException(
                     "Zone metadata does not use the mutation queue");
+            case ZONE_OVERLAY -> throw new IllegalStateException(
+                    "Zone overlay queries do not use the mutation queue");
             case DELETE_VERSION -> throw new IllegalStateException(
                     "Version deletion does not use the mutation queue");
             case CLEANUP_VERSION -> throw new IllegalStateException(
