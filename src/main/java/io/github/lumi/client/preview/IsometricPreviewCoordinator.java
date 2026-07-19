@@ -63,8 +63,9 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
         while (pending.size() > MAX_PENDING) {
             Iterator<UUID> iterator = pending.keySet().iterator();
             UUID oldest = iterator.next();
+            Pending removed = pending.get(oldest);
             iterator.remove();
-            closeCapture(oldest, null);
+            closeCapture(oldest, removed);
         }
     }
 

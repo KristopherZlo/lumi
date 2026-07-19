@@ -13,6 +13,7 @@ class IsometricPreviewCoordinatorTest {
                 "src/main/java/io/github/lumi/client/preview/IsometricPreviewCoordinator.java"));
 
         assertTrue(source.contains("MAX_PENDING = 4"));
+        assertTrue(source.contains("closeCapture(oldest, removed)"));
         assertTrue(source.contains("case SUCCEEDED"));
         assertTrue(source.contains("snapshots.read("));
         assertTrue(source.contains("meshes.scheduleBuild("));
