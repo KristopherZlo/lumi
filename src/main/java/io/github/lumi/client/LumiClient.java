@@ -142,6 +142,7 @@ public final class LumiClient implements ClientModInitializer {
                                 version -> openVersionDetails(client.screen, version),
                                 version -> openRestore(client.screen, version),
                                 version -> openBranchAt(client.screen, version),
+                                NETWORKING::updateVersionTags,
                                 LumiClient::showCompareChanges));
                     }
 

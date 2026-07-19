@@ -37,13 +37,22 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("luma.action.settings"));
         assertTrue(source.contains("addCompactSidebarButtons"));
         assertTrue(source.contains("\"rollback\", \"luma.action.restore\""));
+        assertTrue(source.contains("\"folder\", \"luma.action.open_details\""));
+        assertTrue(source.contains("\"tags\""));
         assertTrue(source.contains("\"branch\", \"luma.action.create_idea\""));
         assertTrue(source.contains("version.statistics().blocks()"));
         assertTrue(source.contains("previews.texture(snapshot.dimensionId(), version.id())"));
         assertTrue(source.contains("NO_PREVIEW_ICON"));
-        assertTrue(source.contains("pagedHistory.ensurePageSize(pageSize)"));
+        assertTrue(source.contains(
+                "pagedHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS)"));
         assertTrue(source.contains("pagedHistory.next()"));
-        assertTrue(source.contains("pagedHistory.previous()"));
+        assertFalse(source.contains("addHistoryPageButtons"));
+        assertTrue(source.contains("public boolean mouseScrolled("));
+        assertTrue(source.contains("addBranchTabs()"));
+        assertTrue(source.contains("pagedHistory.selectBranch(branch)"));
+        assertTrue(source.contains("latestCreated()"));
+        assertTrue(source.contains("snapshot.head().equals(version.id())"));
+        assertTrue(source.contains("updateTags.accept(editingTags, replacement)"));
         assertTrue(source.contains("!Objects.equals(renderedPage, latestPage)"));
         assertTrue(source.contains(
                 "PendingStatisticsText.summary(result.workspace())"));
@@ -55,7 +64,7 @@ class LumiDashboardScreenTest {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));
         int start = source.indexOf("private void search(String value)");
-        int end = source.indexOf("private List<HistorySnapshotPayload.Version>", start);
+        int end = source.indexOf("private void addBranchTabs()", start);
         String searchMethod = source.substring(start, end);
 
         assertTrue(searchMethod.contains("searchResultsDirty = true;"));

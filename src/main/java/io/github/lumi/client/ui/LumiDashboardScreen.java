@@ -6,6 +6,8 @@ import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
@@ -13,8 +15,13 @@ import io.github.lumi.network.PendingStatisticsPayload;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -57,6 +64,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private final Consumer<HistorySnapshotPayload.Version> openDetails;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
     private final Consumer<HistorySnapshotPayload.Version> createBranch;
+    private final BiConsumer<CommitId, VersionTags> updateTags;
     private final Consumer<VersionCompareController.Target> openCompare;
     private final HistoryViewController historyView = new HistoryViewController();
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
@@ -73,6 +81,11 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private PendingStatisticsPayload renderedStatistics;
     private int historyY;
     private int historyHeight;
+    private int historyScroll;
+    private CommitId editingTags;
+    private EditBox tagEditor;
+    private String tagError = "";
+    private final Map<CommitId, VersionTags> optimisticTags = new HashMap<>();
 
     public LumiDashboardScreen(
             Screen parent,
@@ -95,6 +108,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             Consumer<HistorySnapshotPayload.Version> openDetails,
             Consumer<HistorySnapshotPayload.Version> openRestore,
             Consumer<HistorySnapshotPayload.Version> createBranch,
+            BiConsumer<CommitId, VersionTags> updateTags,
             Consumer<VersionCompareController.Target> openCompare) {
         super(Component.translatable("luma.screen.dashboard.title"));
         this.parent = parent;
@@ -120,6 +134,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         this.openDetails = Objects.requireNonNull(openDetails, "openDetails");
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
         this.createBranch = Objects.requireNonNull(createBranch, "createBranch");
+        this.updateTags = Objects.requireNonNull(updateTags, "updateTags");
         this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
     }
 
@@ -149,7 +164,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         snapshot = history.state().snapshot().orElse(null);
         layout = LegacyWorkspaceLayout.fit(width, height);
         addSidebarButtons();
-        int actionY = layout.bodyY() + 58;
+        int actionY = layout.bodyY() + 56;
         int x = layout.bodyX() + 14;
         int available = Math.max(0, layout.bodyWidth() - 28);
         int buttonWidth = Math.max(0, (available - 70) / 2);
@@ -178,31 +193,28 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             pagedHistory = new WorkspaceHistoryController(
                     snapshot, historyPages, requestPage);
         }
-        int pageSize = Math.max(1,
-                visibleHistoryRows(historyHeight - 24, 64));
-        pagedHistory.ensurePageSize(pageSize);
+        pagedHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS);
         pagedHistory.search(searchQuery);
         renderedPage = pagedHistory.page().orElse(null);
         renderedStatistics = pendingStatistics.result(snapshot).orElse(null);
-        int toolbarX = layout.bodyX() + 58;
-        addIconButton(toolbarX, historyY + 7, "unordered-list",
+        latestCreated().ifPresent(version -> addIconButton(
+                layout.bodyX() + latestPanelWidth() - 28,
+                historyY - 21, "folder", "luma.action.open_details",
+                () -> openDetails.accept(version), LumiLegacyButton.Kind.NORMAL));
+        addBranchTabs();
+        int right = layout.bodyX() + layout.bodyWidth() - 14;
+        addIconButton(right - 58, historyY + 7, "unordered-list",
                 "luma.history.view_cards",
                 () -> showHistoryMode(HistoryViewController.Mode.CARDS),
                 historyView.mode() == HistoryViewController.Mode.CARDS
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addIconButton(toolbarX + 32, historyY + 7, "graph",
+        addIconButton(right - 26, historyY + 7, "graph",
                 "luma.history.view_graph",
                 () -> showHistoryMode(HistoryViewController.Mode.GRAPH),
                 historyView.mode() == HistoryViewController.Mode.GRAPH
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
         int searchWidth = Math.min(100, Math.max(70, layout.bodyWidth() / 4));
-        int searchX = layout.bodyX() + layout.bodyWidth() - searchWidth - 14;
-        int branchX = toolbarX + 64;
-        int branchWidth = Math.max(38, searchX - branchX - 6);
-        addRenderableWidget(new LumiLegacyButton(
-                branchX, historyY + 7, branchWidth, 18,
-                Component.literal(shortHistoryBranch()),
-                ignored -> cycleHistoryBranch(), LumiLegacyButton.Kind.NORMAL));
+        int searchX = layout.bodyX() + 14;
         search = new EditBox(
                 font,
                 searchX,
@@ -223,50 +235,56 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             refocusSearch = false;
         }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
-        int rows = visibleHistoryRows(historyHeight - 24, versions.size());
+        int capacity = visibleHistoryRows(historyHeight, Integer.MAX_VALUE);
+        historyScroll = Math.min(historyScroll,
+                Math.max(0, versions.size() - capacity));
+        List<HistorySnapshotPayload.Version> visible = versions.stream()
+                .skip(historyScroll).limit(capacity).toList();
         if (historyView.mode() == HistoryViewController.Mode.GRAPH) {
             List<HistoryGraphLayout.Node> nodes = graphLayout
-                    .build(versions, snapshot.branches()).stream()
-                    .limit(rows)
-                    .toList();
+                    .build(visible, snapshot.branches());
             graphView = new LumiHistoryGraphView(
                     snapshot.dimensionId(), previews, nodes, snapshot.zones(),
                     layout.bodyX() + 10,
                     historyY + HISTORY_FIRST_ROW_OFFSET,
                     layout.bodyWidth() - 20);
             graphView.buttons(openDetails).forEach(this::addRenderableWidget);
-            addHistoryPageButtons();
             return;
         }
         graphView = null;
-        for (int index = 0; index < rows; index++) {
-            HistorySnapshotPayload.Version version = versions.get(index);
+        for (int index = 0; index < visible.size(); index++) {
+            HistorySnapshotPayload.Version version = visible.get(index);
             int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
                     + index * HISTORY_ROW_STRIDE;
-            int right = layout.bodyX() + layout.bodyWidth() - 14;
+            boolean tagEditing = version.id().equals(editingTags);
+            if (tagEditing) {
+                tagEditor = new EditBox(
+                        font, layout.bodyX() + 64, rowY + 7,
+                        Math.max(20, layout.bodyWidth() - 222), 16,
+                        Component.translatable("luma.history.tags_input"));
+                tagEditor.setMaxLength(VersionTags.MAX_SERIALIZED_LENGTH);
+                tagEditor.setValue(displayedTags(version).serialize());
+                tagEditor.setBordered(false);
+                addRenderableWidget(tagEditor);
+                setInitialFocus(tagEditor);
+                tagEditor.setFocused(true);
+            }
+            addIconButton(right - 122, rowY + 6,
+                    tagEditing ? "save" : "tags",
+                    tagEditing ? "luma.action.save_tags" : "luma.action.edit_tags",
+                    tagEditing ? this::saveTags : () -> editTags(version),
+                    tagEditing ? LumiLegacyButton.Kind.PRIMARY
+                            : LumiLegacyButton.Kind.NORMAL);
             addIconButton(right - 90, rowY + 6,
-                    "eye-open", "luma.action.open_details",
-                    () -> openDetails.accept(version), LumiLegacyButton.Kind.NORMAL);
-            addIconButton(right - 58, rowY + 6,
                     "rollback", "luma.action.restore",
                     () -> openRestore.accept(version), LumiLegacyButton.Kind.PRIMARY);
+            addIconButton(right - 58, rowY + 6,
+                    "folder", "luma.action.open_details",
+                    () -> openDetails.accept(version), LumiLegacyButton.Kind.NORMAL);
             addIconButton(right - 26, rowY + 6,
                     "branch", "luma.action.create_idea",
                     () -> createBranch.accept(version), LumiLegacyButton.Kind.NORMAL);
         }
-        addHistoryPageButtons();
-    }
-
-    private void addHistoryPageButtons() {
-        int y = historyY + historyHeight - 22;
-        LumiLegacyButton previous = addLegacyButton(
-                layout.bodyX() + 14, y, 28, Component.literal("<"),
-                () -> changeHistoryPage(false), LumiLegacyButton.Kind.NORMAL);
-        previous.active = pagedHistory.hasPrevious();
-        LumiLegacyButton next = addLegacyButton(
-                layout.bodyX() + 46, y, 28, Component.literal(">"),
-                () -> changeHistoryPage(true), LumiLegacyButton.Kind.NORMAL);
-        next.active = pagedHistory.hasNext();
     }
 
     private void addDashboardHint() {
@@ -381,6 +399,63 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         searchResultsDirty = true;
     }
 
+    private void addBranchTabs() {
+        int x = layout.bodyX() + latestPanelWidth() + 6;
+        int right = layout.bodyX() + layout.bodyWidth() - 10;
+        for (HistorySnapshotPayload.Branch branch : snapshot.branches()) {
+            if (right - x < 24) break;
+            LumiLegacyButton tab = addLegacyButton(
+                    x, historyY - 17, right - x,
+                    Component.literal(shortBranch(branch.name())),
+                    () -> selectHistoryBranch(branch.name()),
+                    pagedHistory.branch().value().equals(branch.name())
+                            ? LumiLegacyButton.Kind.SELECTED
+                            : LumiLegacyButton.Kind.NORMAL);
+            x += tab.getWidth() + 4;
+        }
+    }
+
+    private void selectHistoryBranch(String branch) {
+        pagedHistory.selectBranch(branch);
+        historyScroll = 0;
+        editingTags = null;
+        rebuildWidgets();
+    }
+
+    private void editTags(HistorySnapshotPayload.Version version) {
+        editingTags = version.id();
+        tagError = "";
+        rebuildWidgets();
+    }
+
+    private void saveTags() {
+        try {
+            VersionTags replacement = VersionTags.parse(tagEditor.getValue());
+            optimisticTags.put(editingTags, replacement);
+            updateTags.accept(editingTags, replacement);
+            editingTags = null;
+            tagError = "";
+            rebuildWidgets();
+        } catch (IllegalArgumentException invalid) {
+            tagError = invalid.getMessage() == null
+                    ? "Invalid tags" : invalid.getMessage();
+        }
+    }
+
+    private VersionTags displayedTags(HistorySnapshotPayload.Version version) {
+        return optimisticTags.getOrDefault(version.id(), version.tags());
+    }
+
+    private Optional<HistorySnapshotPayload.Version> latestCreated() {
+        return snapshot.versions().stream().max(
+                Comparator.comparingLong(
+                        HistorySnapshotPayload.Version::timestampMillis));
+    }
+
+    private int latestPanelWidth() {
+        return Math.max(112, layout.bodyWidth() / 2 - 8);
+    }
+
     private List<HistorySnapshotPayload.Version> visibleVersions() {
         return snapshot == null || pagedHistory == null
                 ? List.of()
@@ -392,22 +467,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         rebuildWidgets();
     }
 
-    private void cycleHistoryBranch() {
-        pagedHistory.nextBranch(snapshot.branches());
-        rebuildWidgets();
-    }
-
-    private void changeHistoryPage(boolean next) {
-        if (next) {
-            pagedHistory.next();
-        } else {
-            pagedHistory.previous();
-        }
-        rebuildWidgets();
-    }
-
-    private String shortHistoryBranch() {
-        String value = pagedHistory.branch().value();
+    private static String shortBranch(String value) {
         int slash = value.lastIndexOf('/');
         return slash < 0 ? value : value.substring(slash + 1);
     }
@@ -516,9 +576,24 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                         x + 14, layout.bodyY() + 50,
                         LegacyLumiTheme.ACCENT, false));
 
+        latestCreated().ifPresent(version -> {
+            int latestWidth = latestPanelWidth();
+            LegacyLumiTheme.outlined(
+                    graphics, x, historyY - 24, latestWidth, 22,
+                    LegacyLumiTheme.STATUS, LegacyLumiTheme.STATUS_BORDER);
+            String latest = Component.translatable(
+                    "luma.ideas.latest_save", version.message(),
+                    HISTORY_TIME.format(Instant.ofEpochMilli(
+                            version.timestampMillis()))).getString();
+            graphics.drawString(font,
+                    font.plainSubstrByWidth(latest, latestWidth - 34),
+                    x + 6, historyY - 17, LegacyLumiTheme.ACCENT, false);
+        });
         drawPanel(graphics, x, historyY, width, historyHeight);
+        int titleX = search == null ? x + 14
+                : search.getX() + search.getWidth() + 8;
         graphics.drawString(font, Component.translatable("luma.project.history_title"),
-                x + 14, historyY + 13, LegacyLumiTheme.TEXT, false);
+                titleX, historyY + 13, LegacyLumiTheme.TEXT, false);
         if (search != null) {
             LegacyLumiTheme.outlined(
                     graphics,
@@ -533,27 +608,42 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         if (graphView != null) {
             graphView.renderConnections(graphics);
         }
-        int rows = visibleHistoryRows(historyHeight - 24, versions.size());
-        for (int index = 0;
-                graphView == null && index < rows; index++) {
-            HistorySnapshotPayload.Version version = versions.get(index);
+        int rows = visibleHistoryRows(historyHeight, versions.size());
+        List<HistorySnapshotPayload.Version> visible = versions.stream()
+                .skip(historyScroll).limit(rows).toList();
+        for (int index = 0; graphView == null && index < visible.size(); index++) {
+            HistorySnapshotPayload.Version version = visible.get(index);
             int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
                     + index * HISTORY_ROW_STRIDE;
-            graphics.fill(x + 10, rowY, x + width - 10, rowY + 30,
-                    LegacyLumiTheme.INSET);
+            LegacyLumiTheme.outlined(
+                    graphics, x + 10, rowY, width - 20, HISTORY_ROW_HEIGHT,
+                    LegacyLumiTheme.INSET,
+                    snapshot.head().equals(version.id())
+                            ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.INSET_BORDER);
             drawPreview(graphics, version, x + 16, rowY + 4);
-            graphics.drawString(font,
-                    font.plainSubstrByWidth(
-                            version.message(), Math.max(0, width - 212)),
-                    x + 64, rowY + 5, LegacyLumiTheme.TEXT, false);
-            String tags = version.tags().values().isEmpty() ? ""
-                    : " · #" + String.join(" #", version.tags().values());
-            String meta = version.author() + " · "
-                    + HISTORY_TIME.format(Instant.ofEpochMilli(version.timestampMillis()))
-                    + " · " + version.statistics().blocks() + " blocks" + tags;
-            graphics.drawString(font,
-                    font.plainSubstrByWidth(meta, Math.max(0, width - 212)),
-                    x + 64, rowY + 17, LegacyLumiTheme.MUTED, false);
+            if (!version.id().equals(editingTags)) {
+                graphics.drawString(font,
+                        font.plainSubstrByWidth(
+                                version.message(), Math.max(0, width - 244)),
+                        x + 64, rowY + 5, LegacyLumiTheme.TEXT, false);
+                String tags = displayedTags(version).isEmpty() ? ""
+                        : " · #" + String.join(" #", displayedTags(version).values());
+                String active = snapshot.head().equals(version.id())
+                        ? " · " + Component.translatable(
+                                "luma.project.active_head_badge").getString() : "";
+                String meta = version.author() + " · "
+                        + HISTORY_TIME.format(Instant.ofEpochMilli(
+                                version.timestampMillis()))
+                        + " · " + version.statistics().blocks() + " blocks"
+                        + tags + active;
+                graphics.drawString(font,
+                        font.plainSubstrByWidth(meta, Math.max(0, width - 244)),
+                        x + 64, rowY + 17, LegacyLumiTheme.MUTED, false);
+            } else if (!tagError.isEmpty()) {
+                graphics.drawString(font,
+                        font.plainSubstrByWidth(tagError, Math.max(0, width - 244)),
+                        x + 64, rowY + 20, LegacyLumiTheme.DANGER, false);
+            }
         }
         if (versions.isEmpty()) {
             graphics.drawString(font,
@@ -584,6 +674,34 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                 0, 0, iconSize, iconSize,
                 ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE,
                 ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE);
+    }
+
+    @Override
+    public boolean mouseScrolled(
+            double mouseX, double mouseY,
+            double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        if (layout != null && snapshot != null
+                && x >= layout.bodyX()
+                && x < layout.bodyX() + layout.bodyWidth()
+                && y >= historyY + HISTORY_FIRST_ROW_OFFSET
+                && y < historyY + historyHeight) {
+            int capacity = visibleHistoryRows(historyHeight, Integer.MAX_VALUE);
+            int maximum = Math.max(0, visibleVersions().size() - capacity);
+            int replacement = Math.max(0, Math.min(
+                    maximum, historyScroll + (verticalAmount < 0 ? 1 : -1)));
+            if (replacement != historyScroll) {
+                historyScroll = replacement;
+                editingTags = null;
+                rebuildWidgets();
+            } else if (verticalAmount < 0 && pagedHistory.hasNext()) {
+                pagedHistory.next();
+            }
+            return true;
+        }
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
     private static void drawPanel(GuiGraphics graphics, int x, int y, int width, int height) {
