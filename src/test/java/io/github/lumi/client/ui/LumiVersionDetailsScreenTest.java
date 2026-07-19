@@ -13,6 +13,8 @@ class LumiVersionDetailsScreenTest {
                 "src/main/java/io/github/lumi/client/ui/LumiVersionDetailsScreen.java"));
         String dashboard = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));
+        String tags = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiVersionTagsScreen.java"));
         String client = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClient.java"));
 
@@ -24,8 +26,12 @@ class LumiVersionDetailsScreenTest {
         assertTrue(details.contains("compare.active = compareToParent.isPresent()"));
         assertTrue(details.contains("luma.action.delete_save"));
         assertTrue(details.contains("luma.action.edit_tags"));
-        assertTrue(details.contains("luma.action.save_tags"));
-        assertTrue(details.contains("updateTags.accept(tags)"));
+        assertTrue(details.contains("new LumiVersionTagsScreen("));
+        assertTrue(details.contains("updateTags.accept(replacement)"));
+        assertTrue(tags.contains("luma.action.save_tags"));
+        assertTrue(tags.contains("luma.action.cancel"));
+        assertTrue(tags.contains("luma.history.tags_input"));
+        assertTrue(tags.contains("VersionTags.parse(tags.getValue())"));
         assertTrue(details.contains("luma.action.rename_save"));
         assertTrue(details.contains("rename.accept(replacement.value())"));
         assertTrue(details.contains("luma.save_details.create_idea"));

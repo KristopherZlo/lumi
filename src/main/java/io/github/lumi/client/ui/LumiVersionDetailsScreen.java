@@ -44,9 +44,6 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     private EditBox nameEditor;
     private String nameError = "";
     private VersionTags displayedTags;
-    private boolean editingTags;
-    private EditBox tagEditor;
-    private String tagError = "";
     private int previewZoom = 1;
     private int previewPanX;
     private int previewPanY;
@@ -146,25 +143,10 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                     }, LumiLegacyButton.Kind.NORMAL);
         }
 
-        int metadataX = panelX + 280;
-        int metadataWidth = Math.max(0, panelWidth - 300);
-        if (!readOnly && editingTags) {
-            tagEditor = new EditBox(font, metadataX, panelY + 143,
-                    Math.max(20, metadataWidth - 30), 16,
-                    Component.translatable("luma.history.tags_input"));
-            tagEditor.setMaxLength(VersionTags.MAX_SERIALIZED_LENGTH);
-            tagEditor.setValue(displayedTags.serialize());
-            addRenderableWidget(tagEditor);
-            addLegacyIconButton(panelX + panelWidth - 44, panelY + 139, "save",
-                    Component.translatable("luma.action.save_tags"),
-                    this::saveTags, LumiLegacyButton.Kind.PRIMARY);
-        } else if (!readOnly) {
+        if (!readOnly) {
             addLegacyIconButton(panelX + panelWidth - 44, panelY + 139, "tags",
-                    Component.translatable("luma.action.edit_tags"), () -> {
-                        editingTags = true;
-                        tagError = "";
-                        rebuildWidgets();
-                    }, LumiLegacyButton.Kind.NORMAL);
+                    Component.translatable("luma.action.edit_tags"),
+                    this::editTags, LumiLegacyButton.Kind.NORMAL);
         }
         addPreviewControls();
     }
@@ -230,19 +212,12 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                     metadataX, panelY + 102, LegacyLumiTheme.TEXT, false);
             graphics.drawString(font, Component.translatable("luma.save.tags_title"),
                     metadataX, panelY + 126, LegacyLumiTheme.MUTED, false);
-            if (!editingTags) {
-                String tags = displayedTags.isEmpty()
-                        ? Component.translatable("luma.history.tags_empty").getString()
-                        : displayedTags.display();
-                graphics.drawString(font,
-                        font.plainSubstrByWidth(tags, Math.max(0, metadataWidth - 30)),
-                        metadataX, panelY + 147, LegacyLumiTheme.TEXT, false);
-            }
-            if (!tagError.isEmpty()) {
-                graphics.drawString(font,
-                        font.plainSubstrByWidth(tagError, metadataWidth),
-                        metadataX, panelY + 166, LegacyLumiTheme.DANGER, false);
-            }
+            String tags = displayedTags.isEmpty()
+                    ? Component.translatable("luma.history.tags_empty").getString()
+                    : displayedTags.display();
+            graphics.drawString(font,
+                    font.plainSubstrByWidth(tags, Math.max(0, metadataWidth - 30)),
+                    metadataX, panelY + 147, LegacyLumiTheme.TEXT, false);
             graphics.drawString(font,
                     Component.translatable("luma.save_details.raw_info_title"),
                     metadataX, panelY + 184, LegacyLumiTheme.MUTED, false);
@@ -323,18 +298,12 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         previewPanY = Math.max(0, Math.min(textureHeight - sourceHeight, previewPanY));
     }
 
-    private void saveTags() {
-        try {
-            VersionTags tags = VersionTags.parse(tagEditor.getValue());
-            updateTags.accept(tags);
-            displayedTags = tags;
-            editingTags = false;
-            tagError = "";
-            rebuildWidgets();
-        } catch (RuntimeException failed) {
-            tagError = failed.getMessage() == null
-                    ? "Lumi could not update tags" : failed.getMessage();
-        }
+    private void editTags() {
+        minecraft.setScreen(new LumiVersionTagsScreen(
+                this, displayedTags, replacement -> {
+                    updateTags.accept(replacement);
+                    displayedTags = replacement;
+                }));
     }
 
     private void saveName() {
