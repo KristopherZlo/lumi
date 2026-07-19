@@ -42,6 +42,30 @@ class WorkspaceHistoryControllerTest {
         assertEquals(2, controller.pageNumber());
     }
 
+    @Test
+    void readsOnlyItsAssignedPageChannel() {
+        HistorySnapshotPayload snapshot = snapshot();
+        ClientHistoryPageStore pages = new ClientHistoryPageStore();
+        var channel = new ClientHistoryPageStore.Channel(new UUID(0, 9));
+        UUID request = new UUID(0, 10);
+        WorkspaceHistoryController controller = new WorkspaceHistoryController(
+                snapshot, pages, channel, (branch, zone, offset, limit) -> {
+                    pages.begin(channel, request, snapshot.dimensionId(),
+                            snapshot.workspaceId(), branch, zone, offset);
+                    return request;
+                });
+        controller.ensurePageSize(7);
+
+        assertTrue(pages.accept(new HistoryPagePayload(
+                request, snapshot.dimensionId(), snapshot.workspaceId(),
+                new BranchName("main"), Optional.empty(), 0, false,
+                List.of(version()), "")));
+        assertEquals(List.of(version()), controller.versions());
+        assertTrue(pages.page(
+                snapshot.dimensionId(), snapshot.workspaceId(),
+                new BranchName("main"), Optional.empty()).isEmpty());
+    }
+
     private static HistorySnapshotPayload snapshot() {
         return new HistorySnapshotPayload(
                 "minecraft:overworld", id('1'), 0, 0, false, false,

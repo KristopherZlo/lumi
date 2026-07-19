@@ -38,6 +38,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private final ClientHistoryStore history;
     private final ClientHistoryPageStore historyPages;
     private final ZoneHistoryController.Requester requestPage;
+    private final LumiComparePickerScreen.PageRequester requestComparePage;
     private final ClientVersionPreviewStore previews;
     private final Runnable openSave;
     private final Runnable openAmend;
@@ -73,6 +74,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             ClientVersionPreviewStore previews,
             ClientHistoryPageStore historyPages,
             ZoneHistoryController.Requester requestPage,
+            LumiComparePickerScreen.PageRequester requestComparePage,
             Runnable openSave,
             Runnable openAmend,
             Consumer<Screen> openBranches,
@@ -92,6 +94,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         this.previews = Objects.requireNonNull(previews, "previews");
         this.historyPages = Objects.requireNonNull(historyPages, "historyPages");
         this.requestPage = Objects.requireNonNull(requestPage, "requestPage");
+        this.requestComparePage = Objects.requireNonNull(
+                requestComparePage, "requestComparePage");
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openAmend = Objects.requireNonNull(openAmend, "openAmend");
         this.openBranches = Objects.requireNonNull(openBranches, "openBranches");
@@ -342,7 +346,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         }
         selectTab(LegacyProjectTab.COMPARE);
         minecraft.setScreen(new LumiComparePickerScreen(
-                this, snapshot, previews, openCompare));
+                this, snapshot, previews, historyPages, requestComparePage,
+                openCompare));
     }
 
     private void search(String value) {

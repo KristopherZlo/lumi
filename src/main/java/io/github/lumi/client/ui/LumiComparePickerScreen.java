@@ -2,13 +2,17 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
-import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.client.state.ClientHistoryPageStore;
+import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -35,24 +39,55 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
     private final ClientVersionPreviewStore previews;
     private final Consumer<VersionCompareController.Target> compare;
     private final VersionCompareController controller = new VersionCompareController();
-    private final HistoryViewController leftHistory = new HistoryViewController();
-    private final HistoryViewController rightHistory = new HistoryViewController();
+    private final WorkspaceHistoryController leftHistory;
+    private final WorkspaceHistoryController rightHistory;
     private LegacyModalLayout layout;
-    private int leftPage;
-    private int rightPage;
-    private CommitId leftSelection;
-    private CommitId rightSelection;
+    private HistoryPagePayload renderedLeftPage;
+    private HistoryPagePayload renderedRightPage;
+    private HistorySnapshotPayload.Version leftSelection;
+    private HistorySnapshotPayload.Version rightSelection;
 
     public LumiComparePickerScreen(
             Screen parent,
             HistorySnapshotPayload snapshot,
             ClientVersionPreviewStore previews,
+            ClientHistoryPageStore historyPages,
+            PageRequester requestPage,
             Consumer<VersionCompareController.Target> compare) {
         super(parent, Component.translatable("luma.compare.pick_title"),
                 LegacyProjectTab.COMPARE);
         this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
         this.previews = Objects.requireNonNull(previews, "previews");
         this.compare = Objects.requireNonNull(compare, "compare");
+        Objects.requireNonNull(historyPages, "historyPages");
+        Objects.requireNonNull(requestPage, "requestPage");
+        leftHistory = history(
+                historyPages, requestPage, ClientHistoryPageStore.createChannel());
+        rightHistory = history(
+                historyPages, requestPage, ClientHistoryPageStore.createChannel());
+    }
+
+    private WorkspaceHistoryController history(
+            ClientHistoryPageStore pages,
+            PageRequester requester,
+            ClientHistoryPageStore.Channel channel) {
+        return new WorkspaceHistoryController(
+                snapshot, pages, channel,
+                (branch, zone, offset, limit) ->
+                        requester.request(channel, branch, zone, offset, limit));
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        HistoryPagePayload latestLeft = leftHistory.page().orElse(null);
+        HistoryPagePayload latestRight = rightHistory.page().orElse(null);
+        if (!Objects.equals(renderedLeftPage, latestLeft)
+                || !Objects.equals(renderedRightPage, latestRight)) {
+            renderedLeftPage = latestLeft;
+            renderedRightPage = latestRight;
+            rebuildWidgets();
+        }
     }
 
     @Override
@@ -62,6 +97,13 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         layout = new LegacyModalLayout(
                 shell.contentX(), shell.windowY(),
                 shell.contentWidth(), shell.windowHeight());
+        int rows = visibleRows();
+        if (rows > 0) {
+            leftHistory.ensurePageSize(rows);
+            rightHistory.ensurePageSize(rows);
+        }
+        renderedLeftPage = leftHistory.page().orElse(null);
+        renderedRightPage = rightHistory.page().orElse(null);
         addColumnButtons(true);
         addColumnButtons(false);
         int footerY = layout.y() + layout.height() - 28;
@@ -78,31 +120,27 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
     }
 
     private void addColumnButtons(boolean left) {
-        HistoryViewController history = history(left);
+        WorkspaceHistoryController history = history(left);
         List<HistorySnapshotPayload.Version> versions = versions(left);
         int x = left ? leftX() : rightX();
         int width = columnWidth();
         addRenderableWidget(new LumiLegacyButton(
                 x, layout.y() + 66, width, 18,
-                history.branch().isEmpty()
-                        ? Component.translatable("luma.history.filter_all")
-                        : Component.literal(history.branch()),
+                Component.literal(history.branch().value()),
                 ignored -> changeBranch(left), LumiLegacyButton.Kind.NORMAL));
         int rows = visibleRows();
-        int page = left ? leftPage : rightPage;
-        int start = rows == 0 ? 0 : Math.min(page * rows, versions.size());
-        int end = Math.min(start + rows, versions.size());
-        for (int index = start; index < end; index++) {
+        int end = Math.min(rows, versions.size());
+        for (int index = 0; index < end; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
-            int rowY = rowsY() + (index - start) * ROW_STRIDE;
-            boolean selected = version.id().equals(
+            int rowY = rowsY() + index * ROW_STRIDE;
+            boolean selected = version.equals(
                     left ? leftSelection : rightSelection);
             addLegacyButton(
                     x + width - 58, rowY + 12, 50,
                     Component.translatable(selected
                             ? "luma.compare.selected_save"
                             : "luma.compare.select_save"),
-                    () -> select(left, version.id()),
+                    () -> select(left, version),
                     selected
                             ? LumiLegacyButton.Kind.SELECTED
                             : LumiLegacyButton.Kind.NORMAL);
@@ -111,18 +149,19 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         LumiLegacyButton previous = addLegacyIconButton(
                 x, footerY, "chevron-left", Component.literal("<"),
                 () -> changePage(left, -1), LumiLegacyButton.Kind.NORMAL);
-        previous.active = page > 0;
+        previous.active = history.hasPrevious();
         LumiLegacyButton next = addLegacyIconButton(
                 x + 32, footerY, "chevron-right", Component.literal(">"),
                 () -> changePage(left, 1), LumiLegacyButton.Kind.NORMAL);
-        next.active = rows > 0 && (page + 1) * rows < versions.size();
+        next.active = history.hasNext();
     }
 
-    private void select(boolean left, CommitId commit) {
+    private void select(
+            boolean left, HistorySnapshotPayload.Version version) {
         if (left) {
-            leftSelection = commit;
+            leftSelection = version;
         } else {
-            rightSelection = commit;
+            rightSelection = version;
         }
         rebuildWidgets();
     }
@@ -130,10 +169,8 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
     private void changeBranch(boolean left) {
         history(left).nextBranch(snapshot.branches());
         if (left) {
-            leftPage = 0;
             leftSelection = null;
         } else {
-            rightPage = 0;
             rightSelection = null;
         }
         rebuildWidgets();
@@ -147,19 +184,15 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
     }
 
     private java.util.Optional<VersionCompareController.Target> target() {
-        return controller.target(
-                findVersion(leftSelection), findVersion(rightSelection));
+        return controller.target(leftSelection, rightSelection);
     }
 
     private void changePage(boolean left, int delta) {
-        List<HistorySnapshotPayload.Version> versions = versions(left);
-        int rows = visibleRows();
-        int maximum = rows == 0 || versions.isEmpty()
-                ? 0 : (versions.size() - 1) / rows;
-        if (left) {
-            leftPage = Math.max(0, Math.min(maximum, leftPage + delta));
+        WorkspaceHistoryController history = history(left);
+        if (delta < 0) {
+            history.previous();
         } else {
-            rightPage = Math.max(0, Math.min(maximum, rightPage + delta));
+            history.next();
         }
         rebuildWidgets();
     }
@@ -196,19 +229,20 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                 x + width / 2, layout.y() + 52, LegacyLumiTheme.ACCENT);
         List<HistorySnapshotPayload.Version> versions = versions(left);
         if (versions.isEmpty()) {
+            String error = history(left).error();
             graphics.drawCenteredString(font,
-                    Component.translatable("luma.history.empty"),
+                    error.isEmpty()
+                            ? Component.translatable("luma.history.empty")
+                            : Component.literal(error),
                     x + width / 2, rowsY() + 8, LegacyLumiTheme.MUTED);
             return;
         }
         int rows = visibleRows();
-        int page = left ? leftPage : rightPage;
-        int start = rows == 0 ? 0 : Math.min(page * rows, versions.size());
-        int end = Math.min(start + rows, versions.size());
-        for (int index = start; index < end; index++) {
+        int end = Math.min(rows, versions.size());
+        for (int index = 0; index < end; index++) {
             renderCard(
                     graphics, versions.get(index), x,
-                    rowsY() + (index - start) * ROW_STRIDE, width);
+                    rowsY() + index * ROW_STRIDE, width);
         }
     }
 
@@ -295,26 +329,26 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         return Math.min(MAX_ROWS, Math.max(0, (layout.height() - 130) / ROW_STRIDE));
     }
 
-    private HistoryViewController history(boolean left) {
+    private WorkspaceHistoryController history(boolean left) {
         return left ? leftHistory : rightHistory;
     }
 
     private List<HistorySnapshotPayload.Version> versions(boolean left) {
-        return history(left).visible(snapshot, "");
-    }
-
-    private HistorySnapshotPayload.Version findVersion(CommitId id) {
-        if (id == null) {
-            return null;
-        }
-        return snapshot.versions().stream()
-                .filter(version -> version.id().equals(id))
-                .findFirst()
-                .orElse(null);
+        return history(left).versions();
     }
 
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    @FunctionalInterface
+    public interface PageRequester {
+        UUID request(
+                ClientHistoryPageStore.Channel channel,
+                BranchName branch,
+                Optional<UUID> zoneId,
+                int offset,
+                int limit);
     }
 }

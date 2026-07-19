@@ -12,6 +12,7 @@ import java.util.Optional;
 final class WorkspaceHistoryController {
     private final HistorySnapshotPayload snapshot;
     private final ClientHistoryPageStore pages;
+    private final ClientHistoryPageStore.Channel channel;
     private final ZoneHistoryController.Requester requester;
     private BranchName branch;
     private int offset;
@@ -21,8 +22,17 @@ final class WorkspaceHistoryController {
             HistorySnapshotPayload snapshot,
             ClientHistoryPageStore pages,
             ZoneHistoryController.Requester requester) {
+        this(snapshot, pages, null, requester);
+    }
+
+    WorkspaceHistoryController(
+            HistorySnapshotPayload snapshot,
+            ClientHistoryPageStore pages,
+            ClientHistoryPageStore.Channel channel,
+            ZoneHistoryController.Requester requester) {
         this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
         this.pages = Objects.requireNonNull(pages, "pages");
+        this.channel = channel;
         this.requester = Objects.requireNonNull(requester, "requester");
         branch = new BranchName(snapshot.branchName());
     }
@@ -45,6 +55,11 @@ final class WorkspaceHistoryController {
     }
 
     Optional<HistoryPagePayload> page() {
+        if (channel != null) {
+            return pages.page(
+                    channel, snapshot.dimensionId(), snapshot.workspaceId(),
+                    branch, Optional.empty());
+        }
         return pages.page(
                 snapshot.dimensionId(), snapshot.workspaceId(),
                 branch, Optional.empty());

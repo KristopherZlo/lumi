@@ -108,6 +108,7 @@ public final class LumiClient implements ClientModInitializer {
                         client.setScreen(new LumiDashboardScreen(
                                 client.screen, HISTORY, PREVIEW_STORE,
                                 HISTORY_PAGES, NETWORKING::requestHistoryPage,
+                                NETWORKING::requestHistoryPage,
                                 () -> LumiClient.openSave(client.screen,
                                         SaveScreenController.Intent.SAVE, ""),
                                 () -> LumiClient.openSave(client.screen,
@@ -413,7 +414,8 @@ public final class LumiClient implements ClientModInitializer {
                     var snapshot = HISTORY.state().snapshot().orElseThrow();
                     Screen more = client.screen;
                     client.setScreen(new LumiComparePickerScreen(
-                            more, snapshot, PREVIEW_STORE,
+                            more, snapshot, PREVIEW_STORE, HISTORY_PAGES,
+                            NETWORKING::requestHistoryPage,
                             LumiClient::showCompareChanges));
                 }));
     }

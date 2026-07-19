@@ -5,6 +5,7 @@ import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientZoneOverlayStore;
+import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
@@ -403,6 +404,27 @@ public final class LumiClientNetworking {
             Optional<UUID> zoneId,
             int offset,
             int limit) {
+        return requestHistoryPage(
+                Optional.empty(), branch, zoneId, offset, limit);
+    }
+
+    public UUID requestHistoryPage(
+            ClientHistoryPageStore.Channel channel,
+            io.github.lumi.domain.model.BranchName branch,
+            Optional<UUID> zoneId,
+            int offset,
+            int limit) {
+        return requestHistoryPage(
+                Optional.of(Objects.requireNonNull(channel, "channel")),
+                branch, zoneId, offset, limit);
+    }
+
+    private UUID requestHistoryPage(
+            Optional<ClientHistoryPageStore.Channel> channel,
+            io.github.lumi.domain.model.BranchName branch,
+            Optional<UUID> zoneId,
+            int offset,
+            int limit) {
         var snapshot = history.state().snapshot().orElseThrow(
                 () -> new IllegalStateException(
                         "Lumi history has not synchronized yet"));
@@ -411,13 +433,21 @@ public final class LumiClientNetworking {
                     "The connected server does not support paged history");
         }
         UUID requestId = UUID.randomUUID();
-        historyPages.begin(
-                requestId, snapshot.dimensionId(), snapshot.workspaceId(),
-                Objects.requireNonNull(branch, "branch"),
-                Objects.requireNonNull(zoneId, "zoneId"), offset);
+        BranchName requestedBranch = Objects.requireNonNull(branch, "branch");
+        Optional<UUID> requestedZone = Objects.requireNonNull(zoneId, "zoneId");
+        if (channel.isPresent()) {
+            historyPages.begin(
+                    channel.orElseThrow(), requestId,
+                    snapshot.dimensionId(), snapshot.workspaceId(),
+                    requestedBranch, requestedZone, offset);
+        } else {
+            historyPages.begin(
+                    requestId, snapshot.dimensionId(), snapshot.workspaceId(),
+                    requestedBranch, requestedZone, offset);
+        }
         ClientPlayNetworking.send(new HistoryPageRequestPayload(
                 requestId, snapshot.dimensionId(), snapshot.workspaceId(),
-                branch, zoneId, offset, limit));
+                requestedBranch, requestedZone, offset, limit));
         return requestId;
     }
 
