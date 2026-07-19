@@ -350,7 +350,8 @@ public final class LumiClient implements ClientModInitializer {
                     var snapshot = HISTORY.state().snapshot().orElseThrow();
                     Screen more = client.screen;
                     client.setScreen(new LumiComparePickerScreen(
-                            more, snapshot.versions(),
+                            more, snapshot.dimensionId(), snapshot.versions(),
+                            PREVIEW_STORE,
                             LumiClient::showCompareChanges));
                 }));
     }

@@ -1,31 +1,57 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.LumiMod;
+import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.network.HistorySnapshotPayload;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
-/** Bounded native picker for comparing any two saves in the current history. */
+/** Independent left/right save columns that dispatch Compare into the world. */
 public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
-    private static final int MAX_ROWS = 6;
+    private static final int MAX_ROWS = 5;
+    private static final int COLUMN_GAP = 42;
+    private static final int ROW_HEIGHT = 42;
+    private static final int ROW_STRIDE = 46;
+    private static final int PREVIEW_WIDTH = 44;
+    private static final int PREVIEW_HEIGHT = 30;
+    private static final Identifier CENTER_ICON = Identifier.fromNamespaceAndPath(
+            LumiMod.MOD_ID, "textures/gui/icons/see-changes.png");
+    private static final Identifier NO_PREVIEW_ICON = Identifier.fromNamespaceAndPath(
+            LumiMod.MOD_ID, "textures/gui/new-icons/image.png");
+    private static final DateTimeFormatter DATE_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+                    .withZone(ZoneId.systemDefault());
+    private final String dimensionId;
     private final List<HistorySnapshotPayload.Version> versions;
+    private final ClientVersionPreviewStore previews;
     private final Consumer<VersionCompareController.Target> compare;
     private final VersionCompareController controller = new VersionCompareController();
     private LegacyModalLayout layout;
-    private int page;
-    private int beforeIndex = -1;
-    private int afterIndex = -1;
+    private int leftPage;
+    private int rightPage;
+    private int leftIndex = -1;
+    private int rightIndex = -1;
 
     public LumiComparePickerScreen(
             Screen parent,
+            String dimensionId,
             List<HistorySnapshotPayload.Version> versions,
+            ClientVersionPreviewStore previews,
             Consumer<VersionCompareController.Target> compare) {
         super(parent, Component.translatable("luma.compare.pick_title"),
                 LegacyProjectTab.COMPARE);
+        this.dimensionId = Objects.requireNonNull(dimensionId, "dimensionId");
         this.versions = List.copyOf(Objects.requireNonNull(versions, "versions"));
+        this.previews = Objects.requireNonNull(previews, "previews");
         this.compare = Objects.requireNonNull(compare, "compare");
     }
 
@@ -36,74 +62,82 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         layout = new LegacyModalLayout(
                 shell.contentX(), shell.windowY(),
                 shell.contentWidth(), shell.windowHeight());
-        addRowButtons();
-
+        addColumnButtons(true);
+        addColumnButtons(false);
         int footerY = layout.y() + layout.height() - 28;
-        LumiLegacyButton previous = addLegacyIconButton(
-                layout.x() + 16, footerY, "chevron-left", Component.literal("<"),
-                () -> changePage(-1), LumiLegacyButton.Kind.NORMAL);
-        previous.active = page > 0;
-        LumiLegacyButton next = addLegacyIconButton(
-                layout.x() + 48, footerY, "chevron-right", Component.literal(">"),
-                () -> changePage(1), LumiLegacyButton.Kind.NORMAL);
-        next.active = visibleRows() > 0
-                && (page + 1) * visibleRows() < versions.size();
-        LumiLegacyButton submit = addLegacyButton(
-                layout.x() + layout.width() - 256, footerY, 96,
-                Component.translatable("luma.action.compare"),
+        int dividerX = dividerX();
+        LumiLegacyButton submit = addLegacyIconButton(
+                dividerX - 13, footerY, "eye-open",
+                Component.translatable("luma.action.see_changes"),
                 this::compareSelected, LumiLegacyButton.Kind.PRIMARY);
         submit.active = target().isPresent();
-        addLegacyButton(
-                layout.x() + layout.width() - 152, footerY, 136,
+        addLegacyIconButton(
+                layout.x() + layout.width() - 42, footerY, "close",
                 Component.translatable("luma.action.close"),
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
-    private void addRowButtons() {
+    private void addColumnButtons(boolean left) {
         int rows = visibleRows();
+        int page = left ? leftPage : rightPage;
         int start = rows == 0 ? 0 : Math.min(page * rows, versions.size());
         int end = Math.min(start + rows, versions.size());
+        int x = left ? leftX() : rightX();
+        int width = columnWidth();
         for (int index = start; index < end; index++) {
             int selectedIndex = index;
-            int rowY = layout.y() + 68 + (index - start) * 34;
-            int fromX = layout.x() + layout.width() - 126;
+            int rowY = rowsY() + (index - start) * ROW_STRIDE;
+            boolean selected = (left ? leftIndex : rightIndex) == index;
             addLegacyButton(
-                    fromX, rowY + 5, 50,
-                    Component.translatable("luma.compare.left"),
-                    () -> selectBefore(selectedIndex),
-                    beforeIndex == index
-                            ? LumiLegacyButton.Kind.SELECTED
-                            : LumiLegacyButton.Kind.NORMAL);
-            addLegacyButton(
-                    fromX + 56, rowY + 5, 50,
-                    Component.translatable("luma.compare.right"),
-                    () -> selectAfter(selectedIndex),
-                    afterIndex == index
+                    x + width - 58, rowY + 12, 50,
+                    Component.translatable(selected
+                            ? "luma.compare.selected_save"
+                            : "luma.compare.select_save"),
+                    () -> select(left, selectedIndex),
+                    selected
                             ? LumiLegacyButton.Kind.SELECTED
                             : LumiLegacyButton.Kind.NORMAL);
         }
+        int footerY = layout.y() + layout.height() - 28;
+        LumiLegacyButton previous = addLegacyIconButton(
+                x, footerY, "chevron-left", Component.literal("<"),
+                () -> changePage(left, -1), LumiLegacyButton.Kind.NORMAL);
+        previous.active = page > 0;
+        LumiLegacyButton next = addLegacyIconButton(
+                x + 32, footerY, "chevron-right", Component.literal(">"),
+                () -> changePage(left, 1), LumiLegacyButton.Kind.NORMAL);
+        next.active = rows > 0 && (page + 1) * rows < versions.size();
     }
 
-    private void selectBefore(int index) {
-        beforeIndex = index;
-        rebuildWidgets();
-    }
-
-    private void selectAfter(int index) {
-        afterIndex = index;
+    private void select(boolean left, int index) {
+        if (left) {
+            leftIndex = index;
+        } else {
+            rightIndex = index;
+        }
         rebuildWidgets();
     }
 
     private void compareSelected() {
-        target().ifPresent(compare);
+        target().ifPresent(selected -> {
+            minecraft.setScreen(null);
+            compare.accept(selected);
+        });
     }
 
     private java.util.Optional<VersionCompareController.Target> target() {
-        return controller.target(versions, beforeIndex, afterIndex);
+        return controller.target(versions, leftIndex, rightIndex);
     }
 
-    private void changePage(int delta) {
-        page = Math.max(0, page + delta);
+    private void changePage(boolean left, int delta) {
+        int rows = visibleRows();
+        int maximum = rows == 0 || versions.isEmpty()
+                ? 0 : (versions.size() - 1) / rows;
+        if (left) {
+            leftPage = Math.max(0, Math.min(maximum, leftPage + delta));
+        } else {
+            rightPage = Math.max(0, Math.min(maximum, rightPage + delta));
+        }
         rebuildWidgets();
     }
 
@@ -120,42 +154,120 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                     Component.translatable("luma.compare.pick_help"),
                     layout.x() + 16, layout.y() + 32,
                     LegacyLumiTheme.MUTED, false);
-            renderRows(graphics);
+            renderColumn(graphics, true);
+            renderColumn(graphics, false);
+            renderDivider(graphics);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);
         }
     }
 
-    private void renderRows(GuiGraphics graphics) {
+    private void renderColumn(GuiGraphics graphics, boolean left) {
+        int x = left ? leftX() : rightX();
+        int width = columnWidth();
+        graphics.drawCenteredString(font,
+                Component.translatable(left
+                        ? "luma.compare.left_column"
+                        : "luma.compare.right_column"),
+                x + width / 2, layout.y() + 52, LegacyLumiTheme.ACCENT);
         if (versions.isEmpty()) {
-            graphics.drawString(font,
+            graphics.drawCenteredString(font,
                     Component.translatable("luma.history.empty"),
-                    layout.x() + 16, layout.y() + 74,
-                    LegacyLumiTheme.MUTED, false);
+                    x + width / 2, rowsY() + 8, LegacyLumiTheme.MUTED);
             return;
         }
         int rows = visibleRows();
+        int page = left ? leftPage : rightPage;
         int start = rows == 0 ? 0 : Math.min(page * rows, versions.size());
         int end = Math.min(start + rows, versions.size());
         for (int index = start; index < end; index++) {
-            HistorySnapshotPayload.Version version = versions.get(index);
-            int rowY = layout.y() + 68 + (index - start) * 34;
-            renderLegacyPanel(
-                    graphics, layout.x() + 16, rowY, layout.width() - 32, 30);
-            graphics.drawString(font,
-                    font.plainSubstrByWidth(
-                            version.message(), Math.max(0, layout.width() - 174)),
-                    layout.x() + 24, rowY + 6,
-                    LegacyLumiTheme.TEXT, false);
-            graphics.drawString(font, version.author(),
-                    layout.x() + 24, rowY + 18,
-                    LegacyLumiTheme.MUTED, false);
+            renderCard(
+                    graphics, versions.get(index), x,
+                    rowsY() + (index - start) * ROW_STRIDE, width);
         }
     }
 
+    private void renderCard(
+            GuiGraphics graphics,
+            HistorySnapshotPayload.Version version,
+            int x,
+            int y,
+            int width) {
+        renderLegacyPanel(graphics, x, y, width, ROW_HEIGHT);
+        drawPreview(graphics, version, x + 5, y + 6);
+        int textX = x + PREVIEW_WIDTH + 11;
+        int textWidth = Math.max(0, width - PREVIEW_WIDTH - 80);
+        graphics.drawString(font,
+                font.plainSubstrByWidth(version.message(), textWidth),
+                textX, y + 6, LegacyLumiTheme.TEXT, false);
+        String metadata = version.author() + " · " + DATE_FORMAT.format(
+                Instant.ofEpochMilli(version.timestampMillis()));
+        graphics.drawString(font,
+                font.plainSubstrByWidth(metadata, textWidth),
+                textX, y + 20, LegacyLumiTheme.MUTED, false);
+    }
+
+    private void drawPreview(
+            GuiGraphics graphics,
+            HistorySnapshotPayload.Version version,
+            int x,
+            int y) {
+        var texture = previews.texture(dimensionId, version.id()).orElse(null);
+        if (texture != null) {
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED, texture.id(),
+                    x, y, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT,
+                    texture.width(), texture.height(),
+                    texture.width(), texture.height());
+            return;
+        }
+        LegacyLumiTheme.outlined(
+                graphics, x, y, PREVIEW_WIDTH, PREVIEW_HEIGHT,
+                LegacyLumiTheme.WINDOW, LegacyLumiTheme.INSET_BORDER);
+        graphics.blit(
+                RenderPipelines.GUI_TEXTURED, NO_PREVIEW_ICON,
+                x + (PREVIEW_WIDTH - 12) / 2,
+                y + (PREVIEW_HEIGHT - 12) / 2,
+                0, 0, 12, 12, 24, 24, 24, 24);
+    }
+
+    private void renderDivider(GuiGraphics graphics) {
+        int x = dividerX();
+        int center = layout.y() + layout.height() / 2;
+        graphics.fill(x, layout.y() + 50, x + 1, center - 12,
+                LegacyLumiTheme.PANEL_BORDER);
+        graphics.fill(x, center + 12, x + 1,
+                layout.y() + layout.height() - 38,
+                LegacyLumiTheme.PANEL_BORDER);
+        graphics.blit(
+                RenderPipelines.GUI_TEXTURED, CENTER_ICON,
+                x - 6, center - 6, 0, 0, 12, 12,
+                24, 24, 24, 24);
+    }
+
+    private int leftX() {
+        return layout.x() + 16;
+    }
+
+    private int rightX() {
+        return leftX() + columnWidth() + COLUMN_GAP;
+    }
+
+    private int columnWidth() {
+        return Math.max(1, (layout.width() - 32 - COLUMN_GAP) / 2);
+    }
+
+    private int dividerX() {
+        return leftX() + columnWidth() + COLUMN_GAP / 2;
+    }
+
+    private int rowsY() {
+        return layout.y() + 68;
+    }
+
     private int visibleRows() {
-        return Math.min(MAX_ROWS, Math.max(0, (layout.height() - 108) / 34));
+        return Math.min(MAX_ROWS, Math.max(0, (layout.height() - 110) / ROW_STRIDE));
     }
 
     @Override
