@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -22,5 +23,9 @@ class LumiOperationHudTest {
 
         assertTrue(source.contains("WorkspaceView::active"));
         assertTrue(source.contains("WorkspaceView::workspaceHudEnabled"));
+        assertTrue(source.contains("LumiHotkeys.actionModifierDown("));
+        assertTrue(source.contains("\"key.lumi.quick_rollback\""));
+        assertTrue(source.contains("\"key.lumi.open_dashboard\""));
+        assertFalse(source.contains("\"Alt+R rollback\""));
     }
 }

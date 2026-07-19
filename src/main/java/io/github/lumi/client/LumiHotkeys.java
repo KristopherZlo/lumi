@@ -121,24 +121,24 @@ public final class LumiHotkeys {
     public static List<Shortcut> shortcuts(KeyMapping[] mappings) {
         return List.of(
                 shortcut("luma.hotkeys.open_workspace", "luma.hotkeys.open_workspace_help",
-                        mapping(mappings, "key.lumi.open_dashboard")),
+                        mapping(mappings, "key.lumi.open_dashboard"), true),
                 shortcut("luma.hotkeys.quick_save", "luma.hotkeys.quick_save_help",
-                        mapping(mappings, "key.lumi.quick_save")),
+                        mapping(mappings, "key.lumi.quick_save"), true),
                 shortcut("luma.hotkeys.undo", "luma.hotkeys.undo_help",
-                        mapping(mappings, "key.lumi.undo")),
+                        mapping(mappings, "key.lumi.undo"), true),
                 shortcut("luma.hotkeys.redo", "luma.hotkeys.redo_help",
-                        mapping(mappings, "key.lumi.redo")),
+                        mapping(mappings, "key.lumi.redo"), true),
                 shortcut("luma.hotkeys.compare_overlay", "luma.hotkeys.compare_overlay_help",
-                        mapping(mappings, "key.lumi.toggle_compare_overlay")),
+                        mapping(mappings, "key.lumi.toggle_compare_overlay"), false),
                 shortcut("luma.hotkeys.action_modifier",
                         "luma.hotkeys.action_modifier_help",
-                        mapping(mappings, "key.lumi.action_modifier")),
+                        mapping(mappings, "key.lumi.action_modifier"), false),
                 shortcut("luma.hotkeys.quick_rollback",
                         "luma.hotkeys.quick_rollback_help",
-                        mapping(mappings, "key.lumi.quick_rollback")),
+                        mapping(mappings, "key.lumi.quick_rollback"), false),
                 shortcut("luma.hotkeys.shortcut_info",
                         "luma.hotkeys.shortcut_info_help",
-                        mapping(mappings, "key.lumi.hotkey_info")));
+                        mapping(mappings, "key.lumi.hotkey_info"), true));
     }
 
     private static KeyMapping mapping(KeyMapping[] mappings, String name) {
@@ -150,17 +150,25 @@ public final class LumiHotkeys {
         throw new IllegalStateException("Missing Lumi key mapping: " + name);
     }
 
-    static boolean actionModifierDown(KeyMapping[] mappings) {
+    public static boolean actionModifierDown(KeyMapping[] mappings) {
         return mapping(mappings, "key.lumi.action_modifier").isDown();
     }
 
-    static String bindingLabel(KeyMapping[] mappings, String name) {
+    public static String bindingLabel(KeyMapping[] mappings, String name) {
         return mapping(mappings, name).getTranslatedKeyMessage().getString();
     }
 
-    private static Shortcut shortcut(String labelKey, String helpKey, KeyMapping key) {
-        return new Shortcut(labelKey, helpKey, key.getTranslatedKeyMessage().getString());
+    private static Shortcut shortcut(
+            String labelKey, String helpKey, KeyMapping key, boolean chorded) {
+        return new Shortcut(
+                labelKey, helpKey,
+                key.getTranslatedKeyMessage().getString(), chorded);
     }
 
-    public record Shortcut(String labelKey, String helpKey, String key) { }
+    public record Shortcut(
+            String labelKey, String helpKey, String key, boolean chorded) {
+        public String display(String modifier) {
+            return chorded ? modifier + " + " + key : key;
+        }
+    }
 }

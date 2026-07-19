@@ -1,7 +1,7 @@
 package io.github.lumi.client.ui;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.LumiMod;
+import io.github.lumi.client.LumiHotkeys;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.network.OperationEventPayload;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -65,9 +65,8 @@ public final class LumiOperationHud {
         if (!enabled) {
             return 10;
         }
-        boolean expanded = InputConstants.isKeyDown(
-                client.getWindow(), InputConstants.KEY_LALT)
-                || InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RALT);
+        boolean expanded = LumiHotkeys.actionModifierDown(
+                client.options.keyMappings);
         String branch = snapshot.branchName();
         int slash = branch.lastIndexOf('/');
         if (slash >= 0) {
@@ -82,11 +81,21 @@ public final class LumiOperationHud {
         graphics.drawString(client.font, client.font.plainSubstrByWidth(title, width - 12),
                 x + 6, 17, snapshot.pendingKeys() == 0 ? 0xffaeb6c2 : 0xffffd166, false);
         if (expanded) {
-            graphics.drawString(client.font, "Alt+S save · Alt+Z/Y undo/redo",
+            String action = binding(client, "key.lumi.action_modifier");
+            graphics.drawString(client.font,
+                    action + "+" + binding(client, "key.lumi.quick_save")
+                            + " save · " + action + "+"
+                            + binding(client, "key.lumi.undo") + "/"
+                            + binding(client, "key.lumi.redo") + " undo/redo",
                     x + 6, 35, 0xfff0f3f6, false);
-            graphics.drawString(client.font, "U history · Alt+R rollback",
+            graphics.drawString(client.font,
+                    action + "+" + binding(client, "key.lumi.open_dashboard")
+                            + " history · "
+                            + binding(client, "key.lumi.quick_rollback")
+                            + " rollback",
                     x + 6, 48, 0xfff0f3f6, false);
-            graphics.drawString(client.font, "Alt+1..0 switch branch",
+            graphics.drawString(client.font,
+                    action + "+1..0 switch branch",
                     x + 6, 61, 0xff8f9aa8, false);
         }
         return nextPanelY(10, height);
@@ -94,5 +103,10 @@ public final class LumiOperationHud {
 
     static int nextPanelY(int top, int height) {
         return top + height + 6;
+    }
+
+    private static String binding(Minecraft client, String name) {
+        return LumiHotkeys.bindingLabel(
+                client.options.keyMappings, name);
     }
 }

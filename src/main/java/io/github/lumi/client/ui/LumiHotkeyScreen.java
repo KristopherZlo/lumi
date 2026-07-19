@@ -42,12 +42,14 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
                 LegacyLumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.hotkeys.help"),
                 panelX + 16, panelY + 38, LegacyLumiTheme.MUTED, false);
+        String modifier = LumiHotkeys.bindingLabel(
+                minecraft.options.keyMappings, "key.lumi.action_modifier");
         for (int index = 0; index < shortcuts.size(); index++) {
             LumiHotkeys.Shortcut shortcut = shortcuts.get(index);
             int y = panelY + 62 + index * 34;
             renderLegacyPanel(graphics,
                     panelX + 12, y - 5, panelWidth - 24, 30);
-            graphics.drawString(font, "Alt + " + shortcut.key(),
+            graphics.drawString(font, shortcut.display(modifier),
                     panelX + 20, y + 3, LegacyLumiTheme.ACCENT, false);
             graphics.drawString(font, Component.translatable(shortcut.labelKey()),
                     panelX + 118, y, LegacyLumiTheme.TEXT, false);

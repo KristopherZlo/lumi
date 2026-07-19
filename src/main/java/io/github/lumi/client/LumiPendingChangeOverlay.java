@@ -1,6 +1,5 @@
 package io.github.lumi.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import java.util.Objects;
@@ -13,7 +12,7 @@ import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/** Renders bounded changed-block outlines while Alt is held in normal play. */
+/** Renders changed blocks while the remappable Action key is held. */
 public final class LumiPendingChangeOverlay {
     private static final VoxelShape BLOCK = Shapes.block();
     private static final double MAX_DISTANCE_SQUARED = 256.0 * 256.0;
@@ -38,8 +37,8 @@ public final class LumiPendingChangeOverlay {
     }
 
     private void tick(Minecraft client) {
-        boolean altDown = altDown(client);
-        refresh.tick(altDown, client.player != null && client.screen == null
+        boolean actionDown = actionDown(client);
+        refresh.tick(actionDown, client.player != null && client.screen == null
                 && history.state().snapshot().isPresent());
     }
 
@@ -48,7 +47,7 @@ public final class LumiPendingChangeOverlay {
         var snapshot = history.state().snapshot().orElse(null);
         var comparison = comparisons.visibleChanges();
         boolean showPending = snapshot != null && client.screen == null
-                && altDown(client) && !snapshot.pendingBlocks().isEmpty();
+                && actionDown(client) && !snapshot.pendingBlocks().isEmpty();
         if (client.player == null || (!showPending
                 && comparison.isEmpty())) {
             return;
@@ -63,7 +62,7 @@ public final class LumiPendingChangeOverlay {
                         0xffffd166);
             }
         }
-        compareOverlay.render(context, comparison, altDown(client));
+        compareOverlay.render(context, comparison, actionDown(client));
     }
 
     private static void renderBlock(
@@ -87,8 +86,7 @@ public final class LumiPendingChangeOverlay {
                 color, 1.0F);
     }
 
-    private static boolean altDown(Minecraft client) {
-        return InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_LALT)
-                || InputConstants.isKeyDown(client.getWindow(), InputConstants.KEY_RALT);
+    private static boolean actionDown(Minecraft client) {
+        return LumiHotkeys.actionModifierDown(client.options.keyMappings);
     }
 }

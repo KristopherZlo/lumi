@@ -44,6 +44,17 @@ class LumiHotkeysTest {
     }
 
     @Test
+    void onlyChordedShortcutsDisplayTheActionModifier() {
+        var chorded = new LumiHotkeys.Shortcut(
+                "label", "help", "S", true);
+        var standalone = new LumiHotkeys.Shortcut(
+                "label", "help", "R", false);
+
+        assertEquals("Action + S", chorded.display("Action"));
+        assertEquals("R", standalone.display("Action"));
+    }
+
+    @Test
     void altLIsConsumedBeforeVanillaAdvancements() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiHotkeys.java"));
