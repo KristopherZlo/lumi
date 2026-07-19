@@ -43,6 +43,7 @@ public final class LumiClientNetworking {
     private final ClientCompareStore comparisons;
     private final Consumer<HistorySnapshotPayload> snapshotListener;
     private final Consumer<OperationEventPayload> eventListener;
+    private final Consumer<CompareResultPayload> compareListener;
     private final Consumer<PackageInspectionPayload> packageListener;
     private final Consumer<CleanupResultPayload> cleanupListener;
     private final Consumer<PartialRestorePlanPayload> partialRestoreListener;
@@ -52,6 +53,7 @@ public final class LumiClientNetworking {
             ClientCompareStore comparisons,
             Consumer<HistorySnapshotPayload> snapshotListener,
             Consumer<OperationEventPayload> eventListener,
+            Consumer<CompareResultPayload> compareListener,
             Consumer<PackageInspectionPayload> packageListener,
             Consumer<CleanupResultPayload> cleanupListener,
             Consumer<PartialRestorePlanPayload> partialRestoreListener) {
@@ -59,6 +61,7 @@ public final class LumiClientNetworking {
         this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
         this.snapshotListener = Objects.requireNonNull(snapshotListener, "snapshotListener");
         this.eventListener = Objects.requireNonNull(eventListener, "eventListener");
+        this.compareListener = Objects.requireNonNull(compareListener, "compareListener");
         this.packageListener = Objects.requireNonNull(packageListener, "packageListener");
         this.cleanupListener = Objects.requireNonNull(cleanupListener, "cleanupListener");
         this.partialRestoreListener = Objects.requireNonNull(
@@ -80,7 +83,11 @@ public final class LumiClientNetworking {
                         }));
         ClientPlayNetworking.registerGlobalReceiver(
                 CompareResultPayload.TYPE, (payload, context) ->
-                        context.client().execute(() -> comparisons.accept(payload)));
+                        context.client().execute(() -> {
+                            if (comparisons.accept(payload)) {
+                                compareListener.accept(payload);
+                            }
+                        }));
         ClientPlayNetworking.registerGlobalReceiver(
                 PackageInspectionPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> packageListener.accept(payload)));

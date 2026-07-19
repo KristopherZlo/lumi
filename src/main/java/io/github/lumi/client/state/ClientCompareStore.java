@@ -31,7 +31,7 @@ public final class ClientCompareStore {
         highlightVisible = true;
     }
 
-    public synchronized void accept(CompareResultPayload candidate) {
+    public synchronized boolean accept(CompareResultPayload candidate) {
         Objects.requireNonNull(candidate, "candidate");
         if (pending != null && pending.matches(candidate)
                 && candidate.batchIndex() == nextBatch) {
@@ -45,7 +45,9 @@ public final class ClientCompareStore {
                     publishedChanges = List.of();
                 }
             }
+            return true;
         }
+        return false;
     }
 
     public synchronized Optional<CompareResultPayload> result() {

@@ -17,7 +17,6 @@ import io.github.lumi.client.ui.LumiDeleteVersionScreen;
 import io.github.lumi.client.ui.LumiDeletedVersionsScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiBranchesScreen;
-import io.github.lumi.client.ui.LumiCompareScreen;
 import io.github.lumi.client.ui.LumiComparePickerScreen;
 import io.github.lumi.client.ui.LumiCleanupScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
@@ -75,6 +74,7 @@ public final class LumiClient implements ClientModInitializer {
             new LumiClientNetworking(
                     HISTORY, COMPARISONS, LumiClient::acceptSnapshot,
                     LumiClient::acceptOperationEvent,
+                    LumiClient::acceptCompareResult,
                     LumiClient::showPackageInspection,
                     LumiClient::showCleanupResult,
                     LumiClient::showPartialRestorePlan);
@@ -110,7 +110,7 @@ public final class LumiClient implements ClientModInitializer {
                                 version -> openVersionDetails(client.screen, version),
                                 version -> openRestore(client.screen, version),
                                 version -> openDelete(client.screen, version),
-                                target -> openCompare(client.screen, target)));
+                                LumiClient::showCompareChanges));
                     }
 
                     @Override public void openSave() {
@@ -248,7 +248,7 @@ public final class LumiClient implements ClientModInitializer {
         int index = snapshot.versions().indexOf(version);
         var compare = new VersionCompareController()
                 .target(snapshot.versions(), index)
-                .map(target -> (Runnable) () -> openCompare(parent, target));
+                .map(target -> (Runnable) () -> showCompareChanges(target));
         boolean idle = !snapshot.operationActive();
         var createBranch = idle ? Optional.of((Runnable) () ->
                 client.setScreen(new LumiBranchScreen(
@@ -294,12 +294,26 @@ public final class LumiClient implements ClientModInitializer {
                 parent, version, NETWORKING::deleteVersion));
     }
 
-    private static void openCompare(
-            Screen parent, VersionCompareController.Target target) {
-        Minecraft.getInstance().setScreen(new LumiCompareScreen(
-                parent, COMPARISONS, target.label(),
-                () -> NETWORKING.compare(target.before(), target.after()),
-                NETWORKING::cancelCompare));
+    private static void showCompareChanges(VersionCompareController.Target target) {
+        startCompare(() -> NETWORKING.compare(target.before(), target.after()));
+    }
+
+    private static void showZoneCompareChanges(
+            java.util.UUID zoneId, VersionCompareController.Target target) {
+        startCompare(() -> NETWORKING.compareZone(
+                zoneId, target.before(), target.after()));
+    }
+
+    private static void startCompare(Runnable request) {
+        Minecraft client = Minecraft.getInstance();
+        client.setScreen(null);
+        try {
+            request.run();
+            showFeedback("luma.status.compare_loading");
+        } catch (RuntimeException failed) {
+            showFeedback(failed.getMessage() == null
+                    ? "luma.status.compare_failed" : failed.getMessage());
+        }
     }
 
     private static String latestVersionMessage() {
@@ -337,7 +351,7 @@ public final class LumiClient implements ClientModInitializer {
                     Screen more = client.screen;
                     client.setScreen(new LumiComparePickerScreen(
                             more, snapshot.versions(),
-                            target -> openCompare(more, target)));
+                            LumiClient::showCompareChanges));
                 }));
     }
 
@@ -349,11 +363,7 @@ public final class LumiClient implements ClientModInitializer {
                         NETWORKING::saveZone, NETWORKING::amendZone),
                 version -> client.setScreen(new LumiZoneRestoreScreen(
                         client.screen, zones, zone, version, NETWORKING::restoreZone)),
-                target -> client.setScreen(new LumiCompareScreen(
-                        client.screen, COMPARISONS, target.label(),
-                        () -> NETWORKING.compareZone(
-                                zone.id(), target.before(), target.after()),
-                        NETWORKING::cancelCompare)),
+                target -> showZoneCompareChanges(zone.id(), target),
                 () -> {
                     NETWORKING.refreshSnapshot();
                     showFeedback("luma.hotkeys.pending_preview_help");
@@ -406,6 +416,21 @@ public final class LumiClient implements ClientModInitializer {
         client.setScreen(new LumiPackageInspectionScreen(
                 packages, inspection,
                 () -> NETWORKING.importPackage(inspection.requestId())));
+    }
+
+    private static void acceptCompareResult(
+            io.github.lumi.network.CompareResultPayload result) {
+        if (!result.complete()) {
+            return;
+        }
+        if (!result.error().isEmpty()) {
+            showFeedback(result.error());
+        } else {
+            showFeedback(result.changedBlocks() == 0
+                    && result.changedEntityChunks() == 0
+                    ? "luma.status.compare_no_changes"
+                    : "luma.status.compare_ready");
+        }
     }
 
     private static void showCleanupResult(CleanupResultPayload result) {
