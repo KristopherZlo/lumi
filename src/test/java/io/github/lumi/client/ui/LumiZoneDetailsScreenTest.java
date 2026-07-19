@@ -19,7 +19,10 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains("luma.history.view_graph"));
         assertTrue(source.contains("actions.openDetails()"));
         assertTrue(source.contains("actions.createBranch()"));
-        assertTrue(source.contains("zoneHistory.nextBranch"));
+        assertTrue(source.contains("extends LumiLegacyPageScreen"));
+        assertTrue(source.contains("zoneHistory.selectBranch(branch)"));
+        assertTrue(source.contains("\"folder\""));
+        assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("zoneStatistics()"));
         assertTrue(source.contains("PendingStatisticsText::summary"));
     }
