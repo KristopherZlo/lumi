@@ -53,6 +53,31 @@ class LumiResponsiveModalLayoutTest {
         }
     }
 
+    @Test
+    void versionDetailsReflowsPreviewAndActionsInsideNarrowPanels() {
+        for (int[] viewport : new int[][] {{427, 240}, {320, 200}}) {
+            LegacyModalLayout layout = LumiVersionDetailsScreen.fitPanel(
+                    viewport[0], viewport[1]);
+            assertInside(viewport, layout);
+            int primaryActions = LumiVersionDetailsScreen.primaryActionOffset(
+                    layout.width(), layout.height());
+            int secondaryActions = LumiVersionDetailsScreen.secondaryActionOffset(
+                    layout.width(), layout.height());
+            int previewControls = LumiVersionDetailsScreen.previewControlsOffset(
+                    layout.width(), layout.height());
+            assertTrue(primaryActions + 18 <= layout.height());
+            assertTrue(secondaryActions + 18 <= primaryActions);
+            assertTrue(previewControls + 18 <= secondaryActions);
+            assertTrue(LumiVersionDetailsScreen.previewOffset(
+                    layout.width(), layout.height())
+                    + LumiVersionDetailsScreen.previewHeight(
+                            layout.width(), layout.height())
+                    <= previewControls);
+            assertTrue(LumiVersionDetailsScreen.previewWidth(layout.width()) + 52
+                    <= layout.width());
+        }
+    }
+
     private static void assertInside(int[] viewport, LegacyModalLayout layout) {
         assertTrue(layout.x() >= 0 && layout.y() >= 0);
         assertTrue(layout.x() + layout.width() <= viewport[0]);

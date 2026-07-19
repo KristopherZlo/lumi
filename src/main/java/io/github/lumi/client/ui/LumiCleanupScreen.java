@@ -2,6 +2,7 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.network.CleanupResultPayload;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -21,8 +22,11 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
     private String error = "";
     private int panelX;
     private int panelY;
+    private int panelWidth;
     private int panelHeight;
     private int contentOffset;
+    private int resultScroll;
+    private CleanupGeometry geometry;
 
     public LumiCleanupScreen(
             Screen parent, Supplier<UUID> inspect, Supplier<UUID> apply) {
@@ -35,21 +39,22 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        panelX = (width - panelWidth) / 2;
-        panelHeight = BASE_PANEL_HEIGHT;
-        panelY = Math.max(8, (height - panelHeight) / 2);
+        LegacyModalLayout layout = fitPanel(width, height, 0);
+        applyLayout(layout);
         boolean hintVisible = addContextualHint(
                 ClientContextualHelpHint.CLEANUP,
                 panelX + 16, panelY + 76, panelWidth - 32);
         contentOffset = hintVisible ? contextualHintOffset(8) : 0;
-        panelHeight = BASE_PANEL_HEIGHT + contentOffset;
-        panelY = Math.max(8, (height - panelHeight) / 2);
+        layout = fitPanel(width, height, contentOffset);
+        applyLayout(layout);
+        geometry = cleanupGeometry(
+                panelHeight, hintVisible ? contextualHintOffset(0) : 0);
         if (hintVisible) {
-            moveContextualHint(panelX + 16, panelY + 76);
+            moveContextualHint(
+                    panelX + 16, panelY + geometry.hintY());
         }
-        int buttonWidth = (panelWidth - 48) / 3;
-        int y = panelY + panelHeight - 30;
+        int buttonWidth = Math.max(0, (panelWidth - 40) / 3);
+        int y = panelY + geometry.actionY();
         LumiLegacyButton inspectButton = addLegacyButton(
                 panelX + 16, y, buttonWidth,
                 Component.translatable("luma.action.inspect_unused_files"),
@@ -67,10 +72,18 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
                 this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
+    private void applyLayout(LegacyModalLayout layout) {
+        panelX = layout.x();
+        panelY = layout.y();
+        panelWidth = layout.width();
+        panelHeight = layout.height();
+    }
+
     private void request(Supplier<UUID> sender) {
         try {
             pendingRequest = sender.get();
             error = "";
+            resultScroll = 0;
             rebuildWidgets();
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null
@@ -86,6 +99,7 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
         pendingRequest = null;
         result = response;
         error = response.error();
+        resultScroll = 0;
         rebuildWidgets();
     }
 
@@ -93,24 +107,29 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-            int panelWidth = Math.min(PANEL_WIDTH, width - 32);
             renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
-            graphics.drawString(font, title, panelX + 16, panelY + 18,
+            graphics.drawString(font, title, panelX + 16,
+                    panelY + (geometry.compact() ? 14 : 18),
                     LegacyLumiTheme.TEXT, false);
-            drawWrapped(graphics,
-                    Component.translatable("luma.cleanup.actions_help"),
-                    panelY + 40, LegacyLumiTheme.MUTED, panelWidth);
-            renderLegacyPanel(graphics, panelX + 16,
-                    panelY + 78 + contentOffset,
-                    panelWidth - 32, 86);
-            renderResult(graphics, panelWidth);
+            if (!geometry.compact() || geometry.hintHeight() == 0) {
+                drawWrapped(graphics,
+                        Component.translatable("luma.cleanup.actions_help"),
+                        panelY + (geometry.compact() ? 34 : 40),
+                        LegacyLumiTheme.MUTED, panelWidth);
+            }
+            if (geometry.resultHeight() > 0) {
+                renderLegacyPanel(graphics, panelX + 16,
+                        panelY + geometry.resultY(),
+                        panelWidth - 32, geometry.resultHeight());
+                renderResult(graphics);
+            }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);
         }
     }
 
-    private void renderResult(GuiGraphics graphics, int panelWidth) {
+    private void renderResult(GuiGraphics graphics) {
         Component status;
         if (!error.isEmpty()) {
             status = errorText(error);
@@ -127,9 +146,17 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
                             : "luma.cleanup.results_counts",
                     result.commits(), result.objects());
         }
-        drawWrapped(graphics, status, panelY + 94 + contentOffset,
-                error.isEmpty() ? LegacyLumiTheme.TEXT : LegacyLumiTheme.DANGER,
-                panelWidth);
+        List<net.minecraft.util.FormattedCharSequence> lines =
+                font.split(status, panelWidth - 64);
+        int visible = visibleResultLines(geometry.resultHeight());
+        resultScroll = Math.min(resultScroll, Math.max(0, lines.size() - visible));
+        int y = panelY + geometry.resultY() + 6;
+        for (var line : lines.stream().skip(resultScroll).limit(visible).toList()) {
+            graphics.drawString(font, line, panelX + 32, y,
+                    error.isEmpty() ? LegacyLumiTheme.TEXT : LegacyLumiTheme.DANGER,
+                    false);
+            y += 11;
+        }
     }
 
     private void drawWrapped(
@@ -138,6 +165,67 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
             graphics.drawString(font, line, panelX + 32, y, color, false);
             y += 11;
         }
+    }
+
+    @Override
+    public boolean mouseScrolled(
+            double mouseX, double mouseY,
+            double horizontalAmount, double verticalAmount) {
+        double x = virtualCoordinate(mouseX);
+        double y = virtualCoordinate(mouseY);
+        if (geometry != null
+                && x >= panelX + 16 && x < panelX + panelWidth - 16
+                && y >= panelY + geometry.resultY()
+                && y < panelY + geometry.resultY() + geometry.resultHeight()) {
+            int replacement = Math.max(0, resultScroll
+                    + (verticalAmount < 0 ? 1 : -1));
+            if (replacement != resultScroll) {
+                resultScroll = replacement;
+            }
+            return true;
+        }
+        return super.mouseScrolled(
+                mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    static LegacyModalLayout fitPanel(
+            int screenWidth, int screenHeight, int contentOffset) {
+        int panelWidth = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 16));
+        int panelHeight = Math.min(
+                BASE_PANEL_HEIGHT + Math.max(0, contentOffset),
+                Math.max(1, screenHeight - 16));
+        return new LegacyModalLayout(
+                Math.max(0, (screenWidth - panelWidth) / 2),
+                Math.max(0, (screenHeight - panelHeight) / 2),
+                panelWidth, panelHeight);
+    }
+
+    static CleanupGeometry cleanupGeometry(int panelHeight, int hintHeight) {
+        int actionY = Math.max(0, panelHeight - 28);
+        boolean compact = panelHeight < BASE_PANEL_HEIGHT + Math.max(0, hintHeight);
+        int preferredHintY = compact ? 34 : 76;
+        int hintY = hintHeight == 0 ? preferredHintY : Math.max(
+                24, Math.min(preferredHintY, actionY - hintHeight - 26));
+        int resultY = hintHeight == 0
+                ? (compact ? 58 : 78)
+                : hintY + hintHeight + 5;
+        int resultHeight = Math.max(0, actionY - 6 - resultY);
+        return new CleanupGeometry(
+                hintY, Math.max(0, hintHeight), resultY,
+                resultHeight, actionY, compact);
+    }
+
+    static int visibleResultLines(int resultHeight) {
+        return resultHeight < 15 ? 0 : 1 + (resultHeight - 15) / 11;
+    }
+
+    record CleanupGeometry(
+            int hintY,
+            int hintHeight,
+            int resultY,
+            int resultHeight,
+            int actionY,
+            boolean compact) {
     }
 
     @Override public boolean isPauseScreen() { return false; }

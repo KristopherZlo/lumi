@@ -49,6 +49,8 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     private int previewPanY;
     private int panelX;
     private int panelY;
+    private int panelWidth;
+    private int panelHeight;
 
     public LumiVersionDetailsScreen(
             Screen parent,
@@ -106,11 +108,13 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        panelX = (width - panelWidth) / 2;
-        panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
-        int buttonWidth = Math.max(52, (panelWidth - 40) / 3);
-        int buttonY = panelY + PANEL_HEIGHT - 30;
+        LegacyModalLayout layout = fitPanel(width, height);
+        panelX = layout.x();
+        panelY = layout.y();
+        panelWidth = layout.width();
+        panelHeight = layout.height();
+        int buttonWidth = Math.max(52, (panelWidth - 36) / 2);
+        int buttonY = panelY + primaryActionOffset(panelWidth, panelHeight);
         LumiLegacyButton restoreButton = addLegacyButton(
                 panelX + 16, buttonY, buttonWidth,
                 Component.translatable("luma.action.restore"),
@@ -122,20 +126,23 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                 () -> compareToParent.ifPresent(Runnable::run),
                 LumiLegacyButton.Kind.NORMAL);
         compare.active = compareToParent.isPresent();
-        addSecondaryActions(panelWidth, buttonY - 28);
+        addSecondaryActions(
+                panelWidth,
+                panelY + secondaryActionOffset(panelWidth, panelHeight));
 
+        int renameX = Math.min(panelX + panelWidth - 122, width - 150);
         if (!readOnly && editingName) {
             nameEditor = new EditBox(font, panelX + 20, panelY + 12,
-                    Math.max(20, panelWidth - 150), 16,
+                    Math.max(20, renameX - panelX - 28), 16,
                     Component.translatable("luma.save_details.rename_title"));
             nameEditor.setMaxLength(VersionDisplayName.MAX_LENGTH);
             nameEditor.setValue(displayedName);
             addRenderableWidget(nameEditor);
-            addLegacyButton(panelX + panelWidth - 122, panelY + 13, 102,
+            addLegacyButton(renameX, panelY + 13, 102,
                     Component.translatable("luma.action.rename_save"),
                     this::saveName, LumiLegacyButton.Kind.PRIMARY);
         } else if (!readOnly) {
-            addLegacyButton(panelX + panelWidth - 122, panelY + 13, 102,
+            addLegacyButton(renameX, panelY + 13, 102,
                     Component.translatable("luma.action.rename_save"), () -> {
                         editingName = true;
                         nameError = "";
@@ -144,11 +151,15 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         }
 
         if (!readOnly) {
-            addLegacyIconButton(panelX + panelWidth - 44, panelY + 139, "tags",
+            addLegacyIconButton(
+                    panelX + panelWidth - 44,
+                    panelY + (compact(panelWidth, panelHeight) ? 78 : 139),
+                    "tags",
                     Component.translatable("luma.action.edit_tags"),
                     this::editTags, LumiLegacyButton.Kind.NORMAL);
         }
-        addPreviewControls();
+        addPreviewControls(panelY
+                + previewControlsOffset(panelWidth, panelHeight));
     }
 
     private void addSecondaryActions(int panelWidth, int y) {
@@ -180,52 +191,29 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-            int panelWidth = Math.min(PANEL_WIDTH, width - 32);
             renderLegacyWindow(
-                    graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+                    graphics, panelX, panelY, panelWidth, panelHeight);
             if (!editingName) {
+                int titleWidth = Math.max(1, Math.min(
+                        panelWidth - 160,
+                        width - 150 - panelX - 28));
                 graphics.drawString(font,
-                        font.plainSubstrByWidth(displayedName, panelWidth - 160),
+                        font.plainSubstrByWidth(displayedName, titleWidth),
                         panelX + 20, panelY + 18, LegacyLumiTheme.TEXT, false);
             }
             if (!nameError.isEmpty()) {
                 graphics.drawString(font,
                         font.plainSubstrByWidth(nameError, panelWidth - 40),
-                        panelX + 20, panelY + 38, LegacyLumiTheme.DANGER, false);
+                        panelX + 20,
+                        panelY + (compact(panelWidth, panelHeight) ? 29 : 38),
+                        LegacyLumiTheme.DANGER, false);
             }
             renderPreview(graphics);
-            int metadataX = panelX + 280;
-            int metadataWidth = Math.max(0, panelWidth - 300);
-            graphics.drawString(font,
-                    Component.translatable(
-                            "luma.save_details.summary_help",
-                            DATE_FORMAT.format(
-                                    Instant.ofEpochMilli(version.timestampMillis()))),
-                    metadataX, panelY + 58, LegacyLumiTheme.MUTED, false);
-            graphics.drawString(font,
-                    Component.translatable(
-                            "luma.save_details.raw_info_author", version.author()),
-                    metadataX, panelY + 82, LegacyLumiTheme.TEXT, false);
-            graphics.drawString(font,
-                    Component.translatable(
-                            "luma.save_details.raw_info_type", version.kind().name()),
-                    metadataX, panelY + 102, LegacyLumiTheme.TEXT, false);
-            graphics.drawString(font, Component.translatable("luma.save.tags_title"),
-                    metadataX, panelY + 126, LegacyLumiTheme.MUTED, false);
-            String tags = displayedTags.isEmpty()
-                    ? Component.translatable("luma.history.tags_empty").getString()
-                    : displayedTags.display();
-            graphics.drawString(font,
-                    font.plainSubstrByWidth(tags, Math.max(0, metadataWidth - 30)),
-                    metadataX, panelY + 147, LegacyLumiTheme.TEXT, false);
-            graphics.drawString(font,
-                    Component.translatable("luma.save_details.raw_info_title"),
-                    metadataX, panelY + 184, LegacyLumiTheme.MUTED, false);
-            graphics.drawWordWrap(font,
-                    Component.translatable(
-                            "luma.save_details.raw_info_id", version.id().hex()),
-                    metadataX, panelY + 202, metadataWidth,
-                    LegacyLumiTheme.TEXT);
+            if (compact(panelWidth, panelHeight)) {
+                renderCompactMetadata(graphics);
+            } else {
+                renderFullMetadata(graphics);
+            }
             super.render(
                     graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -233,17 +221,93 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         }
     }
 
+    private void renderFullMetadata(GuiGraphics graphics) {
+        int metadataX = panelX + 280;
+        int metadataWidth = Math.max(0, panelWidth - 300);
+        graphics.drawString(font,
+                Component.translatable(
+                        "luma.save_details.summary_help",
+                        DATE_FORMAT.format(
+                                Instant.ofEpochMilli(version.timestampMillis()))),
+                metadataX, panelY + 58, LegacyLumiTheme.MUTED, false);
+        graphics.drawString(font,
+                Component.translatable(
+                        "luma.save_details.raw_info_author", version.author()),
+                metadataX, panelY + 82, LegacyLumiTheme.TEXT, false);
+        graphics.drawString(font,
+                Component.translatable(
+                        "luma.save_details.raw_info_type", version.kind().name()),
+                metadataX, panelY + 102, LegacyLumiTheme.TEXT, false);
+        graphics.drawString(font, Component.translatable("luma.save.tags_title"),
+                metadataX, panelY + 126, LegacyLumiTheme.MUTED, false);
+        String tags = displayedTags.isEmpty()
+                ? Component.translatable("luma.history.tags_empty").getString()
+                : displayedTags.display();
+        graphics.drawString(font,
+                font.plainSubstrByWidth(tags, Math.max(0, metadataWidth - 30)),
+                metadataX, panelY + 147, LegacyLumiTheme.TEXT, false);
+        graphics.drawString(font,
+                Component.translatable("luma.save_details.raw_info_title"),
+                metadataX, panelY + 184, LegacyLumiTheme.MUTED, false);
+        graphics.drawWordWrap(font,
+                Component.translatable(
+                        "luma.save_details.raw_info_id", version.id().hex()),
+                metadataX, panelY + 202, metadataWidth,
+                LegacyLumiTheme.TEXT);
+    }
+
+    private void renderCompactMetadata(GuiGraphics graphics) {
+        int previewWidth = previewWidth(panelWidth, panelHeight);
+        int metadataX = panelX + previewWidth + 32;
+        int metadataWidth = Math.max(1, panelX + panelWidth - 20 - metadataX);
+        drawMetadataLine(graphics,
+                Component.translatable(
+                        "luma.save_details.summary_help",
+                        DATE_FORMAT.format(
+                                Instant.ofEpochMilli(version.timestampMillis()))),
+                metadataX, panelY + 43, metadataWidth);
+        drawMetadataLine(graphics,
+                Component.translatable(
+                        "luma.save_details.raw_info_author", version.author()),
+                metadataX, panelY + 57, metadataWidth);
+        drawMetadataLine(graphics,
+                Component.translatable(
+                        "luma.save_details.raw_info_type", version.kind().name()),
+                metadataX, panelY + 70, metadataWidth);
+        String tags = displayedTags.isEmpty()
+                ? Component.translatable("luma.history.tags_empty").getString()
+                : displayedTags.display();
+        drawMetadataLine(graphics,
+                Component.translatable("luma.save.tags_title")
+                        .append(": " + tags),
+                metadataX, panelY + 84, Math.max(1, metadataWidth - 30));
+        drawMetadataLine(graphics,
+                Component.translatable(
+                        "luma.save_details.raw_info_id", version.id().hex()),
+                metadataX, panelY + 98, metadataWidth);
+    }
+
+    private void drawMetadataLine(
+            GuiGraphics graphics, Component value,
+            int x, int y, int availableWidth) {
+        graphics.drawString(font,
+                font.plainSubstrByWidth(value.getString(), availableWidth),
+                x, y, LegacyLumiTheme.TEXT, false);
+    }
+
     private void renderPreview(GuiGraphics graphics) {
         int x = panelX + 20;
-        int y = panelY + 52;
+        int y = panelY + previewOffset(panelWidth, panelHeight);
+        int previewWidth = previewWidth(panelWidth, panelHeight);
+        int previewHeight = previewHeight(panelWidth, panelHeight);
         var texture = previews.texture(dimensionId, version.id()).orElse(null);
         if (texture == null) {
             LegacyLumiTheme.outlined(
-                    graphics, x, y, PREVIEW_WIDTH, PREVIEW_HEIGHT,
+                    graphics, x, y, previewWidth, previewHeight,
                     LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
             graphics.drawCenteredString(font,
                     Component.translatable("luma.history.no_preview"),
-                    x + PREVIEW_WIDTH / 2, y + PREVIEW_HEIGHT / 2 - 4,
+                    x + previewWidth / 2, y + previewHeight / 2 - 4,
                     LegacyLumiTheme.MUTED);
             return;
         }
@@ -252,13 +316,12 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         clampPreviewPan(texture.width(), texture.height(), sourceWidth, sourceHeight);
         graphics.blit(
                 RenderPipelines.GUI_TEXTURED, texture.id(),
-                x, y, previewPanX, previewPanY, PREVIEW_WIDTH, PREVIEW_HEIGHT,
+                x, y, previewPanX, previewPanY, previewWidth, previewHeight,
                 sourceWidth, sourceHeight,
                 texture.width(), texture.height());
     }
 
-    private void addPreviewControls() {
-        int y = panelY + 194;
+    private void addPreviewControls(int y) {
         addLegacyIconButton(panelX + 20, y, "minus",
                 Component.translatable("luma.action.zoom_out"),
                 () -> zoomPreview(-1), LumiLegacyButton.Kind.NORMAL);
@@ -277,6 +340,52 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         addLegacyIconButton(panelX + 188, y, "chevron-right",
                 Component.translatable("luma.action.next"),
                 () -> panPreview(1, 0), LumiLegacyButton.Kind.NORMAL);
+    }
+
+    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+        int panelWidth = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 16));
+        int panelHeight = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
+        return new LegacyModalLayout(
+                Math.max(0, (screenWidth - panelWidth) / 2),
+                Math.max(0, (screenHeight - panelHeight) / 2),
+                panelWidth, panelHeight);
+    }
+
+    static int primaryActionOffset(int panelWidth, int panelHeight) {
+        return panelHeight - (compact(panelWidth, panelHeight) ? 26 : 30);
+    }
+
+    static int secondaryActionOffset(int panelWidth, int panelHeight) {
+        return primaryActionOffset(panelWidth, panelHeight)
+                - (compact(panelWidth, panelHeight) ? 24 : 28);
+    }
+
+    static int previewControlsOffset(int panelWidth, int panelHeight) {
+        return compact(panelWidth, panelHeight)
+                ? secondaryActionOffset(panelWidth, panelHeight) - 24
+                : 194;
+    }
+
+    static int previewOffset(int panelWidth, int panelHeight) {
+        return compact(panelWidth, panelHeight) ? 40 : 52;
+    }
+
+    static int previewWidth(int panelWidth, int panelHeight) {
+        if (!compact(panelWidth, panelHeight)) return PREVIEW_WIDTH;
+        return Math.min(PREVIEW_WIDTH,
+                Math.max(96, (panelWidth - 56) / 2));
+    }
+
+    static int previewHeight(int panelWidth, int panelHeight) {
+        int previewWidth = previewWidth(panelWidth, panelHeight);
+        int available = previewControlsOffset(panelWidth, panelHeight)
+                - previewOffset(panelWidth, panelHeight) - 6;
+        return Math.min(PREVIEW_HEIGHT,
+                Math.max(1, Math.min(previewWidth * 9 / 16, available)));
+    }
+
+    private static boolean compact(int panelWidth, int panelHeight) {
+        return panelWidth < 500 || panelHeight < PANEL_HEIGHT;
     }
 
     private void zoomPreview(int delta) {
