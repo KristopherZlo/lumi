@@ -35,7 +35,7 @@ final class LumiClientBehaviorWorld {
         }
     }
 
-    private static void configureWorld(WorldCreationUiState settings) {
+    static void configureWorld(WorldCreationUiState settings) {
         settings.setName("Lumi behavior seed 710");
         settings.setSeed("710");
         settings.setGameMode(WorldCreationUiState.SelectedGameMode.CREATIVE);

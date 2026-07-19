@@ -6,8 +6,7 @@
   "environment": "*",
   "entrypoints": {
     "fabric-client-gametest": [
-      "io.github.lumi.gametest.LumiStressBehaviorClientGameTest",
-      "io.github.lumi.gametest.LumiBehaviorClientGameTest"
+      "io.github.lumi.gametest.LumiRecoveryClientGameTest"
     ],
     "fabric-gametest": [
       "io.github.lumi.gametest.LumiLiveActionGameTests",
