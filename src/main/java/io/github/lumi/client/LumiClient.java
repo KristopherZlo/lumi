@@ -12,7 +12,9 @@ import io.github.lumi.client.state.ClientSelection;
 import io.github.lumi.client.state.ClientZoneOverlayStore;
 import io.github.lumi.client.preview.ClientVersionPreviewCapture;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
+import io.github.lumi.client.onboarding.ClientOnboardingWorldStep;
 import io.github.lumi.client.onboarding.ClientOnboardingStateRepository;
+import io.github.lumi.client.onboarding.OnboardingTour;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiSettingsScreen;
 import io.github.lumi.client.ui.LumiUpdateScreen;
@@ -101,6 +103,9 @@ public final class LumiClient implements ClientModInitializer {
                     LumiClient::showPackageInspection,
                     LumiClient::showCleanupResult,
                     LumiClient::showPartialRestorePlan);
+    private static final ClientOnboardingWorldStep ONBOARDING_WORLD =
+            new ClientOnboardingWorldStep(
+                    HISTORY, NETWORKING::refreshSnapshot);
     private static final LumiZoneOverlay ZONE_OVERLAY =
             new LumiZoneOverlay(
                     ZONE_OVERLAYS, HISTORY, NETWORKING::requestZoneOverlay);
@@ -173,6 +178,7 @@ public final class LumiClient implements ClientModInitializer {
         new LumiOperationHud(HISTORY).register();
         new LumiPendingChangeOverlay(
                 HISTORY, COMPARISONS, NETWORKING::refreshSnapshot).register();
+        ONBOARDING_WORLD.register();
         LumiMod.LOGGER.info("Lumi V2 client initialized");
     }
 
@@ -352,12 +358,21 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void openSave(
             Screen parent, SaveScreenController.Intent intent, String initialMessage) {
+        openSave(parent, intent, initialMessage, () -> { });
+    }
+
+    private static void openSave(
+            Screen parent,
+            SaveScreenController.Intent intent,
+            String initialMessage,
+            Runnable accepted) {
         Minecraft.getInstance().setScreen(new LumiSaveScreen(
                 parent, HISTORY,
                 new SaveScreenController(NETWORKING::save, NETWORKING::amend),
                 NETWORKING::refreshSnapshot, intent, initialMessage,
                 requestId -> PREVIEW_CAPTURE.request(
-                        requestId, HISTORY.state().snapshot().orElseThrow())));
+                        requestId, HISTORY.state().snapshot().orElseThrow()),
+                accepted));
     }
 
     private static void openVersionDetails(
@@ -478,8 +493,7 @@ public final class LumiClient implements ClientModInitializer {
                         client.screen, HISTORY,
                         NETWORKING::restoreDeletedVersion,
                         NETWORKING::cleanupVersion)),
-                () -> client.setScreen(new LumiOnboardingScreen(
-                        client.screen, LumiClient::completeOnboarding)),
+                () -> openOnboarding(client.screen),
                 () -> client.setScreen(new LumiHotkeyScreen(
                         client.screen,
                         LumiHotkeys.shortcuts(client.options.keyMappings))),
@@ -581,7 +595,7 @@ public final class LumiClient implements ClientModInitializer {
         }
         if (!onboardingShown && !ONBOARDING.completed()) {
             onboardingShown = true;
-            client.setScreen(new LumiOnboardingScreen(null, LumiClient::completeOnboarding));
+            openOnboarding(null);
             return;
         }
         showTelemetryNotice();
@@ -590,6 +604,35 @@ public final class LumiClient implements ClientModInitializer {
     private static void completeOnboarding() {
         ONBOARDING.markCompleted();
         showTelemetryNotice();
+    }
+
+    private static void openOnboarding(Screen returnScreen) {
+        showOnboarding(
+                returnScreen, returnScreen, new OnboardingTour());
+    }
+
+    private static void showOnboarding(
+            Screen returnScreen,
+            Screen background,
+            OnboardingTour tour) {
+        Minecraft client = Minecraft.getInstance();
+        LumiOnboardingScreen.Actions actions =
+                new LumiOnboardingScreen.Actions(
+                        activeTour -> ONBOARDING_WORLD.start(
+                                activeTour,
+                                resumed -> showOnboarding(
+                                        returnScreen, null, resumed)),
+                        (parent, saved) -> openSave(
+                                parent, SaveScreenController.Intent.SAVE,
+                                "", saved),
+                        LumiClient::dashboard,
+                        parent -> client.setScreen(new LumiHotkeyScreen(
+                                parent,
+                                LumiHotkeys.shortcuts(
+                                        client.options.keyMappings))),
+                        LumiClient::completeOnboarding);
+        client.setScreen(new LumiOnboardingScreen(
+                returnScreen, background, tour, actions));
     }
 
     private static void showTelemetryNotice() {

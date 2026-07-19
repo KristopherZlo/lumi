@@ -22,8 +22,8 @@ public final class ClientOnboardingWorldStep {
     private static final int REFRESH_INTERVAL_TICKS = 10;
     private final ClientHistoryStore history;
     private final Runnable refresh;
-    private final Consumer<OnboardingTour> reopen;
     private final OnboardingHoldGate holdGate = new OnboardingHoldGate();
+    private Consumer<OnboardingTour> reopen;
     private OnboardingTour tour;
     private int baselinePending = -1;
     private int edits;
@@ -32,11 +32,9 @@ public final class ClientOnboardingWorldStep {
 
     public ClientOnboardingWorldStep(
             ClientHistoryStore history,
-            Runnable refresh,
-            Consumer<OnboardingTour> reopen) {
+            Runnable refresh) {
         this.history = Objects.requireNonNull(history, "history");
         this.refresh = Objects.requireNonNull(refresh, "refresh");
-        this.reopen = Objects.requireNonNull(reopen, "reopen");
     }
 
     public void register() {
@@ -45,13 +43,16 @@ public final class ClientOnboardingWorldStep {
                 VanillaHudElements.OVERLAY_MESSAGE, HUD_ID, this::render);
     }
 
-    public void start(OnboardingTour activeTour) {
+    public void start(
+            OnboardingTour activeTour,
+            Consumer<OnboardingTour> continuation) {
         Objects.requireNonNull(activeTour, "activeTour");
         if (!activeTour.current().worldStep()) {
             throw new IllegalStateException(
                     "Onboarding can enter the world only from a world step");
         }
         tour = activeTour;
+        reopen = Objects.requireNonNull(continuation, "continuation");
         baselinePending = pendingBlocks();
         edits = 0;
         refreshCooldown = 0;
@@ -172,12 +173,14 @@ public final class ClientOnboardingWorldStep {
 
     private void finishStep() {
         OnboardingTour completedTour = tour;
+        Consumer<OnboardingTour> continuation = reopen;
         clear();
-        reopen.accept(completedTour);
+        continuation.accept(completedTour);
     }
 
     private void clear() {
         tour = null;
+        reopen = null;
         baselinePending = -1;
         edits = 0;
         refreshCooldown = 0;

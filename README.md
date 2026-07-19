@@ -44,9 +44,11 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   metadata-only Delete, and paged Cards/Graph commit management with the same
   full-window search and exact zone-scoped pending totals.
 - First-run onboarding opens once per client installation and remains replayable
-  from More. Contextual tips can be dismissed independently and restored with
-  More > Show tips again without replaying onboarding; Alt+I opens the live
-  hotkey guide.
+  from More. Its retained nine-step legacy flow asks for five real world edits,
+  previews those edits, waits for the live remappable Save/Open shortcuts, opens
+  the real Save form, spotlights Dashboard Save/See changes/Restore controls and
+  finishes in the live hotkey guide. Contextual tips remain independently
+  dismissible; Alt+I opens that same guide.
 - Settings persists workspace history, Restore, preview, HUD and automatic
   version defaults; diagnostic telemetry remains client-local. More is a
   compact secondary-action row and does not duplicate Settings or support.
