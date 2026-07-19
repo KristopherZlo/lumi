@@ -1,7 +1,9 @@
 package io.github.lumi.domain.service;
 
 import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.HistoryEntry;
+import io.github.lumi.domain.model.HistoryPage;
 import io.github.lumi.domain.model.Workspace;
 import io.github.lumi.domain.model.Zone;
 import io.github.lumi.storage.repository.CommitRepository;
@@ -54,14 +56,39 @@ public final class DimensionHistoryViewService {
     }
 
     public List<HistoryEntry> history(int limit) throws IOException {
-        BranchRef ref = activeBranch();
+        return combinedHistory(activeBranch().name(), activeWorkspace(), limit);
+    }
+
+    public HistoryPage historyPage(
+            BranchName branch, int offset, int limit) throws IOException {
         Workspace workspace = activeWorkspace();
+        requireWorkspaceBranch(branch, workspace.id());
+        int queryLimit = pageQueryLimit(offset, limit);
+        List<HistoryEntry> queried = combinedHistory(
+                branch, workspace, queryLimit);
+        return page(offset, limit, queried);
+    }
+
+    public HistoryPage zoneHistoryPage(
+            BranchName branch, UUID zoneId, int offset, int limit)
+            throws IOException {
+        Workspace workspace = activeWorkspace();
+        requireWorkspaceBranch(branch, workspace.id());
+        zones.require(workspace.id(), zoneId);
+        int queryLimit = pageQueryLimit(offset, limit);
+        return page(offset, limit, history.firstParentForZone(
+                branch, workspace.id(), zoneId, queryLimit));
+    }
+
+    private List<HistoryEntry> combinedHistory(
+            BranchName branch, Workspace workspace, int limit)
+            throws IOException {
         var visible = history.firstParent(
-                ref.name(), workspace.id(),
+                branch, workspace.id(),
                 !workspace.settings().hideZoneCommits(), limit);
         return Stream.concat(
                         visible.stream(),
-                        autoVersions.list(ref.name(), workspace.id(), limit).stream())
+                        autoVersions.list(branch, workspace.id(), limit).stream())
                 .collect(Collectors.toMap(
                         HistoryEntry::id, entry -> entry,
                         (first, ignored) -> first))
@@ -100,6 +127,36 @@ public final class DimensionHistoryViewService {
 
     public List<Zone> zones() throws IOException {
         return zones.list(activeWorkspace().id());
+    }
+
+    private static int pageQueryLimit(int offset, int limit) {
+        if (offset < 0 || limit < 1 || limit > 64 || offset > 1_000 - limit) {
+            throw new IllegalArgumentException(
+                    "History page exceeds the bounded query window");
+        }
+        return Math.min(1_000, offset + limit + 1);
+    }
+
+    private static HistoryPage page(
+            int offset, int limit, List<HistoryEntry> queried) {
+        if (offset >= queried.size()) {
+            return new HistoryPage(offset, List.of(), false);
+        }
+        int end = Math.min(queried.size(), offset + limit);
+        return new HistoryPage(
+                offset, queried.subList(offset, end), queried.size() > end);
+    }
+
+    private void requireWorkspaceBranch(BranchName branch, UUID workspaceId)
+            throws IOException {
+        BranchRef ref = branches.visible().stream()
+                .filter(candidate -> candidate.name().equals(branch))
+                .findFirst()
+                .orElseThrow(() -> new IOException(
+                        "Branch does not exist: " + branch));
+        if (!commits.read(ref.commit()).workspaceId().equals(workspaceId)) {
+            throw new IOException("Branch belongs to another workspace");
+        }
     }
 
 }

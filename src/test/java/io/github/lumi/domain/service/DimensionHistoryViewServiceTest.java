@@ -83,9 +83,16 @@ class DimensionHistoryViewServiceTest {
                 view.workspaces().stream().map(workspace -> workspace.id()).toList());
         assertEquals(List.of(automatic, manual),
                 view.history(10).stream().map(entry -> entry.id()).toList());
+        var historyPage = view.historyPage(new BranchName("main"), 1, 1);
+        assertEquals(List.of(manual),
+                historyPage.entries().stream().map(entry -> entry.id()).toList());
+        assertEquals(false, historyPage.hasMore());
         assertEquals(List.of(zone),
                 view.zoneHistories(Set.of(zoneId), 10).get(zoneId).stream()
                         .map(entry -> entry.id()).toList());
+        assertEquals(List.of(zone),
+                view.zoneHistoryPage(new BranchName("main"), zoneId, 0, 1)
+                        .entries().stream().map(entry -> entry.id()).toList());
         assertEquals(List.of(new BranchName("main")),
                 view.branches().stream().map(ref -> ref.name()).toList());
         assertEquals(List.of(zoneId),
