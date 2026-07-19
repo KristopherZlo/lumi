@@ -101,6 +101,10 @@ public record HistoryCommandPayload(
                 && !argument.isEmpty()) {
             throw new IllegalArgumentException(kind + " does not accept an argument");
         }
+        if ((kind == Kind.CLEANUP_INSPECT || kind == Kind.CLEANUP_APPLY)
+                && !argument.isEmpty()) {
+            throw new IllegalArgumentException(kind + " does not accept an argument");
+        }
         if (kind == Kind.SNAPSHOT_REFRESH && !argument.isEmpty()) {
             throw new IllegalArgumentException(kind + " does not accept an argument");
         }
@@ -139,7 +143,7 @@ public record HistoryCommandPayload(
         WORKSPACE_CREATE(25), WORKSPACE_SWITCH(26), ZONE_COMPARE(27),
         SNAPSHOT_REFRESH(28), WORKSPACE_SETTINGS(29), UPDATE_VERSION_TAGS(30),
         BRANCH_DELETE(31), RESTORE_DELETED_VERSION(32), RENAME_VERSION(33),
-        BRANCH_CREATE_AT(34);
+        BRANCH_CREATE_AT(34), CLEANUP_INSPECT(35), CLEANUP_APPLY(36);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

@@ -13,6 +13,7 @@ import io.github.lumi.domain.service.PermissionDecision;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.RecoveryChoice;
 import io.github.lumi.minecraft.operation.DimensionMutation;
+import io.github.lumi.minecraft.operation.GarbageCollectionOperation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.operation.OperationTicket;
 import io.github.lumi.minecraft.operation.OperationProgress;
@@ -61,6 +62,8 @@ public final class LumiServerNetworking {
                 CompareResultPayload.TYPE, CompareResultPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 PackageInspectionPayload.TYPE, PackageInspectionPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                CleanupResultPayload.TYPE, CleanupResultPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(
                 HistoryCommandPayload.TYPE, LumiServerNetworking::receive);
         ServerPlayNetworking.registerGlobalReceiver(
@@ -437,6 +440,22 @@ public final class LumiServerNetworking {
         return message == null || message.isBlank() ? "Operation failed" : message;
     }
 
+    private static void sendCleanupResult(
+            ServerPlayer player,
+            HistoryCommandPayload payload,
+            DimensionMutation operation) {
+        var counts = operation instanceof GarbageCollectionOperation cleanup
+                ? cleanup.counts() : Optional.<GarbageCollectionOperation.Counts>empty();
+        String error = operation.failure().map(LumiServerNetworking::failureMessage)
+                .orElseGet(() -> counts.isPresent() ? "" : "Cleanup result is unavailable");
+        send(player, new CleanupResultPayload(
+                payload.requestId(),
+                payload.kind() == HistoryCommandPayload.Kind.CLEANUP_APPLY,
+                counts.map(GarbageCollectionOperation.Counts::commits).orElse(0),
+                counts.map(GarbageCollectionOperation.Counts::objects).orElse(0),
+                error));
+    }
+
     private static Started start(
             ServerPlayer player,
             FabricDimensionRuntime runtime,
@@ -493,6 +512,8 @@ public final class LumiServerNetworking {
                 yield runtime.startZoneRestore(
                         zone.target(), zone.zoneId(), author, terminal);
             }
+            case CLEANUP_INSPECT -> runtime.startGarbageCollection(false, terminal);
+            case CLEANUP_APPLY -> runtime.startGarbageCollection(true, terminal);
             case BRANCH_CREATE, BRANCH_CREATE_AT -> throw new IllegalStateException(
                     "Branch creation does not use the mutation queue");
             case BRANCH_DELETE -> throw new IllegalStateException(
@@ -535,6 +556,10 @@ public final class LumiServerNetworking {
             FabricDimensionRuntime runtime,
             HistoryCommandPayload payload,
             DimensionMutation operation) {
+        if (payload.kind() == HistoryCommandPayload.Kind.CLEANUP_INSPECT
+                || payload.kind() == HistoryCommandPayload.Kind.CLEANUP_APPLY) {
+            sendCleanupResult(player, payload, operation);
+        }
         TICKET_OWNERS.entrySet().removeIf(entry -> {
             if (!entry.getValue().requestId().equals(payload.requestId())) {
                 return false;

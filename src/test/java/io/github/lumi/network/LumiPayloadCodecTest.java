@@ -148,7 +148,9 @@ class LumiPayloadCodecTest {
                 HistoryCommandPayload.Kind.REDO,
                 HistoryCommandPayload.Kind.RECOVER_RESUME,
                 HistoryCommandPayload.Kind.RECOVER_RETURN,
-                HistoryCommandPayload.Kind.SNAPSHOT_REFRESH)) {
+                HistoryCommandPayload.Kind.SNAPSHOT_REFRESH,
+                HistoryCommandPayload.Kind.CLEANUP_INSPECT,
+                HistoryCommandPayload.Kind.CLEANUP_APPLY)) {
             HistoryCommandPayload live = new HistoryCommandPayload(
                     UUID.randomUUID(), kind, "", id('2'), 43);
             assertEquals(live, roundTrip(HistoryCommandPayload.CODEC, live));
@@ -324,6 +326,9 @@ class LumiPayloadCodecTest {
                 "Working clock", "Builder", 123_456, 9);
         assertEquals(inspection,
                 roundTrip(PackageInspectionPayload.CODEC, inspection));
+        CleanupResultPayload cleanup = new CleanupResultPayload(
+                UUID.randomUUID(), false, 2, 7, "");
+        assertEquals(cleanup, roundTrip(CleanupResultPayload.CODEC, cleanup));
     }
 
     private static CommitId id(char digit) {
