@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.client.onboarding.OnboardingTour;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
@@ -89,6 +90,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private int historyY;
     private int historyHeight;
     private int historyScroll;
+    private int actionY;
+    private int actionButtonWidth;
     private CommitId editingTags;
     private EditBox tagEditor;
     private String tagError = "";
@@ -174,19 +177,19 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         addSupportButtons();
         boolean hintVisible = addDashboardHint();
         int contentOffset = hintVisible ? contextualHintOffset(8) : 0;
-        int actionY = layout.bodyY() + 56 + contentOffset;
+        actionY = layout.bodyY() + 56 + contentOffset;
         int x = layout.bodyX() + 14;
         int available = Math.max(0, layout.bodyWidth() - 28);
-        int buttonWidth = Math.max(0, (available - 70) / 2);
-        addButton(x, actionY, buttonWidth, "luma.action.save_build", openSave,
+        actionButtonWidth = Math.max(0, (available - 70) / 2);
+        addButton(x, actionY, actionButtonWidth, "luma.action.save_build", openSave,
                 LumiLegacyButton.Kind.PRIMARY);
-        addButton(x + buttonWidth + 6, actionY, buttonWidth,
+        addButton(x + actionButtonWidth + 6, actionY, actionButtonWidth,
                 "luma.action.amend_version", openAmend,
                 LumiLegacyButton.Kind.NORMAL);
-        addIconButton(x + buttonWidth * 2 + 12, actionY,
+        addIconButton(x + actionButtonWidth * 2 + 12, actionY,
                 "see-changes", "luma.action.see_changes", showChanges,
                 LumiLegacyButton.Kind.NORMAL);
-        addIconButton(x + buttonWidth * 2 + 44, actionY,
+        addIconButton(x + actionButtonWidth * 2 + 44, actionY,
                 "rollback", "key.lumi.quick_rollback", () -> {
             quickRollback.run();
             onClose();
@@ -391,6 +394,22 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         if (minecraft.screen != this) {
             minecraft.setScreen(this);
         }
+    }
+
+    OnboardingSpotlightLayout.Rect onboardingTarget(
+            OnboardingTour.Kind kind) {
+        int x = layout.bodyX() + 14;
+        int right = layout.bodyX() + layout.bodyWidth() - 14;
+        return switch (kind) {
+            case SPOTLIGHT_SAVE -> new OnboardingSpotlightLayout.Rect(
+                    x, actionY, actionButtonWidth, 20);
+            case SPOTLIGHT_CHANGES -> new OnboardingSpotlightLayout.Rect(
+                    x + actionButtonWidth * 2 + 12, actionY, 26, 20);
+            case SPOTLIGHT_RESTORE -> new OnboardingSpotlightLayout.Rect(
+                    right - 90, historyY + HISTORY_FIRST_ROW_OFFSET + 6, 26, 20);
+            default -> throw new IllegalArgumentException(
+                    "Page does not have a Dashboard spotlight");
+        };
     }
 
     private void addSupportButtons() {

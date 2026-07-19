@@ -93,7 +93,11 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
     }
 
     private void initSpotlight() {
-        spotlight = spotlights.place(tour.current().kind(), width, height);
+        spotlight = background instanceof LumiDashboardScreen dashboard
+                ? spotlights.place(
+                        dashboard.onboardingTarget(tour.current().kind()),
+                        width, height)
+                : spotlights.place(tour.current().kind(), width, height);
         var prompt = spotlight.prompt();
         addBack(prompt.x() + 10, prompt.bottom() - 28);
         addLegacyButton(

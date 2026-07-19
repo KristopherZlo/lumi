@@ -19,6 +19,10 @@ final class OnboardingSpotlightLayout {
             default -> throw new IllegalArgumentException(
                     "Page does not have a Dashboard spotlight");
         };
+        return place(target, screenWidth, screenHeight);
+    }
+
+    Placement place(Rect target, int screenWidth, int screenHeight) {
         Rect hole = target.expand(5, screenWidth, screenHeight);
         int panelWidth = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 16));
         int panelX = clamp(
