@@ -71,6 +71,8 @@ class SpecialThanksSupportTest {
                         + "MinecraftSpecialThanksSkinResolver.java"));
         assertTrue(resolver.contains("Util.backgroundExecutor()"));
         assertTrue(resolver.indexOf(".join()") > resolver.indexOf("loadProfileSkin("));
+        assertTrue(resolver.contains("sessionService().fetchProfile("));
+        assertTrue(resolver.contains("complete.profile()"));
         assertTrue(resolver.contains("new ClientAsset.ResourceTexture(id, id)"));
         assertTrue(resolver.contains("getNow(DefaultPlayerSkin.getDefaultSkin())"));
     }

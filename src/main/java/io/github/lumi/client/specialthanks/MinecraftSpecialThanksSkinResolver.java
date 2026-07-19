@@ -101,7 +101,11 @@ public final class MinecraftSpecialThanksSkinResolver {
         if (profile.isEmpty()) {
             return DefaultPlayerSkin.getDefaultSkin();
         }
-        return client.getSkinManager().get(profile.orElseThrow()).join()
+        var complete = client.services().sessionService().fetchProfile(
+                profile.orElseThrow().id(), true);
+        GameProfile resolved = complete == null
+                ? profile.orElseThrow() : complete.profile();
+        return client.getSkinManager().get(resolved).join()
                 .orElseGet(DefaultPlayerSkin::getDefaultSkin);
     }
 

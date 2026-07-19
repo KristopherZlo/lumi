@@ -47,9 +47,6 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
         var models = minecraft.getEntityModels();
         wideModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER), false);
         slimModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER_SLIM), true);
-        addLegacyButton(panelX + panelWidth - 76, panelY + 10, 60,
-                Component.translatable("luma.action.close"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
     }
 
     @Override
