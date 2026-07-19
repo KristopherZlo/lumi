@@ -26,7 +26,7 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("luma.action.amend_version"));
         assertTrue(source.contains("luma.action.see_changes"));
         assertTrue(source.contains("new EditBox("));
-        assertTrue(source.contains("historyView.visible("));
+        assertTrue(source.contains("historyView.filtered("));
         assertTrue(source.contains("visibleVersions()"));
         assertTrue(source.contains("HistoryViewController.Mode.CARDS"));
         assertTrue(source.contains("HistoryViewController.Mode.GRAPH"));
@@ -41,8 +41,10 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("version.statistics().blocks()"));
         assertTrue(source.contains("previews.texture(snapshot.dimensionId(), version.id())"));
         assertTrue(source.contains("NO_PREVIEW_ICON"));
-        assertTrue(source.contains(
-                "if (!Objects.equals(snapshot, latest) || searchResultsDirty)"));
+        assertTrue(source.contains("pagedHistory.ensurePageSize(pageSize)"));
+        assertTrue(source.contains("pagedHistory.next()"));
+        assertTrue(source.contains("pagedHistory.previous()"));
+        assertTrue(source.contains("!Objects.equals(renderedPage, latestPage)"));
     }
 
     @Test

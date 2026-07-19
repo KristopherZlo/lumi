@@ -103,6 +103,7 @@ public final class LumiClient implements ClientModInitializer {
                         Minecraft client = Minecraft.getInstance();
                         client.setScreen(new LumiDashboardScreen(
                                 client.screen, HISTORY, PREVIEW_STORE,
+                                HISTORY_PAGES, NETWORKING::requestHistoryPage,
                                 () -> LumiClient.openSave(client.screen,
                                         SaveScreenController.Intent.SAVE, ""),
                                 () -> LumiClient.openSave(client.screen,

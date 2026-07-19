@@ -3,7 +3,9 @@ package io.github.lumi.client.ui;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
+import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientHistoryStore;
+import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -34,6 +36,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             LumiMod.MOD_ID, "textures/gui/new-icons/image.png");
     private final Screen parent;
     private final ClientHistoryStore history;
+    private final ClientHistoryPageStore historyPages;
+    private final ZoneHistoryController.Requester requestPage;
     private final ClientVersionPreviewStore previews;
     private final Runnable openSave;
     private final Runnable openAmend;
@@ -58,6 +62,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private boolean refocusSearch;
     private LegacyProjectTab activeTab = LegacyProjectTab.HISTORY;
     private LumiHistoryGraphView graphView;
+    private WorkspaceHistoryController pagedHistory;
+    private HistoryPagePayload renderedPage;
     private int historyY;
     private int historyHeight;
 
@@ -65,6 +71,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             Screen parent,
             ClientHistoryStore history,
             ClientVersionPreviewStore previews,
+            ClientHistoryPageStore historyPages,
+            ZoneHistoryController.Requester requestPage,
             Runnable openSave,
             Runnable openAmend,
             Consumer<Screen> openBranches,
@@ -82,6 +90,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
         this.previews = Objects.requireNonNull(previews, "previews");
+        this.historyPages = Objects.requireNonNull(historyPages, "historyPages");
+        this.requestPage = Objects.requireNonNull(requestPage, "requestPage");
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openAmend = Objects.requireNonNull(openAmend, "openAmend");
         this.openBranches = Objects.requireNonNull(openBranches, "openBranches");
@@ -101,9 +111,14 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     public void tick() {
         super.tick();
         HistorySnapshotPayload latest = history.state().snapshot().orElse(null);
-        if (!Objects.equals(snapshot, latest) || searchResultsDirty) {
+        HistoryPagePayload latestPage = pagedHistory == null
+                ? null : pagedHistory.page().orElse(null);
+        if (!Objects.equals(snapshot, latest)
+                || !Objects.equals(renderedPage, latestPage)
+                || searchResultsDirty) {
             refocusSearch = search != null && search.isFocused();
             searchResultsDirty = false;
+            renderedPage = latestPage;
             rebuildWidgets();
         }
     }
@@ -138,6 +153,14 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         if (snapshot == null) {
             return;
         }
+        if (pagedHistory == null || !pagedHistory.matches(snapshot)) {
+            pagedHistory = new WorkspaceHistoryController(
+                    snapshot, historyPages, requestPage);
+        }
+        int pageSize = Math.max(1,
+                visibleHistoryRows(historyHeight - 24, 64));
+        pagedHistory.ensurePageSize(pageSize);
+        renderedPage = pagedHistory.page().orElse(null);
         int toolbarX = layout.bodyX() + 58;
         addIconButton(toolbarX, historyY + 7, "unordered-list",
                 "luma.history.view_cards",
@@ -155,9 +178,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         int branchWidth = Math.max(38, searchX - branchX - 6);
         addRenderableWidget(new LumiLegacyButton(
                 branchX, historyY + 7, branchWidth, 18,
-                historyView.branch().isEmpty()
-                        ? Component.translatable("luma.history.filter_all")
-                        : Component.literal(historyView.branch()),
+                Component.literal(shortHistoryBranch()),
                 ignored -> cycleHistoryBranch(), LumiLegacyButton.Kind.NORMAL));
         search = new EditBox(
                 font,
@@ -178,7 +199,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             refocusSearch = false;
         }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
-        int rows = visibleHistoryRows(historyHeight, versions.size());
+        int rows = visibleHistoryRows(historyHeight - 24, versions.size());
         if (historyView.mode() == HistoryViewController.Mode.GRAPH) {
             List<HistoryGraphLayout.Node> nodes = graphLayout
                     .build(versions, snapshot.branches()).stream()
@@ -190,6 +211,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     historyY + HISTORY_FIRST_ROW_OFFSET,
                     layout.bodyWidth() - 20);
             graphView.buttons(openDetails).forEach(this::addRenderableWidget);
+            addHistoryPageButtons();
             return;
         }
         graphView = null;
@@ -208,6 +230,19 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     "branch", "luma.action.create_idea",
                     () -> createBranch.accept(version), LumiLegacyButton.Kind.NORMAL);
         }
+        addHistoryPageButtons();
+    }
+
+    private void addHistoryPageButtons() {
+        int y = historyY + historyHeight - 22;
+        LumiLegacyButton previous = addLegacyButton(
+                layout.bodyX() + 14, y, 28, Component.literal("<"),
+                () -> changeHistoryPage(false), LumiLegacyButton.Kind.NORMAL);
+        previous.active = pagedHistory.hasPrevious();
+        LumiLegacyButton next = addLegacyButton(
+                layout.bodyX() + 46, y, 28, Component.literal(">"),
+                () -> changeHistoryPage(true), LumiLegacyButton.Kind.NORMAL);
+        next.active = pagedHistory.hasNext();
     }
 
     private void addDashboardHint() {
@@ -319,8 +354,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     }
 
     private List<HistorySnapshotPayload.Version> visibleVersions() {
-        return snapshot == null
-                ? List.of() : historyView.visible(snapshot, searchQuery);
+        return snapshot == null || pagedHistory == null
+                ? List.of()
+                : historyView.filtered(pagedHistory.versions(), searchQuery);
     }
 
     private void showHistoryMode(HistoryViewController.Mode mode) {
@@ -329,8 +365,23 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     }
 
     private void cycleHistoryBranch() {
-        historyView.nextBranch(snapshot.branches());
+        pagedHistory.nextBranch(snapshot.branches());
         rebuildWidgets();
+    }
+
+    private void changeHistoryPage(boolean next) {
+        if (next) {
+            pagedHistory.next();
+        } else {
+            pagedHistory.previous();
+        }
+        rebuildWidgets();
+    }
+
+    private String shortHistoryBranch() {
+        String value = pagedHistory.branch().value();
+        int slash = value.lastIndexOf('/');
+        return slash < 0 ? value : value.substring(slash + 1);
     }
 
     private LumiLegacyButton.Kind tabKind(LegacyProjectTab tab) {
@@ -447,7 +498,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         if (graphView != null) {
             graphView.renderConnections(graphics);
         }
-        int rows = visibleHistoryRows(historyHeight, versions.size());
+        int rows = visibleHistoryRows(historyHeight - 24, versions.size());
         for (int index = 0;
                 graphView == null && index < rows; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
