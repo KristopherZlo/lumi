@@ -145,17 +145,25 @@ final class FabricServerSession implements AutoCloseable {
         Objects.requireNonNull(operations, "operations");
         Objects.requireNonNull(durability, "durability");
         Objects.requireNonNull(unit, "unit");
+        long deadline = System.nanoTime() + unit.toNanos(timeout);
         operations.shutdownNow();
+        boolean operationsFinished = awaitUntil(operations, deadline);
         durability.shutdown();
+        boolean durabilityFinished = awaitUntil(durability, deadline);
+        if (!durabilityFinished) {
+            durability.shutdownNow();
+        }
+        return operationsFinished && durabilityFinished;
+    }
+
+    private static boolean awaitUntil(ExecutorService workers, long deadlineNanos) {
+        long remaining = Math.max(0L, deadlineNanos - System.nanoTime());
         try {
-            if (durability.awaitTermination(timeout, unit)) {
-                return true;
-            }
+            return workers.awaitTermination(remaining, TimeUnit.NANOSECONDS);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
+            return false;
         }
-        durability.shutdownNow();
-        return false;
     }
 
     private void requireServer(ServerLevel level) {

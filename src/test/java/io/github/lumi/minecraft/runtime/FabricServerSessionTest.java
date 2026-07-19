@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 class FabricServerSessionTest {
     @Test
-    void interruptsOperationsWithoutWaitingAndDrainsDurabilityOnce() {
+    void waitsForOperationProducersBeforeDrainingDurability() {
         RecordingExecutor operations = new RecordingExecutor(true);
         RecordingExecutor durability = new RecordingExecutor(true);
 
@@ -19,11 +19,12 @@ class FabricServerSessionTest {
                 operations, durability, 5, TimeUnit.SECONDS));
 
         assertTrue(operations.shutdownNow);
-        assertFalse(operations.awaited);
+        assertTrue(operations.awaited);
         assertTrue(durability.shutdown);
         assertTrue(durability.awaited);
         assertFalse(durability.shutdownNow);
-        assertEquals(5, durability.timeout);
+        assertEquals(TimeUnit.NANOSECONDS, operations.awaitUnit);
+        assertEquals(TimeUnit.NANOSECONDS, durability.awaitUnit);
     }
 
     @Test
@@ -37,12 +38,26 @@ class FabricServerSessionTest {
         assertTrue(durability.shutdownNow);
     }
 
+    @Test
+    void reportsIncompleteShutdownWhenOperationProducerIgnoresInterruption() {
+        RecordingExecutor operations = new RecordingExecutor(false);
+        RecordingExecutor durability = new RecordingExecutor(true);
+
+        assertFalse(FabricServerSession.stopBackgroundWorkers(
+                operations, durability, 1, TimeUnit.MILLISECONDS));
+
+        assertTrue(operations.shutdownNow);
+        assertTrue(operations.awaited);
+        assertTrue(durability.shutdown);
+        assertTrue(durability.awaited);
+    }
+
     private static final class RecordingExecutor extends AbstractExecutorService {
         private final boolean awaitResult;
         private boolean shutdown;
         private boolean shutdownNow;
         private boolean awaited;
-        private long timeout;
+        private TimeUnit awaitUnit;
 
         private RecordingExecutor(boolean awaitResult) {
             this.awaitResult = awaitResult;
@@ -68,7 +83,7 @@ class FabricServerSessionTest {
         @Override
         public boolean awaitTermination(long timeout, TimeUnit unit) {
             awaited = true;
-            this.timeout = timeout;
+            awaitUnit = unit;
             return awaitResult;
         }
 
