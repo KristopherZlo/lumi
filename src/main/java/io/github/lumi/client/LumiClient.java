@@ -195,11 +195,21 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void openPackages(Screen parent) {
         Minecraft client = Minecraft.getInstance();
+        var snapshot = HISTORY.state().snapshot().orElseThrow(
+                () -> new IllegalStateException(
+                        "Lumi history has not synchronized yet"));
         client.setScreen(new LumiPackageScreen(
                 parent,
                 new PackageScreenController(
                         NETWORKING::exportPackage, NETWORKING::inspectPackage),
-                ClientPackageAccess.integrated()));
+                ClientPackageAccess.integrated(), snapshot.branches(),
+                NETWORKING::switchBranch,
+                source -> client.setScreen(new LumiMergeScreen(
+                        client.screen, snapshot.branchName(),
+                        snapshot.branches().stream()
+                                .filter(branch -> branch.name().equals(source))
+                                .toList(), NETWORKING::merge)),
+                NETWORKING::deleteBranch));
     }
 
     private static void openSave(

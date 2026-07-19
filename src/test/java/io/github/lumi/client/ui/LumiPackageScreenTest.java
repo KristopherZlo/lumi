@@ -16,5 +16,10 @@ class LumiPackageScreenTest {
         assertTrue(source.contains("luma.share.package_files_empty"));
         assertTrue(source.contains("browser.local(index).name().value()"));
         assertTrue(source.contains("PackageScreenController.Action.INSPECT"));
+        assertTrue(source.contains("luma.action.combine_with_build"));
+        assertTrue(source.contains("luma.action.delete_package"));
+        assertTrue(source.contains("\"join\""));
+        assertTrue(source.contains("\"branch\""));
+        assertTrue(source.contains("\"trash\""));
     }
 }
