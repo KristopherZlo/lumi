@@ -15,6 +15,8 @@ import org.lwjgl.glfw.GLFW;
 
 /** Shared legacy window chrome for V2 modal workflows. */
 abstract class LumiLegacyModalScreen extends Screen {
+    private static final int TOP_RIGHT_CONTROL_LEFT_OFFSET = 36;
+    private static final int HEADER_CONTROL_GAP = 8;
     private static final Identifier HINT_CLOSE_ICON = Identifier.fromNamespaceAndPath(
             LumiMod.MOD_ID, "textures/gui/icons/close.png");
     private final Screen background;
@@ -231,6 +233,34 @@ abstract class LumiLegacyModalScreen extends Screen {
         LegacyLumiTheme.outlined(
                 graphics, x, y, width, height,
                 LegacyLumiTheme.PANEL, LegacyLumiTheme.PANEL_BORDER);
+    }
+
+    protected final String clippedHeader(
+            Component value, int textX, int contentRight) {
+        return font.plainSubstrByWidth(
+                value.getString(), headerTextWidth(width, textX, contentRight));
+    }
+
+    protected final String clippedCenteredHeader(
+            Component value, int centerX, int contentLeft, int contentRight) {
+        return font.plainSubstrByWidth(value.getString(), centeredHeaderTextWidth(
+                width, centerX, contentLeft, contentRight));
+    }
+
+    static int headerTextWidth(int screenWidth, int textX, int contentRight) {
+        return Math.max(1, safeHeaderRight(screenWidth, contentRight) - textX);
+    }
+
+    static int centeredHeaderTextWidth(
+            int screenWidth, int centerX, int contentLeft, int contentRight) {
+        int safeRight = safeHeaderRight(screenWidth, contentRight);
+        int radius = Math.min(centerX - contentLeft, safeRight - centerX);
+        return Math.max(1, radius * 2);
+    }
+
+    private static int safeHeaderRight(int screenWidth, int contentRight) {
+        return Math.min(contentRight,
+                screenWidth - TOP_RIGHT_CONTROL_LEFT_OFFSET - HEADER_CONTROL_GAP);
     }
 
     protected static Component errorText(String error) {

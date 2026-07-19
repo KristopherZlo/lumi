@@ -156,11 +156,16 @@ public final class LumiDimensionHistoryScreen extends LumiLegacyPageScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
             renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
-            graphics.drawString(font, title, panelX + 16, panelY + 18,
-                    LegacyLumiTheme.TEXT, false);
+            int headerX = panelX + 16;
+            int contentRight = panelX + panelWidth - 16;
             graphics.drawString(font,
+                    clippedHeader(title, headerX, contentRight),
+                    headerX, panelY + 18,
+                    LegacyLumiTheme.TEXT, false);
+            graphics.drawString(font, clippedHeader(
                     Component.translatable("luma.dimensions.read_only"),
-                    panelX + 16, panelY + 36, LegacyLumiTheme.MUTED, false);
+                    headerX, contentRight),
+                    headerX, panelY + 36, LegacyLumiTheme.MUTED, false);
             renderLegacyPanel(graphics, panelX + 12, panelY + 46,
                     panelWidth - 24, Math.max(1, panelHeight - 58));
             LegacyLumiTheme.outlined(

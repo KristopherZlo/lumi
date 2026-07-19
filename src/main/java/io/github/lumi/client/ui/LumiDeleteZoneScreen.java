@@ -109,22 +109,31 @@ public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
                 graphics, mouseX, mouseY);
         try {
             int panelWidth = Math.min(PANEL_WIDTH, width - 32);
+            int centerX = width / 2;
+            int contentLeft = panelX + 20;
+            int contentRight = panelX + panelWidth - 20;
             renderLegacyWindow(
                     graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
             graphics.drawCenteredString(
-                    font, title, width / 2, panelY + 18,
+                    font, clippedCenteredHeader(
+                            title, centerX, contentLeft, contentRight),
+                    centerX, panelY + 18,
                     LegacyLumiTheme.DANGER);
             graphics.drawCenteredString(
-                    font,
-                    Component.translatable(
-                            "luma.zones.delete_help", zone.name()),
-                    width / 2, panelY + 46, LegacyLumiTheme.MUTED);
+                    font, clippedCenteredHeader(
+                            Component.translatable(
+                                    "luma.zones.delete_help", zone.name()),
+                            centerX, contentLeft, contentRight),
+                    centerX, panelY + 46, LegacyLumiTheme.MUTED);
             LegacyLumiTheme.outlined(
                     graphics, panelX + 20, panelY + 80, panelWidth - 40, 20,
                     LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
             if (!error.isEmpty()) {
                 graphics.drawCenteredString(
-                        font, errorText(error), width / 2, panelY + 118,
+                        font, clippedCenteredHeader(
+                                errorText(error), centerX,
+                                contentLeft, contentRight),
+                        centerX, panelY + 118,
                         LegacyLumiTheme.DANGER);
             }
             super.render(

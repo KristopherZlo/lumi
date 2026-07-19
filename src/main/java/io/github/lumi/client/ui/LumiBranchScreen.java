@@ -92,23 +92,31 @@ public final class LumiBranchScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
-        graphics.drawString(font, title, panelX + 12, panelY + 14,
-                LegacyLumiTheme.TEXT, false);
-        graphics.drawString(font,
-                Component.translatable("luma.variants.create_help", startingPoint),
-                panelX + 12, panelY + 34, LegacyLumiTheme.MUTED, false);
-        LegacyLumiTheme.outlined(graphics, panelX + 14, panelY + 66,
-                panelWidth - 28, 20,
-                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
-        graphics.drawString(font, Component.translatable("luma.variant.name_input"),
-                panelX + 20, panelY + 55, LegacyLumiTheme.TEXT, false);
-        if (!error.isEmpty()) {
-            graphics.drawString(font, errorText(error), panelX + 20, panelY + 96,
-                    LegacyLumiTheme.DANGER, false);
-        }
-        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+            int panelWidth = Math.min(PANEL_WIDTH, width - 32);
+            int headerX = panelX + 12;
+            int contentRight = panelX + panelWidth - 12;
+            renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+            graphics.drawString(font,
+                    clippedHeader(title, headerX, contentRight),
+                    headerX, panelY + 14, LegacyLumiTheme.TEXT, false);
+            graphics.drawString(font, clippedHeader(
+                    Component.translatable(
+                            "luma.variants.create_help", startingPoint),
+                    headerX, contentRight),
+                    headerX, panelY + 34, LegacyLumiTheme.MUTED, false);
+            LegacyLumiTheme.outlined(graphics, panelX + 14, panelY + 66,
+                    panelWidth - 28, 20,
+                    LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+            graphics.drawString(font,
+                    Component.translatable("luma.variant.name_input"),
+                    panelX + 20, panelY + 55, LegacyLumiTheme.TEXT, false);
+            if (!error.isEmpty()) {
+                graphics.drawString(font, errorText(error),
+                        panelX + 20, panelY + 96,
+                        LegacyLumiTheme.DANGER, false);
+            }
+            super.render(
+                    graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);
         }

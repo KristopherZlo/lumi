@@ -62,24 +62,33 @@ public final class LumiDeleteVersionScreen extends LumiLegacyModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
-        graphics.drawCenteredString(font, title, width / 2, panelY + 18,
-                LegacyLumiTheme.TEXT);
-        graphics.drawCenteredString(font,
-                font.plainSubstrByWidth(version.message(), panelWidth - 48),
-                width / 2, panelY + 42, LegacyLumiTheme.TEXT);
-        graphics.drawCenteredString(font,
-                Component.translatable("luma.save_details.delete_help"),
-                width / 2, panelY + 68, LegacyLumiTheme.MUTED);
-        graphics.drawCenteredString(font,
-                Component.translatable("luma.save_details.delete_warning"),
-                width / 2, panelY + 90, LegacyLumiTheme.ACCENT);
-        if (!error.isEmpty()) {
-            graphics.drawCenteredString(font, errorText(error),
-                    width / 2, panelY + 116, LegacyLumiTheme.DANGER);
-        }
-        super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+            int panelWidth = Math.min(PANEL_WIDTH, width - 32);
+            int centerX = width / 2;
+            int contentLeft = panelX + 20;
+            int contentRight = panelX + panelWidth - 20;
+            renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+            graphics.drawCenteredString(font, clippedCenteredHeader(
+                    title, centerX, contentLeft, contentRight),
+                    centerX, panelY + 18, LegacyLumiTheme.TEXT);
+            graphics.drawCenteredString(font, clippedCenteredHeader(
+                    Component.literal(version.message()),
+                    centerX, contentLeft, contentRight),
+                    centerX, panelY + 42, LegacyLumiTheme.TEXT);
+            graphics.drawCenteredString(font, clippedCenteredHeader(
+                    Component.translatable("luma.save_details.delete_help"),
+                    centerX, contentLeft, contentRight),
+                    centerX, panelY + 68, LegacyLumiTheme.MUTED);
+            graphics.drawCenteredString(font, clippedCenteredHeader(
+                    Component.translatable("luma.save_details.delete_warning"),
+                    centerX, contentLeft, contentRight),
+                    centerX, panelY + 90, LegacyLumiTheme.ACCENT);
+            if (!error.isEmpty()) {
+                graphics.drawCenteredString(font, clippedCenteredHeader(
+                        errorText(error), centerX, contentLeft, contentRight),
+                        centerX, panelY + 116, LegacyLumiTheme.DANGER);
+            }
+            super.render(
+                    graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);
         }
