@@ -82,7 +82,8 @@ class LumiResponsiveModalLayoutTest {
                     + LumiVersionDetailsScreen.previewHeight(
                             layout.width(), layout.height())
                     <= previewControls);
-            assertTrue(LumiVersionDetailsScreen.previewWidth(layout.width()) + 52
+            assertTrue(LumiVersionDetailsScreen.previewWidth(
+                    layout.width(), layout.height()) + 52
                     <= layout.width());
         }
     }
