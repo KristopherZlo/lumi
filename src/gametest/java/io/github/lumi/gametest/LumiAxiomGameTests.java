@@ -39,6 +39,8 @@ public final class LumiAxiomGameTests {
                     applyBuffer(helper, player.get());
                     helper.assertBlockState(FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
                     helper.assertBlockState(SECOND, Blocks.GOLD_BLOCK.defaultBlockState());
+                    helper.assertTrue(runtime.mutations().hasPendingBuilderChanges(),
+                            "Axiom edit must mark the builder draft");
                     runtime.startLiveAction(player.get().getUUID(),
                             LiveActionJournal.Direction.UNDO, ignored -> { });
                 })
@@ -68,6 +70,11 @@ public final class LumiAxiomGameTests {
                             "Overlapping Axiom Undo must fail");
                     helper.assertBlockState(FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
                     helper.assertBlockState(SECOND, Blocks.DIAMOND_BLOCK.defaultBlockState());
+                    var builderBeforeNoOp = runtime.mutations().builderSnapshot();
+                    applyCurrentBuffer(helper, player.get());
+                    helper.assertValueEqual(builderBeforeNoOp,
+                            runtime.mutations().builderSnapshot(),
+                            "No-op Axiom buffer must not advance builder generations");
                 })
                 .thenExecute(() -> releasePlayer(helper, player.get(), test))
                 .thenSucceed();
@@ -79,6 +86,18 @@ public final class LumiAxiomGameTests {
         BlockPos second = helper.absolutePos(SECOND);
         buffer.set(first.getX(), first.getY(), first.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
         buffer.set(second.getX(), second.getY(), second.getZ(), Blocks.GOLD_BLOCK.defaultBlockState());
+        AxiomServerboundSetBuffer.applyBlockBufferServer(
+                buffer, helper.getLevel(), null, player);
+    }
+
+    private static void applyCurrentBuffer(GameTestHelper helper, ServerPlayer player) {
+        BlockBuffer buffer = new BlockBuffer();
+        BlockPos first = helper.absolutePos(FIRST);
+        BlockPos second = helper.absolutePos(SECOND);
+        buffer.set(first.getX(), first.getY(), first.getZ(),
+                helper.getLevel().getBlockState(first));
+        buffer.set(second.getX(), second.getY(), second.getZ(),
+                helper.getLevel().getBlockState(second));
         AxiomServerboundSetBuffer.applyBlockBufferServer(
                 buffer, helper.getLevel(), null, player);
     }

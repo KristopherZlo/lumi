@@ -2,6 +2,7 @@ package io.github.lumi.mixin;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BlockPosition;
+import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -44,9 +45,13 @@ abstract class BlockEntityMixin {
                 }
             });
             var position = blockEntity.getBlockPos();
-            runtime.mutations().recordBlockMutation(
-                    new BlockPosition(position.getX(), position.getY(), position.getZ()),
-                    generation);
+            var changed = new BlockPosition(
+                    position.getX(), position.getY(), position.getZ());
+            if (DirectLiveActionContext.current(runtime.liveActions()).isPresent()) {
+                runtime.mutations().recordBuilderBlockMutation(changed, generation);
+            } else {
+                runtime.mutations().recordBlockMutation(changed, generation);
+            }
         });
     }
 }

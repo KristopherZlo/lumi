@@ -15,12 +15,17 @@ import net.minecraft.world.entity.Entity;
 public final class MinecraftLiveEntityTracker {
     private final LiveActionJournal journal;
     private final MinecraftLiveEntityWorldAccess world;
+    private final BuilderMutationObserver builderMutations;
     private final Map<UUID, Map<UUID, Owned>> owned = new HashMap<>();
 
     public MinecraftLiveEntityTracker(
-            LiveActionJournal journal, MinecraftLiveEntityWorldAccess world) {
+            LiveActionJournal journal,
+            MinecraftLiveEntityWorldAccess world,
+            BuilderMutationObserver builderMutations) {
         this.journal = Objects.requireNonNull(journal, "journal");
         this.world = Objects.requireNonNull(world, "world");
+        this.builderMutations = Objects.requireNonNull(
+                builderMutations, "builderMutations");
     }
 
     public void added(Entity entity) throws IOException {
@@ -33,6 +38,7 @@ public final class MinecraftLiveEntityTracker {
             journal.recordEntity(
                     action.orElseThrow(), entity.getUUID(), Optional.empty(), after);
             own(action.orElseThrow(), entity.getUUID(), Optional.empty());
+            builderMutations.changed(Optional.empty(), after);
         }
     }
 
@@ -43,17 +49,19 @@ public final class MinecraftLiveEntityTracker {
         }
         UUID actionId = action.orElseThrow();
         UUID entityId = entity.getUUID();
+        Optional<EntityState> observedBefore = world.capture(entity);
+        if (observedBefore.isEmpty()) {
+            return Optional.empty();
+        }
         Map<UUID, Owned> entities = owned.get(actionId);
         if (entities != null && entities.containsKey(entityId)) {
             return Optional.of(new Pending(
-                    actionId, entityId, entities.get(entityId).before()));
+                    actionId, entityId, entities.get(entityId).before(),
+                    observedBefore));
         }
-        Optional<EntityState> before = world.capture(entity);
-        if (before.isEmpty()) {
-            return Optional.empty();
-        }
-        own(actionId, entityId, before);
-        return Optional.of(new Pending(actionId, entityId, before));
+        own(actionId, entityId, observedBefore);
+        return Optional.of(new Pending(
+                actionId, entityId, observedBefore, observedBefore));
     }
 
     public void finish(Pending pending) throws IOException {
@@ -62,6 +70,9 @@ public final class MinecraftLiveEntityTracker {
         journal.recordEntity(
                 pending.action(), pending.entity(), pending.before(),
                 after);
+        if (!pending.observedBefore().equals(after)) {
+            builderMutations.changed(pending.observedBefore(), after);
+        }
         if (after.isPresent()) {
             own(pending.action(), pending.entity(), pending.before());
         } else {
@@ -146,12 +157,23 @@ public final class MinecraftLiveEntityTracker {
     }
 
     public record Pending(
-            UUID action, UUID entity, Optional<EntityState> before) {
+            UUID action,
+            UUID entity,
+            Optional<EntityState> before,
+            Optional<EntityState> observedBefore) {
         public Pending {
             Objects.requireNonNull(action, "action");
             Objects.requireNonNull(entity, "entity");
             Objects.requireNonNull(before, "before");
+            Objects.requireNonNull(observedBefore, "observedBefore");
         }
+    }
+
+    @FunctionalInterface
+    public interface BuilderMutationObserver {
+        void changed(
+                Optional<EntityState> before,
+                Optional<EntityState> after) throws IOException;
     }
 
     private enum Endpoint {

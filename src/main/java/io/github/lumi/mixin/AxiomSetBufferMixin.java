@@ -51,18 +51,23 @@ abstract class AxiomSetBufferMixin {
         try (var ignored = DirectLiveActionContext.open(
                 runtime.liveActions(), player.getUUID())) {
             UUID action = DirectLiveActionContext.current(runtime.liveActions()).orElseThrow();
-            captureBefore(buffer, mask, runtime, action, before, sections);
+            boolean exactCapture = captureBefore(
+                    buffer, mask, runtime, action, before, sections);
             Map<SectionKey, Long> generations =
                     registerDurability(level, runtime, sections);
             try {
                 original.call(buffer, level, mask, player);
             } finally {
-                recordAfter(runtime, action, before, generations);
+                if (exactCapture) {
+                    recordAfter(runtime, action, before, generations);
+                } else {
+                    generations.keySet().forEach(runtime.mutations()::markBuilderMutation);
+                }
             }
         }
     }
 
-    private static void captureBefore(
+    private static boolean captureBefore(
             BlockBuffer buffer,
             ChunkedBooleanRegion mask,
             FabricDimensionRuntime runtime,
@@ -101,6 +106,7 @@ abstract class AxiomSetBufferMixin {
             }
             sections.add(MinecraftSectionCapture.key(new BlockPos(x, y, z)));
         });
+        return available[0];
     }
 
     private static Map<SectionKey, Long> registerDurability(
@@ -109,14 +115,15 @@ abstract class AxiomSetBufferMixin {
             Set<SectionKey> sections) {
         Map<SectionKey, Long> generations = new LinkedHashMap<>();
         for (SectionKey key : sections) {
-            generations.put(key, runtime.mutations().registerSectionMutation(key, () -> {
+            long generation = runtime.mutations().registerSectionMutation(key, () -> {
                 try {
                     return LUMI_SECTIONS.capture(
                             level, level.getChunk(key.chunkX(), key.chunkZ()), key.sectionY());
                 } catch (IOException failed) {
                     throw new UncheckedIOException("Cannot capture Axiom section origin", failed);
                 }
-            }));
+            });
+            generations.put(key, generation);
             runtime.blockEntityBaselines().discard(key);
         }
         return generations;
@@ -133,7 +140,7 @@ abstract class AxiomSetBufferMixin {
                 if (!snapshot.equals(after)) {
                     runtime.liveActions().record(action, position, snapshot, after);
                     runtime.recordCausalZoneGrowth(action, position);
-                    runtime.mutations().recordBlockMutation(
+                    runtime.mutations().recordBuilderBlockMutation(
                             position, generations.get(section(position)));
                 }
             } catch (IOException failed) {

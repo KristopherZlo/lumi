@@ -238,12 +238,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         this.defaultWorkspaceId = defaultWorkspaceId;
         this.pendingRecovery = pendingRecovery;
         this.recoveryLease = recoveryLease;
+        worldReader = new MinecraftWorldStateReader(level);
+        entityDurability = new EntityChunkDurabilityGate(mutations);
         liveWorld = new MinecraftLiveBlockWorldAccess(level, freeze);
         liveEntityWorld = new MinecraftLiveEntityWorldAccess(level, freeze);
-        liveEntities = new MinecraftLiveEntityTracker(liveActions, liveEntityWorld);
+        liveEntities = new MinecraftLiveEntityTracker(
+                liveActions, liveEntityWorld, this::publishBuilderEntityMutation);
         causalTicks = new MinecraftCausalTickTracker(
                 liveActions, level, freeze, level.getBlockTicks(), level.getFluidTicks());
-        entityDurability = new EntityChunkDurabilityGate(mutations);
         restoreStateListener = new RestoreBaselineReconciler(
                 entityDurability, blockEntityBaselines);
         returnPointRestores = new ReturnPointRestorePreparation(
@@ -270,7 +272,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 },
                 failure -> LumiMod.LOGGER.error(
                         "Lumi background garbage collection failed", failure));
-        worldReader = new MinecraftWorldStateReader(level);
         savePreparation = new DurableSavePreparation(worldReader, entityDurability, mutations);
     }
 
@@ -739,7 +740,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     Math.floorDiv(position.z(), 16));
             long generation = generations.computeIfAbsent(
                     section, mutations::markTrackedSection);
-            mutations.recordBlockMutation(position, generation);
+            mutations.recordBuilderBlockMutation(position, generation);
         });
         Stream.concat(
                         plan.expectedEntities().values().stream(),
@@ -747,7 +748,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 .flatMap(Optional::stream)
                 .map(this::liveEntityChunk)
                 .distinct()
-                .forEach(this::publishLiveEntityChunk);
+                .forEach(this::publishBuilderEntityChunk);
         liveEntities.trackApplied(
                 plan.actionId(), plan.direction(),
                 plan.expectedEntities(), plan.replacementEntities());
@@ -769,9 +770,25 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
     }
 
-    private void publishLiveEntityChunk(EntityChunkKey key) {
+    private void publishBuilderEntityMutation(
+            Optional<EntityState> before,
+            Optional<EntityState> after) throws IOException {
+        if (freeze.isAuthorizedMutation()) {
+            return;
+        }
+        Set<EntityChunkKey> chunks = new java.util.LinkedHashSet<>();
+        before.ifPresent(state -> chunks.add(liveEntityChunk(state)));
+        after.ifPresent(state -> chunks.add(liveEntityChunk(state)));
+        for (EntityChunkKey key : chunks) {
+            entityDurability.observeCurrent(key, worldReader.read(key));
+            mutations.markBuilderMutation(key);
+        }
+    }
+
+    private void publishBuilderEntityChunk(EntityChunkKey key) {
         try {
             entityDurability.observeCurrent(key, worldReader.read(key));
+            mutations.markBuilderMutation(key);
         } catch (IOException failed) {
             throw new java.io.UncheckedIOException(failed);
         }

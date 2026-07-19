@@ -53,8 +53,12 @@ abstract class LevelChunkMixin {
             if (generation == LUMI_MUTATION_DENIED) {
                 callback.setReturnValue(current);
             } else {
+                boolean builder = LumiMod.serverRuntime().find(serverLevel)
+                        .flatMap(runtime -> DirectLiveActionContext.current(
+                                runtime.liveActions()))
+                        .isPresent();
                 pending = Optional.of(new PendingBlockMutation(
-                        current, generation,
+                        current, generation, builder,
                         lumi$captureLiveBefore(serverLevel, position)));
             }
         }
@@ -82,8 +86,14 @@ abstract class LevelChunkMixin {
             }
             var runtime = LumiMod.serverRuntime().find(serverLevel).orElse(null);
             if (runtime != null && value.generation() > LUMI_MUTATION_UNTRACKED) {
-                runtime.mutations().recordBlockMutation(
-                        blockPosition(position), value.generation());
+                BlockPosition changed = blockPosition(position);
+                if (value.builder()) {
+                    runtime.mutations().recordBuilderBlockMutation(
+                            changed, value.generation());
+                } else {
+                    runtime.mutations().recordBlockMutation(
+                            changed, value.generation());
+                }
             }
             value.live().ifPresent(live ->
                     lumi$recordLiveAfter(serverLevel, position, live));
@@ -100,10 +110,15 @@ abstract class LevelChunkMixin {
             if (generation == LUMI_MUTATION_DENIED) {
                 callback.cancel();
             } else if (generation > LUMI_MUTATION_UNTRACKED) {
-                LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime ->
-                        runtime.mutations().recordBlockMutation(
-                                blockPosition(blockEntity.getBlockPos()),
-                                generation));
+                LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime -> {
+                    BlockPosition changed = blockPosition(blockEntity.getBlockPos());
+                    if (DirectLiveActionContext.current(runtime.liveActions()).isPresent()) {
+                        runtime.mutations().recordBuilderBlockMutation(
+                                changed, generation);
+                    } else {
+                        runtime.mutations().recordBlockMutation(changed, generation);
+                    }
+                });
             }
         }
     }
@@ -115,9 +130,15 @@ abstract class LevelChunkMixin {
             if (generation == LUMI_MUTATION_DENIED) {
                 callback.cancel();
             } else if (generation > LUMI_MUTATION_UNTRACKED) {
-                LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime ->
-                        runtime.mutations().recordBlockMutation(
-                                blockPosition(position), generation));
+                LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime -> {
+                    BlockPosition changed = blockPosition(position);
+                    if (DirectLiveActionContext.current(runtime.liveActions()).isPresent()) {
+                        runtime.mutations().recordBuilderBlockMutation(
+                                changed, generation);
+                    } else {
+                        runtime.mutations().recordBlockMutation(changed, generation);
+                    }
+                });
             }
         }
     }
@@ -212,5 +233,6 @@ abstract class LevelChunkMixin {
     private record PendingBlockMutation(
             BlockState before,
             long generation,
+            boolean builder,
             Optional<PendingLiveBlock> live) { }
 }
