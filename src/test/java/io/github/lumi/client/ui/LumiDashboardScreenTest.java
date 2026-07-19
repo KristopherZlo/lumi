@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -35,6 +36,20 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("\"trash\", \"luma.action.delete\""));
         assertTrue(source.contains("previews.texture(snapshot.dimensionId(), version.id())"));
         assertTrue(source.contains("NO_PREVIEW_ICON"));
-        assertTrue(source.contains("if (!Objects.equals(snapshot, latest))"));
+        assertTrue(source.contains(
+                "if (!Objects.equals(snapshot, latest) || searchResultsDirty)"));
+    }
+
+    @Test
+    void defersSearchRebuildUntilAfterTheInputEvent() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));
+        int start = source.indexOf("private void search(String value)");
+        int end = source.indexOf("private List<HistorySnapshotPayload.Version>", start);
+        String searchMethod = source.substring(start, end);
+
+        assertTrue(searchMethod.contains("searchResultsDirty = true;"));
+        assertFalse(searchMethod.contains("rebuildWidgets()"));
+        assertTrue(source.contains("|| searchResultsDirty"));
     }
 }

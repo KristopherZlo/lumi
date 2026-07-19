@@ -48,6 +48,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private LegacyWorkspaceLayout layout;
     private EditBox search;
     private String searchQuery = "";
+    private boolean searchResultsDirty;
     private boolean refocusSearch;
     private LegacyProjectTab activeTab = LegacyProjectTab.HISTORY;
     private int historyY;
@@ -93,8 +94,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     public void tick() {
         super.tick();
         HistorySnapshotPayload latest = history.state().snapshot().orElse(null);
-        if (!Objects.equals(snapshot, latest)) {
+        if (!Objects.equals(snapshot, latest) || searchResultsDirty) {
             refocusSearch = search != null && search.isFocused();
+            searchResultsDirty = false;
             rebuildWidgets();
         }
     }
@@ -277,8 +279,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             return;
         }
         searchQuery = value;
-        refocusSearch = true;
-        rebuildWidgets();
+        searchResultsDirty = true;
     }
 
     private List<HistorySnapshotPayload.Version> visibleVersions() {
