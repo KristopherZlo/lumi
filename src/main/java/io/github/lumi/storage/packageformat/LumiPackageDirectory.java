@@ -25,6 +25,11 @@ public final class LumiPackageDirectory {
                 Objects.requireNonNull(name, "name").value() + ".lumi");
     }
 
+    public Path ensureDirectory() throws IOException {
+        Files.createDirectories(directory);
+        return directory;
+    }
+
     public List<Entry> list() throws IOException {
         if (!Files.exists(directory)) {
             return List.of();

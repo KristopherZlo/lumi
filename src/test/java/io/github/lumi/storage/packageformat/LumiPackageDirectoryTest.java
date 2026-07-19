@@ -16,6 +16,9 @@ class LumiPackageDirectoryTest {
     void resolvesOnlyLogicalNamesBelowTheWorldPackageDirectory() throws Exception {
         LumiPackageDirectory packages = new LumiPackageDirectory(world);
 
+        assertEquals(world.resolve("lumi/packages").toAbsolutePath().normalize(),
+                packages.ensureDirectory());
+
         Path clock = packages.resolve(new PackageName("clock-v2"));
         Files.createDirectories(clock.getParent());
         Files.write(clock, new byte[] {1, 2, 3});
