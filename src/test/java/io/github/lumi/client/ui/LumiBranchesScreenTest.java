@@ -21,5 +21,7 @@ class LumiBranchesScreenTest {
         assertTrue(source.contains("luma.action.delete_branch"));
         assertTrue(source.contains("deleter.accept(pendingDelete.name())"));
         assertTrue(source.contains("addDeleteConfirmation"));
+        assertTrue(source.contains("ClientContextualHelpHint.BRANCHES"));
+        assertTrue(source.contains("contentOffset"));
     }
 }

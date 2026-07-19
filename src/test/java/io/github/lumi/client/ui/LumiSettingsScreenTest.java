@@ -26,5 +26,7 @@ class LumiSettingsScreenTest {
         assertTrue(source.contains("active.workspaceHudEnabled()"));
         assertTrue(source.contains("luma.settings.telemetry_enabled"));
         assertTrue(source.contains("panelWidth < 360"));
+        assertTrue(source.contains("ClientContextualHelpHint.SETTINGS"));
+        assertTrue(source.contains("contentOffset"));
     }
 }

@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.network.HistorySnapshotPayload;
@@ -30,6 +31,7 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private int cardWidth;
     private int diagnosticsY;
     private int diagnosticsHeight;
+    private int contentOffset;
 
     public LumiSettingsScreen(
             Screen parent,
@@ -53,12 +55,15 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
         panelWidth = page.contentWidth();
         panelHeight = page.windowHeight();
         loadWorkspaceSettings();
-        narrow = panelWidth < 360 || panelHeight < 220;
+        contentOffset = addContextualHint(
+                ClientContextualHelpHint.SETTINGS,
+                panelX + 12, panelY + 36, panelWidth - 24) ? 56 : 0;
+        narrow = panelWidth < 360 || panelHeight < 220 + contentOffset;
         if (narrow) {
             addNarrowControls();
             return;
         }
-        cardsY = panelY + 38;
+        cardsY = panelY + 38 + contentOffset;
         cardHeight = panelHeight < 300 ? 78 : 92;
         cardWidth = (panelWidth - 32) / 2;
         diagnosticsY = cardsY + cardHeight + 8;
@@ -120,29 +125,29 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private void addNarrowControls() {
         int x = panelX + 16;
         int width = panelWidth - 32;
-        addLegacyButton(x, panelY + 44, width,
+        addLegacyButton(x, panelY + 44 + contentOffset, width,
                 toggleLabel("luma.settings.show_hidden_commits", showZoneSaves),
                 this::toggleZoneSaves, showZoneSaves
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x, panelY + 68, width,
+        addLegacyButton(x, panelY + 68 + contentOffset, width,
                 toggleLabel(
                         "luma.settings.restore_entities", includeEntitiesOnRestore),
                 this::toggleRestoreEntities, includeEntitiesOnRestore
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x, panelY + 92, width,
+        addLegacyButton(x, panelY + 92 + contentOffset, width,
                 toggleLabel("luma.settings.preview_generation", previewGenerationEnabled),
                 this::togglePreviewGeneration, previewGenerationEnabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x, panelY + 116, width,
+        addLegacyButton(x, panelY + 116 + contentOffset, width,
                 toggleLabel("luma.settings.workspace_hud", workspaceHudEnabled),
                 this::toggleWorkspaceHud, workspaceHudEnabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
         boolean enabled = telemetry.settings().enabled();
-        addLegacyButton(x, panelY + 140, width,
+        addLegacyButton(x, panelY + 140 + contentOffset, width,
                 toggleLabel("luma.settings.telemetry_enabled", enabled),
                 this::toggleTelemetry, enabled
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(x, panelY + 164, width,
+        addLegacyButton(x, panelY + 164 + contentOffset, width,
                 Component.translatable("luma.settings.telemetry_clear_queue"),
                 () -> {
                     telemetry.clearLocalQueue();
@@ -153,15 +158,17 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
     private void renderNarrow(GuiGraphics graphics) {
         renderLegacyPanel(graphics, panelX + 12, panelY + 36,
                 panelWidth - 24, Math.max(1, panelHeight - 46));
-        if (panelHeight >= 216) {
+        if (panelHeight >= 216 + contentOffset) {
             graphics.drawString(font,
                     Component.translatable("luma.settings.telemetry_pending",
                             telemetry.pendingEventCount()),
-                    panelX + 16, panelY + 190, LegacyLumiTheme.MUTED, false);
+                    panelX + 16, panelY + 190 + contentOffset,
+                    LegacyLumiTheme.MUTED, false);
             graphics.drawString(font,
                     Component.translatable("luma.settings.telemetry_last_send",
                             telemetry.lastSendSummary()),
-                    panelX + 16, panelY + 202, LegacyLumiTheme.MUTED, false);
+                    panelX + 16, panelY + 202 + contentOffset,
+                    LegacyLumiTheme.MUTED, false);
         }
     }
 

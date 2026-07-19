@@ -21,5 +21,7 @@ class LumiPackageScreenTest {
         assertTrue(source.contains("\"join\""));
         assertTrue(source.contains("\"branch\""));
         assertTrue(source.contains("\"trash\""));
+        assertTrue(source.contains("ClientContextualHelpHint.IMPORT_EXPORT"));
+        assertTrue(source.contains("contentOffset"));
     }
 }
