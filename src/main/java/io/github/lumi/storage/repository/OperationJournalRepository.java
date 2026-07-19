@@ -5,11 +5,15 @@ import io.github.lumi.domain.model.BranchSwitchTarget;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
+import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.model.WorkspaceSwitchTarget;
 import io.github.lumi.domain.model.ZoneRestoreTarget;
 import java.io.ByteArrayInputStream;
@@ -20,32 +24,54 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public final class OperationJournalRepository {
     private static final int MAGIC = 0x4C4F4A32;
+    private static final int GENERATIONS_MAGIC = 0x4C4F4731;
     private static final int MAX_NAME_BYTES = 1024;
+    private static final int MAX_GENERATION_KEYS = 1_000_000;
+    private static final Comparator<HistoryKey> KEY_ORDER = Comparator
+            .comparingInt(OperationJournalRepository::keyKind)
+            .thenComparingInt(OperationJournalRepository::keyChunkX)
+            .thenComparingInt(OperationJournalRepository::keyChunkZ)
+            .thenComparingInt(OperationJournalRepository::keySectionY);
+    private static final Logger LOGGER =
+            Logger.getLogger(OperationJournalRepository.class.getName());
     private final Path journalFile;
+    private final Path generationsFile;
 
     public OperationJournalRepository(Path dimensionRepository) {
-        journalFile = Objects.requireNonNull(dimensionRepository, "dimensionRepository")
-                .resolve("operations").resolve("active.bin");
+        Path operations = Objects.requireNonNull(dimensionRepository, "dimensionRepository")
+                .resolve("operations");
+        journalFile = operations.resolve("active.bin");
+        generationsFile = operations.resolve("active-generations.bin");
     }
 
     public synchronized OperationJournal create(OperationJournal journal) throws IOException {
+        Objects.requireNonNull(journal, "journal");
         if (Files.exists(journalFile)) {
             throw new JournalConflictException("A dimension operation journal is already active");
+        }
+        if (journal.capturedGenerations().isPresent()) {
+            AtomicFileWriter.replace(generationsFile, encodeGenerations(
+                    journal.operationId(), journal.capturedGenerations().orElseThrow()));
         }
         AtomicFileWriter.replace(journalFile, encode(journal));
         return journal;
     }
 
     public synchronized OperationJournal advance(OperationJournal expected, OperationPhase next) throws IOException {
-        OperationJournal current = read().orElseThrow(
-                () -> new JournalConflictException("Active operation journal is missing"));
+        OperationJournal current = readExpected(expected);
         if (!current.equals(expected)) {
             throw new JournalConflictException("Active operation journal changed");
         }
@@ -55,10 +81,16 @@ public final class OperationJournalRepository {
     }
 
     public synchronized void clear(OperationJournal expected) throws IOException {
-        if (!read().filter(expected::equals).isPresent()) {
+        if (!readExpected(expected).equals(expected)) {
             throw new JournalConflictException("Active operation journal changed");
         }
         Files.delete(journalFile);
+        try {
+            Files.deleteIfExists(generationsFile);
+        } catch (IOException failed) {
+            LOGGER.log(Level.WARNING,
+                    "Could not clean up Lumi operation generation boundary", failed);
+        }
     }
 
     public synchronized Optional<OperationJournal> read() throws IOException {
@@ -89,11 +121,17 @@ public final class OperationJournalRepository {
             output.writeBoolean(journal.target().excludeEntities());
             writeWorkspaceSwitch(output, journal.target().workspaceSwitch());
             writeZoneRestore(output, journal.target().zoneRestore());
+            output.writeBoolean(journal.capturedGenerations().isPresent());
         }
         return bytes.toByteArray();
     }
 
     private OperationJournal decode(byte[] payload) throws IOException {
+        return decode(payload, null);
+    }
+
+    private OperationJournal decode(
+            byte[] payload, WorkingIndexSnapshot knownGenerations) throws IOException {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(payload))) {
             if (input.readInt() != MAGIC) {
                 throw new IOException("Not a Lumi V2 operation journal");
@@ -128,15 +166,89 @@ public final class OperationJournalRepository {
                     ? Optional.<WorkspaceSwitchTarget>empty() : readWorkspaceSwitch(input);
             var zoneRestore = input.available() == 0
                     ? Optional.<ZoneRestoreTarget>empty() : readZoneRestore(input);
+            Optional<WorkingIndexSnapshot> capturedGenerations = Optional.empty();
+            if (input.available() != 0) {
+                int present = input.readUnsignedByte();
+                if (present > 1) {
+                    throw new IOException("Invalid captured generation boundary flag");
+                }
+                if (present == 1) {
+                    capturedGenerations = Optional.of(knownGenerations == null
+                            ? readGenerations(operationId) : knownGenerations);
+                }
+            }
             OperationTarget target = new OperationTarget(
                     branchName, expected, revision, targetCommit, returnPoint,
                     branchSwitch, blockArea, excludeEntities, workspaceSwitch, zoneRestore);
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in operation journal");
             }
-            return new OperationJournal(operationId, kind, phase, target);
+            return new OperationJournal(
+                    operationId, kind, phase, target, capturedGenerations);
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid operation journal", invalid);
+        }
+    }
+
+    private OperationJournal readExpected(OperationJournal expected) throws IOException {
+        Objects.requireNonNull(expected, "expected");
+        if (!Files.exists(journalFile)) {
+            throw new JournalConflictException("Active operation journal is missing");
+        }
+        return decode(Files.readAllBytes(journalFile),
+                expected.capturedGenerations().orElse(null));
+    }
+
+    private byte[] encodeGenerations(
+            UUID operationId, WorkingIndexSnapshot snapshot) throws IOException {
+        if (snapshot.generations().size() > MAX_GENERATION_KEYS) {
+            throw new IOException(
+                    "Operation generation boundary exceeds " + MAX_GENERATION_KEYS + " keys");
+        }
+        var keys = new ArrayList<>(snapshot.generations().keySet());
+        keys.sort(KEY_ORDER);
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream output = new DataOutputStream(bytes)) {
+            output.writeInt(GENERATIONS_MAGIC);
+            writeUuid(output, operationId);
+            output.writeInt(keys.size());
+            for (HistoryKey key : keys) {
+                writeHistoryKey(output, key);
+                output.writeLong(snapshot.generations().get(key));
+            }
+        }
+        return bytes.toByteArray();
+    }
+
+    private WorkingIndexSnapshot readGenerations(UUID expectedOperationId) throws IOException {
+        try (DataInputStream input = new DataInputStream(Files.newInputStream(generationsFile))) {
+            if (input.readInt() != GENERATIONS_MAGIC) {
+                throw new IOException("Not a Lumi operation generation boundary");
+            }
+            if (!readUuid(input).equals(expectedOperationId)) {
+                throw new IOException("Operation generation boundary belongs to another operation");
+            }
+            int count = input.readInt();
+            if (count < 0 || count > MAX_GENERATION_KEYS) {
+                throw new IOException("Invalid operation generation boundary size");
+            }
+            Map<HistoryKey, Long> generations = new LinkedHashMap<>();
+            HistoryKey previous = null;
+            for (int index = 0; index < count; index++) {
+                HistoryKey key = readHistoryKey(input);
+                long generation = input.readLong();
+                if (generation < 1 || (previous != null && KEY_ORDER.compare(previous, key) >= 0)) {
+                    throw new IOException("Operation generation boundary is not canonical");
+                }
+                previous = key;
+                generations.put(key, generation);
+            }
+            if (input.read() != -1) {
+                throw new IOException("Trailing bytes in operation generation boundary");
+            }
+            return new WorkingIndexSnapshot(generations);
+        } catch (IllegalArgumentException invalid) {
+            throw new IOException("Invalid operation generation boundary", invalid);
         }
     }
 
@@ -258,6 +370,52 @@ public final class OperationJournalRepository {
         if (present > 1) throw new IOException("Invalid zone Restore target flag");
         return present == 0 ? Optional.empty() : Optional.of(new ZoneRestoreTarget(
                 readUuid(input), readUuid(input), input.readLong()));
+    }
+
+    private static void writeHistoryKey(DataOutputStream output, HistoryKey key)
+            throws IOException {
+        if (key instanceof SectionKey section) {
+            output.writeByte(1);
+            output.writeInt(section.chunkX());
+            output.writeInt(section.chunkZ());
+            output.writeInt(section.sectionY());
+        } else if (key instanceof EntityChunkKey entities) {
+            output.writeByte(2);
+            output.writeInt(entities.chunkX());
+            output.writeInt(entities.chunkZ());
+        } else {
+            throw new IOException("Unsupported operation generation boundary key");
+        }
+    }
+
+    private static HistoryKey readHistoryKey(DataInputStream input) throws IOException {
+        return switch (input.readUnsignedByte()) {
+            case 1 -> {
+                int chunkX = input.readInt();
+                int chunkZ = input.readInt();
+                yield new SectionKey(chunkX, input.readInt(), chunkZ);
+            }
+            case 2 -> new EntityChunkKey(input.readInt(), input.readInt());
+            default -> throw new IOException("Invalid operation generation boundary key kind");
+        };
+    }
+
+    private static int keyKind(HistoryKey key) {
+        return key instanceof SectionKey ? 1 : 2;
+    }
+
+    private static int keyChunkX(HistoryKey key) {
+        return key instanceof SectionKey section
+                ? section.chunkX() : ((EntityChunkKey) key).chunkX();
+    }
+
+    private static int keyChunkZ(HistoryKey key) {
+        return key instanceof SectionKey section
+                ? section.chunkZ() : ((EntityChunkKey) key).chunkZ();
+    }
+
+    private static int keySectionY(HistoryKey key) {
+        return key instanceof SectionKey section ? section.sectionY() : 0;
     }
 
     private static void writeId(DataOutputStream output, CommitId id) throws IOException {
