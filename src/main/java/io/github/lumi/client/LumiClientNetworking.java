@@ -19,6 +19,7 @@ import io.github.lumi.network.MergeArgument;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
 import io.github.lumi.network.PartialRestoreArgument;
+import io.github.lumi.network.PartialRestorePlanPayload;
 import io.github.lumi.network.SaveArgument;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.network.ZoneCreateArgument;
@@ -44,6 +45,7 @@ public final class LumiClientNetworking {
     private final Consumer<OperationEventPayload> eventListener;
     private final Consumer<PackageInspectionPayload> packageListener;
     private final Consumer<CleanupResultPayload> cleanupListener;
+    private final Consumer<PartialRestorePlanPayload> partialRestoreListener;
 
     public LumiClientNetworking(
             ClientHistoryStore history,
@@ -51,13 +53,16 @@ public final class LumiClientNetworking {
             Consumer<HistorySnapshotPayload> snapshotListener,
             Consumer<OperationEventPayload> eventListener,
             Consumer<PackageInspectionPayload> packageListener,
-            Consumer<CleanupResultPayload> cleanupListener) {
+            Consumer<CleanupResultPayload> cleanupListener,
+            Consumer<PartialRestorePlanPayload> partialRestoreListener) {
         this.history = Objects.requireNonNull(history, "history");
         this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
         this.snapshotListener = Objects.requireNonNull(snapshotListener, "snapshotListener");
         this.eventListener = Objects.requireNonNull(eventListener, "eventListener");
         this.packageListener = Objects.requireNonNull(packageListener, "packageListener");
         this.cleanupListener = Objects.requireNonNull(cleanupListener, "cleanupListener");
+        this.partialRestoreListener = Objects.requireNonNull(
+                partialRestoreListener, "partialRestoreListener");
     }
 
     public void register() {
@@ -82,6 +87,9 @@ public final class LumiClientNetworking {
         ClientPlayNetworking.registerGlobalReceiver(
                 CleanupResultPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> cleanupListener.accept(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(
+                PartialRestorePlanPayload.TYPE, (payload, context) ->
+                        context.client().execute(() -> partialRestoreListener.accept(payload)));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             history.clear();
             comparisons.clear();
@@ -120,11 +128,16 @@ public final class LumiClientNetworking {
                 Objects.requireNonNull(target, "target").hex());
     }
 
-    public UUID restoreArea(CommitId target, BlockAreaTarget area) {
-        return send(HistoryCommandPayload.Kind.RESTORE_AREA,
+    public UUID previewRestoreArea(CommitId target, BlockAreaTarget area) {
+        return send(HistoryCommandPayload.Kind.RESTORE_AREA_PLAN,
                 new PartialRestoreArgument(
                         Objects.requireNonNull(target, "target"),
                         Objects.requireNonNull(area, "area")).encode());
+    }
+
+    public UUID applyRestoreArea(UUID previewToken) {
+        return send(HistoryCommandPayload.Kind.RESTORE_AREA_APPLY,
+                Objects.requireNonNull(previewToken, "previewToken").toString());
     }
 
     public UUID quickRollback() {

@@ -819,7 +819,7 @@
   "luma.partial_restore.help": "Choose whether to restore only the selected area from this save, or restore everything except the selected area. Use a wooden-sword Lumi selection or edit XYZ bounds, preview the affected blocks, then apply as a new save.",
   "luma.partial_restore.min": "Min XYZ",
   "luma.partial_restore.max": "Max XYZ",
-  "luma.partial_restore.summary": "%s blocks across %s chunks",
+  "luma.partial_restore.summary": "%s blocks across %s sections",
   "luma.partial_restore.lumi_region": "Lumi region",
 
   "luma.actionbar.operation.save": "Save",

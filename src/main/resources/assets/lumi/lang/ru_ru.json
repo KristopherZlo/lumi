@@ -601,7 +601,7 @@
   "luma.partial_restore.help": "Выберите, восстановить только выделенную область из этого сохранения или восстановить все кроме нее. Используйте выделение Lumi деревянным мечом или измените границы XYZ, просмотрите затронутые блоки и примените результат как новое сохранение.",
   "luma.partial_restore.min": "Мин. XYZ",
   "luma.partial_restore.max": "Макс. XYZ",
-  "luma.partial_restore.summary": "%s блоков в %s чанках",
+  "luma.partial_restore.summary": "%s блоков в %s секциях",
   "luma.variants.overview_title": "Ветки",
   "luma.variants.overview_help": "Используйте ветки, когда хотите попробовать другое направление без риска для текущего.",
   "luma.variants.create_title": "Новая ветка",

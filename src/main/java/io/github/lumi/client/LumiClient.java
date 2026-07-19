@@ -44,6 +44,7 @@ import io.github.lumi.client.ui.VersionCompareController;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.CleanupResultPayload;
 import io.github.lumi.network.PackageInspectionPayload;
+import io.github.lumi.network.PartialRestorePlanPayload;
 import io.github.lumi.telemetry.TelemetryService;
 import io.github.lumi.update.UpdateChecker;
 import io.github.lumi.update.ClientUpdatePreferenceRepository;
@@ -74,7 +75,8 @@ public final class LumiClient implements ClientModInitializer {
                     HISTORY, COMPARISONS, LumiClient::acceptSnapshot,
                     PREVIEW_CAPTURE::accept,
                     LumiClient::showPackageInspection,
-                    LumiClient::showCleanupResult);
+                    LumiClient::showCleanupResult,
+                    LumiClient::showPartialRestorePlan);
 
     @Override
     public void onInitializeClient() {
@@ -251,7 +253,7 @@ public final class LumiClient implements ClientModInitializer {
                     NETWORKING.amend(version.message(), version.tags());
                     client.setScreen(parent);
                 }) : Optional.<Runnable>empty();
-        var partialRestore = idle && SELECTION.bounds().isPresent()
+        var partialRestore = idle
                 ? Optional.of((Runnable) () -> openRestore(parent, version))
                 : Optional.<Runnable>empty();
         client.setScreen(new LumiVersionDetailsScreen(
@@ -266,15 +268,15 @@ public final class LumiClient implements ClientModInitializer {
     private static void openRestore(
             Screen parent, HistorySnapshotPayload.Version version) {
         Minecraft.getInstance().setScreen(new LumiRestoreScreen(
-                parent, version.id(), version.message(), SELECTION.bounds(),
+                parent, version.id(), version.message(), SELECTION::bounds,
                 (target, includeEntities) -> {
                     if (includeEntities) {
                         NETWORKING.restore(target);
                     } else {
                         NETWORKING.restoreWithoutEntities(target);
                     }
-                },
-                NETWORKING::restoreArea));
+                }, NETWORKING::previewRestoreArea,
+                NETWORKING::applyRestoreArea));
     }
 
     private static void openDelete(
@@ -400,6 +402,12 @@ public final class LumiClient implements ClientModInitializer {
     private static void showCleanupResult(CleanupResultPayload result) {
         if (Minecraft.getInstance().screen instanceof LumiCleanupScreen cleanup) {
             cleanup.accept(result);
+        }
+    }
+
+    private static void showPartialRestorePlan(PartialRestorePlanPayload result) {
+        if (Minecraft.getInstance().screen instanceof LumiRestoreScreen restore) {
+            restore.accept(result);
         }
     }
 

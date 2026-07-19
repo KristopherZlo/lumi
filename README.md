@@ -13,6 +13,9 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   and saved player spawn positions.
 - Published commits and refs survive crashes.
 - Restore verifies the applied result before publishing a ref.
+- Save details retain legacy full and partial Restore controls. Partial Restore
+  accepts manual XYZ bounds or the wooden-sword selection, shows exact changed
+  block/section counts, and requires that clean-state preview before Apply.
 - Singleplayer and multiplayer use the same server-authoritative path.
 - Idle play performs no history work when nothing is dirty.
 - Dirty work receives a ref-neutral automatic version every five minutes;
