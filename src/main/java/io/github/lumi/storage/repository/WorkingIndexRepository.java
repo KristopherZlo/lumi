@@ -18,7 +18,8 @@ import java.util.Map;
 import java.util.Objects;
 
 public final class WorkingIndexRepository {
-    private static final int MAGIC = 0x4C574932;
+    private static final int MAGIC_V2 = 0x4C574932;
+    private static final int MAGIC_V3 = 0x4C574933;
     private static final int MAX_KEYS = 1_000_000;
     private static final Comparator<HistoryKey> KEY_ORDER = Comparator
             .comparingInt(WorkingIndexRepository::kind)
@@ -33,30 +34,62 @@ public final class WorkingIndexRepository {
     }
 
     public synchronized void write(WorkingIndexSnapshot snapshot) throws IOException {
+        write(new State(snapshot, WorkingIndexSnapshot.empty()));
+    }
+
+    public synchronized void write(State state) throws IOException {
+        Objects.requireNonNull(state, "state");
+        WorkingIndexSnapshot snapshot = state.working();
         if (snapshot.generations().size() > MAX_KEYS) {
             throw new IOException("Working index exceeds " + MAX_KEYS + " keys");
         }
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream output = new DataOutputStream(bytes)) {
-            output.writeInt(MAGIC);
+            output.writeInt(MAGIC_V3);
             output.writeInt(snapshot.generations().size());
             var keys = new ArrayList<>(snapshot.generations().keySet());
             keys.sort(KEY_ORDER);
             for (HistoryKey key : keys) {
                 writeKey(output, key);
                 output.writeLong(snapshot.generations().get(key));
+                output.writeLong(state.builder().generations().getOrDefault(key, 0L));
             }
         }
         AtomicFileWriter.replace(indexFile, bytes.toByteArray());
     }
 
     public synchronized WorkingIndexSnapshot read() throws IOException {
+        return readState().working();
+    }
+
+    /** Clears only generations proven to have been included in a published operation. */
+    public synchronized void clearCaptured(WorkingIndexSnapshot captured) throws IOException {
+        Objects.requireNonNull(captured, "captured");
+        State current = readState();
+        Map<HistoryKey, Long> working = new LinkedHashMap<>(
+                current.working().generations());
+        captured.generations().forEach(working::remove);
+        Map<HistoryKey, Long> builder = new LinkedHashMap<>(
+                current.builder().generations());
+        builder.entrySet().removeIf(entry -> {
+            Long generation = captured.generations().get(entry.getKey());
+            return generation != null && generation >= entry.getValue();
+        });
+        State updated = new State(
+                new WorkingIndexSnapshot(working), new WorkingIndexSnapshot(builder));
+        if (!updated.equals(current)) {
+            write(updated);
+        }
+    }
+
+    public synchronized State readState() throws IOException {
         if (!Files.exists(indexFile)) {
-            return WorkingIndexSnapshot.empty();
+            return new State(WorkingIndexSnapshot.empty(), WorkingIndexSnapshot.empty());
         }
         try (DataInputStream input = new DataInputStream(
                 new ByteArrayInputStream(Files.readAllBytes(indexFile)))) {
-            if (input.readInt() != MAGIC) {
+            int magic = input.readInt();
+            if (magic != MAGIC_V2 && magic != MAGIC_V3) {
                 throw new IOException("Not a Lumi V2 working index");
             }
             int count = input.readInt();
@@ -64,6 +97,7 @@ public final class WorkingIndexRepository {
                 throw new IOException("Invalid working index size");
             }
             Map<HistoryKey, Long> generations = new LinkedHashMap<>();
+            Map<HistoryKey, Long> builderGenerations = new LinkedHashMap<>();
             HistoryKey previous = null;
             for (int index = 0; index < count; index++) {
                 HistoryKey key = readKey(input);
@@ -73,13 +107,40 @@ public final class WorkingIndexRepository {
                 }
                 previous = key;
                 generations.put(key, generation);
+                if (magic == MAGIC_V3) {
+                    long builderGeneration = input.readLong();
+                    if (builderGeneration < 0 || builderGeneration > generation) {
+                        throw new IOException("Invalid builder generation");
+                    }
+                    if (builderGeneration > 0) {
+                        builderGenerations.put(key, builderGeneration);
+                    }
+                }
             }
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in working index");
             }
-            return new WorkingIndexSnapshot(generations);
+            WorkingIndexSnapshot working = new WorkingIndexSnapshot(generations);
+            return new State(working, magic == MAGIC_V2
+                    ? working : new WorkingIndexSnapshot(builderGenerations));
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid working index", invalid);
+        }
+    }
+
+    public record State(
+            WorkingIndexSnapshot working,
+            WorkingIndexSnapshot builder) {
+        public State {
+            Objects.requireNonNull(working, "working");
+            Objects.requireNonNull(builder, "builder");
+            builder.generations().forEach((key, generation) -> {
+                Long dirtyGeneration = working.generations().get(key);
+                if (dirtyGeneration == null || generation > dirtyGeneration) {
+                    throw new IllegalArgumentException(
+                            "Builder generations must be a subset of the working index");
+                }
+            });
         }
     }
 

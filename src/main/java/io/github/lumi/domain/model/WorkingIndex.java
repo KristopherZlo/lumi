@@ -19,13 +19,27 @@ public final class WorkingIndex {
     }
 
     public synchronized long markDirty(HistoryKey key) {
-        long next = Math.incrementExact(generations.getOrDefault(key, 0L));
+        return markDirty(key, 0L);
+    }
+
+    public synchronized long markDirty(HistoryKey key, long previousGeneration) {
+        if (previousGeneration < 0) {
+            throw new IllegalArgumentException("Previous generation cannot be negative");
+        }
+        long next = Math.incrementExact(Math.max(
+                generations.getOrDefault(key, 0L), previousGeneration));
         generations.put(key, next);
         return next;
     }
 
     public synchronized void clearCaptured(WorkingIndexSnapshot captured) {
         captured.generations().forEach(generations::remove);
+    }
+
+    public synchronized void restoreCaptured(WorkingIndexSnapshot captured) {
+        Objects.requireNonNull(captured, "captured");
+        captured.generations().forEach((key, generation) ->
+                generations.merge(key, generation, Math::max));
     }
 
     public synchronized WorkingIndexSnapshot snapshot() {
