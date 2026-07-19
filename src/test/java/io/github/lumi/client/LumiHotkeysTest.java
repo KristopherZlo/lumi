@@ -24,6 +24,16 @@ class LumiHotkeysTest {
     }
 
     @Test
+    void quickRollbackDoesNotRequireTheAltChord() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/LumiHotkeys.java"));
+        assertTrue(source.contains(
+                "consume(rollback, normalPlay, HotkeyActionDispatcher.Action.QUICK_ROLLBACK)"));
+        assertFalse(source.contains(
+                "consume(rollback, canUseChord, HotkeyActionDispatcher.Action.QUICK_ROLLBACK)"));
+    }
+
+    @Test
     void altLIsConsumedBeforeVanillaAdvancements() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiHotkeys.java"));

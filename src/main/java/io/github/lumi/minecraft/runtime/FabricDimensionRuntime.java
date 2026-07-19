@@ -27,6 +27,7 @@ import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.ActiveBranch;
 import io.github.lumi.domain.model.ActiveWorkspace;
 import io.github.lumi.domain.model.BlockAreaTarget;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.BlockChange;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.CommitAuthor;
@@ -35,11 +36,13 @@ import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ComparisonSummary;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.model.PartialRestorePlan;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
@@ -1370,15 +1373,25 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public synchronized DimensionMutation startQuickRollback(
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        return startQuickRollback(Optional.empty(), author, terminalObserver);
+    }
+
+    public synchronized DimensionMutation startQuickRollback(
+            Optional<BlockBox> selection,
+            CommitAuthor author,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
+        Objects.requireNonNull(selection, "selection");
         Objects.requireNonNull(author, "author");
         var operation = new DeferredDimensionMutation(true, () -> {
             var workspace = activeWorkspace();
-            WorkingIndexSnapshot builder = mutations.builderSnapshot(workspace::includes);
+            WorkingIndexSnapshot builder = mutations.builderSnapshot(key ->
+                    workspace.includes(key) && inside(selection, key));
             return builder.generations().isEmpty()
                     ? new NoChangeMutation("luma.status.nothing_to_restore")
                     : new LiveRecordedMutation(
-                            liveActions, author.id(), createQuickRollback(author, builder));
+                            liveActions, author.id(),
+                            createQuickRollback(author, builder, selection));
         });
         operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
         return operation;
@@ -1425,7 +1438,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private ReturnPointRestoreOperation createQuickRollback(
-            CommitAuthor author, WorkingIndexSnapshot builder)
+            CommitAuthor author, WorkingIndexSnapshot builder,
+            Optional<BlockBox> selection)
             throws IOException {
         BranchRef expected = activeRef();
         UUID operationId = UUID.randomUUID();
@@ -1445,11 +1459,17 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         if (!activeRef().equals(expected)) {
                             throw new IOException("Active branch changed during Quick Rollback");
                         }
-                        var prepared = restores.prepare(
+                        var full = restores.prepare(
                                 expected, saved.commitId(), expected.commit());
+                        var prepared = selection.isEmpty() ? full
+                                : restores.preparePartial(
+                                        expected, saved.commitId(), expected.commit(),
+                                        selection.orElseThrow(), false);
                         return RestoreOperation.startQuickRollback(
                                 prepared, worldApply, new WorkingIndexClearPublication(
-                                        mutations, saved.capturedGenerations()),
+                                        mutations, clearableQuickRollbackKeys(
+                                                saved.capturedGenerations(),
+                                                full, selection)),
                                 journals, operationId, restoreStateListener,
                                 saved.commitId(), saved.capturedGenerations());
                     } catch (IOException failed) {
@@ -1457,6 +1477,55 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     }
                 }, background));
         return operation;
+    }
+
+    static boolean inside(Optional<BlockBox> selection, HistoryKey key) {
+        if (selection.isEmpty()) {
+            return true;
+        }
+        BlockBox area = selection.orElseThrow();
+        return key instanceof SectionKey section && area.intersects(section);
+    }
+
+    private static WorkingIndexSnapshot clearableQuickRollbackKeys(
+            WorkingIndexSnapshot captured,
+            io.github.lumi.domain.service.PreparedRestore full,
+            Optional<BlockBox> selection) {
+        if (selection.isEmpty()) {
+            return captured;
+        }
+        Map<HistoryKey, Long> clearable = new HashMap<>();
+        captured.generations().forEach((key, generation) -> {
+            if (!(key instanceof SectionKey section)) {
+                return;
+            }
+            SectionBlob before = full.returnSections().get(section);
+            SectionBlob after = full.sections().get(section);
+            if (before == null || after == null
+                    || changesOnlyInside(selection.orElseThrow(), section, before, after)) {
+                clearable.put(key, generation);
+            }
+        });
+        return new WorkingIndexSnapshot(clearable);
+    }
+
+    static boolean changesOnlyInside(
+            BlockBox area, SectionKey section,
+            SectionBlob before, SectionBlob after) {
+        for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+            if (before.blockStates().get(index).equals(after.blockStates().get(index))
+                    && Objects.equals(before.blockEntities().get(index),
+                            after.blockEntities().get(index))) {
+                continue;
+            }
+            int x = section.chunkX() * 16 + (index & 15);
+            int z = section.chunkZ() * 16 + (index >>> 4 & 15);
+            int y = section.sectionY() * 16 + (index >>> 8 & 15);
+            if (!area.contains(x, y, z)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public ServerLevel level() { return level; }

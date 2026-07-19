@@ -10,7 +10,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 
-/** Registers the Alt+L dashboard chord and the remaining Alt action chords. */
+/** Registers legacy Lumi chords plus standalone H and R world actions. */
 public final class LumiHotkeys {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "general"));
@@ -66,11 +66,11 @@ public final class LumiHotkeys {
             dispatcher.dispatch(HotkeyActionDispatcher.Action.DASHBOARD);
         }
         consume(compare, normalPlay, HotkeyActionDispatcher.Action.COMPARE_OVERLAY);
+        consume(rollback, normalPlay, HotkeyActionDispatcher.Action.QUICK_ROLLBACK);
         boolean canUseChord = normalPlay && altDown;
         consume(save, canUseChord, HotkeyActionDispatcher.Action.SAVE);
         consume(undo, canUseChord, HotkeyActionDispatcher.Action.UNDO);
         consume(redo, canUseChord, HotkeyActionDispatcher.Action.REDO);
-        consume(rollback, canUseChord, HotkeyActionDispatcher.Action.QUICK_ROLLBACK);
         consume(info, canUseChord, HotkeyActionDispatcher.Action.HOTKEYS);
         for (int slot = 0; slot < branches.length; slot++) {
             if (consume(branches[slot]) && canUseChord) {

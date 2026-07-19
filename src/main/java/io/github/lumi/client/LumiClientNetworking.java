@@ -20,6 +20,7 @@ import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.OperationCancelPayload;
 import io.github.lumi.network.PartialRestoreArgument;
 import io.github.lumi.network.PartialRestorePlanPayload;
+import io.github.lumi.network.QuickRollbackArgument;
 import io.github.lumi.network.SaveArgument;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.network.ZoneCreateArgument;
@@ -148,7 +149,12 @@ public final class LumiClientNetworking {
     }
 
     public UUID quickRollback() {
-        return send(HistoryCommandPayload.Kind.QUICK_ROLLBACK, "");
+        return quickRollback(Optional.empty());
+    }
+
+    public UUID quickRollback(Optional<BlockBox> selection) {
+        return send(HistoryCommandPayload.Kind.QUICK_ROLLBACK,
+                new QuickRollbackArgument(selection).encode());
     }
 
     public UUID undo() {

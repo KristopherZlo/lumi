@@ -152,7 +152,6 @@ class LumiPayloadCodecTest {
                 UUID.randomUUID(), UUID.randomUUID());
         assertEquals(cancel, roundTrip(OperationCancelPayload.CODEC, cancel));
         for (HistoryCommandPayload.Kind kind : java.util.List.of(
-                HistoryCommandPayload.Kind.QUICK_ROLLBACK,
                 HistoryCommandPayload.Kind.UNDO,
                 HistoryCommandPayload.Kind.REDO,
                 HistoryCommandPayload.Kind.RECOVER_RESUME,
@@ -164,6 +163,13 @@ class LumiPayloadCodecTest {
                     UUID.randomUUID(), kind, "", id('2'), 43);
             assertEquals(live, roundTrip(HistoryCommandPayload.CODEC, live));
         }
+        HistoryCommandPayload rollback = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.QUICK_ROLLBACK,
+                new QuickRollbackArgument(java.util.Optional.of(
+                        new io.github.lumi.domain.model.BlockBox(
+                                -2, 3, 4, 5, 6, 7))).encode(),
+                id('2'), 43);
+        assertEquals(rollback, roundTrip(HistoryCommandPayload.CODEC, rollback));
         HistoryCommandPayload switchBranch = new HistoryCommandPayload(
                 UUID.randomUUID(), HistoryCommandPayload.Kind.BRANCH_SWITCH,
                 "workspace/lab/idea", id('2'), 43);

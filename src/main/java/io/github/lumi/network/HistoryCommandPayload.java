@@ -47,6 +47,9 @@ public record HistoryCommandPayload(
         if (kind == Kind.RESTORE_AREA_APPLY) {
             UUID.fromString(argument);
         }
+        if (kind == Kind.QUICK_ROLLBACK) {
+            QuickRollbackArgument.parse(argument);
+        }
         if (kind == Kind.COMPARE) {
             CompareArgument.parse(argument);
         }
@@ -99,7 +102,7 @@ public record HistoryCommandPayload(
         if (kind == Kind.PACKAGE_IMPORT) {
             UUID.fromString(argument);
         }
-        if ((kind == Kind.QUICK_ROLLBACK || kind == Kind.UNDO || kind == Kind.REDO
+        if ((kind == Kind.UNDO || kind == Kind.REDO
                 || kind == Kind.RECOVER_RESUME || kind == Kind.RECOVER_RETURN)
                 && !argument.isEmpty()) {
             throw new IllegalArgumentException(kind + " does not accept an argument");
