@@ -13,11 +13,17 @@ class LumiUiScaleTest {
     }
 
     @Test
-    void commonFramebuffersResolveToOneVirtualViewport() {
-        assertProfile(1280, 720, 2);
-        assertProfile(1920, 1080, 3);
-        assertProfile(2560, 1440, 4);
-        assertProfile(3840, 2160, 6);
+    void liveViewportUsesMinecraftGuiScale() {
+        assertEquals(2, LumiUiScale.forGuiScale(2).targetGuiScale());
+        assertEquals(4, LumiUiScale.forGuiScale(4).targetGuiScale());
+    }
+
+    @Test
+    void fullscreenKeepsTheAvailableLogicalWidth() {
+        LumiUiScale scale = LumiUiScale.forGuiScale(2);
+
+        assertEquals(960, scale.virtualSize(960, 2));
+        assertEquals(1920, scale.virtualSize(1920, 2));
     }
 
     @Test
@@ -35,13 +41,6 @@ class LumiUiScaleTest {
     void developmentOverrideIsClamped() {
         System.setProperty(LumiUiScale.TARGET_GUI_SCALE_PROPERTY, "99");
 
-        assertEquals(8, LumiUiScale.forFramebuffer(1920, 1080).targetGuiScale());
-    }
-
-    private static void assertProfile(int width, int height, int expectedScale) {
-        LumiUiScale scale = LumiUiScale.forFramebuffer(width, height);
-        assertEquals(expectedScale, scale.targetGuiScale());
-        assertEquals(640, width / scale.targetGuiScale());
-        assertEquals(360, height / scale.targetGuiScale());
+        assertEquals(8, LumiUiScale.forGuiScale(2).targetGuiScale());
     }
 }

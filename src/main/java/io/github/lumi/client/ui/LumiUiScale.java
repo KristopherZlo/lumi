@@ -3,12 +3,9 @@ package io.github.lumi.client.ui;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.Minecraft;
 
-/** Stable 640x360 virtual viewport resolved from the physical framebuffer. */
+/** Lumi coordinates resolved from Minecraft's live logical GUI scale. */
 public record LumiUiScale(int targetGuiScale) {
     public static final String TARGET_GUI_SCALE_PROPERTY = "lumi.ui.targetGuiScale";
-    private static final int REFERENCE_WIDTH = 640;
-    private static final int REFERENCE_HEIGHT = 360;
-    private static final int MIN_TARGET_GUI_SCALE = 2;
     private static final int MAX_TARGET_GUI_SCALE = 8;
 
     public LumiUiScale {
@@ -18,21 +15,12 @@ public record LumiUiScale(int targetGuiScale) {
     public static LumiUiScale current() {
         Minecraft client = Minecraft.getInstance();
         Window window = client == null ? null : client.getWindow();
-        return window == null
-                ? forFramebuffer(1280, 720)
-                : forFramebuffer(window.getWidth(), window.getHeight());
+        return forGuiScale(window == null ? 2 : window.getGuiScale());
     }
 
-    public static LumiUiScale forFramebuffer(int width, int height) {
-        int fittingScale = Math.min(
-                Math.max(1, width) / REFERENCE_WIDTH,
-                Math.max(1, height) / REFERENCE_HEIGHT);
-        int automatic = fittingScale >= 8
-                ? 8 : fittingScale >= 6 ? 6
-                : clamp(fittingScale, MIN_TARGET_GUI_SCALE, 4);
-        return new LumiUiScale(clamp(
-                Integer.getInteger(TARGET_GUI_SCALE_PROPERTY, automatic),
-                1, MAX_TARGET_GUI_SCALE));
+    static LumiUiScale forGuiScale(int guiScale) {
+        return new LumiUiScale(Integer.getInteger(
+                TARGET_GUI_SCALE_PROPERTY, Math.max(1, guiScale)));
     }
 
     public float renderScale(int currentGuiScale) {

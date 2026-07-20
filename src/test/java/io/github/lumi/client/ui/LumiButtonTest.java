@@ -27,8 +27,9 @@ class LumiButtonTest {
         assertTrue(source.contains("\"textures/gui/icons/\" + iconName + \".png\""));
         assertTrue(source.contains("\"textures/gui/icons/\" + iconName + \"_disabled.png\""));
         assertTrue(source.contains("active ? icon : disabledIcon"));
-        assertTrue(source.contains("textures/gui/new-icons/sliders.png"));
-        assertTrue(source.contains("boolean sliders = \"sliders\".equals(iconName)"));
+        assertFalse(source.contains("new-icons/sliders.png"));
+        assertTrue(Files.exists(Path.of(
+                "src/main/resources/assets/lumi/textures/gui/icons/sliders.png")));
         assertFalse(source.contains("kind.border()"));
         assertTrue(source.contains("Tooltip.create"));
         assertFalse(source.toLowerCase(Locale.ROOT).contains("owo"));

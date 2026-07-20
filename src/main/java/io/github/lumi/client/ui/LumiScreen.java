@@ -30,7 +30,7 @@ abstract class LumiScreen extends Screen {
     private final List<LumiScrollbar> scrollbars = new ArrayList<>();
     private final ClientContextualHelpService contextualHelp =
             new ClientContextualHelpService();
-    private LumiUiScale uiScale = LumiUiScale.forFramebuffer(1280, 720);
+    private LumiUiScale uiScale = new LumiUiScale(2);
     private boolean screenInitialized;
     private ClientContextualHelpHint contextualHint;
     private int hintX;

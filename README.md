@@ -64,8 +64,10 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   Settings, support or credits.
 - Check updates immediately performs a bounded lookup against Lumi's fixed
   GitHub-hosted release manifest and shows progress/result in a compact modal.
-- Every project page owns the same sidebar shell; switching tabs replaces the
-  content pane without retaining Dashboard as an input or rendering proxy.
+- Every project page owns the same bordered sidebar/header shell; switching tabs
+  replaces the content pane without retaining Dashboard as an input or rendering
+  proxy. Fullscreen changes use Minecraft's live logical viewport instead of
+  forcing the menu back to a framebuffer-derived compact profile.
 - The project sidebar keeps More with the navigation and a bottom Support Lumi
   block with full-width icon-and-text actions for Buy me a coffee, PayPal and
   GitHub bug reports; the container keeps bottom padding before the author

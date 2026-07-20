@@ -43,15 +43,14 @@ public final class LumiButton extends Button {
                 message, onPress, DEFAULT_NARRATION);
         this.kind = kind;
         this.accentColor = accentColor;
-        boolean sliders = "sliders".equals(iconName);
         boolean support = "buymeacoffee".equals(iconName)
                 || "paypal".equals(iconName);
         this.icon = iconName == null ? null : Identifier.fromNamespaceAndPath(
                 LumiMod.MOD_ID, support
                         ? "textures/gui/" + iconName + ".png"
-                        : sliders ? "textures/gui/new-icons/sliders.png"
                         : "textures/gui/icons/" + iconName + ".png");
-        this.disabledIcon = sliders || support ? icon : iconName == null ? null
+        this.disabledIcon = support || "sliders".equals(iconName)
+                ? icon : iconName == null ? null
                 : Identifier.fromNamespaceAndPath(
                         LumiMod.MOD_ID,
                         "textures/gui/icons/" + iconName + "_disabled.png");

@@ -372,7 +372,7 @@ public final class LumiPackageScreen extends LumiPageScreen {
         int contentShift = hintHeight == 0 ? 0
                 : compact ? hintY + hintHeight + 5 - 20 : hintHeight + 8;
         int nameLabelY = (compact ? 20 : 52) + contentShift;
-        int fieldY = (compact ? 29 : 60) + contentShift;
+        int fieldY = nameLabelY + 13;
         int actionY = (compact ? 53 : 90) + contentShift;
         int optionY = (compact ? 75 : 118) + contentShift;
         int tabsY = (compact ? 97 : 144) + contentShift;

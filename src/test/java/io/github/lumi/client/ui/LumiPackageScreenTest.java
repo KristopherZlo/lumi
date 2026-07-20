@@ -75,6 +75,7 @@ class LumiPackageScreenTest {
     private static void assertBandsInside(
             LumiPackageScreen.PackageGeometry geometry, int panelHeight) {
         assertTrue(geometry.contentVisible());
+        assertEquals(13, geometry.fieldY() - geometry.nameLabelY());
         assertTrue(geometry.fieldY() + 20 <= geometry.actionY());
         assertTrue(geometry.actionY() + 18 <= geometry.optionY());
         assertTrue(geometry.optionY() + 18 <= geometry.tabsY());
