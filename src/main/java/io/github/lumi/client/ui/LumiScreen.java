@@ -1,6 +1,9 @@
 package io.github.lumi.client.ui;
 
 import com.mojang.blaze3d.platform.Window;
+import io.github.lumi.LumiMod;
+import io.github.lumi.client.onboarding.ClientContextualHelpHint;
+import io.github.lumi.client.onboarding.ClientContextualHelpService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntConsumer;
@@ -9,15 +12,26 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 /** Neutral V2 screen mechanics shared by pages and modal workflows. */
 abstract class LumiScreen extends Screen {
     protected static final int INPUT_HEIGHT = 14;
     protected static final int INPUT_FRAME_HEIGHT = 18;
+    private static final Identifier HINT_CLOSE_ICON = Identifier.fromNamespaceAndPath(
+            LumiMod.MOD_ID, "textures/gui/icons/close.png");
     private final List<LumiScrollbar> scrollbars = new ArrayList<>();
+    private final ClientContextualHelpService contextualHelp =
+            new ClientContextualHelpService();
     private LumiUiScale uiScale = LumiUiScale.forFramebuffer(1280, 720);
     private boolean screenInitialized;
+    private ClientContextualHelpHint contextualHint;
+    private int hintX;
+    private int hintY;
+    private int hintWidth;
+    private int hintHeight;
 
     protected LumiScreen(Component title) {
         super(title);
@@ -87,11 +101,97 @@ abstract class LumiScreen extends Screen {
     protected final void initializeScreenScale() {
         screenInitialized = true;
         scrollbars.clear();
+        contextualHint = null;
         Window window = Minecraft.getInstance().getWindow();
         int currentGuiScale = currentGuiScale();
         uiScale = LumiUiScale.current();
         width = uiScale.virtualSize(window.getGuiScaledWidth(), currentGuiScale);
         height = uiScale.virtualSize(window.getGuiScaledHeight(), currentGuiScale);
+    }
+
+    protected final boolean addContextualHint(
+            ClientContextualHelpHint hint, int x, int y, int width) {
+        if (!contextualHelp.shouldShowHint(hint)) {
+            return false;
+        }
+        contextualHint = hint;
+        hintX = x;
+        hintY = y;
+        hintWidth = width;
+        hintHeight = 30 + font.split(
+                Component.translatable(hint.bodyKey()),
+                Math.max(1, width - 14)).size() * 10;
+        return true;
+    }
+
+    protected final int contextualHintOffset(int gap) {
+        return contextualHint == null ? 0 : hintHeight + Math.max(0, gap);
+    }
+
+    protected final void moveContextualHint(int x, int y) {
+        if (contextualHint != null) {
+            hintX = x;
+            hintY = y;
+        }
+    }
+
+    protected final void resetContextualHints() {
+        contextualHelp.resetHints();
+        rebuildWidgets();
+    }
+
+    protected final void renderContextualHint(
+            GuiGraphics graphics, int mouseX, int mouseY) {
+        if (contextualHint == null) return;
+        LumiTheme.outlined(
+                graphics, hintX, hintY, hintWidth, hintHeight,
+                LumiTheme.STATUS, LumiTheme.STATUS_BORDER);
+        String title = font.plainSubstrByWidth(
+                Component.translatable(contextualHint.titleKey()).getString(),
+                Math.max(1, hintWidth - 44));
+        graphics.drawString(font, title, hintX + 8, hintY + 8,
+                LumiTheme.ACCENT, false);
+        int lineY = hintY + 23;
+        for (var line : font.split(
+                Component.translatable(contextualHint.bodyKey()),
+                Math.max(1, hintWidth - 14))) {
+            graphics.drawString(font, line, hintX + 8, lineY,
+                    LumiTheme.TEXT, false);
+            lineY += 10;
+        }
+        int closeX = hintX + hintWidth - 26;
+        boolean hovered = mouseX >= closeX && mouseX < closeX + 18
+                && mouseY >= hintY + 6 && mouseY < hintY + 24;
+        LumiTheme.outlined(
+                graphics, closeX, hintY + 6, 18, 18,
+                hovered ? LumiTheme.CHIP : LumiTheme.INSET,
+                LumiTheme.STATUS_BORDER);
+        graphics.blit(
+                RenderPipelines.GUI_TEXTURED, HINT_CLOSE_ICON,
+                closeX + 3, hintY + 9, 0, 0, 12, 12,
+                24, 24, 24, 24);
+    }
+
+    protected final boolean clickContextualHint(MouseButtonEvent click) {
+        if (contextualHint == null
+                || click.x() < hintX || click.x() >= hintX + hintWidth
+                || click.y() < hintY || click.y() >= hintY + hintHeight) {
+            return false;
+        }
+        int closeX = hintX + hintWidth - 26;
+        if (click.x() >= closeX && click.x() < closeX + 18
+                && click.y() >= hintY + 6 && click.y() < hintY + 24) {
+            contextualHelp.dismissHint(contextualHint);
+            rebuildWidgets();
+        }
+        return true;
+    }
+
+    protected final boolean contextualPointerHovered(int mouseX, int mouseY) {
+        return contextualHint != null
+                && mouseX >= hintX + hintWidth - 26
+                && mouseX < hintX + hintWidth - 8
+                && mouseY >= hintY + 6 && mouseY < hintY + 24;
     }
 
     final boolean screenInitialized() {

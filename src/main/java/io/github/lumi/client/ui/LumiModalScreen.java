@@ -1,16 +1,11 @@
 package io.github.lumi.client.ui;
 
-import io.github.lumi.LumiMod;
-import io.github.lumi.client.onboarding.ClientContextualHelpHint;
-import io.github.lumi.client.onboarding.ClientContextualHelpService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 /** Shared window chrome for V2 modal workflows. */
@@ -18,16 +13,7 @@ abstract class LumiModalScreen extends LumiScreen {
     private static final int FRAME_CONTROL_INSET = 8;
     private static final int ICON_BUTTON_WIDTH = 26;
     private static final int HEADER_CONTROL_GAP = 8;
-    private static final Identifier HINT_CLOSE_ICON = Identifier.fromNamespaceAndPath(
-            LumiMod.MOD_ID, "textures/gui/icons/close.png");
     private final Screen background;
-    private final ClientContextualHelpService contextualHelp =
-            new ClientContextualHelpService();
-    private ClientContextualHelpHint contextualHint;
-    private int hintX;
-    private int hintY;
-    private int hintWidth;
-    private int hintHeight;
     private LumiButton navigationButton;
     private boolean handCursorActive;
     private static long handCursor;
@@ -43,7 +29,6 @@ abstract class LumiModalScreen extends LumiScreen {
 
     protected final void beginScreenInit() {
         initializeScreenScale();
-        contextualHint = null;
         if (!(this instanceof LumiRecoveryScreen)) {
             boolean page = this instanceof LumiPageScreen;
             navigationButton = addIconButton(
@@ -55,68 +40,10 @@ abstract class LumiModalScreen extends LumiScreen {
         }
     }
 
-    protected final boolean addContextualHint(
-            ClientContextualHelpHint hint, int x, int y, int width) {
-        if (!contextualHelp.shouldShowHint(hint)) {
-            return false;
-        }
-        contextualHint = hint;
-        hintX = x;
-        hintY = y;
-        hintWidth = width;
-        hintHeight = 30 + font.split(
-                Component.translatable(hint.bodyKey()), Math.max(1, width - 14)).size() * 10;
-        return true;
-    }
-
-    protected final int contextualHintOffset(int gap) {
-        return contextualHint == null ? 0 : hintHeight + Math.max(0, gap);
-    }
-
-    protected final void moveContextualHint(int x, int y) {
-        if (contextualHint != null) {
-            hintX = x;
-            hintY = y;
-        }
-    }
-
-    protected final void resetContextualHints() {
-        contextualHelp.resetHints();
-        rebuildWidgets();
-    }
-
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
-        if (contextualHint != null) {
-            LumiTheme.outlined(
-                    graphics, hintX, hintY, hintWidth, hintHeight,
-                    LumiTheme.STATUS, LumiTheme.STATUS_BORDER);
-            String title = font.plainSubstrByWidth(
-                    Component.translatable(contextualHint.titleKey()).getString(),
-                    Math.max(1, hintWidth - 44));
-            graphics.drawString(font, title, hintX + 8, hintY + 8,
-                    LumiTheme.ACCENT, false);
-            int lineY = hintY + 23;
-            for (var line : font.split(
-                    Component.translatable(contextualHint.bodyKey()),
-                    Math.max(1, hintWidth - 14))) {
-                graphics.drawString(font, line, hintX + 8, lineY,
-                        LumiTheme.TEXT, false);
-                lineY += 10;
-            }
-            int closeX = hintX + hintWidth - 26;
-            boolean hovered = mouseX >= closeX && mouseX < closeX + 18
-                    && mouseY >= hintY + 6 && mouseY < hintY + 24;
-            LumiTheme.outlined(
-                    graphics, closeX, hintY + 6, 18, 18,
-                    hovered ? LumiTheme.CHIP : LumiTheme.INSET,
-                    LumiTheme.STATUS_BORDER);
-            graphics.blit(
-                    RenderPipelines.GUI_TEXTURED, HINT_CLOSE_ICON,
-                    closeX + 3, hintY + 9, 0, 0, 12, 12,
-                    24, 24, 24, 24);
-        }
+        renderContextualHint(graphics, mouseX, mouseY);
         if (minecraft.screen == this) {
             updateCursor(mouseX, mouseY);
         }
@@ -138,10 +65,7 @@ abstract class LumiModalScreen extends LumiScreen {
         return children().stream().anyMatch(child ->
                 child instanceof Button button
                         && button.isMouseOver(mouseX, mouseY))
-                || contextualHint != null
-                && mouseX >= hintX + hintWidth - 26
-                && mouseX < hintX + hintWidth - 8
-                && mouseY >= hintY + 6 && mouseY < hintY + 24;
+                || contextualPointerHovered(mouseX, mouseY);
     }
 
     @Override
@@ -165,17 +89,7 @@ abstract class LumiModalScreen extends LumiScreen {
     @Override
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         MouseButtonEvent virtual = virtualClick(click);
-        if (contextualHint != null
-                && virtual.x() >= hintX && virtual.x() < hintX + hintWidth
-                && virtual.y() >= hintY && virtual.y() < hintY + hintHeight) {
-            int closeX = hintX + hintWidth - 26;
-            if (virtual.x() >= closeX && virtual.x() < closeX + 18
-                    && virtual.y() >= hintY + 6 && virtual.y() < hintY + 24) {
-                contextualHelp.dismissHint(contextualHint);
-                rebuildWidgets();
-            }
-            return true;
-        }
+        if (clickContextualHint(virtual)) return true;
         return super.mouseClicked(virtual, doubled);
     }
 
