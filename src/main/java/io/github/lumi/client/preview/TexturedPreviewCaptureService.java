@@ -17,6 +17,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.CachedOrthoProjectionMatrixBuffer;
+import net.minecraft.client.renderer.fog.FogRenderer;
 import org.joml.Matrix4fStack;
 
 /** Renders a prepared world mesh into one transparent offscreen PNG source image. */
@@ -27,6 +28,7 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
     private final CachedOrthoProjectionMatrixBuffer projectionMatrixBuffer =
             new CachedOrthoProjectionMatrixBuffer(
                     "Lumi Preview", -1000.0F, 1000.0F, false);
+    private FogRenderer previewFog;
 
     PendingPreviewCapture capture(
             Minecraft client,
@@ -78,9 +80,11 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
         GpuTextureView previousColor = RenderSystem.outputColorTextureOverride;
         GpuTextureView previousDepth = RenderSystem.outputDepthTextureOverride;
         GpuBufferSlice previousLights = RenderSystem.getShaderLights();
+        GpuBufferSlice previousFog = RenderSystem.getShaderFog();
         RenderSystem.outputColorTextureOverride = colorView;
         RenderSystem.outputDepthTextureOverride = depthView;
         try {
+            RenderSystem.setShaderFog(fog().getBuffer(FogRenderer.FogMode.NONE));
             client.gameRenderer.lightTexture().updateLightTexture(1.0F);
             client.gameRenderer.getLighting().setupFor(Lighting.Entry.LEVEL);
             float halfResolution = framing.resolution() * 0.5F;
@@ -99,9 +103,15 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
             RenderSystem.outputColorTextureOverride = previousColor;
             RenderSystem.outputDepthTextureOverride = previousDepth;
             if (previousLights != null) RenderSystem.setShaderLights(previousLights);
+            if (previousFog != null) RenderSystem.setShaderFog(previousFog);
             modelView.popMatrix();
             RenderSystem.restoreProjectionMatrix();
         }
+    }
+
+    private FogRenderer fog() {
+        if (previewFog == null) previewFog = new FogRenderer();
+        return previewFog;
     }
 
     private CompletableFuture<NativeImage> readPixels(RenderTarget target) {
@@ -138,6 +148,7 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
     @Override
     public void close() {
         projectionMatrixBuffer.close();
+        if (previewFog != null) previewFog.close();
     }
 
     record PendingPreviewCapture(

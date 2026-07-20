@@ -15,8 +15,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.level.material.FluidState;
 
-/** Immutable commit block states with live lighting only for mesh shading. */
+/** Immutable commit block states with neutral light and live directional shading. */
 final class FrozenPreviewBlockGetter implements BlockAndTintGetter {
+    private static final int PREVIEW_LIGHT = 15;
+    private static final int NEUTRAL_TINT = 0xffffff;
     private final BlockAndTintGetter lighting;
     private final Map<SectionKey, DecodedSection> sections;
 
@@ -51,19 +53,19 @@ final class FrozenPreviewBlockGetter implements BlockAndTintGetter {
     }
 
     @Override public int getBlockTint(BlockPos position, ColorResolver resolver) {
-        return lighting.getBlockTint(position, resolver);
+        return NEUTRAL_TINT;
     }
 
     @Override public int getBrightness(LightLayer layer, BlockPos position) {
-        return lighting.getBrightness(layer, position);
+        return PREVIEW_LIGHT;
     }
 
     @Override public int getRawBrightness(BlockPos position, int amount) {
-        return lighting.getRawBrightness(position, amount);
+        return PREVIEW_LIGHT;
     }
 
     @Override public boolean canSeeSky(BlockPos position) {
-        return lighting.canSeeSky(position);
+        return true;
     }
 
     @Override public int getHeight() {

@@ -28,6 +28,8 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
             new CommitPreviewSnapshotReader();
     private final PreviewRenderMeshBuilder meshes =
             new PreviewRenderMeshBuilder();
+    private final PreviewBoundsLimiter boundsLimiter =
+            new PreviewBoundsLimiter();
     private TexturedPreviewCaptureService capture;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(
             runnable -> {
@@ -87,7 +89,8 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
                     return;
                 }
                 startBuild(
-                        event.requestId(), item.withBounds(bounds.orElseThrow()),
+                        event.requestId(), item.withBounds(
+                                boundsLimiter.limit(bounds.orElseThrow())),
                         event.head());
             }
             case FAILED, CANCELLED, RETURNED, DEGRADED ->

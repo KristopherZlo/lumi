@@ -1,5 +1,6 @@
 package io.github.lumi.gametest;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.LumiClient;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
@@ -12,6 +13,7 @@ import io.github.lumi.domain.model.OperationTarget;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.storage.repository.OperationJournalRepository;
+import io.github.lumi.storage.repository.VersionPreviewRepository;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -227,9 +229,43 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                 .isPresent(), "Dashboard did not contain exactly "
                         + expectedManualVersions + " manual saves, one Initial, including "
                         + saveName);
+        awaitIsometricPreview(context, server, saved.commit());
         report.event("operation", operationName, "succeeded", 0,
                 elapsedMillis(started), saved.commit().hex());
         return saved;
+    }
+
+    private static void awaitIsometricPreview(
+            ClientGameTestContext context,
+            TestServerContext server,
+            io.github.lumi.domain.model.CommitId commit) throws IOException {
+        Path repository = server.computeOnServer(
+                minecraft -> runtime(minecraft).repository());
+        VersionPreviewRepository previews = new VersionPreviewRepository(repository);
+        byte[] png = null;
+        for (int tick = 0; tick < TIMEOUT_TICKS; tick++) {
+            if (tick % 10 == 0) {
+                png = previews.load(commit).orElse(null);
+                if (png != null) break;
+            }
+            context.waitTick();
+        }
+        require(png != null, "Save did not publish an isometric preview for " + commit);
+        try (NativeImage image = NativeImage.read(png)) {
+            boolean transparent = false;
+            boolean opaque = false;
+            boolean neutralOrWarm = false;
+            for (int pixel : image.getPixelsABGR()) {
+                int alpha = pixel >>> 24;
+                transparent |= alpha == 0;
+                opaque |= alpha != 0;
+                neutralOrWarm |= alpha != 0
+                        && (pixel & 0xff) >= ((pixel >>> 16) & 0xff);
+            }
+            require(image.getWidth() > 1 && image.getHeight() > 1
+                            && transparent && opaque && neutralOrWarm,
+                    "Save preview is not a cropped transparent isometric render");
+        }
     }
 
     private static OperationJournal createApplyingFixture(
