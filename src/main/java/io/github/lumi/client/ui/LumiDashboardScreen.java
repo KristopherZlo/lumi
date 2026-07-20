@@ -278,8 +278,9 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         List<HistorySnapshotPayload.Version> visible = versions.stream()
                 .skip(historyScroll).limit(capacity).toList();
         if (historyView.mode() == HistoryViewController.Mode.GRAPH) {
-            List<HistoryGraphLayout.Node> nodes = graphLayout
-                    .build(visible, snapshot.branches());
+            List<HistoryGraphLayout.Node> nodes = graphLayout.window(
+                    graphLayout.build(versions, snapshot.branches()),
+                    historyScroll, capacity);
             graphView = new LumiHistoryGraphView(
                     snapshot.dimensionId(), previews, nodes, snapshot.zones(),
                     layout.bodyX() + PANEL_PADDING,

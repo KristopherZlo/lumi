@@ -112,7 +112,9 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
         if (view.mode() == HistoryViewController.Mode.GRAPH) {
             graphView = new LumiHistoryGraphView(
                     dimensionId, previews,
-                    graphLayout.build(visible, List.of()), List.of(),
+                    graphLayout.window(
+                            graphLayout.build(loaded, List.of()), scroll, capacity),
+                    List.of(),
                     panelX + 16, panelY + 84, panelWidth - 32);
             graphView.buttons(openDetails).forEach(this::addRenderableWidget);
             return;

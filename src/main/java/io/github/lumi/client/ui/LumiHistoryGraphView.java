@@ -81,8 +81,12 @@ final class LumiHistoryGraphView {
         }
         HistorySnapshotPayload.Version version = hovered.orElseThrow().version();
         int cardWidth = Math.min(150, width);
-        int cardX = x + width - cardWidth;
-        int cardY = Math.max(y, mouseY - 58);
+        TooltipPosition position = tooltipPosition(
+                mouseX, mouseY, x, y, width,
+                Math.max(ROW_HEIGHT, nodes.size() * ROW_HEIGHT),
+                cardWidth, 56);
+        int cardX = position.x();
+        int cardY = position.y();
         LumiTheme.outlined(graphics, cardX, cardY, cardWidth, 56,
                 LumiTheme.PANEL, LumiTheme.ACCENT);
         previews.texture(dimensionId, version.id()).ifPresent(texture ->
@@ -114,4 +118,16 @@ final class LumiHistoryGraphView {
     private int centerY(int row) {
         return y + row * ROW_HEIGHT + ROW_HEIGHT / 2;
     }
+
+    static TooltipPosition tooltipPosition(
+            int mouseX, int mouseY, int viewX, int viewY,
+            int viewWidth, int viewHeight, int cardWidth, int cardHeight) {
+        int maximumX = Math.max(viewX, viewX + viewWidth - cardWidth);
+        int maximumY = Math.max(viewY, viewY + viewHeight - cardHeight);
+        return new TooltipPosition(
+                Math.max(viewX, Math.min(maximumX, mouseX + 8)),
+                Math.max(viewY, Math.min(maximumY, mouseY + 8)));
+    }
+
+    record TooltipPosition(int x, int y) { }
 }

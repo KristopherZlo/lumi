@@ -207,7 +207,9 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         if (historyView.mode() == HistoryViewController.Mode.GRAPH) {
             graphView = new LumiHistoryGraphView(
                     snapshot.dimensionId(), previews,
-                    graphLayout.build(visible, snapshot.branches()),
+                    graphLayout.window(
+                            graphLayout.build(versions, snapshot.branches()),
+                            historyScroll, capacity),
                     snapshot.zones(),
                     layout.bodyX() + LumiDashboardScreen.PANEL_PADDING,
                     geometry.historyY()

@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -33,6 +34,7 @@ final class HistoryGraphLayout {
             byId.put(ordered.get(row).id(), ordered.get(row));
             rows.put(ordered.get(row).id(), row);
         }
+        Map<CommitId, List<CommitId>> visualParents = visualParents(ordered);
 
         Map<CommitId, Integer> lanes = new LinkedHashMap<>();
         Map<CommitId, List<String>> heads = new HashMap<>();
@@ -54,8 +56,8 @@ final class HistoryGraphLayout {
             int lane = nextLane++;
             HistorySnapshotPayload.Version cursor = byId.get(branch.head());
             while (cursor != null && lanes.putIfAbsent(cursor.id(), lane) == null) {
-                cursor = cursor.parents().isEmpty()
-                        ? null : byId.get(cursor.parents().getFirst());
+                List<CommitId> parents = visualParents.get(cursor.id());
+                cursor = parents.isEmpty() ? null : byId.get(parents.getFirst());
             }
         }
 
@@ -64,7 +66,7 @@ final class HistoryGraphLayout {
             if (lanes.containsKey(version.id())) {
                 continue;
             }
-            Integer parentLane = version.parents().stream()
+            Integer parentLane = visualParents.get(version.id()).stream()
                     .map(lanes::get)
                     .filter(Objects::nonNull)
                     .findFirst()
@@ -77,7 +79,7 @@ final class HistoryGraphLayout {
         for (int row = 0; row < ordered.size(); row++) {
             HistorySnapshotPayload.Version version = ordered.get(row);
             int childRow = row;
-            List<Edge> edges = version.parents().stream()
+            List<Edge> edges = visualParents.get(version.id()).stream()
                     .filter(rows::containsKey)
                     .map(parent -> new Edge(
                             lanes.get(version.id()), childRow,
@@ -93,6 +95,42 @@ final class HistoryGraphLayout {
                     edges, branchHeads, activeHead));
         }
         return List.copyOf(nodes);
+    }
+
+    List<Node> window(List<Node> nodes, int offset, int limit) {
+        int start = Math.max(0, Math.min(offset, nodes.size()));
+        int end = Math.min(nodes.size(), start + Math.max(0, limit));
+        return nodes.subList(start, end).stream().map(node -> new Node(
+                node.version(), node.row() - start, node.lane(), node.laneCount(),
+                node.parentEdges().stream()
+                        .filter(edge -> edge.parentRow() >= start
+                                && edge.parentRow() < end)
+                        .map(edge -> new Edge(
+                                edge.childLane(), edge.childRow() - start,
+                                edge.parentLane(), edge.parentRow() - start))
+                        .toList(),
+                node.branchHeads(), node.activeHead())).toList();
+    }
+
+    private static Map<CommitId, List<CommitId>> visualParents(
+            List<HistorySnapshotPayload.Version> ordered) {
+        Map<CommitId, List<CommitId>> result = new HashMap<>();
+        Map<CommitId, List<HistorySnapshotPayload.Version>> automatic =
+                new LinkedHashMap<>();
+        for (HistorySnapshotPayload.Version version : ordered) {
+            result.put(version.id(), version.parents());
+            if (version.kind() == CommitKind.AUTO && !version.parents().isEmpty()) {
+                automatic.computeIfAbsent(
+                        version.parents().getFirst(), ignored -> new ArrayList<>())
+                        .add(version);
+            }
+        }
+        for (List<HistorySnapshotPayload.Version> chain : automatic.values()) {
+            for (int index = 0; index + 1 < chain.size(); index++) {
+                result.put(chain.get(index).id(), List.of(chain.get(index + 1).id()));
+            }
+        }
+        return result;
     }
 
     record Node(

@@ -54,6 +54,32 @@ class HistoryGraphLayoutTest {
                 .distinct().count());
     }
 
+    @Test
+    void automaticSiblingsShareOneVisualChainAndKeepTheirLaneWhenClipped() {
+        var root = version('a', 1, List.of(), Optional.empty());
+        var first = version('b', 2, List.of(root.id()), Optional.empty(),
+                CommitKind.AUTO);
+        var second = version('c', 3, List.of(root.id()), Optional.empty(),
+                CommitKind.AUTO);
+        var third = version('d', 4, List.of(root.id()), Optional.empty(),
+                CommitKind.AUTO);
+        var nodes = layout.build(
+                List.of(root, first, third, second),
+                List.of(branch("main", root.id(), true)));
+
+        assertEquals(List.of(0, 0, 0, 0),
+                nodes.stream().map(HistoryGraphLayout.Node::lane).toList());
+        assertEquals(1, nodes.get(0).parentEdges().getFirst().parentRow());
+        assertEquals(2, nodes.get(1).parentEdges().getFirst().parentRow());
+        assertEquals(3, nodes.get(2).parentEdges().getFirst().parentRow());
+
+        var window = layout.window(nodes, 1, 2);
+        assertEquals(List.of(0, 1),
+                window.stream().map(HistoryGraphLayout.Node::row).toList());
+        assertEquals(1, window.getFirst().parentEdges().getFirst().parentRow());
+        assertTrue(window.getLast().parentEdges().isEmpty());
+    }
+
     private static HistorySnapshotPayload.Branch branch(
             String name, CommitId head, boolean active) {
         return new HistorySnapshotPayload.Branch(name, head, active);
@@ -62,9 +88,15 @@ class HistoryGraphLayoutTest {
     private static HistorySnapshotPayload.Version version(
             char digit, long timestamp, List<CommitId> parents,
             Optional<UUID> zone) {
+        return version(digit, timestamp, parents, zone, CommitKind.MANUAL);
+    }
+
+    private static HistorySnapshotPayload.Version version(
+            char digit, long timestamp, List<CommitId> parents,
+            Optional<UUID> zone, CommitKind kind) {
         return new HistorySnapshotPayload.Version(
                 id(digit), "Save " + digit, "Builder", timestamp,
-                CommitKind.MANUAL, VersionTags.empty(), parents,
+                kind, VersionTags.empty(), parents,
                 new CommitStatistics(1, 0, 1, 0), zone);
     }
 
