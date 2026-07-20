@@ -2,11 +2,8 @@ package io.github.lumi.client.ui;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 /** Shared window chrome for V2 modal workflows. */
 abstract class LumiModalScreen extends LumiScreen {
@@ -15,8 +12,6 @@ abstract class LumiModalScreen extends LumiScreen {
     private static final int HEADER_CONTROL_GAP = 8;
     private final Screen background;
     private LumiButton navigationButton;
-    private boolean handCursorActive;
-    private static long handCursor;
 
     protected LumiModalScreen(Component title) {
         this(Minecraft.getInstance().screen, title);
@@ -41,56 +36,12 @@ abstract class LumiModalScreen extends LumiScreen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
-        renderContextualHint(graphics, mouseX, mouseY);
-        if (minecraft.screen == this) {
-            updateCursor(mouseX, mouseY);
-        }
-    }
-
-    private void updateCursor(int mouseX, int mouseY) {
-        boolean hovered = pointerHovered(mouseX, mouseY);
-        if (hovered == handCursorActive) return;
-        handCursorActive = hovered;
-        if (hovered && handCursor == 0L) {
-            handCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_HAND_CURSOR);
-        }
-        GLFW.glfwSetCursor(
-                Minecraft.getInstance().getWindow().handle(),
-                hovered ? handCursor : 0L);
-    }
-
-    protected boolean pointerHovered(int mouseX, int mouseY) {
-        return children().stream().anyMatch(child ->
-                child instanceof Button button
-                        && button.isMouseOver(mouseX, mouseY))
-                || contextualPointerHovered(mouseX, mouseY);
-    }
-
-    @Override
-    public void removed() {
-        if (handCursorActive) {
-            GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().handle(), 0L);
-            handCursorActive = false;
-        }
-        super.removed();
-    }
-
-    @Override
     protected void renderUnderlay(GuiGraphics graphics) {
         if (background != null && background != this
                 && (!(background instanceof LumiScreen screen)
                         || screen.screenInitialized())) {
             background.render(graphics, -1, -1, 0.0F);
         }
-    }
-
-    @Override
-    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
-        MouseButtonEvent virtual = virtualClick(click);
-        if (clickContextualHint(virtual)) return true;
-        return super.mouseClicked(virtual, doubled);
     }
 
     protected final void renderWindow(

@@ -9,12 +9,14 @@ import java.util.List;
 import java.util.function.IntConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import org.lwjgl.glfw.GLFW;
 
 /** Neutral V2 screen mechanics shared by pages and modal workflows. */
 abstract class LumiScreen extends Screen {
@@ -32,6 +34,8 @@ abstract class LumiScreen extends Screen {
     private int hintY;
     private int hintWidth;
     private int hintHeight;
+    private boolean handCursorActive;
+    private static long handCursor;
 
     protected LumiScreen(Component title) {
         super(title);
@@ -192,6 +196,52 @@ abstract class LumiScreen extends Screen {
                 && mouseX >= hintX + hintWidth - 26
                 && mouseX < hintX + hintWidth - 8
                 && mouseY >= hintY + 6 && mouseY < hintY + 24;
+    }
+
+    @Override
+    public void render(
+            GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        renderContextualHint(graphics, mouseX, mouseY);
+        if (minecraft.screen == this) {
+            updateCursor(mouseX, mouseY);
+        }
+    }
+
+    protected boolean pointerHovered(int mouseX, int mouseY) {
+        return children().stream().anyMatch(child ->
+                child instanceof Button button
+                        && button.isMouseOver(mouseX, mouseY))
+                || contextualPointerHovered(mouseX, mouseY);
+    }
+
+    private void updateCursor(int mouseX, int mouseY) {
+        boolean hovered = pointerHovered(mouseX, mouseY);
+        if (hovered == handCursorActive) return;
+        handCursorActive = hovered;
+        if (hovered && handCursor == 0L) {
+            handCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_HAND_CURSOR);
+        }
+        GLFW.glfwSetCursor(
+                Minecraft.getInstance().getWindow().handle(),
+                hovered ? handCursor : 0L);
+    }
+
+    @Override
+    public void removed() {
+        if (handCursorActive) {
+            GLFW.glfwSetCursor(
+                    Minecraft.getInstance().getWindow().handle(), 0L);
+            handCursorActive = false;
+        }
+        super.removed();
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        MouseButtonEvent virtual = virtualClick(click);
+        if (clickContextualHint(virtual)) return true;
+        return super.mouseClicked(virtual, doubled);
     }
 
     final boolean screenInitialized() {
