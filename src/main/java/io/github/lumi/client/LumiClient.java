@@ -49,7 +49,6 @@ import io.github.lumi.client.ui.BranchNameController;
 import io.github.lumi.client.ui.SaveScreenController;
 import io.github.lumi.client.ui.PackageScreenController;
 import io.github.lumi.client.ui.ZoneScreenController;
-import io.github.lumi.client.ui.ZoneDetailsController;
 import io.github.lumi.client.ui.ZoneHistoryActions;
 import io.github.lumi.client.ui.VersionCompareController;
 import io.github.lumi.network.HistorySnapshotPayload;
@@ -552,8 +551,7 @@ public final class LumiClient implements ClientModInitializer {
         HistorySnapshotPayload snapshot =
                 HISTORY.state().snapshot().orElseThrow();
         client.setScreen(new LumiZoneDetailsScreen(
-                zones, snapshot, zone, new ZoneDetailsController(
-                        NETWORKING::saveZone, NETWORKING::amendZone),
+                zones, snapshot, zone,
                 HISTORY_PAGES, NETWORKING::requestHistoryPage,
                 PENDING_STATISTICS, NETWORKING::requestPendingStatistics,
                 PREVIEW_STORE,
@@ -565,6 +563,12 @@ public final class LumiClient implements ClientModInitializer {
                                 NETWORKING::restoreZone)),
                         version -> openBranchAt(client.screen, version),
                         NETWORKING::updateVersionTags),
+                () -> openZoneSave(
+                        client.screen, zone, SaveScreenController.Intent.SAVE, ""),
+                () -> openZoneSave(
+                        client.screen, zone, SaveScreenController.Intent.AMEND,
+                        zone.versions().isEmpty()
+                                ? "" : zone.versions().getFirst().message()),
                 () -> {
                     NETWORKING.refreshSnapshot();
                     showFeedback("luma.hotkeys.pending_preview_help");

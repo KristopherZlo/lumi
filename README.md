@@ -44,8 +44,9 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   refresh control.
 - Work zones support empty color-assigned creation, exclusive Enter/Leave,
   sword cell editing, merged Focused/All/Hidden world shells, overlap counts,
-  metadata-only Delete, and paged Cards/Graph commit management with the same
-  full-window search and exact zone-scoped pending totals.
+  metadata-only Delete, and paged Cards/Graph commit management using the same
+  Build, Latest save, History and full-window search layout with exact
+  zone-scoped pending totals.
 - First-run onboarding opens once per client installation and remains replayable
   from More. Its retained nine-step legacy flow asks for five real world edits,
   previews those edits, waits for the live remappable Save/Open shortcuts, opens
