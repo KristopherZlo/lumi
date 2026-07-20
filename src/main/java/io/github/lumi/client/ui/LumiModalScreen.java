@@ -1,6 +1,5 @@
 package io.github.lumi.client.ui;
 
-import com.mojang.blaze3d.platform.Window;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.onboarding.ClientContextualHelpService;
@@ -13,9 +12,6 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.IntConsumer;
 
 /** Shared window chrome for V2 modal workflows. */
 abstract class LumiModalScreen extends LumiScreen {
@@ -27,16 +23,13 @@ abstract class LumiModalScreen extends LumiScreen {
     private final Screen background;
     private final ClientContextualHelpService contextualHelp =
             new ClientContextualHelpService();
-    private LumiUiScale uiScale = LumiUiScale.forFramebuffer(1280, 720);
     private ClientContextualHelpHint contextualHint;
     private int hintX;
     private int hintY;
     private int hintWidth;
     private int hintHeight;
-    private boolean screenInitialized;
     private LumiButton navigationButton;
     private boolean handCursorActive;
-    private final List<LumiScrollbar> scrollbars = new ArrayList<>();
     private static long handCursor;
 
     protected LumiModalScreen(Component title) {
@@ -48,39 +41,9 @@ abstract class LumiModalScreen extends LumiScreen {
         this.background = background;
     }
 
-    protected final void renderScrollbar(
-            GuiGraphics graphics,
-            int viewportX,
-            int y,
-            int viewportWidth,
-            int height,
-            int totalExtent,
-            int visibleExtent,
-            int offset,
-            IntConsumer update) {
-        LumiScrollbar scrollbar = scrollbars.stream()
-                .filter(candidate -> candidate.matches(
-                        viewportX, y, viewportWidth, height))
-                .findFirst()
-                .orElseGet(() -> {
-                    LumiScrollbar created = new LumiScrollbar(
-                            viewportX, y, viewportWidth, height,
-                            this::rebuildWidgets);
-                    scrollbars.add(created);
-                    return addRenderableWidget(created);
-                });
-        scrollbar.configure(totalExtent, visibleExtent, offset, update);
-    }
-
     protected final void beginScreenInit() {
-        screenInitialized = true;
-        scrollbars.clear();
+        initializeScreenScale();
         contextualHint = null;
-        Window window = Minecraft.getInstance().getWindow();
-        int currentGuiScale = currentGuiScale();
-        uiScale = LumiUiScale.current();
-        width = uiScale.virtualSize(window.getGuiScaledWidth(), currentGuiScale);
-        height = uiScale.virtualSize(window.getGuiScaledHeight(), currentGuiScale);
         if (!(this instanceof LumiRecoveryScreen)) {
             boolean page = this instanceof LumiPageScreen;
             navigationButton = addIconButton(
@@ -190,22 +153,13 @@ abstract class LumiModalScreen extends LumiScreen {
         super.removed();
     }
 
-    protected final ScaledRenderContext beginScaledRender(
-            GuiGraphics graphics, int mouseX, int mouseY) {
+    @Override
+    protected void renderUnderlay(GuiGraphics graphics) {
         if (background != null && background != this
-                && (!(background instanceof LumiModalScreen screen)
-                        || screen.screenInitialized)) {
+                && (!(background instanceof LumiScreen screen)
+                        || screen.screenInitialized())) {
             background.render(graphics, -1, -1, 0.0F);
         }
-        float scale = renderScale();
-        graphics.pose().pushMatrix();
-        graphics.pose().scale(scale, scale);
-        return new ScaledRenderContext(
-                virtualCoordinate(mouseX), virtualCoordinate(mouseY));
-    }
-
-    protected final void endScaledRender(GuiGraphics graphics) {
-        graphics.pose().popMatrix();
     }
 
     @Override
@@ -223,25 +177,6 @@ abstract class LumiModalScreen extends LumiScreen {
             return true;
         }
         return super.mouseClicked(virtual, doubled);
-    }
-
-    @Override
-    public boolean mouseReleased(MouseButtonEvent click) {
-        return super.mouseReleased(virtualClick(click));
-    }
-
-    @Override
-    public boolean mouseScrolled(
-            double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        return super.mouseScrolled(
-                virtualCoordinate(mouseX), virtualCoordinate(mouseY),
-                horizontalAmount, verticalAmount);
-    }
-
-    @Override
-    public boolean mouseDragged(MouseButtonEvent click, double deltaX, double deltaY) {
-        float scale = renderScale();
-        return super.mouseDragged(virtualClick(click), deltaX / scale, deltaY / scale);
     }
 
     protected final void renderWindow(
@@ -339,28 +274,4 @@ abstract class LumiModalScreen extends LumiScreen {
                 ? Component.translatable(error) : Component.literal(error);
     }
 
-    private MouseButtonEvent virtualClick(MouseButtonEvent click) {
-        return new MouseButtonEvent(
-                virtualCoordinate(click.x()), virtualCoordinate(click.y()),
-                click.buttonInfo());
-    }
-
-    private int virtualCoordinate(int coordinate) {
-        return (int) Math.round(virtualCoordinate((double) coordinate));
-    }
-
-    protected final double virtualCoordinate(double coordinate) {
-        return uiScale.virtualCoordinate(coordinate, currentGuiScale());
-    }
-
-    private float renderScale() {
-        return uiScale.renderScale(currentGuiScale());
-    }
-
-    private static int currentGuiScale() {
-        Window window = Minecraft.getInstance().getWindow();
-        return window == null ? 1 : window.getGuiScale();
-    }
-
-    protected record ScaledRenderContext(int mouseX, int mouseY) { }
 }
