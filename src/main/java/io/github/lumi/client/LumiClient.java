@@ -246,13 +246,12 @@ public final class LumiClient implements ClientModInitializer {
                         client.screen, zone, NETWORKING::deleteZone)),
                 ZONE_OVERLAY::label, ZONE_OVERLAY::cycle,
                 NETWORKING::enterZone, NETWORKING::leaveZone);
+        client.setScreen(zones);
         HISTORY.state().snapshot().stream()
                 .flatMap(snapshot -> snapshot.zones().stream())
                 .filter(HistorySnapshotPayload.ZoneView::active)
                 .findFirst()
-                .ifPresentOrElse(
-                        zone -> openZoneDetails(zones, zone),
-                        () -> client.setScreen(zones));
+                .ifPresent(zone -> openZoneDetails(zones, zone));
     }
 
     private static void openDimensions(Screen parent) {

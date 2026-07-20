@@ -46,4 +46,17 @@ class LumiZonesScreenTest {
         assertTrue(source.contains("rowHeight = compact ? 42 : 28"));
         assertTrue(source.contains("name.getWidth() + 4"));
     }
+
+    @Test
+    void initializesTheZonePageBeforeOpeningActiveZoneDetails() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/LumiClient.java"));
+        int openZones = source.indexOf("private static void openZones(");
+        int initializePage = source.indexOf("client.setScreen(zones);", openZones);
+        int openDetails = source.indexOf(
+                ".ifPresent(zone -> openZoneDetails(zones, zone));", openZones);
+
+        assertTrue(initializePage > openZones);
+        assertTrue(openDetails > initializePage);
+    }
 }
