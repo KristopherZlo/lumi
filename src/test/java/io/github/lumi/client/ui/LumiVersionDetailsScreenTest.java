@@ -16,6 +16,8 @@ class LumiVersionDetailsScreenTest {
                 "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));
         String tags = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiVersionTagsScreen.java"));
+        String rename = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiVersionRenameScreen.java"));
         String client = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClient.java"));
 
@@ -23,7 +25,13 @@ class LumiVersionDetailsScreenTest {
         assertTrue(details.contains("luma.save_details.raw_info_id"));
         assertTrue(details.contains("luma.save_details.raw_info_author"));
         assertTrue(details.contains("luma.save_details.raw_info_type"));
-        assertTrue(details.contains("luma.action.restore"));
+        int restoreAction = details.indexOf("\"rollback\"");
+        int branchAction = details.indexOf("\"branch\"", restoreAction);
+        int compareAction = details.indexOf("\"see-changes\"", branchAction);
+        int deleteAction = details.indexOf("\"trash\"", compareAction);
+        assertTrue(restoreAction < branchAction);
+        assertTrue(branchAction < compareAction);
+        assertTrue(compareAction < deleteAction);
         assertTrue(details.contains("compare.active = compareToParent.isPresent()"));
         assertTrue(details.contains("luma.action.delete_save"));
         assertTrue(details.contains("luma.action.edit_tags"));
@@ -37,13 +45,17 @@ class LumiVersionDetailsScreenTest {
         assertTrue(details.contains("\"edit-text\""));
         assertTrue(details.contains(
                 "navigationControlX(panelX, panelWidth) - 8 - 26"));
-        assertTrue(details.contains("rename.accept(replacement.value())"));
+        assertTrue(details.contains("new LumiVersionRenameScreen("));
+        assertTrue(details.contains("rename.accept(replacement)"));
         assertTrue(details.contains("luma.save_details.create_idea"));
         assertFalse(details.contains("luma.action.amend_version"));
         assertFalse(details.contains("luma.action.restore_selected_area"));
-        assertTrue(details.contains("nameEditor.setCentered(true)"));
-        assertTrue(details.contains("Component.literal(\"✓\")"));
-        assertTrue(details.contains("nameEditor = null"));
+        assertFalse(details.contains("nameEditor"));
+        assertFalse(details.contains("editingName"));
+        assertTrue(rename.contains("luma.action.save"));
+        assertTrue(rename.contains("luma.action.cancel"));
+        assertFalse(rename.contains("addIconButton"));
+        assertTrue(rename.contains("new VersionDisplayName(name.getValue())"));
         assertTrue(details.contains("luma.action.zoom_out"));
         assertTrue(details.contains("luma.action.zoom_in"));
         assertTrue(details.contains("luma.action.preview_pan_up"));

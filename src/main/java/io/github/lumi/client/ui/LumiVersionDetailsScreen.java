@@ -2,7 +2,6 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.domain.model.VersionTags;
-import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -11,7 +10,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
@@ -38,9 +36,6 @@ public final class LumiVersionDetailsScreen extends LumiModalScreen {
     private final Consumer<String> rename;
     private final boolean readOnly;
     private String displayedName;
-    private boolean editingName;
-    private EditBox nameEditor;
-    private String nameError = "";
     private VersionTags displayedTags;
     private int previewZoom = 1;
     private int previewPanX;
@@ -99,51 +94,20 @@ public final class LumiVersionDetailsScreen extends LumiModalScreen {
     @Override
     protected void init() {
         beginScreenInit();
-        nameEditor = null;
         LumiModalLayout layout = fitPanel(width, height);
         panelX = layout.x();
         panelY = layout.y();
         panelWidth = layout.width();
         panelHeight = layout.height();
-        int buttonWidth = Math.max(52, (panelWidth - 36) / 2);
-        int buttonY = panelY + primaryActionOffset(panelWidth, panelHeight);
-        LumiButton restoreButton = addButton(
-                panelX + 16, buttonY, buttonWidth,
-                Component.translatable("luma.action.restore"),
-                restore, LumiButton.Kind.PRIMARY);
-        restoreButton.active = !readOnly;
-        LumiButton compare = addButton(
-                panelX + 20 + buttonWidth, buttonY, buttonWidth,
-                Component.translatable("luma.action.compare"),
-                () -> compareToParent.ifPresent(Runnable::run),
-                LumiButton.Kind.NORMAL);
-        compare.active = compareToParent.isPresent();
-        addSecondaryActions(
-                panelWidth,
-                panelY + secondaryActionOffset(panelWidth, panelHeight));
+        addActions(panelY + actionOffset(panelWidth, panelHeight));
 
         int renameX = Math.max(
                 panelX + 20,
                 navigationControlX(panelX, panelWidth) - 8 - 26);
-        int renameY = panelY + 13;
-        int nameWidth = Math.max(20, renameX - panelX - 26);
-        if (!readOnly && !VersionText.immutable(version) && editingName) {
-            nameEditor = addTextField(
-                    panelX + 20, renameY,
-                    nameWidth,
-                    Component.translatable("luma.save_details.rename_title"));
-            nameEditor.setMaxLength(VersionDisplayName.MAX_LENGTH);
-            nameEditor.setValue(displayedName);
-            nameEditor.setCentered(true);
-            addButton(renameX, renameY, 26, Component.literal("✓"),
-                    this::saveName, LumiButton.Kind.PRIMARY);
-        } else if (!readOnly && !VersionText.immutable(version)) {
-            addIconButton(renameX, renameY, "edit-text",
-                    Component.translatable("luma.action.rename_save"), () -> {
-                        editingName = true;
-                        nameError = "";
-                        rebuildWidgets();
-                    }, LumiButton.Kind.NORMAL);
+        if (!readOnly && !VersionText.immutable(version)) {
+            addIconButton(renameX, panelY + 8, "edit-text",
+                    Component.translatable("luma.action.rename_save"),
+                    this::editName, LumiButton.Kind.NORMAL);
         }
 
         if (!readOnly && !VersionText.immutable(version)) {
@@ -158,14 +122,26 @@ public final class LumiVersionDetailsScreen extends LumiModalScreen {
                 + previewControlsOffset(panelWidth, panelHeight));
     }
 
-    private void addSecondaryActions(int panelWidth, int y) {
-        LumiButton branch = addIconButton(panelX + 16, y, "branch",
+    private void addActions(int y) {
+        int gap = 8;
+        int width = 26 * 4 + gap * 3;
+        int x = panelX + (panelWidth - width) / 2;
+        LumiButton restoreButton = addIconButton(x, y, "rollback",
+                Component.translatable("luma.action.restore"),
+                restore, LumiButton.Kind.PRIMARY);
+        restoreButton.active = !readOnly;
+        LumiButton branch = addIconButton(x + 26 + gap, y, "branch",
                 Component.translatable("luma.save_details.create_idea"),
                 () -> createBranch.ifPresent(Runnable::run),
                 LumiButton.Kind.NORMAL);
         branch.active = createBranch.isPresent();
+        LumiButton compare = addIconButton(x + (26 + gap) * 2, y, "see-changes",
+                Component.translatable("luma.action.see_changes"),
+                () -> compareToParent.ifPresent(Runnable::run),
+                LumiButton.Kind.NORMAL);
+        compare.active = compareToParent.isPresent();
         LumiButton remove = addIconButton(
-                panelX + panelWidth - 40, y, "trash",
+                x + (26 + gap) * 3, y, "trash",
                 Component.translatable("luma.action.delete_save"),
                 delete, LumiButton.Kind.DANGER);
         remove.active = !readOnly && !VersionText.immutable(version);
@@ -178,25 +154,13 @@ public final class LumiVersionDetailsScreen extends LumiModalScreen {
         try {
             renderWindow(
                     graphics, panelX, panelY, panelWidth, panelHeight);
-            if (nameEditor != null) {
-                renderTextField(graphics, nameEditor);
-            }
-            if (!editingName) {
-                int renameX = Math.max(panelX + 20,
-                        navigationControlX(panelX, panelWidth) - 8 - 26);
-                int titleWidth = Math.max(1, renameX - panelX - 26);
-                graphics.drawCenteredString(font,
-                        font.plainSubstrByWidth(displayedName, titleWidth),
-                        panelX + 20 + titleWidth / 2,
-                        panelY + 18, LumiTheme.TEXT);
-            }
-            if (!nameError.isEmpty()) {
-                graphics.drawString(font,
-                        font.plainSubstrByWidth(nameError, panelWidth - 40),
-                        panelX + 20,
-                        panelY + (compact(panelWidth, panelHeight) ? 29 : 38),
-                        LumiTheme.DANGER, false);
-            }
+            int renameX = navigationControlX(panelX, panelWidth) - 8 - 26;
+            int titleRight = readOnly || VersionText.immutable(version)
+                    ? navigationControlX(panelX, panelWidth) - 8 : renameX - 8;
+            graphics.drawString(font,
+                    font.plainSubstrByWidth(
+                            displayedName, Math.max(1, titleRight - panelX - 20)),
+                    panelX + 20, panelY + 14, LumiTheme.TEXT, false);
             renderPreview(graphics);
             if (compact(panelWidth, panelHeight)) {
                 renderCompactMetadata(graphics);
@@ -340,18 +304,13 @@ public final class LumiVersionDetailsScreen extends LumiModalScreen {
                 panelWidth, panelHeight);
     }
 
-    static int primaryActionOffset(int panelWidth, int panelHeight) {
+    static int actionOffset(int panelWidth, int panelHeight) {
         return panelHeight - (compact(panelWidth, panelHeight) ? 26 : 30);
-    }
-
-    static int secondaryActionOffset(int panelWidth, int panelHeight) {
-        return primaryActionOffset(panelWidth, panelHeight)
-                - (compact(panelWidth, panelHeight) ? 24 : 28);
     }
 
     static int previewControlsOffset(int panelWidth, int panelHeight) {
         return compact(panelWidth, panelHeight)
-                ? secondaryActionOffset(panelWidth, panelHeight) - 24
+                ? actionOffset(panelWidth, panelHeight) - 24
                 : 194;
     }
 
@@ -404,20 +363,12 @@ public final class LumiVersionDetailsScreen extends LumiModalScreen {
                 }));
     }
 
-    private void saveName() {
-        try {
-            VersionDisplayName replacement =
-                    new VersionDisplayName(nameEditor.getValue());
-            rename.accept(replacement.value());
-            displayedName = replacement.value();
-            editingName = false;
-            nameEditor = null;
-            nameError = "";
-            rebuildWidgets();
-        } catch (RuntimeException failed) {
-            nameError = failed.getMessage() == null
-                    ? "Lumi could not rename this Save" : failed.getMessage();
-        }
+    private void editName() {
+        minecraft.setScreen(new LumiVersionRenameScreen(
+                this, displayedName, replacement -> {
+                    rename.accept(replacement);
+                    displayedName = replacement;
+                }));
     }
 
     @Override public boolean isPauseScreen() { return false; }

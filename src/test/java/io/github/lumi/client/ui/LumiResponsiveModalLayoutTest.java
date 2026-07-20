@@ -109,15 +109,12 @@ class LumiResponsiveModalLayoutTest {
             LumiModalLayout layout = LumiVersionDetailsScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertInside(viewport, layout);
-            int primaryActions = LumiVersionDetailsScreen.primaryActionOffset(
-                    layout.width(), layout.height());
-            int secondaryActions = LumiVersionDetailsScreen.secondaryActionOffset(
+            int actions = LumiVersionDetailsScreen.actionOffset(
                     layout.width(), layout.height());
             int previewControls = LumiVersionDetailsScreen.previewControlsOffset(
                     layout.width(), layout.height());
-            assertTrue(primaryActions + 18 <= layout.height());
-            assertTrue(secondaryActions + 18 <= primaryActions);
-            assertTrue(previewControls + 18 <= secondaryActions);
+            assertTrue(actions + 18 <= layout.height());
+            assertTrue(previewControls + 18 <= actions);
             assertTrue(LumiVersionDetailsScreen.previewOffset(
                     layout.width(), layout.height())
                     + LumiVersionDetailsScreen.previewHeight(
