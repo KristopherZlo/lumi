@@ -24,7 +24,10 @@ class LumiMoreScreenTest {
         assertTrue(more.contains("ClientContextualHelpHint.MORE"));
         assertTrue(more.contains("luma.action.reset_contextual_hints"));
         assertTrue(more.contains("resetContextualHints"));
-        assertTrue(more.contains("new MoreAction("));
+        assertTrue(more.contains("new MoreCategory("));
+        assertTrue(more.contains("luma.more.category_history"));
+        assertTrue(more.contains("luma.more.category_guides"));
+        assertTrue(more.contains("luma.more.category_maintenance"));
         assertTrue(more.contains("public boolean mouseScrolled("));
         assertTrue(more.contains("renderedY + 18 > actionBottom"));
         assertFalse(more.contains("luma.action.settings"));
@@ -41,10 +44,10 @@ class LumiMoreScreenTest {
     }
 
     @Test
-    void wrappedToolsScrollByWholeRows() {
-        assertEquals(0, LumiMoreScreen.requiredScrollRows(100, 100));
-        assertEquals(1, LumiMoreScreen.requiredScrollRows(101, 100));
-        assertEquals(2, LumiMoreScreen.requiredScrollRows(125, 100));
+    void verticalCategoriesScrollByPixels() {
+        assertEquals(0, LumiMoreScreen.requiredScroll(100, 100));
+        assertEquals(1, LumiMoreScreen.requiredScroll(101, 100));
+        assertEquals(25, LumiMoreScreen.requiredScroll(125, 100));
         assertFalse(LumiMoreScreen.supportsContextualHint(160));
         assertFalse(LumiMoreScreen.supportsContextualHint(180));
         assertTrue(LumiMoreScreen.supportsContextualHint(220));

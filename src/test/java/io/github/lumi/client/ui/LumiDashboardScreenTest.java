@@ -75,6 +75,8 @@ class LumiDashboardScreenTest {
         }
         assertTrue(LumiDashboardScreen.supportCreditY(tiny) + 11
                 < tiny.windowY() + tiny.windowHeight());
+        assertTrue(LumiDashboardScreen.supportCreditY(tiny) - 4
+                - (supportTop + 75) >= 8);
     }
 
     @Test

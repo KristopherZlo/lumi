@@ -46,7 +46,9 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
     @Override
     protected void init() {
         beginLegacyInit();
-        LegacyModalLayout layout = fitPanel(width, height);
+        boolean expanded = result != null
+                && result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE;
+        LegacyModalLayout layout = fitPanel(width, height, expanded);
         panelWidth = layout.width();
         panelHeight = layout.height();
         panelX = layout.x();
@@ -164,8 +166,14 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
     }
 
     static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
-        int width = Math.min(430, Math.max(1, screenWidth - 24));
-        int height = Math.min(292, Math.max(1, screenHeight - 24));
+        return fitPanel(screenWidth, screenHeight, false);
+    }
+
+    static LegacyModalLayout fitPanel(
+            int screenWidth, int screenHeight, boolean expanded) {
+        int width = Math.min(360, Math.max(1, screenWidth - 24));
+        int height = Math.min(expanded ? 210 : 144,
+                Math.max(1, screenHeight - 24));
         return new LegacyModalLayout(
                 Math.max(0, (screenWidth - width) / 2),
                 Math.max(0, (screenHeight - height) / 2), width, height);

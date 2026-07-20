@@ -112,9 +112,8 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         addColumnButtons(true);
         addColumnButtons(false);
         int footerY = layout.y() + layout.height() - 28;
-        int dividerX = dividerX();
         LumiLegacyButton submit = addLegacyIconButton(
-                dividerX - 13, footerY, "eye-open",
+                layout.x() + layout.width() - 42, footerY, "eye-open",
                 Component.translatable("luma.action.see_changes"),
                 this::compareSelected, LumiLegacyButton.Kind.PRIMARY);
         submit.active = target().isPresent();

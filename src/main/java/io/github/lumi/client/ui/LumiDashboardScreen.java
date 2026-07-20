@@ -43,7 +43,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private static final int HISTORY_ROW_STRIDE = 34;
     private static final int COMPACT_HISTORY_ROW_HEIGHT = 54;
     private static final int COMPACT_HISTORY_ROW_STRIDE = 58;
-    private static final int SUPPORT_PANEL_OFFSET = 103;
+    private static final int SUPPORT_PANEL_OFFSET = 111;
     private static final int SUPPORT_CREDIT_OFFSET = 23;
     private static final int SIDEBAR_BUTTON_STRIDE = 19;
     private static final java.net.URI COFFEE_URI =
@@ -951,7 +951,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     }
 
     private boolean compactSidebar() {
-        return layout.sidebarWidth() < 136 || layout.windowHeight() < 340;
+        return layout.sidebarWidth() < 136 || layout.windowHeight() < 350;
     }
 
     private static boolean tinySidebar(LegacyWorkspaceLayout layout) {

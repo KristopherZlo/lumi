@@ -55,13 +55,15 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   dismissible; Alt+I opens that same guide.
 - Settings persists workspace history, Restore, preview, HUD and automatic
   version defaults through descriptive rows with compact On/Off controls;
-  diagnostic telemetry remains client-local. More is a compact
-  secondary-action row and does not duplicate Settings, support or credits.
+  diagnostic telemetry remains client-local. More groups its secondary actions
+  into vertical History, Guides and Maintenance sections and does not duplicate
+  Settings, support or credits.
 - Check updates immediately performs a bounded lookup against Lumi's fixed
-  GitHub-hosted release manifest and shows progress/result in the same modal.
+  GitHub-hosted release manifest and shows progress/result in a compact modal.
 - The project sidebar keeps More with the navigation and a bottom Support Lumi
   block with full-width icon-and-text actions for Buy me a coffee, PayPal and
-  GitHub bug reports; the author credit and mod version sit below it.
+  GitHub bug reports; the container keeps bottom padding before the author
+  credit and mod version below it.
 - A one-time native Minecraft world backup can be requested before first V2
   history creation with `-Dlumi.preModBackup.maxMiB=<limit>`; it is off by default.
 

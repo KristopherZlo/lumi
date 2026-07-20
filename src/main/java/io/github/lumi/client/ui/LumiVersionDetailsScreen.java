@@ -130,7 +130,9 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                 panelWidth,
                 panelY + secondaryActionOffset(panelWidth, panelHeight));
 
-        int renameX = Math.min(panelX + panelWidth - 122, width - 150);
+        int renameX = Math.max(
+                panelX + 20,
+                navigationControlX(panelX, panelWidth) - 8 - 102);
         if (!readOnly && editingName) {
             nameEditor = new EditBox(font, panelX + 20, panelY + 12,
                     Math.max(20, renameX - panelX - 28), INPUT_HEIGHT,

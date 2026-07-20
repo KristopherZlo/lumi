@@ -27,6 +27,7 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
     private int actionBottom;
     private int actionScroll;
     private int maximumActionScroll;
+    private List<PlacedCategory> placedCategories = List.of();
 
     public LumiMoreScreen(
             Screen parent,
@@ -68,43 +69,51 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         actionTop = panelY + 58
                 + (hintVisible ? contextualHintOffset(8) : 0);
         actionBottom = panelY + panelHeight - 12;
-        addActions(List.of(
-                new MoreAction("luma.action.dimensions", dimensions),
-                new MoreAction("luma.more.deleted_saves_title", deletedVersions),
-                new MoreAction("luma.more.onboarding_title", onboarding),
-                new MoreAction("luma.hotkeys.title", hotkeys),
-                new MoreAction("luma.more.special_thanks_title", thanks),
-                new MoreAction("luma.action.open_diagnostics", diagnostics),
-                new MoreAction("luma.action.check_updates", updates),
-                new MoreAction("luma.action.open_cleanup", cleanup),
-                new MoreAction("luma.action.manual_compare", manualCompare),
-                new MoreAction("luma.action.reset_contextual_hints",
-                        this::resetContextualHints)));
+        addCategories(List.of(
+                new MoreCategory("luma.more.category_history", List.of(
+                        new MoreAction("luma.action.dimensions", dimensions),
+                        new MoreAction("luma.more.deleted_saves_title", deletedVersions),
+                        new MoreAction("luma.action.manual_compare", manualCompare))),
+                new MoreCategory("luma.more.category_guides", List.of(
+                        new MoreAction("luma.more.onboarding_title", onboarding),
+                        new MoreAction("luma.hotkeys.title", hotkeys),
+                        new MoreAction("luma.more.special_thanks_title", thanks))),
+                new MoreCategory("luma.more.category_maintenance", List.of(
+                        new MoreAction("luma.action.open_diagnostics", diagnostics),
+                        new MoreAction("luma.action.check_updates", updates),
+                        new MoreAction("luma.action.open_cleanup", cleanup),
+                        new MoreAction("luma.action.reset_contextual_hints",
+                                this::resetContextualHints)))));
     }
 
-    private void addActions(List<MoreAction> actions) {
+    private void addCategories(List<MoreCategory> categories) {
         int left = panelX + 16;
         int right = panelX + panelWidth - 16;
-        int x = left;
         int y = actionTop;
-        List<PlacedAction> placed = new ArrayList<>(actions.size());
-        for (MoreAction action : actions) {
-            Component label = Component.translatable(action.key());
-            int width = LumiLegacyButton.contentWidth(right - left, label);
-            if (x > left && x + width > right) {
-                x = left;
-                y += 24;
+        List<PlacedCategory> placed = new ArrayList<>(categories.size());
+        for (MoreCategory category : categories) {
+            int height = 28 + category.actions().size() * 22;
+            List<PlacedAction> actions = new ArrayList<>(category.actions().size());
+            int buttonY = y + 22;
+            for (MoreAction action : category.actions()) {
+                actions.add(new PlacedAction(
+                        action, Component.translatable(action.key()),
+                        left + 8, buttonY, right - left - 16));
+                buttonY += 22;
             }
-            placed.add(new PlacedAction(action, label, x, y, width));
-            x += width + 4;
+            placed.add(new PlacedCategory(category.key(), y, height, actions));
+            y += height + 6;
         }
-        maximumActionScroll = requiredScrollRows(y + 18, actionBottom);
+        placedCategories = List.copyOf(placed);
+        maximumActionScroll = requiredScroll(y - 6, actionBottom);
         actionScroll = Math.min(actionScroll, maximumActionScroll);
-        for (PlacedAction item : placed) {
-            int renderedY = item.y() - actionScroll * 24;
-            if (renderedY < actionTop || renderedY + 18 > actionBottom) continue;
-            addLegacyButton(item.x(), renderedY, item.width(), item.label(),
-                    item.action().callback(), LumiLegacyButton.Kind.NORMAL);
+        for (PlacedCategory category : placedCategories) {
+            for (PlacedAction item : category.actions()) {
+                int renderedY = item.y() - actionScroll;
+                if (renderedY < actionTop || renderedY + 18 > actionBottom) continue;
+                addLegacyButton(item.x(), renderedY, item.width(), item.label(),
+                        item.action().callback(), LumiLegacyButton.Kind.NORMAL);
+            }
         }
     }
 
@@ -117,6 +126,16 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
                 panelWidth - 24, panelHeight - 62);
         renderPageHeader(graphics, panelX, panelY, panelWidth, title,
                 Component.translatable("luma.more.help"));
+        graphics.enableScissor(
+                panelX + 12, actionTop, panelX + panelWidth - 12, actionBottom);
+        for (PlacedCategory category : placedCategories) {
+            int y = category.y() - actionScroll;
+            renderLegacyPanel(graphics, panelX + 16, y,
+                    panelWidth - 32, category.height());
+            graphics.drawString(font, Component.translatable(category.key()),
+                    panelX + 24, y + 7, LegacyLumiTheme.ACCENT, false);
+        }
+        graphics.disableScissor();
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);
@@ -125,9 +144,8 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
 
     @Override public boolean isPauseScreen() { return false; }
 
-    static int requiredScrollRows(int contentBottom, int viewportBottom) {
-        int overflow = Math.max(0, contentBottom - viewportBottom);
-        return (overflow + 23) / 24;
+    static int requiredScroll(int contentBottom, int viewportBottom) {
+        return Math.max(0, contentBottom - viewportBottom);
     }
 
     static boolean supportsContextualHint(int panelHeight) {
@@ -143,7 +161,7 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         if (x >= panelX && x < panelX + panelWidth
                 && y >= actionTop && y < actionBottom) {
             int replacement = Math.max(0, Math.min(maximumActionScroll,
-                    actionScroll + (verticalAmount < 0 ? 1 : -1)));
+                    actionScroll + (verticalAmount < 0 ? 24 : -24)));
             if (replacement != actionScroll) {
                 actionScroll = replacement;
                 rebuildWidgets();
@@ -155,6 +173,9 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
     }
 
     private record MoreAction(String key, Runnable callback) { }
+    private record MoreCategory(String key, List<MoreAction> actions) { }
     private record PlacedAction(
             MoreAction action, Component label, int x, int y, int width) { }
+    private record PlacedCategory(
+            String key, int y, int height, List<PlacedAction> actions) { }
 }

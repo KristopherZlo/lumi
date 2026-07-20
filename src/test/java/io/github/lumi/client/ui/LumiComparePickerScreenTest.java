@@ -29,6 +29,8 @@ class LumiComparePickerScreenTest {
                 "history(left).nextBranch(snapshot.branches())"));
         assertTrue(source.contains("\"textures/gui/icons/see-changes.png\""));
         assertTrue(source.contains("\"eye-open\""));
+        assertTrue(source.contains(
+                "layout.x() + layout.width() - 42, footerY"));
         assertTrue(source.contains("minecraft.setScreen(null)"));
         assertTrue(source.contains(
                 "selected ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.PANEL_BORDER"));

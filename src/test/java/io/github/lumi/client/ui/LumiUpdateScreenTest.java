@@ -30,7 +30,7 @@ class LumiUpdateScreenTest {
     void releaseActionsFitTheMinimumViewport() {
         for (int[] viewport : new int[][] {{640, 360}, {427, 240}, {320, 180}}) {
             LegacyModalLayout layout = LumiUpdateScreen.fitPanel(
-                    viewport[0], viewport[1]);
+                    viewport[0], viewport[1], true);
             int height = layout.height();
             assertTrue(layout.x() + layout.width() <= viewport[0]);
             assertTrue(layout.y() + height <= viewport[1]);
@@ -40,9 +40,11 @@ class LumiUpdateScreenTest {
                     <= LumiUpdateScreen.bottomActionOffset(height));
             assertTrue(LumiUpdateScreen.bottomActionOffset(height) + 20 <= height);
         }
-        int height = LumiUpdateScreen.fitPanel(320, 180).height();
+        int height = LumiUpdateScreen.fitPanel(320, 180, true).height();
         assertEquals(156, height);
         assertFalse(LumiUpdateScreen.fitsResultLine(98,
                 LumiUpdateScreen.updateResultBottomOffset(height)));
+        assertEquals(144, LumiUpdateScreen.fitPanel(640, 360).height());
+        assertEquals(210, LumiUpdateScreen.fitPanel(640, 360, true).height());
     }
 }

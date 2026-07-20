@@ -33,6 +33,8 @@ class LumiVersionDetailsScreenTest {
         assertTrue(tags.contains("luma.history.tags_input"));
         assertTrue(tags.contains("VersionTags.parse(tags.getValue())"));
         assertTrue(details.contains("luma.action.rename_save"));
+        assertTrue(details.contains(
+                "navigationControlX(panelX, panelWidth) - 8 - 102"));
         assertTrue(details.contains("rename.accept(replacement.value())"));
         assertTrue(details.contains("luma.save_details.create_idea"));
         assertTrue(details.contains("luma.action.amend_version"));
