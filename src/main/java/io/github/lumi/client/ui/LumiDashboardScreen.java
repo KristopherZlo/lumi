@@ -1,6 +1,5 @@
 package io.github.lumi.client.ui;
 
-import io.github.lumi.LumiMod;
 import io.github.lumi.client.onboarding.OnboardingTour;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
@@ -21,7 +20,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -59,7 +57,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private final Consumer<HistorySnapshotPayload.Version> createBranch;
     private final BiConsumer<CommitId, VersionTags> updateTags;
     private final Consumer<VersionCompareController.Target> openCompare;
-    private final String modVersion;
     private final HistoryViewController historyView =
             new HistoryViewController(new HistoryScope.Workspace());
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
@@ -134,10 +131,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         this.createBranch = Objects.requireNonNull(createBranch, "createBranch");
         this.updateTags = Objects.requireNonNull(updateTags, "updateTags");
         this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
-        modVersion = FabricLoader.getInstance().getModContainer(LumiMod.MOD_ID)
-                .map(container -> container.getMetadata()
-                        .getVersion().getFriendlyString())
-                .orElse("?");
         pageSession().attachHistory(this);
         pageSession().route(ProjectTab.ZONES, openZones);
         pageSession().route(ProjectTab.VARIANTS, openBranches);
@@ -473,8 +466,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        graphics.fill(0, 0, width, height, LumiTheme.BACKDROP);
-        drawFrame(graphics);
         if (snapshot == null) {
             drawPanel(graphics, layout.bodyX(), layout.bodyY(),
                     layout.bodyWidth(), 96);
@@ -493,62 +484,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         }
         } finally {
             endScaledRender(graphics);
-        }
-    }
-
-    private void drawFrame(GuiGraphics graphics) {
-        int x = layout.windowX();
-        int y = layout.windowY();
-        alignNavigation(x, y, layout.windowWidth());
-        int right = x + layout.windowWidth();
-        int bottom = y + layout.windowHeight();
-        graphics.fill(x, y, right, bottom,
-                activeZoneColor().orElse(LumiTheme.WINDOW_BORDER));
-        graphics.fill(x + 1, y + 1, right - 1, bottom - 1,
-                LumiTheme.WINDOW);
-        graphics.fill(x + 1, y + 1, layout.contentX(), bottom - 1,
-                LumiTheme.SIDEBAR);
-        graphics.fill(layout.contentX(), y + 1, right - 1,
-                y + layout.titleHeight(), LumiTheme.TITLEBAR);
-        graphics.drawString(font, "Lumi", x + 14, y + 18,
-                LumiTheme.TEXT, false);
-        if (!tinySidebar(layout)) {
-            graphics.drawString(font, Component.translatable("luma.window.mode"),
-                    x + 14, y + 43, LumiTheme.MUTED, false);
-        }
-        int supportY = supportTop(layout);
-        int creditY = supportCreditY(layout);
-        LumiTheme.outlined(
-                graphics, x + 10, supportY,
-                layout.sidebarWidth() - 20, creditY - 4 - supportY,
-                LumiTheme.PANEL, LumiTheme.PANEL_BORDER);
-        graphics.drawString(font, Component.translatable("luma.window.support"),
-                x + 16, supportY + 7, LumiTheme.MUTED, false);
-        int footerWidth = Math.max(1, layout.sidebarWidth() - 32);
-        graphics.drawString(font, font.plainSubstrByWidth(
-                        Component.translatable("luma.window.credit").getString(),
-                        footerWidth),
-                x + 16, creditY, LumiTheme.MUTED, false);
-        graphics.drawString(font, font.plainSubstrByWidth(
-                        Component.translatable(
-                                "luma.window.mod_version", modVersion).getString(),
-                        footerWidth),
-                x + 16, creditY + 11, LumiTheme.MUTED, false);
-        if (snapshot != null) {
-            if (!compactSidebar()) {
-                drawChip(graphics, x + 14, y + 62,
-                        shortDimension(snapshot.dimensionId()));
-                drawChip(graphics, x + 14, y + 84, shortBranch());
-            }
-            graphics.drawString(font,
-                    Component.translatable("luma.screen.project.title",
-                            snapshot.workspaceName()),
-                    layout.contentX() + 16, y + 15,
-                    LumiTheme.TEXT, false);
-            graphics.drawString(font,
-                    Component.translatable("luma.window.home_help"),
-                    layout.contentX() + 16, y + 32,
-                    LumiTheme.MUTED, false);
         }
     }
 
@@ -783,43 +718,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 cardX, rowY, Math.max(0, bodyWidth - PANEL_PADDING * 4),
                 historyRowHeight(bodyWidth), true, true,
                 compactHistoryCards(bodyWidth));
-    }
-
-    private void drawChip(GuiGraphics graphics, int x, int y, String text) {
-        int width = Math.min(layout.sidebarWidth() - 28, font.width(text) + 12);
-        LumiTheme.outlined(graphics, x, y, width, 17,
-                LumiTheme.CHIP, LumiTheme.CHIP_BORDER);
-        graphics.drawString(font, text, x + 6, y + 5,
-                LumiTheme.MUTED, false);
-    }
-
-    private String shortBranch() {
-        String value = snapshot.branchName();
-        int slash = value.lastIndexOf('/');
-        return slash < 0 ? value : value.substring(slash + 1);
-    }
-
-    private static String shortDimension(String value) {
-        return switch (value) {
-            case "minecraft:the_nether" -> "Nether";
-            case "minecraft:the_end" -> "End";
-            default -> "Overworld";
-        };
-    }
-
-    private Optional<Integer> activeZoneColor() {
-        return snapshot == null ? Optional.empty() : snapshot.zones().stream()
-                .filter(HistorySnapshotPayload.ZoneView::active)
-                .map(HistorySnapshotPayload.ZoneView::color)
-                .findFirst();
-    }
-
-    private boolean compactSidebar() {
-        return layout.sidebarWidth() < 136 || layout.windowHeight() < 350;
-    }
-
-    private static boolean tinySidebar(LumiPageLayout layout) {
-        return layout.windowHeight() < 220;
     }
 
     record DashboardGeometry(

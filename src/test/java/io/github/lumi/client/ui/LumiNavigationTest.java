@@ -52,12 +52,13 @@ class LumiNavigationTest {
         assertFalse(modal.contains("background.mouseClicked("));
         assertFalse(modal.contains("background.mouseReleased("));
         String dashboard = Files.readString(ui.resolve("LumiDashboardScreen.java"));
-        assertTrue(dashboard.contains(
-                "alignNavigation(x, y, layout.windowWidth())"));
+        String page = Files.readString(ui.resolve("LumiPageScreen.java"));
+        assertTrue(page.contains(
+                "alignNavigation(x, y, shellLayout.windowWidth())"));
+        assertFalse(dashboard.contains("drawFrame("));
         String onboarding = Files.readString(ui.resolve("LumiOnboardingScreen.java"));
         assertTrue(onboarding.contains(
                 "alignNavigation(panelX, panelY, panelWidth)"));
-        String page = Files.readString(ui.resolve("LumiPageScreen.java"));
         String session = Files.readString(ui.resolve("LumiPageSession.java"));
         assertTrue(page.contains("private final LumiPageSession pageSession"));
         assertTrue(session.contains("new EnumMap<>(ProjectTab.class)"));
