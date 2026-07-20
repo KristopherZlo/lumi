@@ -22,6 +22,8 @@ public final class ZoneHistoryController {
     private String query = "";
     private final List<HistorySnapshotPayload.Version> loaded = new ArrayList<>();
     private int loadedOffset = -1;
+    private long observedRevision;
+    private boolean awaitingRefresh;
 
     ZoneHistoryController(
             HistorySnapshotPayload snapshot,
@@ -33,6 +35,7 @@ public final class ZoneHistoryController {
         this.pages = Objects.requireNonNull(pages, "pages");
         this.requester = Objects.requireNonNull(requester, "requester");
         branch = new BranchName(snapshot.branchName());
+        observedRevision = pages.revision(snapshot.dimensionId());
     }
 
     void request() {
@@ -41,6 +44,7 @@ public final class ZoneHistoryController {
     }
 
     Optional<HistoryPagePayload> page() {
+        synchronizeInvalidation();
         return pages.page(
                 snapshot.dimensionId(), snapshot.workspaceId(),
                 branch, Optional.of(zoneId));
@@ -48,13 +52,16 @@ public final class ZoneHistoryController {
 
     List<HistorySnapshotPayload.Version> versions(
             List<HistorySnapshotPayload.Version> initial) {
-        page().filter(current -> current.offset() != loadedOffset)
+        Optional<HistoryPagePayload> currentPage = page();
+        currentPage.filter(current -> current.offset() != loadedOffset)
                 .ifPresent(current -> {
                     if (current.offset() == 0) loaded.clear();
                     loaded.addAll(current.versions());
                     loadedOffset = current.offset();
+                    awaitingRefresh = false;
                 });
         if (!loaded.isEmpty()) return List.copyOf(loaded);
+        if (awaitingRefresh) return List.of();
         return offset == 0 && branch.value().equals(snapshot.branchName())
                 ? List.copyOf(initial) : List.of();
     }
@@ -130,6 +137,15 @@ public final class ZoneHistoryController {
         offset = 0;
         loaded.clear();
         loadedOffset = -1;
+    }
+
+    private void synchronizeInvalidation() {
+        long current = pages.revision(snapshot.dimensionId());
+        if (current == observedRevision) return;
+        observedRevision = current;
+        reset();
+        awaitingRefresh = true;
+        request();
     }
 
     @FunctionalInterface

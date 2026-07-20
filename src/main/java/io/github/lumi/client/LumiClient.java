@@ -240,6 +240,11 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void acceptOperationEvent(OperationEventPayload event) {
         PREVIEW_CAPTURE.accept(event);
+        if (Minecraft.getInstance().screen instanceof LumiDeleteVersionScreen delete
+                && delete.accept(event)) {
+            HISTORY_PAGES.invalidateDimension(event.dimensionId());
+            NETWORKING.refreshSnapshot();
+        }
         if (event.state() == OperationEventPayload.State.SUCCEEDED
                 && event.message().startsWith("luma.")) {
             showFeedback(event.message());

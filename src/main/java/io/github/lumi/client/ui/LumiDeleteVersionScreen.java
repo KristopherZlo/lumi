@@ -2,8 +2,10 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.OperationEventPayload;
 import java.util.Objects;
-import java.util.function.Consumer;
+import java.util.UUID;
+import java.util.function.Function;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -14,7 +16,9 @@ public final class LumiDeleteVersionScreen extends LumiModalScreen {
     private static final int PANEL_HEIGHT = 180;
     private final Screen parent;
     private final HistorySnapshotPayload.Version version;
-    private final Consumer<CommitId> delete;
+    private final Function<CommitId, UUID> delete;
+    private LumiButton submit;
+    private UUID requestId;
     private int panelX;
     private int panelY;
     private String error = "";
@@ -22,7 +26,7 @@ public final class LumiDeleteVersionScreen extends LumiModalScreen {
     public LumiDeleteVersionScreen(
             Screen parent,
             HistorySnapshotPayload.Version version,
-            Consumer<CommitId> delete) {
+            Function<CommitId, UUID> delete) {
         super(Component.translatable("luma.save_details.delete_title"));
         this.parent = parent;
         this.version = Objects.requireNonNull(version, "version");
@@ -36,26 +40,47 @@ public final class LumiDeleteVersionScreen extends LumiModalScreen {
         panelX = (width - panelWidth) / 2;
         panelY = (height - PANEL_HEIGHT) / 2;
         int buttonWidth = (panelWidth - 48) / 2;
-        addButton(panelX + 20, panelY + 138, buttonWidth,
+        submit = addButton(panelX + 20, panelY + 138, buttonWidth,
                 Component.translatable("luma.action.delete_save"),
                 this::delete, LumiButton.Kind.DANGER);
         addButton(panelX + 28 + buttonWidth, panelY + 138, buttonWidth,
                 Component.translatable("luma.action.cancel"),
                 this::onClose, LumiButton.Kind.NORMAL);
+        submit.active = requestId == null;
     }
 
     private void delete() {
+        if (requestId != null) return;
         try {
-            delete.accept(version.id());
+            requestId = delete.apply(version.id());
+            error = "";
+            submit.active = false;
+        } catch (RuntimeException failed) {
+            error = failed.getMessage() == null
+                    ? "Lumi save could not be deleted" : failed.getMessage();
+        }
+    }
+
+    public boolean accept(OperationEventPayload event) {
+        if (requestId == null || !requestId.equals(event.requestId())) return false;
+        if (event.state() == OperationEventPayload.State.SUCCEEDED) {
+            requestId = null;
             if (minecraft.player != null) {
                 minecraft.player.displayClientMessage(
                         Component.translatable("luma.status.version_deleted"), true);
             }
             minecraft.setScreen(parent);
-        } catch (RuntimeException failed) {
-            error = failed.getMessage() == null
-                    ? "Lumi save could not be deleted" : failed.getMessage();
+            return true;
         }
+        if (event.state() == OperationEventPayload.State.FAILED
+                || event.state() == OperationEventPayload.State.CANCELLED
+                || event.state() == OperationEventPayload.State.DEGRADED) {
+            requestId = null;
+            error = event.message().isBlank()
+                    ? "Lumi save could not be deleted" : event.message();
+            submit.active = true;
+        }
+        return false;
     }
 
     @Override

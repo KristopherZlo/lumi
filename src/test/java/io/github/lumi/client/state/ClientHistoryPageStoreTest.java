@@ -73,6 +73,23 @@ class ClientHistoryPageStoreTest {
                 .isPresent());
     }
 
+    @Test
+    void invalidatesEveryScopeInOneDimensionAndAdvancesItsRevision() {
+        ClientHistoryPageStore store = new ClientHistoryPageStore();
+        UUID request = new UUID(0, 11);
+        store.begin(request, "minecraft:overworld", WORKSPACE,
+                MAIN, Optional.empty(), 0);
+        assertTrue(store.accept(page(request, 0)));
+
+        store.invalidateDimension("minecraft:overworld");
+
+        assertTrue(store.page(
+                "minecraft:overworld", WORKSPACE, MAIN, Optional.empty())
+                .isEmpty());
+        assertTrue(store.revision("minecraft:overworld") == 1);
+        assertTrue(store.revision("minecraft:the_nether") == 0);
+    }
+
     private static HistoryPagePayload page(UUID request, int offset) {
         return new HistoryPagePayload(
                 request, "minecraft:overworld", WORKSPACE, MAIN,

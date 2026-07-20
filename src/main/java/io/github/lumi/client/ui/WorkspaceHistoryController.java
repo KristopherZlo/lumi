@@ -21,6 +21,8 @@ final class WorkspaceHistoryController {
     private String query = "";
     private final List<HistorySnapshotPayload.Version> loaded = new ArrayList<>();
     private int loadedOffset = -1;
+    private long observedRevision;
+    private boolean awaitingRefresh;
 
     WorkspaceHistoryController(
             HistorySnapshotPayload snapshot,
@@ -39,6 +41,7 @@ final class WorkspaceHistoryController {
         this.channel = channel;
         this.requester = Objects.requireNonNull(requester, "requester");
         branch = new BranchName(snapshot.branchName());
+        observedRevision = pages.revision(snapshot.dimensionId());
     }
 
     boolean matches(HistorySnapshotPayload candidate) {
@@ -59,6 +62,7 @@ final class WorkspaceHistoryController {
     }
 
     Optional<HistoryPagePayload> page() {
+        synchronizeInvalidation();
         if (channel != null) {
             return pages.page(
                     channel, snapshot.dimensionId(), snapshot.workspaceId(),
@@ -70,13 +74,16 @@ final class WorkspaceHistoryController {
     }
 
     List<HistorySnapshotPayload.Version> versions() {
-        page().filter(current -> current.offset() != loadedOffset)
+        Optional<HistoryPagePayload> currentPage = page();
+        currentPage.filter(current -> current.offset() != loadedOffset)
                 .ifPresent(current -> {
                     if (current.offset() == 0) loaded.clear();
                     loaded.addAll(current.versions());
                     loadedOffset = current.offset();
+                    awaitingRefresh = false;
                 });
         if (!loaded.isEmpty()) return List.copyOf(loaded);
+        if (awaitingRefresh) return List.of();
         return offset == 0 && branch.value().equals(snapshot.branchName())
                 ? snapshot.versions() : List.of();
     }
@@ -159,5 +166,14 @@ final class WorkspaceHistoryController {
     private void request() {
         requester.request(
                 branch, Optional.empty(), offset, pageSize, query);
+    }
+
+    private void synchronizeInvalidation() {
+        long current = pages.revision(snapshot.dimensionId());
+        if (current == observedRevision) return;
+        observedRevision = current;
+        reset();
+        awaitingRefresh = true;
+        if (pageSize > 0) request();
     }
 }

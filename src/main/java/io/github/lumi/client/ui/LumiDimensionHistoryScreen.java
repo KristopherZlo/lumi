@@ -48,6 +48,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     private boolean requested;
     private boolean queryDirty;
     private boolean refocusSearch;
+    private long observedHistoryRevision;
     private LumiCommitCard commitCards;
 
     public LumiDimensionHistoryScreen(
@@ -65,6 +66,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
         this.previews = Objects.requireNonNull(previews, "previews");
         this.requester = Objects.requireNonNull(requester, "requester");
         this.openDetails = Objects.requireNonNull(openDetails, "openDetails");
+        observedHistoryRevision = pages.revision(dimensionId);
         view = new HistoryViewController(new HistoryScope.Dimension(dimensionId));
     }
 
@@ -143,6 +145,17 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     @Override
     public void tick() {
         super.tick();
+        long historyRevision = pages.revision(dimensionId);
+        if (historyRevision != observedHistoryRevision) {
+            observedHistoryRevision = historyRevision;
+            loaded.clear();
+            loadedOffset = -1;
+            renderedPage = null;
+            scroll = 0;
+            request(0);
+            rebuildWidgets();
+            return;
+        }
         if (queryDirty) {
             queryDirty = false;
             loaded.clear();

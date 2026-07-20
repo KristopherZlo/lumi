@@ -16,6 +16,7 @@ public final class ClientHistoryPageStore {
             new LinkedHashMap<>();
     private final LinkedHashMap<PageScope, HistoryPagePayload> pages =
             new LinkedHashMap<>();
+    private final LinkedHashMap<String, Long> revisions = new LinkedHashMap<>();
 
     public static Channel createChannel() {
         return new Channel(UUID.randomUUID());
@@ -90,9 +91,23 @@ public final class ClientHistoryPageStore {
                         dimensionId, workspaceId, branch, zoneId))));
     }
 
+    public synchronized void invalidateDimension(String dimensionId) {
+        String target = Objects.requireNonNull(dimensionId, "dimensionId");
+        pending.keySet().removeIf(key -> key.scope().dimensionId().equals(target));
+        pages.keySet().removeIf(key -> key.scope().dimensionId().equals(target));
+        revisions.put(target, revision(target) + 1);
+        trim(revisions);
+    }
+
+    public synchronized long revision(String dimensionId) {
+        return revisions.getOrDefault(
+                Objects.requireNonNull(dimensionId, "dimensionId"), 0L);
+    }
+
     public synchronized void clear() {
         pending.clear();
         pages.clear();
+        revisions.clear();
     }
 
     private static <K, V> void trim(LinkedHashMap<K, V> values) {
