@@ -42,7 +42,7 @@ class LumiHeaderSafeBoundsTest {
                 "LumiBranchSlotScreen.java", "clippedCenteredHeader(",
                 "LumiMergeScreen.java", "clippedCenteredHeader(",
                 "LumiBranchScreen.java", "clippedHeader(",
-                "LumiDimensionHistoryScreen.java", "clippedHeader(");
+                "LumiDimensionHistoryScreen.java", "renderPageHeader(");
         Path screens = Path.of("src/main/java/io/github/lumi/client/ui");
         for (Map.Entry<String, String> expected : expectedCalls.entrySet()) {
             assertTrue(Files.readString(screens.resolve(expected.getKey()))
