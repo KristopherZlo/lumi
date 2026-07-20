@@ -117,16 +117,11 @@ public final class LumiZoneOverlay {
         var camera = context.worldState().cameraRenderState.pos;
         var fills = context.consumers().getBuffer(
                 LumiCompareRenderTypes.fill(false));
-        var lines = context.consumers().getBuffer(
-                LumiCompareRenderTypes.outline(false));
         for (var zone : snapshot.zones()) {
             int color = renderColor(
                     zone.color(), mode, zone.active(), zone.entered());
             int alpha = mode == Mode.FOCUSED || zone.active()
                     ? 38 : zone.entered() ? 30 : 18;
-            float width = mode == Mode.FOCUSED
-                    ? 3.0F : zone.active() ? 2.75F
-                    : zone.entered() ? 2.25F : 1.25F;
             for (ZoneShellFace face : zone.faces()) {
                 AABB box = box(face).move(
                         -camera.x, -camera.y, -camera.z);
@@ -136,6 +131,19 @@ public final class LumiZoneOverlay {
                         (float) box.maxX, (float) box.maxY, (float) box.maxZ,
                         color >> 16 & 255, color >> 8 & 255, color & 255,
                         alpha);
+            }
+        }
+        var lines = context.consumers().getBuffer(
+                LumiCompareRenderTypes.outline(false));
+        for (var zone : snapshot.zones()) {
+            int color = renderColor(
+                    zone.color(), mode, zone.active(), zone.entered());
+            float width = mode == Mode.FOCUSED
+                    ? 3.0F : zone.active() ? 2.75F
+                    : zone.entered() ? 2.25F : 1.25F;
+            for (ZoneShellFace face : zone.faces()) {
+                AABB box = box(face).move(
+                        -camera.x, -camera.y, -camera.z);
                 ShapeRenderer.renderShape(
                         context.matrices(), lines,
                         Shapes.create(new AABB(

@@ -22,8 +22,6 @@ final class LumiCompareOverlayRenderer {
         var camera = context.worldState().cameraRenderState.pos;
         VertexConsumer fills = context.consumers().getBuffer(
                 LumiCompareRenderTypes.fill(xray));
-        VertexConsumer lines = context.consumers().getBuffer(
-                LumiCompareRenderTypes.outline(xray));
         int alpha = xray ? XRAY_ALPHA : NORMAL_ALPHA;
         for (BlockChange change : changes) {
             double x = change.x() - camera.x;
@@ -39,6 +37,18 @@ final class LumiCompareOverlayRenderer {
                     (float) x, (float) y, (float) z,
                     (float) x + 1, (float) y + 1, (float) z + 1,
                     (color >> 16) & 255, (color >> 8) & 255, color & 255, alpha);
+        }
+        VertexConsumer lines = context.consumers().getBuffer(
+                LumiCompareRenderTypes.outline(xray));
+        for (BlockChange change : changes) {
+            double x = change.x() - camera.x;
+            double y = change.y() - camera.y;
+            double z = change.z() - camera.z;
+            if (distanceSquared(x + 0.5, y + 0.5, z + 0.5)
+                    > MAX_DISTANCE_SQUARED) {
+                continue;
+            }
+            int color = color(change.kind());
             ShapeRenderer.renderShape(
                     context.matrices(), lines, Shapes.block(),
                     x, y, z, color, 2.75F);

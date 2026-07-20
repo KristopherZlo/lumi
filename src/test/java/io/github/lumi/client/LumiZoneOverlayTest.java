@@ -2,8 +2,11 @@ package io.github.lumi.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.ZoneShellFace;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class LumiZoneOverlayTest {
@@ -36,5 +39,18 @@ class LumiZoneOverlayTest {
         assertNotEquals(focused, active);
         assertNotEquals(active, entered);
         assertNotEquals(entered, other);
+    }
+
+    @Test
+    void finishesFillsBeforeAcquiringTheOutlineBuffer() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/LumiZoneOverlay.java"));
+        int fillBuffer = source.indexOf("LumiCompareRenderTypes.fill(false)");
+        int fill = source.indexOf("renderSolidBox(", fillBuffer);
+        int outlineBuffer = source.indexOf(
+                "LumiCompareRenderTypes.outline(false)", fillBuffer);
+
+        assertTrue(fillBuffer < fill);
+        assertTrue(fill < outlineBuffer);
     }
 }
