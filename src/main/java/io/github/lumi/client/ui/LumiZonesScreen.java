@@ -96,8 +96,8 @@ public final class LumiZonesScreen extends LumiPageScreen {
         panelWidth = shell.contentWidth();
         panelHeight = shell.windowHeight();
         compact = panelWidth < 300;
-        contentX = shell.bodyX();
-        contentWidth = shell.bodyWidth();
+        contentX = panelX + 16;
+        contentWidth = panelWidth - 32;
         int fieldY = panelY + (compact ? 60 : 72);
         rowsY = panelY + (compact ? COMPACT_ROWS_OFFSET : 126);
         rowHeight = compact ? 42 : 28;

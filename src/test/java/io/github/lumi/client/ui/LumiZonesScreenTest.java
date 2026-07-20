@@ -43,8 +43,8 @@ class LumiZonesScreenTest {
         assertTrue(source.contains("\"luma.zones.cells\", zone.cells()"));
         assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("compact = panelWidth < 300"));
-        assertTrue(source.contains("contentX = shell.bodyX()"));
-        assertTrue(source.contains("contentWidth = shell.bodyWidth()"));
+        assertTrue(source.contains("contentX = panelX + 16"));
+        assertTrue(source.contains("contentWidth = panelWidth - 32"));
         assertTrue(source.contains("contentWidth - LumiScrollbar.GUTTER_WIDTH"));
         assertTrue(source.contains("rowHeight = compact ? 42 : 28"));
         assertTrue(source.contains("renderTextField(graphics, name)"));

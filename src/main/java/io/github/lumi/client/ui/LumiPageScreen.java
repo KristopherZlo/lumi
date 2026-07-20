@@ -202,11 +202,14 @@ abstract class LumiPageScreen extends LumiScreen {
             drawChip(graphics, x + 14, y + 84,
                     shortBranch(snapshot.branchName()));
         }
-        renderPageHeader(
-                graphics, shellLayout.contentX(), y, shellLayout.contentWidth(),
-                Component.translatable(
-                        "luma.screen.project.title", snapshot.workspaceName()),
-                Component.translatable("luma.window.home_help"));
+        if (tab == ProjectTab.HISTORY) {
+            renderPageHeader(
+                    graphics, shellLayout.contentX(), y,
+                    shellLayout.contentWidth(),
+                    Component.translatable(
+                            "luma.screen.project.title", snapshot.workspaceName()),
+                    Component.translatable("luma.window.home_help"));
+        }
     }
 
     private void drawChip(GuiGraphics graphics, int x, int y, String text) {
