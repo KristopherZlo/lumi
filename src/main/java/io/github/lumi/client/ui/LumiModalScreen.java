@@ -7,7 +7,6 @@ import io.github.lumi.client.onboarding.ClientContextualHelpService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -19,9 +18,7 @@ import java.util.List;
 import java.util.function.IntConsumer;
 
 /** Shared window chrome for V2 modal workflows. */
-abstract class LumiModalScreen extends Screen {
-    protected static final int INPUT_HEIGHT = 14;
-    protected static final int INPUT_FRAME_HEIGHT = 18;
+abstract class LumiModalScreen extends LumiScreen {
     private static final int FRAME_CONTROL_INSET = 8;
     private static final int ICON_BUTTON_WIDTH = 26;
     private static final int HEADER_CONTROL_GAP = 8;
@@ -49,43 +46,6 @@ abstract class LumiModalScreen extends Screen {
     protected LumiModalScreen(Screen background, Component title) {
         super(title);
         this.background = background;
-    }
-
-    protected final LumiButton addButton(
-            int x, int y, int width, Component label,
-            Runnable action, LumiButton.Kind kind) {
-        return addRenderableWidget(new LumiButton(
-                x, y, width, 20, label, ignored -> action.run(), kind));
-    }
-
-    protected final LumiButton addContentButton(
-            int x, int y, int maximumWidth, Component label,
-            Runnable action, LumiButton.Kind kind) {
-        return addButton(
-                x, y, LumiButton.contentWidth(maximumWidth, label),
-                label, action, kind);
-    }
-
-    protected final LumiButton addIconButton(
-            int x, int y, String icon, Component label,
-            Runnable action, LumiButton.Kind kind) {
-        return addRenderableWidget(new LumiButton(
-                x, y, 26, 20, label, ignored -> action.run(), kind, icon));
-    }
-
-    protected final LumiTextField addTextField(
-            int x, int y, int width, Component label) {
-        return addRenderableWidget(new LumiTextField(font, x, y, width, label));
-    }
-
-    protected final void renderTextField(
-            GuiGraphics graphics, EditBox field) {
-        if (!(field instanceof LumiTextField)) {
-            LumiTheme.outlined(
-                    graphics, field.getX() - 6, field.getY(),
-                    field.getWidth() + 12, INPUT_FRAME_HEIGHT,
-                    LumiTheme.INSET, LumiTheme.INSET_BORDER);
-        }
     }
 
     protected final void renderScrollbar(
