@@ -190,8 +190,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         commitCards = snapshot == null ? null
                 : new LumiCommitCard(font, previews, snapshot.dimensionId());
         layout = LumiPageLayout.fit(width, height);
-        addSidebarButtons();
-        addSupportButtons();
         DashboardGeometry baseGeometry = dashboardGeometry(
                 layout.bodyY(), layout.bodyHeight(), layout.bodyWidth(), 0);
         boolean hintVisible = addDashboardHint(baseGeometry.hintY());

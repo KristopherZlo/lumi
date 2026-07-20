@@ -128,6 +128,10 @@ abstract class LumiScreen extends Screen {
                             ? "luma.action.back" : "luma.action.close"),
                     this::onClose, LumiButton.Kind.NORMAL);
         }
+        afterScreenInit();
+    }
+
+    protected void afterScreenInit() {
     }
 
     protected final boolean addContextualHint(
@@ -367,11 +371,15 @@ abstract class LumiScreen extends Screen {
         float scale = renderScale();
         graphics.pose().pushMatrix();
         graphics.pose().scale(scale, scale);
+        renderScaledUnderlay(graphics);
         return new ScaledRenderContext(
                 virtualCoordinate(mouseX), virtualCoordinate(mouseY));
     }
 
     protected void renderUnderlay(GuiGraphics graphics) {
+    }
+
+    protected void renderScaledUnderlay(GuiGraphics graphics) {
     }
 
     protected final void endScaledRender(GuiGraphics graphics) {
