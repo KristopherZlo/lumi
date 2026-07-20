@@ -71,13 +71,16 @@ class LumiNavigationTest {
 
     @Test
     void textInputsUseCompactSingleLineHeight() throws Exception {
-        assertEquals(14, LumiModalScreen.INPUT_HEIGHT);
-        assertEquals(18, LumiModalScreen.INPUT_FRAME_HEIGHT);
+        assertEquals(18, LumiTextField.FRAME_HEIGHT);
+        assertEquals(6, LumiTextField.HORIZONTAL_PADDING);
+        assertEquals(4, LumiTextField.VERTICAL_PADDING);
         String modal = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiModalScreen.java"));
-        assertTrue(modal.contains("x + 6, y, Math.max(0, width - 12)"));
-        assertTrue(modal.contains("field.getX() - 6, field.getY()"));
-        assertTrue(modal.contains("INPUT_FRAME_HEIGHT, label"));
+        assertTrue(modal.contains("new LumiTextField(font, x, y, width, label)"));
+        String field = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiTextField.java"));
+        assertTrue(field.contains("y + VERTICAL_PADDING"));
+        assertTrue(field.contains("mouseY < frameY + FRAME_HEIGHT"));
         Path ui = Path.of("src/main/java/io/github/lumi/client/ui");
         for (String screen : List.of(
                 "LumiDashboardScreen.java",
@@ -93,5 +96,7 @@ class LumiNavigationTest {
             assertFalse(source.matches("(?s).*new EditBox\\([^;]+, 20,\\s*Component.*"),
                     screen);
         }
+        assertEquals(200, LumiPageLayout.doubledSearchWidth(100, 400));
+        assertEquals(86, LumiPageLayout.doubledSearchWidth(100, 86));
     }
 }

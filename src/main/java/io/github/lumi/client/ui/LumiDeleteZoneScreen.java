@@ -44,14 +44,12 @@ public final class LumiDeleteZoneScreen extends LumiModalScreen {
         panelY = layout.y();
         panelWidth = layout.width();
         panelHeight = layout.height();
-        confirmation = new EditBox(
-                font, panelX + 22, panelY + 83, panelWidth - 44, INPUT_HEIGHT,
+        confirmation = addTextField(
+                panelX + 20, panelY + 80, panelWidth - 40,
                 Component.translatable("luma.zones.delete_input"));
         confirmation.setMaxLength(256);
         confirmation.setHint(Component.translatable("luma.zones.delete_input"));
-        confirmation.setBordered(false);
         confirmation.setResponder(ignored -> updateSubmit());
-        addRenderableWidget(confirmation);
         int buttonWidth = (panelWidth - 48) / 2;
         submit = addButton(
                 panelX + 20, panelY + actionOffset(panelHeight), buttonWidth,
@@ -129,10 +127,6 @@ public final class LumiDeleteZoneScreen extends LumiModalScreen {
                                     "luma.zones.delete_help", zone.name()),
                             centerX, contentLeft, contentRight),
                     centerX, panelY + 46, LumiTheme.MUTED);
-            LumiTheme.outlined(
-                    graphics, panelX + 20, panelY + 80, panelWidth - 40,
-                    INPUT_FRAME_HEIGHT,
-                    LumiTheme.INSET, LumiTheme.INSET_BORDER);
             if (!error.isEmpty()) {
                 graphics.drawCenteredString(
                         font, clippedCenteredHeader(

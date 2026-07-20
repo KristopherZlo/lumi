@@ -108,27 +108,20 @@ public final class LumiSaveScreen extends LumiModalScreen {
         int y = layout.y();
         int actionY = y + actionOffset(layout.height());
 
-        message = new EditBox(
-                font, x + 14, y + messageOffset(layout.height()),
-                layout.width() - 28, INPUT_HEIGHT,
-                scope.nameLabel());
+        message = addTextField(
+                x + 11, y + messageOffset(layout.height()) - 3,
+                layout.width() - 22, scope.nameLabel());
         message.setMaxLength(SaveScreenController.MAX_NAME_LENGTH);
         message.setHint(scope.nameLabel());
-        message.setBordered(false);
-        message.setTextColor(LumiTheme.TEXT);
         message.setResponder(value -> setSubmitActive(!value.trim().isEmpty()));
-        addRenderableWidget(message);
         message.setValue(initialMessage);
 
-        tags = new EditBox(
-                font, x + 14, y + tagsOffset(layout.height()),
-                layout.width() - 28, INPUT_HEIGHT,
+        tags = addTextField(
+                x + 11, y + tagsOffset(layout.height()) - 3,
+                layout.width() - 22,
                 Component.translatable("luma.history.tags_input"));
         tags.setMaxLength(io.github.lumi.domain.model.VersionTags.MAX_SERIALIZED_LENGTH);
         tags.setHint(Component.translatable("luma.history.tags_input"));
-        tags.setBordered(false);
-        tags.setTextColor(LumiTheme.TEXT);
-        addRenderableWidget(tags);
 
         int buttonWidth = Math.max(80, (layout.width() - 18) / 2);
         save = addButton(x + 6, actionY, buttonWidth,
@@ -241,20 +234,11 @@ public final class LumiSaveScreen extends LumiModalScreen {
                     font, scope.help(),
                     x + 12, fieldY + 20, LumiTheme.MUTED, false);
         }
-        LumiTheme.outlined(graphics, x + 11,
-                y + messageOffset(layout.height()) - 3,
-                layout.width() - 22, 20,
-                LumiTheme.WINDOW, LumiTheme.PANEL_BORDER);
-
         LumiTheme.outlined(graphics, x + 6, tagPanelY,
                 layout.width() - 12, tiny ? 32 : compact ? 40 : 43,
                 LumiTheme.INSET, LumiTheme.INSET_BORDER);
         graphics.drawString(font, Component.translatable("luma.save.tags_title"),
                 x + 12, tagPanelY + 6, LumiTheme.TEXT, false);
-        LumiTheme.outlined(graphics, x + 11,
-                y + tagsOffset(layout.height()) - 3,
-                layout.width() - 22, 20,
-                LumiTheme.WINDOW, LumiTheme.PANEL_BORDER);
     }
 
     static LumiModalLayout fitPanel(int screenWidth, int screenHeight) {

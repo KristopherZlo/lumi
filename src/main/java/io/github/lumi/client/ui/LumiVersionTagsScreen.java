@@ -34,15 +34,12 @@ public final class LumiVersionTagsScreen extends LumiModalScreen {
         layout = fitPanel(width, height);
         int x = layout.x();
         int y = layout.y();
-        tags = new EditBox(
-                font, x + 14, y + 63, layout.width() - 28, INPUT_HEIGHT,
+        tags = addTextField(
+                x + 10, y + 59, layout.width() - 20,
                 Component.translatable("luma.history.tags_input"));
         tags.setMaxLength(VersionTags.MAX_SERIALIZED_LENGTH);
         tags.setHint(Component.translatable("luma.history.tags_input"));
-        tags.setBordered(false);
-        tags.setTextColor(LumiTheme.TEXT);
         tags.setValue(initialTags.serialize());
-        addRenderableWidget(tags);
 
         int actionY = y + layout.height() - 28;
         addButton(x + 12, actionY, 100,
@@ -96,10 +93,6 @@ public final class LumiVersionTagsScreen extends LumiModalScreen {
                     Component.translatable("luma.history.tags_input"),
                     layout.x() + 12, layout.y() + 39,
                     LumiTheme.MUTED, false);
-            LumiTheme.outlined(
-                    graphics, layout.x() + 10, layout.y() + 59,
-                    layout.width() - 20, INPUT_FRAME_HEIGHT,
-                    LumiTheme.INSET, LumiTheme.INSET_BORDER);
             if (!error.isEmpty()) {
                 graphics.drawString(font, errorText(error),
                         layout.x() + 12, layout.y() + 82,

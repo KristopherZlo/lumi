@@ -18,7 +18,8 @@ import net.minecraft.network.chat.Component;
 public final class LumiBranchesScreen extends LumiPageScreen {
     private static final int MAX_ROWS = 6;
     private static final int FORM_TOP = LumiTheme.PAGE_HEADER_HEIGHT + 8;
-    private static final int LIST_TOP = FORM_TOP + 28;
+    private static final int FIELD_TOP = FORM_TOP + 14;
+    private static final int LIST_TOP = FIELD_TOP + 28;
     private static final int INLINE_ACTION_WIDTH = 252;
     private static final int ICON_WIDTH = 26;
     private static final int STACKED_ICON_GAP = 4;
@@ -82,14 +83,14 @@ public final class LumiBranchesScreen extends LumiPageScreen {
                 x + 16, y + FORM_TOP, contentWidth);
         contentOffset = hintVisible ? contextualHintOffset(8) : 0;
         name = addTextField(
-                x + 16, y + FORM_TOP + contentOffset,
+                x + 16, y + FIELD_TOP + contentOffset,
                 Math.max(20, contentWidth - 106),
                 Component.translatable("luma.variant.name_input"));
         name.setMaxLength(BranchNameController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.variant.name_input"));
         name.setResponder(value -> updateCreateButton());
         createButton = addButton(
-                x + layout.width() - 116, y + FORM_TOP + contentOffset, 100,
+                x + layout.width() - 116, y + FIELD_TOP + contentOffset, 100,
                 Component.translatable("luma.action.variant_create"),
                 this::createBranch,
                 LumiButton.Kind.PRIMARY);
@@ -191,10 +192,11 @@ public final class LumiBranchesScreen extends LumiPageScreen {
 
     private void addDeleteConfirmation(int x, int y, int contentWidth) {
         int buttonWidth = Math.max(0, (contentWidth - 8) / 2);
-        addButton(x + 16, y + 142 + contentOffset, buttonWidth,
+        addButton(x + 16, y + LIST_TOP + 64 + contentOffset, buttonWidth,
                 Component.translatable("luma.action.delete_branch"),
                 this::deleteBranch, LumiButton.Kind.DANGER);
-        addButton(x + 24 + buttonWidth, y + 142 + contentOffset, buttonWidth,
+        addButton(x + 24 + buttonWidth,
+                y + LIST_TOP + 64 + contentOffset, buttonWidth,
                 Component.translatable("luma.action.cancel"), () -> {
                     pendingDelete = null;
                     error = "";
@@ -222,12 +224,15 @@ public final class LumiBranchesScreen extends LumiPageScreen {
         try {
         renderPage(graphics, layout.x(), layout.y(), layout.width(), layout.height());
         renderPageHeader(
-                graphics, layout.x(), layout.y(), layout.width(), title, null);
-        activeZone.ifPresent(zone -> graphics.drawString(
-                font,
-                Component.translatable("luma.ideas.zone_badge", zone.name()),
-                layout.x() + 16, layout.y() + 29, zone.color(), false));
-        renderTextField(graphics, name);
+                graphics, layout.x(), layout.y(), layout.width(), title,
+                Component.translatable(activeZone.isPresent()
+                        ? "luma.ideas.zone_overview_help"
+                        : "luma.variants.overview_help"));
+        graphics.drawString(font,
+                Component.translatable("luma.variant.name_input"),
+                layout.x() + 16,
+                layout.y() + FORM_TOP + contentOffset,
+                LumiTheme.MUTED, false);
         if (pendingDelete == null) {
             int rows = visibleRows();
             int start = rows == 0 ? 0 : Math.min(scroll, branches.size());
@@ -258,23 +263,26 @@ public final class LumiBranchesScreen extends LumiPageScreen {
                     branches.size(), rows, scroll, value -> scroll = value);
         } else {
             renderPanel(graphics, layout.x() + 16,
-                    layout.y() + 76 + contentOffset,
+                    layout.y() + LIST_TOP + contentOffset,
                     layout.width() - 32, 54);
             graphics.drawCenteredString(font,
                     Component.translatable("luma.action.delete_branch"),
                     layout.x() + layout.width() / 2,
-                    layout.y() + 88 + contentOffset, LumiTheme.DANGER);
+                    layout.y() + LIST_TOP + 12 + contentOffset,
+                    LumiTheme.DANGER);
             graphics.drawCenteredString(font,
                     font.plainSubstrByWidth(
                             shortName(pendingDelete.name()), layout.width() - 64),
                     layout.x() + layout.width() / 2,
-                    layout.y() + 108 + contentOffset, LumiTheme.TEXT);
+                    layout.y() + LIST_TOP + 32 + contentOffset,
+                    LumiTheme.TEXT);
         }
         if (branches.isEmpty()) {
             graphics.drawCenteredString(font,
                     Component.translatable("luma.merge.no_sources"),
                     layout.x() + layout.width() / 2,
-                    layout.y() + 86 + contentOffset, LumiTheme.MUTED);
+                    layout.y() + LIST_TOP + 8 + contentOffset,
+                    LumiTheme.MUTED);
         }
         if (!error.isEmpty()) {
             graphics.drawCenteredString(font, errorText(error),
@@ -315,7 +323,8 @@ public final class LumiBranchesScreen extends LumiPageScreen {
 
     static int visibleRows(int layoutHeight, int contentOffset, int layoutWidth) {
         return Math.min(MAX_ROWS, Math.max(
-                0, (layoutHeight - 100 - contentOffset) / rowStride(layoutWidth)));
+                0, (layoutHeight - LIST_TOP - 10 - contentOffset)
+                        / rowStride(layoutWidth)));
     }
 
     @Override
@@ -344,7 +353,7 @@ public final class LumiBranchesScreen extends LumiPageScreen {
         double x = virtualCoordinate(mouseX);
         double y = virtualCoordinate(mouseY);
         if (x >= layout.x() && x < layout.x() + layout.width()
-                && y >= layout.y() + 70 + contentOffset
+                && y >= layout.y() + LIST_TOP + contentOffset
                 && y < layout.y() + layout.height()) {
             int maximum = Math.max(0, branches.size() - visibleRows());
             int replacement = Math.max(0, Math.min(

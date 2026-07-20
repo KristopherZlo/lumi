@@ -48,4 +48,8 @@ public record LumiPageLayout(
     public int bodyHeight() {
         return Math.max(0, windowHeight - titleHeight - 12);
     }
+
+    static int doubledSearchWidth(int currentWidth, int availableWidth) {
+        return Math.max(20, Math.min(currentWidth * 2, availableWidth));
+    }
 }

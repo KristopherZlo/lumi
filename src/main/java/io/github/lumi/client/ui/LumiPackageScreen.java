@@ -80,15 +80,12 @@ public final class LumiPackageScreen extends LumiPageScreen {
         if (!geometry.contentVisible()) {
             return;
         }
-        name = new EditBox(font, x, panelY + geometry.fieldY() + 3,
-                contentWidth, INPUT_HEIGHT,
+        name = addTextField(
+                panelX + 14, panelY + geometry.fieldY(), panelWidth - 28,
                 Component.translatable("luma.share.package_name"));
         name.setMaxLength(PackageScreenController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.share.package_name"));
-        name.setBordered(false);
-        name.setTextColor(LumiTheme.TEXT);
         name.setResponder(value -> updateActions());
-        addRenderableWidget(name);
 
         int actionWidth = Math.max(40, (contentWidth - 38) / 2);
         export = addButton(x, panelY + geometry.actionY(), actionWidth,
@@ -296,10 +293,6 @@ public final class LumiPackageScreen extends LumiPageScreen {
                         Component.translatable("luma.share.package_name"),
                         panelX + 16, panelY + geometry.nameLabelY(),
                         LumiTheme.TEXT, false);
-                LumiTheme.outlined(graphics, panelX + 14,
-                        panelY + geometry.fieldY(),
-                        panelWidth - 28, INPUT_FRAME_HEIGHT,
-                        LumiTheme.INSET, LumiTheme.INSET_BORDER);
                 renderRows(graphics);
             }
             if (!status.isEmpty()) {

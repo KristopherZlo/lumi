@@ -73,22 +73,19 @@ abstract class LumiModalScreen extends Screen {
                 x, y, 26, 20, label, ignored -> action.run(), kind, icon));
     }
 
-    protected final EditBox addTextField(
+    protected final LumiTextField addTextField(
             int x, int y, int width, Component label) {
-        EditBox field = new EditBox(
-                font, x + 6, y, Math.max(0, width - 12),
-                INPUT_FRAME_HEIGHT, label);
-        field.setBordered(false);
-        field.setTextColor(LumiTheme.TEXT);
-        return addRenderableWidget(field);
+        return addRenderableWidget(new LumiTextField(font, x, y, width, label));
     }
 
     protected final void renderTextField(
             GuiGraphics graphics, EditBox field) {
-        LumiTheme.outlined(
-                graphics, field.getX() - 6, field.getY(),
-                field.getWidth() + 12, INPUT_FRAME_HEIGHT,
-                LumiTheme.INSET, LumiTheme.INSET_BORDER);
+        if (!(field instanceof LumiTextField)) {
+            LumiTheme.outlined(
+                    graphics, field.getX() - 6, field.getY(),
+                    field.getWidth() + 12, INPUT_FRAME_HEIGHT,
+                    LumiTheme.INSET, LumiTheme.INSET_BORDER);
+        }
     }
 
     protected final void renderScrollbar(

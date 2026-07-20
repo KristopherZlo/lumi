@@ -167,7 +167,12 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                 historyView.mode() == HistoryViewController.Mode.GRAPH
                         ? LumiButton.Kind.SELECTED
                         : LumiButton.Kind.NORMAL);
-        int searchWidth = Math.min(100, Math.max(70, layout.bodyWidth() / 4));
+        int currentSearchWidth = Math.min(
+                100, Math.max(70, layout.bodyWidth() / 4));
+        int searchWidth = LumiPageLayout.doubledSearchWidth(
+                currentSearchWidth,
+                Math.max(20, right - 60 - left
+                        - LumiDashboardScreen.CONTROL_GAP));
         search = addTextField(
                 left, toolbarY, searchWidth,
                 Component.translatable("luma.dashboard.search"));

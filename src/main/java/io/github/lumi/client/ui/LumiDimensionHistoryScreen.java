@@ -95,9 +95,12 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
                 view.mode() == HistoryViewController.Mode.GRAPH
                         ? LumiButton.Kind.SELECTED
                         : LumiButton.Kind.NORMAL);
+        int currentSearchWidth = Math.min(
+                124, Math.max(74, panelWidth / 3 + 4));
         search = addTextField(
                 panelX + 16, historyY + 4,
-                Math.min(124, Math.max(74, panelWidth / 3 + 4)),
+                LumiPageLayout.doubledSearchWidth(
+                        currentSearchWidth, Math.max(20, panelWidth - 96)),
                 Component.translatable("luma.dashboard.search"));
         search.setMaxLength(HistoryPageRequestPayload.MAX_QUERY_LENGTH);
         search.setHint(Component.translatable("luma.dashboard.search"));
