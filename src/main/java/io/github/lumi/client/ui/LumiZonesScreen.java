@@ -250,9 +250,10 @@ public final class LumiZonesScreen extends LumiPageScreen {
         renderZoneRows(graphics, panelWidth);
         if (snapshot != null) {
             renderScrollbar(
-                    graphics, panelX + panelWidth - 7, rowsY,
+                    graphics, panelX + 16, rowsY, panelWidth - 20,
                     Math.max(0, panelY + panelHeight - rowsY - 8),
-                    snapshot.zones().size(), visibleRows(), scroll);
+                    snapshot.zones().size(), visibleRows(), scroll,
+                    value -> scroll = value);
         }
         if (!error.isEmpty() && !errorReplacesListTitle) {
             graphics.drawString(font, font.plainSubstrByWidth(

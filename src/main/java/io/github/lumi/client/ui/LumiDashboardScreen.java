@@ -29,7 +29,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
 
 /** Project-window presentation backed by the immutable V2 history snapshot. */
-public final class LumiDashboardScreen extends LumiModalScreen {
+public final class LumiDashboardScreen extends LumiPageScreen {
     static final int PANEL_PADDING = 6;
     static final int SECTION_GAP = 5;
     static final int CONTROL_GAP = 4;
@@ -122,7 +122,8 @@ public final class LumiDashboardScreen extends LumiModalScreen {
             Consumer<HistorySnapshotPayload.Version> createBranch,
             BiConsumer<CommitId, VersionTags> updateTags,
             Consumer<VersionCompareController.Target> openCompare) {
-        super(parent, Component.translatable("luma.screen.dashboard.title"));
+        super(parent, Component.translatable("luma.screen.dashboard.title"),
+                ProjectTab.HISTORY);
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
         this.previews = Objects.requireNonNull(previews, "previews");
@@ -770,10 +771,12 @@ public final class LumiDashboardScreen extends LumiModalScreen {
             renderVersionCard(graphics, version, rowY, false);
         }
         renderScrollbar(
-                graphics, x + width - 6,
+                graphics, x,
                 historyY + HISTORY_FIRST_ROW_OFFSET,
+                width - 3,
                 Math.max(0, historyHeight - HISTORY_FIRST_ROW_OFFSET - 5),
-                versions.size(), rows, historyScroll);
+                versions.size(), rows, historyScroll,
+                value -> historyScroll = value);
         if (versions.isEmpty()) {
             graphics.drawString(font,
                     Component.translatable(searchQuery.isBlank()

@@ -344,10 +344,12 @@ public final class LumiPackageScreen extends LumiPageScreen {
                     panelX + 24, y + 8, LumiTheme.TEXT, false);
         }
         renderScrollbar(
-                graphics, panelX + panelWidth - 15,
+                graphics, panelX + 16,
                 panelY + geometry.listY(),
+                panelWidth - 28,
                 Math.max(0, geometry.listBottom() - geometry.listY()),
-                browser.size(), rows, start);
+                browser.size(), rows, start,
+                value -> browser.scrollTo(value, rows));
     }
 
     private void renderDeleteConfirmation(GuiGraphics graphics) {

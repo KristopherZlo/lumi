@@ -164,10 +164,11 @@ public final class LumiMergeScreen extends LumiModalScreen {
                     panelX + 28, rowY + 6, LumiTheme.TEXT, false);
         }
         renderScrollbar(
-                graphics, panelX + panelWidth - 17, panelY + LIST_Y,
+                graphics, panelX + 16, panelY + LIST_Y, panelWidth - 30,
                 Math.max(0, panelY + actionOffset(panelHeight) - 4
                         - (panelY + LIST_Y)),
-                sources.size(), visibleRows, sourceScroll);
+                sources.size(), visibleRows, sourceScroll,
+                value -> sourceScroll = value);
         if (sources.isEmpty()) {
             graphics.drawCenteredString(font,
                     Component.translatable("luma.merge.no_sources"),

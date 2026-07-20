@@ -278,6 +278,7 @@
   "luma.history.message_input": "Name des Speicherstands",
   "luma.history.message_required": "Nachricht (erforderlich)",
   "luma.history.empty": "Noch keine Speicherungen.",
+  "luma.scrollbar": "Bildlaufleiste",
   "luma.history.version_header": "%s | %s",
   "luma.history.version_header_selected": "%s | %s | ausgewählt",
   "luma.history.version_message": "Nachricht: %s",

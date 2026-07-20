@@ -14,6 +14,9 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.IntConsumer;
 
 /** Shared window chrome for V2 modal workflows. */
 abstract class LumiModalScreen extends Screen {
@@ -36,6 +39,7 @@ abstract class LumiModalScreen extends Screen {
     private boolean screenInitialized;
     private LumiButton navigationButton;
     private boolean handCursorActive;
+    private final List<LumiScrollbar> scrollbars = new ArrayList<>();
     private static long handCursor;
 
     protected LumiModalScreen(Component title) {
@@ -89,27 +93,31 @@ abstract class LumiModalScreen extends Screen {
 
     protected final void renderScrollbar(
             GuiGraphics graphics,
-            int x,
+            int viewportX,
             int y,
+            int viewportWidth,
             int height,
             int totalExtent,
             int visibleExtent,
-            int offset) {
-        if (height <= 0 || visibleExtent <= 0 || totalExtent <= visibleExtent) {
-            return;
-        }
-        int maximumOffset = totalExtent - visibleExtent;
-        int thumbHeight = Math.max(
-                10, (int) ((long) height * visibleExtent / totalExtent));
-        int thumbY = y + (int) ((long) (height - thumbHeight)
-                * Math.max(0, Math.min(offset, maximumOffset)) / maximumOffset);
-        graphics.fill(x, y, x + 3, y + height, LumiTheme.INSET_BORDER);
-        graphics.fill(
-                x, thumbY, x + 3, thumbY + thumbHeight, LumiTheme.ACCENT);
+            int offset,
+            IntConsumer update) {
+        LumiScrollbar scrollbar = scrollbars.stream()
+                .filter(candidate -> candidate.matches(
+                        viewportX, y, viewportWidth, height))
+                .findFirst()
+                .orElseGet(() -> {
+                    LumiScrollbar created = new LumiScrollbar(
+                            viewportX, y, viewportWidth, height,
+                            this::rebuildWidgets);
+                    scrollbars.add(created);
+                    return addRenderableWidget(created);
+                });
+        scrollbar.configure(totalExtent, visibleExtent, offset, update);
     }
 
     protected final void beginScreenInit() {
         screenInitialized = true;
+        scrollbars.clear();
         contextualHint = null;
         Window window = Minecraft.getInstance().getWindow();
         int currentGuiScale = currentGuiScale();

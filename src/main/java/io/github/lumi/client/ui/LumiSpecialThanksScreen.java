@@ -73,9 +73,9 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
             y += cardHeight + CARD_GAP;
         }
         renderScrollbar(
-                graphics, panelX + panelWidth - 10, panelY + CARDS_TOP,
+                graphics, panelX + 12, panelY + CARDS_TOP, panelWidth - 19,
                 Math.max(0, panelHeight - CARDS_TOP - BOTTOM_PADDING),
-                entries.size(), rows, scroll);
+                entries.size(), rows, scroll, value -> scroll = value);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endScaledRender(graphics);

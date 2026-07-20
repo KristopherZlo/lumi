@@ -95,10 +95,12 @@ public final class LumiSettingsScreen extends LumiPageScreen {
             renderPanel(
                     graphics, contentX, contentY, contentWidth, contentHeight);
             renderScrollbar(
-                    graphics, contentX + contentWidth - 3,
+                    graphics, contentX,
                     contentY + 4 + contentOffset,
+                    contentWidth,
                     Math.max(0, contentHeight - 8 - contentOffset),
-                    SETTING_COUNT, visibleSettingRows(), scroll);
+                    SETTING_COUNT, visibleSettingRows(), scroll,
+                    value -> scroll = value);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endScaledRender(graphics);

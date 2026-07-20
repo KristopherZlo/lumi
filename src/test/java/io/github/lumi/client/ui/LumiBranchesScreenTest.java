@@ -53,5 +53,7 @@ class LumiBranchesScreenTest {
         assertTrue(source.contains("addBranchActions(branch, rowY)"));
         assertTrue(source.contains("luma.screen.zone_ideas.title"));
         assertTrue(source.contains("luma.ideas.zone_badge"));
+        assertTrue(source.contains(
+                "FORM_TOP = LumiTheme.PAGE_HEADER_HEIGHT + 8"));
     }
 }

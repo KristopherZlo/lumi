@@ -22,7 +22,6 @@ import net.minecraft.resources.Identifier;
 
 /** Independent left/right save columns that dispatch Compare into the world. */
 public final class LumiComparePickerScreen extends LumiPageScreen {
-    private static final int MAX_ROWS = 5;
     private static final int COLUMN_GAP = 42;
     private static final int NARROW_COLUMN_GAP = 22;
     private static final int ROW_HEIGHT = 42;
@@ -130,6 +129,8 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
                 ignored -> changeBranch(left), LumiButton.Kind.NORMAL));
         int rows = visibleRows();
         int scroll = scroll(left);
+        int contentWidth = width - (versions.size() > rows
+                ? LumiScrollbar.GUTTER_WIDTH : 0);
         int end = Math.min(scroll + rows, versions.size());
         for (int index = scroll; index < end; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
@@ -139,9 +140,9 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
                     left ? leftSelection : rightSelection);
             boolean compact = compactCards();
             addButton(
-                    compact ? x + 6 : x + width - 58,
+                    compact ? x + 6 : x + contentWidth - 58,
                     compact ? rowY + 22 : rowY + 12,
-                    compact ? Math.max(1, width - 12) : 50,
+                    compact ? Math.max(1, contentWidth - 12) : 50,
                     Component.translatable(selected
                             ? "luma.compare.selected_save"
                             : "luma.compare.select_save"),
@@ -222,17 +223,20 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
         }
         int rows = visibleRows();
         int scroll = scroll(left);
+        int contentWidth = width - (versions.size() > rows
+                ? LumiScrollbar.GUTTER_WIDTH : 0);
         int end = Math.min(scroll + rows, versions.size());
         for (int index = scroll; index < end; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
             renderCard(
                     graphics, version, x,
-                    rowsY() + (index - scroll) * ROW_STRIDE, width,
+                    rowsY() + (index - scroll) * ROW_STRIDE, contentWidth,
                     version.equals(left ? leftSelection : rightSelection));
         }
         renderScrollbar(
-                graphics, x + width - 3, rowsY(), rowsHeight(),
-                versions.size(), rows, scroll);
+                graphics, x, rowsY(), width, rowsHeight(),
+                versions.size(), rows, scroll,
+                value -> setScroll(left, value));
     }
 
     private void renderCard(
@@ -351,8 +355,7 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
     static int visibleRows(int layoutHeight) {
         int available = layoutHeight - 114;
         if (available < ROW_HEIGHT) return 0;
-        return Math.min(MAX_ROWS,
-                1 + (available - ROW_HEIGHT) / ROW_STRIDE);
+        return 1 + (available - ROW_HEIGHT) / ROW_STRIDE;
     }
 
     private WorkspaceHistoryController history(boolean left) {

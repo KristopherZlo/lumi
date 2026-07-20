@@ -60,9 +60,10 @@ public final class LumiHotkeyScreen extends LumiModalScreen {
                     panelX + 118, y + 12, LumiTheme.MUTED, false);
         }
         renderScrollbar(
-                graphics, panelX + panelWidth - 9, panelY + 57,
+                graphics, panelX + 8, panelY + 57, panelWidth - 14,
                 Math.max(0, panelHeight - 69),
-                shortcuts.size(), visibleRows(), scroll);
+                shortcuts.size(), visibleRows(), scroll,
+                value -> scroll = value);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endScaledRender(graphics);

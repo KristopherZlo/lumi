@@ -91,9 +91,10 @@ public final class LumiDimensionsScreen extends LumiPageScreen {
                 }
             }
             renderScrollbar(
-                    graphics, panelX + panelWidth - 18, panelY + 72,
+                    graphics, panelX + 20, panelY + 72, panelWidth - 35,
                     Math.max(0, panelHeight - 86),
-                    visible.size(), capacity(), scroll);
+                    visible.size(), capacity(), scroll,
+                    value -> scroll = value);
             if (visible.isEmpty()) {
                 graphics.drawString(font,
                         font.plainSubstrByWidth(

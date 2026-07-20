@@ -158,10 +158,12 @@ public final class LumiCleanupScreen extends LumiModalScreen {
             y += 11;
         }
         renderScrollbar(
-                graphics, panelX + panelWidth - 21,
+                graphics, panelX + 20,
                 panelY + geometry.resultY() + 5,
+                panelWidth - 38,
                 Math.max(0, geometry.resultHeight() - 10),
-                lines.size(), visible, resultScroll);
+                lines.size(), visible, resultScroll,
+                value -> resultScroll = value);
     }
 
     private void drawWrapped(

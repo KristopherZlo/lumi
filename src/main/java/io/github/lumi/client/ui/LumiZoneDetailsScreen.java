@@ -381,12 +381,14 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                     false);
         }
         renderScrollbar(
-                graphics, x + width - 6,
+                graphics, x,
                 geometry.historyY()
                         + LumiDashboardScreen.HISTORY_FIRST_ROW_OFFSET,
+                width - 3,
                 Math.max(0, geometry.historyHeight()
                         - LumiDashboardScreen.HISTORY_FIRST_ROW_OFFSET - 5),
-                versions.size(), rows, historyScroll);
+                versions.size(), rows, historyScroll,
+                value -> historyScroll = value);
         if (versions.isEmpty()) {
             graphics.drawString(font,
                     Component.translatable(searchValue.isBlank()

@@ -337,6 +337,7 @@
   "luma.history.message_input": "Message",
   "luma.history.message_required": "Message (required)",
   "luma.history.empty": "No saves yet.",
+  "luma.scrollbar": "Scrollbar",
   "luma.history.version_header": "%s | %s",
   "luma.history.version_header_selected": "%s | %s | selected",
   "luma.history.version_message": "Message: %s",

@@ -163,9 +163,10 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
             if (graphView != null) graphView.renderConnections(graphics);
             renderRows(graphics);
             renderScrollbar(
-                    graphics, panelX + panelWidth - 17, panelY + 84,
+                    graphics, panelX + 12, panelY + 84, panelWidth - 26,
                     Math.max(0, panelHeight - 96),
-                    loaded.size(), capacity(), scroll);
+                    loaded.size(), capacity(), scroll,
+                    value -> scroll = value);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
             if (graphView != null) {
                 graphView.renderHover(

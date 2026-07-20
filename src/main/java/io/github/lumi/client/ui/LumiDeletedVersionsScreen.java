@@ -170,9 +170,9 @@ public final class LumiDeletedVersionsScreen extends LumiPageScreen {
                     panelX + 28, rowY + 20, LumiTheme.MUTED, false);
         }
         renderScrollbar(
-                graphics, panelX + panelWidth - 7, panelY + 62,
+                graphics, panelX + 16, panelY + 62, panelWidth - 20,
                 Math.max(0, panelHeight - 74),
-                versions.size(), rows, scroll);
+                versions.size(), rows, scroll, value -> scroll = value);
     }
 
     private void renderConfirmation(GuiGraphics graphics, int panelWidth) {

@@ -138,9 +138,9 @@ public final class LumiMoreScreen extends LumiPageScreen {
         graphics.disableScissor();
         int viewportHeight = Math.max(0, actionBottom - actionTop);
         renderScrollbar(
-                graphics, panelX + panelWidth - 16, actionTop, viewportHeight,
+                graphics, panelX + 16, actionTop, panelWidth - 29, viewportHeight,
                 viewportHeight + maximumActionScroll,
-                viewportHeight, actionScroll);
+                viewportHeight, actionScroll, value -> actionScroll = value);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endScaledRender(graphics);

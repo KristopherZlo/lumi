@@ -71,8 +71,11 @@ final class PackageBrowserState {
     }
 
     void scroll(int delta, int rows) {
-        int maximum = Math.max(0, size() - rows);
-        scroll = Math.max(0, Math.min(maximum, scroll + delta));
+        scrollTo(scroll + delta, rows);
+    }
+
+    void scrollTo(int value, int rows) {
+        scroll = Math.max(0, Math.min(Math.max(0, size() - rows), value));
     }
 
     Optional<HistorySnapshotPayload.Branch> pendingDelete() {

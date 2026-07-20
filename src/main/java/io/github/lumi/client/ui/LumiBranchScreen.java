@@ -9,16 +9,14 @@ import net.minecraft.network.chat.Component;
 
 /** Focused one-step branch creation form for the active workspace HEAD. */
 public final class LumiBranchScreen extends LumiModalScreen {
-    private static final int PANEL_WIDTH = 360;
-    private static final int PANEL_HEIGHT = 158;
+    private static final int PANEL_HEIGHT = 126;
     private final Screen parent;
     private final String startingPoint;
     private final BranchNameController controller;
     private EditBox name;
     private LumiButton create;
     private String error = "";
-    private int panelX;
-    private int panelY;
+    private LumiModalLayout layout;
 
     public LumiBranchScreen(
             Screen parent,
@@ -33,27 +31,21 @@ public final class LumiBranchScreen extends LumiModalScreen {
     @Override
     protected void init() {
         beginScreenInit();
-        int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        panelX = (width - panelWidth) / 2;
-        panelY = (height - PANEL_HEIGHT) / 2;
-        int contentX = panelX + 20;
-        int contentWidth = panelWidth - 40;
-        name = new EditBox(
-                font, contentX, panelY + 70, contentWidth, INPUT_HEIGHT,
+        layout = LumiModalLayout.fit(width, height, PANEL_HEIGHT);
+        int contentX = layout.x() + 20;
+        int contentWidth = layout.width() - 40;
+        name = addTextField(contentX, layout.y() + 66, contentWidth,
                 Component.translatable("luma.variant.name_input"));
         name.setMaxLength(BranchNameController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.variant.name_input"));
-        name.setBordered(false);
-        name.setTextColor(LumiTheme.TEXT);
         name.setResponder(value -> create.active = !value.trim().isEmpty());
-        addRenderableWidget(name);
 
         int buttonWidth = (contentWidth - 8) / 2;
-        create = addButton(contentX, panelY + 116, buttonWidth,
+        create = addButton(contentX, layout.y() + 98, buttonWidth,
                 Component.translatable("luma.action.variant_create"),
                 this::submit, LumiButton.Kind.PRIMARY);
         create.active = false;
-        addButton(contentX + buttonWidth + 8, panelY + 116, buttonWidth,
+        addButton(contentX + buttonWidth + 8, layout.y() + 98, buttonWidth,
                 Component.translatable("luma.action.cancel"),
                 this::onClose, LumiButton.Kind.NORMAL);
     }
@@ -92,27 +84,25 @@ public final class LumiBranchScreen extends LumiModalScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-            int headerX = panelX + 12;
-            int contentRight = panelX + panelWidth - 12;
-            renderWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+            int headerX = layout.x() + 12;
+            int contentRight = layout.x() + layout.width() - 12;
+            renderWindow(graphics, layout.x(), layout.y(),
+                    layout.width(), layout.height());
             graphics.drawString(font,
                     clippedHeader(title, headerX, contentRight),
-                    headerX, panelY + 14, LumiTheme.TEXT, false);
+                    headerX, layout.y() + 14, LumiTheme.TEXT, false);
             graphics.drawString(font, clippedHeader(
                     Component.translatable(
                             "luma.variants.create_help", startingPoint),
                     headerX, contentRight),
-                    headerX, panelY + 34, LumiTheme.MUTED, false);
-            LumiTheme.outlined(graphics, panelX + 14, panelY + 66,
-                    panelWidth - 28, INPUT_FRAME_HEIGHT,
-                    LumiTheme.INSET, LumiTheme.INSET_BORDER);
+                    headerX, layout.y() + 34, LumiTheme.MUTED, false);
+            renderTextField(graphics, name);
             graphics.drawString(font,
                     Component.translatable("luma.variant.name_input"),
-                    panelX + 20, panelY + 55, LumiTheme.TEXT, false);
+                    layout.x() + 20, layout.y() + 55, LumiTheme.TEXT, false);
             if (!error.isEmpty()) {
                 graphics.drawString(font, errorText(error),
-                        panelX + 20, panelY + 96,
+                        layout.x() + 20, layout.y() + 87,
                         LumiTheme.DANGER, false);
             }
             super.render(

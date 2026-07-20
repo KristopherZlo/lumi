@@ -291,6 +291,7 @@
   "luma.history.message_input": "Сообщение",
   "luma.history.message_required": "Сообщение (обязательно)",
   "luma.history.empty": "Сохранений пока нет.",
+  "luma.scrollbar": "Полоса прокрутки",
   "luma.history.version_header": "%s | %s",
   "luma.history.version_header_selected": "%s | %s | выбрано",
   "luma.history.version_message": "Сообщение: %s",

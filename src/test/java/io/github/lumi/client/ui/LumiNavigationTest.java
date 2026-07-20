@@ -65,6 +65,11 @@ class LumiNavigationTest {
     }
 
     @Test
+    void historyUsesTheSharedPageShell() {
+        assertEquals(LumiPageScreen.class, LumiDashboardScreen.class.getSuperclass());
+    }
+
+    @Test
     void textInputsUseCompactSingleLineHeight() throws Exception {
         assertEquals(14, LumiModalScreen.INPUT_HEIGHT);
         assertEquals(18, LumiModalScreen.INPUT_FRAME_HEIGHT);

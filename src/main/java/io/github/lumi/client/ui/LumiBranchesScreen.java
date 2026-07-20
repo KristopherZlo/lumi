@@ -17,7 +17,8 @@ import net.minecraft.network.chat.Component;
 /** Bounded native branch list with create, switch and merge actions. */
 public final class LumiBranchesScreen extends LumiPageScreen {
     private static final int MAX_ROWS = 6;
-    private static final int LIST_TOP = 70;
+    private static final int FORM_TOP = LumiTheme.PAGE_HEADER_HEIGHT + 8;
+    private static final int LIST_TOP = FORM_TOP + 28;
     private static final int INLINE_ACTION_WIDTH = 252;
     private static final int ICON_WIDTH = 26;
     private static final int STACKED_ICON_GAP = 4;
@@ -76,21 +77,19 @@ public final class LumiBranchesScreen extends LumiPageScreen {
         int x = layout.x();
         int y = layout.y();
         int contentWidth = Math.max(0, layout.width() - 32);
-        int zoneOffset = activeZone.isPresent() ? 18 : 0;
         boolean hintVisible = addContextualHint(
                 ClientContextualHelpHint.BRANCHES,
-                x + 16, y + 36 + zoneOffset, contentWidth);
-        contentOffset = zoneOffset
-                + (hintVisible ? contextualHintOffset(8) : 0);
+                x + 16, y + FORM_TOP, contentWidth);
+        contentOffset = hintVisible ? contextualHintOffset(8) : 0;
         name = addTextField(
-                x + 16, y + 40 + contentOffset,
+                x + 16, y + FORM_TOP + contentOffset,
                 Math.max(20, contentWidth - 106),
                 Component.translatable("luma.variant.name_input"));
         name.setMaxLength(BranchNameController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.variant.name_input"));
         name.setResponder(value -> updateCreateButton());
         createButton = addButton(
-                x + layout.width() - 116, y + 40 + contentOffset, 100,
+                x + layout.width() - 116, y + FORM_TOP + contentOffset, 100,
                 Component.translatable("luma.action.variant_create"),
                 this::createBranch,
                 LumiButton.Kind.PRIMARY);
@@ -252,10 +251,11 @@ public final class LumiBranchesScreen extends LumiPageScreen {
                 }
             }
             renderScrollbar(
-                    graphics, layout.x() + layout.width() - 7,
+                    graphics, layout.x() + 16,
                     layout.y() + LIST_TOP + contentOffset,
+                    layout.width() - 20,
                     Math.max(0, layout.height() - LIST_TOP - contentOffset - 10),
-                    branches.size(), rows, scroll);
+                    branches.size(), rows, scroll, value -> scroll = value);
         } else {
             renderPanel(graphics, layout.x() + 16,
                     layout.y() + 76 + contentOffset,
