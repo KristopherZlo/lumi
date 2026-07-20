@@ -287,18 +287,9 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
             renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
-            int headerX = panelX + 16;
-            int contentRight = panelX + panelWidth - 16;
-            graphics.drawString(font, clippedHeader(title, headerX, contentRight),
-                    headerX, panelY + geometry.titleY(),
-                    LegacyLumiTheme.TEXT, false);
-            if (!geometry.compact()) {
-                graphics.drawString(font, clippedHeader(
-                                Component.translatable("luma.simple.share_help"),
-                                headerX, contentRight),
-                        headerX, panelY + 38,
-                        LegacyLumiTheme.MUTED, false);
-            }
+            renderPageHeader(graphics, panelX, panelY, panelWidth, title,
+                    geometry.compact() ? null
+                            : Component.translatable("luma.simple.share_help"));
             if (browser.pendingDelete().isPresent()) renderDeleteConfirmation(graphics);
             else if (geometry.contentVisible()) {
                 graphics.drawString(font,

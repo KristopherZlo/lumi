@@ -40,6 +40,8 @@ class LumiLegacyNavigationTest {
         assertTrue(modal.contains("background.render("));
         assertTrue(modal.contains("GLFW_HAND_CURSOR"));
         assertTrue(modal.contains("child instanceof Button button"));
+        assertTrue(modal.contains("minecraft.screen == this"));
+        assertTrue(modal.contains("hovered == handCursorActive"));
         assertTrue(modal.contains("LegacyLumiTheme.PAGE_HEADER_HEIGHT"));
         assertTrue(modal.contains("LegacyLumiTheme.TITLEBAR"));
         assertTrue(modal.contains("page ? \"chevron-left\" : \"close\""));
@@ -59,12 +61,17 @@ class LumiLegacyNavigationTest {
         assertTrue(page.contains("x < layout.contentX()"));
         assertTrue(page.contains("dashboard.mouseClicked(click, doubled)"));
         assertTrue(page.contains("page.dashboardParent()"));
+        assertTrue(page.contains("dashboard.pointerHovered(mouseX, mouseY)"));
     }
 
     @Test
     void textInputsUseCompactSingleLineHeight() throws Exception {
         assertEquals(14, LumiLegacyModalScreen.INPUT_HEIGHT);
         assertEquals(18, LumiLegacyModalScreen.INPUT_FRAME_HEIGHT);
+        String modal = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiLegacyModalScreen.java"));
+        assertTrue(modal.contains("x + 6, y + 2"));
+        assertTrue(modal.contains("field.getX() - 6, field.getY() - 2"));
         Path ui = Path.of("src/main/java/io/github/lumi/client/ui");
         for (String screen : List.of(
                 "LumiDashboardScreen.java",

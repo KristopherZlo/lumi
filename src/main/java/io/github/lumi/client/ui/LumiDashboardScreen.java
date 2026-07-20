@@ -253,19 +253,13 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                         ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
         int searchWidth = Math.min(100, Math.max(70, layout.bodyWidth() / 4));
         int searchX = layout.bodyX() + PANEL_PADDING;
-        search = new EditBox(
-                font,
-                searchX,
-                historyY + HISTORY_TOOLBAR_OFFSET + 1,
-                searchWidth,
-                INPUT_HEIGHT,
-                Component.translatable("luma.dashboard.search"));
-        search.setBordered(false);
+        search = addLegacyTextField(
+                searchX, historyY + HISTORY_TOOLBAR_OFFSET,
+                searchWidth, Component.translatable("luma.dashboard.search"));
         search.setMaxLength(HistoryPageRequestPayload.MAX_QUERY_LENGTH);
         search.setHint(Component.translatable("luma.dashboard.search"));
         search.setValue(searchQuery);
         search.setResponder(this::search);
-        addRenderableWidget(search);
         addBranchTabs(searchX + searchWidth + CONTROL_GAP, right - 60);
         if (refocusSearch) {
             setInitialFocus(search);
@@ -755,14 +749,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             return;
         }
         if (search != null) {
-            LegacyLumiTheme.outlined(
-                    graphics,
-                    search.getX() - 2,
-                    search.getY() - 2,
-                    search.getWidth() + 4,
-                    search.getHeight() + 4,
-                    LegacyLumiTheme.INSET,
-                    LegacyLumiTheme.INSET_BORDER);
+            renderLegacyTextField(graphics, search);
         }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
         if (graphView != null) {

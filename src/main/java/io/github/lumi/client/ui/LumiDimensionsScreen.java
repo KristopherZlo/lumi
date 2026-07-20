@@ -63,16 +63,8 @@ public final class LumiDimensionsScreen extends LumiLegacyPageScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
             renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
-            int headerX = panelX + 16;
-            int textWidth = Math.max(1, panelWidth - 32);
-            graphics.drawString(font, clippedHeader(
-                            title, headerX, panelX + panelWidth - 16),
-                    headerX, panelY + 18,
-                    LegacyLumiTheme.TEXT, false);
-            graphics.drawString(font, font.plainSubstrByWidth(
-                            Component.translatable("luma.dimensions.help").getString(),
-                            textWidth),
-                    headerX, panelY + 40, LegacyLumiTheme.MUTED, false);
+            renderPageHeader(graphics, panelX, panelY, panelWidth, title,
+                    Component.translatable("luma.dimensions.help"));
             renderLegacyPanel(graphics, panelX + 12, panelY + 62,
                     panelWidth - 24, Math.max(1, panelHeight - 74));
             String current = currentDimension.get();

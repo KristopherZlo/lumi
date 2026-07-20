@@ -87,15 +87,14 @@ public final class LumiDimensionHistoryScreen extends LumiLegacyPageScreen {
                 view.mode() == HistoryViewController.Mode.GRAPH
                         ? LumiLegacyButton.Kind.SELECTED
                         : LumiLegacyButton.Kind.NORMAL);
-        search = new EditBox(font, panelX + 18, panelY + 52,
-                Math.min(120, Math.max(70, panelWidth / 3)), INPUT_HEIGHT,
+        search = addLegacyTextField(
+                panelX + 16, panelY + 50,
+                Math.min(124, Math.max(74, panelWidth / 3 + 4)),
                 Component.translatable("luma.dashboard.search"));
-        search.setBordered(false);
         search.setMaxLength(HistoryPageRequestPayload.MAX_QUERY_LENGTH);
         search.setHint(Component.translatable("luma.dashboard.search"));
         search.setValue(query);
         search.setResponder(this::search);
-        addRenderableWidget(search);
         if (refocusSearch) {
             setInitialFocus(search);
             search.setFocused(true);
@@ -156,22 +155,11 @@ public final class LumiDimensionHistoryScreen extends LumiLegacyPageScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
             renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
-            int headerX = panelX + 16;
-            int contentRight = panelX + panelWidth - 16;
-            graphics.drawString(font,
-                    clippedHeader(title, headerX, contentRight),
-                    headerX, panelY + 18,
-                    LegacyLumiTheme.TEXT, false);
-            graphics.drawString(font, clippedHeader(
-                    Component.translatable("luma.dimensions.read_only"),
-                    headerX, contentRight),
-                    headerX, panelY + 36, LegacyLumiTheme.MUTED, false);
+            renderPageHeader(graphics, panelX, panelY, panelWidth, title,
+                    Component.translatable("luma.dimensions.read_only"));
             renderLegacyPanel(graphics, panelX + 12, panelY + 46,
                     panelWidth - 24, Math.max(1, panelHeight - 58));
-            LegacyLumiTheme.outlined(
-                    graphics, search.getX() - 2, search.getY() - 2,
-                    search.getWidth() + 4, search.getHeight() + 4,
-                    LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+            renderLegacyTextField(graphics, search);
             if (graphView != null) graphView.renderConnections(graphics);
             renderRows(graphics);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);

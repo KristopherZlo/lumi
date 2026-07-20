@@ -45,6 +45,18 @@ abstract class LumiLegacyPageScreen extends LumiLegacyModalScreen {
     }
 
     @Override
+    protected boolean pointerHovered(int mouseX, int mouseY) {
+        if (super.pointerHovered(mouseX, mouseY)) return true;
+        LegacyWorkspaceLayout layout = pageLayout();
+        LumiDashboardScreen dashboard = dashboardParent();
+        return dashboard != null
+                && mouseX >= layout.windowX() && mouseX < layout.contentX()
+                && mouseY >= layout.windowY()
+                && mouseY < layout.windowY() + layout.windowHeight()
+                && dashboard.pointerHovered(mouseX, mouseY);
+    }
+
+    @Override
     public void onClose() {
         if (parent instanceof LumiDashboardScreen dashboard) {
             dashboard.selectTab(LegacyProjectTab.HISTORY);

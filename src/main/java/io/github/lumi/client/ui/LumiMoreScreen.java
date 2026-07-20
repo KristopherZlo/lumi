@@ -115,15 +115,8 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
         renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
         renderLegacyPanel(graphics, panelX + 12, panelY + 50,
                 panelWidth - 24, panelHeight - 62);
-        int textX = panelX + 16;
-        int textWidth = Math.max(1, panelWidth - 32);
-        graphics.drawString(font, clippedHeader(
-                        title, textX, panelX + panelWidth - 16),
-                textX, panelY + 18,
-                LegacyLumiTheme.TEXT, false);
-        graphics.drawString(font, font.plainSubstrByWidth(
-                        Component.translatable("luma.more.help").getString(), textWidth),
-                textX, panelY + 40, LegacyLumiTheme.MUTED, false);
+        renderPageHeader(graphics, panelX, panelY, panelWidth, title,
+                Component.translatable("luma.more.help"));
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);

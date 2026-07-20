@@ -209,14 +209,8 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         Component heading = snapshot == null
                 ? title : Component.translatable(
                         "luma.screen.zones.title", snapshot.workspaceName());
-        graphics.drawCenteredString(font, clippedCenteredHeader(
-                        heading, panelX + panelWidth / 2,
-                        panelX + 16, panelX + panelWidth - 16),
-                panelX + panelWidth / 2, panelY + 16,
-                LegacyLumiTheme.TEXT);
-        graphics.drawCenteredString(font, font.plainSubstrByWidth(
-                        activeZoneText().getString(), Math.max(1, panelWidth - 32)),
-                panelX + panelWidth / 2, panelY + 36, LegacyLumiTheme.MUTED);
+        renderPageHeader(graphics, panelX, panelY, panelWidth,
+                heading, activeZoneText());
         int textX = panelX + (compact ? 16 : 20);
         int textWidth = Math.max(1, panelWidth - (compact ? 32 : 40));
         graphics.drawString(font, font.plainSubstrByWidth(

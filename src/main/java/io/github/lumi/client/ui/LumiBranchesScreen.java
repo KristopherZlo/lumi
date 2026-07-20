@@ -224,12 +224,12 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
         renderLegacyPage(graphics, layout.x(), layout.y(), layout.width(), layout.height());
-        graphics.drawString(font, title, layout.x() + 16, layout.y() + 14,
-                LegacyLumiTheme.TEXT, false);
+        renderPageHeader(
+                graphics, layout.x(), layout.y(), layout.width(), title, null);
         activeZone.ifPresent(zone -> graphics.drawString(
                 font,
                 Component.translatable("luma.ideas.zone_badge", zone.name()),
-                layout.x() + 16, layout.y() + 32, zone.color(), false));
+                layout.x() + 16, layout.y() + 29, zone.color(), false));
         LegacyLumiTheme.outlined(
                 graphics, name.getX() - 2, name.getY() - 2,
                 name.getWidth() + 4, name.getHeight() + 4,

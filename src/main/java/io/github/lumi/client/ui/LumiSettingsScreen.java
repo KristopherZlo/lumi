@@ -90,11 +90,8 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
             renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
-            int headerX = panelX + 16;
-            graphics.drawString(font, clippedHeader(
-                            title, headerX, panelX + panelWidth - 16),
-                    headerX, panelY + 16,
-                    LegacyLumiTheme.TEXT, false);
+            renderPageHeader(
+                    graphics, panelX, panelY, panelWidth, title, null);
             renderLegacyPanel(
                     graphics, contentX, contentY, contentWidth, contentHeight);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);

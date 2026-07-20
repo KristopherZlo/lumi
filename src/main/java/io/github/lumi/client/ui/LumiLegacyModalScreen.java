@@ -7,6 +7,7 @@ import io.github.lumi.client.onboarding.ClientContextualHelpService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -34,6 +35,7 @@ abstract class LumiLegacyModalScreen extends Screen {
     private int hintHeight;
     private boolean legacyInitialized;
     private LumiLegacyButton navigationButton;
+    private boolean handCursorActive;
     private static long handCursor;
 
     protected LumiLegacyModalScreen(Component title) {
@@ -65,6 +67,24 @@ abstract class LumiLegacyModalScreen extends Screen {
             Runnable action, LumiLegacyButton.Kind kind) {
         return addRenderableWidget(new LumiLegacyButton(
                 x, y, 26, 20, label, ignored -> action.run(), kind, icon));
+    }
+
+    protected final EditBox addLegacyTextField(
+            int x, int y, int width, Component label) {
+        EditBox field = new EditBox(
+                font, x + 6, y + 2, Math.max(0, width - 12),
+                INPUT_HEIGHT, label);
+        field.setBordered(false);
+        field.setTextColor(LegacyLumiTheme.TEXT);
+        return addRenderableWidget(field);
+    }
+
+    protected final void renderLegacyTextField(
+            GuiGraphics graphics, EditBox field) {
+        LegacyLumiTheme.outlined(
+                graphics, field.getX() - 6, field.getY() - 2,
+                field.getWidth() + 12, INPUT_FRAME_HEIGHT,
+                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
     }
 
     protected final void beginLegacyInit() {
@@ -148,13 +168,15 @@ abstract class LumiLegacyModalScreen extends Screen {
                     closeX + 3, hintY + 9, 0, 0, 12, 12,
                     24, 24, 24, 24);
         }
-        updateCursor(mouseX, mouseY);
+        if (minecraft.screen == this) {
+            updateCursor(mouseX, mouseY);
+        }
     }
 
     private void updateCursor(int mouseX, int mouseY) {
-        boolean hovered = children().stream().anyMatch(child ->
-                child instanceof Button button
-                        && button.isMouseOver(mouseX, mouseY));
+        boolean hovered = pointerHovered(mouseX, mouseY);
+        if (hovered == handCursorActive) return;
+        handCursorActive = hovered;
         if (hovered && handCursor == 0L) {
             handCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_HAND_CURSOR);
         }
@@ -163,9 +185,22 @@ abstract class LumiLegacyModalScreen extends Screen {
                 hovered ? handCursor : 0L);
     }
 
+    protected boolean pointerHovered(int mouseX, int mouseY) {
+        return children().stream().anyMatch(child ->
+                child instanceof Button button
+                        && button.isMouseOver(mouseX, mouseY))
+                || contextualHint != null
+                && mouseX >= hintX + hintWidth - 26
+                && mouseX < hintX + hintWidth - 8
+                && mouseY >= hintY + 6 && mouseY < hintY + 24;
+    }
+
     @Override
     public void removed() {
-        GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().handle(), 0L);
+        if (handCursorActive) {
+            GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().handle(), 0L);
+            handCursorActive = false;
+        }
         super.removed();
     }
 
@@ -254,6 +289,19 @@ abstract class LumiLegacyModalScreen extends Screen {
         LegacyLumiTheme.outlined(
                 graphics, x, y, width, height,
                 LegacyLumiTheme.PANEL, LegacyLumiTheme.PANEL_BORDER);
+    }
+
+    protected final void renderPageHeader(
+            GuiGraphics graphics, int x, int y, int width,
+            Component heading, Component description) {
+        int textX = x + 16;
+        int right = x + width - 16;
+        graphics.drawString(font, clippedHeader(heading, textX, right),
+                textX, y + 14, LegacyLumiTheme.TEXT, false);
+        if (description != null) {
+            graphics.drawString(font, clippedHeader(description, textX, right),
+                    textX, y + 29, LegacyLumiTheme.MUTED, false);
+        }
     }
 
     protected final String clippedHeader(

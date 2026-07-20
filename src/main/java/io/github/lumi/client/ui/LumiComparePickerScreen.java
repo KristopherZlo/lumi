@@ -191,16 +191,8 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         try {
             renderLegacyPage(
                     graphics, layout.x(), layout.y(), layout.width(), layout.height());
-            int headerX = layout.x() + 16;
-            int contentRight = layout.x() + layout.width() - 16;
-            graphics.drawString(font, clippedHeader(title, headerX, contentRight),
-                    headerX, layout.y() + 14,
-                    LegacyLumiTheme.TEXT, false);
-            graphics.drawString(font, clippedHeader(
-                            Component.translatable("luma.compare.pick_help"),
-                            headerX, contentRight),
-                    headerX, layout.y() + 32,
-                    LegacyLumiTheme.MUTED, false);
+            renderPageHeader(graphics, layout.x(), layout.y(), layout.width(), title,
+                    Component.translatable("luma.compare.pick_help"));
             renderColumn(graphics, true);
             renderColumn(graphics, false);
             renderDivider(graphics);

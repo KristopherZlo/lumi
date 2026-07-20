@@ -121,7 +121,7 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("luma.action.save_build"));
         assertTrue(source.contains("luma.action.amend_version"));
         assertTrue(source.contains("luma.action.see_changes"));
-        assertTrue(source.contains("new EditBox("));
+        assertTrue(source.contains("search = addLegacyTextField("));
         assertTrue(source.contains("historyView.filtered("));
         assertTrue(source.contains("visibleVersions()"));
         assertTrue(source.contains("HistoryViewController.Mode.CARDS"));

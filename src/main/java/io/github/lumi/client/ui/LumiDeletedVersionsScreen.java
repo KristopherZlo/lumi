@@ -120,17 +120,10 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
         renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
-        int centerX = panelX + panelWidth / 2;
         int textWidth = contentTextWidth(panelWidth);
-        graphics.drawCenteredString(font, clippedCenteredHeader(
-                        title, centerX, panelX + 20, panelX + panelWidth - 20),
-                centerX, panelY + 16,
-                LegacyLumiTheme.TEXT);
-        graphics.drawCenteredString(font,
-                font.plainSubstrByWidth(
-                        Component.translatable("luma.more.deleted_saves_help").getString(),
-                        textWidth),
-                centerX, panelY + 36, LegacyLumiTheme.MUTED);
+        int centerX = panelX + panelWidth / 2;
+        renderPageHeader(graphics, panelX, panelY, panelWidth, title,
+                Component.translatable("luma.more.deleted_saves_help"));
         if (pendingCleanup == null) {
             renderVersions(graphics, panelWidth);
         } else {
