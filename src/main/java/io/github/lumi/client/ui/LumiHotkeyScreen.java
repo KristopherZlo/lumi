@@ -59,6 +59,10 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
                             panelWidth - 150),
                     panelX + 118, y + 12, LegacyLumiTheme.MUTED, false);
         }
+        renderLegacyScrollbar(
+                graphics, panelX + panelWidth - 9, panelY + 57,
+                Math.max(0, panelHeight - 69),
+                shortcuts.size(), visibleRows(), scroll);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);

@@ -72,8 +72,8 @@ abstract class LumiLegacyModalScreen extends Screen {
     protected final EditBox addLegacyTextField(
             int x, int y, int width, Component label) {
         EditBox field = new EditBox(
-                font, x + 6, y + 2, Math.max(0, width - 12),
-                INPUT_HEIGHT, label);
+                font, x + 6, y, Math.max(0, width - 12),
+                INPUT_FRAME_HEIGHT, label);
         field.setBordered(false);
         field.setTextColor(LegacyLumiTheme.TEXT);
         return addRenderableWidget(field);
@@ -82,9 +82,30 @@ abstract class LumiLegacyModalScreen extends Screen {
     protected final void renderLegacyTextField(
             GuiGraphics graphics, EditBox field) {
         LegacyLumiTheme.outlined(
-                graphics, field.getX() - 6, field.getY() - 2,
+                graphics, field.getX() - 6, field.getY(),
                 field.getWidth() + 12, INPUT_FRAME_HEIGHT,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+    }
+
+    protected final void renderLegacyScrollbar(
+            GuiGraphics graphics,
+            int x,
+            int y,
+            int height,
+            int totalExtent,
+            int visibleExtent,
+            int offset) {
+        if (height <= 0 || visibleExtent <= 0 || totalExtent <= visibleExtent) {
+            return;
+        }
+        int maximumOffset = totalExtent - visibleExtent;
+        int thumbHeight = Math.max(
+                10, (int) ((long) height * visibleExtent / totalExtent));
+        int thumbY = y + (int) ((long) (height - thumbHeight)
+                * Math.max(0, Math.min(offset, maximumOffset)) / maximumOffset);
+        graphics.fill(x, y, x + 3, y + height, LegacyLumiTheme.INSET_BORDER);
+        graphics.fill(
+                x, thumbY, x + 3, thumbY + thumbHeight, LegacyLumiTheme.ACCENT);
     }
 
     protected final void beginLegacyInit() {

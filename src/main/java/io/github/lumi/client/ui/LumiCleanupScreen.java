@@ -157,6 +157,11 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
                     false);
             y += 11;
         }
+        renderLegacyScrollbar(
+                graphics, panelX + panelWidth - 21,
+                panelY + geometry.resultY() + 5,
+                Math.max(0, geometry.resultHeight() - 10),
+                lines.size(), visible, resultScroll);
     }
 
     private void drawWrapped(

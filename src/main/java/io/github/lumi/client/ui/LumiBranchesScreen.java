@@ -82,15 +82,13 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
                 x + 16, y + 36 + zoneOffset, contentWidth);
         contentOffset = zoneOffset
                 + (hintVisible ? contextualHintOffset(8) : 0);
-        name = new EditBox(
-                font, x + 18, y + 41 + contentOffset,
-                Math.max(20, contentWidth - 120), INPUT_HEIGHT,
+        name = addLegacyTextField(
+                x + 16, y + 40 + contentOffset,
+                Math.max(20, contentWidth - 106),
                 Component.translatable("luma.variant.name_input"));
         name.setMaxLength(BranchNameController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.variant.name_input"));
-        name.setBordered(false);
         name.setResponder(value -> updateCreateButton());
-        addRenderableWidget(name);
         createButton = addLegacyButton(
                 x + layout.width() - 116, y + 40 + contentOffset, 100,
                 Component.translatable("luma.action.variant_create"),
@@ -230,10 +228,7 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
                 font,
                 Component.translatable("luma.ideas.zone_badge", zone.name()),
                 layout.x() + 16, layout.y() + 29, zone.color(), false));
-        LegacyLumiTheme.outlined(
-                graphics, name.getX() - 2, name.getY() - 2,
-                name.getWidth() + 4, name.getHeight() + 4,
-                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+        renderLegacyTextField(graphics, name);
         if (pendingDelete == null) {
             int rows = visibleRows();
             int start = rows == 0 ? 0 : Math.min(scroll, branches.size());
@@ -256,6 +251,11 @@ public final class LumiBranchesScreen extends LumiLegacyPageScreen {
                             false);
                 }
             }
+            renderLegacyScrollbar(
+                    graphics, layout.x() + layout.width() - 7,
+                    layout.y() + LIST_TOP + contentOffset,
+                    Math.max(0, layout.height() - LIST_TOP - contentOffset - 10),
+                    branches.size(), rows, scroll);
         } else {
             renderLegacyPanel(graphics, layout.x() + 16,
                     layout.y() + 76 + contentOffset,

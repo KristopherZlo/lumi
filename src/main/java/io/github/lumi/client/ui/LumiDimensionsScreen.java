@@ -90,6 +90,10 @@ public final class LumiDimensionsScreen extends LumiLegacyPageScreen {
                             panelX + 28, y + 16, LegacyLumiTheme.ACCENT, false);
                 }
             }
+            renderLegacyScrollbar(
+                    graphics, panelX + panelWidth - 18, panelY + 72,
+                    Math.max(0, panelHeight - 86),
+                    visible.size(), capacity(), scroll);
             if (visible.isEmpty()) {
                 graphics.drawString(font,
                         font.plainSubstrByWidth(

@@ -94,6 +94,11 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
                     graphics, panelX, panelY, panelWidth, title, null);
             renderLegacyPanel(
                     graphics, contentX, contentY, contentWidth, contentHeight);
+            renderLegacyScrollbar(
+                    graphics, contentX + contentWidth - 3,
+                    contentY + 4 + contentOffset,
+                    Math.max(0, contentHeight - 8 - contentOffset),
+                    SETTING_COUNT, visibleSettingRows(), scroll);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);

@@ -380,6 +380,13 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
                                     layout.bodyWidth()),
                     false);
         }
+        renderLegacyScrollbar(
+                graphics, x + width - 6,
+                geometry.historyY()
+                        + LumiDashboardScreen.HISTORY_FIRST_ROW_OFFSET,
+                Math.max(0, geometry.historyHeight()
+                        - LumiDashboardScreen.HISTORY_FIRST_ROW_OFFSET - 5),
+                versions.size(), rows, historyScroll);
         if (versions.isEmpty()) {
             graphics.drawString(font,
                     Component.translatable(searchValue.isBlank()

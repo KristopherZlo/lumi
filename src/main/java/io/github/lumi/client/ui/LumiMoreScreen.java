@@ -136,6 +136,11 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
                     panelX + 24, y + 7, LegacyLumiTheme.ACCENT, false);
         }
         graphics.disableScissor();
+        int viewportHeight = Math.max(0, actionBottom - actionTop);
+        renderLegacyScrollbar(
+                graphics, panelX + panelWidth - 16, actionTop, viewportHeight,
+                viewportHeight + maximumActionScroll,
+                viewportHeight, actionScroll);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);

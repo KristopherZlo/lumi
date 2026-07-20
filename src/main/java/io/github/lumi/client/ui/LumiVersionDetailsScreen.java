@@ -132,19 +132,20 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
 
         int renameX = Math.max(
                 panelX + 20,
-                navigationControlX(panelX, panelWidth) - 8 - 102);
+                navigationControlX(panelX, panelWidth) - 8 - 26);
+        int renameY = panelY + 8;
         if (!readOnly && editingName) {
-            nameEditor = new EditBox(font, panelX + 20, panelY + 12,
-                    Math.max(20, renameX - panelX - 28), INPUT_HEIGHT,
+            nameEditor = addLegacyTextField(
+                    panelX + 20, renameY,
+                    Math.max(20, renameX - panelX - 26),
                     Component.translatable("luma.save_details.rename_title"));
             nameEditor.setMaxLength(VersionDisplayName.MAX_LENGTH);
             nameEditor.setValue(displayedName);
-            addRenderableWidget(nameEditor);
-            addLegacyButton(renameX, panelY + 13, 102,
+            addLegacyIconButton(renameX, renameY, "edit-text",
                     Component.translatable("luma.action.rename_save"),
                     this::saveName, LumiLegacyButton.Kind.PRIMARY);
         } else if (!readOnly) {
-            addLegacyButton(renameX, panelY + 13, 102,
+            addLegacyIconButton(renameX, renameY, "edit-text",
                     Component.translatable("luma.action.rename_save"), () -> {
                         editingName = true;
                         nameError = "";
@@ -195,6 +196,9 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         try {
             renderLegacyWindow(
                     graphics, panelX, panelY, panelWidth, panelHeight);
+            if (nameEditor != null) {
+                renderLegacyTextField(graphics, nameEditor);
+            }
             if (!editingName) {
                 int titleWidth = Math.max(1, Math.min(
                         panelWidth - 160,

@@ -169,6 +169,10 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
                             version.author(), Math.max(1, panelWidth - 132)),
                     panelX + 28, rowY + 20, LegacyLumiTheme.MUTED, false);
         }
+        renderLegacyScrollbar(
+                graphics, panelX + panelWidth - 7, panelY + 62,
+                Math.max(0, panelHeight - 74),
+                versions.size(), rows, scroll);
     }
 
     private void renderConfirmation(GuiGraphics graphics, int panelWidth) {

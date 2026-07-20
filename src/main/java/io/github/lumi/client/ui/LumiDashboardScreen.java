@@ -769,6 +769,11 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     + index * historyRowStride(width);
             renderVersionCard(graphics, version, rowY, false);
         }
+        renderLegacyScrollbar(
+                graphics, x + width - 6,
+                historyY + HISTORY_FIRST_ROW_OFFSET,
+                Math.max(0, historyHeight - HISTORY_FIRST_ROW_OFFSET - 5),
+                versions.size(), rows, historyScroll);
         if (versions.isEmpty()) {
             graphics.drawString(font,
                     Component.translatable(searchQuery.isBlank()

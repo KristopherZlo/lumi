@@ -162,6 +162,10 @@ public final class LumiDimensionHistoryScreen extends LumiLegacyPageScreen {
             renderLegacyTextField(graphics, search);
             if (graphView != null) graphView.renderConnections(graphics);
             renderRows(graphics);
+            renderLegacyScrollbar(
+                    graphics, panelX + panelWidth - 17, panelY + 84,
+                    Math.max(0, panelHeight - 96),
+                    loaded.size(), capacity(), scroll);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
             if (graphView != null) {
                 graphView.renderHover(

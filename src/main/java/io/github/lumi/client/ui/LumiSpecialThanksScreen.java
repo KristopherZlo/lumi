@@ -72,6 +72,10 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
             entry(graphics, y, cardHeight, entries.get(scroll + index), now);
             y += cardHeight + CARD_GAP;
         }
+        renderLegacyScrollbar(
+                graphics, panelX + panelWidth - 10, panelY + CARDS_TOP,
+                Math.max(0, panelHeight - CARDS_TOP - BOTTOM_PADDING),
+                entries.size(), rows, scroll);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
             endLegacyRender(graphics);

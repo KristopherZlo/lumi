@@ -44,7 +44,8 @@ class LumiZonesScreenTest {
         assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("compact = panelWidth < 300"));
         assertTrue(source.contains("rowHeight = compact ? 42 : 28"));
-        assertTrue(source.contains("name.getWidth() + 4"));
+        assertTrue(source.contains("renderLegacyTextField(graphics, name)"));
+        assertTrue(source.contains("renderLegacyScrollbar("));
     }
 
     @Test

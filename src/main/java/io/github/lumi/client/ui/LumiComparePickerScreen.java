@@ -230,6 +230,9 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                     rowsY() + (index - scroll) * ROW_STRIDE, width,
                     version.equals(left ? leftSelection : rightSelection));
         }
+        renderLegacyScrollbar(
+                graphics, x + width - 3, rowsY(), rowsHeight(),
+                versions.size(), rows, scroll);
     }
 
     private void renderCard(
@@ -334,7 +337,11 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
     }
 
     private int rowsY() {
-        return layout.y() + 88;
+        return layout.y() + 86;
+    }
+
+    private int rowsHeight() {
+        return layout.y() + layout.height() - 30 - rowsY();
     }
 
     private int visibleRows() {
@@ -342,7 +349,7 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
     }
 
     static int visibleRows(int layoutHeight) {
-        int available = layoutHeight - 116;
+        int available = layoutHeight - 114;
         if (available < ROW_HEIGHT) return 0;
         return Math.min(MAX_ROWS,
                 1 + (available - ROW_HEIGHT) / ROW_STRIDE);

@@ -84,20 +84,16 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         compact = panelWidth < 300;
         int contentX = panelX + (compact ? 16 : 20);
         int contentWidth = panelWidth - (compact ? 32 : 40);
-        int fieldY = panelY + (compact ? 60 : 73);
+        int fieldY = panelY + (compact ? 60 : 72);
         rowsY = panelY + (compact ? COMPACT_ROWS_OFFSET : 126);
         rowHeight = compact ? 42 : 28;
         rowStride = compact ? 46 : 32;
-        name = new EditBox(font, contentX, fieldY,
+        name = addLegacyTextField(contentX, fieldY,
                 compact ? contentWidth : Math.max(20, contentWidth - 140),
-                INPUT_HEIGHT,
                 Component.translatable("luma.zones.create_title"));
         name.setMaxLength(ZoneScreenController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.zones.create_title"));
-        name.setBordered(false);
-        name.setTextColor(LegacyLumiTheme.TEXT);
         name.setResponder(value -> updateCreateButton());
-        addRenderableWidget(name);
         Component createLabel = Component.translatable("luma.zones.create_button");
         if (compact) {
             int actionWidth = Math.max(1, (contentWidth - 6) / 2);
@@ -218,10 +214,7 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
                         textWidth),
                 textX, panelY + (compact ? 47 : 56),
                 LegacyLumiTheme.MUTED, false);
-        LegacyLumiTheme.outlined(graphics,
-                name.getX() - 2, name.getY() - 2,
-                name.getWidth() + 4, name.getHeight() + 4,
-                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+        renderLegacyTextField(graphics, name);
         boolean errorReplacesListTitle = compact && panelHeight < 220
                 && !error.isEmpty();
         Component listLabel = errorReplacesListTitle
@@ -235,6 +228,12 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
                         ? LegacyLumiTheme.DANGER : LegacyLumiTheme.TEXT,
                 false);
         renderZoneRows(graphics, panelWidth);
+        if (snapshot != null) {
+            renderLegacyScrollbar(
+                    graphics, panelX + panelWidth - 7, rowsY,
+                    Math.max(0, panelY + panelHeight - rowsY - 8),
+                    snapshot.zones().size(), visibleRows(), scroll);
+        }
         if (!error.isEmpty() && !errorReplacesListTitle) {
             graphics.drawString(font, font.plainSubstrByWidth(
                             errorText(error).getString(), Math.max(1, panelWidth - 40)),

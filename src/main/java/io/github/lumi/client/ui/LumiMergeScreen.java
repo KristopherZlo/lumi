@@ -163,6 +163,11 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
                             panelWidth - buttonWidth - 54),
                     panelX + 28, rowY + 6, LegacyLumiTheme.TEXT, false);
         }
+        renderLegacyScrollbar(
+                graphics, panelX + panelWidth - 17, panelY + LIST_Y,
+                Math.max(0, panelY + actionOffset(panelHeight) - 4
+                        - (panelY + LIST_Y)),
+                sources.size(), visibleRows, sourceScroll);
         if (sources.isEmpty()) {
             graphics.drawCenteredString(font,
                     Component.translatable("luma.merge.no_sources"),

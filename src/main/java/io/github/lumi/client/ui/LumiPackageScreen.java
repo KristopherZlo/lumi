@@ -343,6 +343,11 @@ public final class LumiPackageScreen extends LumiLegacyPageScreen {
                             label, rowTextWidth(panelWidth, browser.showImported())),
                     panelX + 24, y + 8, LegacyLumiTheme.TEXT, false);
         }
+        renderLegacyScrollbar(
+                graphics, panelX + panelWidth - 15,
+                panelY + geometry.listY(),
+                Math.max(0, geometry.listBottom() - geometry.listY()),
+                browser.size(), rows, start);
     }
 
     private void renderDeleteConfirmation(GuiGraphics graphics) {
