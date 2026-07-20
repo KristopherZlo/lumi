@@ -1,6 +1,7 @@
 package io.github.lumi.client.specialthanks;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -55,7 +56,7 @@ class SpecialThanksSupportTest {
     }
 
     @Test
-    void resolverAcceptsOnlyHostedHttpsAndKeepsBlockingJoinOffSkinFor() throws Exception {
+    void resolverUsesNativeAsyncProfileLookupAndHostedHttps() throws Exception {
         assertEquals(URI.create("https://example.com/skin.png"),
                 MinecraftSpecialThanksSkinResolver.requireHttps(
                         "https://example.com/skin.png"));
@@ -70,10 +71,13 @@ class SpecialThanksSupportTest {
                 "src/main/java/io/github/lumi/client/specialthanks/"
                         + "MinecraftSpecialThanksSkinResolver.java"));
         assertTrue(resolver.contains("Util.backgroundExecutor()"));
-        assertTrue(resolver.indexOf(".join()") > resolver.indexOf("loadProfileSkin("));
+        assertFalse(resolver.contains(".join()"));
         assertTrue(resolver.contains("sessionService().fetchProfile("));
         assertTrue(resolver.contains("complete.profile()"));
+        assertTrue(resolver.contains(".createLookup(profile, true)"));
+        assertTrue(resolver.contains(".thenApplyAsync("));
+        assertTrue(resolver.contains("loggedFailures.add(entry)"));
         assertTrue(resolver.contains("new ClientAsset.ResourceTexture(id, id)"));
-        assertTrue(resolver.contains("getNow(DefaultPlayerSkin.getDefaultSkin())"));
+        assertTrue(resolver.contains("getNow(DEFAULT_SKIN).get()"));
     }
 }
