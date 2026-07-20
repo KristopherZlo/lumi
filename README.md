@@ -50,11 +50,13 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   Build, Latest save, History and full-window search layout with exact
   zone-scoped pending totals.
 - First-run onboarding opens once per client installation and remains replayable
-  from More. Its retained nine-step legacy flow asks for five real world edits,
-  previews those edits, waits for the live remappable Save/Open shortcuts, opens
-  the real Save form, spotlights Dashboard Save/See changes/Restore controls and
-  finishes in the live hotkey guide. Contextual tips remain independently
-  dismissible; Alt+I opens that same guide.
+  from More. One nine-step event-driven tour asks for five real world edits,
+  previews those edits, reacts to press/release events from live remappable
+  Save/Open shortcuts, opens the real Save form, spotlights Dashboard
+  Save/See changes/Restore controls and finishes in the live hotkey guide. Every
+  step has Next, Back and Skip; Escape closes without completing and reopening
+  resumes the active step. Contextual tips remain independently dismissible;
+  Alt+I opens that same guide.
 - Settings persists workspace history, Restore, preview, HUD and automatic
   version defaults through descriptive rows with compact On/Off controls;
   diagnostic telemetry remains client-local. More groups its secondary actions

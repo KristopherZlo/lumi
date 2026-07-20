@@ -16,9 +16,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.Util;
 
-/** Owns the two no-screen, in-world steps of the legacy onboarding tour. */
+/** Owns bounded world observation for the two no-screen onboarding steps. */
 public final class ClientOnboardingWorldStep {
     private static final Identifier HUD_ID = Identifier.fromNamespaceAndPath(
             LumiMod.MOD_ID, "onboarding_world_prompt");
@@ -26,14 +25,12 @@ public final class ClientOnboardingWorldStep {
     private static final int REFRESH_INTERVAL_TICKS = 10;
     private final ClientHistoryStore history;
     private final Runnable refresh;
-    private final OnboardingHoldGate holdGate = new OnboardingHoldGate();
-    private Consumer<OnboardingTour> reopen;
-    private OnboardingTour tour;
+    private Consumer<OnboardingController> reopen;
+    private OnboardingController controller;
     private Set<HistorySnapshotPayload.PendingBlock> baselinePending = Set.of();
     private boolean baselineReady;
     private int edits;
     private int refreshCooldown;
-    private long lastHoldSampleMillis;
 
     public ClientOnboardingWorldStep(
             ClientHistoryStore history,
@@ -49,38 +46,49 @@ public final class ClientOnboardingWorldStep {
     }
 
     public void start(
-            OnboardingTour activeTour,
-            Consumer<OnboardingTour> continuation) {
-        Objects.requireNonNull(activeTour, "activeTour");
-        if (!activeTour.current().worldStep()) {
+            OnboardingController activeController,
+            Consumer<OnboardingController> continuation) {
+        Objects.requireNonNull(activeController, "activeController");
+        if (!activeController.current().worldStep()) {
             throw new IllegalStateException(
                     "Onboarding can enter the world only from a world step");
         }
-        tour = activeTour;
+        controller = activeController;
         reopen = Objects.requireNonNull(continuation, "continuation");
         var initial = pendingBlocks();
         baselinePending = initial.map(Set::copyOf).orElseGet(Set::of);
         baselineReady = initial.isPresent();
         edits = 0;
         refreshCooldown = 0;
-        resetHold();
         refresh.run();
     }
 
     public boolean tracking() {
-        return tour != null;
+        return controller != null;
+    }
+
+    public boolean accept(OnboardingEvent event) {
+        if (controller == null
+                || !(event instanceof OnboardingEvent.Shortcut shortcut)
+                || shortcut.shortcut() != OnboardingEvent.ShortcutKind.PREVIEW
+                || !shortcut.pressed()
+                || controller.current().kind() != OnboardingTour.Kind.WORLD_PREVIEW
+                || pendingBlocks().map(List::isEmpty).orElse(true)) {
+            return false;
+        }
+        OnboardingController.Effect effect = controller.handle(
+                new OnboardingEvent.WorldCompleted(OnboardingTour.Kind.WORLD_PREVIEW));
+        if (effect == OnboardingController.Effect.REOPEN) finishStep();
+        return true;
     }
 
     private void tick(Minecraft client) {
-        if (tour == null || client.screen != null
+        if (controller == null || client.screen != null
                 || client.player == null || client.level == null) {
             return;
         }
-        if (tour.current().kind() == OnboardingTour.Kind.WORLD_PREVIEW) {
-            tickPreview(client);
-            return;
-        }
-        if (tour.current().kind() != OnboardingTour.Kind.WORLD_EDIT) {
+        if (controller.current().kind() == OnboardingTour.Kind.WORLD_PREVIEW) return;
+        if (controller.current().kind() != OnboardingTour.Kind.WORLD_EDIT) {
             clear();
             return;
         }
@@ -98,34 +106,20 @@ public final class ClientOnboardingWorldStep {
             return;
         }
         edits = trackedEdits(baselinePending, current.orElseThrow());
-        if (edits >= REQUIRED_EDITS && tour.advanceWorldEdit()) {
-            finishStep();
-        }
-    }
-
-    private void tickPreview(Minecraft client) {
-        boolean held = LumiHotkeys.actionModifierDown(
-                client.options.keyMappings);
-        long now = Util.getMillis();
-        long elapsed = held && lastHoldSampleMillis > 0L
-                ? Math.min(100L, now - lastHoldSampleMillis) : 0L;
-        lastHoldSampleMillis = held ? now : 0L;
-        boolean overlayVisible = held && pendingBlocks()
-                .map(blocks -> !blocks.isEmpty()).orElse(false);
-        if (holdGate.update(
-                previewHoldActive(held, overlayVisible), elapsed)
-                && tour.advancePendingPreview()) {
-            finishStep();
+        if (edits >= REQUIRED_EDITS) {
+            OnboardingController.Effect effect = controller.handle(
+                    new OnboardingEvent.WorldCompleted(OnboardingTour.Kind.WORLD_EDIT));
+            if (effect == OnboardingController.Effect.REOPEN) finishStep();
         }
     }
 
     private void render(
             GuiGraphics graphics, net.minecraft.client.DeltaTracker ignored) {
         Minecraft client = Minecraft.getInstance();
-        if (tour == null || client.screen != null || client.options.hideGui) {
+        if (controller == null || client.screen != null || client.options.hideGui) {
             return;
         }
-        OnboardingTour.Page page = tour.current();
+        OnboardingTour.Page page = controller.current();
         int panelWidth = Math.min(330, graphics.guiWidth() - 16);
         int panelHeight = page.kind() == OnboardingTour.Kind.WORLD_EDIT ? 72 : 86;
         int x = (graphics.guiWidth() - panelWidth) / 2;
@@ -134,7 +128,7 @@ public final class ClientOnboardingWorldStep {
         graphics.fill(x, y, x + 3, y + panelHeight, 0xff70d6a5);
         graphics.drawString(client.font,
                 Component.translatable("luma.onboarding.header",
-                        tour.displayIndex(), OnboardingTour.pageCount()),
+                        controller.displayIndex(), OnboardingTour.pageCount()),
                 x + 10, y + 8, 0xff8f9aa8, false);
         graphics.drawString(client.font,
                 Component.translatable(page.titleKey()),
@@ -145,7 +139,7 @@ public final class ClientOnboardingWorldStep {
                     client.options.keyMappings, "key.lumi.action_modifier");
             graphics.drawString(client.font,
                     Component.translatable(
-                            "luma.onboarding.preview_changes_hold")
+                            "luma.onboarding.preview_changes_press")
                             .append(" [" + key + "]"),
                     x + 10, cursorY, 0xfff0f3f6, false);
             cursorY += 14;
@@ -163,16 +157,7 @@ public final class ClientOnboardingWorldStep {
                             "luma.onboarding.world_edit_counter",
                             Math.min(REQUIRED_EDITS, edits), REQUIRED_EDITS),
                     x + 10, y + panelHeight - 15, 0xff8f9aa8, false);
-        } else {
-            drawProgress(graphics, x + 10, y + panelHeight - 9, panelWidth - 20);
         }
-    }
-
-    private void drawProgress(GuiGraphics graphics, int x, int y, int width) {
-        graphics.fill(x, y, x + width, y + 3, 0xff343a43);
-        graphics.fill(x, y,
-                x + (int) Math.round(width * holdGate.progress()), y + 3,
-                0xff70d6a5);
     }
 
     private Optional<List<HistorySnapshotPayload.PendingBlock>> pendingBlocks() {
@@ -187,29 +172,19 @@ public final class ClientOnboardingWorldStep {
                 .filter(block -> !baseline.contains(block)).count();
     }
 
-    static boolean previewHoldActive(boolean held, boolean overlayVisible) {
-        return held && overlayVisible;
-    }
-
     private void finishStep() {
-        OnboardingTour completedTour = tour;
-        Consumer<OnboardingTour> continuation = reopen;
+        OnboardingController completedController = controller;
+        Consumer<OnboardingController> continuation = reopen;
         clear();
-        continuation.accept(completedTour);
+        continuation.accept(completedController);
     }
 
     private void clear() {
-        tour = null;
+        controller = null;
         reopen = null;
         baselinePending = Set.of();
         baselineReady = false;
         edits = 0;
         refreshCooldown = 0;
-        resetHold();
-    }
-
-    private void resetHold() {
-        holdGate.reset();
-        lastHoldSampleMillis = 0L;
     }
 }

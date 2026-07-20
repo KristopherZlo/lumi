@@ -17,7 +17,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.Shapes;
 
-/** Requests and renders bounded legacy zone shells in the world. */
+/** Requests and renders bounded zone shells in the world. */
 public final class LumiZoneOverlay {
     private static final double FACE_THICKNESS = 0.015;
     private final ClientZoneOverlayStore overlays;

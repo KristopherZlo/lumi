@@ -1,8 +1,6 @@
 package io.github.lumi.client.onboarding;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.List;
@@ -21,12 +19,5 @@ class ClientOnboardingWorldStepTest {
                 Set.of(old), List.of(old, added, added)));
         assertEquals(1, ClientOnboardingWorldStep.trackedEdits(
                 Set.of(old), List.of(added)));
-    }
-
-    @Test
-    void previewRequiresBothTheKeyAndVisibleOverlay() {
-        assertFalse(ClientOnboardingWorldStep.previewHoldActive(true, false));
-        assertFalse(ClientOnboardingWorldStep.previewHoldActive(false, true));
-        assertTrue(ClientOnboardingWorldStep.previewHoldActive(true, true));
     }
 }

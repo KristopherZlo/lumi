@@ -19,7 +19,7 @@ class LumiHotkeysTest {
     }
 
     @Test
-    void compareHighlightKeepsTheLegacyHBinding() {
+    void compareHighlightKeepsTheHBinding() {
         assertEquals(InputConstants.KEY_H, LumiHotkeys.defaultCompareOverlayKey());
     }
 
@@ -41,6 +41,9 @@ class LumiHotkeysTest {
         assertTrue(source.contains("actionModifier.isDown()"));
         assertTrue(source.contains(
                 "KeyBindingHelper.registerKeyBinding(actionModifier)"));
+        assertTrue(source.contains("publishOnboardingEdges(altDown)"));
+        assertTrue(source.contains(
+                "new OnboardingEvent.Shortcut(shortcut, pressed)"));
     }
 
     @Test

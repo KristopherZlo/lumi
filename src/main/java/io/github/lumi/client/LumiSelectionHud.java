@@ -16,7 +16,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
-/** Crosshair teaching HUD using live bindings and legacy mouse glyphs. */
+/** Crosshair teaching HUD using live bindings and mouse glyphs. */
 public final class LumiSelectionHud {
     private static final Identifier ID = Identifier.fromNamespaceAndPath(
             LumiMod.MOD_ID, "selection_tool_hint");

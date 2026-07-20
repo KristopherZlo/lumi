@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class PreviewRenderMeshBuilderTest {
     @Test
-    void keepsLegacyLayeredModelsFluidsCullingAndDepthSort() throws Exception {
+    void keepsLayeredModelsFluidsCullingAndDepthSort() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/preview/PreviewRenderMeshBuilder.java"));
 

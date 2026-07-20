@@ -1,28 +1,25 @@
 package io.github.lumi.client.ui;
 
-import io.github.lumi.client.LumiHotkeys;
-import io.github.lumi.client.onboarding.OnboardingHoldGate;
-import io.github.lumi.client.onboarding.OnboardingTour;
+import io.github.lumi.client.onboarding.OnboardingController;
+import io.github.lumi.client.onboarding.OnboardingEvent;
 import java.util.Objects;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.options.controls.ControlsScreen;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Util;
 import org.lwjgl.glfw.GLFW;
 
-/** Replayable nine-step hands-on introduction for Lumi V2. */
+/** Replayable nine-step hands-on introduction driven by explicit events. */
 public final class LumiOnboardingScreen extends LumiModalScreen {
     private static final int PANEL_HEIGHT = 224;
+    private static final int NAVIGATION_WIDTH = 64;
     private final Screen returnScreen;
     private final Screen background;
-    private final OnboardingTour tour;
+    private final OnboardingController controller;
     private final Actions actions;
-    private final OnboardingHoldGate holdGate = new OnboardingHoldGate();
     private final OnboardingSpotlightLayout spotlights =
             new OnboardingSpotlightLayout();
     private final OnboardingScreenRenderer renderer =
@@ -32,7 +29,6 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
     private int panelWidth;
     private int panelHeight;
     private OnboardingSpotlightLayout.Placement spotlight;
-    private long lastHoldSampleMillis;
     private boolean completionSent;
 
     public LumiOnboardingScreen(Screen parent) {
@@ -40,7 +36,7 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
     }
 
     public LumiOnboardingScreen(Screen parent, Runnable completed) {
-        this(parent, parent, new OnboardingTour(), new Actions(
+        this(parent, parent, new OnboardingController(), new Actions(
                 ignored -> { }, (screen, saved) -> { },
                 ignored -> parent, ignored -> { }, completed));
     }
@@ -48,25 +44,20 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
     public LumiOnboardingScreen(
             Screen returnScreen,
             Screen background,
-            OnboardingTour tour,
+            OnboardingController controller,
             Actions actions) {
         super(background, Component.translatable("luma.screen.onboarding.title"));
         this.returnScreen = returnScreen;
         this.background = background;
-        this.tour = Objects.requireNonNull(tour, "tour");
+        this.controller = Objects.requireNonNull(controller, "controller");
         this.actions = Objects.requireNonNull(actions, "actions");
     }
 
     @Override
     protected void init() {
         beginScreenInit();
-        holdGate.reset();
-        lastHoldSampleMillis = 0L;
-        if (tour.current().spotlight()) {
-            initSpotlight();
-        } else {
-            initPanel();
-        }
+        if (controller.current().spotlight()) initSpotlight();
+        else initPanel();
     }
 
     private void initPanel() {
@@ -74,145 +65,77 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
         panelX = (width - panelWidth) / 2;
         panelHeight = fittedPanelHeight(height);
         panelY = Math.max(12, (height - panelHeight) / 2);
-        int actionY = panelY + panelActionOffset(panelHeight);
-        addBack(panelX + 16, actionY);
-        OnboardingTour.Page page = tour.current();
-        if (page.worldStep() || page.kind() == OnboardingTour.Kind.INFO) {
-            addButton(
-                    panelX + panelWidth - 96, actionY, 80,
-                    Component.translatable("luma.action.next"),
-                    this::advanceButton, LumiButton.Kind.PRIMARY);
-        } else if (shortcutUnbound(page)) {
-            addButton(
-                    panelX + panelWidth - 184, actionY, 80,
-                    Component.translatable("luma.action.open_controls"),
-                    this::openControls, LumiButton.Kind.NORMAL);
-            addButton(
-                    panelX + panelWidth - 96, actionY, 80,
-                    Component.translatable("luma.action.skip"),
-                    this::skipShortcut, LumiButton.Kind.PRIMARY);
-        } else {
-            addButton(
-                    panelX + panelWidth - 96, actionY, 80,
-                    Component.translatable("luma.action.next"),
-                    () -> completeHold(page.kind()),
-                    LumiButton.Kind.PRIMARY);
-        }
+        addNavigation(panelX + 16, panelX + panelWidth - 16,
+                panelY + panelActionOffset(panelHeight));
     }
 
     private void initSpotlight() {
         spotlight = background instanceof LumiDashboardScreen dashboard
                 ? spotlights.place(
-                        dashboard.onboardingTarget(tour.current().kind()),
+                        dashboard.onboardingTarget(controller.current().kind()),
                         width, height)
-                : spotlights.place(tour.current().kind(), width, height);
+                : spotlights.place(controller.current().kind(), width, height);
         var prompt = spotlight.prompt();
-        addBack(prompt.x() + 10, prompt.bottom() - 28);
-        addButton(
-                prompt.right() - 90, prompt.bottom() - 28, 80,
-                Component.translatable("luma.action.next"),
-                this::advanceSpotlight, LumiButton.Kind.PRIMARY);
+        addNavigation(prompt.x() + 10, prompt.right() - 10,
+                prompt.bottom() - 28);
     }
 
-    private void addBack(int x, int y) {
+    private void addNavigation(int left, int right, int y) {
         LumiButton back = addButton(
-                x, y, 80, Component.translatable("luma.action.back"),
-                () -> {
-                    tour.previous();
-                    rebuildWidgets();
-                }, LumiButton.Kind.NORMAL);
-        back.active = tour.canGoBack();
+                left, y, NAVIGATION_WIDTH,
+                Component.translatable("luma.action.back"),
+                () -> accept(new OnboardingEvent.Navigation(
+                        OnboardingEvent.Direction.BACK)),
+                LumiButton.Kind.NORMAL);
+        back.active = controller.canGoBack();
+        addButton(right - NAVIGATION_WIDTH * 2 - 8, y, NAVIGATION_WIDTH,
+                Component.translatable("luma.action.skip"),
+                () -> accept(new OnboardingEvent.Navigation(
+                        OnboardingEvent.Direction.SKIP)),
+                LumiButton.Kind.NORMAL);
+        addButton(right - NAVIGATION_WIDTH, y, NAVIGATION_WIDTH,
+                Component.translatable("luma.action.next"),
+                () -> accept(new OnboardingEvent.Navigation(
+                        OnboardingEvent.Direction.NEXT)),
+                LumiButton.Kind.PRIMARY);
     }
 
     @Override
     public void tick() {
         super.tick();
-        if (background instanceof LumiDashboardScreen dashboard) {
-            dashboard.tick();
-        }
-        OnboardingTour.Page page = tour.current();
-        if (!page.holdStep() || shortcutUnbound(page)) {
-            holdGate.reset();
-            lastHoldSampleMillis = 0L;
-            return;
-        }
-        boolean held = page.bindings().stream().allMatch(binding ->
-                LumiHotkeys.bindingDown(
-                        minecraft.options.keyMappings, binding));
-        long now = Util.getMillis();
-        long elapsed = held && lastHoldSampleMillis > 0L
-                ? Math.min(100L, now - lastHoldSampleMillis) : 0L;
-        lastHoldSampleMillis = held ? now : 0L;
-        if (holdGate.update(held, elapsed)) {
-            completeHold(page.kind());
-        }
+        if (background instanceof LumiDashboardScreen dashboard) dashboard.tick();
     }
 
-    private void completeHold(OnboardingTour.Kind kind) {
-        holdGate.reset();
-        lastHoldSampleMillis = 0L;
-        switch (kind) {
-            case HOLD_SAVE -> actions.save().open(this, () -> {
-                tour.advanceQuickSave();
-                rebuildWidgets();
-            });
-            case HOLD_DASHBOARD -> {
-                tour.next();
-                openDashboard();
+    public void accept(OnboardingEvent event) {
+        execute(controller.handle(event));
+    }
+
+    private void execute(OnboardingController.Effect effect) {
+        switch (effect) {
+            case NONE -> { }
+            case REFRESH, REOPEN -> rebuildWidgets();
+            case ENTER_WORLD -> {
+                actions.worldStep().accept(controller);
+                minecraft.setScreen(null);
             }
-            case HOLD_HOTKEYS -> {
+            case OPEN_SAVE -> actions.save().open(
+                    this, () -> accept(new OnboardingEvent.SaveCompleted()));
+            case OPEN_DASHBOARD -> openDashboard();
+            case OPEN_HOTKEYS -> {
                 complete();
                 actions.hotkeys().accept(workspaceBackground());
             }
-            default -> {
-            }
-        }
-    }
-
-    private void advanceButton() {
-        if (tour.current().worldStep()) {
-            actions.worldStep().accept(tour);
-            minecraft.setScreen(null);
-            return;
-        }
-        tour.next();
-        rebuildWidgets();
-    }
-
-    private void advanceSpotlight() {
-        tour.next();
-        rebuildWidgets();
-    }
-
-    private void skipShortcut() {
-        switch (tour.current().kind()) {
-            case HOLD_DASHBOARD -> {
-                tour.next();
-                openDashboard();
-            }
-            case HOLD_HOTKEYS -> onClose();
-            default -> {
-                tour.next();
-                rebuildWidgets();
+            case COMPLETE -> {
+                complete();
+                minecraft.setScreen(returnScreen);
             }
         }
     }
 
     private void openDashboard() {
         Screen dashboard = actions.dashboard().apply(returnScreen);
-        minecraft.setScreen(dashboard);
         minecraft.setScreen(new LumiOnboardingScreen(
-                returnScreen, dashboard, tour, actions));
-    }
-
-    private void openControls() {
-        minecraft.setScreen(new ControlsScreen(this, minecraft.options));
-    }
-
-    private boolean shortcutUnbound(OnboardingTour.Page page) {
-        return page.bindings().stream().anyMatch(binding ->
-                LumiHotkeys.bindingUnbound(
-                        minecraft.options.keyMappings, binding));
+                returnScreen, dashboard, controller, actions));
     }
 
     private Screen workspaceBackground() {
@@ -221,22 +144,42 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
     }
 
     @Override
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        if (super.mouseClicked(click, doubled)) return true;
+        if (spotlight == null) return false;
+        double x = virtualCoordinate(click.x());
+        double y = virtualCoordinate(click.y());
+        var hole = spotlight.hole();
+        if (x < hole.x() || x >= hole.right()
+                || y < hole.y() || y >= hole.bottom()) return false;
+        boolean activated = background != null
+                && background.mouseClicked(click, doubled);
+        if (activated) {
+            accept(new OnboardingEvent.SpotlightActivated(
+                    controller.current().kind()));
+            if (minecraft.screen == null) {
+                minecraft.setScreen(new LumiOnboardingScreen(
+                        returnScreen, background, controller, actions));
+            }
+        }
+        return activated;
+    }
+
+    @Override
     public void render(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            if (tour.current().spotlight()) {
+            if (controller.current().spotlight()) {
                 alignNavigation(0, 0, width);
                 renderer.spotlight(
-                        graphics, font, tour, spotlight, width, height);
+                        graphics, font, controller, spotlight, width, height);
             } else {
                 alignNavigation(panelX, panelY, panelWidth);
-                graphics.fill(
-                        0, 0, width, height, LumiTheme.BACKDROP);
+                graphics.fill(0, 0, width, height, LumiTheme.BACKDROP);
                 renderer.panel(
                         graphics, font, minecraft.options.keyMappings,
-                        tour, holdGate,
-                        panelX, panelY, panelWidth, panelHeight);
+                        controller, panelX, panelY, panelWidth, panelHeight);
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
@@ -247,18 +190,15 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
-            onClose();
+            minecraft.setScreen(returnScreen);
             return true;
         }
         return super.keyPressed(event);
     }
 
-    @Override public boolean isPauseScreen() {
-        return false;
-    }
+    @Override public boolean isPauseScreen() { return false; }
 
     @Override public void onClose() {
-        complete();
         minecraft.setScreen(returnScreen);
     }
 
@@ -278,7 +218,7 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
     }
 
     public record Actions(
-            Consumer<OnboardingTour> worldStep,
+            Consumer<OnboardingController> worldStep,
             SaveOpener save,
             Function<Screen, Screen> dashboard,
             Consumer<Screen> hotkeys,

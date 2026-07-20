@@ -4,7 +4,7 @@ import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.BlockPosition;
 import net.minecraft.world.phys.Vec3;
 
-/** Resolves the legacy looked-at or nearest face for wheel resizing. */
+/** Resolves the looked-at or nearest face for wheel resizing. */
 public final class SelectionResizeSideResolver {
     private SelectionResizeSideResolver() {
     }

@@ -1,7 +1,7 @@
 package io.github.lumi.client.ui;
 
 import io.github.lumi.client.LumiHotkeys;
-import io.github.lumi.client.onboarding.OnboardingHoldGate;
+import io.github.lumi.client.onboarding.OnboardingController;
 import io.github.lumi.client.onboarding.OnboardingTour;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.Font;
@@ -14,13 +14,12 @@ final class OnboardingScreenRenderer {
             GuiGraphics graphics,
             Font font,
             KeyMapping[] mappings,
-            OnboardingTour tour,
-            OnboardingHoldGate holdGate,
+            OnboardingController controller,
             int x,
             int y,
             int width,
             int height) {
-        OnboardingTour.Page page = tour.current();
+        OnboardingTour.Page page = controller.current();
         boolean compact = height < 224;
         int actionY = y + height - 30;
         int contentY = compact ? y + 8 : y + 36;
@@ -34,27 +33,17 @@ final class OnboardingScreenRenderer {
                 graphics, x + 12, contentY, width - 24, contentHeight,
                 LumiTheme.PANEL, LumiTheme.PANEL_BORDER);
         int textBottom = compact
-                ? (page.holdStep() ? shortcutY - 5 : actionY - 6)
+                ? (page.shortcutStep() ? shortcutY - 5 : actionY - 6)
                 : y + 126;
-        pageText(graphics, font, tour, x + 24, textY, width - 48, textBottom);
-        if (!page.holdStep()) return;
+        pageText(graphics, font, controller, x + 24, textY, width - 48, textBottom);
+        if (!page.shortcutStep()) return;
         shortcut(graphics, font, mappings, page, x + 24, shortcutY);
-        int barX = x + 24;
-        int barY = compact ? actionY - 10 : y + 162;
-        int barWidth = width - 48;
-        graphics.fill(
-                barX, barY, barX + barWidth, barY + 3,
-                LumiTheme.INSET_BORDER);
-        graphics.fill(
-                barX, barY,
-                barX + (int) Math.round(barWidth * holdGate.progress()),
-                barY + 3, LumiTheme.ACCENT);
     }
 
     void spotlight(
             GuiGraphics graphics,
             Font font,
-            OnboardingTour tour,
+            OnboardingController controller,
             OnboardingSpotlightLayout.Placement placement,
             int screenWidth,
             int screenHeight) {
@@ -76,7 +65,7 @@ final class OnboardingScreenRenderer {
                 prompt.x(), prompt.y(), prompt.width(), prompt.height(),
                 LumiTheme.WINDOW, LumiTheme.WINDOW_BORDER);
         pageText(
-                graphics, font, tour,
+                graphics, font, controller,
                 prompt.x() + 10, prompt.y() + 12, prompt.width() - 20,
                 prompt.bottom() - 30);
     }
@@ -84,7 +73,7 @@ final class OnboardingScreenRenderer {
     private static void pageText(
             GuiGraphics graphics,
             Font font,
-            OnboardingTour tour,
+            OnboardingController controller,
             int x,
             int y,
             int textWidth,
@@ -93,14 +82,14 @@ final class OnboardingScreenRenderer {
                 font,
                 Component.translatable(
                         "luma.onboarding.header",
-                        tour.displayIndex(), OnboardingTour.pageCount()),
+                        controller.displayIndex(), OnboardingTour.pageCount()),
                 x, y, LumiTheme.MUTED, false);
         graphics.drawString(
-                font, Component.translatable(tour.current().titleKey()),
+                font, Component.translatable(controller.current().titleKey()),
                 x, y + 16, LumiTheme.ACCENT, false);
         int lineY = y + 36;
         for (var line : font.split(
-                Component.translatable(tour.current().helpKey()), textWidth)) {
+                Component.translatable(controller.current().helpKey()), textWidth)) {
             if (lineY + 9 > textBottom) break;
             graphics.drawString(
                     font, line, x, lineY, LumiTheme.TEXT, false);
@@ -116,7 +105,7 @@ final class OnboardingScreenRenderer {
             int x,
             int y) {
         graphics.drawString(
-                font, Component.translatable(holdInstruction(page.kind())),
+                font, Component.translatable(shortcutInstruction(page.kind())),
                 x, y, LumiTheme.MUTED, false);
         boolean unbound = page.bindings().stream().anyMatch(binding ->
                 LumiHotkeys.bindingUnbound(mappings, binding));
@@ -132,11 +121,11 @@ final class OnboardingScreenRenderer {
                 font, keys, x, y + 15, LumiTheme.TEXT, false);
     }
 
-    private static String holdInstruction(OnboardingTour.Kind kind) {
+    private static String shortcutInstruction(OnboardingTour.Kind kind) {
         return switch (kind) {
-            case HOLD_SAVE -> "luma.onboarding.hold_quick_save";
-            case HOLD_DASHBOARD -> "luma.onboarding.hold_open";
-            case HOLD_HOTKEYS -> "luma.onboarding.press_info";
+            case SHORTCUT_SAVE -> "luma.onboarding.press_quick_save";
+            case SHORTCUT_DASHBOARD -> "luma.onboarding.press_open";
+            case SHORTCUT_HOTKEYS -> "luma.onboarding.press_info";
             default -> throw new IllegalArgumentException("Not a hold page");
         };
     }

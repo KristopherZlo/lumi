@@ -33,7 +33,7 @@ class PreviewFramingCalculatorTest {
     }
 
     @Test
-    void keepsXAxisAndZAxisInLegacyIsometricDirection() {
+    void keepsXAxisAndZAxisInIsometricDirection() {
         Vector3f positiveX = new Vector3f(1, 0, 0)
                 .mulPosition(PreviewFramingCalculator.rotationMatrix());
         Vector3f positiveZ = new Vector3f(0, 0, 1)

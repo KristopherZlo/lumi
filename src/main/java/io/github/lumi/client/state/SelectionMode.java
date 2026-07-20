@@ -1,6 +1,6 @@
 package io.github.lumi.client.state;
 
-/** Wooden-sword click behavior retained from legacy Lumi. */
+/** Wooden-sword click behavior for Lumi selections. */
 public enum SelectionMode {
     CORNERS,
     EXTEND;

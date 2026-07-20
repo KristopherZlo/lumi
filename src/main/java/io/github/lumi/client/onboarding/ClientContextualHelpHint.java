@@ -1,6 +1,6 @@
 package io.github.lumi.client.onboarding;
 
-/** Builder-facing contextual tips retained from the legacy UI. */
+/** Builder-facing contextual tips for the V2 UI. */
 public enum ClientContextualHelpHint {
     HISTORY("history"),
     SHORTCUTS("shortcuts"),

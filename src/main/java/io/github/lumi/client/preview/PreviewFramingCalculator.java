@@ -5,7 +5,7 @@ import java.util.Objects;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
-/** Computes the retained legacy isometric projection for one inclusive block box. */
+/** Computes the isometric projection for one inclusive block box. */
 final class PreviewFramingCalculator {
     static final float ISO_PITCH_RADIANS = (float) Math.toRadians(35.2643897D);
     static final float ISO_YAW_RADIANS = (float) Math.toRadians(-45.0D);

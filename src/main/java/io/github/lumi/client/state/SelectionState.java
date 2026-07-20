@@ -6,7 +6,7 @@ import java.util.ArrayDeque;
 import java.util.Objects;
 import java.util.Optional;
 
-/** One scoped selection with legacy modes, face resize and bounded undo/redo. */
+/** One scoped selection with modes, face resize and bounded undo/redo. */
 final class SelectionState {
     private static final int HISTORY_LIMIT = 64;
     private final ArrayDeque<Snapshot> undo = new ArrayDeque<>();

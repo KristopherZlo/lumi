@@ -2,24 +2,30 @@ package io.github.lumi.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.LumiMod;
+import io.github.lumi.client.onboarding.OnboardingEvent;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.function.Consumer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 
-/** Registers legacy Lumi chords plus standalone H and R world actions. */
+/** Registers Lumi chords plus standalone H and R world actions. */
 public final class LumiHotkeys {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "general"));
     private final HotkeyActionDispatcher dispatcher;
     private final Supplier<List<Integer>> branchKeys;
+    private final Consumer<OnboardingEvent> onboardingEvents;
     private final Set<Integer> pressedBranchKeys = new HashSet<>();
+    private final EnumSet<OnboardingEvent.ShortcutKind> pressedOnboardingKeys =
+            EnumSet.noneOf(OnboardingEvent.ShortcutKind.class);
     private final KeyMapping dashboard = mapping(
             "key.lumi.open_dashboard", defaultDashboardKey());
     private final KeyMapping save = mapping("key.lumi.quick_save", InputConstants.KEY_S);
@@ -33,14 +39,23 @@ public final class LumiHotkeys {
             "key.lumi.quick_rollback", InputConstants.KEY_R);
     private final KeyMapping info = mapping("key.lumi.hotkey_info", InputConstants.KEY_I);
     public LumiHotkeys(HotkeyActionDispatcher dispatcher) {
-        this(dispatcher, List::of);
+        this(dispatcher, List::of, ignored -> { });
     }
 
     public LumiHotkeys(
             HotkeyActionDispatcher dispatcher,
             Supplier<List<Integer>> branchKeys) {
+        this(dispatcher, branchKeys, ignored -> { });
+    }
+
+    public LumiHotkeys(
+            HotkeyActionDispatcher dispatcher,
+            Supplier<List<Integer>> branchKeys,
+            Consumer<OnboardingEvent> onboardingEvents) {
         this.dispatcher = Objects.requireNonNull(dispatcher, "dispatcher");
         this.branchKeys = Objects.requireNonNull(branchKeys, "branchKeys");
+        this.onboardingEvents = Objects.requireNonNull(
+                onboardingEvents, "onboardingEvents");
     }
 
     public void register() {
@@ -58,6 +73,7 @@ public final class LumiHotkeys {
     private void tick(Minecraft client) {
         boolean normalPlay = client.player != null && client.screen == null;
         boolean altDown = actionModifier.isDown();
+        publishOnboardingEdges(altDown);
         if (consume(dashboard) && canOpenDashboard(normalPlay, altDown)) {
             if (dashboard.same(client.options.keyAdvancements)) {
                 consume(client.options.keyAdvancements);
@@ -73,6 +89,26 @@ public final class LumiHotkeys {
         consume(info, canUseChord, HotkeyActionDispatcher.Action.HOTKEYS);
         pollBranchKeys(client, canUseChord);
         consume(actionModifier);
+    }
+
+    private void publishOnboardingEdges(boolean modifierDown) {
+        publishEdge(OnboardingEvent.ShortcutKind.PREVIEW, modifierDown);
+        publishEdge(OnboardingEvent.ShortcutKind.SAVE,
+                modifierDown && save.isDown());
+        publishEdge(OnboardingEvent.ShortcutKind.DASHBOARD,
+                modifierDown && dashboard.isDown());
+        publishEdge(OnboardingEvent.ShortcutKind.HOTKEYS,
+                modifierDown && info.isDown());
+    }
+
+    private void publishEdge(
+            OnboardingEvent.ShortcutKind shortcut, boolean pressed) {
+        boolean changed = pressed
+                ? pressedOnboardingKeys.add(shortcut)
+                : pressedOnboardingKeys.remove(shortcut);
+        if (changed) {
+            onboardingEvents.accept(new OnboardingEvent.Shortcut(shortcut, pressed));
+        }
     }
 
     private void pollBranchKeys(Minecraft client, boolean enabled) {

@@ -3,20 +3,20 @@ package io.github.lumi.client.onboarding;
 import java.util.List;
 import java.util.Objects;
 
-/** Retained state for the nine-step hands-on legacy onboarding flow. */
+/** Page catalog and cursor for the retained nine-step hands-on onboarding. */
 public final class OnboardingTour {
     private static final List<Page> PAGES = List.of(
             page("welcome", Kind.INFO),
             page("break_block", Kind.WORLD_EDIT),
             page("preview_changes", Kind.WORLD_PREVIEW),
-            page("save_shortcut", Kind.HOLD_SAVE,
+            page("save_shortcut", Kind.SHORTCUT_SAVE,
                     "key.lumi.action_modifier", "key.lumi.quick_save"),
-            page("open", Kind.HOLD_DASHBOARD,
+            page("open", Kind.SHORTCUT_DASHBOARD,
                     "key.lumi.action_modifier", "key.lumi.open_dashboard"),
             page("save_spotlight", Kind.SPOTLIGHT_SAVE),
             page("changes_spotlight", Kind.SPOTLIGHT_CHANGES),
             page("commit_navigation", Kind.SPOTLIGHT_RESTORE),
-            page("finish", Kind.HOLD_HOTKEYS,
+            page("finish", Kind.SHORTCUT_HOTKEYS,
                     "key.lumi.action_modifier", "key.lumi.hotkey_info"));
     private int index;
 
@@ -32,32 +32,12 @@ public final class OnboardingTour {
         return PAGES.get(index);
     }
 
-    public void next() {
+    void moveNext() {
         index = Math.min(PAGES.size() - 1, index + 1);
     }
 
-    public void previous() {
+    void movePrevious() {
         if (canGoBack()) index--;
-    }
-
-    public boolean advanceWorldEdit() {
-        return advance(Kind.WORLD_EDIT);
-    }
-
-    public boolean advancePendingPreview() {
-        return advance(Kind.WORLD_PREVIEW);
-    }
-
-    public boolean advanceQuickSave() {
-        return advance(Kind.HOLD_SAVE);
-    }
-
-    public boolean first() {
-        return index == 0;
-    }
-
-    public boolean last() {
-        return index == PAGES.size() - 1;
     }
 
     public boolean canGoBack() {
@@ -68,11 +48,6 @@ public final class OnboardingTour {
         return index + 1;
     }
 
-    private boolean advance(Kind expected) {
-        if (current().kind() != expected) return false;
-        next();
-        return true;
-    }
 
     private static Page page(String id, Kind kind, String... bindings) {
         Objects.requireNonNull(id, "id");
@@ -86,12 +61,12 @@ public final class OnboardingTour {
         INFO,
         WORLD_EDIT,
         WORLD_PREVIEW,
-        HOLD_SAVE,
-        HOLD_DASHBOARD,
+        SHORTCUT_SAVE,
+        SHORTCUT_DASHBOARD,
         SPOTLIGHT_SAVE,
         SPOTLIGHT_CHANGES,
         SPOTLIGHT_RESTORE,
-        HOLD_HOTKEYS
+        SHORTCUT_HOTKEYS
     }
 
     public record Page(
@@ -118,7 +93,7 @@ public final class OnboardingTour {
                     || kind == Kind.SPOTLIGHT_RESTORE;
         }
 
-        public boolean holdStep() {
+        public boolean shortcutStep() {
             return !bindings.isEmpty();
         }
     }

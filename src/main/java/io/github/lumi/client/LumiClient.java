@@ -14,7 +14,8 @@ import io.github.lumi.client.preview.ClientVersionPreviewCapture;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.onboarding.ClientOnboardingWorldStep;
 import io.github.lumi.client.onboarding.ClientOnboardingStateRepository;
-import io.github.lumi.client.onboarding.OnboardingTour;
+import io.github.lumi.client.onboarding.OnboardingController;
+import io.github.lumi.client.onboarding.OnboardingEvent;
 import io.github.lumi.client.ui.LumiSaveScreen;
 import io.github.lumi.client.ui.LumiSettingsScreen;
 import io.github.lumi.client.ui.LumiUpdateScreen;
@@ -91,6 +92,7 @@ public final class LumiClient implements ClientModInitializer {
     private static final ClientVersionPreviewCapture PREVIEW_CAPTURE =
             new ClientVersionPreviewCapture(PREVIEW_STORE);
     private static boolean onboardingShown;
+    private static OnboardingController activeOnboarding;
     private static final LumiClientNetworking NETWORKING =
             new LumiClientNetworking(
                     HISTORY, HISTORY_PAGES, COMPARISONS, ZONE_OVERLAYS,
@@ -170,7 +172,8 @@ public final class LumiClient implements ClientModInitializer {
                     }
                 }, LumiClient::showFeedback),
                 () -> HISTORY.state().snapshot()
-                        .map(BRANCH_SLOTS::keys).orElseGet(List::of));
+                        .map(BRANCH_SLOTS::keys).orElseGet(List::of),
+                LumiClient::acceptOnboardingEvent);
         hotkeys.register();
         new LumiSelectionTool(
                 SELECTION, HISTORY, LumiClient::showFeedback,
@@ -619,23 +622,26 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void completeOnboarding() {
         ONBOARDING.markCompleted();
+        activeOnboarding = null;
         showTelemetryNotice();
     }
 
     private static void openOnboarding(Screen returnScreen) {
-        showOnboarding(
-                returnScreen, returnScreen, new OnboardingTour());
+        if (activeOnboarding == null || activeOnboarding.completed()) {
+            activeOnboarding = new OnboardingController();
+        }
+        showOnboarding(returnScreen, returnScreen, activeOnboarding);
     }
 
     private static void showOnboarding(
             Screen returnScreen,
             Screen background,
-            OnboardingTour tour) {
+            OnboardingController controller) {
         Minecraft client = Minecraft.getInstance();
         LumiOnboardingScreen.Actions actions =
                 new LumiOnboardingScreen.Actions(
-                        activeTour -> ONBOARDING_WORLD.start(
-                                activeTour,
+                        activeController -> ONBOARDING_WORLD.start(
+                                activeController,
                                 resumed -> showOnboarding(
                                         returnScreen, null, resumed)),
                         (parent, saved) -> openSave(
@@ -648,7 +654,14 @@ public final class LumiClient implements ClientModInitializer {
                                         client.options.keyMappings))),
                         LumiClient::completeOnboarding);
         client.setScreen(new LumiOnboardingScreen(
-                returnScreen, background, tour, actions));
+                returnScreen, background, controller, actions));
+    }
+
+    private static void acceptOnboardingEvent(OnboardingEvent event) {
+        if (ONBOARDING_WORLD.accept(event)) return;
+        if (Minecraft.getInstance().screen instanceof LumiOnboardingScreen screen) {
+            screen.accept(event);
+        }
     }
 
     private static void showTelemetryNotice() {

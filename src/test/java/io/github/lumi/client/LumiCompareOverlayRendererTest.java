@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class LumiCompareOverlayRendererTest {
     @Test
-    void usesLegacyDirectionalColors() {
+    void usesDirectionalColors() {
         assertEquals(0xff55ff55,
                 LumiCompareOverlayRenderer.color(BlockChange.Kind.ADDED));
         assertEquals(0xffff5555,

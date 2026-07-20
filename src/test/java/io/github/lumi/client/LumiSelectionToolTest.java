@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class LumiSelectionToolTest {
     @Test
-    void rawAdapterOwnsLegacyClicksWheelAndEitherHand() throws Exception {
+    void rawAdapterOwnsClicksWheelAndEitherHand() throws Exception {
         String tool = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiSelectionTool.java"));
         String mixin = Files.readString(Path.of(

@@ -16,11 +16,14 @@ class LumiOnboardingScreenTest {
         assertTrue(source.contains(
                 "background instanceof LumiDashboardScreen dashboard"));
         assertTrue(source.contains("dashboard.tick()"));
-        assertTrue(source.contains("actions.save().open(this"));
-        assertTrue(source.contains("actions.worldStep().accept(tour)"));
-        assertTrue(source.contains("() -> completeHold(page.kind())"));
+        assertTrue(source.contains("actions.save().open("));
+        assertTrue(source.contains("actions.worldStep().accept(controller)"));
+        assertTrue(source.contains("controller.handle(event)"));
+        assertTrue(source.contains("OnboardingEvent.Direction.SKIP"));
+        assertTrue(source.contains("OnboardingEvent.Direction.BACK"));
+        assertTrue(source.contains("OnboardingEvent.Direction.NEXT"));
         assertTrue(source.contains("event.key() == GLFW.GLFW_KEY_ESCAPE"));
-        assertTrue(source.contains("onClose();"));
+        assertTrue(source.contains("minecraft.setScreen(returnScreen)"));
     }
 
     @Test
