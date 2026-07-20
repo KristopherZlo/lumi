@@ -35,7 +35,7 @@ class LumiBranchesScreenTest {
         assertTrue(source.contains("luma.action.variant_switch"));
         assertTrue(source.contains("visibleRows()"));
         assertTrue(source.contains("addLegacyIconButton"));
-        assertTrue(source.contains("new EditBox("));
+        assertTrue(source.contains("name = addLegacyTextField("));
         assertTrue(source.contains("create.submit(name.getValue())"));
         assertTrue(source.contains("luma.action.delete_branch"));
         assertTrue(source.contains("deleter.accept(pendingDelete.name())"));

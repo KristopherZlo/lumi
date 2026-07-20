@@ -70,8 +70,9 @@ class LumiLegacyNavigationTest {
         assertEquals(18, LumiLegacyModalScreen.INPUT_FRAME_HEIGHT);
         String modal = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiLegacyModalScreen.java"));
-        assertTrue(modal.contains("x + 6, y + 2"));
-        assertTrue(modal.contains("field.getX() - 6, field.getY() - 2"));
+        assertTrue(modal.contains("x + 6, y, Math.max(0, width - 12)"));
+        assertTrue(modal.contains("field.getX() - 6, field.getY()"));
+        assertTrue(modal.contains("INPUT_FRAME_HEIGHT, label"));
         Path ui = Path.of("src/main/java/io/github/lumi/client/ui");
         for (String screen : List.of(
                 "LumiDashboardScreen.java",
