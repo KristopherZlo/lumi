@@ -608,6 +608,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private void drawFrame(GuiGraphics graphics) {
         int x = layout.windowX();
         int y = layout.windowY();
+        alignLegacyNavigation(x, y, layout.windowWidth());
         int right = x + layout.windowWidth();
         int bottom = y + layout.windowHeight();
         graphics.fill(x, y, right, bottom,

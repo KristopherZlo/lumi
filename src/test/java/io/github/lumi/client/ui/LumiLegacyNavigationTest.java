@@ -48,6 +48,12 @@ class LumiLegacyNavigationTest {
         assertTrue(modal.contains("legacy.legacyInitialized"));
         assertFalse(modal.contains("background.mouseClicked("));
         assertFalse(modal.contains("background.mouseReleased("));
+        String dashboard = Files.readString(ui.resolve("LumiDashboardScreen.java"));
+        assertTrue(dashboard.contains(
+                "alignLegacyNavigation(x, y, layout.windowWidth())"));
+        String onboarding = Files.readString(ui.resolve("LumiOnboardingScreen.java"));
+        assertTrue(onboarding.contains(
+                "alignLegacyNavigation(panelX, panelY, panelWidth)"));
         String page = Files.readString(ui.resolve("LumiLegacyPageScreen.java"));
         assertFalse(page.contains("forwardsParentInput"));
         assertTrue(page.contains("x < layout.contentX()"));

@@ -284,7 +284,8 @@ abstract class LumiLegacyModalScreen extends Screen {
         return frameX + Math.max(0, frameWidth - FRAME_CONTROL_INSET - ICON_BUTTON_WIDTH);
     }
 
-    private void alignLegacyNavigation(int frameX, int frameY, int frameWidth) {
+    protected final void alignLegacyNavigation(
+            int frameX, int frameY, int frameWidth) {
         if (navigationButton == null) return;
         navigationButton.setX(navigationControlX(frameX, frameWidth));
         navigationButton.setY(frameY + FRAME_CONTROL_INSET);

@@ -220,9 +220,11 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
         LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
         try {
             if (tour.current().spotlight()) {
+                alignLegacyNavigation(0, 0, width);
                 renderer.spotlight(
                         graphics, font, tour, spotlight, width, height);
             } else {
+                alignLegacyNavigation(panelX, panelY, panelWidth);
                 graphics.fill(
                         0, 0, width, height, LegacyLumiTheme.BACKDROP);
                 renderer.panel(
