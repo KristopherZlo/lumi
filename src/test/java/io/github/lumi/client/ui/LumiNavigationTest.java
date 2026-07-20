@@ -37,16 +37,17 @@ class LumiNavigationTest {
         }
 
         String modal = Files.readString(ui.resolve("LumiModalScreen.java"));
+        String neutral = Files.readString(ui.resolve("LumiScreen.java"));
         assertTrue(modal.contains("background.render("));
-        assertTrue(modal.contains("GLFW_HAND_CURSOR"));
-        assertTrue(modal.contains("child instanceof Button button"));
-        assertTrue(modal.contains("minecraft.screen == this"));
-        assertTrue(modal.contains("hovered == handCursorActive"));
-        assertTrue(modal.contains("LumiTheme.PAGE_HEADER_HEIGHT"));
-        assertTrue(modal.contains("LumiTheme.TITLEBAR"));
-        assertTrue(modal.contains("page ? \"chevron-left\" : \"close\""));
-        assertTrue(modal.contains("alignNavigation(x, y, width)"));
-        assertTrue(modal.contains("frameY + FRAME_CONTROL_INSET"));
+        assertTrue(neutral.contains("GLFW_HAND_CURSOR"));
+        assertTrue(neutral.contains("child instanceof Button button"));
+        assertTrue(neutral.contains("minecraft.screen == this"));
+        assertTrue(neutral.contains("hovered == handCursorActive"));
+        assertTrue(neutral.contains("LumiTheme.PAGE_HEADER_HEIGHT"));
+        assertTrue(neutral.contains("LumiTheme.TITLEBAR"));
+        assertTrue(neutral.contains("page ? \"chevron-left\" : \"close\""));
+        assertTrue(neutral.contains("alignNavigation(x, y, width)"));
+        assertTrue(neutral.contains("frameY + FRAME_CONTROL_INSET"));
         assertTrue(modal.contains("screen.screenInitialized"));
         assertFalse(modal.contains("background.mouseClicked("));
         assertFalse(modal.contains("background.mouseReleased("));
@@ -74,9 +75,9 @@ class LumiNavigationTest {
         assertEquals(18, LumiTextField.FRAME_HEIGHT);
         assertEquals(6, LumiTextField.HORIZONTAL_PADDING);
         assertEquals(4, LumiTextField.VERTICAL_PADDING);
-        String modal = Files.readString(Path.of(
-                "src/main/java/io/github/lumi/client/ui/LumiModalScreen.java"));
-        assertTrue(modal.contains("new LumiTextField(font, x, y, width, label)"));
+        String neutral = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiScreen.java"));
+        assertTrue(neutral.contains("new LumiTextField(font, x, y, width, label)"));
         String field = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiTextField.java"));
         assertTrue(field.contains("y + VERTICAL_PADDING"));
