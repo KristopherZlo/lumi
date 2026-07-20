@@ -10,9 +10,6 @@ import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.PendingStatisticsPayload;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,7 +18,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 
 /** Full page zone-scoped Save form and history view. */
@@ -29,9 +25,6 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
     private static final int PANEL_INSET = 6;
     private static final int CONTROL_GAP = 4;
     private static final int ICON_WIDTH = 26;
-    private static final DateTimeFormatter HISTORY_TIME =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-                    .withZone(ZoneId.systemDefault());
     private final Screen parent;
     private final HistorySnapshotPayload snapshot;
     private final HistorySnapshotPayload.ZoneView zone;
@@ -65,6 +58,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
     private HistoryPagePayload renderedPage;
     private PendingStatisticsPayload renderedStatistics;
     private LumiHistoryGraphView graphView;
+    private LumiCommitCard commitCards;
     private final Map<CommitId, VersionTags> optimisticTags = new HashMap<>();
 
     public LumiZoneDetailsScreen(
@@ -115,6 +109,7 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
     @Override
     protected void init() {
         beginLegacyInit();
+        commitCards = new LumiCommitCard(font, previews, snapshot.dimensionId());
         requestPendingStatistics();
         LegacyWorkspaceLayout layout = pageLayout();
         panelX = layout.contentX();
@@ -259,22 +254,21 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
             HistorySnapshotPayload.Version version = visible.get(index);
             int rowY = panelY + geometry.historyY()
                     + index * geometry.rowStride();
-            int right = panelX + geometry.innerRight();
-            int actionY = rowY + (geometry.rowHeight() - 18) / 2;
-            addLegacyIconButton(right - 116, actionY,
+            LumiCommitCard.Layout card = historyCardLayout(rowY);
+            addLegacyIconButton(card.actionX(0), card.actionY(),
                     "rollback",
                     Component.translatable("luma.action.restore"),
                     () -> actions.openRestore().accept(version),
                     LumiLegacyButton.Kind.PRIMARY);
-            addLegacyIconButton(right - 86, actionY, "folder",
+            addLegacyIconButton(card.actionX(1), card.actionY(), "folder",
                     Component.translatable("luma.action.open_details"),
                     () -> actions.openDetails().accept(version),
                     LumiLegacyButton.Kind.NORMAL);
-            addLegacyIconButton(right - 56, actionY, "branch",
+            addLegacyIconButton(card.actionX(2), card.actionY(), "branch",
                     Component.translatable("luma.action.create_idea"),
                     () -> actions.createBranch().accept(version),
                     LumiLegacyButton.Kind.NORMAL);
-            addLegacyIconButton(right - ICON_WIDTH, actionY, "tags",
+            addLegacyIconButton(card.actionX(3), card.actionY(), "tags",
                     Component.translatable("luma.action.edit_tags"),
                     () -> editTags(version), LumiLegacyButton.Kind.NORMAL);
         }
@@ -481,38 +475,18 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
             HistorySnapshotPayload.Version version = visible.get(index);
             int rowY = panelY + geometry.historyY()
                     + index * geometry.rowStride();
-            LegacyLumiTheme.outlined(
-                    graphics, panelX + geometry.innerLeft(), rowY,
-                    geometry.innerWidth(), geometry.rowHeight(),
-                    LegacyLumiTheme.INSET,
-                    snapshot.head().equals(version.id())
-                            ? zone.color() : LegacyLumiTheme.INSET_BORDER);
-            if (geometry.showPreview()) {
-                drawPreview(graphics, version,
-                        panelX + geometry.innerLeft() + 6,
-                        rowY + (geometry.rowHeight() - 22) / 2);
-            }
-            graphics.drawString(font,
-                    font.plainSubstrByWidth(
-                            version.message(), geometry.cardTextWidth()),
-                    panelX + geometry.cardTextX(),
-                    rowY + (geometry.showMeta() ? 5 : 8),
-                    LegacyLumiTheme.TEXT, false);
-            String tagText = displayedTags(version).isEmpty()
-                    ? "" : " · #" + String.join(
-                            " #", displayedTags(version).values());
-            String meta = version.author() + " · "
-                    + HISTORY_TIME.format(
-                            Instant.ofEpochMilli(version.timestampMillis()))
-                    + " · " + version.statistics().blocks() + " blocks"
-                    + tagText;
-            if (geometry.showMeta()) {
-                graphics.drawString(font,
-                        font.plainSubstrByWidth(meta, geometry.cardTextWidth()),
-                        panelX + geometry.cardTextX(), rowY + 17,
-                        LegacyLumiTheme.MUTED, false);
-            }
+            commitCards.render(
+                    graphics, version, displayedTags(version),
+                    historyCardLayout(rowY), zone.color(),
+                    snapshot.head().equals(version.id()), false);
         }
+    }
+
+    private LumiCommitCard.Layout historyCardLayout(int rowY) {
+        return LumiCommitCard.layout(
+                panelX + geometry.innerLeft(), rowY,
+                geometry.innerWidth(), geometry.rowHeight(),
+                geometry.showPreview(), geometry.showMeta(), false);
     }
 
     static ZoneDetailsGeometry zoneDetailsGeometry(
@@ -563,26 +537,6 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
                 .filter(result -> result.error().isEmpty())
                 .map(result -> result.zones().get(zone.id()))
                 .filter(Objects::nonNull);
-    }
-
-    private void drawPreview(
-            GuiGraphics graphics,
-            HistorySnapshotPayload.Version version,
-            int x,
-            int y) {
-        var texture = previews.texture(snapshot.dimensionId(), version.id())
-                .orElse(null);
-        if (texture != null) {
-            graphics.blit(
-                    RenderPipelines.GUI_TEXTURED, texture.id(),
-                    x, y, 0, 0, 40, 22,
-                    texture.width(), texture.height(),
-                    texture.width(), texture.height());
-            return;
-        }
-        LegacyLumiTheme.outlined(
-                graphics, x, y, 40, 22,
-                LegacyLumiTheme.WINDOW, LegacyLumiTheme.INSET_BORDER);
     }
 
     @Override
@@ -645,11 +599,17 @@ public final class LumiZoneDetailsScreen extends LumiLegacyPageScreen {
             return stacked ? Math.max(0, (innerWidth() - CONTROL_GAP) / 2) : 92;
         }
         int historyHeight() { return Math.max(0, panelHeight - historyY); }
-        int cardActionX() { return innerRight() - 116; }
-        int cardTextX() { return innerLeft() + 6 + (showPreview ? 46 : 0); }
-        int cardTextWidth() {
-            return Math.max(0, cardActionX() - CONTROL_GAP - cardTextX());
+        private LumiCommitCard.Layout cardLayout() {
+            return LumiCommitCard.layout(
+                    innerLeft(), 0, innerWidth(), rowHeight,
+                    showPreview, showMeta, false);
         }
+        int cardActionX() { return cardLayout().actionX(); }
+        int cardTextX() { return cardLayout().textX(); }
+        int cardTextWidth() {
+            return cardLayout().textWidth();
+        }
+        int cardActionsRight() { return cardLayout().actionsRight(); }
     }
 
     @Override public boolean isPauseScreen() { return false; }

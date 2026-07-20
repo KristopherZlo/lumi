@@ -53,6 +53,8 @@ class LumiZoneDetailsScreenTest {
             assertTrue(geometry.cardTextX() + geometry.cardTextWidth() + 4
                     <= geometry.cardActionX());
             assertTrue(geometry.cardActionX() >= geometry.innerLeft());
+            assertTrue(geometry.cardActionsRight()
+                    <= geometry.innerRight() - 6);
         }
 
         assertTrue(zoneGeometry(320, 180).stacked());
@@ -83,6 +85,8 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains("actions.updateTags().accept"));
         assertTrue(source.contains("optimisticTags"));
         assertTrue(source.contains("new LumiVersionTagsScreen("));
+        assertTrue(source.contains("new LumiCommitCard("));
+        assertTrue(source.contains("historyCardLayout(rowY)"));
         assertTrue(source.contains("snapshot.head().equals(version.id())"));
         assertTrue(source.contains("clippedCenteredHeader("));
 
