@@ -199,7 +199,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             LumiBehaviorReport report,
             String saveName,
             String operationName,
-            int expectedVisibleVersions) throws IOException {
+            int expectedManualVersions) throws IOException {
         BranchRef before = server.computeOnServer(minecraft -> runtime(minecraft).activeRef());
         Set<UUID> previousEvents = operations.eventIds();
         long started = System.nanoTime();
@@ -215,13 +215,18 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                         && !saved.commit().equals(before.commit()),
                 "UI Save did not advance the active ref");
         await(context, client -> LumiClient.history().state().snapshot()
-                .filter(snapshot -> snapshot.versions().size() == expectedVisibleVersions
+                .filter(snapshot -> snapshot.versions().stream().filter(version ->
+                                version.kind() == CommitKind.MANUAL).count()
+                                == expectedManualVersions
+                        && snapshot.versions().stream().filter(version ->
+                                version.kind() == CommitKind.HIDDEN_SAFETY).count() == 1
                         && snapshot.versions().stream().anyMatch(version ->
                                 version.id().equals(saved.commit())
                                         && version.kind() == CommitKind.MANUAL
                                         && version.message().equals(saveName)))
                 .isPresent(), "Dashboard did not contain exactly "
-                        + expectedVisibleVersions + " versions including " + saveName);
+                        + expectedManualVersions + " manual saves, one Initial, including "
+                        + saveName);
         report.event("operation", operationName, "succeeded", 0,
                 elapsedMillis(started), saved.commit().hex());
         return saved;
