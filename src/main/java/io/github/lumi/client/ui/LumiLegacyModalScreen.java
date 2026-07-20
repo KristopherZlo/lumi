@@ -18,7 +18,8 @@ import org.lwjgl.glfw.GLFW;
 abstract class LumiLegacyModalScreen extends Screen {
     protected static final int INPUT_HEIGHT = 14;
     protected static final int INPUT_FRAME_HEIGHT = 18;
-    private static final int TOP_RIGHT_CONTROL_LEFT_OFFSET = 36;
+    private static final int FRAME_CONTROL_INSET = 8;
+    private static final int ICON_BUTTON_WIDTH = 26;
     private static final int HEADER_CONTROL_GAP = 8;
     private static final Identifier HINT_CLOSE_ICON = Identifier.fromNamespaceAndPath(
             LumiMod.MOD_ID, "textures/gui/icons/close.png");
@@ -32,6 +33,7 @@ abstract class LumiLegacyModalScreen extends Screen {
     private int hintWidth;
     private int hintHeight;
     private boolean legacyInitialized;
+    private LumiLegacyButton navigationButton;
     private static long handCursor;
 
     protected LumiLegacyModalScreen(Component title) {
@@ -75,8 +77,9 @@ abstract class LumiLegacyModalScreen extends Screen {
         height = uiScale.virtualSize(window.getGuiScaledHeight(), currentGuiScale);
         if (!(this instanceof LumiRecoveryScreen)) {
             boolean page = this instanceof LumiLegacyPageScreen;
-            addLegacyIconButton(
-                    width - 36, 12, page ? "chevron-left" : "close",
+            navigationButton = addLegacyIconButton(
+                    navigationControlX(0, width), FRAME_CONTROL_INSET,
+                    page ? "chevron-left" : "close",
                     Component.translatable(page
                             ? "luma.action.back" : "luma.action.close"),
                     this::onClose, LumiLegacyButton.Kind.NORMAL);
@@ -222,6 +225,7 @@ abstract class LumiLegacyModalScreen extends Screen {
 
     protected final void renderLegacyWindow(
             GuiGraphics graphics, int x, int y, int width, int height) {
+        alignLegacyNavigation(x, y, width);
         graphics.fill(0, 0, this.width, this.height, LegacyLumiTheme.BACKDROP);
         LegacyLumiTheme.outlined(
                 graphics, x, y, width, height,
@@ -230,6 +234,7 @@ abstract class LumiLegacyModalScreen extends Screen {
 
     protected final void renderLegacyPage(
             GuiGraphics graphics, int x, int y, int width, int height) {
+        alignLegacyNavigation(x, y, width);
         LegacyLumiTheme.outlined(
                 graphics, x, y, width, height,
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
@@ -254,29 +259,44 @@ abstract class LumiLegacyModalScreen extends Screen {
     protected final String clippedHeader(
             Component value, int textX, int contentRight) {
         return font.plainSubstrByWidth(
-                value.getString(), headerTextWidth(width, textX, contentRight));
+                value.getString(), headerTextWidth(
+                        navigationControlX(), textX, contentRight));
     }
 
     protected final String clippedCenteredHeader(
             Component value, int centerX, int contentLeft, int contentRight) {
         return font.plainSubstrByWidth(value.getString(), centeredHeaderTextWidth(
-                width, centerX, contentLeft, contentRight));
+                navigationControlX(), centerX, contentLeft, contentRight));
     }
 
-    static int headerTextWidth(int screenWidth, int textX, int contentRight) {
-        return Math.max(1, safeHeaderRight(screenWidth, contentRight) - textX);
+    static int headerTextWidth(int controlX, int textX, int contentRight) {
+        return Math.max(1, safeHeaderRight(controlX, contentRight) - textX);
     }
 
     static int centeredHeaderTextWidth(
-            int screenWidth, int centerX, int contentLeft, int contentRight) {
-        int safeRight = safeHeaderRight(screenWidth, contentRight);
+            int controlX, int centerX, int contentLeft, int contentRight) {
+        int safeRight = safeHeaderRight(controlX, contentRight);
         int radius = Math.min(centerX - contentLeft, safeRight - centerX);
         return Math.max(1, radius * 2);
     }
 
-    private static int safeHeaderRight(int screenWidth, int contentRight) {
-        return Math.min(contentRight,
-                screenWidth - TOP_RIGHT_CONTROL_LEFT_OFFSET - HEADER_CONTROL_GAP);
+    static int navigationControlX(int frameX, int frameWidth) {
+        return frameX + Math.max(0, frameWidth - FRAME_CONTROL_INSET - ICON_BUTTON_WIDTH);
+    }
+
+    private void alignLegacyNavigation(int frameX, int frameY, int frameWidth) {
+        if (navigationButton == null) return;
+        navigationButton.setX(navigationControlX(frameX, frameWidth));
+        navigationButton.setY(frameY + FRAME_CONTROL_INSET);
+    }
+
+    private int navigationControlX() {
+        return navigationButton == null
+                ? navigationControlX(0, width) : navigationButton.getX();
+    }
+
+    private static int safeHeaderRight(int controlX, int contentRight) {
+        return Math.min(contentRight, controlX - HEADER_CONTROL_GAP);
     }
 
     protected static Component errorText(String error) {

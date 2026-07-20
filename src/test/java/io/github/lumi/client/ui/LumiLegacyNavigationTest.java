@@ -43,6 +43,8 @@ class LumiLegacyNavigationTest {
         assertTrue(modal.contains("LegacyLumiTheme.PAGE_HEADER_HEIGHT"));
         assertTrue(modal.contains("LegacyLumiTheme.TITLEBAR"));
         assertTrue(modal.contains("page ? \"chevron-left\" : \"close\""));
+        assertTrue(modal.contains("alignLegacyNavigation(x, y, width)"));
+        assertTrue(modal.contains("frameY + FRAME_CONTROL_INSET"));
         assertTrue(modal.contains("legacy.legacyInitialized"));
         assertFalse(modal.contains("background.mouseClicked("));
         assertFalse(modal.contains("background.mouseReleased("));

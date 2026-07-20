@@ -10,18 +10,23 @@ import org.junit.jupiter.api.Test;
 
 class LumiHeaderSafeBoundsTest {
     @Test
-    void reservesSpaceBeforeTheGlobalTopRightControl() {
+    void reservesSpaceBeforeTheFrameAlignedTopRightControl() {
         for (int screenWidth : new int[] {320, 427, 640}) {
-            int contentLeft = 36;
-            int contentRight = screenWidth - 36;
-            int safeRight = screenWidth - 44;
+            int frameX = 24;
+            int frameWidth = screenWidth - 48;
+            int controlX = LumiLegacyModalScreen.navigationControlX(
+                    frameX, frameWidth);
+            int contentLeft = frameX + 12;
+            int contentRight = frameX + frameWidth - 12;
+            int safeRight = controlX - 8;
+            assertEquals(frameX + frameWidth - 8 - 26, controlX);
             assertEquals(safeRight - contentLeft,
                     LumiLegacyModalScreen.headerTextWidth(
-                            screenWidth, contentLeft, contentRight));
+                            controlX, contentLeft, contentRight));
 
-            int centerX = screenWidth / 2;
+            int centerX = frameX + frameWidth / 2;
             int centeredWidth = LumiLegacyModalScreen.centeredHeaderTextWidth(
-                    screenWidth, centerX, contentLeft, contentRight);
+                    controlX, centerX, contentLeft, contentRight);
             assertTrue(centerX + centeredWidth / 2 <= safeRight);
             assertTrue(centerX - centeredWidth / 2 >= contentLeft);
         }
