@@ -1,6 +1,5 @@
 package io.github.lumi.client.ui;
 
-import io.github.lumi.LumiMod;
 import io.github.lumi.client.onboarding.OnboardingTour;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
@@ -13,9 +12,6 @@ import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.PendingStatisticsPayload;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -27,9 +23,7 @@ import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
 
 /** Legacy project-window presentation backed by the immutable V2 history snapshot. */
@@ -45,16 +39,6 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private static final int HISTORY_ROW_STRIDE = 34;
     private static final int COMPACT_HISTORY_ROW_HEIGHT = 54;
     private static final int COMPACT_HISTORY_ROW_STRIDE = 58;
-    private static final int HISTORY_ACTION_STRIDE = 30;
-    private static final int HISTORY_ACTION_CLUSTER_WIDTH = 116;
-    private static final int PREVIEW_WIDTH = 40;
-    private static final int PREVIEW_HEIGHT = 22;
-    private static final int ICON_TEXTURE_SIZE = 24;
-    private static final DateTimeFormatter HISTORY_TIME =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-                    .withZone(ZoneId.systemDefault());
-    private static final Identifier NO_PREVIEW_ICON = Identifier.fromNamespaceAndPath(
-            LumiMod.MOD_ID, "textures/gui/new-icons/image.png");
     private static final java.net.URI COFFEE_URI =
             java.net.URI.create("https://buymeacoffee.com/zl0yxp");
     private static final java.net.URI PAYPAL_URI = java.net.URI.create(
@@ -104,6 +88,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private int changesActionX;
     private int actionButtonWidth;
     private DashboardGeometry dashboardGeometry;
+    private LumiCommitCard commitCards;
     private final Map<CommitId, VersionTags> optimisticTags = new HashMap<>();
 
     public LumiDashboardScreen(
@@ -181,6 +166,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     protected void init() {
         beginLegacyInit();
         snapshot = history.state().snapshot().orElse(null);
+        commitCards = snapshot == null ? null
+                : new LumiCommitCard(font, previews, snapshot.dimensionId());
         layout = LegacyWorkspaceLayout.fit(width, height);
         addSidebarButtons();
         addSupportButtons();
@@ -305,17 +292,18 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
 
     private void addVersionActions(
             HistorySnapshotPayload.Version version, int rowY) {
-        int actionY = historyActionY(rowY, layout.bodyWidth());
-        addIconButton(historyActionX(layout.bodyX(), layout.bodyWidth(), 0), actionY,
+        LumiCommitCard.Layout card = versionCardLayout(
+                layout.bodyX(), layout.bodyWidth(), rowY);
+        addIconButton(card.actionX(0), card.actionY(),
                 "rollback", "luma.action.restore",
                 () -> openRestore.accept(version), LumiLegacyButton.Kind.PRIMARY);
-        addIconButton(historyActionX(layout.bodyX(), layout.bodyWidth(), 1), actionY,
+        addIconButton(card.actionX(1), card.actionY(),
                 "folder", "luma.action.open_details",
                 () -> openDetails.accept(version), LumiLegacyButton.Kind.NORMAL);
-        addIconButton(historyActionX(layout.bodyX(), layout.bodyWidth(), 2), actionY,
+        addIconButton(card.actionX(2), card.actionY(),
                 "branch", "luma.action.create_idea",
                 () -> createBranch.accept(version), LumiLegacyButton.Kind.NORMAL);
-        addIconButton(historyActionX(layout.bodyX(), layout.bodyWidth(), 3), actionY,
+        addIconButton(card.actionX(3), card.actionY(),
                 "tags", "luma.action.edit_tags",
                 () -> editTags(version), LumiLegacyButton.Kind.NORMAL);
     }
@@ -693,7 +681,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
 
         if (dashboardGeometry.latestVisible()) {
             latestCreated().ifPresent(version -> renderVersionCard(
-                    graphics, version, dashboardGeometry.latestY()));
+                    graphics, version, dashboardGeometry.latestY(), true));
         }
         if (historyHeight <= 0) {
             return;
@@ -724,7 +712,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
             HistorySnapshotPayload.Version version = visible.get(index);
             int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
                     + index * historyRowStride(width);
-            renderVersionCard(graphics, version, rowY);
+            renderVersionCard(graphics, version, rowY, false);
         }
         if (versions.isEmpty()) {
             graphics.drawString(font,
@@ -736,55 +724,16 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         }
     }
 
-    private void drawPreview(
-            GuiGraphics graphics, HistorySnapshotPayload.Version version, int x, int y) {
-        var texture = previews.texture(snapshot.dimensionId(), version.id()).orElse(null);
-        if (texture != null) {
-            graphics.blit(
-                    RenderPipelines.GUI_TEXTURED, texture.id(),
-                    x, y, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT,
-                    texture.width(), texture.height(), texture.width(), texture.height());
-            return;
-        }
-        LegacyLumiTheme.outlined(graphics, x, y, PREVIEW_WIDTH, PREVIEW_HEIGHT,
-                LegacyLumiTheme.WINDOW, LegacyLumiTheme.INSET_BORDER);
-        int iconSize = 12;
-        graphics.blit(
-                RenderPipelines.GUI_TEXTURED, NO_PREVIEW_ICON,
-                x + (PREVIEW_WIDTH - iconSize) / 2,
-                y + (PREVIEW_HEIGHT - iconSize) / 2,
-                0, 0, iconSize, iconSize,
-                ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE,
-                ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE);
-    }
-
     private void renderVersionCard(
-            GuiGraphics graphics, HistorySnapshotPayload.Version version, int rowY) {
-        int bodyX = layout.bodyX();
-        int bodyWidth = layout.bodyWidth();
-        int cardX = bodyX + PANEL_PADDING * 2;
-        LegacyLumiTheme.outlined(
-                graphics, cardX, rowY, bodyWidth - PANEL_PADDING * 4,
-                historyRowHeight(bodyWidth), LegacyLumiTheme.INSET,
-                snapshot.head().equals(version.id())
-                        ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.INSET_BORDER);
-        drawPreview(graphics, version, cardX + PANEL_PADDING, rowY + 4);
-        int textX = cardX + 46;
-        int textWidth = historyTextWidth(bodyWidth);
-        graphics.drawString(font,
-                font.plainSubstrByWidth(version.message(), textWidth),
-                textX, rowY + 5, LegacyLumiTheme.TEXT, false);
-        String tags = displayedTags(version).isEmpty() ? ""
-                : " · #" + String.join(" #", displayedTags(version).values());
-        String active = snapshot.head().equals(version.id())
-                ? " · " + Component.translatable(
-                        "luma.project.active_head_badge").getString() : "";
-        String meta = version.author() + " · "
-                + HISTORY_TIME.format(Instant.ofEpochMilli(version.timestampMillis()))
-                + " · " + version.statistics().blocks() + " blocks"
-                + tags + active;
-        graphics.drawString(font, font.plainSubstrByWidth(meta, textWidth),
-                textX, rowY + 17, LegacyLumiTheme.MUTED, false);
+            GuiGraphics graphics,
+            HistorySnapshotPayload.Version version,
+            int rowY,
+            boolean featured) {
+        commitCards.render(
+                graphics, version, displayedTags(version),
+                versionCardLayout(layout.bodyX(), layout.bodyWidth(), rowY),
+                LegacyLumiTheme.ACCENT,
+                snapshot.head().equals(version.id()), featured);
     }
 
     @Override
@@ -888,22 +837,25 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     }
 
     static int historyTextWidth(int bodyWidth) {
-        return Math.max(0, bodyWidth
-                - (compactHistoryCards(bodyWidth) ? 74 : 190));
+        return versionCardLayout(0, bodyWidth, 0).textWidth();
     }
 
     static int historyActionX(
             int bodyX, int bodyWidth, int actionIndex) {
-        int first = compactHistoryCards(bodyWidth)
-                ? bodyX + PANEL_PADDING + Math.max(0,
-                        (bodyWidth - PANEL_PADDING * 2
-                                - HISTORY_ACTION_CLUSTER_WIDTH) / 2)
-                : bodyX + bodyWidth - PANEL_PADDING * 2 - 116;
-        return first + actionIndex * HISTORY_ACTION_STRIDE;
+        return versionCardLayout(bodyX, bodyWidth, 0).actionX(actionIndex);
     }
 
     static int historyActionY(int rowY, int bodyWidth) {
-        return rowY + (compactHistoryCards(bodyWidth) ? 30 : 6);
+        return versionCardLayout(0, bodyWidth, rowY).actionY();
+    }
+
+    static LumiCommitCard.Layout versionCardLayout(
+            int bodyX, int bodyWidth, int rowY) {
+        int cardX = bodyX + PANEL_PADDING * 2;
+        return LumiCommitCard.layout(
+                cardX, rowY, Math.max(0, bodyWidth - PANEL_PADDING * 4),
+                historyRowHeight(bodyWidth), true, true,
+                compactHistoryCards(bodyWidth));
     }
 
     private void drawChip(GuiGraphics graphics, int x, int y, String text) {

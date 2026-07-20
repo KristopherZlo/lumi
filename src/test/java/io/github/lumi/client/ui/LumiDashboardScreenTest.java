@@ -43,15 +43,18 @@ class LumiDashboardScreenTest {
         assertTrue(LumiDashboardScreen.compactHistoryCards(bodyWidth));
         assertEquals(54, LumiDashboardScreen.historyRowHeight(bodyWidth));
         assertTrue(LumiDashboardScreen.historyTextWidth(bodyWidth) > 0);
-        assertTrue(LumiDashboardScreen.historyActionX(bodyX, bodyWidth, 0)
-                >= bodyX + 6);
+        LumiCommitCard.Layout compactCard = LumiDashboardScreen.versionCardLayout(
+                bodyX, bodyWidth, 100);
+        assertTrue(compactCard.actionX() >= compactCard.x() + 6);
         assertTrue(LumiDashboardScreen.historyActionX(bodyX, bodyWidth, 3) + 26
-                <= bodyX + bodyWidth - 12);
+                <= compactCard.right() - 6);
         assertTrue(LumiDashboardScreen.historyActionY(100, bodyWidth) + 18
-                <= 100 + LumiDashboardScreen.historyRowHeight(bodyWidth));
+                <= compactCard.bottom() - 6);
 
         LegacyWorkspaceLayout wide = LegacyWorkspaceLayout.fit(640, 360);
-        assertEquals(wide.bodyX() + wide.bodyWidth() - 12,
+        LumiCommitCard.Layout wideCard = LumiDashboardScreen.versionCardLayout(
+                wide.bodyX(), wide.bodyWidth(), 100);
+        assertEquals(wideCard.right() - 6,
                 LumiDashboardScreen.historyActionX(
                         wide.bodyX(), wide.bodyWidth(), 3) + 26);
     }
@@ -109,6 +112,8 @@ class LumiDashboardScreenTest {
     void restoresLegacyActionsAndCompactIconNavigation() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));
+        String cardSource = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiCommitCard.java"));
 
         assertTrue(source.contains("luma.action.save_build"));
         assertTrue(source.contains("luma.action.amend_version"));
@@ -136,9 +141,10 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("\"folder\", \"luma.action.open_details\""));
         assertTrue(source.contains("\"tags\""));
         assertTrue(source.contains("\"branch\", \"luma.action.create_idea\""));
-        assertTrue(source.contains("version.statistics().blocks()"));
-        assertTrue(source.contains("previews.texture(snapshot.dimensionId(), version.id())"));
-        assertTrue(source.contains("NO_PREVIEW_ICON"));
+        assertTrue(cardSource.contains("version.statistics().blocks()"));
+        assertTrue(cardSource.contains("previews.texture(dimensionId, version.id())"));
+        assertTrue(cardSource.contains("luma.dashboard.latest_badge"));
+        assertTrue(source.contains("new LumiCommitCard("));
         assertTrue(source.contains(
                 "pagedHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS)"));
         assertTrue(source.contains("pagedHistory.next()"));
