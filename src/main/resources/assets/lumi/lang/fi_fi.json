@@ -213,6 +213,7 @@
   "luma.dashboard.current_dimension": "Mitat: %s",
   "luma.dashboard.active_branch": "Nykyinen haara: %s",
   "luma.dashboard.pending_clean": "Ei tallentamattomia maailmanmuutoksia.",
+  "luma.dashboard.latest_badge": "Viimeisin tallennus",
   "luma.dashboard.pending_added": "Lisätty",
   "luma.dashboard.pending_removed": "Poistettu",
   "luma.dashboard.pending_changed": "Muutettu",

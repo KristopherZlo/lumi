@@ -213,6 +213,7 @@
   "luma.dashboard.current_dimension": "Dimensión: %s",
   "luma.dashboard.active_branch": "Rama actual: %s",
   "luma.dashboard.pending_clean": "No hay cambios en el mundo no salvo.",
+  "luma.dashboard.latest_badge": "Último guardado",
   "luma.dashboard.pending_added": "Agregado",
   "luma.dashboard.pending_removed": "Remoto",
   "luma.dashboard.pending_changed": "Cambió",

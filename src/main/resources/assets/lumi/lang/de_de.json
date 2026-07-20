@@ -213,6 +213,7 @@
   "luma.dashboard.current_dimension": "Abmessung: %s",
   "luma.dashboard.active_branch": "Aktueller Zweig: %s",
   "luma.dashboard.pending_clean": "Keine ungespeicherten Weltveränderungen.",
+  "luma.dashboard.latest_badge": "Letzte Speicherung",
   "luma.dashboard.pending_added": "Hinzugefügt",
   "luma.dashboard.pending_removed": "ENTFERNT",
   "luma.dashboard.pending_changed": "Geändert",
