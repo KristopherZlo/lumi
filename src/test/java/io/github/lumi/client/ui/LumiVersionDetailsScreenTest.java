@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,14 +39,18 @@ class LumiVersionDetailsScreenTest {
                 "navigationControlX(panelX, panelWidth) - 8 - 26"));
         assertTrue(details.contains("rename.accept(replacement.value())"));
         assertTrue(details.contains("luma.save_details.create_idea"));
-        assertTrue(details.contains("luma.action.amend_version"));
-        assertTrue(details.contains("luma.action.restore_selected_area"));
+        assertFalse(details.contains("luma.action.amend_version"));
+        assertFalse(details.contains("luma.action.restore_selected_area"));
+        assertTrue(details.contains("nameEditor.setCentered(true)"));
+        assertTrue(details.contains("Component.literal(\"✓\")"));
+        assertTrue(details.contains("nameEditor = null"));
         assertTrue(details.contains("luma.action.zoom_out"));
         assertTrue(details.contains("luma.action.zoom_in"));
         assertTrue(details.contains("luma.action.preview_pan_up"));
         assertTrue(details.contains("luma.action.preview_pan_down"));
         assertTrue(details.contains("restoreButton.active = !readOnly"));
-        assertTrue(details.contains("remove.active = !readOnly"));
+        assertTrue(details.contains(
+                "remove.active = !readOnly && !VersionText.immutable(version)"));
         assertTrue(details.contains("sourceWidth, sourceHeight"));
         assertTrue(dashboard.contains("\"folder\", \"luma.action.open_details\""));
         assertTrue(client.contains("new LumiVersionDetailsScreen("));
@@ -54,6 +59,6 @@ class LumiVersionDetailsScreenTest {
         assertTrue(client.contains("NETWORKING.updateVersionTags(version.id(), tags)"));
         assertTrue(client.contains("NETWORKING.renameVersion(version.id(), name)"));
         assertTrue(client.contains("NETWORKING.createBranchAt(name, version.id())"));
-        assertTrue(client.contains("NETWORKING.amend(version.message(), version.tags())"));
+        assertFalse(client.contains("var partialRestore ="));
     }
 }

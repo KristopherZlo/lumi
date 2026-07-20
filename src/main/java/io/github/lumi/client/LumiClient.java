@@ -418,19 +418,10 @@ public final class LumiClient implements ClientModInitializer {
         var createBranch = idle ? Optional.of((Runnable) () ->
                 openBranchAt(client.screen, version))
                 : Optional.<Runnable>empty();
-        var amend = idle && snapshot.pendingKeys() > 0
-                && snapshot.head().equals(version.id())
-                ? Optional.of((Runnable) () -> {
-                    NETWORKING.amend(version.message(), version.tags());
-                    client.setScreen(parent);
-                }) : Optional.<Runnable>empty();
-        var partialRestore = idle && SELECTION.bounds().isPresent()
-                ? Optional.of((Runnable) () -> openPartialRestore(parent, version))
-                : Optional.<Runnable>empty();
         client.setScreen(new LumiVersionDetailsScreen(
                 parent, snapshot.dimensionId(), version, PREVIEW_STORE,
                 () -> openRestore(parent, version), compare,
-                createBranch, amend, partialRestore,
+                createBranch,
                 () -> openDelete(parent, version),
                 tags -> NETWORKING.updateVersionTags(version.id(), tags),
                 name -> NETWORKING.renameVersion(version.id(), name)));
@@ -442,8 +433,8 @@ public final class LumiClient implements ClientModInitializer {
             HistorySnapshotPayload.Version version) {
         Minecraft.getInstance().setScreen(new LumiVersionDetailsScreen(
                 parent, dimensionId, version, PREVIEW_STORE,
-                () -> { }, Optional.empty(), Optional.empty(), Optional.empty(),
-                Optional.empty(), () -> { }, ignored -> { }, ignored -> { },
+                () -> { }, Optional.empty(), Optional.empty(),
+                () -> { }, ignored -> { }, ignored -> { },
                 true));
     }
 
@@ -588,13 +579,6 @@ public final class LumiClient implements ClientModInitializer {
                 .map(target -> (Runnable) () ->
                         showZoneCompareChanges(zone.id(), target));
         boolean idle = !snapshot.operationActive();
-        var amend = idle && snapshot.pendingKeys() > 0
-                && snapshot.head().equals(version.id())
-                ? Optional.of((Runnable) () -> {
-                    NETWORKING.amendZone(
-                            zone.id(), version.message(), version.tags());
-                    client.setScreen(zones);
-                }) : Optional.<Runnable>empty();
         client.setScreen(new LumiVersionDetailsScreen(
                 zoneDetails, snapshot.dimensionId(), version, PREVIEW_STORE,
                 () -> client.setScreen(new LumiZoneRestoreScreen(
@@ -604,7 +588,6 @@ public final class LumiClient implements ClientModInitializer {
                 idle ? Optional.of((Runnable) () ->
                         openBranchAt(client.screen, version))
                         : Optional.empty(),
-                amend, Optional.empty(),
                 () -> openDelete(zoneDetails, version),
                 tags -> NETWORKING.updateVersionTags(version.id(), tags),
                 name -> NETWORKING.renameVersion(version.id(), name)));
