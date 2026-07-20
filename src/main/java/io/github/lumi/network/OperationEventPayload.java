@@ -1,6 +1,7 @@
 package io.github.lumi.network;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.minecraft.operation.OperationProgress;
@@ -22,7 +23,8 @@ public record OperationEventPayload(
         long revision,
         Optional<UUID> ticketId,
         int queuePosition,
-        Optional<OperationProgress> progress) implements CustomPacketPayload {
+        Optional<OperationProgress> progress,
+        Optional<BlockBox> previewBounds) implements CustomPacketPayload {
     private static final int MAX_DIMENSION_BYTES = 256;
     private static final int MAX_MESSAGE_BYTES = 4096;
     public static final Type<OperationEventPayload> TYPE = new Type<>(
@@ -38,6 +40,7 @@ public record OperationEventPayload(
         Objects.requireNonNull(head, "head");
         ticketId = Objects.requireNonNull(ticketId, "ticketId");
         progress = Objects.requireNonNull(progress, "progress");
+        previewBounds = Objects.requireNonNull(previewBounds, "previewBounds");
         if (dimensionId.isBlank() || dimensionId.length() > MAX_DIMENSION_BYTES) {
             throw new IllegalArgumentException("Invalid dimension ID");
         }
@@ -53,6 +56,10 @@ public record OperationEventPayload(
         if ((state == State.PROGRESS) != progress.isPresent()) {
             throw new IllegalArgumentException("Only progress events carry progress");
         }
+        if (previewBounds.isPresent() && state != State.SUCCEEDED) {
+            throw new IllegalArgumentException(
+                    "Only successful saves carry preview bounds");
+        }
     }
 
     public OperationEventPayload(
@@ -63,7 +70,7 @@ public record OperationEventPayload(
             CommitId head,
             long revision) {
         this(requestId, dimensionId, state, message, head, revision,
-                Optional.empty(), -1, Optional.empty());
+                Optional.empty(), -1, Optional.empty(), Optional.empty());
     }
 
     public OperationEventPayload(
@@ -76,7 +83,21 @@ public record OperationEventPayload(
             Optional<UUID> ticketId,
             int queuePosition) {
         this(requestId, dimensionId, state, message, head, revision,
-                ticketId, queuePosition, Optional.empty());
+                ticketId, queuePosition, Optional.empty(), Optional.empty());
+    }
+
+    public OperationEventPayload(
+            UUID requestId,
+            String dimensionId,
+            State state,
+            String message,
+            CommitId head,
+            long revision,
+            Optional<UUID> ticketId,
+            int queuePosition,
+            Optional<OperationProgress> progress) {
+        this(requestId, dimensionId, state, message, head, revision,
+                ticketId, queuePosition, progress, Optional.empty());
     }
 
     private void write(FriendlyByteBuf buffer) {
@@ -95,6 +116,15 @@ public record OperationEventPayload(
             buffer.writeVarLong(value.completed());
             buffer.writeVarLong(value.total());
         });
+        buffer.writeBoolean(previewBounds.isPresent());
+        previewBounds.ifPresent(bounds -> {
+            buffer.writeInt(bounds.minX());
+            buffer.writeInt(bounds.minY());
+            buffer.writeInt(bounds.minZ());
+            buffer.writeInt(bounds.maxX());
+            buffer.writeInt(bounds.maxY());
+            buffer.writeInt(bounds.maxZ());
+        });
     }
 
     private static OperationEventPayload read(FriendlyByteBuf buffer) {
@@ -111,9 +141,14 @@ public record OperationEventPayload(
                 ? Optional.of(new OperationProgress(
                         buffer.readUtf(256), buffer.readVarLong(), buffer.readVarLong()))
                 : Optional.empty();
+        Optional<BlockBox> previewBounds = buffer.readBoolean()
+                ? Optional.of(new BlockBox(
+                        buffer.readInt(), buffer.readInt(), buffer.readInt(),
+                        buffer.readInt(), buffer.readInt(), buffer.readInt()))
+                : Optional.empty();
         return new OperationEventPayload(
                 request, dimension, state, message, head, revision,
-                ticket, queuePosition, progress);
+                ticket, queuePosition, progress, previewBounds);
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

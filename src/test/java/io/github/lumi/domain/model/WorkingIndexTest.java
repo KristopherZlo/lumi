@@ -48,4 +48,17 @@ class WorkingIndexTest {
                         Integer.MAX_VALUE, 15, -2_147_483_633),
                 index.preview(ignored -> true, 0).bounds().orElseThrow());
     }
+
+    @Test
+    void snapshotReportsTheExactCapturedSectionBounds() {
+        WorkingIndexSnapshot snapshot = new WorkingIndexSnapshot(java.util.Map.of(
+                new SectionKey(-2, 3, 4), 1L,
+                new SectionKey(1, 5, -1), 2L,
+                new EntityChunkKey(20, 30), 3L));
+
+        assertEquals(new BlockBox(-32, 48, -16, 31, 95, 79),
+                snapshot.sectionBounds().orElseThrow());
+        assertTrue(new WorkingIndexSnapshot(java.util.Map.of(
+                new EntityChunkKey(0, 0), 1L)).sectionBounds().isEmpty());
+    }
 }

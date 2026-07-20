@@ -368,12 +368,14 @@ class LumiPayloadCodecTest {
                         CommitKind.MANUAL, VersionTags.parse("archived"))));
         OperationEventPayload event = new OperationEventPayload(
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
-                "minecraft:overworld", OperationEventPayload.State.ACCEPTED,
-                "Queued", id('b'), 8,
-                Optional.of(UUID.fromString("30000000-0000-0000-0000-000000000003")), 2);
+                "minecraft:overworld", OperationEventPayload.State.SUCCEEDED,
+                "Saved", id('b'), 8, Optional.empty(), -1, Optional.empty(),
+                Optional.of(new BlockBox(-16, 0, -32, 31, 47, 15)));
 
         assertEquals(snapshot, roundTrip(HistorySnapshotPayload.CODEC, snapshot));
         assertEquals(event, roundTrip(OperationEventPayload.CODEC, event));
+        assertEquals(new BlockBox(-16, 0, -32, 31, 47, 15),
+                event.previewBounds().orElseThrow());
         OperationEventPayload progress = new OperationEventPayload(
                 UUID.randomUUID(), "minecraft:overworld",
                 OperationEventPayload.State.PROGRESS, "Restore: applying", id('b'), 8,

@@ -3,6 +3,7 @@ package io.github.lumi.network;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
@@ -17,6 +18,7 @@ import io.github.lumi.minecraft.operation.GarbageCollectionOperation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.operation.OperationTicket;
 import io.github.lumi.minecraft.operation.OperationProgress;
+import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import java.io.IOException;
 import java.time.Instant;
@@ -753,8 +755,19 @@ public final class LumiServerNetworking {
                 .or(() -> operation.completionMessage()
                         .filter(value -> !value.isBlank()))
                 .orElseGet(() -> terminalMessage(operation.terminalState()));
-        sendEvent(player, payload, runtime, state, message);
+        sendEvent(
+                player, payload.requestId(), runtime, state, message,
+                Optional.empty(), -1, previewBounds(operation));
         deferSnapshotBroadcast(runtime);
+    }
+
+    private static Optional<BlockBox> previewBounds(
+            DimensionMutation operation) {
+        if (!(operation instanceof SaveCaptureOperation save)) {
+            return Optional.empty();
+        }
+        return save.result().flatMap(result ->
+                result.capturedGenerations().sectionBounds());
     }
 
     private static void cancel(
@@ -885,13 +898,27 @@ public final class LumiServerNetworking {
             String message,
             Optional<OperationTicket> ticket,
             int queuePosition) {
+        sendEvent(
+                player, requestId, runtime, state, message,
+                ticket, queuePosition, Optional.empty());
+    }
+
+    private static void sendEvent(
+            ServerPlayer player,
+            UUID requestId,
+            FabricDimensionRuntime runtime,
+            OperationEventPayload.State state,
+            String message,
+            Optional<OperationTicket> ticket,
+            int queuePosition,
+            Optional<BlockBox> previewBounds) {
         try {
             BranchRef head = runtime.activeRef();
             send(player, new OperationEventPayload(
                     requestId, dimension(runtime), state,
                     message == null ? "Operation failed" : message,
                     head.commit(), head.revision(), ticket.map(OperationTicket::id),
-                    queuePosition));
+                    queuePosition, Optional.empty(), previewBounds));
             if (state != OperationEventPayload.State.ACCEPTED
                     && state != OperationEventPayload.State.PROGRESS) {
                 LumiMod.LOGGER.info(

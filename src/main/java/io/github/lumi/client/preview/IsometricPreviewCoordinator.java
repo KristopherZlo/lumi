@@ -10,6 +10,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -53,11 +54,11 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
                 .findFirst()
                 .map(HistorySnapshotPayload.WorkspaceView::previewGenerationEnabled)
                 .orElse(true);
-        if (!enabled || snapshot.pendingBounds().isEmpty()) return;
+        if (!enabled) return;
         discard(requestId);
         pending.put(requestId, new Pending(
                 snapshot.dimensionId(), snapshot.head(),
-                snapshot.pendingBounds().orElseThrow(),
+                snapshot.pendingBounds(),
                 null, null, null, null));
         while (pending.size() > MAX_PENDING) {
             Iterator<UUID> iterator = pending.keySet().iterator();
@@ -79,7 +80,15 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
                     discard(event.requestId());
                     return;
                 }
-                startBuild(event.requestId(), item, event.head());
+                Optional<BlockBox> bounds = event.previewBounds()
+                        .or(item::previewBounds);
+                if (bounds.isEmpty()) {
+                    discard(event.requestId());
+                    return;
+                }
+                startBuild(
+                        event.requestId(), item.withBounds(bounds.orElseThrow()),
+                        event.head());
             }
             case FAILED, CANCELLED, RETURNED, DEGRADED ->
                     discard(event.requestId());
@@ -186,28 +195,38 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
     private record Pending(
             String dimensionId,
             CommitId before,
-            BlockBox bounds,
+            Optional<BlockBox> previewBounds,
             CommitId target,
             CompletableFuture<PreviewRenderMesh> build,
             PreviewRenderMesh mesh,
             TexturedPreviewCaptureService.PendingPreviewCapture offscreen) {
+        private BlockBox bounds() {
+            return previewBounds.orElseThrow();
+        }
+
+        private Pending withBounds(BlockBox value) {
+            return new Pending(
+                    dimensionId, before, Optional.of(value), target,
+                    build, mesh, offscreen);
+        }
+
         private Pending withTarget(
                 CommitId value, CompletableFuture<PreviewRenderMesh> future) {
             return new Pending(
-                    dimensionId, before, bounds, value,
+                    dimensionId, before, previewBounds, value,
                     future, mesh, offscreen);
         }
 
         private Pending withMesh(PreviewRenderMesh value) {
             return new Pending(
-                    dimensionId, before, bounds, target,
+                    dimensionId, before, previewBounds, target,
                     build, value, offscreen);
         }
 
         private Pending withCapture(
                 TexturedPreviewCaptureService.PendingPreviewCapture value) {
             return new Pending(
-                    dimensionId, before, bounds, target,
+                    dimensionId, before, previewBounds, target,
                     build, mesh, value);
         }
     }

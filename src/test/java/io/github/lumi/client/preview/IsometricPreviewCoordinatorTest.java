@@ -15,6 +15,7 @@ class IsometricPreviewCoordinatorTest {
         assertTrue(source.contains("MAX_PENDING = 4"));
         assertTrue(source.contains("closeCapture(oldest, removed)"));
         assertTrue(source.contains("case SUCCEEDED"));
+        assertTrue(source.contains("event.previewBounds()"));
         assertTrue(source.contains("snapshots.read("));
         assertTrue(source.contains("meshes.scheduleBuild("));
         assertTrue(source.contains("capture().capture("));

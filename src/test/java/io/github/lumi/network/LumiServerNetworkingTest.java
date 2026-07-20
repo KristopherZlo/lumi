@@ -17,6 +17,7 @@ class LumiServerNetworkingTest {
         String terminal = source.substring(terminalStart, terminalEnd);
 
         assertTrue(terminal.contains("deferSnapshotBroadcast(runtime);"));
+        assertTrue(terminal.contains("previewBounds(operation)"));
         assertFalse(terminal.contains("broadcastSnapshot(runtime);"));
         assertTrue(source.contains("server.schedule(new TickTask("));
     }
