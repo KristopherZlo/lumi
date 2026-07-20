@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 class LumiNavigationTest {
     @Test
-    void sidebarUsesV2OrderAndPagesBlockBackgroundInput() throws Exception {
+    void sidebarUsesV2OrderAndPagesOwnTheirShell() throws Exception {
         assertEquals(List.of(
                 ProjectTab.HISTORY,
                 ProjectTab.ZONES,
@@ -62,11 +62,14 @@ class LumiNavigationTest {
         assertTrue(page.contains("private final LumiPageSession pageSession"));
         assertTrue(session.contains("new EnumMap<>(ProjectTab.class)"));
         assertTrue(session.contains("destination.accept(historyPage)"));
-        assertFalse(page.contains("forwardsParentInput"));
-        assertTrue(page.contains("x < layout.contentX()"));
-        assertTrue(page.contains("dashboard.mouseClicked(click, doubled)"));
-        assertTrue(page.contains("page.dashboardParent()"));
-        assertTrue(page.contains("dashboard.pointerHovered(mouseX, mouseY)"));
+        assertTrue(page.contains("extends LumiScreen"));
+        assertTrue(page.contains("addSidebarButtons()"));
+        assertTrue(page.contains("pageSession.open(destination)"));
+        assertFalse(page.contains("dashboardParent"));
+        assertFalse(page.contains("dashboard.mouseClicked"));
+        assertFalse(page.contains("dashboard.pointerHovered"));
+        assertEquals(LumiScreen.class, LumiPageScreen.class.getSuperclass());
+        assertEquals(LumiScreen.class, LumiModalScreen.class.getSuperclass());
     }
 
     @Test
