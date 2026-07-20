@@ -159,6 +159,12 @@ abstract class LumiPageScreen extends LumiScreen {
                 LumiTheme.SIDEBAR);
         graphics.fill(shellLayout.contentX(), y + 1, right - 1,
                 y + shellLayout.titleHeight(), LumiTheme.TITLEBAR);
+        graphics.fill(shellLayout.contentX(), y + 1,
+                shellLayout.contentX() + 1, bottom - 1,
+                LumiTheme.WINDOW_BORDER);
+        int headerBottom = y + shellLayout.titleHeight();
+        graphics.fill(shellLayout.contentX() + 1, headerBottom - 1,
+                right - 1, headerBottom, LumiTheme.PANEL_BORDER);
         graphics.drawString(font, "Lumi", x + 14, y + 18,
                 LumiTheme.TEXT, false);
         if (!tinySidebar(shellLayout)) {
@@ -196,15 +202,11 @@ abstract class LumiPageScreen extends LumiScreen {
             drawChip(graphics, x + 14, y + 84,
                     shortBranch(snapshot.branchName()));
         }
-        graphics.drawString(font,
+        renderPageHeader(
+                graphics, shellLayout.contentX(), y, shellLayout.contentWidth(),
                 Component.translatable(
                         "luma.screen.project.title", snapshot.workspaceName()),
-                shellLayout.contentX() + 16, y + 15,
-                LumiTheme.TEXT, false);
-        graphics.drawString(font,
-                Component.translatable("luma.window.home_help"),
-                shellLayout.contentX() + 16, y + 32,
-                LumiTheme.MUTED, false);
+                Component.translatable("luma.window.home_help"));
     }
 
     private void drawChip(GuiGraphics graphics, int x, int y, String text) {

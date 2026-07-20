@@ -89,7 +89,6 @@ public final class LumiSettingsScreen extends LumiPageScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderPage(graphics, panelX, panelY, panelWidth, panelHeight);
             renderPageHeader(
                     graphics, panelX, panelY, panelWidth, title, null);
             renderPanel(

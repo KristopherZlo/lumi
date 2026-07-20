@@ -119,7 +119,6 @@ public final class LumiDeletedVersionsScreen extends LumiPageScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderPage(graphics, panelX, panelY, panelWidth, panelHeight);
         int textWidth = contentTextWidth(panelWidth);
         int centerX = panelX + panelWidth / 2;
         renderPageHeader(graphics, panelX, panelY, panelWidth, title,

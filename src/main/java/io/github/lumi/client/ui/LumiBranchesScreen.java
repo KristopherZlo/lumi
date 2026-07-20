@@ -222,7 +222,6 @@ public final class LumiBranchesScreen extends LumiPageScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderPage(graphics, layout.x(), layout.y(), layout.width(), layout.height());
         renderPageHeader(
                 graphics, layout.x(), layout.y(), layout.width(), title,
                 Component.translatable(activeZone.isPresent()

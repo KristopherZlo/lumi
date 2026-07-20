@@ -283,7 +283,6 @@ public final class LumiPackageScreen extends LumiPageScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderPage(graphics, panelX, panelY, panelWidth, panelHeight);
             renderPageHeader(graphics, panelX, panelY, panelWidth, title,
                     geometry.compact() ? null
                             : Component.translatable("luma.simple.share_help"));

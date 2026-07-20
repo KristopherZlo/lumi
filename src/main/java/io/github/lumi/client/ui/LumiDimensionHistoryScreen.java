@@ -182,7 +182,6 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderPage(graphics, panelX, panelY, panelWidth, panelHeight);
             renderPageHeader(graphics, panelX, panelY, panelWidth, title,
                     Component.translatable("luma.dimensions.read_only"));
             renderLatest(graphics);

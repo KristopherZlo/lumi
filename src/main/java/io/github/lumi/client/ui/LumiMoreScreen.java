@@ -121,7 +121,6 @@ public final class LumiMoreScreen extends LumiPageScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderPage(graphics, panelX, panelY, panelWidth, panelHeight);
         renderPanel(graphics, panelX + 12, panelY + 50,
                 panelWidth - 24, panelHeight - 62);
         renderPageHeader(graphics, panelX, panelY, panelWidth, title,

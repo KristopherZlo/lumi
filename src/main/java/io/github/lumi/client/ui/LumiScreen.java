@@ -228,23 +228,6 @@ abstract class LumiScreen extends Screen {
                 LumiTheme.WINDOW, LumiTheme.WINDOW_BORDER);
     }
 
-    protected final void renderPage(
-            GuiGraphics graphics, int x, int y, int width, int height) {
-        alignNavigation(x, y, width);
-        LumiTheme.outlined(
-                graphics, x, y, width, height,
-                LumiTheme.WINDOW, LumiTheme.WINDOW_BORDER);
-        int headerBottom = Math.min(
-                y + height - 1, y + LumiTheme.PAGE_HEADER_HEIGHT);
-        if (width > 2 && headerBottom > y + 1) {
-            graphics.fill(x + 1, y + 1, x + width - 1, headerBottom,
-                    LumiTheme.TITLEBAR);
-            graphics.fill(x + 1, headerBottom - 1,
-                    x + width - 1, headerBottom,
-                    LumiTheme.PANEL_BORDER);
-        }
-    }
-
     protected final void renderPanel(
             GuiGraphics graphics, int x, int y, int width, int height) {
         LumiTheme.outlined(

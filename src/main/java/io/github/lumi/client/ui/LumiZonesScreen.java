@@ -32,6 +32,8 @@ public final class LumiZonesScreen extends LumiPageScreen {
     private int panelY;
     private int panelWidth;
     private int panelHeight;
+    private int contentX;
+    private int contentWidth;
     private boolean compact;
     private int rowsY;
     private int rowHeight;
@@ -94,8 +96,8 @@ public final class LumiZonesScreen extends LumiPageScreen {
         panelWidth = shell.contentWidth();
         panelHeight = shell.windowHeight();
         compact = panelWidth < 300;
-        int contentX = panelX + (compact ? 16 : 20);
-        int contentWidth = panelWidth - (compact ? 32 : 40);
+        contentX = shell.bodyX();
+        contentWidth = shell.bodyWidth();
         int fieldY = panelY + (compact ? 60 : 72);
         rowsY = panelY + (compact ? COMPACT_ROWS_OFFSET : 126);
         rowHeight = compact ? 42 : 28;
@@ -124,7 +126,7 @@ public final class LumiZonesScreen extends LumiPageScreen {
                     overlayLabel.get(), this::cycleOverlay,
                     LumiButton.Kind.NORMAL);
         }
-        addZoneRows(panelWidth);
+        addZoneRows();
     }
 
     private void cycleOverlay() {
@@ -132,14 +134,15 @@ public final class LumiZonesScreen extends LumiPageScreen {
         rebuildWidgets();
     }
 
-    private void addZoneRows(int panelWidth) {
+    private void addZoneRows() {
         if (snapshot == null) return;
         int start = Math.min(scroll, snapshot.zones().size());
         int end = Math.min(start + visibleRows(), snapshot.zones().size());
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.ZoneView zone = snapshot.zones().get(index);
             int rowY = rowsY + (index - start) * rowStride;
-            int right = panelX + panelWidth - 24;
+            int right = contentX + contentWidth
+                    - LumiScrollbar.GUTTER_WIDTH - 4;
             int actionY = rowY + (compact ? 20 : 4);
             addIconButton(right - 26, actionY,
                     "trash", Component.translatable("luma.zones.delete"),
@@ -221,18 +224,16 @@ public final class LumiZonesScreen extends LumiPageScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderPage(graphics, panelX, panelY, panelWidth, panelHeight);
         Component heading = snapshot == null
                 ? title : Component.translatable(
                         "luma.screen.zones.title", snapshot.workspaceName());
         renderPageHeader(graphics, panelX, panelY, panelWidth,
                 heading, activeZoneText());
-        int textX = panelX + (compact ? 16 : 20);
-        int textWidth = Math.max(1, panelWidth - (compact ? 32 : 40));
+        int textWidth = Math.max(1, contentWidth);
         graphics.drawString(font, font.plainSubstrByWidth(
                         Component.translatable("luma.zones.create_help").getString(),
                         textWidth),
-                textX, panelY + (compact ? 47 : 56),
+                contentX, panelY + (compact ? 47 : 56),
                 LumiTheme.MUTED, false);
         renderTextField(graphics, name);
         boolean errorReplacesListTitle = compact && panelHeight < 220
@@ -242,15 +243,15 @@ public final class LumiZonesScreen extends LumiPageScreen {
                 : Component.translatable("luma.zones.list_title");
         graphics.drawString(font,
                 font.plainSubstrByWidth(listLabel.getString(), textWidth),
-                panelX + (compact ? 16 : 20),
+                contentX,
                 panelY + (compact ? 104 : 106),
                 errorReplacesListTitle
                         ? LumiTheme.DANGER : LumiTheme.TEXT,
                 false);
-        renderZoneRows(graphics, panelWidth);
+        renderZoneRows(graphics);
         if (snapshot != null) {
             renderScrollbar(
-                    graphics, panelX + 16, rowsY, panelWidth - 20,
+                    graphics, contentX, rowsY, contentWidth,
                     Math.max(0, panelY + panelHeight - rowsY - 8),
                     snapshot.zones().size(), visibleRows(), scroll,
                     value -> scroll = value);
@@ -279,10 +280,10 @@ public final class LumiZonesScreen extends LumiPageScreen {
                 .orElseGet(() -> Component.translatable("luma.zones.current_none"));
     }
 
-    private void renderZoneRows(GuiGraphics graphics, int panelWidth) {
+    private void renderZoneRows(GuiGraphics graphics) {
         if (snapshot == null || snapshot.zones().isEmpty()) {
             graphics.drawString(font, Component.translatable("luma.zones.empty"),
-                    panelX + 20, rowsY + 8, LumiTheme.MUTED, false);
+                    contentX, rowsY + 8, LumiTheme.MUTED, false);
             return;
         }
         int start = Math.min(scroll, snapshot.zones().size());
@@ -290,14 +291,16 @@ public final class LumiZonesScreen extends LumiPageScreen {
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.ZoneView zone = snapshot.zones().get(index);
             int rowY = rowsY + (index - start) * rowStride;
-            int rowX = panelX + (compact ? 16 : 20);
+            int rowX = contentX;
+            int rowWidth = contentWidth - LumiScrollbar.GUTTER_WIDTH;
             renderPanel(graphics, rowX, rowY,
-                    panelWidth - (compact ? 32 : 40), rowHeight);
+                    rowWidth, rowHeight);
             graphics.fill(
-                    panelX + (compact ? 23 : 27), rowY + 6,
-                    panelX + (compact ? 28 : 32), rowY + 11, zone.color());
-            int textX = panelX + (compact ? 34 : 38);
-            int textWidth = Math.max(0, panelWidth - (compact ? 58 : 160));
+                    rowX + 7, rowY + 6,
+                    rowX + 12, rowY + 11, zone.color());
+            int textX = rowX + 18;
+            int textWidth = Math.max(0,
+                    rowWidth - (compact ? 26 : 120));
             Component metadata = Component.translatable(
                     "luma.zones.cells", zone.cells());
             if (compact) {

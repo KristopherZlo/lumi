@@ -314,9 +314,6 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderPage(
-                    graphics, layout.contentX(), layout.windowY(),
-                    layout.contentWidth(), layout.windowHeight());
             renderPageHeader(
                     graphics, layout.contentX(), layout.windowY(),
                     layout.contentWidth(), title,

@@ -33,7 +33,7 @@ class LumiNavigationTest {
                 "LumiMoreScreen.java")) {
             String source = Files.readString(ui.resolve(page));
             assertTrue(source.contains("extends LumiPageScreen"), page);
-            assertTrue(source.contains("renderPage("), page);
+            assertFalse(source.contains("renderPage("), page);
         }
 
         String modal = Files.readString(ui.resolve("LumiModalScreen.java"));
@@ -43,8 +43,7 @@ class LumiNavigationTest {
         assertTrue(neutral.contains("child instanceof Button button"));
         assertTrue(neutral.contains("minecraft.screen == this"));
         assertTrue(neutral.contains("hovered == handCursorActive"));
-        assertTrue(neutral.contains("LumiTheme.PAGE_HEADER_HEIGHT"));
-        assertTrue(neutral.contains("LumiTheme.TITLEBAR"));
+        assertFalse(neutral.contains("void renderPage("));
         assertTrue(neutral.contains("page ? \"chevron-left\" : \"close\""));
         assertTrue(neutral.contains("alignNavigation(x, y, width)"));
         assertTrue(neutral.contains("frameY + FRAME_CONTROL_INSET"));
@@ -55,6 +54,9 @@ class LumiNavigationTest {
         String page = Files.readString(ui.resolve("LumiPageScreen.java"));
         assertTrue(page.contains(
                 "alignNavigation(x, y, shellLayout.windowWidth())"));
+        assertTrue(page.contains("LumiTheme.WINDOW_BORDER"));
+        assertTrue(page.contains("LumiTheme.PANEL_BORDER"));
+        assertTrue(page.contains("renderPageHeader("));
         assertFalse(dashboard.contains("drawFrame("));
         String onboarding = Files.readString(ui.resolve("LumiOnboardingScreen.java"));
         assertTrue(onboarding.contains(
