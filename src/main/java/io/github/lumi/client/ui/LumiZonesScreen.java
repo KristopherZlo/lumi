@@ -37,6 +37,7 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
     private int rowHeight;
     private int rowStride;
     private int scroll;
+    private UUID pendingEnterZone;
     private String error = "";
 
     public LumiZonesScreen(
@@ -67,6 +68,17 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         super.tick();
         HistorySnapshotPayload latest =
                 history.state().snapshot().orElse(null);
+        if (pendingEnterZone != null && latest != null) {
+            var entered = latest.zones().stream()
+                    .filter(zone -> zone.id().equals(pendingEnterZone)
+                            && zone.active())
+                    .findFirst();
+            if (entered.isPresent()) {
+                pendingEnterZone = null;
+                openDetails.accept(entered.orElseThrow());
+                return;
+            }
+        }
         if (!Objects.equals(snapshot, latest)) {
             rebuildWidgets();
         }
@@ -135,13 +147,14 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
             addLegacyIconButton(right - 58, actionY, "folder",
                     Component.translatable("luma.action.open_details"),
                     () -> openDetails.accept(zone), LumiLegacyButton.Kind.NORMAL);
-            addLegacyIconButton(right - 90, actionY,
+            LumiLegacyButton enterButton = addLegacyIconButton(right - 90, actionY,
                     zone.active() ? "leave" : "join",
                     Component.translatable(zone.active()
                             ? "luma.zones.leave" : "luma.zones.enter"),
                     () -> select(zone), zone.active()
                             ? LumiLegacyButton.Kind.DANGER
                             : LumiLegacyButton.Kind.PRIMARY);
+            enterButton.active = pendingEnterZone == null;
         }
     }
 
@@ -163,11 +176,18 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
 
     private void select(HistorySnapshotPayload.ZoneView zone) {
         try {
-            (zone.active() ? leave : enter).accept(zone.id());
-            feedback(zone.active()
-                    ? "luma.status.zone_cleared" : "luma.status.zone_selected");
-            onClose();
+            if (zone.active()) {
+                leave.accept(zone.id());
+                feedback("luma.status.zone_cleared");
+                onClose();
+                return;
+            }
+            enter.accept(zone.id());
+            pendingEnterZone = zone.id();
+            feedback("luma.status.zone_selected");
+            rebuildWidgets();
         } catch (RuntimeException failed) {
+            pendingEnterZone = null;
             error = failed.getMessage() == null
                     ? "Lumi zone could not be updated" : failed.getMessage();
         }

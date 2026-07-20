@@ -18,6 +18,9 @@ class LumiOnboardingScreenTest {
         assertTrue(source.contains("dashboard.tick()"));
         assertTrue(source.contains("actions.save().open(this"));
         assertTrue(source.contains("actions.worldStep().accept(tour)"));
+        assertTrue(source.contains("() -> completeHold(page.kind())"));
+        assertTrue(source.contains("event.key() == GLFW.GLFW_KEY_ESCAPE"));
+        assertTrue(source.contains("onClose();"));
     }
 
     @Test

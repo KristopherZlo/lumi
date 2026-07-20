@@ -415,7 +415,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         boolean busy = recoveryJournal().isPresent()
                 || operations.hasActiveOperation() || operations.queuedCount() > 0;
         nextAutoVersionTick = now + (busy ? 200 : AUTO_VERSION_INTERVAL_TICKS);
-        if (busy || !mutations.hasPendingChanges()
+        if (busy || !mutations.hasPendingBuilderChanges()
                 || !autoVersionScheduled.compareAndSet(false, true)) {
             return;
         }
@@ -435,20 +435,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 return;
             }
             BranchRef expected = activeRef();
-            var dirty = mutations.snapshot();
+            var workspace = activeWorkspace();
+            var dirty = mutations.builderSnapshot(workspace::includes);
             AutoVersionFingerprint fingerprint =
                     new AutoVersionFingerprint(expected.commit(), dirty);
             if (dirty.generations().isEmpty() || fingerprint.equals(lastAutoVersion)) {
                 autoVersionScheduled.set(false);
                 return;
             }
-            UUID workspaceId = activeWorkspaceId();
             SaveRequest request = new SaveRequest(
                     expected, AUTO_AUTHOR, "Automatic version", Instant.now(),
-                    workspaceId, Optional.empty(), CommitKind.AUTO);
+                    workspace.id(), Optional.empty(), CommitKind.AUTO);
             BranchName hidden = autoVersions.refName(expected.name(), UUID.randomUUID());
             SaveCaptureOperation operation = createChunkReadySave(
-                    request, scopedSavePreparation(request),
+                    request, scopedSavePreparation(dirty.generations()::containsKey),
                     (save, captured) -> {
                         var result = saves.checkpoint(save, captured, hidden);
                         autoVersions.prune(expected.name(), 64);
@@ -456,9 +456,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     },
                     ignored -> { });
             operations.enqueue(operation, OperationPriority.NORMAL, completed -> {
-                operation.result().ifPresent(result -> lastAutoVersion =
-                        new AutoVersionFingerprint(expected.commit(),
-                                result.capturedGenerations()));
+                operation.result().ifPresent(ignored -> lastAutoVersion = fingerprint);
                 autoVersionScheduled.set(false);
             });
         } catch (IOException | RuntimeException failed) {

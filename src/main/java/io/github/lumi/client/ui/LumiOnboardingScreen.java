@@ -91,6 +91,12 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
                     panelX + panelWidth - 96, actionY, 80,
                     Component.translatable("luma.action.skip"),
                     this::skipShortcut, LumiLegacyButton.Kind.PRIMARY);
+        } else {
+            addLegacyButton(
+                    panelX + panelWidth - 96, actionY, 80,
+                    Component.translatable("luma.action.next"),
+                    () -> completeHold(page.kind()),
+                    LumiLegacyButton.Kind.PRIMARY);
         }
     }
 
@@ -240,8 +246,11 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        return event.key() == GLFW.GLFW_KEY_ESCAPE
-                || super.keyPressed(event);
+        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+            onClose();
+            return true;
+        }
+        return super.keyPressed(event);
     }
 
     @Override public boolean isPauseScreen() {

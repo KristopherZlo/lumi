@@ -61,7 +61,7 @@ public final class OnboardingTour {
     }
 
     public boolean canGoBack() {
-        return index > 0 && current().kind() != Kind.SPOTLIGHT_SAVE;
+        return index > 0;
     }
 
     public int displayIndex() {

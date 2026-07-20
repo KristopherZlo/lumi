@@ -3,7 +3,11 @@ package io.github.lumi.client.onboarding;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.LumiHotkeys;
 import io.github.lumi.client.state.ClientHistoryStore;
+import io.github.lumi.network.HistorySnapshotPayload;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -25,7 +29,8 @@ public final class ClientOnboardingWorldStep {
     private final OnboardingHoldGate holdGate = new OnboardingHoldGate();
     private Consumer<OnboardingTour> reopen;
     private OnboardingTour tour;
-    private int baselinePending = -1;
+    private Set<HistorySnapshotPayload.PendingBlock> baselinePending = Set.of();
+    private boolean baselineReady;
     private int edits;
     private int refreshCooldown;
     private long lastHoldSampleMillis;
@@ -53,7 +58,9 @@ public final class ClientOnboardingWorldStep {
         }
         tour = activeTour;
         reopen = Objects.requireNonNull(continuation, "continuation");
-        baselinePending = pendingBlocks();
+        var initial = pendingBlocks();
+        baselinePending = initial.map(Set::copyOf).orElseGet(Set::of);
+        baselineReady = initial.isPresent();
         edits = 0;
         refreshCooldown = 0;
         resetHold();
@@ -81,7 +88,16 @@ public final class ClientOnboardingWorldStep {
             refreshCooldown = REFRESH_INTERVAL_TICKS;
             refresh.run();
         }
-        edits = trackedEdits(baselinePending, pendingBlocks());
+        var current = pendingBlocks();
+        if (current.isEmpty()) {
+            return;
+        }
+        if (!baselineReady) {
+            baselinePending = Set.copyOf(current.orElseThrow());
+            baselineReady = true;
+            return;
+        }
+        edits = trackedEdits(baselinePending, current.orElseThrow());
         if (edits >= REQUIRED_EDITS && tour.advanceWorldEdit()) {
             finishStep();
         }
@@ -94,7 +110,8 @@ public final class ClientOnboardingWorldStep {
         long elapsed = held && lastHoldSampleMillis > 0L
                 ? Math.min(100L, now - lastHoldSampleMillis) : 0L;
         lastHoldSampleMillis = held ? now : 0L;
-        boolean overlayVisible = held && pendingBlocks() > 0;
+        boolean overlayVisible = held && pendingBlocks()
+                .map(blocks -> !blocks.isEmpty()).orElse(false);
         if (holdGate.update(
                 previewHoldActive(held, overlayVisible), elapsed)
                 && tour.advancePendingPreview()) {
@@ -158,13 +175,16 @@ public final class ClientOnboardingWorldStep {
                 0xff70d6a5);
     }
 
-    private int pendingBlocks() {
+    private Optional<List<HistorySnapshotPayload.PendingBlock>> pendingBlocks() {
         return history.state().snapshot()
-                .map(snapshot -> snapshot.pendingBlocks().size()).orElse(0);
+                .map(HistorySnapshotPayload::pendingBlocks);
     }
 
-    static int trackedEdits(int baseline, int pending) {
-        return baseline < 0 ? 0 : Math.max(0, pending - baseline);
+    static int trackedEdits(
+            Set<HistorySnapshotPayload.PendingBlock> baseline,
+            List<HistorySnapshotPayload.PendingBlock> current) {
+        return (int) current.stream().distinct()
+                .filter(block -> !baseline.contains(block)).count();
     }
 
     static boolean previewHoldActive(boolean held, boolean overlayVisible) {
@@ -181,7 +201,8 @@ public final class ClientOnboardingWorldStep {
     private void clear() {
         tour = null;
         reopen = null;
-        baselinePending = -1;
+        baselinePending = Set.of();
+        baselineReady = false;
         edits = 0;
         refreshCooldown = 0;
         resetHold();

@@ -30,6 +30,16 @@ class OnboardingTourTest {
     }
 
     @Test
+    void everyPageAfterWelcomeCanGoBack() {
+        OnboardingTour tour = new OnboardingTour();
+        assertFalse(tour.canGoBack());
+        for (int index = 1; index < OnboardingTour.pageCount(); index++) {
+            tour.next();
+            assertTrue(tour.canGoBack());
+        }
+    }
+
+    @Test
     void advancesOnlyFromTheMatchingWorldStep() {
         OnboardingTour tour = new OnboardingTour();
         assertFalse(tour.advanceWorldEdit());

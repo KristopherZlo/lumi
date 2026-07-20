@@ -66,4 +66,15 @@ class LumiZonesScreenTest {
         assertTrue(method.contains(
                 "activeZone().ifPresent(zone -> openZoneDetails(zones, zone))"));
     }
+
+    @Test
+    void enteringAZoneWaitsForServerStateThenOpensItsHistory() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiZonesScreen.java"));
+
+        assertTrue(source.contains("pendingEnterZone = zone.id()"));
+        assertTrue(source.contains("zone.id().equals(pendingEnterZone)"));
+        assertTrue(source.contains("&& zone.active()"));
+        assertTrue(source.contains("openDetails.accept(entered.orElseThrow())"));
+    }
 }
