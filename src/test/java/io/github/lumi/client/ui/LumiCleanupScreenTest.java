@@ -9,7 +9,7 @@ class LumiCleanupScreenTest {
     void keepsHintScrollableResultAndFooterInsideSupportedViewports() {
         int hintHeight = 70;
         for (int[] viewport : new int[][] {{320, 180}, {427, 240}, {640, 360}}) {
-            LegacyModalLayout panel = LumiCleanupScreen.fitPanel(
+            LumiModalLayout panel = LumiCleanupScreen.fitPanel(
                     viewport[0], viewport[1], hintHeight + 8);
             var geometry = LumiCleanupScreen.cleanupGeometry(
                     panel.height(), hintHeight);

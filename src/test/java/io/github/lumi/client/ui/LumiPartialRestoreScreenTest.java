@@ -34,7 +34,7 @@ class LumiPartialRestoreScreenTest {
     @Test
     void selectionActionsFitTheMinimumViewport() {
         for (int[] viewport : new int[][] {{640, 360}, {427, 240}, {320, 180}}) {
-            LegacyModalLayout layout = LumiPartialRestoreScreen.fitPanel(
+            LumiModalLayout layout = LumiPartialRestoreScreen.fitPanel(
                     viewport[0], viewport[1]);
             int height = layout.height();
             assertTrue(layout.x() + layout.width() <= viewport[0]);

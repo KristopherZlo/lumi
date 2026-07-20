@@ -54,19 +54,19 @@ final class LumiSettingRow extends Button {
     protected void renderContents(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         boolean highlighted = active && isHoveredOrFocused();
-        LegacyLumiTheme.outlined(
+        LumiTheme.outlined(
                 graphics, getX(), getY(), getWidth(), getHeight(),
-                highlighted ? LegacyLumiTheme.CHIP : LegacyLumiTheme.INSET,
+                highlighted ? LumiTheme.CHIP : LumiTheme.INSET,
                 isFocused()
-                        ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.INSET_BORDER);
+                        ? LumiTheme.ACCENT : LumiTheme.INSET_BORDER);
 
         var font = Minecraft.getInstance().font;
         int valueWidth = value.getString().isEmpty()
                 ? 0 : valueWidth(getWidth(), font.width(value));
         int textWidth = Math.max(0, getWidth() - valueWidth - 22);
         int textColor = active
-                ? destructive ? LegacyLumiTheme.DANGER : LegacyLumiTheme.TEXT
-                : LegacyLumiTheme.MUTED;
+                ? destructive ? LumiTheme.DANGER : LumiTheme.TEXT
+                : LumiTheme.MUTED;
         int titleY = description.getString().isBlank()
                 ? getY() + (getHeight() - 8) / 2 : getY() + 5;
         graphics.drawString(font,
@@ -76,7 +76,7 @@ final class LumiSettingRow extends Button {
             graphics.drawString(font,
                     font.plainSubstrByWidth(description.getString(), textWidth),
                     getX() + 8, getY() + 18,
-                    LegacyLumiTheme.MUTED, false);
+                    LumiTheme.MUTED, false);
         }
         if (valueWidth == 0) {
             return;
@@ -84,16 +84,16 @@ final class LumiSettingRow extends Button {
 
         int valueX = getX() + getWidth() - valueWidth - 6;
         int valueY = getY() + (getHeight() - CONTROL_HEIGHT) / 2;
-        LegacyLumiTheme.outlined(
+        LumiTheme.outlined(
                 graphics, valueX, valueY, valueWidth, CONTROL_HEIGHT,
-                selected ? LegacyLumiTheme.STATUS : LegacyLumiTheme.CHIP,
+                selected ? LumiTheme.STATUS : LumiTheme.CHIP,
                 selected
-                        ? LegacyLumiTheme.STATUS_BORDER : LegacyLumiTheme.CHIP_BORDER);
+                        ? LumiTheme.STATUS_BORDER : LumiTheme.CHIP_BORDER);
         graphics.drawCenteredString(
                 font,
                 font.plainSubstrByWidth(value.getString(), valueWidth - 8),
                 valueX + valueWidth / 2, valueY + 5,
-                selected ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.MUTED);
+                selected ? LumiTheme.ACCENT : LumiTheme.MUTED);
     }
 
     static int valueWidth(int rowWidth, int textWidth) {

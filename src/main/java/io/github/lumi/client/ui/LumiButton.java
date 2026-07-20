@@ -9,8 +9,8 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
-/** Flat legacy Lumi control used instead of Minecraft's textured button. */
-public final class LumiLegacyButton extends Button {
+/** Flat Lumi control used instead of Minecraft's textured button. */
+public final class LumiButton extends Button {
     private static final int TEXT = 0xfff4f1ea;
     private static final int TEXT_DISABLED = 0xff77736d;
     private static final int CONTROL_HEIGHT = 18;
@@ -21,19 +21,19 @@ public final class LumiLegacyButton extends Button {
     private final Identifier disabledIcon;
     private final Integer accentColor;
 
-    public LumiLegacyButton(
+    public LumiButton(
             int x, int y, int width, int height,
             Component message, OnPress onPress, Kind kind) {
         this(x, y, width, height, message, onPress, kind, null);
     }
 
-    public LumiLegacyButton(
+    public LumiButton(
             int x, int y, int width, int height,
             Component message, OnPress onPress, Kind kind, String iconName) {
         this(x, y, width, height, message, onPress, kind, iconName, null);
     }
 
-    public LumiLegacyButton(
+    public LumiButton(
             int x, int y, int width, int height,
             Component message, OnPress onPress, Kind kind,
             String iconName, Integer accentColor) {

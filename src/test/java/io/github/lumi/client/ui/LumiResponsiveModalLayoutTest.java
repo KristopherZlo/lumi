@@ -10,13 +10,13 @@ class LumiResponsiveModalLayoutTest {
     void saveAndPackageInspectionKeepFieldsAndActionsInsideNarrowViewports() {
         for (int[] viewport : new int[][] {
                 {427, 240}, {320, 200}, {320, 180}}) {
-            LegacyModalLayout save = LumiSaveScreen.fitPanel(
+            LumiModalLayout save = LumiSaveScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertInside(viewport, save);
             assertTrue(LumiSaveScreen.tagsBottom(save.height())
                     <= LumiSaveScreen.actionOffset(save.height()));
 
-            LegacyModalLayout inspection = LumiPackageInspectionScreen.fitPanel(
+            LumiModalLayout inspection = LumiPackageInspectionScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertInside(viewport, inspection);
             assertTrue(LumiPackageInspectionScreen.actionOffset(
@@ -28,7 +28,7 @@ class LumiResponsiveModalLayoutTest {
     void mergeReflowsRowsAndPreviewsAboveItsFooter() {
         for (int[] viewport : new int[][] {
                 {640, 360}, {427, 240}, {320, 200}, {320, 180}}) {
-            LegacyModalLayout layout = LumiMergeScreen.fitPanel(
+            LumiModalLayout layout = LumiMergeScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertInside(viewport, layout);
             assertTrue(LumiMergeScreen.actionOffset(layout.height()) + 18
@@ -48,7 +48,7 @@ class LumiResponsiveModalLayoutTest {
     void mergeSourceListCanScrollPastEveryVisibleCapacity() {
         for (int[] viewport : new int[][] {
                 {320, 180, 3}, {427, 240, 6}, {640, 360, 6}}) {
-            LegacyModalLayout layout = LumiMergeScreen.fitPanel(
+            LumiModalLayout layout = LumiMergeScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertEquals(viewport[2],
                     LumiMergeScreen.visibleBranchRows(layout.height()));
@@ -61,13 +61,13 @@ class LumiResponsiveModalLayoutTest {
     void deleteZonePanelAndFooterStayInsideSupportedViewports() {
         for (int[] viewport : new int[][] {
                 {320, 180}, {427, 240}, {640, 360}}) {
-            LegacyModalLayout layout = LumiDeleteZoneScreen.fitPanel(
+            LumiModalLayout layout = LumiDeleteZoneScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertInside(viewport, layout);
             assertTrue(LumiDeleteZoneScreen.actionOffset(layout.height()) + 18
                     <= layout.height());
         }
-        LegacyModalLayout minimum = LumiDeleteZoneScreen.fitPanel(320, 180);
+        LumiModalLayout minimum = LumiDeleteZoneScreen.fitPanel(320, 180);
         assertEquals(8, minimum.y());
         assertEquals(164, minimum.height());
     }
@@ -76,7 +76,7 @@ class LumiResponsiveModalLayoutTest {
     void tagEditorUsesOnlyTheHeightNeededByItsFieldAndActions() {
         for (int[] viewport : new int[][] {
                 {320, 180}, {427, 240}, {640, 360}}) {
-            LegacyModalLayout layout = LumiVersionTagsScreen.fitPanel(
+            LumiModalLayout layout = LumiVersionTagsScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertInside(viewport, layout);
             assertEquals(124, layout.height());
@@ -87,7 +87,7 @@ class LumiResponsiveModalLayoutTest {
     void diagnosticsFitsItsHintAndRowsInsideNarrowPanels() {
         for (int[] viewport : new int[][] {
                 {427, 240}, {320, 200}, {320, 180}}) {
-            LegacyModalLayout layout = LumiDiagnosticsScreen.fitPanel(
+            LumiModalLayout layout = LumiDiagnosticsScreen.fitPanel(
                     viewport[0], viewport[1], 48);
             assertInside(viewport, layout);
             int rowAreaHeight = LumiDiagnosticsScreen.rowAreaHeight(
@@ -106,7 +106,7 @@ class LumiResponsiveModalLayoutTest {
     void versionDetailsReflowsPreviewAndActionsInsideNarrowPanels() {
         for (int[] viewport : new int[][] {
                 {427, 240}, {320, 200}, {320, 180}}) {
-            LegacyModalLayout layout = LumiVersionDetailsScreen.fitPanel(
+            LumiModalLayout layout = LumiVersionDetailsScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertInside(viewport, layout);
             int primaryActions = LumiVersionDetailsScreen.primaryActionOffset(
@@ -129,7 +129,7 @@ class LumiResponsiveModalLayoutTest {
         }
     }
 
-    private static void assertInside(int[] viewport, LegacyModalLayout layout) {
+    private static void assertInside(int[] viewport, LumiModalLayout layout) {
         assertTrue(layout.x() >= 0 && layout.y() >= 0);
         assertTrue(layout.x() + layout.width() <= viewport[0]);
         assertTrue(layout.y() + layout.height() <= viewport[1]);

@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 class LumiContextualSupportScreensTest {
     @Test
-    void cleanupAndDiagnosticsExposeTheirLegacyHintsWithoutCoveringContent()
+    void cleanupAndDiagnosticsExposeTheirV2HintsWithoutCoveringContent()
             throws Exception {
         String cleanup = source("LumiCleanupScreen.java");
         String diagnostics = source("LumiDiagnosticsScreen.java");

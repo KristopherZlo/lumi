@@ -21,7 +21,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 /** Independent left/right save columns that dispatch Compare into the world. */
-public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
+public final class LumiComparePickerScreen extends LumiPageScreen {
     private static final int MAX_ROWS = 5;
     private static final int COLUMN_GAP = 42;
     private static final int NARROW_COLUMN_GAP = 22;
@@ -44,7 +44,7 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
     private final VersionCompareController controller = new VersionCompareController();
     private final WorkspaceHistoryController leftHistory;
     private final WorkspaceHistoryController rightHistory;
-    private LegacyModalLayout layout;
+    private LumiModalLayout layout;
     private HistoryPagePayload renderedLeftPage;
     private HistoryPagePayload renderedRightPage;
     private HistorySnapshotPayload.Version leftSelection;
@@ -60,7 +60,7 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
             PageRequester requestPage,
             Consumer<VersionCompareController.Target> compare) {
         super(parent, Component.translatable("luma.compare.pick_title"),
-                LegacyProjectTab.COMPARE);
+                ProjectTab.COMPARE);
         this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
         this.previews = Objects.requireNonNull(previews, "previews");
         this.compare = Objects.requireNonNull(compare, "compare");
@@ -97,9 +97,9 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
-        LegacyWorkspaceLayout shell = pageLayout();
-        layout = new LegacyModalLayout(
+        beginScreenInit();
+        LumiPageLayout shell = pageLayout();
+        layout = new LumiModalLayout(
                 shell.contentX(), shell.windowY(),
                 shell.contentWidth(), shell.windowHeight());
         int rows = visibleRows();
@@ -112,10 +112,10 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         addColumnButtons(true);
         addColumnButtons(false);
         int footerY = layout.y() + layout.height() - 28;
-        LumiLegacyButton submit = addLegacyIconButton(
+        LumiButton submit = addIconButton(
                 layout.x() + layout.width() - 42, footerY, "eye-open",
                 Component.translatable("luma.action.see_changes"),
-                this::compareSelected, LumiLegacyButton.Kind.PRIMARY);
+                this::compareSelected, LumiButton.Kind.PRIMARY);
         submit.active = target().isPresent();
     }
 
@@ -124,10 +124,10 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         List<HistorySnapshotPayload.Version> versions = versions(left);
         int x = left ? leftX() : rightX();
         int width = columnWidth();
-        addRenderableWidget(new LumiLegacyButton(
+        addRenderableWidget(new LumiButton(
                 x, layout.y() + 66, width, 18,
                 Component.literal(history.branch().value()),
-                ignored -> changeBranch(left), LumiLegacyButton.Kind.NORMAL));
+                ignored -> changeBranch(left), LumiButton.Kind.NORMAL));
         int rows = visibleRows();
         int scroll = scroll(left);
         int end = Math.min(scroll + rows, versions.size());
@@ -138,7 +138,7 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
             boolean selected = version.equals(
                     left ? leftSelection : rightSelection);
             boolean compact = compactCards();
-            addLegacyButton(
+            addButton(
                     compact ? x + 6 : x + width - 58,
                     compact ? rowY + 22 : rowY + 12,
                     compact ? Math.max(1, width - 12) : 50,
@@ -147,8 +147,8 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                             : "luma.compare.select_save"),
                     () -> select(left, version),
                     selected
-                            ? LumiLegacyButton.Kind.SELECTED
-                            : LumiLegacyButton.Kind.NORMAL);
+                            ? LumiButton.Kind.SELECTED
+                            : LumiButton.Kind.NORMAL);
         }
     }
 
@@ -186,9 +186,9 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderLegacyPage(
+            renderPage(
                     graphics, layout.x(), layout.y(), layout.width(), layout.height());
             renderPageHeader(graphics, layout.x(), layout.y(), layout.width(), title,
                     Component.translatable("luma.compare.pick_help"));
@@ -197,7 +197,7 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
             renderDivider(graphics);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -208,7 +208,7 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                 Component.translatable(left
                         ? "luma.compare.left_column"
                         : "luma.compare.right_column"),
-                x + width / 2, layout.y() + 52, LegacyLumiTheme.ACCENT);
+                x + width / 2, layout.y() + 52, LumiTheme.ACCENT);
         List<HistorySnapshotPayload.Version> versions = versions(left);
         if (versions.isEmpty()) {
             String error = history(left).error();
@@ -217,7 +217,7 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                     : Component.literal(error);
             graphics.drawCenteredString(font,
                     font.plainSubstrByWidth(message.getString(), Math.max(1, width - 4)),
-                    x + width / 2, rowsY() + 8, LegacyLumiTheme.MUTED);
+                    x + width / 2, rowsY() + 8, LumiTheme.MUTED);
             return;
         }
         int rows = visibleRows();
@@ -230,7 +230,7 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                     rowsY() + (index - scroll) * ROW_STRIDE, width,
                     version.equals(left ? leftSelection : rightSelection));
         }
-        renderLegacyScrollbar(
+        renderScrollbar(
                 graphics, x + width - 3, rowsY(), rowsHeight(),
                 versions.size(), rows, scroll);
     }
@@ -242,10 +242,10 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
             int y,
             int width,
             boolean selected) {
-        LegacyLumiTheme.outlined(
+        LumiTheme.outlined(
                 graphics, x, y, width, ROW_HEIGHT,
-                LegacyLumiTheme.PANEL,
-                selected ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.PANEL_BORDER);
+                LumiTheme.PANEL,
+                selected ? LumiTheme.ACCENT : LumiTheme.PANEL_BORDER);
         boolean compact = compactCards();
         int previewWidth = compact ? COMPACT_PREVIEW_WIDTH : PREVIEW_WIDTH;
         int previewHeight = compact ? COMPACT_PREVIEW_HEIGHT : PREVIEW_HEIGHT;
@@ -256,13 +256,13 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                 width - previewWidth - (compact ? 16 : 80));
         graphics.drawString(font,
                 font.plainSubstrByWidth(version.message(), textWidth),
-                textX, y + 6, LegacyLumiTheme.TEXT, false);
+                textX, y + 6, LumiTheme.TEXT, false);
         if (!compact) {
             String metadata = version.author() + " · " + DATE_FORMAT.format(
                     Instant.ofEpochMilli(version.timestampMillis()));
             graphics.drawString(font,
                     font.plainSubstrByWidth(metadata, textWidth),
-                    textX, y + 20, LegacyLumiTheme.MUTED, false);
+                    textX, y + 20, LumiTheme.MUTED, false);
         }
     }
 
@@ -280,9 +280,9 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
                     texture.width(), texture.height());
             return;
         }
-        LegacyLumiTheme.outlined(
+        LumiTheme.outlined(
                 graphics, x, y, width, height,
-                LegacyLumiTheme.WINDOW, LegacyLumiTheme.INSET_BORDER);
+                LumiTheme.WINDOW, LumiTheme.INSET_BORDER);
         graphics.blit(
                 RenderPipelines.GUI_TEXTURED, NO_PREVIEW_ICON,
                 x + (width - 12) / 2,
@@ -294,10 +294,10 @@ public final class LumiComparePickerScreen extends LumiLegacyPageScreen {
         int x = dividerX();
         int center = layout.y() + layout.height() / 2;
         graphics.fill(x, layout.y() + 50, x + 1, center - 12,
-                LegacyLumiTheme.PANEL_BORDER);
+                LumiTheme.PANEL_BORDER);
         graphics.fill(x, center + 12, x + 1,
                 layout.y() + layout.height() - 38,
-                LegacyLumiTheme.PANEL_BORDER);
+                LumiTheme.PANEL_BORDER);
         graphics.blit(
                 RenderPipelines.GUI_TEXTURED, CENTER_ICON,
                 x - 6, center - 6, 0, 0, 12, 12,

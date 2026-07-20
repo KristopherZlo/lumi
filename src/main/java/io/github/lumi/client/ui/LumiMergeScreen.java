@@ -11,7 +11,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 
 /** Explicit source-wins confirmation for merging another visible branch. */
-public final class LumiMergeScreen extends LumiLegacyModalScreen {
+public final class LumiMergeScreen extends LumiModalScreen {
     private static final int MAX_VISIBLE_BRANCHES = 6;
     private static final int PANEL_WIDTH = 520;
     private static final int PANEL_HEIGHT = 300;
@@ -58,8 +58,8 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
-        LegacyModalLayout layout = fitPanel(width, height);
+        beginScreenInit();
+        LumiModalLayout layout = fitPanel(width, height);
         panelX = layout.x();
         panelY = layout.y();
         panelWidth = layout.width();
@@ -77,32 +77,32 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
         for (int row = 0; row < count; row++) {
             HistorySnapshotPayload.Branch branch = sources.get(sourceScroll + row);
             int rowY = panelY + LIST_Y + row * ROW_STRIDE;
-            addLegacyButton(
+            addButton(
                     panelX + panelWidth - buttonWidth - 18,
                     rowY + 1, buttonWidth,
                     Component.translatable("luma.action.preview"),
-                    () -> preview(branch), LumiLegacyButton.Kind.NORMAL);
+                    () -> preview(branch), LumiButton.Kind.NORMAL);
         }
-        addLegacyButton(width / 2 - 60,
+        addButton(width / 2 - 60,
                 panelY + actionOffset(panelHeight), 120,
                 Component.translatable("luma.action.cancel"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
+                this::onClose, LumiButton.Kind.NORMAL);
     }
 
     private void addConfirmation() {
         int buttonWidth = (panelWidth - 48) / 2;
         int actionY = panelY + actionOffset(panelHeight);
-        addLegacyButton(panelX + 20, actionY, buttonWidth,
+        addButton(panelX + 20, actionY, buttonWidth,
                 Component.translatable("luma.action.merge_into_current"),
                 () -> submit(pendingSource.name()),
-                LumiLegacyButton.Kind.PRIMARY);
-        addLegacyButton(panelX + 28 + buttonWidth,
+                LumiButton.Kind.PRIMARY);
+        addButton(panelX + 28 + buttonWidth,
                 actionY, buttonWidth,
                 Component.translatable("luma.action.cancel"), () -> {
                     pendingSource = null;
                     error = "";
                     rebuildWidgets();
-                }, LumiLegacyButton.Kind.NORMAL);
+                }, LumiButton.Kind.NORMAL);
     }
 
     private void preview(HistorySnapshotPayload.Branch source) {
@@ -127,19 +127,19 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
+        renderWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         int centerX = width / 2;
         int contentLeft = panelX + 20;
         int contentRight = panelX + panelWidth - 20;
         graphics.drawCenteredString(font, clippedCenteredHeader(
                 title, centerX, contentLeft, contentRight),
-                centerX, panelY + 16, LegacyLumiTheme.TEXT);
+                centerX, panelY + 16, LumiTheme.TEXT);
         graphics.drawCenteredString(font, clippedCenteredHeader(
                 Component.translatable("luma.merge.current", currentBranch),
                 centerX, contentLeft, contentRight),
-                centerX, panelY + 34, LegacyLumiTheme.MUTED);
+                centerX, panelY + 34, LumiTheme.MUTED);
         if (pendingSource != null) {
             renderConfirmation(graphics);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
@@ -147,7 +147,7 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
         }
         graphics.drawCenteredString(font,
                 Component.translatable("luma.merge.source_wins"),
-                width / 2, panelY + 52, LegacyLumiTheme.ACCENT);
+                width / 2, panelY + 52, LumiTheme.ACCENT);
         List<HistorySnapshotPayload.Branch> sources = sourceBranches();
         int visibleRows = visibleBranchRows(panelHeight);
         int buttonWidth = Math.min(148, Math.max(80, panelWidth / 3));
@@ -155,15 +155,15 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
         for (int row = 0; row < count; row++) {
             HistorySnapshotPayload.Branch branch = sources.get(sourceScroll + row);
             int rowY = panelY + LIST_Y + row * ROW_STRIDE;
-            renderLegacyPanel(graphics, panelX + 20, rowY,
+            renderPanel(graphics, panelX + 20, rowY,
                     panelWidth - 40, ROW_HEIGHT);
             graphics.drawString(font,
                     font.plainSubstrByWidth(
                             shortName(branch.name()),
                             panelWidth - buttonWidth - 54),
-                    panelX + 28, rowY + 6, LegacyLumiTheme.TEXT, false);
+                    panelX + 28, rowY + 6, LumiTheme.TEXT, false);
         }
-        renderLegacyScrollbar(
+        renderScrollbar(
                 graphics, panelX + panelWidth - 17, panelY + LIST_Y,
                 Math.max(0, panelY + actionOffset(panelHeight) - 4
                         - (panelY + LIST_Y)),
@@ -171,15 +171,15 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
         if (sources.isEmpty()) {
             graphics.drawCenteredString(font,
                     Component.translatable("luma.merge.no_sources"),
-                    width / 2, panelY + 108, LegacyLumiTheme.MUTED);
+                    width / 2, panelY + 108, LumiTheme.MUTED);
         }
         if (!error.isEmpty()) {
             graphics.drawCenteredString(font, errorText(error),
-                    width / 2, panelY + 72, LegacyLumiTheme.DANGER);
+                    width / 2, panelY + 72, LumiTheme.DANGER);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -195,19 +195,19 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
         drawPreview(graphics, pendingSource, startX, previewY,
                 previewWidth, previewHeight,
                 "luma.ideas.merge_source_preview",
-                LegacyLumiTheme.ACCENT);
+                LumiTheme.ACCENT);
         if (target != null) {
             drawPreview(graphics, target,
                     startX + previewWidth + gap, previewY,
                     previewWidth, previewHeight,
                     "luma.ideas.merge_target_preview",
-                    LegacyLumiTheme.TEXT);
+                    LumiTheme.TEXT);
         }
         graphics.drawCenteredString(
                 font, Component.literal("→"),
                 panelX + panelWidth / 2,
                 previewY + previewHeight / 2 - 4,
-                LegacyLumiTheme.ACCENT);
+                LumiTheme.ACCENT);
         int actionY = panelY + actionOffset(panelHeight);
         graphics.drawCenteredString(
                 font,
@@ -221,11 +221,11 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
                         panelY + confirmationTextOffset(
                                 panelHeight, !error.isEmpty()),
                         previewY + previewHeight + 18),
-                LegacyLumiTheme.TEXT);
+                LumiTheme.TEXT);
         if (!error.isEmpty()) {
             graphics.drawCenteredString(
                     font, errorText(error), width / 2, actionY - 13,
-                    LegacyLumiTheme.DANGER);
+                    LumiTheme.DANGER);
         }
     }
 
@@ -243,9 +243,9 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
                         Component.translatable(label).getString(),
                         Math.max(1, previewWidth - 4)),
                 x + previewWidth / 2, y - 12, color);
-        LegacyLumiTheme.outlined(
+        LumiTheme.outlined(
                 graphics, x, y, previewWidth, previewHeight,
-                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+                LumiTheme.INSET, LumiTheme.INSET_BORDER);
         previews.texture(dimensionId, branch.head()).ifPresent(texture ->
                 graphics.blit(
                         RenderPipelines.GUI_TEXTURED, texture.id(),
@@ -282,10 +282,10 @@ public final class LumiMergeScreen extends LumiLegacyModalScreen {
                 mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
-    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+    static LumiModalLayout fitPanel(int screenWidth, int screenHeight) {
         int panelWidth = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 16));
         int panelHeight = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
-        return new LegacyModalLayout(
+        return new LumiModalLayout(
                 Math.max(0, (screenWidth - panelWidth) / 2),
                 Math.max(0, (screenHeight - panelHeight) / 2),
                 panelWidth, panelHeight);

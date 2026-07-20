@@ -10,8 +10,8 @@ final class OnboardingSpotlightLayout {
 
     Placement place(
             OnboardingTour.Kind kind, int screenWidth, int screenHeight) {
-        LegacyWorkspaceLayout dashboard =
-                LegacyWorkspaceLayout.fit(screenWidth, screenHeight);
+        LumiPageLayout dashboard =
+                LumiPageLayout.fit(screenWidth, screenHeight);
         Rect target = switch (kind) {
             case SPOTLIGHT_SAVE -> saveTarget(dashboard);
             case SPOTLIGHT_CHANGES -> changesTarget(dashboard);
@@ -39,7 +39,7 @@ final class OnboardingSpotlightLayout {
                 hole, new Rect(panelX, panelY, panelWidth, PANEL_HEIGHT));
     }
 
-    private static Rect saveTarget(LegacyWorkspaceLayout layout) {
+    private static Rect saveTarget(LumiPageLayout layout) {
         int available = Math.max(0, layout.bodyWidth() - 28);
         int buttonWidth = Math.max(0, (available - 70) / 2);
         return new Rect(
@@ -47,7 +47,7 @@ final class OnboardingSpotlightLayout {
                 buttonWidth, 20);
     }
 
-    private static Rect changesTarget(LegacyWorkspaceLayout layout) {
+    private static Rect changesTarget(LumiPageLayout layout) {
         int available = Math.max(0, layout.bodyWidth() - 28);
         int buttonWidth = Math.max(0, (available - 70) / 2);
         return new Rect(
@@ -55,7 +55,7 @@ final class OnboardingSpotlightLayout {
                 layout.bodyY() + 56, 26, 20);
     }
 
-    private static Rect restoreTarget(LegacyWorkspaceLayout layout) {
+    private static Rect restoreTarget(LumiPageLayout layout) {
         var geometry = LumiDashboardScreen.dashboardGeometry(
                 layout.bodyY(), layout.bodyHeight(), layout.bodyWidth(), 0);
         return new Rect(

@@ -10,8 +10,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-/** Legacy cleanup page that requires a correlated dry run before apply. */
-public final class LumiCleanupScreen extends LumiLegacyModalScreen {
+/** Cleanup page that requires a correlated dry run before apply. */
+public final class LumiCleanupScreen extends LumiModalScreen {
     private static final int PANEL_WIDTH = 460;
     private static final int BASE_PANEL_HEIGHT = 220;
     private final Screen parent;
@@ -38,8 +38,8 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
-        LegacyModalLayout layout = fitPanel(width, height, 0);
+        beginScreenInit();
+        LumiModalLayout layout = fitPanel(width, height, 0);
         applyLayout(layout);
         boolean hintVisible = addContextualHint(
                 ClientContextualHelpHint.CLEANUP,
@@ -55,24 +55,24 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
         }
         int buttonWidth = Math.max(0, (panelWidth - 40) / 3);
         int y = panelY + geometry.actionY();
-        LumiLegacyButton inspectButton = addLegacyButton(
+        LumiButton inspectButton = addButton(
                 panelX + 16, y, buttonWidth,
                 Component.translatable("luma.action.inspect_unused_files"),
-                () -> request(inspect), LumiLegacyButton.Kind.PRIMARY);
+                () -> request(inspect), LumiButton.Kind.PRIMARY);
         inspectButton.active = pendingRequest == null;
-        LumiLegacyButton clean = addLegacyButton(
+        LumiButton clean = addButton(
                 panelX + 20 + buttonWidth, y, buttonWidth,
                 Component.translatable("luma.action.clean_up"),
-                () -> request(apply), LumiLegacyButton.Kind.DANGER);
+                () -> request(apply), LumiButton.Kind.DANGER);
         clean.active = pendingRequest == null && result != null
                 && result.succeeded() && !result.applied()
                 && result.commits() + result.objects() > 0;
-        addLegacyButton(panelX + 24 + buttonWidth * 2, y, buttonWidth,
+        addButton(panelX + 24 + buttonWidth * 2, y, buttonWidth,
                 Component.translatable("luma.action.cancel"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
+                this::onClose, LumiButton.Kind.NORMAL);
     }
 
-    private void applyLayout(LegacyModalLayout layout) {
+    private void applyLayout(LumiModalLayout layout) {
         panelX = layout.x();
         panelY = layout.y();
         panelWidth = layout.width();
@@ -105,27 +105,27 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
+            renderWindow(graphics, panelX, panelY, panelWidth, panelHeight);
             graphics.drawString(font, title, panelX + 16,
                     panelY + (geometry.compact() ? 14 : 18),
-                    LegacyLumiTheme.TEXT, false);
+                    LumiTheme.TEXT, false);
             if (!geometry.compact() || geometry.hintHeight() == 0) {
                 drawWrapped(graphics,
                         Component.translatable("luma.cleanup.actions_help"),
                         panelY + (geometry.compact() ? 34 : 40),
-                        LegacyLumiTheme.MUTED, panelWidth);
+                        LumiTheme.MUTED, panelWidth);
             }
             if (geometry.resultHeight() > 0) {
-                renderLegacyPanel(graphics, panelX + 16,
+                renderPanel(graphics, panelX + 16,
                         panelY + geometry.resultY(),
                         panelWidth - 32, geometry.resultHeight());
                 renderResult(graphics);
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -153,11 +153,11 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
         int y = panelY + geometry.resultY() + 6;
         for (var line : lines.stream().skip(resultScroll).limit(visible).toList()) {
             graphics.drawString(font, line, panelX + 32, y,
-                    error.isEmpty() ? LegacyLumiTheme.TEXT : LegacyLumiTheme.DANGER,
+                    error.isEmpty() ? LumiTheme.TEXT : LumiTheme.DANGER,
                     false);
             y += 11;
         }
-        renderLegacyScrollbar(
+        renderScrollbar(
                 graphics, panelX + panelWidth - 21,
                 panelY + geometry.resultY() + 5,
                 Math.max(0, geometry.resultHeight() - 10),
@@ -193,13 +193,13 @@ public final class LumiCleanupScreen extends LumiLegacyModalScreen {
                 mouseX, mouseY, horizontalAmount, verticalAmount);
     }
 
-    static LegacyModalLayout fitPanel(
+    static LumiModalLayout fitPanel(
             int screenWidth, int screenHeight, int contentOffset) {
         int panelWidth = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 16));
         int panelHeight = Math.min(
                 BASE_PANEL_HEIGHT + Math.max(0, contentOffset),
                 Math.max(1, screenHeight - 16));
-        return new LegacyModalLayout(
+        return new LumiModalLayout(
                 Math.max(0, (screenWidth - panelWidth) / 2),
                 Math.max(0, (screenHeight - panelHeight) / 2),
                 panelWidth, panelHeight);

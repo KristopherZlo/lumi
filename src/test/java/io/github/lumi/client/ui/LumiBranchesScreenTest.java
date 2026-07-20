@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test;
 class LumiBranchesScreenTest {
     @Test
     void keepsNamesClearOfActionsAndStacksCardsWhenNarrow() {
-        int referenceWidth = LegacyWorkspaceLayout.fit(640, 360).contentWidth();
-        int smallWidth = LegacyWorkspaceLayout.fit(427, 240).contentWidth();
+        int referenceWidth = LumiPageLayout.fit(640, 360).contentWidth();
+        int smallWidth = LumiPageLayout.fit(427, 240).contentWidth();
 
         assertFalse(LumiBranchesScreen.stacksActions(referenceWidth));
         assertEquals(referenceWidth - 302,
@@ -26,7 +26,7 @@ class LumiBranchesScreenTest {
     }
 
     @Test
-    void exposesLegacyCreateMergeSwitchAndConfirmedDeleteActions() throws Exception {
+    void exposesV2CreateMergeSwitchAndConfirmedDeleteActions() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiBranchesScreen.java"));
 
@@ -34,8 +34,8 @@ class LumiBranchesScreenTest {
         assertTrue(source.contains("luma.action.merge_into_current"));
         assertTrue(source.contains("luma.action.variant_switch"));
         assertTrue(source.contains("visibleRows()"));
-        assertTrue(source.contains("addLegacyIconButton"));
-        assertTrue(source.contains("name = addLegacyTextField("));
+        assertTrue(source.contains("addIconButton"));
+        assertTrue(source.contains("name = addTextField("));
         assertTrue(source.contains("create.submit(name.getValue())"));
         assertTrue(source.contains("luma.action.delete_branch"));
         assertTrue(source.contains("deleter.accept(pendingDelete.name())"));

@@ -8,7 +8,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Minimal full-commit Restore confirmation. */
-public final class LumiRestoreScreen extends LumiLegacyModalScreen {
+public final class LumiRestoreScreen extends LumiModalScreen {
     private static final int PANEL_WIDTH = 380;
     private static final int PANEL_HEIGHT = 120;
     private final Screen parent;
@@ -29,20 +29,20 @@ public final class LumiRestoreScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(8, (height - PANEL_HEIGHT) / 2);
         int buttonWidth = Math.max(80, (panelWidth - 48) / 2);
-        addLegacyButton(
+        addButton(
                 panelX + 16, panelY + PANEL_HEIGHT - 34, buttonWidth,
                 Component.translatable("luma.action.cancel"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
-        addLegacyButton(
+                this::onClose, LumiButton.Kind.NORMAL);
+        addButton(
                 panelX + panelWidth - 16 - buttonWidth,
                 panelY + PANEL_HEIGHT - 34, buttonWidth,
                 Component.translatable("luma.action.restore"),
-                this::submit, LumiLegacyButton.Kind.PRIMARY);
+                this::submit, LumiButton.Kind.PRIMARY);
     }
 
     private void submit() {
@@ -57,24 +57,24 @@ public final class LumiRestoreScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
             int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-            renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+            renderWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
             graphics.drawCenteredString(
                     font, clippedCenteredHeader(
                             title, width / 2,
                             panelX + 16, panelX + panelWidth - 16),
-                    width / 2, panelY + 24, LegacyLumiTheme.TEXT);
+                    width / 2, panelY + 24, LumiTheme.TEXT);
             if (!error.isEmpty()) {
                 graphics.drawCenteredString(
                         font,
                         font.plainSubstrByWidth(error, Math.max(1, panelWidth - 32)),
-                        width / 2, panelY + 48, LegacyLumiTheme.DANGER);
+                        width / 2, panelY + 48, LumiTheme.DANGER);
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 

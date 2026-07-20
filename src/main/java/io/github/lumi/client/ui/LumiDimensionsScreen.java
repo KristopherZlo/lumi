@@ -9,7 +9,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Loaded vanilla and mod dimension catalog; it never changes player location. */
-public final class LumiDimensionsScreen extends LumiLegacyPageScreen {
+public final class LumiDimensionsScreen extends LumiPageScreen {
     private static final int ROW_HEIGHT = 30;
     private final Supplier<List<String>> dimensions;
     private final Supplier<String> currentDimension;
@@ -27,7 +27,7 @@ public final class LumiDimensionsScreen extends LumiLegacyPageScreen {
             Supplier<String> currentDimension,
             Consumer<String> openHistory) {
         super(parent, Component.translatable("luma.action.dimensions"),
-                LegacyProjectTab.MORE);
+                ProjectTab.MORE);
         this.dimensions = Objects.requireNonNull(dimensions, "dimensions");
         this.currentDimension = Objects.requireNonNull(
                 currentDimension, "currentDimension");
@@ -36,8 +36,8 @@ public final class LumiDimensionsScreen extends LumiLegacyPageScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
-        LegacyWorkspaceLayout page = pageLayout();
+        beginScreenInit();
+        LumiPageLayout page = pageLayout();
         panelX = page.contentX();
         panelY = page.windowY();
         panelWidth = page.contentWidth();
@@ -47,50 +47,50 @@ public final class LumiDimensionsScreen extends LumiLegacyPageScreen {
         scroll = Math.min(scroll, Math.max(0, visible.size() - capacity));
         for (int index = 0; index < Math.min(capacity, visible.size() - scroll); index++) {
             String dimension = visible.get(scroll + index);
-            addLegacyIconButton(
+            addIconButton(
                     panelX + panelWidth - 48,
                     panelY + 76 + index * ROW_HEIGHT,
                     "folder", Component.translatable(
                             "luma.dimensions.open_history", dimension),
                     () -> openHistory.accept(dimension),
-                    LumiLegacyButton.Kind.NORMAL);
+                    LumiButton.Kind.NORMAL);
         }
     }
 
     @Override
     public void render(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
+            renderPage(graphics, panelX, panelY, panelWidth, panelHeight);
             renderPageHeader(graphics, panelX, panelY, panelWidth, title,
                     Component.translatable("luma.dimensions.help"));
-            renderLegacyPanel(graphics, panelX + 12, panelY + 62,
+            renderPanel(graphics, panelX + 12, panelY + 62,
                     panelWidth - 24, Math.max(1, panelHeight - 74));
             String current = currentDimension.get();
             int count = Math.min(capacity(), visible.size() - scroll);
             for (int index = 0; index < count; index++) {
                 String dimension = visible.get(scroll + index);
                 int y = panelY + 72 + index * ROW_HEIGHT;
-                LegacyLumiTheme.outlined(
+                LumiTheme.outlined(
                         graphics, panelX + 20, y, panelWidth - 40, 26,
-                        LegacyLumiTheme.INSET,
+                        LumiTheme.INSET,
                         dimension.equals(current)
-                                ? LegacyLumiTheme.ACCENT
-                                : LegacyLumiTheme.INSET_BORDER);
+                                ? LumiTheme.ACCENT
+                                : LumiTheme.INSET_BORDER);
                 graphics.drawString(font,
                         font.plainSubstrByWidth(dimension, panelWidth - 100),
-                        panelX + 28, y + 6, LegacyLumiTheme.TEXT, false);
+                        panelX + 28, y + 6, LumiTheme.TEXT, false);
                 if (dimension.equals(current)) {
                     graphics.drawString(font,
                             font.plainSubstrByWidth(
                                     Component.translatable(
                                             "luma.dimensions.current").getString(),
                                     Math.max(1, panelWidth - 100)),
-                            panelX + 28, y + 16, LegacyLumiTheme.ACCENT, false);
+                            panelX + 28, y + 16, LumiTheme.ACCENT, false);
                 }
             }
-            renderLegacyScrollbar(
+            renderScrollbar(
                     graphics, panelX + panelWidth - 18, panelY + 72,
                     Math.max(0, panelHeight - 86),
                     visible.size(), capacity(), scroll);
@@ -99,11 +99,11 @@ public final class LumiDimensionsScreen extends LumiLegacyPageScreen {
                         font.plainSubstrByWidth(
                                 Component.translatable("luma.dimensions.empty").getString(),
                                 Math.max(1, panelWidth - 48)),
-                        panelX + 24, panelY + 76, LegacyLumiTheme.MUTED, false);
+                        panelX + 24, panelY + 76, LumiTheme.MUTED, false);
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 

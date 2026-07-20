@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class LumiMoreScreenTest {
     @Test
-    void retainsLegacyCleanupAndManualCompareRoutes() throws Exception {
+    void retainsV2CleanupAndManualCompareRoutes() throws Exception {
         String more = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiMoreScreen.java"));
         String client = Files.readString(Path.of(

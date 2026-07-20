@@ -7,7 +7,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Read-only table of the actual registered Lumi shortcuts. */
-public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
+public final class LumiHotkeyScreen extends LumiModalScreen {
     private final Screen parent;
     private final List<LumiHotkeys.Shortcut> shortcuts;
     private int panelX;
@@ -24,7 +24,7 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         panelWidth = Math.min(430, width - 24);
         panelX = (width - panelWidth) / 2;
         panelHeight = fittedPanelHeight(height, shortcuts.size());
@@ -34,38 +34,38 @@ public final class LumiHotkeyScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
+        renderWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         graphics.drawString(font, title, panelX + 16, panelY + 17,
-                LegacyLumiTheme.TEXT, false);
+                LumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.hotkeys.help"),
-                panelX + 16, panelY + 38, LegacyLumiTheme.MUTED, false);
+                panelX + 16, panelY + 38, LumiTheme.MUTED, false);
         String modifier = LumiHotkeys.bindingLabel(
                 minecraft.options.keyMappings, "key.lumi.action_modifier");
         int count = Math.min(visibleRows(), shortcuts.size() - scroll);
         for (int index = 0; index < count; index++) {
             LumiHotkeys.Shortcut shortcut = shortcuts.get(scroll + index);
             int y = panelY + 62 + index * 34;
-            renderLegacyPanel(graphics,
+            renderPanel(graphics,
                     panelX + 12, y - 5, panelWidth - 24, 30);
             graphics.drawString(font, shortcut.display(modifier),
-                    panelX + 20, y + 3, LegacyLumiTheme.ACCENT, false);
+                    panelX + 20, y + 3, LumiTheme.ACCENT, false);
             graphics.drawString(font, Component.translatable(shortcut.labelKey()),
-                    panelX + 118, y, LegacyLumiTheme.TEXT, false);
+                    panelX + 118, y, LumiTheme.TEXT, false);
             graphics.drawString(font,
                     font.plainSubstrByWidth(
                             Component.translatable(shortcut.helpKey()).getString(),
                             panelWidth - 150),
-                    panelX + 118, y + 12, LegacyLumiTheme.MUTED, false);
+                    panelX + 118, y + 12, LumiTheme.MUTED, false);
         }
-        renderLegacyScrollbar(
+        renderScrollbar(
                 graphics, panelX + panelWidth - 9, panelY + 57,
                 Math.max(0, panelHeight - 69),
                 shortcuts.size(), visibleRows(), scroll);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 

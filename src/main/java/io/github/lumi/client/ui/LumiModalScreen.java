@@ -15,8 +15,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 
-/** Shared legacy window chrome for V2 modal workflows. */
-abstract class LumiLegacyModalScreen extends Screen {
+/** Shared window chrome for V2 modal workflows. */
+abstract class LumiModalScreen extends Screen {
     protected static final int INPUT_HEIGHT = 14;
     protected static final int INPUT_FRAME_HEIGHT = 18;
     private static final int FRAME_CONTROL_INSET = 8;
@@ -33,61 +33,61 @@ abstract class LumiLegacyModalScreen extends Screen {
     private int hintY;
     private int hintWidth;
     private int hintHeight;
-    private boolean legacyInitialized;
-    private LumiLegacyButton navigationButton;
+    private boolean screenInitialized;
+    private LumiButton navigationButton;
     private boolean handCursorActive;
     private static long handCursor;
 
-    protected LumiLegacyModalScreen(Component title) {
+    protected LumiModalScreen(Component title) {
         this(Minecraft.getInstance().screen, title);
     }
 
-    protected LumiLegacyModalScreen(Screen background, Component title) {
+    protected LumiModalScreen(Screen background, Component title) {
         super(title);
         this.background = background;
     }
 
-    protected final LumiLegacyButton addLegacyButton(
+    protected final LumiButton addButton(
             int x, int y, int width, Component label,
-            Runnable action, LumiLegacyButton.Kind kind) {
-        return addRenderableWidget(new LumiLegacyButton(
+            Runnable action, LumiButton.Kind kind) {
+        return addRenderableWidget(new LumiButton(
                 x, y, width, 20, label, ignored -> action.run(), kind));
     }
 
-    protected final LumiLegacyButton addLegacyContentButton(
+    protected final LumiButton addContentButton(
             int x, int y, int maximumWidth, Component label,
-            Runnable action, LumiLegacyButton.Kind kind) {
-        return addLegacyButton(
-                x, y, LumiLegacyButton.contentWidth(maximumWidth, label),
+            Runnable action, LumiButton.Kind kind) {
+        return addButton(
+                x, y, LumiButton.contentWidth(maximumWidth, label),
                 label, action, kind);
     }
 
-    protected final LumiLegacyButton addLegacyIconButton(
+    protected final LumiButton addIconButton(
             int x, int y, String icon, Component label,
-            Runnable action, LumiLegacyButton.Kind kind) {
-        return addRenderableWidget(new LumiLegacyButton(
+            Runnable action, LumiButton.Kind kind) {
+        return addRenderableWidget(new LumiButton(
                 x, y, 26, 20, label, ignored -> action.run(), kind, icon));
     }
 
-    protected final EditBox addLegacyTextField(
+    protected final EditBox addTextField(
             int x, int y, int width, Component label) {
         EditBox field = new EditBox(
                 font, x + 6, y, Math.max(0, width - 12),
                 INPUT_FRAME_HEIGHT, label);
         field.setBordered(false);
-        field.setTextColor(LegacyLumiTheme.TEXT);
+        field.setTextColor(LumiTheme.TEXT);
         return addRenderableWidget(field);
     }
 
-    protected final void renderLegacyTextField(
+    protected final void renderTextField(
             GuiGraphics graphics, EditBox field) {
-        LegacyLumiTheme.outlined(
+        LumiTheme.outlined(
                 graphics, field.getX() - 6, field.getY(),
                 field.getWidth() + 12, INPUT_FRAME_HEIGHT,
-                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+                LumiTheme.INSET, LumiTheme.INSET_BORDER);
     }
 
-    protected final void renderLegacyScrollbar(
+    protected final void renderScrollbar(
             GuiGraphics graphics,
             int x,
             int y,
@@ -103,13 +103,13 @@ abstract class LumiLegacyModalScreen extends Screen {
                 10, (int) ((long) height * visibleExtent / totalExtent));
         int thumbY = y + (int) ((long) (height - thumbHeight)
                 * Math.max(0, Math.min(offset, maximumOffset)) / maximumOffset);
-        graphics.fill(x, y, x + 3, y + height, LegacyLumiTheme.INSET_BORDER);
+        graphics.fill(x, y, x + 3, y + height, LumiTheme.INSET_BORDER);
         graphics.fill(
-                x, thumbY, x + 3, thumbY + thumbHeight, LegacyLumiTheme.ACCENT);
+                x, thumbY, x + 3, thumbY + thumbHeight, LumiTheme.ACCENT);
     }
 
-    protected final void beginLegacyInit() {
-        legacyInitialized = true;
+    protected final void beginScreenInit() {
+        screenInitialized = true;
         contextualHint = null;
         Window window = Minecraft.getInstance().getWindow();
         int currentGuiScale = currentGuiScale();
@@ -117,13 +117,13 @@ abstract class LumiLegacyModalScreen extends Screen {
         width = uiScale.virtualSize(window.getGuiScaledWidth(), currentGuiScale);
         height = uiScale.virtualSize(window.getGuiScaledHeight(), currentGuiScale);
         if (!(this instanceof LumiRecoveryScreen)) {
-            boolean page = this instanceof LumiLegacyPageScreen;
-            navigationButton = addLegacyIconButton(
+            boolean page = this instanceof LumiPageScreen;
+            navigationButton = addIconButton(
                     navigationControlX(0, width), FRAME_CONTROL_INSET,
                     page ? "chevron-left" : "close",
                     Component.translatable(page
                             ? "luma.action.back" : "luma.action.close"),
-                    this::onClose, LumiLegacyButton.Kind.NORMAL);
+                    this::onClose, LumiButton.Kind.NORMAL);
         }
     }
 
@@ -161,29 +161,29 @@ abstract class LumiLegacyModalScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
         if (contextualHint != null) {
-            LegacyLumiTheme.outlined(
+            LumiTheme.outlined(
                     graphics, hintX, hintY, hintWidth, hintHeight,
-                    LegacyLumiTheme.STATUS, LegacyLumiTheme.STATUS_BORDER);
+                    LumiTheme.STATUS, LumiTheme.STATUS_BORDER);
             String title = font.plainSubstrByWidth(
                     Component.translatable(contextualHint.titleKey()).getString(),
                     Math.max(1, hintWidth - 44));
             graphics.drawString(font, title, hintX + 8, hintY + 8,
-                    LegacyLumiTheme.ACCENT, false);
+                    LumiTheme.ACCENT, false);
             int lineY = hintY + 23;
             for (var line : font.split(
                     Component.translatable(contextualHint.bodyKey()),
                     Math.max(1, hintWidth - 14))) {
                 graphics.drawString(font, line, hintX + 8, lineY,
-                        LegacyLumiTheme.TEXT, false);
+                        LumiTheme.TEXT, false);
                 lineY += 10;
             }
             int closeX = hintX + hintWidth - 26;
             boolean hovered = mouseX >= closeX && mouseX < closeX + 18
                     && mouseY >= hintY + 6 && mouseY < hintY + 24;
-            LegacyLumiTheme.outlined(
+            LumiTheme.outlined(
                     graphics, closeX, hintY + 6, 18, 18,
-                    hovered ? LegacyLumiTheme.CHIP : LegacyLumiTheme.INSET,
-                    LegacyLumiTheme.STATUS_BORDER);
+                    hovered ? LumiTheme.CHIP : LumiTheme.INSET,
+                    LumiTheme.STATUS_BORDER);
             graphics.blit(
                     RenderPipelines.GUI_TEXTURED, HINT_CLOSE_ICON,
                     closeX + 3, hintY + 9, 0, 0, 12, 12,
@@ -225,21 +225,21 @@ abstract class LumiLegacyModalScreen extends Screen {
         super.removed();
     }
 
-    protected final LegacyRenderContext beginLegacyRender(
+    protected final ScaledRenderContext beginScaledRender(
             GuiGraphics graphics, int mouseX, int mouseY) {
         if (background != null && background != this
-                && (!(background instanceof LumiLegacyModalScreen legacy)
-                        || legacy.legacyInitialized)) {
+                && (!(background instanceof LumiModalScreen screen)
+                        || screen.screenInitialized)) {
             background.render(graphics, -1, -1, 0.0F);
         }
         float scale = renderScale();
         graphics.pose().pushMatrix();
         graphics.pose().scale(scale, scale);
-        return new LegacyRenderContext(
+        return new ScaledRenderContext(
                 virtualCoordinate(mouseX), virtualCoordinate(mouseY));
     }
 
-    protected final void endLegacyRender(GuiGraphics graphics) {
+    protected final void endScaledRender(GuiGraphics graphics) {
         graphics.pose().popMatrix();
     }
 
@@ -279,37 +279,37 @@ abstract class LumiLegacyModalScreen extends Screen {
         return super.mouseDragged(virtualClick(click), deltaX / scale, deltaY / scale);
     }
 
-    protected final void renderLegacyWindow(
+    protected final void renderWindow(
             GuiGraphics graphics, int x, int y, int width, int height) {
-        alignLegacyNavigation(x, y, width);
-        graphics.fill(0, 0, this.width, this.height, LegacyLumiTheme.BACKDROP);
-        LegacyLumiTheme.outlined(
+        alignNavigation(x, y, width);
+        graphics.fill(0, 0, this.width, this.height, LumiTheme.BACKDROP);
+        LumiTheme.outlined(
                 graphics, x, y, width, height,
-                LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
+                LumiTheme.WINDOW, LumiTheme.WINDOW_BORDER);
     }
 
-    protected final void renderLegacyPage(
+    protected final void renderPage(
             GuiGraphics graphics, int x, int y, int width, int height) {
-        alignLegacyNavigation(x, y, width);
-        LegacyLumiTheme.outlined(
+        alignNavigation(x, y, width);
+        LumiTheme.outlined(
                 graphics, x, y, width, height,
-                LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
+                LumiTheme.WINDOW, LumiTheme.WINDOW_BORDER);
         int headerBottom = Math.min(
-                y + height - 1, y + LegacyLumiTheme.PAGE_HEADER_HEIGHT);
+                y + height - 1, y + LumiTheme.PAGE_HEADER_HEIGHT);
         if (width > 2 && headerBottom > y + 1) {
             graphics.fill(x + 1, y + 1, x + width - 1, headerBottom,
-                    LegacyLumiTheme.TITLEBAR);
+                    LumiTheme.TITLEBAR);
             graphics.fill(x + 1, headerBottom - 1,
                     x + width - 1, headerBottom,
-                    LegacyLumiTheme.PANEL_BORDER);
+                    LumiTheme.PANEL_BORDER);
         }
     }
 
-    protected final void renderLegacyPanel(
+    protected final void renderPanel(
             GuiGraphics graphics, int x, int y, int width, int height) {
-        LegacyLumiTheme.outlined(
+        LumiTheme.outlined(
                 graphics, x, y, width, height,
-                LegacyLumiTheme.PANEL, LegacyLumiTheme.PANEL_BORDER);
+                LumiTheme.PANEL, LumiTheme.PANEL_BORDER);
     }
 
     protected final void renderPageHeader(
@@ -318,10 +318,10 @@ abstract class LumiLegacyModalScreen extends Screen {
         int textX = x + 16;
         int right = x + width - 16;
         graphics.drawString(font, clippedHeader(heading, textX, right),
-                textX, y + 14, LegacyLumiTheme.TEXT, false);
+                textX, y + 14, LumiTheme.TEXT, false);
         if (description != null) {
             graphics.drawString(font, clippedHeader(description, textX, right),
-                    textX, y + 29, LegacyLumiTheme.MUTED, false);
+                    textX, y + 29, LumiTheme.MUTED, false);
         }
     }
 
@@ -353,7 +353,7 @@ abstract class LumiLegacyModalScreen extends Screen {
         return frameX + Math.max(0, frameWidth - FRAME_CONTROL_INSET - ICON_BUTTON_WIDTH);
     }
 
-    protected final void alignLegacyNavigation(
+    protected final void alignNavigation(
             int frameX, int frameY, int frameWidth) {
         if (navigationButton == null) return;
         navigationButton.setX(navigationControlX(frameX, frameWidth));
@@ -397,5 +397,5 @@ abstract class LumiLegacyModalScreen extends Screen {
         return window == null ? 1 : window.getGuiScale();
     }
 
-    protected record LegacyRenderContext(int mouseX, int mouseY) { }
+    protected record ScaledRenderContext(int mouseX, int mouseY) { }
 }

@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 class LumiPartialRestoreFlowTest {
     @Test
-    void legacyControlsUseCorrelatedPreviewAndTokenApply() throws Exception {
+    void v2ControlsUseCorrelatedPreviewAndTokenApply() throws Exception {
         String fullRestore = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiRestoreScreen.java"));
         String partialRestore = Files.readString(Path.of(

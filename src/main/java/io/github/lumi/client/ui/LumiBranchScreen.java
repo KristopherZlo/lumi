@@ -8,14 +8,14 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** Focused one-step branch creation form for the active workspace HEAD. */
-public final class LumiBranchScreen extends LumiLegacyModalScreen {
+public final class LumiBranchScreen extends LumiModalScreen {
     private static final int PANEL_WIDTH = 360;
     private static final int PANEL_HEIGHT = 158;
     private final Screen parent;
     private final String startingPoint;
     private final BranchNameController controller;
     private EditBox name;
-    private LumiLegacyButton create;
+    private LumiButton create;
     private String error = "";
     private int panelX;
     private int panelY;
@@ -32,7 +32,7 @@ public final class LumiBranchScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = (height - PANEL_HEIGHT) / 2;
@@ -44,18 +44,18 @@ public final class LumiBranchScreen extends LumiLegacyModalScreen {
         name.setMaxLength(BranchNameController.MAX_NAME_LENGTH);
         name.setHint(Component.translatable("luma.variant.name_input"));
         name.setBordered(false);
-        name.setTextColor(LegacyLumiTheme.TEXT);
+        name.setTextColor(LumiTheme.TEXT);
         name.setResponder(value -> create.active = !value.trim().isEmpty());
         addRenderableWidget(name);
 
         int buttonWidth = (contentWidth - 8) / 2;
-        create = addLegacyButton(contentX, panelY + 116, buttonWidth,
+        create = addButton(contentX, panelY + 116, buttonWidth,
                 Component.translatable("luma.action.variant_create"),
-                this::submit, LumiLegacyButton.Kind.PRIMARY);
+                this::submit, LumiButton.Kind.PRIMARY);
         create.active = false;
-        addLegacyButton(contentX + buttonWidth + 8, panelY + 116, buttonWidth,
+        addButton(contentX + buttonWidth + 8, panelY + 116, buttonWidth,
                 Component.translatable("luma.action.cancel"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
+                this::onClose, LumiButton.Kind.NORMAL);
     }
 
     @Override
@@ -90,35 +90,35 @@ public final class LumiBranchScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
             int panelWidth = Math.min(PANEL_WIDTH, width - 32);
             int headerX = panelX + 12;
             int contentRight = panelX + panelWidth - 12;
-            renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+            renderWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
             graphics.drawString(font,
                     clippedHeader(title, headerX, contentRight),
-                    headerX, panelY + 14, LegacyLumiTheme.TEXT, false);
+                    headerX, panelY + 14, LumiTheme.TEXT, false);
             graphics.drawString(font, clippedHeader(
                     Component.translatable(
                             "luma.variants.create_help", startingPoint),
                     headerX, contentRight),
-                    headerX, panelY + 34, LegacyLumiTheme.MUTED, false);
-            LegacyLumiTheme.outlined(graphics, panelX + 14, panelY + 66,
+                    headerX, panelY + 34, LumiTheme.MUTED, false);
+            LumiTheme.outlined(graphics, panelX + 14, panelY + 66,
                     panelWidth - 28, INPUT_FRAME_HEIGHT,
-                    LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+                    LumiTheme.INSET, LumiTheme.INSET_BORDER);
             graphics.drawString(font,
                     Component.translatable("luma.variant.name_input"),
-                    panelX + 20, panelY + 55, LegacyLumiTheme.TEXT, false);
+                    panelX + 20, panelY + 55, LumiTheme.TEXT, false);
             if (!error.isEmpty()) {
                 graphics.drawString(font, errorText(error),
                         panelX + 20, panelY + 96,
-                        LegacyLumiTheme.DANGER, false);
+                        LumiTheme.DANGER, false);
             }
             super.render(
                     graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 

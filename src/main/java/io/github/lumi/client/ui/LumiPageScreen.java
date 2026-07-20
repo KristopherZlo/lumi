@@ -5,11 +5,11 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /** One project sidebar page rendered inside its retained Dashboard shell. */
-abstract class LumiLegacyPageScreen extends LumiLegacyModalScreen {
+abstract class LumiPageScreen extends LumiModalScreen {
     private final Screen parent;
 
-    protected LumiLegacyPageScreen(
-            Screen parent, Component title, LegacyProjectTab tab) {
+    protected LumiPageScreen(
+            Screen parent, Component title, ProjectTab tab) {
         super(parent, title);
         this.parent = parent;
         LumiDashboardScreen dashboard = dashboardParent();
@@ -18,8 +18,8 @@ abstract class LumiLegacyPageScreen extends LumiLegacyModalScreen {
         }
     }
 
-    protected final LegacyWorkspaceLayout pageLayout() {
-        return LegacyWorkspaceLayout.fit(width, height);
+    protected final LumiPageLayout pageLayout() {
+        return LumiPageLayout.fit(width, height);
     }
 
     @Override
@@ -27,7 +27,7 @@ abstract class LumiLegacyPageScreen extends LumiLegacyModalScreen {
         if (super.mouseClicked(click, doubled)) {
             return true;
         }
-        LegacyWorkspaceLayout layout = pageLayout();
+        LumiPageLayout layout = pageLayout();
         double x = virtualCoordinate(click.x());
         double y = virtualCoordinate(click.y());
         LumiDashboardScreen dashboard = dashboardParent();
@@ -40,14 +40,14 @@ abstract class LumiLegacyPageScreen extends LumiLegacyModalScreen {
 
     private LumiDashboardScreen dashboardParent() {
         if (parent instanceof LumiDashboardScreen dashboard) return dashboard;
-        return parent instanceof LumiLegacyPageScreen page
+        return parent instanceof LumiPageScreen page
                 ? page.dashboardParent() : null;
     }
 
     @Override
     protected boolean pointerHovered(int mouseX, int mouseY) {
         if (super.pointerHovered(mouseX, mouseY)) return true;
-        LegacyWorkspaceLayout layout = pageLayout();
+        LumiPageLayout layout = pageLayout();
         LumiDashboardScreen dashboard = dashboardParent();
         return dashboard != null
                 && mouseX >= layout.windowX() && mouseX < layout.contentX()
@@ -59,7 +59,7 @@ abstract class LumiLegacyPageScreen extends LumiLegacyModalScreen {
     @Override
     public void onClose() {
         if (parent instanceof LumiDashboardScreen dashboard) {
-            dashboard.selectTab(LegacyProjectTab.HISTORY);
+            dashboard.selectTab(ProjectTab.HISTORY);
         }
         minecraft.setScreen(parent);
     }

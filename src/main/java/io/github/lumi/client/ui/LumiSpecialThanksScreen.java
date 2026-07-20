@@ -13,7 +13,7 @@ import net.minecraft.world.entity.player.PlayerModelType;
 import net.minecraft.world.entity.player.PlayerSkin;
 
 /** Bundled credits with lazily resolved, non-blocking player skin previews. */
-public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
+public final class LumiSpecialThanksScreen extends LumiModalScreen {
     private static final int CARDS_TOP = 58;
     private static final int CARD_GAP = 8;
     private static final int MIN_CARD_HEIGHT = 46;
@@ -44,7 +44,7 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         panelWidth = Math.min(390, width - 24);
         panelHeight = Math.min(320, height - 24);
         panelX = (width - panelWidth) / 2;
@@ -57,13 +57,13 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
+        renderWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         graphics.drawString(font, title, panelX + 16, panelY + 18,
-                LegacyLumiTheme.TEXT, false);
+                LumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.special_thanks.help"),
-                panelX + 16, panelY + 42, LegacyLumiTheme.MUTED, false);
+                panelX + 16, panelY + 42, LumiTheme.MUTED, false);
         int rows = visibleRows();
         int cardHeight = cardHeight(panelHeight, rows);
         int y = panelY + CARDS_TOP;
@@ -72,13 +72,13 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
             entry(graphics, y, cardHeight, entries.get(scroll + index), now);
             y += cardHeight + CARD_GAP;
         }
-        renderLegacyScrollbar(
+        renderScrollbar(
                 graphics, panelX + panelWidth - 10, panelY + CARDS_TOP,
                 Math.max(0, panelHeight - CARDS_TOP - BOTTOM_PADDING),
                 entries.size(), rows, scroll);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -90,20 +90,20 @@ public final class LumiSpecialThanksScreen extends LumiLegacyModalScreen {
             long now) {
         int x = panelX + 16;
         int width = panelWidth - 32;
-        renderLegacyPanel(graphics, x, y, width, height);
+        renderPanel(graphics, x, y, width, height);
         int modelHeight = height - 8;
         int modelWidth = Math.min(76, Math.max(34, modelHeight * 2 / 3));
         int modelX = x + 8;
         renderPlayer(graphics, entry, modelX, y + 4, modelWidth, modelHeight, now);
         int textX = modelX + modelWidth + 12;
         graphics.drawString(font, entry.displayName(), textX, y + 12,
-                LegacyLumiTheme.TEXT, false);
+                LumiTheme.TEXT, false);
         int textY = y + 27;
         for (var line : font.split(
                 Component.literal(entry.description()),
                 Math.max(1, x + width - textX - 8))) {
             graphics.drawString(font, line, textX, textY,
-                    LegacyLumiTheme.MUTED, false);
+                    LumiTheme.MUTED, false);
             textY += 11;
             if (textY >= y + height - 8) {
                 break;

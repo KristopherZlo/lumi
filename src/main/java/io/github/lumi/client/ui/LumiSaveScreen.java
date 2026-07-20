@@ -11,8 +11,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
-/** Focused legacy-style Save form retained for the Alt+S workflow. */
-public final class LumiSaveScreen extends LumiLegacyModalScreen {
+/** Focused Save form for the Alt+S workflow. */
+public final class LumiSaveScreen extends LumiModalScreen {
     private static final int DIALOG_HEIGHT = 226;
     private static final int COMPACT_HEIGHT = 206;
     private static final int TINY_HEIGHT = 180;
@@ -26,11 +26,11 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
     private final Consumer<UUID> previewCapture;
     private final Runnable accepted;
     private final Scope scope;
-    private LegacyModalLayout layout;
+    private LumiModalLayout layout;
     private EditBox message;
     private EditBox tags;
-    private LumiLegacyButton save;
-    private LumiLegacyButton amend;
+    private LumiButton save;
+    private LumiButton amend;
     private String error = "";
 
     public LumiSaveScreen(
@@ -102,7 +102,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         layout = fitPanel(width, height);
         int x = layout.x();
         int y = layout.y();
@@ -115,7 +115,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         message.setMaxLength(SaveScreenController.MAX_NAME_LENGTH);
         message.setHint(scope.nameLabel());
         message.setBordered(false);
-        message.setTextColor(LegacyLumiTheme.TEXT);
+        message.setTextColor(LumiTheme.TEXT);
         message.setResponder(value -> setSubmitActive(!value.trim().isEmpty()));
         addRenderableWidget(message);
         message.setValue(initialMessage);
@@ -127,21 +127,21 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         tags.setMaxLength(io.github.lumi.domain.model.VersionTags.MAX_SERIALIZED_LENGTH);
         tags.setHint(Component.translatable("luma.history.tags_input"));
         tags.setBordered(false);
-        tags.setTextColor(LegacyLumiTheme.TEXT);
+        tags.setTextColor(LumiTheme.TEXT);
         addRenderableWidget(tags);
 
         int buttonWidth = Math.max(80, (layout.width() - 18) / 2);
-        save = addLegacyButton(x + 6, actionY, buttonWidth,
+        save = addButton(x + 6, actionY, buttonWidth,
                 scope.saveLabel(),
                 () -> submit(SaveScreenController.Intent.SAVE),
                 preferredIntent == SaveScreenController.Intent.SAVE
-                        ? LumiLegacyButton.Kind.PRIMARY : LumiLegacyButton.Kind.NORMAL);
-        amend = addLegacyButton(
+                        ? LumiButton.Kind.PRIMARY : LumiButton.Kind.NORMAL);
+        amend = addButton(
                 save.getX() + save.getWidth() + 4, actionY, buttonWidth,
                 Component.translatable("luma.action.amend_version"),
                 () -> submit(SaveScreenController.Intent.AMEND),
                 preferredIntent == SaveScreenController.Intent.AMEND
-                        ? LumiLegacyButton.Kind.PRIMARY : LumiLegacyButton.Kind.NORMAL);
+                        ? LumiButton.Kind.PRIMARY : LumiButton.Kind.NORMAL);
         setSubmitActive(!initialMessage.trim().isEmpty());
         refreshPreview();
     }
@@ -200,14 +200,14 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(
+        renderWindow(
                 graphics, layout.x(), layout.y(), layout.width(), layout.height());
         drawDialog(graphics);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -219,46 +219,46 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         int fieldY = y + (compact ? 62 : 65);
         int tagPanelY = y + (tiny ? 98 : compact ? 106 : 137);
         graphics.drawString(font, title, x + 10, y + 12,
-                LegacyLumiTheme.TEXT, false);
+                LumiTheme.TEXT, false);
 
-        LegacyLumiTheme.outlined(graphics, x + 6, y + 34,
+        LumiTheme.outlined(graphics, x + 6, y + 34,
                 layout.width() - 12, 26,
-                LegacyLumiTheme.STATUS, LegacyLumiTheme.STATUS_BORDER);
+                LumiTheme.STATUS, LumiTheme.STATUS_BORDER);
         Component status = status();
         int statusColor = error.isEmpty()
-                ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.DANGER;
+                ? LumiTheme.ACCENT : LumiTheme.DANGER;
         graphics.drawString(font,
                 font.plainSubstrByWidth(status.getString(), layout.width() - 132),
                 x + 12, y + 43, statusColor, false);
 
-        LegacyLumiTheme.outlined(graphics, x + 6, fieldY,
+        LumiTheme.outlined(graphics, x + 6, fieldY,
                 layout.width() - 12, tiny ? 34 : compact ? 42 : 67,
-                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+                LumiTheme.INSET, LumiTheme.INSET_BORDER);
         graphics.drawString(font, scope.nameLabel(),
-                x + 12, fieldY + 8, LegacyLumiTheme.TEXT, false);
+                x + 12, fieldY + 8, LumiTheme.TEXT, false);
         if (!compact) {
             graphics.drawString(
                     font, scope.help(),
-                    x + 12, fieldY + 20, LegacyLumiTheme.MUTED, false);
+                    x + 12, fieldY + 20, LumiTheme.MUTED, false);
         }
-        LegacyLumiTheme.outlined(graphics, x + 11,
+        LumiTheme.outlined(graphics, x + 11,
                 y + messageOffset(layout.height()) - 3,
                 layout.width() - 22, 20,
-                LegacyLumiTheme.WINDOW, LegacyLumiTheme.PANEL_BORDER);
+                LumiTheme.WINDOW, LumiTheme.PANEL_BORDER);
 
-        LegacyLumiTheme.outlined(graphics, x + 6, tagPanelY,
+        LumiTheme.outlined(graphics, x + 6, tagPanelY,
                 layout.width() - 12, tiny ? 32 : compact ? 40 : 43,
-                LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+                LumiTheme.INSET, LumiTheme.INSET_BORDER);
         graphics.drawString(font, Component.translatable("luma.save.tags_title"),
-                x + 12, tagPanelY + 6, LegacyLumiTheme.TEXT, false);
-        LegacyLumiTheme.outlined(graphics, x + 11,
+                x + 12, tagPanelY + 6, LumiTheme.TEXT, false);
+        LumiTheme.outlined(graphics, x + 11,
                 y + tagsOffset(layout.height()) - 3,
                 layout.width() - 22, 20,
-                LegacyLumiTheme.WINDOW, LegacyLumiTheme.PANEL_BORDER);
+                LumiTheme.WINDOW, LumiTheme.PANEL_BORDER);
     }
 
-    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
-        return LegacyModalLayout.fit(screenWidth, screenHeight, DIALOG_HEIGHT);
+    static LumiModalLayout fitPanel(int screenWidth, int screenHeight) {
+        return LumiModalLayout.fit(screenWidth, screenHeight, DIALOG_HEIGHT);
     }
 
     static int actionOffset(int panelHeight) {

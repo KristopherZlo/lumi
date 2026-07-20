@@ -4,7 +4,7 @@ import io.github.lumi.domain.model.PendingChangeStatistics;
 import java.util.Objects;
 import net.minecraft.network.chat.Component;
 
-/** Formats exact pending totals with the existing localized legacy labels. */
+/** Formats exact pending totals with the existing localized labels. */
 final class PendingStatisticsText {
     private PendingStatisticsText() { }
 

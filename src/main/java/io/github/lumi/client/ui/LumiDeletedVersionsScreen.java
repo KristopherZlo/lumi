@@ -10,8 +10,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-/** Bounded tombstone list with an explicit legacy permanent-cleanup confirmation. */
-public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
+/** Bounded tombstone list with an explicit permanent-cleanup confirmation. */
+public final class LumiDeletedVersionsScreen extends LumiPageScreen {
     private static final int MAX_VISIBLE_ROWS = 5;
     private final ClientHistoryStore history;
     private final Consumer<CommitId> restore;
@@ -31,7 +31,7 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
             Consumer<CommitId> restore,
             Consumer<CommitId> cleanup) {
         super(parent, Component.translatable("luma.more.deleted_saves_title"),
-                LegacyProjectTab.MORE);
+                ProjectTab.MORE);
         this.history = Objects.requireNonNull(history, "history");
         this.restore = Objects.requireNonNull(restore, "restore");
         this.cleanup = Objects.requireNonNull(cleanup, "cleanup");
@@ -39,10 +39,10 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         versions = history.state().snapshot()
                 .map(HistorySnapshotPayload::deletedVersions).orElse(List.of());
-        LegacyWorkspaceLayout shell = pageLayout();
+        LumiPageLayout shell = pageLayout();
         panelX = shell.contentX();
         panelY = shell.windowY();
         panelWidth = shell.contentWidth();
@@ -58,12 +58,12 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
             int rowY = panelY + 62 + (index - start) * 38;
-            addLegacyIconButton(panelX + panelWidth - 76, rowY + 4,
+            addIconButton(panelX + panelWidth - 76, rowY + 4,
                     "rollback", Component.translatable("luma.action.restore_deleted_save"),
-                    () -> restoreVersion(version), LumiLegacyButton.Kind.PRIMARY);
-            addLegacyIconButton(panelX + panelWidth - 48, rowY + 4,
+                    () -> restoreVersion(version), LumiButton.Kind.PRIMARY);
+            addIconButton(panelX + panelWidth - 48, rowY + 4,
                     "trash", Component.translatable("luma.screen.cleanup.title"),
-                    () -> confirm(version), LumiLegacyButton.Kind.DANGER);
+                    () -> confirm(version), LumiButton.Kind.DANGER);
         }
     }
 
@@ -76,15 +76,15 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
     private void addConfirmationButtons() {
         int buttonWidth = (panelWidth - 48) / 2;
         int footerY = panelY + footerOffset(panelHeight);
-        addLegacyButton(panelX + 20, footerY, buttonWidth,
+        addButton(panelX + 20, footerY, buttonWidth,
                 Component.translatable("luma.action.clean_up"),
-                this::cleanup, LumiLegacyButton.Kind.DANGER);
-        addLegacyButton(panelX + 28 + buttonWidth, footerY, buttonWidth,
+                this::cleanup, LumiButton.Kind.DANGER);
+        addButton(panelX + 28 + buttonWidth, footerY, buttonWidth,
                 Component.translatable("luma.action.cancel"), () -> {
                     pendingCleanup = null;
                     error = "";
                     rebuildWidgets();
-                }, LumiLegacyButton.Kind.NORMAL);
+                }, LumiButton.Kind.NORMAL);
     }
 
     private void restoreVersion(HistorySnapshotPayload.Version version) {
@@ -117,9 +117,9 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
+        renderPage(graphics, panelX, panelY, panelWidth, panelHeight);
         int textWidth = contentTextWidth(panelWidth);
         int centerX = panelX + panelWidth / 2;
         renderPageHeader(graphics, panelX, panelY, panelWidth, title,
@@ -136,11 +136,11 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
                     panelY + (pendingCleanup == null
                             ? panelHeight - 44
                             : confirmationErrorOffset(panelHeight)),
-                    LegacyLumiTheme.DANGER);
+                    LumiTheme.DANGER);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -151,7 +151,7 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
                             Component.translatable(
                                     "luma.more.deleted_saves_empty").getString(),
                             contentTextWidth(panelWidth)),
-                    panelX + 20, panelY + 78, LegacyLumiTheme.MUTED, false);
+                    panelX + 20, panelY + 78, LumiTheme.MUTED, false);
             return;
         }
         int rows = visibleRows();
@@ -160,16 +160,16 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
         for (int index = start; index < end; index++) {
             HistorySnapshotPayload.Version version = versions.get(index);
             int rowY = panelY + 62 + (index - start) * 38;
-            renderLegacyPanel(graphics,
+            renderPanel(graphics,
                     panelX + 20, rowY, panelWidth - 40, 34);
             graphics.drawString(font,
                     font.plainSubstrByWidth(version.message(), panelWidth - 132),
-                    panelX + 28, rowY + 7, LegacyLumiTheme.TEXT, false);
+                    panelX + 28, rowY + 7, LumiTheme.TEXT, false);
             graphics.drawString(font, font.plainSubstrByWidth(
                             version.author(), Math.max(1, panelWidth - 132)),
-                    panelX + 28, rowY + 20, LegacyLumiTheme.MUTED, false);
+                    panelX + 28, rowY + 20, LumiTheme.MUTED, false);
         }
-        renderLegacyScrollbar(
+        renderScrollbar(
                 graphics, panelX + panelWidth - 7, panelY + 62,
                 Math.max(0, panelHeight - 74),
                 versions.size(), rows, scroll);
@@ -178,7 +178,7 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
     private void renderConfirmation(GuiGraphics graphics, int panelWidth) {
         int top = confirmationPanelOffset(panelHeight);
         int footer = footerOffset(panelHeight);
-        renderLegacyPanel(graphics,
+        renderPanel(graphics,
                 panelX + 20, panelY + top, panelWidth - 40,
                 Math.max(1, footer - top - 8));
         graphics.drawCenteredString(font,
@@ -187,12 +187,12 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
                         contentTextWidth(panelWidth)),
                 panelX + panelWidth / 2,
                 panelY + confirmationHeadingOffset(panelHeight),
-                LegacyLumiTheme.DANGER);
+                LumiTheme.DANGER);
         graphics.drawCenteredString(font,
                 font.plainSubstrByWidth(pendingCleanup.message(), panelWidth - 80),
                 panelX + panelWidth / 2,
                 panelY + confirmationMessageOffset(panelHeight),
-                LegacyLumiTheme.TEXT);
+                LumiTheme.TEXT);
         graphics.drawCenteredString(font,
                 font.plainSubstrByWidth(
                         Component.translatable(
@@ -200,7 +200,7 @@ public final class LumiDeletedVersionsScreen extends LumiLegacyPageScreen {
                         contentTextWidth(panelWidth)),
                 panelX + panelWidth / 2,
                 panelY + confirmationWarningOffset(panelHeight),
-                LegacyLumiTheme.ACCENT);
+                LumiTheme.ACCENT);
     }
 
     static int footerOffset(int panelHeight) {

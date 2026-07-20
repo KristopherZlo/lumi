@@ -11,12 +11,12 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** Focused editor for the mutable tags attached to one saved version. */
-public final class LumiVersionTagsScreen extends LumiLegacyModalScreen {
+public final class LumiVersionTagsScreen extends LumiModalScreen {
     private static final int DIALOG_HEIGHT = 124;
     private final Screen parent;
     private final VersionTags initialTags;
     private final Consumer<VersionTags> update;
-    private LegacyModalLayout layout;
+    private LumiModalLayout layout;
     private EditBox tags;
     private String error = "";
 
@@ -30,7 +30,7 @@ public final class LumiVersionTagsScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         layout = fitPanel(width, height);
         int x = layout.x();
         int y = layout.y();
@@ -40,17 +40,17 @@ public final class LumiVersionTagsScreen extends LumiLegacyModalScreen {
         tags.setMaxLength(VersionTags.MAX_SERIALIZED_LENGTH);
         tags.setHint(Component.translatable("luma.history.tags_input"));
         tags.setBordered(false);
-        tags.setTextColor(LegacyLumiTheme.TEXT);
+        tags.setTextColor(LumiTheme.TEXT);
         tags.setValue(initialTags.serialize());
         addRenderableWidget(tags);
 
         int actionY = y + layout.height() - 28;
-        addLegacyButton(x + 12, actionY, 100,
+        addButton(x + 12, actionY, 100,
                 Component.translatable("luma.action.save_tags"),
-                this::submit, LumiLegacyButton.Kind.PRIMARY);
-        addLegacyButton(x + 120, actionY, 80,
+                this::submit, LumiButton.Kind.PRIMARY);
+        addButton(x + 120, actionY, 80,
                 Component.translatable("luma.action.cancel"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
+                this::onClose, LumiButton.Kind.NORMAL);
     }
 
     @Override
@@ -86,33 +86,33 @@ public final class LumiVersionTagsScreen extends LumiLegacyModalScreen {
     @Override
     public void render(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderLegacyWindow(
+            renderWindow(
                     graphics, layout.x(), layout.y(), layout.width(), layout.height());
             graphics.drawString(font, title, layout.x() + 12, layout.y() + 14,
-                    LegacyLumiTheme.TEXT, false);
+                    LumiTheme.TEXT, false);
             graphics.drawString(font,
                     Component.translatable("luma.history.tags_input"),
                     layout.x() + 12, layout.y() + 39,
-                    LegacyLumiTheme.MUTED, false);
-            LegacyLumiTheme.outlined(
+                    LumiTheme.MUTED, false);
+            LumiTheme.outlined(
                     graphics, layout.x() + 10, layout.y() + 59,
                     layout.width() - 20, INPUT_FRAME_HEIGHT,
-                    LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+                    LumiTheme.INSET, LumiTheme.INSET_BORDER);
             if (!error.isEmpty()) {
                 graphics.drawString(font, errorText(error),
                         layout.x() + 12, layout.y() + 82,
-                        LegacyLumiTheme.DANGER, false);
+                        LumiTheme.DANGER, false);
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
-    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
-        return LegacyModalLayout.fit(screenWidth, screenHeight, DIALOG_HEIGHT);
+    static LumiModalLayout fitPanel(int screenWidth, int screenHeight) {
+        return LumiModalLayout.fit(screenWidth, screenHeight, DIALOG_HEIGHT);
     }
 
     @Override public boolean isPauseScreen() { return false; }

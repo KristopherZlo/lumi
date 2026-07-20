@@ -13,7 +13,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
 
 /** Manual update check; all network work stays off the render thread. */
-public final class LumiUpdateScreen extends LumiLegacyModalScreen {
+public final class LumiUpdateScreen extends LumiModalScreen {
     private static final ExecutorService EXECUTOR =
             Executors.newSingleThreadExecutor(task -> {
                 Thread thread = new Thread(task, "lumi-update-check");
@@ -45,10 +45,10 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         boolean expanded = result != null
                 && result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE;
-        LegacyModalLayout layout = fitPanel(width, height, expanded);
+        LumiModalLayout layout = fitPanel(width, height, expanded);
         panelWidth = layout.width();
         panelHeight = layout.height();
         panelX = layout.x();
@@ -60,19 +60,19 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
         if (result != null && result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE) {
             int buttonWidth = (panelWidth - 40) / 2;
             int firstRow = panelY + firstActionOffset(panelHeight);
-            addLegacyButton(panelX + 16, firstRow, buttonWidth,
+            addButton(panelX + 16, firstRow, buttonWidth,
                     Component.translatable("luma.action.download_update"),
                     this::openDownload,
-                    LumiLegacyButton.Kind.PRIMARY);
-            addLegacyButton(panelX + 24 + buttonWidth, firstRow, buttonWidth,
+                    LumiButton.Kind.PRIMARY);
+            addButton(panelX + 24 + buttonWidth, firstRow, buttonWidth,
                     Component.translatable("luma.action.open_changelog"),
-                    this::openChangelog, LumiLegacyButton.Kind.NORMAL);
-            addLegacyButton(panelX + 16, bottomY, buttonWidth,
+                    this::openChangelog, LumiButton.Kind.NORMAL);
+            addButton(panelX + 16, bottomY, buttonWidth,
                     Component.translatable("luma.action.later"),
-                    this::later, LumiLegacyButton.Kind.NORMAL);
-            addLegacyButton(panelX + 24 + buttonWidth, bottomY, buttonWidth,
+                    this::later, LumiButton.Kind.NORMAL);
+            addButton(panelX + 24 + buttonWidth, bottomY, buttonWidth,
                     Component.translatable("luma.action.dont_show_version"),
-                    this::dismissVersion, LumiLegacyButton.Kind.DANGER);
+                    this::dismissVersion, LumiButton.Kind.DANGER);
             resultBottom = panelY + updateResultBottomOffset(panelHeight);
             return;
         }
@@ -100,19 +100,19 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
+        renderWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         graphics.drawString(font, title, panelX + 16, panelY + 18,
-                LegacyLumiTheme.TEXT, false);
+                LumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.more.updates_help"),
-                panelX + 16, panelY + 42, LegacyLumiTheme.MUTED, false);
-        renderLegacyPanel(graphics, panelX + 12, panelY + 66,
+                panelX + 16, panelY + 42, LumiTheme.MUTED, false);
+        renderPanel(graphics, panelX + 12, panelY + 66,
                 panelWidth - 24, Math.max(1, resultBottom - panelY - 66));
         renderResult(graphics);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -120,7 +120,7 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
         if (checking) {
             graphics.drawString(font,
                     Component.translatable("luma.action.checking_updates"),
-                    panelX + 22, panelY + 76, LegacyLumiTheme.ACCENT, false);
+                    panelX + 22, panelY + 76, LumiTheme.ACCENT, false);
             return;
         }
         if (result == null) {
@@ -141,15 +141,15 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
             body = Component.translatable("luma.update.check_failed_body");
         }
         graphics.drawString(font, heading, panelX + 22, panelY + 76,
-                LegacyLumiTheme.ACCENT, false);
-        int y = drawWrapped(graphics, body, panelY + 98, LegacyLumiTheme.TEXT);
+                LumiTheme.ACCENT, false);
+        int y = drawWrapped(graphics, body, panelY + 98, LumiTheme.TEXT);
         if (result.status() == UpdateCheckResult.Status.UPDATE_AVAILABLE
                 && fitsResultLine(y + 8, resultBottom)) {
             graphics.drawString(font, Component.translatable("luma.update.changes_title"),
-                    panelX + 22, y + 8, LegacyLumiTheme.TEXT, false);
+                    panelX + 22, y + 8, LumiTheme.TEXT, false);
             drawWrapped(graphics,
                     Component.literal(result.release().orElseThrow().summary()),
-                    y + 26, LegacyLumiTheme.MUTED);
+                    y + 26, LumiTheme.MUTED);
         }
     }
 
@@ -165,16 +165,16 @@ public final class LumiUpdateScreen extends LumiLegacyModalScreen {
         return y;
     }
 
-    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+    static LumiModalLayout fitPanel(int screenWidth, int screenHeight) {
         return fitPanel(screenWidth, screenHeight, false);
     }
 
-    static LegacyModalLayout fitPanel(
+    static LumiModalLayout fitPanel(
             int screenWidth, int screenHeight, boolean expanded) {
         int width = Math.min(360, Math.max(1, screenWidth - 24));
         int height = Math.min(expanded ? 210 : 144,
                 Math.max(1, screenHeight - 24));
-        return new LegacyModalLayout(
+        return new LumiModalLayout(
                 Math.max(0, (screenWidth - width) / 2),
                 Math.max(0, (screenHeight - height) / 2), width, height);
     }

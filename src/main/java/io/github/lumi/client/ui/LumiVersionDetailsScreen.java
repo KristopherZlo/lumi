@@ -16,8 +16,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 
-/** Legacy-style details and display metadata for one saved version. */
-public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
+/** Details and display metadata for one saved version. */
+public final class LumiVersionDetailsScreen extends LumiModalScreen {
     private static final int PANEL_WIDTH = 540;
     private static final int PANEL_HEIGHT = 314;
     private static final int PREVIEW_WIDTH = 240;
@@ -107,24 +107,24 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
-        LegacyModalLayout layout = fitPanel(width, height);
+        beginScreenInit();
+        LumiModalLayout layout = fitPanel(width, height);
         panelX = layout.x();
         panelY = layout.y();
         panelWidth = layout.width();
         panelHeight = layout.height();
         int buttonWidth = Math.max(52, (panelWidth - 36) / 2);
         int buttonY = panelY + primaryActionOffset(panelWidth, panelHeight);
-        LumiLegacyButton restoreButton = addLegacyButton(
+        LumiButton restoreButton = addButton(
                 panelX + 16, buttonY, buttonWidth,
                 Component.translatable("luma.action.restore"),
-                restore, LumiLegacyButton.Kind.PRIMARY);
+                restore, LumiButton.Kind.PRIMARY);
         restoreButton.active = !readOnly;
-        LumiLegacyButton compare = addLegacyButton(
+        LumiButton compare = addButton(
                 panelX + 20 + buttonWidth, buttonY, buttonWidth,
                 Component.translatable("luma.action.compare"),
                 () -> compareToParent.ifPresent(Runnable::run),
-                LumiLegacyButton.Kind.NORMAL);
+                LumiButton.Kind.NORMAL);
         compare.active = compareToParent.isPresent();
         addSecondaryActions(
                 panelWidth,
@@ -135,69 +135,69 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                 navigationControlX(panelX, panelWidth) - 8 - 26);
         int renameY = panelY + 8;
         if (!readOnly && editingName) {
-            nameEditor = addLegacyTextField(
+            nameEditor = addTextField(
                     panelX + 20, renameY,
                     Math.max(20, renameX - panelX - 26),
                     Component.translatable("luma.save_details.rename_title"));
             nameEditor.setMaxLength(VersionDisplayName.MAX_LENGTH);
             nameEditor.setValue(displayedName);
-            addLegacyIconButton(renameX, renameY, "edit-text",
+            addIconButton(renameX, renameY, "edit-text",
                     Component.translatable("luma.action.rename_save"),
-                    this::saveName, LumiLegacyButton.Kind.PRIMARY);
+                    this::saveName, LumiButton.Kind.PRIMARY);
         } else if (!readOnly) {
-            addLegacyIconButton(renameX, renameY, "edit-text",
+            addIconButton(renameX, renameY, "edit-text",
                     Component.translatable("luma.action.rename_save"), () -> {
                         editingName = true;
                         nameError = "";
                         rebuildWidgets();
-                    }, LumiLegacyButton.Kind.NORMAL);
+                    }, LumiButton.Kind.NORMAL);
         }
 
         if (!readOnly) {
-            addLegacyIconButton(
+            addIconButton(
                     panelX + panelWidth - 44,
                     panelY + (compact(panelWidth, panelHeight) ? 78 : 139),
                     "tags",
                     Component.translatable("luma.action.edit_tags"),
-                    this::editTags, LumiLegacyButton.Kind.NORMAL);
+                    this::editTags, LumiButton.Kind.NORMAL);
         }
         addPreviewControls(panelY
                 + previewControlsOffset(panelWidth, panelHeight));
     }
 
     private void addSecondaryActions(int panelWidth, int y) {
-        LumiLegacyButton branch = addLegacyIconButton(panelX + 16, y, "branch",
+        LumiButton branch = addIconButton(panelX + 16, y, "branch",
                 Component.translatable("luma.save_details.create_idea"),
                 () -> createBranch.ifPresent(Runnable::run),
-                LumiLegacyButton.Kind.NORMAL);
+                LumiButton.Kind.NORMAL);
         branch.active = createBranch.isPresent();
         int buttonWidth = Math.max(52, (panelWidth - 100) / 2);
-        LumiLegacyButton replace = addLegacyButton(panelX + 48, y, buttonWidth,
+        LumiButton replace = addButton(panelX + 48, y, buttonWidth,
                 Component.translatable("luma.action.amend_version"),
-                () -> amend.ifPresent(Runnable::run), LumiLegacyButton.Kind.NORMAL);
+                () -> amend.ifPresent(Runnable::run), LumiButton.Kind.NORMAL);
         replace.active = amend.isPresent();
-        LumiLegacyButton partial = addLegacyButton(
+        LumiButton partial = addButton(
                 panelX + 52 + buttonWidth, y, buttonWidth,
                 Component.translatable("luma.action.restore_selected_area"),
                 () -> partialRestore.ifPresent(Runnable::run),
-                LumiLegacyButton.Kind.NORMAL);
+                LumiButton.Kind.NORMAL);
         partial.active = partialRestore.isPresent();
-        LumiLegacyButton remove = addLegacyIconButton(
+        LumiButton remove = addIconButton(
                 panelX + panelWidth - 40, y, "trash",
                 Component.translatable("luma.action.delete_save"),
-                delete, LumiLegacyButton.Kind.DANGER);
+                delete, LumiButton.Kind.DANGER);
         remove.active = !readOnly;
     }
 
     @Override
     public void render(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderLegacyWindow(
+            renderWindow(
                     graphics, panelX, panelY, panelWidth, panelHeight);
             if (nameEditor != null) {
-                renderLegacyTextField(graphics, nameEditor);
+                renderTextField(graphics, nameEditor);
             }
             if (!editingName) {
                 int titleWidth = Math.max(1, Math.min(
@@ -205,14 +205,14 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                         width - 150 - panelX - 28));
                 graphics.drawString(font,
                         font.plainSubstrByWidth(displayedName, titleWidth),
-                        panelX + 20, panelY + 18, LegacyLumiTheme.TEXT, false);
+                        panelX + 20, panelY + 18, LumiTheme.TEXT, false);
             }
             if (!nameError.isEmpty()) {
                 graphics.drawString(font,
                         font.plainSubstrByWidth(nameError, panelWidth - 40),
                         panelX + 20,
                         panelY + (compact(panelWidth, panelHeight) ? 29 : 38),
-                        LegacyLumiTheme.DANGER, false);
+                        LumiTheme.DANGER, false);
             }
             renderPreview(graphics);
             if (compact(panelWidth, panelHeight)) {
@@ -223,7 +223,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
             super.render(
                     graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -235,31 +235,31 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
                         "luma.save_details.summary_help",
                         DATE_FORMAT.format(
                                 Instant.ofEpochMilli(version.timestampMillis()))),
-                metadataX, panelY + 58, LegacyLumiTheme.MUTED, false);
+                metadataX, panelY + 58, LumiTheme.MUTED, false);
         graphics.drawString(font,
                 Component.translatable(
                         "luma.save_details.raw_info_author", version.author()),
-                metadataX, panelY + 82, LegacyLumiTheme.TEXT, false);
+                metadataX, panelY + 82, LumiTheme.TEXT, false);
         graphics.drawString(font,
                 Component.translatable(
                         "luma.save_details.raw_info_type", version.kind().name()),
-                metadataX, panelY + 102, LegacyLumiTheme.TEXT, false);
+                metadataX, panelY + 102, LumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.save.tags_title"),
-                metadataX, panelY + 126, LegacyLumiTheme.MUTED, false);
+                metadataX, panelY + 126, LumiTheme.MUTED, false);
         String tags = displayedTags.isEmpty()
                 ? Component.translatable("luma.history.tags_empty").getString()
                 : displayedTags.display();
         graphics.drawString(font,
                 font.plainSubstrByWidth(tags, Math.max(0, metadataWidth - 30)),
-                metadataX, panelY + 147, LegacyLumiTheme.TEXT, false);
+                metadataX, panelY + 147, LumiTheme.TEXT, false);
         graphics.drawString(font,
                 Component.translatable("luma.save_details.raw_info_title"),
-                metadataX, panelY + 184, LegacyLumiTheme.MUTED, false);
+                metadataX, panelY + 184, LumiTheme.MUTED, false);
         graphics.drawWordWrap(font,
                 Component.translatable(
                         "luma.save_details.raw_info_id", version.id().hex()),
                 metadataX, panelY + 202, metadataWidth,
-                LegacyLumiTheme.TEXT);
+                LumiTheme.TEXT);
     }
 
     private void renderCompactMetadata(GuiGraphics graphics) {
@@ -298,7 +298,7 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
             int x, int y, int availableWidth) {
         graphics.drawString(font,
                 font.plainSubstrByWidth(value.getString(), availableWidth),
-                x, y, LegacyLumiTheme.TEXT, false);
+                x, y, LumiTheme.TEXT, false);
     }
 
     private void renderPreview(GuiGraphics graphics) {
@@ -308,13 +308,13 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
         int previewHeight = previewHeight(panelWidth, panelHeight);
         var texture = previews.texture(dimensionId, version.id()).orElse(null);
         if (texture == null) {
-            LegacyLumiTheme.outlined(
+            LumiTheme.outlined(
                     graphics, x, y, previewWidth, previewHeight,
-                    LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+                    LumiTheme.INSET, LumiTheme.INSET_BORDER);
             graphics.drawCenteredString(font,
                     Component.translatable("luma.history.no_preview"),
                     x + previewWidth / 2, y + previewHeight / 2 - 4,
-                    LegacyLumiTheme.MUTED);
+                    LumiTheme.MUTED);
             return;
         }
         int sourceWidth = Math.max(1, texture.width() / previewZoom);
@@ -328,30 +328,30 @@ public final class LumiVersionDetailsScreen extends LumiLegacyModalScreen {
     }
 
     private void addPreviewControls(int y) {
-        addLegacyIconButton(panelX + 20, y, "minus",
+        addIconButton(panelX + 20, y, "minus",
                 Component.translatable("luma.action.zoom_out"),
-                () -> zoomPreview(-1), LumiLegacyButton.Kind.NORMAL);
-        addLegacyIconButton(panelX + 48, y, "plus",
+                () -> zoomPreview(-1), LumiButton.Kind.NORMAL);
+        addIconButton(panelX + 48, y, "plus",
                 Component.translatable("luma.action.zoom_in"),
-                () -> zoomPreview(1), LumiLegacyButton.Kind.NORMAL);
-        addLegacyIconButton(panelX + 104, y, "chevron-left",
+                () -> zoomPreview(1), LumiButton.Kind.NORMAL);
+        addIconButton(panelX + 104, y, "chevron-left",
                 Component.translatable("luma.action.back"),
-                () -> panPreview(-1, 0), LumiLegacyButton.Kind.NORMAL);
-        addLegacyIconButton(panelX + 132, y, "chevron-up",
+                () -> panPreview(-1, 0), LumiButton.Kind.NORMAL);
+        addIconButton(panelX + 132, y, "chevron-up",
                 Component.translatable("luma.action.preview_pan_up"),
-                () -> panPreview(0, -1), LumiLegacyButton.Kind.NORMAL);
-        addLegacyIconButton(panelX + 160, y, "chevron-down",
+                () -> panPreview(0, -1), LumiButton.Kind.NORMAL);
+        addIconButton(panelX + 160, y, "chevron-down",
                 Component.translatable("luma.action.preview_pan_down"),
-                () -> panPreview(0, 1), LumiLegacyButton.Kind.NORMAL);
-        addLegacyIconButton(panelX + 188, y, "chevron-right",
+                () -> panPreview(0, 1), LumiButton.Kind.NORMAL);
+        addIconButton(panelX + 188, y, "chevron-right",
                 Component.translatable("luma.action.next"),
-                () -> panPreview(1, 0), LumiLegacyButton.Kind.NORMAL);
+                () -> panPreview(1, 0), LumiButton.Kind.NORMAL);
     }
 
-    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+    static LumiModalLayout fitPanel(int screenWidth, int screenHeight) {
         int panelWidth = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 16));
         int panelHeight = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
-        return new LegacyModalLayout(
+        return new LumiModalLayout(
                 Math.max(0, (screenWidth - panelWidth) / 2),
                 Math.max(0, (screenHeight - panelHeight) / 2),
                 panelWidth, panelHeight);

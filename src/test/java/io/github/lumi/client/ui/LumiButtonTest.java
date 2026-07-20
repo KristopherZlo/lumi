@@ -9,11 +9,11 @@ import java.nio.file.Path;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
-class LumiLegacyButtonTest {
+class LumiButtonTest {
     @Test
-    void matchesLegacyFlatButtonRenderingWithoutOwo() throws Exception {
+    void matchesV2FlatButtonRenderingWithoutOwo() throws Exception {
         String source = Files.readString(Path.of(
-                "src/main/java/io/github/lumi/client/ui/LumiLegacyButton.java"));
+                "src/main/java/io/github/lumi/client/ui/LumiButton.java"));
 
         assertTrue(source.contains("font.plainSubstrByWidth"));
         assertTrue(source.contains("x, y, width,"));
@@ -36,9 +36,9 @@ class LumiLegacyButtonTest {
 
     @Test
     void contentWidthIsBoundedWithoutChangingFixedGridSlots() {
-        assertEquals(18, LumiLegacyButton.fittedWidth(100, 0));
-        assertEquals(42, LumiLegacyButton.fittedWidth(100, 30));
-        assertEquals(32, LumiLegacyButton.fittedWidth(32, 100));
-        assertEquals(0, LumiLegacyButton.fittedWidth(0, 100));
+        assertEquals(18, LumiButton.fittedWidth(100, 0));
+        assertEquals(42, LumiButton.fittedWidth(100, 30));
+        assertEquals(32, LumiButton.fittedWidth(32, 100));
+        assertEquals(0, LumiButton.fittedWidth(0, 100));
     }
 }

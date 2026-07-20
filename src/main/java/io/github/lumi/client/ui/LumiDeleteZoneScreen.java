@@ -12,14 +12,14 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** Typed-name danger confirmation for deleting zone metadata only. */
-public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
+public final class LumiDeleteZoneScreen extends LumiModalScreen {
     private static final int PANEL_WIDTH = 420;
     private static final int PANEL_HEIGHT = 190;
     private final Screen parent;
     private final HistorySnapshotPayload.ZoneView zone;
     private final BiConsumer<UUID, Long> delete;
     private EditBox confirmation;
-    private LumiLegacyButton submit;
+    private LumiButton submit;
     private int panelX;
     private int panelY;
     private int panelWidth;
@@ -38,8 +38,8 @@ public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
-        LegacyModalLayout layout = fitPanel(width, height);
+        beginScreenInit();
+        LumiModalLayout layout = fitPanel(width, height);
         panelX = layout.x();
         panelY = layout.y();
         panelWidth = layout.width();
@@ -53,15 +53,15 @@ public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
         confirmation.setResponder(ignored -> updateSubmit());
         addRenderableWidget(confirmation);
         int buttonWidth = (panelWidth - 48) / 2;
-        submit = addLegacyButton(
+        submit = addButton(
                 panelX + 20, panelY + actionOffset(panelHeight), buttonWidth,
                 Component.translatable("luma.zones.delete_confirm"),
-                this::delete, LumiLegacyButton.Kind.DANGER);
-        addLegacyButton(
+                this::delete, LumiButton.Kind.DANGER);
+        addButton(
                 panelX + 28 + buttonWidth,
                 panelY + actionOffset(panelHeight), buttonWidth,
                 Component.translatable("luma.action.cancel"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
+                this::onClose, LumiButton.Kind.NORMAL);
         updateSubmit();
     }
 
@@ -110,48 +110,48 @@ public final class LumiDeleteZoneScreen extends LumiLegacyModalScreen {
     @Override
     public void render(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(
+        ScaledRenderContext render = beginScaledRender(
                 graphics, mouseX, mouseY);
         try {
             int centerX = width / 2;
             int contentLeft = panelX + 20;
             int contentRight = panelX + panelWidth - 20;
-            renderLegacyWindow(
+            renderWindow(
                     graphics, panelX, panelY, panelWidth, panelHeight);
             graphics.drawCenteredString(
                     font, clippedCenteredHeader(
                             title, centerX, contentLeft, contentRight),
                     centerX, panelY + 18,
-                    LegacyLumiTheme.DANGER);
+                    LumiTheme.DANGER);
             graphics.drawCenteredString(
                     font, clippedCenteredHeader(
                             Component.translatable(
                                     "luma.zones.delete_help", zone.name()),
                             centerX, contentLeft, contentRight),
-                    centerX, panelY + 46, LegacyLumiTheme.MUTED);
-            LegacyLumiTheme.outlined(
+                    centerX, panelY + 46, LumiTheme.MUTED);
+            LumiTheme.outlined(
                     graphics, panelX + 20, panelY + 80, panelWidth - 40,
                     INPUT_FRAME_HEIGHT,
-                    LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
+                    LumiTheme.INSET, LumiTheme.INSET_BORDER);
             if (!error.isEmpty()) {
                 graphics.drawCenteredString(
                         font, clippedCenteredHeader(
                                 errorText(error), centerX,
                                 contentLeft, contentRight),
                         centerX, panelY + 118,
-                        LegacyLumiTheme.DANGER);
+                        LumiTheme.DANGER);
             }
             super.render(
                     graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
-    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+    static LumiModalLayout fitPanel(int screenWidth, int screenHeight) {
         int width = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 32));
         int height = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
-        return new LegacyModalLayout(
+        return new LumiModalLayout(
                 Math.max(0, (screenWidth - width) / 2),
                 Math.max(0, (screenHeight - height) / 2), width, height);
     }

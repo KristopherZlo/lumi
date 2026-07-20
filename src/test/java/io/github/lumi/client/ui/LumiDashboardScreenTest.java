@@ -11,10 +11,10 @@ import org.junit.jupiter.api.Test;
 class LumiDashboardScreenTest {
     @Test
     void keepsDashboardBandsSeparatedAtReferenceAndSmallViewports() {
-        LegacyWorkspaceLayout reference = LegacyWorkspaceLayout.fit(640, 360);
+        LumiPageLayout reference = LumiPageLayout.fit(640, 360);
         var referenceGeometry = LumiDashboardScreen.dashboardGeometry(
                 reference.bodyY(), reference.bodyHeight(), reference.bodyWidth(), 0);
-        LegacyWorkspaceLayout small = LegacyWorkspaceLayout.fit(427, 240);
+        LumiPageLayout small = LumiPageLayout.fit(427, 240);
         var smallGeometry = LumiDashboardScreen.dashboardGeometry(
                 small.bodyY(), small.bodyHeight(), small.bodyWidth(), 0);
 
@@ -37,7 +37,7 @@ class LumiDashboardScreenTest {
 
     @Test
     void stacksHistoryActionsBelowTextWhenTheContentPaneIsVeryNarrow() {
-        LegacyWorkspaceLayout tiny = LegacyWorkspaceLayout.fit(320, 240);
+        LumiPageLayout tiny = LumiPageLayout.fit(320, 240);
         int bodyX = tiny.bodyX();
         int bodyWidth = tiny.bodyWidth();
 
@@ -52,7 +52,7 @@ class LumiDashboardScreenTest {
         assertTrue(LumiDashboardScreen.historyActionY(100, bodyWidth) + 18
                 <= compactCard.bottom() - 6);
 
-        LegacyWorkspaceLayout wide = LegacyWorkspaceLayout.fit(640, 360);
+        LumiPageLayout wide = LumiPageLayout.fit(640, 360);
         LumiCommitCard.Layout wideCard = LumiDashboardScreen.versionCardLayout(
                 wide.bodyX(), wide.bodyWidth(), 100);
         assertEquals(wideCard.right() - 6,
@@ -62,7 +62,7 @@ class LumiDashboardScreenTest {
 
     @Test
     void compactNavigationStaysAboveTheSupportPanel() {
-        LegacyWorkspaceLayout tiny = LegacyWorkspaceLayout.fit(320, 180);
+        LumiPageLayout tiny = LumiPageLayout.fit(320, 180);
         int supportTop = LumiDashboardScreen.supportTop(tiny);
 
         for (int index = 0; index < 7; index++) {
@@ -81,7 +81,7 @@ class LumiDashboardScreenTest {
 
     @Test
     void contextualHintPushesActionsWithoutCrossingDashboardBands() {
-        LegacyWorkspaceLayout layout = LegacyWorkspaceLayout.fit(640, 360);
+        LumiPageLayout layout = LumiPageLayout.fit(640, 360);
         int hintHeight = 54;
         var geometry = LumiDashboardScreen.dashboardGeometry(
                 layout.bodyY(), layout.bodyHeight(), layout.bodyWidth(), hintHeight);
@@ -96,7 +96,7 @@ class LumiDashboardScreenTest {
 
     @Test
     void hidesLowerBandsWhenTallHintConsumesTinyViewport() {
-        LegacyWorkspaceLayout layout = LegacyWorkspaceLayout.fit(320, 200);
+        LumiPageLayout layout = LumiPageLayout.fit(320, 200);
         int hintHeight = 70;
         var geometry = LumiDashboardScreen.dashboardGeometry(
                 layout.bodyY(), layout.bodyHeight(), layout.bodyWidth(), hintHeight);
@@ -115,7 +115,7 @@ class LumiDashboardScreenTest {
     }
 
     @Test
-    void restoresLegacyActionsAndCompactIconNavigation() throws Exception {
+    void restoresV2ActionsAndCompactIconNavigation() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));
         String cardSource = Files.readString(Path.of(
@@ -124,7 +124,7 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("luma.action.save_build"));
         assertTrue(source.contains("luma.action.amend_version"));
         assertTrue(source.contains("luma.action.see_changes"));
-        assertTrue(source.contains("search = addLegacyTextField("));
+        assertTrue(source.contains("search = addTextField("));
         assertTrue(source.contains("historyView.filtered("));
         assertTrue(source.contains("visibleVersions()"));
         assertTrue(source.contains("HistoryViewController.Mode.CARDS"));
@@ -145,7 +145,7 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("addCompactSidebarButtons"));
         assertTrue(source.contains("activeZoneColor()"));
         assertTrue(source.contains(
-                "activeZoneColor().orElse(LegacyLumiTheme.WINDOW_BORDER)"));
+                "activeZoneColor().orElse(LumiTheme.WINDOW_BORDER)"));
         assertTrue(source.contains("\"rollback\", \"luma.action.restore\""));
         assertTrue(source.contains("\"folder\", \"luma.action.open_details\""));
         assertTrue(source.contains("\"tags\""));
@@ -160,7 +160,7 @@ class LumiDashboardScreenTest {
         assertFalse(source.contains("addHistoryPageButtons"));
         assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("addBranchTabs("));
-        assertTrue(source.contains("addLegacyContentButton("));
+        assertTrue(source.contains("addContentButton("));
         assertTrue(source.contains("pagedHistory.selectBranch(branch)"));
         assertTrue(source.contains("latestCreated()"));
         assertTrue(source.contains(

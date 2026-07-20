@@ -2,8 +2,8 @@ package io.github.lumi.client.ui;
 
 import net.minecraft.client.gui.GuiGraphics;
 
-/** Colors and simple surfaces retained from the legacy Lumi presentation. */
-final class LegacyLumiTheme {
+/** Colors and simple surfaces shared by the Lumi V2 presentation. */
+final class LumiTheme {
     static final int PAGE_HEADER_HEIGHT = 42;
     static final int TEXT = 0xfff4f1ea;
     static final int MUTED = 0xffa9a39a;
@@ -23,7 +23,7 @@ final class LegacyLumiTheme {
     static final int STATUS = 0xff211f18;
     static final int STATUS_BORDER = 0xff5a4724;
 
-    private LegacyLumiTheme() {
+    private LumiTheme() {
     }
 
     static void outlined(

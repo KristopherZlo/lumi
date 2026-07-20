@@ -9,7 +9,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Secondary client-only tools kept away from the main history workflow. */
-public final class LumiMoreScreen extends LumiLegacyPageScreen {
+public final class LumiMoreScreen extends LumiPageScreen {
     private final Runnable dimensions;
     private final Runnable deletedVersions;
     private final Runnable onboarding;
@@ -41,7 +41,7 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
             Runnable cleanup,
             Runnable manualCompare) {
         super(parent, Component.translatable("luma.screen.more.title"),
-                LegacyProjectTab.MORE);
+                ProjectTab.MORE);
         this.dimensions = Objects.requireNonNull(dimensions, "dimensions");
         this.deletedVersions = Objects.requireNonNull(
                 deletedVersions, "deletedVersions");
@@ -56,8 +56,8 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
-        LegacyWorkspaceLayout page = pageLayout();
+        beginScreenInit();
+        LumiPageLayout page = pageLayout();
         panelX = page.contentX();
         panelY = page.windowY();
         panelWidth = page.contentWidth();
@@ -111,18 +111,18 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
             for (PlacedAction item : category.actions()) {
                 int renderedY = item.y() - actionScroll;
                 if (renderedY < actionTop || renderedY + 18 > actionBottom) continue;
-                addLegacyButton(item.x(), renderedY, item.width(), item.label(),
-                        item.action().callback(), LumiLegacyButton.Kind.NORMAL);
+                addButton(item.x(), renderedY, item.width(), item.label(),
+                        item.action().callback(), LumiButton.Kind.NORMAL);
             }
         }
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
-        renderLegacyPanel(graphics, panelX + 12, panelY + 50,
+        renderPage(graphics, panelX, panelY, panelWidth, panelHeight);
+        renderPanel(graphics, panelX + 12, panelY + 50,
                 panelWidth - 24, panelHeight - 62);
         renderPageHeader(graphics, panelX, panelY, panelWidth, title,
                 Component.translatable("luma.more.help"));
@@ -130,20 +130,20 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
                 panelX + 12, actionTop, panelX + panelWidth - 12, actionBottom);
         for (PlacedCategory category : placedCategories) {
             int y = category.y() - actionScroll;
-            renderLegacyPanel(graphics, panelX + 16, y,
+            renderPanel(graphics, panelX + 16, y,
                     panelWidth - 32, category.height());
             graphics.drawString(font, Component.translatable(category.key()),
-                    panelX + 24, y + 7, LegacyLumiTheme.ACCENT, false);
+                    panelX + 24, y + 7, LumiTheme.ACCENT, false);
         }
         graphics.disableScissor();
         int viewportHeight = Math.max(0, actionBottom - actionTop);
-        renderLegacyScrollbar(
+        renderScrollbar(
                 graphics, panelX + panelWidth - 16, actionTop, viewportHeight,
                 viewportHeight + maximumActionScroll,
                 viewportHeight, actionScroll);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 

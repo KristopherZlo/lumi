@@ -15,8 +15,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
 import org.lwjgl.glfw.GLFW;
 
-/** Replayable nine-step hands-on introduction retained from legacy Lumi. */
-public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
+/** Replayable nine-step hands-on introduction for Lumi V2. */
+public final class LumiOnboardingScreen extends LumiModalScreen {
     private static final int PANEL_HEIGHT = 224;
     private final Screen returnScreen;
     private final Screen background;
@@ -59,7 +59,7 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         holdGate.reset();
         lastHoldSampleMillis = 0L;
         if (tour.current().spotlight()) {
@@ -78,25 +78,25 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
         addBack(panelX + 16, actionY);
         OnboardingTour.Page page = tour.current();
         if (page.worldStep() || page.kind() == OnboardingTour.Kind.INFO) {
-            addLegacyButton(
+            addButton(
                     panelX + panelWidth - 96, actionY, 80,
                     Component.translatable("luma.action.next"),
-                    this::advanceButton, LumiLegacyButton.Kind.PRIMARY);
+                    this::advanceButton, LumiButton.Kind.PRIMARY);
         } else if (shortcutUnbound(page)) {
-            addLegacyButton(
+            addButton(
                     panelX + panelWidth - 184, actionY, 80,
                     Component.translatable("luma.action.open_controls"),
-                    this::openControls, LumiLegacyButton.Kind.NORMAL);
-            addLegacyButton(
+                    this::openControls, LumiButton.Kind.NORMAL);
+            addButton(
                     panelX + panelWidth - 96, actionY, 80,
                     Component.translatable("luma.action.skip"),
-                    this::skipShortcut, LumiLegacyButton.Kind.PRIMARY);
+                    this::skipShortcut, LumiButton.Kind.PRIMARY);
         } else {
-            addLegacyButton(
+            addButton(
                     panelX + panelWidth - 96, actionY, 80,
                     Component.translatable("luma.action.next"),
                     () -> completeHold(page.kind()),
-                    LumiLegacyButton.Kind.PRIMARY);
+                    LumiButton.Kind.PRIMARY);
         }
     }
 
@@ -108,19 +108,19 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
                 : spotlights.place(tour.current().kind(), width, height);
         var prompt = spotlight.prompt();
         addBack(prompt.x() + 10, prompt.bottom() - 28);
-        addLegacyButton(
+        addButton(
                 prompt.right() - 90, prompt.bottom() - 28, 80,
                 Component.translatable("luma.action.next"),
-                this::advanceSpotlight, LumiLegacyButton.Kind.PRIMARY);
+                this::advanceSpotlight, LumiButton.Kind.PRIMARY);
     }
 
     private void addBack(int x, int y) {
-        LumiLegacyButton back = addLegacyButton(
+        LumiButton back = addButton(
                 x, y, 80, Component.translatable("luma.action.back"),
                 () -> {
                     tour.previous();
                     rebuildWidgets();
-                }, LumiLegacyButton.Kind.NORMAL);
+                }, LumiButton.Kind.NORMAL);
         back.active = tour.canGoBack();
     }
 
@@ -223,16 +223,16 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
     @Override
     public void render(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
             if (tour.current().spotlight()) {
-                alignLegacyNavigation(0, 0, width);
+                alignNavigation(0, 0, width);
                 renderer.spotlight(
                         graphics, font, tour, spotlight, width, height);
             } else {
-                alignLegacyNavigation(panelX, panelY, panelWidth);
+                alignNavigation(panelX, panelY, panelWidth);
                 graphics.fill(
-                        0, 0, width, height, LegacyLumiTheme.BACKDROP);
+                        0, 0, width, height, LumiTheme.BACKDROP);
                 renderer.panel(
                         graphics, font, minecraft.options.keyMappings,
                         tour, holdGate,
@@ -240,7 +240,7 @@ public final class LumiOnboardingScreen extends LumiLegacyModalScreen {
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 

@@ -22,7 +22,7 @@ class LumiBranchSlotScreenTest {
     @Test
     void clearActionFitsTheMinimumViewport() {
         for (int[] viewport : new int[][] {{640, 360}, {427, 240}, {320, 180}}) {
-            LegacyModalLayout layout = LumiBranchSlotScreen.fitPanel(
+            LumiModalLayout layout = LumiBranchSlotScreen.fitPanel(
                     viewport[0], viewport[1]);
             assertTrue(layout.x() + layout.width() <= viewport[0]);
             assertTrue(layout.y() + layout.height() <= viewport[1]);

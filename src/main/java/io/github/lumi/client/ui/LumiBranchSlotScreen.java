@@ -10,7 +10,7 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** Captures one arbitrary keyboard key for a branch's Alt chord. */
-public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
+public final class LumiBranchSlotScreen extends LumiModalScreen {
     private static final int PANEL_WIDTH = 430;
     private static final int PANEL_HEIGHT = 210;
     private final Screen parent;
@@ -37,16 +37,16 @@ public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
-        LegacyModalLayout layout = fitPanel(width, height);
+        beginScreenInit();
+        LumiModalLayout layout = fitPanel(width, height);
         panelX = layout.x();
         panelY = layout.y();
         panelWidth = layout.width();
         panelHeight = layout.height();
-        addLegacyButton(
+        addButton(
                 panelX + 20, panelY + actionOffset(panelHeight), panelWidth - 40,
                 Component.translatable("luma.action.clear_bind"),
-                this::clear, LumiLegacyButton.Kind.DANGER);
+                this::clear, LumiButton.Kind.DANGER);
     }
 
     private void clear() {
@@ -81,28 +81,28 @@ public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
     @Override
     public void render(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render =
-                beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render =
+                beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderLegacyWindow(
+            renderWindow(
                     graphics, panelX, panelY, panelWidth, panelHeight);
             graphics.drawCenteredString(
                     font, clippedCenteredHeader(
                             title, width / 2,
                             panelX + 16, panelX + panelWidth - 16),
                     width / 2, panelY + 18,
-                    LegacyLumiTheme.TEXT);
+                    LumiTheme.TEXT);
             graphics.drawCenteredString(
                     font, Component.translatable(
                             "luma.ideas.bind_help",
                             LumiHotkeys.bindingLabel(
                                     minecraft.options.keyMappings,
                                     "key.lumi.action_modifier")),
-                    width / 2, panelY + 44, LegacyLumiTheme.MUTED);
+                    width / 2, panelY + 44, LumiTheme.MUTED);
             super.render(
                     graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -111,10 +111,10 @@ public final class LumiBranchSlotScreen extends LumiLegacyModalScreen {
         return slash < 0 ? name : name.substring(slash + 1);
     }
 
-    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+    static LumiModalLayout fitPanel(int screenWidth, int screenHeight) {
         int width = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 32));
         int height = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
-        return new LegacyModalLayout(
+        return new LumiModalLayout(
                 Math.max(0, (screenWidth - width) / 2),
                 Math.max(0, (screenHeight - height) / 2), width, height);
     }

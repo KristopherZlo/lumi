@@ -20,7 +20,7 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains("LumiDashboardScreen.HISTORY_FIRST_ROW_OFFSET"));
         assertTrue(source.contains("luma.dashboard.latest_badge"));
         assertTrue(source.contains("renderPageHeader("));
-        assertTrue(source.contains("search = addLegacyTextField("));
+        assertTrue(source.contains("search = addTextField("));
         assertFalse(source.contains("clippedCenteredHeader("));
         assertFalse(source.contains("ZoneDetailsGeometry"));
     }
@@ -40,7 +40,7 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains("actions.openDetails()"));
         assertTrue(source.contains("actions.createBranch()"));
         assertTrue(source.contains("zoneHistory.selectBranch(branch)"));
-        assertTrue(source.contains("LumiLegacyButton tab = addLegacyContentButton("));
+        assertTrue(source.contains("LumiButton tab = addContentButton("));
         assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("zoneStatistics()"));
         assertTrue(source.contains("PendingStatisticsText::summary"));

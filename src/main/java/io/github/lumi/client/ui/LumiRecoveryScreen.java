@@ -6,7 +6,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Blocking choice for an interrupted durable apply journal. */
-public final class LumiRecoveryScreen extends LumiLegacyModalScreen {
+public final class LumiRecoveryScreen extends LumiModalScreen {
     private static final int PANEL_WIDTH = 400;
     private static final int PANEL_HEIGHT = 142;
     private final Screen parent;
@@ -28,18 +28,18 @@ public final class LumiRecoveryScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = (height - PANEL_HEIGHT) / 2;
         int contentX = panelX + 20;
         int buttonWidth = (panelWidth - 48) / 2;
-        addLegacyButton(contentX, panelY + 96, buttonWidth,
+        addButton(contentX, panelY + 96, buttonWidth,
                 Component.translatable("luma.action.recovery_restore"),
-                () -> submit(resumeTarget), LumiLegacyButton.Kind.PRIMARY);
-        addLegacyButton(contentX + buttonWidth + 8, panelY + 96, buttonWidth,
+                () -> submit(resumeTarget), LumiButton.Kind.PRIMARY);
+        addButton(contentX + buttonWidth + 8, panelY + 96, buttonWidth,
                 Component.translatable("luma.action.return_before_restore"),
-                () -> submit(returnCheckpoint), LumiLegacyButton.Kind.DANGER);
+                () -> submit(returnCheckpoint), LumiButton.Kind.DANGER);
     }
 
     private void submit(Runnable intent) {
@@ -54,25 +54,25 @@ public final class LumiRecoveryScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+        renderWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
         graphics.drawCenteredString(font, title, width / 2, panelY + 18,
-                LegacyLumiTheme.TEXT);
+                LumiTheme.TEXT);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.recovery.found_help"),
-                width / 2, panelY + 42, LegacyLumiTheme.MUTED);
+                width / 2, panelY + 42, LumiTheme.MUTED);
         graphics.drawCenteredString(font,
                 Component.translatable("luma.recovery.actions_help"),
-                width / 2, panelY + 58, LegacyLumiTheme.MUTED);
+                width / 2, panelY + 58, LumiTheme.MUTED);
         if (!error.isEmpty()) {
             graphics.drawCenteredString(font, errorText(error),
-                    width / 2, panelY + 76, LegacyLumiTheme.DANGER);
+                    width / 2, panelY + 76, LumiTheme.DANGER);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 

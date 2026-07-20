@@ -11,7 +11,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Read-only support screen; it never scans chunks or mutates history. */
-public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
+public final class LumiDiagnosticsScreen extends LumiModalScreen {
     private static final int BASE_PANEL_HEIGHT = 260;
     private final Screen parent;
     private final ClientHistoryStore history;
@@ -30,14 +30,14 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         Runtime runtime = Runtime.getRuntime();
         diagnostics = ClientDiagnostics.from(
                 history.state(),
                 FabricLoader.getInstance().isModLoaded("worldedit"),
                 FabricLoader.getInstance().isModLoaded("axiom"),
                 (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024));
-        LegacyModalLayout layout = fitPanel(width, height, 0);
+        LumiModalLayout layout = fitPanel(width, height, 0);
         panelX = layout.x();
         panelY = layout.y();
         panelWidth = layout.width();
@@ -58,20 +58,20 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
-        renderLegacyPanel(graphics, panelX + 12,
+        renderWindow(graphics, panelX, panelY, panelWidth, panelHeight);
+        renderPanel(graphics, panelX + 12,
                 panelY + 60 + contentOffset,
                 panelWidth - 24, rowAreaHeight(panelHeight, contentOffset));
         graphics.drawString(font, title, panelX + 16, panelY + 18,
-                LegacyLumiTheme.TEXT, false);
+                LumiTheme.TEXT, false);
         graphics.drawString(font, Component.translatable("luma.diagnostics.help"),
-                panelX + 16, panelY + 42, LegacyLumiTheme.MUTED, false);
+                panelX + 16, panelY + 42, LumiTheme.MUTED, false);
         renderRows(graphics);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -109,19 +109,19 @@ public final class LumiDiagnosticsScreen extends LumiLegacyModalScreen {
         int labelWidth = Math.min(82, Math.max(42, width / 2));
         graphics.drawString(font,
                 font.plainSubstrByWidth(label, labelWidth - 4), x, y,
-                LegacyLumiTheme.MUTED, false);
+                LumiTheme.MUTED, false);
         graphics.drawString(font,
                 font.plainSubstrByWidth(value, Math.max(1, width - labelWidth)),
-                x + labelWidth, y, LegacyLumiTheme.TEXT, false);
+                x + labelWidth, y, LumiTheme.TEXT, false);
     }
 
-    static LegacyModalLayout fitPanel(
+    static LumiModalLayout fitPanel(
             int screenWidth, int screenHeight, int contentOffset) {
         int panelWidth = Math.min(430, Math.max(1, screenWidth - 16));
         int panelHeight = Math.min(
                 BASE_PANEL_HEIGHT + Math.max(0, contentOffset),
                 Math.max(1, screenHeight - 16));
-        return new LegacyModalLayout(
+        return new LumiModalLayout(
                 Math.max(0, (screenWidth - panelWidth) / 2),
                 Math.max(0, (screenHeight - panelHeight) / 2),
                 panelWidth, panelHeight);

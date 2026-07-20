@@ -17,8 +17,8 @@ class LumiScrollableScreensTest {
                 String source = Files.readString(file);
                 if (source.contains("public boolean mouseScrolled(")
                         && !file.getFileName().toString()
-                                .equals("LumiLegacyModalScreen.java")) {
-                    assertTrue(source.contains("renderLegacyScrollbar("),
+                                .equals("LumiModalScreen.java")) {
+                    assertTrue(source.contains("renderScrollbar("),
                             () -> file.getFileName() + " hides its scroll position");
                 }
             }

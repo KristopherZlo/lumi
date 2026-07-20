@@ -13,7 +13,7 @@ class LumiZonesScreenTest {
         int[][] viewports = {{320, 180}, {427, 240}, {640, 360}};
         int[] expectedRows = {1, 2, 6};
         for (int index = 0; index < viewports.length; index++) {
-            LegacyWorkspaceLayout layout = LegacyWorkspaceLayout.fit(
+            LumiPageLayout layout = LumiPageLayout.fit(
                     viewports[index][0], viewports[index][1]);
             boolean compact = layout.contentWidth() < 300;
             int rows = LumiZonesScreen.visibleRows(layout.windowHeight(), compact);
@@ -28,7 +28,7 @@ class LumiZonesScreenTest {
     }
 
     @Test
-    void exposesLegacyOverlayCycleAndZoneActions() throws Exception {
+    void exposesV2OverlayCycleAndZoneActions() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiZonesScreen.java"));
 
@@ -44,8 +44,8 @@ class LumiZonesScreenTest {
         assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("compact = panelWidth < 300"));
         assertTrue(source.contains("rowHeight = compact ? 42 : 28"));
-        assertTrue(source.contains("renderLegacyTextField(graphics, name)"));
-        assertTrue(source.contains("renderLegacyScrollbar("));
+        assertTrue(source.contains("renderTextField(graphics, name)"));
+        assertTrue(source.contains("renderScrollbar("));
     }
 
     @Test

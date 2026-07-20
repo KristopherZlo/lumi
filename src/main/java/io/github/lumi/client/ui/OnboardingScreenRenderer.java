@@ -27,12 +27,12 @@ final class OnboardingScreenRenderer {
         int contentHeight = compact ? height - 44 : 140;
         int textY = compact ? y + 16 : y + 48;
         int shortcutY = compact ? actionY - 38 : y + 126;
-        LegacyLumiTheme.outlined(
+        LumiTheme.outlined(
                 graphics, x, y, width, height,
-                LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
-        LegacyLumiTheme.outlined(
+                LumiTheme.WINDOW, LumiTheme.WINDOW_BORDER);
+        LumiTheme.outlined(
                 graphics, x + 12, contentY, width - 24, contentHeight,
-                LegacyLumiTheme.PANEL, LegacyLumiTheme.PANEL_BORDER);
+                LumiTheme.PANEL, LumiTheme.PANEL_BORDER);
         int textBottom = compact
                 ? (page.holdStep() ? shortcutY - 5 : actionY - 6)
                 : y + 126;
@@ -44,11 +44,11 @@ final class OnboardingScreenRenderer {
         int barWidth = width - 48;
         graphics.fill(
                 barX, barY, barX + barWidth, barY + 3,
-                LegacyLumiTheme.INSET_BORDER);
+                LumiTheme.INSET_BORDER);
         graphics.fill(
                 barX, barY,
                 barX + (int) Math.round(barWidth * holdGate.progress()),
-                barY + 3, LegacyLumiTheme.ACCENT);
+                barY + 3, LumiTheme.ACCENT);
     }
 
     void spotlight(
@@ -59,22 +59,22 @@ final class OnboardingScreenRenderer {
             int screenWidth,
             int screenHeight) {
         var hole = placement.hole();
-        graphics.fill(0, 0, screenWidth, hole.y(), LegacyLumiTheme.BACKDROP);
+        graphics.fill(0, 0, screenWidth, hole.y(), LumiTheme.BACKDROP);
         graphics.fill(
                 0, hole.bottom(), screenWidth, screenHeight,
-                LegacyLumiTheme.BACKDROP);
+                LumiTheme.BACKDROP);
         graphics.fill(
                 0, hole.y(), hole.x(), hole.bottom(),
-                LegacyLumiTheme.BACKDROP);
+                LumiTheme.BACKDROP);
         graphics.fill(
                 hole.right(), hole.y(), screenWidth, hole.bottom(),
-                LegacyLumiTheme.BACKDROP);
-        outline(graphics, hole, LegacyLumiTheme.ACCENT);
+                LumiTheme.BACKDROP);
+        outline(graphics, hole, LumiTheme.ACCENT);
         var prompt = placement.prompt();
-        LegacyLumiTheme.outlined(
+        LumiTheme.outlined(
                 graphics,
                 prompt.x(), prompt.y(), prompt.width(), prompt.height(),
-                LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
+                LumiTheme.WINDOW, LumiTheme.WINDOW_BORDER);
         pageText(
                 graphics, font, tour,
                 prompt.x() + 10, prompt.y() + 12, prompt.width() - 20,
@@ -94,16 +94,16 @@ final class OnboardingScreenRenderer {
                 Component.translatable(
                         "luma.onboarding.header",
                         tour.displayIndex(), OnboardingTour.pageCount()),
-                x, y, LegacyLumiTheme.MUTED, false);
+                x, y, LumiTheme.MUTED, false);
         graphics.drawString(
                 font, Component.translatable(tour.current().titleKey()),
-                x, y + 16, LegacyLumiTheme.ACCENT, false);
+                x, y + 16, LumiTheme.ACCENT, false);
         int lineY = y + 36;
         for (var line : font.split(
                 Component.translatable(tour.current().helpKey()), textWidth)) {
             if (lineY + 9 > textBottom) break;
             graphics.drawString(
-                    font, line, x, lineY, LegacyLumiTheme.TEXT, false);
+                    font, line, x, lineY, LumiTheme.TEXT, false);
             lineY += 11;
         }
     }
@@ -117,7 +117,7 @@ final class OnboardingScreenRenderer {
             int y) {
         graphics.drawString(
                 font, Component.translatable(holdInstruction(page.kind())),
-                x, y, LegacyLumiTheme.MUTED, false);
+                x, y, LumiTheme.MUTED, false);
         boolean unbound = page.bindings().stream().anyMatch(binding ->
                 LumiHotkeys.bindingUnbound(mappings, binding));
         String keys = page.bindings().stream()
@@ -129,7 +129,7 @@ final class OnboardingScreenRenderer {
                 .reduce((left, right) -> left + " + " + right)
                 .orElse("");
         graphics.drawString(
-                font, keys, x, y + 15, LegacyLumiTheme.TEXT, false);
+                font, keys, x, y + 15, LumiTheme.TEXT, false);
     }
 
     private static String holdInstruction(OnboardingTour.Kind kind) {

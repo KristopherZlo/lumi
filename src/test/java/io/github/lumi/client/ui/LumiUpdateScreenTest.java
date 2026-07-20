@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class LumiUpdateScreenTest {
     @Test
-    void exposesAllLegacyReleaseActions() throws Exception {
+    void exposesAllV2ReleaseActions() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiUpdateScreen.java"));
 
@@ -29,7 +29,7 @@ class LumiUpdateScreenTest {
     @Test
     void releaseActionsFitTheMinimumViewport() {
         for (int[] viewport : new int[][] {{640, 360}, {427, 240}, {320, 180}}) {
-            LegacyModalLayout layout = LumiUpdateScreen.fitPanel(
+            LumiModalLayout layout = LumiUpdateScreen.fitPanel(
                     viewport[0], viewport[1], true);
             int height = layout.height();
             assertTrue(layout.x() + layout.width() <= viewport[0]);

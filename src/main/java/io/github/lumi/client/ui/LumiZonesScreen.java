@@ -14,7 +14,7 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /** Thin workspace-zone screen backed by immutable server snapshots. */
-public final class LumiZonesScreen extends LumiLegacyPageScreen {
+public final class LumiZonesScreen extends LumiPageScreen {
     private static final int MAX_ROWS = 8;
     private static final int COMPACT_ROWS_OFFSET = 118;
     private final ClientHistoryStore history;
@@ -27,7 +27,7 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
     private final Consumer<UUID> leave;
     private HistorySnapshotPayload snapshot;
     private EditBox name;
-    private LumiLegacyButton create;
+    private LumiButton create;
     private int panelX;
     private int panelY;
     private int panelWidth;
@@ -50,7 +50,7 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
             Runnable cycleOverlay,
             Consumer<UUID> enter,
             Consumer<UUID> leave) {
-        super(parent, Component.translatable("luma.tab.zones"), LegacyProjectTab.ZONES);
+        super(parent, Component.translatable("luma.tab.zones"), ProjectTab.ZONES);
         this.history = Objects.requireNonNull(history, "history");
         this.controller = Objects.requireNonNull(controller, "controller");
         this.openDetails = Objects.requireNonNull(openDetails, "openDetails");
@@ -86,9 +86,9 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         snapshot = history.state().snapshot().orElse(null);
-        LegacyWorkspaceLayout shell = pageLayout();
+        LumiPageLayout shell = pageLayout();
         panelX = shell.contentX();
         panelY = shell.windowY();
         panelWidth = shell.contentWidth();
@@ -100,7 +100,7 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         rowsY = panelY + (compact ? COMPACT_ROWS_OFFSET : 126);
         rowHeight = compact ? 42 : 28;
         rowStride = compact ? 46 : 32;
-        name = addLegacyTextField(contentX, fieldY,
+        name = addTextField(contentX, fieldY,
                 compact ? contentWidth : Math.max(20, contentWidth - 140),
                 Component.translatable("luma.zones.create_title"));
         name.setMaxLength(ZoneScreenController.MAX_NAME_LENGTH);
@@ -109,20 +109,20 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
         Component createLabel = Component.translatable("luma.zones.create_button");
         if (compact) {
             int actionWidth = Math.max(1, (contentWidth - 6) / 2);
-            create = addLegacyButton(contentX, panelY + 82, actionWidth,
-                    createLabel, this::create, LumiLegacyButton.Kind.PRIMARY);
-            addLegacyButton(contentX + actionWidth + 6, panelY + 82, actionWidth,
+            create = addButton(contentX, panelY + 82, actionWidth,
+                    createLabel, this::create, LumiButton.Kind.PRIMARY);
+            addButton(contentX + actionWidth + 6, panelY + 82, actionWidth,
                     overlayLabel.get(), this::cycleOverlay,
-                    LumiLegacyButton.Kind.NORMAL);
+                    LumiButton.Kind.NORMAL);
         } else {
-            create = addLegacyButton(contentX + contentWidth - 132, panelY + 72, 132,
-                    createLabel, this::create, LumiLegacyButton.Kind.PRIMARY);
+            create = addButton(contentX + contentWidth - 132, panelY + 72, 132,
+                    createLabel, this::create, LumiButton.Kind.PRIMARY);
         }
         updateCreateButton();
         if (!compact) {
-            addLegacyButton(panelX + panelWidth - 140, panelY + 102, 120,
+            addButton(panelX + panelWidth - 140, panelY + 102, 120,
                     overlayLabel.get(), this::cycleOverlay,
-                    LumiLegacyButton.Kind.NORMAL);
+                    LumiButton.Kind.NORMAL);
         }
         addZoneRows(panelWidth);
     }
@@ -141,19 +141,19 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
             int rowY = rowsY + (index - start) * rowStride;
             int right = panelX + panelWidth - 24;
             int actionY = rowY + (compact ? 20 : 4);
-            addLegacyIconButton(right - 26, actionY,
+            addIconButton(right - 26, actionY,
                     "trash", Component.translatable("luma.zones.delete"),
-                    () -> delete.accept(zone), LumiLegacyButton.Kind.DANGER);
-            addLegacyIconButton(right - 58, actionY, "folder",
+                    () -> delete.accept(zone), LumiButton.Kind.DANGER);
+            addIconButton(right - 58, actionY, "folder",
                     Component.translatable("luma.action.open_details"),
-                    () -> openDetails.accept(zone), LumiLegacyButton.Kind.NORMAL);
-            LumiLegacyButton enterButton = addLegacyIconButton(right - 90, actionY,
+                    () -> openDetails.accept(zone), LumiButton.Kind.NORMAL);
+            LumiButton enterButton = addIconButton(right - 90, actionY,
                     zone.active() ? "leave" : "join",
                     Component.translatable(zone.active()
                             ? "luma.zones.leave" : "luma.zones.enter"),
                     () -> select(zone), zone.active()
-                            ? LumiLegacyButton.Kind.DANGER
-                            : LumiLegacyButton.Kind.PRIMARY);
+                            ? LumiButton.Kind.DANGER
+                            : LumiButton.Kind.PRIMARY);
             enterButton.active = pendingEnterZone == null;
         }
     }
@@ -219,9 +219,9 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
+        renderPage(graphics, panelX, panelY, panelWidth, panelHeight);
         Component heading = snapshot == null
                 ? title : Component.translatable(
                         "luma.screen.zones.title", snapshot.workspaceName());
@@ -233,8 +233,8 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
                         Component.translatable("luma.zones.create_help").getString(),
                         textWidth),
                 textX, panelY + (compact ? 47 : 56),
-                LegacyLumiTheme.MUTED, false);
-        renderLegacyTextField(graphics, name);
+                LumiTheme.MUTED, false);
+        renderTextField(graphics, name);
         boolean errorReplacesListTitle = compact && panelHeight < 220
                 && !error.isEmpty();
         Component listLabel = errorReplacesListTitle
@@ -245,11 +245,11 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
                 panelX + (compact ? 16 : 20),
                 panelY + (compact ? 104 : 106),
                 errorReplacesListTitle
-                        ? LegacyLumiTheme.DANGER : LegacyLumiTheme.TEXT,
+                        ? LumiTheme.DANGER : LumiTheme.TEXT,
                 false);
         renderZoneRows(graphics, panelWidth);
         if (snapshot != null) {
-            renderLegacyScrollbar(
+            renderScrollbar(
                     graphics, panelX + panelWidth - 7, rowsY,
                     Math.max(0, panelY + panelHeight - rowsY - 8),
                     snapshot.zones().size(), visibleRows(), scroll);
@@ -259,11 +259,11 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
                             errorText(error).getString(), Math.max(1, panelWidth - 40)),
                     panelX + 20,
                     panelY + panelHeight - 14,
-                    LegacyLumiTheme.DANGER, false);
+                    LumiTheme.DANGER, false);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -281,7 +281,7 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
     private void renderZoneRows(GuiGraphics graphics, int panelWidth) {
         if (snapshot == null || snapshot.zones().isEmpty()) {
             graphics.drawString(font, Component.translatable("luma.zones.empty"),
-                    panelX + 20, rowsY + 8, LegacyLumiTheme.MUTED, false);
+                    panelX + 20, rowsY + 8, LumiTheme.MUTED, false);
             return;
         }
         int start = Math.min(scroll, snapshot.zones().size());
@@ -290,7 +290,7 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
             HistorySnapshotPayload.ZoneView zone = snapshot.zones().get(index);
             int rowY = rowsY + (index - start) * rowStride;
             int rowX = panelX + (compact ? 16 : 20);
-            renderLegacyPanel(graphics, rowX, rowY,
+            renderPanel(graphics, rowX, rowY,
                     panelWidth - (compact ? 32 : 40), rowHeight);
             graphics.fill(
                     panelX + (compact ? 23 : 27), rowY + 6,
@@ -304,19 +304,19 @@ public final class LumiZonesScreen extends LumiLegacyPageScreen {
                 int nameWidth = Math.max(0, textWidth - metadataWidth - 4);
                 graphics.drawString(font,
                         font.plainSubstrByWidth(zone.name(), nameWidth),
-                        textX, rowY + 5, LegacyLumiTheme.TEXT, false);
+                        textX, rowY + 5, LumiTheme.TEXT, false);
                 graphics.drawString(font,
                         font.plainSubstrByWidth(
                                 metadata.getString(), metadataWidth),
                         textX + textWidth - metadataWidth, rowY + 5,
-                        LegacyLumiTheme.MUTED, false);
+                        LumiTheme.MUTED, false);
             } else {
                 graphics.drawString(font,
                         font.plainSubstrByWidth(zone.name(), textWidth),
-                        textX, rowY + 5, LegacyLumiTheme.TEXT, false);
+                        textX, rowY + 5, LumiTheme.TEXT, false);
                 graphics.drawString(font,
                         font.plainSubstrByWidth(metadata.getString(), textWidth),
-                        textX, rowY + 17, LegacyLumiTheme.MUTED, false);
+                        textX, rowY + 17, LumiTheme.MUTED, false);
             }
         }
     }

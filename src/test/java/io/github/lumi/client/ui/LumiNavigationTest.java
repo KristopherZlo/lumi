@@ -9,17 +9,17 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class LumiLegacyNavigationTest {
+class LumiNavigationTest {
     @Test
-    void sidebarUsesLegacyOrderAndPagesBlockBackgroundInput() throws Exception {
+    void sidebarUsesV2OrderAndPagesBlockBackgroundInput() throws Exception {
         assertEquals(List.of(
-                LegacyProjectTab.HISTORY,
-                LegacyProjectTab.ZONES,
-                LegacyProjectTab.VARIANTS,
-                LegacyProjectTab.COMPARE,
-                LegacyProjectTab.IMPORT_EXPORT,
-                LegacyProjectTab.SETTINGS,
-                LegacyProjectTab.MORE), List.of(LegacyProjectTab.values()));
+                ProjectTab.HISTORY,
+                ProjectTab.ZONES,
+                ProjectTab.VARIANTS,
+                ProjectTab.COMPARE,
+                ProjectTab.IMPORT_EXPORT,
+                ProjectTab.SETTINGS,
+                ProjectTab.MORE), List.of(ProjectTab.values()));
 
         Path ui = Path.of("src/main/java/io/github/lumi/client/ui");
         for (String page : List.of(
@@ -32,31 +32,31 @@ class LumiLegacyNavigationTest {
                 "LumiDeletedVersionsScreen.java",
                 "LumiMoreScreen.java")) {
             String source = Files.readString(ui.resolve(page));
-            assertTrue(source.contains("extends LumiLegacyPageScreen"), page);
-            assertTrue(source.contains("renderLegacyPage("), page);
+            assertTrue(source.contains("extends LumiPageScreen"), page);
+            assertTrue(source.contains("renderPage("), page);
         }
 
-        String modal = Files.readString(ui.resolve("LumiLegacyModalScreen.java"));
+        String modal = Files.readString(ui.resolve("LumiModalScreen.java"));
         assertTrue(modal.contains("background.render("));
         assertTrue(modal.contains("GLFW_HAND_CURSOR"));
         assertTrue(modal.contains("child instanceof Button button"));
         assertTrue(modal.contains("minecraft.screen == this"));
         assertTrue(modal.contains("hovered == handCursorActive"));
-        assertTrue(modal.contains("LegacyLumiTheme.PAGE_HEADER_HEIGHT"));
-        assertTrue(modal.contains("LegacyLumiTheme.TITLEBAR"));
+        assertTrue(modal.contains("LumiTheme.PAGE_HEADER_HEIGHT"));
+        assertTrue(modal.contains("LumiTheme.TITLEBAR"));
         assertTrue(modal.contains("page ? \"chevron-left\" : \"close\""));
-        assertTrue(modal.contains("alignLegacyNavigation(x, y, width)"));
+        assertTrue(modal.contains("alignNavigation(x, y, width)"));
         assertTrue(modal.contains("frameY + FRAME_CONTROL_INSET"));
-        assertTrue(modal.contains("legacy.legacyInitialized"));
+        assertTrue(modal.contains("screen.screenInitialized"));
         assertFalse(modal.contains("background.mouseClicked("));
         assertFalse(modal.contains("background.mouseReleased("));
         String dashboard = Files.readString(ui.resolve("LumiDashboardScreen.java"));
         assertTrue(dashboard.contains(
-                "alignLegacyNavigation(x, y, layout.windowWidth())"));
+                "alignNavigation(x, y, layout.windowWidth())"));
         String onboarding = Files.readString(ui.resolve("LumiOnboardingScreen.java"));
         assertTrue(onboarding.contains(
-                "alignLegacyNavigation(panelX, panelY, panelWidth)"));
-        String page = Files.readString(ui.resolve("LumiLegacyPageScreen.java"));
+                "alignNavigation(panelX, panelY, panelWidth)"));
+        String page = Files.readString(ui.resolve("LumiPageScreen.java"));
         assertFalse(page.contains("forwardsParentInput"));
         assertTrue(page.contains("x < layout.contentX()"));
         assertTrue(page.contains("dashboard.mouseClicked(click, doubled)"));
@@ -66,10 +66,10 @@ class LumiLegacyNavigationTest {
 
     @Test
     void textInputsUseCompactSingleLineHeight() throws Exception {
-        assertEquals(14, LumiLegacyModalScreen.INPUT_HEIGHT);
-        assertEquals(18, LumiLegacyModalScreen.INPUT_FRAME_HEIGHT);
+        assertEquals(14, LumiModalScreen.INPUT_HEIGHT);
+        assertEquals(18, LumiModalScreen.INPUT_FRAME_HEIGHT);
         String modal = Files.readString(Path.of(
-                "src/main/java/io/github/lumi/client/ui/LumiLegacyModalScreen.java"));
+                "src/main/java/io/github/lumi/client/ui/LumiModalScreen.java"));
         assertTrue(modal.contains("x + 6, y, Math.max(0, width - 12)"));
         assertTrue(modal.contains("field.getX() - 6, field.getY()"));
         assertTrue(modal.contains("INPUT_FRAME_HEIGHT, label"));

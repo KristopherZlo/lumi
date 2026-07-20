@@ -44,8 +44,8 @@ final class LumiHistoryGraphNodeButton extends Button {
         int nodeY = getY() + getHeight() / 2;
         int color = zoneColor == null ? laneColor(node.lane()) : 0xff000000 | zoneColor;
         if (node.activeHead()) {
-            LegacyLumiTheme.outlined(graphics, nodeX - 5, nodeY - 5, 10, 10,
-                    LegacyLumiTheme.WINDOW, LegacyLumiTheme.ACCENT);
+            LumiTheme.outlined(graphics, nodeX - 5, nodeY - 5, 10, 10,
+                    LumiTheme.WINDOW, LumiTheme.ACCENT);
         }
         graphics.fill(nodeX - 3, nodeY - 3, nodeX + 4, nodeY + 4, color);
         var font = Minecraft.getInstance().font;
@@ -53,13 +53,13 @@ final class LumiHistoryGraphNodeButton extends Button {
         int available = Math.max(0, getX() + getWidth() - textX - 4);
         graphics.drawString(font,
                 font.plainSubstrByWidth(node.version().message(), available),
-                textX, getY() + 5, LegacyLumiTheme.TEXT, false);
+                textX, getY() + 5, LumiTheme.TEXT, false);
         String marker = node.branchHeads().isEmpty()
                 ? node.version().id().hex().substring(0, 7)
                 : String.join(", ", node.branchHeads());
         graphics.drawString(font, font.plainSubstrByWidth(marker, available),
                 textX, getY() + 16,
-                node.activeHead() ? LegacyLumiTheme.ACCENT : LegacyLumiTheme.MUTED,
+                node.activeHead() ? LumiTheme.ACCENT : LumiTheme.MUTED,
                 false);
     }
 

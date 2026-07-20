@@ -15,7 +15,7 @@ class LumiPackageScreenTest {
         int[] rowsWithoutHint = {1, 3, 5};
         int[] rowsWithHint = {0, 0, 2};
         for (int index = 0; index < viewports.length; index++) {
-            LegacyWorkspaceLayout layout = LegacyWorkspaceLayout.fit(
+            LumiPageLayout layout = LumiPageLayout.fit(
                     viewports[index][0], viewports[index][1]);
             var plain = LumiPackageScreen.packageGeometry(
                     layout.windowHeight(), 0);
@@ -33,14 +33,14 @@ class LumiPackageScreenTest {
                     <= hinted.listBottom());
         }
         assertFalse(LumiPackageScreen.packageGeometry(
-                LegacyWorkspaceLayout.fit(320, 180).windowHeight(), 70)
+                LumiPageLayout.fit(320, 180).windowHeight(), 70)
                 .contentVisible());
     }
 
     @Test
     void reservesTheRealImportedAndLocalActionBounds() {
         for (int[] viewport : new int[][] {{320, 180}, {427, 240}, {640, 360}}) {
-            int panelWidth = LegacyWorkspaceLayout.fit(
+            int panelWidth = LumiPageLayout.fit(
                     viewport[0], viewport[1]).contentWidth();
             int importedWidth = LumiPackageScreen.rowTextWidth(panelWidth, true);
             int localWidth = LumiPackageScreen.rowTextWidth(panelWidth, false);
@@ -53,7 +53,7 @@ class LumiPackageScreenTest {
     }
 
     @Test
-    void exposesLegacyLocalPackageControls() throws Exception {
+    void exposesV2LocalPackageControls() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiPackageScreen.java"));
 

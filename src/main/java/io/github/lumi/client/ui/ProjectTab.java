@@ -1,7 +1,7 @@
 package io.github.lumi.client.ui;
 
 /** Stable sidebar selection shared by the project shell and its native pages. */
-enum LegacyProjectTab {
+enum ProjectTab {
     HISTORY,
     ZONES,
     VARIANTS,

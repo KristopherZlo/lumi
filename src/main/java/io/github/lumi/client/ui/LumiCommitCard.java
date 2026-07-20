@@ -51,10 +51,10 @@ final class LumiCommitCard {
             boolean head,
             boolean featured) {
         int border = head || featured
-                ? accentColor : LegacyLumiTheme.INSET_BORDER;
-        LegacyLumiTheme.outlined(
+                ? accentColor : LumiTheme.INSET_BORDER;
+        LumiTheme.outlined(
                 graphics, layout.x(), layout.y(), layout.width(), layout.height(),
-                featured ? LegacyLumiTheme.PANEL : LegacyLumiTheme.INSET, border);
+                featured ? LumiTheme.PANEL : LumiTheme.INSET, border);
         if (featured && layout.height() > 2) {
             graphics.fill(
                     layout.x() + 1, layout.y() + 1,
@@ -67,7 +67,7 @@ final class LumiCommitCard {
         graphics.drawString(
                 font,
                 font.plainSubstrByWidth(version.message(), layout.textWidth()),
-                layout.textX(), layout.messageY(), LegacyLumiTheme.TEXT, false);
+                layout.textX(), layout.messageY(), LumiTheme.TEXT, false);
         if (!layout.showMeta()) return;
         String tagText = tags.isEmpty()
                 ? "" : " · #" + String.join(" #", tags.values());
@@ -85,7 +85,7 @@ final class LumiCommitCard {
                 + tagText + headText;
         graphics.drawString(
                 font, font.plainSubstrByWidth(meta, layout.textWidth()),
-                layout.textX(), layout.metaY(), LegacyLumiTheme.MUTED, false);
+                layout.textX(), layout.metaY(), LumiTheme.MUTED, false);
     }
 
     private void drawPreview(
@@ -102,9 +102,9 @@ final class LumiCommitCard {
                     texture.width(), texture.height());
             return;
         }
-        LegacyLumiTheme.outlined(
+        LumiTheme.outlined(
                 graphics, x, y, PREVIEW_WIDTH, PREVIEW_HEIGHT,
-                LegacyLumiTheme.WINDOW, LegacyLumiTheme.INSET_BORDER);
+                LumiTheme.WINDOW, LumiTheme.INSET_BORDER);
         int iconSize = 12;
         graphics.blit(
                 RenderPipelines.GUI_TEXTURED, NO_PREVIEW_ICON,

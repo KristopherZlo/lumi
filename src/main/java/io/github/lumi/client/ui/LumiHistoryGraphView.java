@@ -13,7 +13,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderPipelines;
 
-/** Renders graph connectors, clickable nodes and the legacy preview hover card. */
+/** Renders graph connectors, clickable nodes and the preview hover card. */
 final class LumiHistoryGraphView {
     static final int ROW_HEIGHT = 30;
     private static final int LANE_SPACING = 12;
@@ -83,8 +83,8 @@ final class LumiHistoryGraphView {
         int cardWidth = Math.min(150, width);
         int cardX = x + width - cardWidth;
         int cardY = Math.max(y, mouseY - 58);
-        LegacyLumiTheme.outlined(graphics, cardX, cardY, cardWidth, 56,
-                LegacyLumiTheme.PANEL, LegacyLumiTheme.ACCENT);
+        LumiTheme.outlined(graphics, cardX, cardY, cardWidth, 56,
+                LumiTheme.PANEL, LumiTheme.ACCENT);
         previews.texture(dimensionId, version.id()).ifPresent(texture ->
                 graphics.blit(RenderPipelines.GUI_TEXTURED, texture.id(),
                         cardX + 5, cardY + 5, 0, 0, 64, 36,
@@ -93,13 +93,13 @@ final class LumiHistoryGraphView {
         int textX = cardX + 74;
         graphics.drawString(font,
                 font.plainSubstrByWidth(version.message(), cardWidth - 79),
-                textX, cardY + 7, LegacyLumiTheme.TEXT, false);
+                textX, cardY + 7, LumiTheme.TEXT, false);
         graphics.drawString(font,
                 font.plainSubstrByWidth(version.author(), cardWidth - 79),
-                textX, cardY + 20, LegacyLumiTheme.MUTED, false);
+                textX, cardY + 20, LumiTheme.MUTED, false);
         graphics.drawString(font,
                 Long.toString(version.statistics().blocks()),
-                textX, cardY + 33, LegacyLumiTheme.ACCENT, false);
+                textX, cardY + 33, LumiTheme.ACCENT, false);
     }
 
     Optional<HistoryGraphLayout.Node> nodeAt(double mouseX, double mouseY) {

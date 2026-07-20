@@ -9,7 +9,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Explicit confirmation for a durable soft-delete marker. */
-public final class LumiDeleteVersionScreen extends LumiLegacyModalScreen {
+public final class LumiDeleteVersionScreen extends LumiModalScreen {
     private static final int PANEL_WIDTH = 420;
     private static final int PANEL_HEIGHT = 180;
     private final Screen parent;
@@ -31,17 +31,17 @@ public final class LumiDeleteVersionScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
+        beginScreenInit();
         int panelWidth = Math.min(PANEL_WIDTH, width - 32);
         panelX = (width - panelWidth) / 2;
         panelY = (height - PANEL_HEIGHT) / 2;
         int buttonWidth = (panelWidth - 48) / 2;
-        addLegacyButton(panelX + 20, panelY + 138, buttonWidth,
+        addButton(panelX + 20, panelY + 138, buttonWidth,
                 Component.translatable("luma.action.delete_save"),
-                this::delete, LumiLegacyButton.Kind.DANGER);
-        addLegacyButton(panelX + 28 + buttonWidth, panelY + 138, buttonWidth,
+                this::delete, LumiButton.Kind.DANGER);
+        addButton(panelX + 28 + buttonWidth, panelY + 138, buttonWidth,
                 Component.translatable("luma.action.cancel"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
+                this::onClose, LumiButton.Kind.NORMAL);
     }
 
     private void delete() {
@@ -60,37 +60,37 @@ public final class LumiDeleteVersionScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
             int panelWidth = Math.min(PANEL_WIDTH, width - 32);
             int centerX = width / 2;
             int contentLeft = panelX + 20;
             int contentRight = panelX + panelWidth - 20;
-            renderLegacyWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
+            renderWindow(graphics, panelX, panelY, panelWidth, PANEL_HEIGHT);
             graphics.drawCenteredString(font, clippedCenteredHeader(
                     title, centerX, contentLeft, contentRight),
-                    centerX, panelY + 18, LegacyLumiTheme.TEXT);
+                    centerX, panelY + 18, LumiTheme.TEXT);
             graphics.drawCenteredString(font, clippedCenteredHeader(
                     Component.literal(version.message()),
                     centerX, contentLeft, contentRight),
-                    centerX, panelY + 42, LegacyLumiTheme.TEXT);
+                    centerX, panelY + 42, LumiTheme.TEXT);
             graphics.drawCenteredString(font, clippedCenteredHeader(
                     Component.translatable("luma.save_details.delete_help"),
                     centerX, contentLeft, contentRight),
-                    centerX, panelY + 68, LegacyLumiTheme.MUTED);
+                    centerX, panelY + 68, LumiTheme.MUTED);
             graphics.drawCenteredString(font, clippedCenteredHeader(
                     Component.translatable("luma.save_details.delete_warning"),
                     centerX, contentLeft, contentRight),
-                    centerX, panelY + 90, LegacyLumiTheme.ACCENT);
+                    centerX, panelY + 90, LumiTheme.ACCENT);
             if (!error.isEmpty()) {
                 graphics.drawCenteredString(font, clippedCenteredHeader(
                         errorText(error), centerX, contentLeft, contentRight),
-                        centerX, panelY + 116, LegacyLumiTheme.DANGER);
+                        centerX, panelY + 116, LumiTheme.DANGER);
             }
             super.render(
                     graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 

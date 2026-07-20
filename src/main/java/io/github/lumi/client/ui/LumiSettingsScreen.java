@@ -13,7 +13,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Active-workspace defaults and client-local diagnostic controls. */
-public final class LumiSettingsScreen extends LumiLegacyPageScreen {
+public final class LumiSettingsScreen extends LumiPageScreen {
     private static final int SETTING_COUNT = 8;
     private static final int SETTING_STRIDE = LumiSettingRow.HEIGHT + 2;
     private final ClientHistoryStore history;
@@ -50,7 +50,7 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
             Runnable requestSurvivalSettings,
             Consumer<Boolean> updateSurvivalSettings) {
         super(parent, Component.translatable("luma.screen.settings.title", "Lumi"),
-                LegacyProjectTab.SETTINGS);
+                ProjectTab.SETTINGS);
         this.history = Objects.requireNonNull(history, "history");
         this.telemetry = Objects.requireNonNull(telemetry, "telemetry");
         this.updateWorkspace = Objects.requireNonNull(
@@ -65,8 +65,8 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
-        LegacyWorkspaceLayout page = pageLayout();
+        beginScreenInit();
+        LumiPageLayout page = pageLayout();
         panelX = page.contentX();
         panelY = page.windowY();
         panelWidth = page.contentWidth();
@@ -87,21 +87,21 @@ public final class LumiSettingsScreen extends LumiLegacyPageScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderLegacyPage(graphics, panelX, panelY, panelWidth, panelHeight);
+            renderPage(graphics, panelX, panelY, panelWidth, panelHeight);
             renderPageHeader(
                     graphics, panelX, panelY, panelWidth, title, null);
-            renderLegacyPanel(
+            renderPanel(
                     graphics, contentX, contentY, contentWidth, contentHeight);
-            renderLegacyScrollbar(
+            renderScrollbar(
                     graphics, contentX + contentWidth - 3,
                     contentY + 4 + contentOffset,
                     Math.max(0, contentHeight - 8 - contentOffset),
                     SETTING_COUNT, visibleSettingRows(), scroll);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 

@@ -14,7 +14,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /** Preview-gated selected/outside Restore using only wooden-sword bounds. */
-public final class LumiPartialRestoreScreen extends LumiLegacyModalScreen {
+public final class LumiPartialRestoreScreen extends LumiModalScreen {
     private static final int PANEL_WIDTH = 440;
     private static final int PANEL_HEIGHT = 190;
     private final Screen parent;
@@ -22,8 +22,8 @@ public final class LumiPartialRestoreScreen extends LumiLegacyModalScreen {
     private final BiFunction<CommitId, BlockAreaTarget, UUID> previewRestore;
     private final Function<UUID, UUID> applyRestore;
     private final PartialRestoreFormState form;
-    private LumiLegacyButton preview;
-    private LumiLegacyButton apply;
+    private LumiButton preview;
+    private LumiButton apply;
     private int panelX;
     private int panelY;
     private int panelWidth;
@@ -49,33 +49,33 @@ public final class LumiPartialRestoreScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
-        LegacyModalLayout layout = fitPanel(width, height);
+        beginScreenInit();
+        LumiModalLayout layout = fitPanel(width, height);
         panelX = layout.x();
         panelY = layout.y();
         panelWidth = layout.width();
         panelHeight = layout.height();
         int innerWidth = panelWidth - 32;
         int half = (innerWidth - 8) / 2;
-        addLegacyButton(panelX + 16, panelY + modeOffset(panelHeight), half,
+        addButton(panelX + 16, panelY + modeOffset(panelHeight), half,
                 Component.translatable("luma.partial_restore.mode_selected_area"),
                 () -> selectMode(false), form.outside()
-                        ? LumiLegacyButton.Kind.NORMAL : LumiLegacyButton.Kind.SELECTED);
-        addLegacyButton(panelX + 24 + half, panelY + modeOffset(panelHeight), half,
+                        ? LumiButton.Kind.NORMAL : LumiButton.Kind.SELECTED);
+        addButton(panelX + 24 + half, panelY + modeOffset(panelHeight), half,
                 Component.translatable("luma.partial_restore.mode_outside_selection"),
                 () -> selectMode(true), form.outside()
-                        ? LumiLegacyButton.Kind.SELECTED : LumiLegacyButton.Kind.NORMAL);
-        preview = addLegacyButton(panelX + 16, panelY + previewOffset(panelHeight), half,
+                        ? LumiButton.Kind.SELECTED : LumiButton.Kind.NORMAL);
+        preview = addButton(panelX + 16, panelY + previewOffset(panelHeight), half,
                 Component.translatable("luma.action.preview_partial_restore"),
-                this::preview, LumiLegacyButton.Kind.NORMAL);
-        apply = addLegacyButton(panelX + 24 + half,
+                this::preview, LumiButton.Kind.NORMAL);
+        apply = addButton(panelX + 24 + half,
                 panelY + previewOffset(panelHeight), half,
                 Component.translatable("luma.action.apply_partial_restore"),
-                this::apply, LumiLegacyButton.Kind.PRIMARY);
-        addLegacyButton(width / 2 - 60,
+                this::apply, LumiButton.Kind.PRIMARY);
+        addButton(width / 2 - 60,
                 panelY + cancelOffset(panelHeight), 120,
                 Component.translatable("luma.action.cancel"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
+                this::onClose, LumiButton.Kind.NORMAL);
         updateButtons();
     }
 
@@ -123,30 +123,30 @@ public final class LumiPartialRestoreScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-            renderLegacyWindow(
+            renderWindow(
                     graphics, panelX, panelY, panelWidth, panelHeight);
             graphics.drawCenteredString(font,
                     Component.translatable("luma.partial_restore.title"),
-                    width / 2, panelY + 16, LegacyLumiTheme.TEXT);
+                    width / 2, panelY + 16, LumiTheme.TEXT);
             graphics.drawCenteredString(font,
                     Component.translatable("luma.partial_restore.lumi_region"),
-                    width / 2, panelY + 34, LegacyLumiTheme.ACCENT);
+                    width / 2, panelY + 34, LumiTheme.ACCENT);
             renderStatus(graphics, panelWidth);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
     private void renderStatus(GuiGraphics graphics, int panelWidth) {
         String error = localError.isEmpty() ? form.error() : localError;
         Component status = null;
-        int color = LegacyLumiTheme.MUTED;
+        int color = LumiTheme.MUTED;
         if (!error.isEmpty()) {
             status = errorText(error);
-            color = LegacyLumiTheme.DANGER;
+            color = LumiTheme.DANGER;
         } else if (form.previewPending()) {
             status = Component.translatable("luma.status.preview_requested");
         } else if (form.previewToken().isPresent()) {
@@ -154,7 +154,7 @@ public final class LumiPartialRestoreScreen extends LumiLegacyModalScreen {
                     "luma.partial_restore.summary",
                     form.changedBlocks(), form.changedSections());
             color = form.changedBlocks() == 0
-                    ? LegacyLumiTheme.MUTED : LegacyLumiTheme.ACCENT;
+                    ? LumiTheme.MUTED : LumiTheme.ACCENT;
         }
         if (status != null) {
             graphics.drawCenteredString(font,
@@ -164,10 +164,10 @@ public final class LumiPartialRestoreScreen extends LumiLegacyModalScreen {
         }
     }
 
-    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+    static LumiModalLayout fitPanel(int screenWidth, int screenHeight) {
         int width = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 32));
         int height = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
-        return new LegacyModalLayout(
+        return new LumiModalLayout(
                 Math.max(0, (screenWidth - width) / 2),
                 Math.max(0, (screenHeight - height) / 2), width, height);
     }

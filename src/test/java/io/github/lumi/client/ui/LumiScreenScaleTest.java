@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class LumiLegacyScreenScaleTest {
+class LumiScreenScaleTest {
     @Test
     void everyNativeScreenUsesScaledLayoutRenderAndInputCoordinates() throws Exception {
         List<Path> screens;
@@ -19,8 +19,8 @@ class LumiLegacyScreenScaleTest {
                         try {
                             String source = Files.readString(path);
                             return source.contains("public final class")
-                                    && (source.contains("extends LumiLegacyModalScreen")
-                                    || source.contains("extends LumiLegacyPageScreen"));
+                                    && (source.contains("extends LumiModalScreen")
+                                    || source.contains("extends LumiPageScreen"));
                         } catch (java.io.IOException failed) {
                             throw new java.io.UncheckedIOException(failed);
                         }
@@ -30,11 +30,11 @@ class LumiLegacyScreenScaleTest {
         assertFalse(screens.isEmpty());
         for (Path screen : screens) {
             String source = Files.readString(screen);
-            assertTrue(source.contains("beginLegacyInit();"), screen.toString());
+            assertTrue(source.contains("beginScreenInit();"), screen.toString());
             assertTrue(source.matches(
-                            "(?s).*beginLegacyRender\\(\\s*graphics,\\s*mouseX,\\s*mouseY\\).*"),
+                            "(?s).*beginScaledRender\\(\\s*graphics,\\s*mouseX,\\s*mouseY\\).*"),
                     screen.toString());
-            assertTrue(source.contains("endLegacyRender(graphics);"), screen.toString());
+            assertTrue(source.contains("endScaledRender(graphics);"), screen.toString());
         }
     }
 }

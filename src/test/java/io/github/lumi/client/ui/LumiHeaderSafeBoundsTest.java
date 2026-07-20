@@ -14,18 +14,18 @@ class LumiHeaderSafeBoundsTest {
         for (int screenWidth : new int[] {320, 427, 640}) {
             int frameX = 24;
             int frameWidth = screenWidth - 48;
-            int controlX = LumiLegacyModalScreen.navigationControlX(
+            int controlX = LumiModalScreen.navigationControlX(
                     frameX, frameWidth);
             int contentLeft = frameX + 12;
             int contentRight = frameX + frameWidth - 12;
             int safeRight = controlX - 8;
             assertEquals(frameX + frameWidth - 8 - 26, controlX);
             assertEquals(safeRight - contentLeft,
-                    LumiLegacyModalScreen.headerTextWidth(
+                    LumiModalScreen.headerTextWidth(
                             controlX, contentLeft, contentRight));
 
             int centerX = frameX + frameWidth / 2;
-            int centeredWidth = LumiLegacyModalScreen.centeredHeaderTextWidth(
+            int centeredWidth = LumiModalScreen.centeredHeaderTextWidth(
                     controlX, centerX, contentLeft, contentRight);
             assertTrue(centerX + centeredWidth / 2 <= safeRight);
             assertTrue(centerX - centeredWidth / 2 >= contentLeft);

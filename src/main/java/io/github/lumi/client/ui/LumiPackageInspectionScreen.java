@@ -6,8 +6,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-/** Legacy confirmation for applying inspected world-state package data. */
-public final class LumiPackageInspectionScreen extends LumiLegacyModalScreen {
+/** Confirmation for applying inspected world-state package data. */
+public final class LumiPackageInspectionScreen extends LumiModalScreen {
     private static final int PANEL_WIDTH = 460;
     private static final int PANEL_HEIGHT = 238;
     private final Screen parent;
@@ -31,20 +31,20 @@ public final class LumiPackageInspectionScreen extends LumiLegacyModalScreen {
 
     @Override
     protected void init() {
-        beginLegacyInit();
-        LegacyModalLayout layout = fitPanel(width, height);
+        beginScreenInit();
+        LumiModalLayout layout = fitPanel(width, height);
         panelX = layout.x();
         panelY = layout.y();
         panelWidth = layout.width();
         panelHeight = layout.height();
         int buttonWidth = (panelWidth - 48) / 2;
         int actionY = panelY + actionOffset(panelHeight);
-        addLegacyButton(panelX + 20, actionY, buttonWidth,
+        addButton(panelX + 20, actionY, buttonWidth,
                 Component.translatable("luma.action.import_package"),
-                this::confirm, LumiLegacyButton.Kind.PRIMARY);
-        addLegacyButton(panelX + 28 + buttonWidth, actionY, buttonWidth,
+                this::confirm, LumiButton.Kind.PRIMARY);
+        addButton(panelX + 28 + buttonWidth, actionY, buttonWidth,
                 Component.translatable("luma.action.cancel"),
-                this::onClose, LumiLegacyButton.Kind.NORMAL);
+                this::onClose, LumiButton.Kind.NORMAL);
     }
 
     private void confirm() {
@@ -59,16 +59,16 @@ public final class LumiPackageInspectionScreen extends LumiLegacyModalScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        LegacyRenderContext render = beginLegacyRender(graphics, mouseX, mouseY);
+        ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
-        renderLegacyWindow(graphics, panelX, panelY, panelWidth, panelHeight);
+        renderWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         graphics.drawCenteredString(font, title, width / 2, panelY + 16,
-                LegacyLumiTheme.TEXT);
+                LumiTheme.TEXT);
         int warningBottom = drawWrapped(
                 graphics,
                 Component.translatable("luma.share.package_safety_warning"),
                 panelX + 20, panelY + 36, panelWidth - 40,
-                LegacyLumiTheme.ACCENT);
+                LumiTheme.ACCENT);
         int actionY = panelY + actionOffset(panelHeight);
         int errorSpace = error.isEmpty() ? 0 : 14;
         int detailsY = Math.max(panelY + 68, warningBottom + 6);
@@ -76,32 +76,32 @@ public final class LumiPackageInspectionScreen extends LumiLegacyModalScreen {
                 actionY - detailsY - 8 - errorSpace);
         int lineStride = Math.max(9, Math.min(16,
                 Math.max(0, detailsHeight - 17) / 3));
-        renderLegacyPanel(
+        renderPanel(
                 graphics, panelX + 20, detailsY, panelWidth - 40, detailsHeight);
         graphics.drawString(font, inspection.packageName() + ".lumi",
-                panelX + 30, detailsY + 7, LegacyLumiTheme.TEXT, false);
+                panelX + 30, detailsY + 7, LumiTheme.TEXT, false);
         graphics.drawString(font,
                 font.plainSubstrByWidth(inspection.message(), panelWidth - 60),
                 panelX + 30, detailsY + 7 + lineStride,
-                LegacyLumiTheme.TEXT, false);
+                LumiTheme.TEXT, false);
         graphics.drawString(font,
                 font.plainSubstrByWidth(inspection.author(), panelWidth - 60),
                 panelX + 30, detailsY + 7 + lineStride * 2,
-                LegacyLumiTheme.MUTED, false);
+                LumiTheme.MUTED, false);
         String metadata = Component.translatable(
                 "luma.share.package_safety_metadata",
                 inspection.totalBytes(), inspection.objectCount()).getString();
         graphics.drawString(font,
                 font.plainSubstrByWidth(metadata, panelWidth - 60),
                 panelX + 30, detailsY + 7 + lineStride * 3,
-                LegacyLumiTheme.MUTED, false);
+                LumiTheme.MUTED, false);
         if (!error.isEmpty()) {
             graphics.drawCenteredString(font, errorText(error),
-                    width / 2, actionY - 13, LegacyLumiTheme.DANGER);
+                    width / 2, actionY - 13, LumiTheme.DANGER);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endLegacyRender(graphics);
+            endScaledRender(graphics);
         }
     }
 
@@ -120,10 +120,10 @@ public final class LumiPackageInspectionScreen extends LumiLegacyModalScreen {
         return lineY;
     }
 
-    static LegacyModalLayout fitPanel(int screenWidth, int screenHeight) {
+    static LumiModalLayout fitPanel(int screenWidth, int screenHeight) {
         int panelWidth = Math.min(PANEL_WIDTH, Math.max(1, screenWidth - 32));
         int panelHeight = Math.min(PANEL_HEIGHT, Math.max(1, screenHeight - 16));
-        return new LegacyModalLayout(
+        return new LumiModalLayout(
                 Math.max(0, (screenWidth - panelWidth) / 2),
                 Math.max(0, (screenHeight - panelHeight) / 2),
                 panelWidth, panelHeight);
