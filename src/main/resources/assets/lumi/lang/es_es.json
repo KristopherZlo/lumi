@@ -278,6 +278,7 @@
   "luma.history.message_input": "Nombre del guardado",
   "luma.history.message_required": "Mensaje (requerido)",
   "luma.history.empty": "Aún no hay guardados.",
+  "luma.history.initial_save": "Guardado inicial",
   "luma.scrollbar": "Barra de desplazamiento",
   "luma.history.version_header": "%s | %s",
   "luma.history.version_header_selected": "%s | %s | seleccionado",

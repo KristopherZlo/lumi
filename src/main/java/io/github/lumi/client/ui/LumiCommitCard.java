@@ -66,7 +66,7 @@ final class LumiCommitCard {
         if (layout.textWidth() <= 0) return;
         graphics.drawString(
                 font,
-                font.plainSubstrByWidth(version.message(), layout.textWidth()),
+                font.plainSubstrByWidth(VersionText.name(version), layout.textWidth()),
                 layout.textX(), layout.messageY(), LumiTheme.TEXT, false);
         if (!layout.showMeta()) return;
         String tagText = tags.isEmpty()

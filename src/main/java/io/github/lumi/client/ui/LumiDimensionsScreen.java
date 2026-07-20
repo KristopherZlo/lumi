@@ -45,15 +45,20 @@ public final class LumiDimensionsScreen extends LumiPageScreen {
         visible = dimensions.get().stream().distinct().sorted().toList();
         int capacity = capacity();
         scroll = Math.min(scroll, Math.max(0, visible.size() - capacity));
+        String current = currentDimension.get();
         for (int index = 0; index < Math.min(capacity, visible.size() - scroll); index++) {
             String dimension = visible.get(scroll + index);
-            addIconButton(
-                    panelX + panelWidth - 48,
-                    panelY + 76 + index * ROW_HEIGHT,
-                    "folder", Component.translatable(
-                            "luma.dimensions.open_history", dimension),
+            Component label = Component.literal(dimension);
+            if (dimension.equals(current)) {
+                label = label.copy().append(" · ").append(
+                        Component.translatable("luma.dimensions.current"));
+            }
+            addButton(
+                    panelX + 20, panelY + 74 + index * ROW_HEIGHT,
+                    Math.max(1, panelWidth - 40), label,
                     () -> openHistory.accept(dimension),
-                    LumiButton.Kind.NORMAL);
+                    dimension.equals(current)
+                            ? LumiButton.Kind.SELECTED : LumiButton.Kind.NORMAL);
         }
     }
 
@@ -67,40 +72,17 @@ public final class LumiDimensionsScreen extends LumiPageScreen {
                     Component.translatable("luma.dimensions.help"));
             renderPanel(graphics, panelX + 12, panelY + 62,
                     panelWidth - 24, Math.max(1, panelHeight - 74));
-            String current = currentDimension.get();
-            int count = Math.min(capacity(), visible.size() - scroll);
-            for (int index = 0; index < count; index++) {
-                String dimension = visible.get(scroll + index);
-                int y = panelY + 72 + index * ROW_HEIGHT;
-                LumiTheme.outlined(
-                        graphics, panelX + 20, y, panelWidth - 40, 26,
-                        LumiTheme.INSET,
-                        dimension.equals(current)
-                                ? LumiTheme.ACCENT
-                                : LumiTheme.INSET_BORDER);
-                graphics.drawString(font,
-                        font.plainSubstrByWidth(dimension, panelWidth - 100),
-                        panelX + 28, y + 6, LumiTheme.TEXT, false);
-                if (dimension.equals(current)) {
-                    graphics.drawString(font,
-                            font.plainSubstrByWidth(
-                                    Component.translatable(
-                                            "luma.dimensions.current").getString(),
-                                    Math.max(1, panelWidth - 100)),
-                            panelX + 28, y + 16, LumiTheme.ACCENT, false);
-                }
-            }
             renderScrollbar(
                     graphics, panelX + 20, panelY + 72, panelWidth - 35,
                     Math.max(0, panelHeight - 86),
                     visible.size(), capacity(), scroll,
                     value -> scroll = value);
             if (visible.isEmpty()) {
-                graphics.drawString(font,
-                        font.plainSubstrByWidth(
-                                Component.translatable("luma.dimensions.empty").getString(),
-                                Math.max(1, panelWidth - 48)),
-                        panelX + 24, panelY + 76, LumiTheme.MUTED, false);
+                graphics.drawCenteredString(font,
+                        Component.translatable("luma.dimensions.empty"),
+                        panelX + panelWidth / 2,
+                        panelY + 62 + Math.max(0, (panelHeight - 74) / 2),
+                        LumiTheme.MUTED);
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {

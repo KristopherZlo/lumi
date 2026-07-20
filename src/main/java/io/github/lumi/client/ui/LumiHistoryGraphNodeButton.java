@@ -24,7 +24,7 @@ final class LumiHistoryGraphNodeButton extends Button {
             HistoryGraphLayout.Node node,
             int graphX, int laneSpacing, Integer zoneColor,
             Runnable open) {
-        super(x, y, width, 28, Component.literal(node.version().message()),
+        super(x, y, width, 28, Component.literal(VersionText.name(node.version())),
                 ignored -> open.run(), DEFAULT_NARRATION);
         this.node = Objects.requireNonNull(node, "node");
         this.graphX = graphX;
@@ -52,7 +52,7 @@ final class LumiHistoryGraphNodeButton extends Button {
         int textX = graphX + Math.max(1, node.laneCount()) * laneSpacing + 12;
         int available = Math.max(0, getX() + getWidth() - textX - 4);
         graphics.drawString(font,
-                font.plainSubstrByWidth(node.version().message(), available),
+                font.plainSubstrByWidth(VersionText.name(node.version()), available),
                 textX, getY() + 5, LumiTheme.TEXT, false);
         String marker = node.branchHeads().isEmpty()
                 ? node.version().id().hex().substring(0, 7)

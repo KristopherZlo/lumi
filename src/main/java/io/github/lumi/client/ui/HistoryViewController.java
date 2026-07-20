@@ -18,8 +18,17 @@ final class HistoryViewController {
     }
 
     private final HistorySearchController search = new HistorySearchController();
+    private final HistoryScope scope;
     private Mode mode = Mode.CARDS;
     private String branch = "";
+
+    HistoryViewController(HistoryScope scope) {
+        this.scope = Objects.requireNonNull(scope, "scope");
+    }
+
+    HistoryScope scope() {
+        return scope;
+    }
 
     Mode mode() {
         return mode;

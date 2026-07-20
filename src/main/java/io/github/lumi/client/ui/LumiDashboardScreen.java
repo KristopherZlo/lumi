@@ -75,7 +75,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private final BiConsumer<CommitId, VersionTags> updateTags;
     private final Consumer<VersionCompareController.Target> openCompare;
     private final String modVersion;
-    private final HistoryViewController historyView = new HistoryViewController();
+    private final HistoryViewController historyView =
+            new HistoryViewController(new HistoryScope.Workspace());
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
     private HistorySnapshotPayload snapshot;
     private LumiPageLayout layout;
@@ -189,7 +190,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         boolean hintVisible = addDashboardHint(baseGeometry.hintY());
         dashboardGeometry = dashboardGeometry(
                 layout.bodyY(), layout.bodyHeight(), layout.bodyWidth(),
-                hintVisible ? contextualHintOffset(0) : 0);
+                hintVisible ? contextualHintOffset(0) : 0,
+                latestCreated().isPresent());
         if (hintVisible) {
             moveContextualHint(
                     layout.bodyX() + PANEL_PADDING, dashboardGeometry.hintY());
@@ -311,9 +313,11 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         addIconButton(card.actionX(2), card.actionY(),
                 "branch", "luma.action.create_idea",
                 () -> createBranch.accept(version), LumiButton.Kind.NORMAL);
-        addIconButton(card.actionX(3), card.actionY(),
-                "tags", "luma.action.edit_tags",
-                () -> editTags(version), LumiButton.Kind.NORMAL);
+        if (!VersionText.immutable(version)) {
+            addIconButton(card.actionX(3), card.actionY(),
+                    "tags", "luma.action.edit_tags",
+                    () -> editTags(version), LumiButton.Kind.NORMAL);
+        }
     }
 
     private boolean addDashboardHint(int y) {
@@ -572,7 +576,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     }
 
     private Optional<HistorySnapshotPayload.Version> latestCreated() {
-        return snapshot.versions().stream().max(
+        return snapshot == null ? Optional.empty() : snapshot.versions().stream()
+                .filter(VersionText::featured).max(
                 Comparator.comparingLong(
                         HistorySnapshotPayload.Version::timestampMillis));
     }
@@ -779,12 +784,12 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 versions.size(), rows, historyScroll,
                 value -> historyScroll = value);
         if (versions.isEmpty()) {
-            graphics.drawString(font,
+            graphics.drawCenteredString(font,
                     Component.translatable(searchQuery.isBlank()
-                            ? "luma.simple.no_saved_help"
+                            ? "luma.history.empty"
                             : "luma.project.history_search_help"),
-                    x + PANEL_PADDING, historyY + 38,
-                    LumiTheme.MUTED, false);
+                    x + width / 2, emptyHistoryY(historyY, historyHeight),
+                    LumiTheme.MUTED);
         }
     }
 
@@ -843,12 +848,18 @@ public final class LumiDashboardScreen extends LumiPageScreen {
 
     static DashboardGeometry dashboardGeometry(
             int bodyY, int bodyHeight, int bodyWidth, int hintHeight) {
+        return dashboardGeometry(bodyY, bodyHeight, bodyWidth, hintHeight, true);
+    }
+
+    static DashboardGeometry dashboardGeometry(
+            int bodyY, int bodyHeight, int bodyWidth,
+            int hintHeight, boolean hasLatest) {
         boolean compact = bodyHeight < 220;
         int bodyBottom = bodyY + Math.max(0, bodyHeight);
         int preferredHintY = bodyY + (compact ? 42 : 64);
         int latestCandidateHeight = LATEST_TITLE_HEIGHT
                 + historyRowHeight(bodyWidth) + LATEST_BOTTOM_PADDING;
-        int latestHeight = latestCandidateHeight;
+        int latestHeight = hasLatest ? latestCandidateHeight : 0;
         int maximumActionY = bodyBottom - CONTROL_HEIGHT - PANEL_PADDING;
         int hintY = hintHeight > 0
                 ? Math.max(bodyY, Math.min(
@@ -881,6 +892,12 @@ public final class LumiDashboardScreen extends LumiPageScreen {
 
     static int latestCardY(DashboardGeometry geometry) {
         return geometry.latestY() + LATEST_TITLE_HEIGHT;
+    }
+
+    static int emptyHistoryY(int historyY, int historyHeight) {
+        int contentHeight = Math.max(0, historyHeight - HISTORY_FIRST_ROW_OFFSET);
+        return historyY + HISTORY_FIRST_ROW_OFFSET
+                + Math.max(0, (contentHeight - 8) / 2);
     }
 
     static int visibleHistoryRows(

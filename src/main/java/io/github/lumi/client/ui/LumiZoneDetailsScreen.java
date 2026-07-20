@@ -33,7 +33,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     private final Runnable openSave;
     private final Runnable openAmend;
     private final Runnable showChanges;
-    private final HistoryViewController historyView = new HistoryViewController();
+    private final HistoryViewController historyView;
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
     private final Map<CommitId, VersionTags> optimisticTags = new HashMap<>();
     private LumiPageLayout layout;
@@ -76,6 +76,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openAmend = Objects.requireNonNull(openAmend, "openAmend");
         this.showChanges = Objects.requireNonNull(showChanges, "showChanges");
+        historyView = new HistoryViewController(new HistoryScope.Zone(zone.id()));
         zoneHistory = new ZoneHistoryController(
                 snapshot, zone.id(), pages, requestPage);
     }
@@ -101,7 +102,8 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         beginScreenInit();
         layout = pageLayout();
         geometry = LumiDashboardScreen.dashboardGeometry(
-                layout.bodyY(), layout.bodyHeight(), layout.bodyWidth(), 0);
+                layout.bodyY(), layout.bodyHeight(), layout.bodyWidth(), 0,
+                latestCreated().isPresent());
         commitCards = new LumiCommitCard(font, previews, snapshot.dimensionId());
         requestPendingStatistics();
         addWorkspaceActions();
@@ -283,7 +285,8 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     }
 
     private Optional<HistorySnapshotPayload.Version> latestCreated() {
-        return zone.versions().stream().max(Comparator.comparingLong(
+        return zone.versions().stream().filter(VersionText::featured)
+                .max(Comparator.comparingLong(
                 HistorySnapshotPayload.Version::timestampMillis));
     }
 
@@ -392,13 +395,14 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                 versions.size(), rows, historyScroll,
                 value -> historyScroll = value);
         if (versions.isEmpty()) {
-            graphics.drawString(font,
+            graphics.drawCenteredString(font,
                     Component.translatable(searchValue.isBlank()
                             ? "luma.zones.history_empty"
                             : "luma.project.history_search_help"),
-                    x + LumiDashboardScreen.PANEL_PADDING,
-                    geometry.historyY() + LumiDashboardScreen.HISTORY_FIRST_ROW_OFFSET,
-                    LumiTheme.MUTED, false);
+                    x + width / 2,
+                    LumiDashboardScreen.emptyHistoryY(
+                            geometry.historyY(), geometry.historyHeight()),
+                    LumiTheme.MUTED);
         }
     }
 

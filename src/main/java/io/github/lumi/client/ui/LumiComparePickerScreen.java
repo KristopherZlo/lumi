@@ -259,7 +259,7 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
         int textWidth = Math.max(0,
                 width - previewWidth - (compact ? 16 : 80));
         graphics.drawString(font,
-                font.plainSubstrByWidth(version.message(), textWidth),
+                font.plainSubstrByWidth(VersionText.name(version), textWidth),
                 textX, y + 6, LumiTheme.TEXT, false);
         if (!compact) {
             String metadata = version.author() + " · " + DATE_FORMAT.format(

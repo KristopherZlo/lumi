@@ -1,6 +1,8 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
@@ -14,7 +16,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class HistoryViewControllerTest {
-    private final HistoryViewController controller = new HistoryViewController();
+    private final HistoryViewController controller =
+            new HistoryViewController(new HistoryScope.Workspace());
 
     @Test
     void defaultsToCardsAndCyclesAllThenEveryBranch() {
@@ -23,6 +26,7 @@ class HistoryViewControllerTest {
                 branch("tower", 'd', false));
 
         assertEquals(HistoryViewController.Mode.CARDS, controller.mode());
+        assertEquals(new HistoryScope.Workspace(), controller.scope());
         assertEquals("", controller.branch());
         controller.show(HistoryViewController.Mode.GRAPH);
         controller.nextBranch(branches);
@@ -32,6 +36,17 @@ class HistoryViewControllerTest {
         assertEquals("tower", controller.branch());
         controller.nextBranch(branches);
         assertEquals("", controller.branch());
+    }
+
+    @Test
+    void initialSaveIsImmutableAndNeverFeatured() {
+        var initial = new HistorySnapshotPayload.Version(
+                id('a'), "Initial world", "Lumi", 0,
+                CommitKind.HIDDEN_SAFETY, VersionTags.empty(), List.of(),
+                new CommitStatistics(0, 0, 0, 0), Optional.empty());
+
+        assertTrue(VersionText.immutable(initial));
+        assertFalse(VersionText.featured(initial));
     }
 
     @Test

@@ -278,6 +278,7 @@
   "luma.history.message_input": "Tallennuksen nimi",
   "luma.history.message_required": "Viesti (pakollinen)",
   "luma.history.empty": "Ei vielä tallenteita.",
+  "luma.history.initial_save": "Alkutallennus",
   "luma.scrollbar": "Vierityspalkki",
   "luma.history.version_header": "%s | %s",
   "luma.history.version_header_selected": "%s | %s | valittu",

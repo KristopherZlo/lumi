@@ -96,7 +96,7 @@ final class LumiHistoryGraphView {
                         texture.width(), texture.height()));
         int textX = cardX + 74;
         graphics.drawString(font,
-                font.plainSubstrByWidth(version.message(), cardWidth - 79),
+                font.plainSubstrByWidth(VersionText.name(version), cardWidth - 79),
                 textX, cardY + 7, LumiTheme.TEXT, false);
         graphics.drawString(font,
                 font.plainSubstrByWidth(version.author(), cardWidth - 79),

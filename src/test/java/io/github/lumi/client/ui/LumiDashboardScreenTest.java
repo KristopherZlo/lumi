@@ -36,6 +36,18 @@ class LumiDashboardScreenTest {
     }
 
     @Test
+    void omitsLatestAndGivesItsSpaceToHistoryWithoutUserSaves() {
+        LumiPageLayout layout = LumiPageLayout.fit(640, 360);
+        var geometry = LumiDashboardScreen.dashboardGeometry(
+                layout.bodyY(), layout.bodyHeight(), layout.bodyWidth(), 0, false);
+
+        assertFalse(geometry.latestVisible());
+        assertEquals(geometry.latestY(), geometry.historyY());
+        assertEquals(layout.bodyY() + layout.bodyHeight(),
+                geometry.historyY() + geometry.historyHeight());
+    }
+
+    @Test
     void stacksHistoryActionsBelowTextWhenTheContentPaneIsVeryNarrow() {
         LumiPageLayout tiny = LumiPageLayout.fit(320, 240);
         int bodyX = tiny.bodyX();

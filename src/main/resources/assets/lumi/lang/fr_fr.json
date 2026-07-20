@@ -278,6 +278,7 @@
   "luma.history.message_input": "Nom de la sauvegarde",
   "luma.history.message_required": "Message (obligatoire)",
   "luma.history.empty": "Aucune sauvegarde pour l'instant.",
+  "luma.history.initial_save": "Sauvegarde initiale",
   "luma.scrollbar": "Barre de défilement",
   "luma.history.version_header": "%s | %s",
   "luma.history.version_header_selected": "%s | %s | sélectionné",

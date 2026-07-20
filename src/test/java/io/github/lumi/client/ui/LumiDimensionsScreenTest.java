@@ -14,8 +14,15 @@ class LumiDimensionsScreenTest {
         String client = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClient.java"));
         assertTrue(screen.contains("openHistory.accept(dimension)"));
+        assertTrue(screen.contains("addButton("));
+        assertTrue(screen.contains("LumiButton.Kind.SELECTED"));
         assertTrue(screen.contains("public boolean mouseScrolled("));
         assertTrue(client.contains("getConnection().levels()"));
         assertTrue(client.contains("requestDimensionHistoryPage"));
+        String history = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiDimensionHistoryScreen.java"));
+        assertTrue(history.contains("new HistoryScope.Dimension(dimensionId)"));
+        assertTrue(history.contains("renderLatest(graphics)"));
+        assertTrue(history.contains("luma.history.empty"));
     }
 }
