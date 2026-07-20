@@ -123,8 +123,13 @@ public final class LumiClient implements ClientModInitializer {
 
                     @Override public void openSave() {
                         Minecraft client = Minecraft.getInstance();
-                        LumiClient.openSave(
-                                client.screen, SaveScreenController.Intent.SAVE, "");
+                        activeZone().ifPresentOrElse(
+                                zone -> LumiClient.openZoneSave(
+                                        client.screen, zone,
+                                        SaveScreenController.Intent.SAVE, ""),
+                                () -> LumiClient.openSave(
+                                        client.screen,
+                                        SaveScreenController.Intent.SAVE, ""));
                     }
 
                     @Override public void openHotkeys() {
@@ -382,6 +387,24 @@ public final class LumiClient implements ClientModInitializer {
                 requestId -> PREVIEW_CAPTURE.request(
                         requestId, HISTORY.state().snapshot().orElseThrow()),
                 accepted));
+    }
+
+    private static void openZoneSave(
+            Screen parent,
+            HistorySnapshotPayload.ZoneView zone,
+            SaveScreenController.Intent intent,
+            String initialMessage) {
+        Minecraft.getInstance().setScreen(new LumiSaveScreen(
+                parent, HISTORY,
+                new SaveScreenController(
+                        (message, tags) -> NETWORKING.saveZone(
+                                zone.id(), message, tags),
+                        (message, tags) -> NETWORKING.amendZone(
+                                zone.id(), message, tags)),
+                NETWORKING::refreshSnapshot, intent, initialMessage,
+                requestId -> PREVIEW_CAPTURE.request(
+                        requestId, HISTORY.state().snapshot().orElseThrow()),
+                () -> { }, LumiSaveScreen.Scope.ZONE));
     }
 
     private static void openVersionDetails(

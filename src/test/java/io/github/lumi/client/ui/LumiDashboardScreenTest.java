@@ -22,10 +22,11 @@ class LumiDashboardScreenTest {
                 - (reference.bodyY() + referenceGeometry.buildPanelHeight()));
         assertEquals(5, referenceGeometry.historyY()
                 - (referenceGeometry.latestY() + referenceGeometry.latestHeight()));
-        assertEquals(LumiDashboardScreen.historyRowHeight(reference.bodyWidth()),
-                referenceGeometry.latestHeight());
-        assertEquals(LumiDashboardScreen.historyRowHeight(small.bodyWidth()),
-                smallGeometry.latestHeight());
+        assertEquals(22, LumiDashboardScreen.latestCardY(referenceGeometry)
+                - referenceGeometry.latestY());
+        assertEquals(6, referenceGeometry.latestHeight()
+                - 22 - LumiDashboardScreen.historyRowHeight(reference.bodyWidth()));
+        assertEquals(0, smallGeometry.latestHeight());
         assertEquals(reference.bodyY() + reference.bodyHeight(),
                 referenceGeometry.historyY() + referenceGeometry.historyHeight());
         assertEquals(3, LumiDashboardScreen.visibleHistoryRows(

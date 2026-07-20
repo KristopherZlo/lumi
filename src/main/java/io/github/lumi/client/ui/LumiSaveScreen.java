@@ -25,6 +25,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
     private final String initialMessage;
     private final Consumer<UUID> previewCapture;
     private final Runnable accepted;
+    private final Scope scope;
     private LegacyModalLayout layout;
     private EditBox message;
     private EditBox tags;
@@ -73,7 +74,21 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
             String initialMessage,
             Consumer<UUID> previewCapture,
             Runnable accepted) {
-        super(parent, Component.translatable("luma.screen.save.title"));
+        this(parent, history, controller, refresh, preferredIntent,
+                initialMessage, previewCapture, accepted, Scope.BUILD);
+    }
+
+    public LumiSaveScreen(
+            Screen parent,
+            ClientHistoryStore history,
+            SaveScreenController controller,
+            Runnable refresh,
+            SaveScreenController.Intent preferredIntent,
+            String initialMessage,
+            Consumer<UUID> previewCapture,
+            Runnable accepted,
+            Scope scope) {
+        super(parent, scope.title());
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
         this.controller = Objects.requireNonNull(controller, "controller");
@@ -82,6 +97,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         this.initialMessage = Objects.requireNonNull(initialMessage, "initialMessage");
         this.previewCapture = Objects.requireNonNull(previewCapture, "previewCapture");
         this.accepted = Objects.requireNonNull(accepted, "accepted");
+        this.scope = Objects.requireNonNull(scope, "scope");
     }
 
     @Override
@@ -92,16 +108,12 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         int y = layout.y();
         int actionY = y + actionOffset(layout.height());
 
-        addLegacyIconButton(x + layout.width() - 32, y + 34, "see-changes",
-                Component.translatable("luma.action.refresh_preview"),
-                this::refreshPreview, LumiLegacyButton.Kind.NORMAL);
-
         message = new EditBox(
                 font, x + 14, y + messageOffset(layout.height()),
                 layout.width() - 28, INPUT_HEIGHT,
-                Component.translatable("luma.save.name_input"));
+                scope.nameLabel());
         message.setMaxLength(SaveScreenController.MAX_NAME_LENGTH);
-        message.setHint(Component.translatable("luma.save.name_input"));
+        message.setHint(scope.nameLabel());
         message.setBordered(false);
         message.setTextColor(LegacyLumiTheme.TEXT);
         message.setResponder(value -> setSubmitActive(!value.trim().isEmpty()));
@@ -120,7 +132,7 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
 
         int buttonWidth = Math.max(80, (layout.width() - 18) / 2);
         save = addLegacyButton(x + 6, actionY, buttonWidth,
-                Component.translatable("luma.action.save_build"),
+                scope.saveLabel(),
                 () -> submit(SaveScreenController.Intent.SAVE),
                 preferredIntent == SaveScreenController.Intent.SAVE
                         ? LumiLegacyButton.Kind.PRIMARY : LumiLegacyButton.Kind.NORMAL);
@@ -222,11 +234,11 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         LegacyLumiTheme.outlined(graphics, x + 6, fieldY,
                 layout.width() - 12, tiny ? 34 : compact ? 42 : 67,
                 LegacyLumiTheme.INSET, LegacyLumiTheme.INSET_BORDER);
-        graphics.drawString(font, Component.translatable("luma.save.name_input"),
+        graphics.drawString(font, scope.nameLabel(),
                 x + 12, fieldY + 8, LegacyLumiTheme.TEXT, false);
         if (!compact) {
             graphics.drawString(
-                    font, Component.translatable("luma.quick_save.name_help"),
+                    font, scope.help(),
                     x + 12, fieldY + 20, LegacyLumiTheme.MUTED, false);
         }
         LegacyLumiTheme.outlined(graphics, x + 11,
@@ -277,6 +289,30 @@ public final class LumiSaveScreen extends LumiLegacyModalScreen {
         return pending == 0
                 ? Component.translatable("luma.dashboard.pending_clean")
                 : Component.translatable("luma.dashboard.workspace_pending", pending);
+    }
+
+    public enum Scope {
+        BUILD("luma.screen.save.title", "luma.action.save_build",
+                "luma.save.name_input", "luma.quick_save.name_help"),
+        ZONE("luma.zones.save_title", "luma.zones.save_button",
+                "luma.zones.save_input", "luma.zones.save_help");
+
+        private final String titleKey;
+        private final String saveKey;
+        private final String nameKey;
+        private final String helpKey;
+
+        Scope(String titleKey, String saveKey, String nameKey, String helpKey) {
+            this.titleKey = titleKey;
+            this.saveKey = saveKey;
+            this.nameKey = nameKey;
+            this.helpKey = helpKey;
+        }
+
+        Component title() { return Component.translatable(titleKey); }
+        Component saveLabel() { return Component.translatable(saveKey); }
+        Component nameLabel() { return Component.translatable(nameKey); }
+        Component help() { return Component.translatable(helpKey); }
     }
 
     @Override public boolean isPauseScreen() { return false; }

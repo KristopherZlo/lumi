@@ -30,13 +30,15 @@ import net.minecraft.util.Util;
 
 /** Legacy project-window presentation backed by the immutable V2 history snapshot. */
 public final class LumiDashboardScreen extends LumiLegacyModalScreen {
-    private static final int PANEL_PADDING = 6;
-    private static final int SECTION_GAP = 5;
-    private static final int CONTROL_GAP = 4;
-    private static final int CONTROL_HEIGHT = 18;
-    private static final int ICON_BUTTON_WIDTH = 26;
-    private static final int HISTORY_TOOLBAR_OFFSET = 7;
-    private static final int HISTORY_FIRST_ROW_OFFSET = 38;
+    static final int PANEL_PADDING = 6;
+    static final int SECTION_GAP = 5;
+    static final int CONTROL_GAP = 4;
+    static final int CONTROL_HEIGHT = 18;
+    static final int ICON_BUTTON_WIDTH = 26;
+    static final int HISTORY_TOOLBAR_OFFSET = 7;
+    static final int HISTORY_FIRST_ROW_OFFSET = 38;
+    private static final int LATEST_TITLE_HEIGHT = 22;
+    private static final int LATEST_BOTTOM_PADDING = 6;
     private static final int HISTORY_ROW_HEIGHT = 30;
     private static final int HISTORY_ROW_STRIDE = 34;
     private static final int COMPACT_HISTORY_ROW_HEIGHT = 54;
@@ -234,7 +236,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         renderedStatistics = pendingStatistics.result(snapshot).orElse(null);
         if (dashboardGeometry.latestVisible()) {
             latestCreated().ifPresent(version -> addVersionActions(
-                    version, dashboardGeometry.latestY()));
+                    version, latestCardY(dashboardGeometry)));
         }
         if (historyHeight < 28) {
             return;
@@ -459,7 +461,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     historyActionX(layout.bodyX(), layout.bodyWidth(), 0),
                     historyActionY(
                             dashboardGeometry.latestVisible()
-                                    ? dashboardGeometry.latestY()
+                                    ? latestCardY(dashboardGeometry)
                                     : historyY + HISTORY_FIRST_ROW_OFFSET,
                             layout.bodyWidth()),
                     ICON_BUTTON_WIDTH, CONTROL_HEIGHT);
@@ -717,29 +719,31 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                     x + PANEL_PADDING, layout.bodyY() + titleOffset,
                     LegacyLumiTheme.TEXT, false);
             int pending = snapshot.pendingKeys();
-            Component pendingText = pending == 0
-                    ? Component.translatable("luma.dashboard.pending_clean")
-                    : Component.translatable("luma.dashboard.workspace_pending", pending);
+            Component pendingText = pendingStatistics.result(snapshot)
+                    .filter(result -> result.error().isEmpty())
+                    .<Component>map(result ->
+                            PendingStatisticsText.summary(result.workspace()))
+                    .orElseGet(() -> pending == 0
+                            ? Component.translatable("luma.dashboard.pending_clean")
+                            : Component.translatable(
+                                    "luma.dashboard.workspace_pending", pending));
             graphics.drawString(font,
                     pendingText,
                     x + PANEL_PADDING, layout.bodyY() + pendingOffset,
                     pending == 0
                             ? LegacyLumiTheme.MUTED : LegacyLumiTheme.ACCENT,
                     false);
-            if (!dashboardGeometry.compact()) {
-                pendingStatistics.result(snapshot)
-                        .filter(result -> result.error().isEmpty())
-                        .ifPresent(result -> graphics.drawString(
-                                font,
-                                PendingStatisticsText.summary(result.workspace()),
-                                x + PANEL_PADDING, layout.bodyY() + 50,
-                                LegacyLumiTheme.ACCENT, false));
-            }
         }
 
         if (dashboardGeometry.latestVisible()) {
+            drawPanel(graphics, x, dashboardGeometry.latestY(), width,
+                    dashboardGeometry.latestHeight());
+            graphics.drawString(font,
+                    Component.translatable("luma.dashboard.latest_badge"),
+                    x + PANEL_PADDING, dashboardGeometry.latestY() + 7,
+                    LegacyLumiTheme.TEXT, false);
             latestCreated().ifPresent(version -> renderVersionCard(
-                    graphics, version, dashboardGeometry.latestY(), true));
+                    graphics, version, latestCardY(dashboardGeometry), true));
         }
         if (historyHeight <= 0) {
             return;
@@ -833,7 +837,8 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         boolean compact = bodyHeight < 220;
         int bodyBottom = bodyY + Math.max(0, bodyHeight);
         int preferredHintY = bodyY + (compact ? 42 : 64);
-        int latestCandidateHeight = historyRowHeight(bodyWidth);
+        int latestCandidateHeight = LATEST_TITLE_HEIGHT
+                + historyRowHeight(bodyWidth) + LATEST_BOTTOM_PADDING;
         int latestHeight = latestCandidateHeight;
         int maximumActionY = bodyBottom - CONTROL_HEIGHT - PANEL_PADDING;
         int hintY = hintHeight > 0
@@ -845,21 +850,28 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                 || hintY >= bodyY + (compact ? 33 : 60);
         int actionY = hintHeight > 0
                 ? hintY + hintHeight + SECTION_GAP
-                : bodyY + (compact ? 38 : 64);
+                : bodyY + (compact ? 38 : 46);
         int buildPanelHeight = actionY - bodyY
                 + CONTROL_HEIGHT + PANEL_PADDING;
         int bandGap = compact ? 3 : SECTION_GAP;
-        int latestY = bodyY + buildPanelHeight + bandGap;
-        if (latestY + latestHeight > bodyBottom) {
-            latestY = bodyBottom;
+        int latestY = Math.min(
+                bodyBottom, bodyY + buildPanelHeight + bandGap);
+        boolean latestFits = latestY + latestHeight + bandGap
+                + HISTORY_FIRST_ROW_OFFSET + historyRowHeight(bodyWidth)
+                <= bodyBottom;
+        if (!latestFits) {
             latestHeight = 0;
         }
-        int historyY = latestHeight == 0 ? bodyBottom : Math.min(
+        int historyY = latestHeight == 0 ? latestY : Math.min(
                 bodyBottom, latestY + latestHeight + bandGap);
         return new DashboardGeometry(
                 hintY, actionY, buildPanelHeight,
                 latestY, latestHeight, historyY,
                 Math.max(0, bodyBottom - historyY), compact, headerVisible);
+    }
+
+    static int latestCardY(DashboardGeometry geometry) {
+        return geometry.latestY() + LATEST_TITLE_HEIGHT;
     }
 
     static int visibleHistoryRows(

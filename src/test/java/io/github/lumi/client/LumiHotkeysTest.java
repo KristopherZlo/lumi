@@ -77,4 +77,15 @@ class LumiHotkeysTest {
         assertTrue(source.contains("dashboard.same(client.options.keyAdvancements)"));
         assertTrue(source.contains("consume(client.options.keyAdvancements)"));
     }
+
+    @Test
+    void altSUsesTheZoneSaveModalWhileAZoneIsActive() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/LumiClient.java"));
+
+        assertTrue(source.contains("activeZone().ifPresentOrElse("));
+        assertTrue(source.contains("LumiClient.openZoneSave("));
+        assertTrue(source.contains("LumiSaveScreen.Scope.ZONE"));
+        assertTrue(source.contains("NETWORKING.saveZone("));
+    }
 }

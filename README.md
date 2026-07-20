@@ -23,7 +23,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   branch appear in normal history; they are neither created nor shown by
   default.
 - Alt+Z/Y is session-only and separate from durable commits.
-- Alt+S opens the Save form; R rolls back only pending builder-root work
+- Alt+S opens the Save form, using the same focused modal with a Save zone
+  action while a zone is active; R rolls back only pending builder-root work
   inside the active workspace and reports when the current saved version has
   nothing to restore.
 - The same form can replace the latest version with a crash-safe Amend.
@@ -39,6 +40,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - Successful integrated Save and Amend operations capture a bounded world
   transparent isometric render for their new history entry; no player
   framebuffer or open menu is captured.
+- The Save modal refreshes its state automatically and has no manual preview
+  refresh control.
 - Work zones support empty color-assigned creation, exclusive Enter/Leave,
   sword cell editing, merged Focused/All/Hidden world shells, overlap counts,
   metadata-only Delete, and paged Cards/Graph commit management with the same
