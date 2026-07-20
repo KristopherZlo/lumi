@@ -50,8 +50,9 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   finishes in the live hotkey guide. Contextual tips remain independently
   dismissible; Alt+I opens that same guide.
 - Settings persists workspace history, Restore, preview, HUD and automatic
-  version defaults; diagnostic telemetry remains client-local. More is a
-  compact secondary-action row and does not duplicate Settings or support.
+  version defaults through descriptive rows with compact On/Off controls;
+  diagnostic telemetry remains client-local. More is a compact
+  secondary-action row and does not duplicate Settings or support.
 - Check updates immediately performs a bounded lookup against Lumi's fixed
   GitHub-hosted release manifest and shows progress/result in the same modal.
 - The project sidebar keeps More with the navigation and a bottom Support Lumi

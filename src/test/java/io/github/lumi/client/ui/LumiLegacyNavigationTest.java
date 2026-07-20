@@ -39,6 +39,9 @@ class LumiLegacyNavigationTest {
         String modal = Files.readString(ui.resolve("LumiLegacyModalScreen.java"));
         assertTrue(modal.contains("background.render("));
         assertTrue(modal.contains("GLFW_HAND_CURSOR"));
+        assertTrue(modal.contains("child instanceof Button button"));
+        assertTrue(modal.contains("LegacyLumiTheme.PAGE_HEADER_HEIGHT"));
+        assertTrue(modal.contains("LegacyLumiTheme.TITLEBAR"));
         assertTrue(modal.contains("page ? \"chevron-left\" : \"close\""));
         assertTrue(modal.contains("legacy.legacyInitialized"));
         assertFalse(modal.contains("background.mouseClicked("));

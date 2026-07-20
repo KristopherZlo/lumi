@@ -35,6 +35,9 @@ class LumiSettingsScreenTest {
         assertTrue(source.contains("requestSurvivalSettings.run()"));
         assertTrue(source.contains("updateSurvivalSettings.accept"));
         assertFalse(source.contains("renderCards("));
+        assertTrue(source.contains("LumiSettingRow.toggle("));
+        assertTrue(source.contains("LumiSettingRow.action("));
+        assertFalse(source.contains("toggleLabel("));
         assertTrue(source.contains("ClientContextualHelpHint.SETTINGS"));
         assertTrue(source.contains("contentOffset"));
         assertTrue(source.contains("public boolean mouseScrolled("));
@@ -43,11 +46,18 @@ class LumiSettingsScreenTest {
     @Test
     void settingsRowsStayInsideShortViewports() {
         assertFalse(LumiSettingsScreen.supportsContextualHint(160));
-        assertTrue(LumiSettingsScreen.supportsContextualHint(180));
+        assertFalse(LumiSettingsScreen.supportsContextualHint(180));
         assertTrue(LumiSettingsScreen.supportsContextualHint(220));
-        assertEquals(4, LumiSettingsScreen.visibleSettingRows(160, 0));
-        assertEquals(6, LumiSettingsScreen.visibleSettingRows(220, 0));
-        assertEquals(4, LumiSettingsScreen.visibleSettingRows(220, 48));
+        assertEquals(3, LumiSettingsScreen.visibleSettingRows(160, 0));
+        assertEquals(4, LumiSettingsScreen.visibleSettingRows(220, 0));
+        assertEquals(3, LumiSettingsScreen.visibleSettingRows(220, 48));
         assertEquals(8, LumiSettingsScreen.visibleSettingRows(340, 0));
+    }
+
+    @Test
+    void settingValuesStayCompactInsideNarrowRows() {
+        assertEquals(42, LumiSettingRow.valueWidth(100, 10));
+        assertEquals(76, LumiSettingRow.valueWidth(100, 80));
+        assertEquals(0, LumiSettingRow.valueWidth(20, 10));
     }
 }

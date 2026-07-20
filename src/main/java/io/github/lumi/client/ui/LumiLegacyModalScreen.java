@@ -6,6 +6,7 @@ import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.onboarding.ClientContextualHelpService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -149,7 +150,7 @@ abstract class LumiLegacyModalScreen extends Screen {
 
     private void updateCursor(int mouseX, int mouseY) {
         boolean hovered = children().stream().anyMatch(child ->
-                child instanceof LumiLegacyButton button
+                child instanceof Button button
                         && button.isMouseOver(mouseX, mouseY));
         if (hovered && handCursor == 0L) {
             handCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_HAND_CURSOR);
@@ -232,6 +233,15 @@ abstract class LumiLegacyModalScreen extends Screen {
         LegacyLumiTheme.outlined(
                 graphics, x, y, width, height,
                 LegacyLumiTheme.WINDOW, LegacyLumiTheme.WINDOW_BORDER);
+        int headerBottom = Math.min(
+                y + height - 1, y + LegacyLumiTheme.PAGE_HEADER_HEIGHT);
+        if (width > 2 && headerBottom > y + 1) {
+            graphics.fill(x + 1, y + 1, x + width - 1, headerBottom,
+                    LegacyLumiTheme.TITLEBAR);
+            graphics.fill(x + 1, headerBottom - 1,
+                    x + width - 1, headerBottom,
+                    LegacyLumiTheme.PANEL_BORDER);
+        }
     }
 
     protected final void renderLegacyPanel(

@@ -22,7 +22,7 @@ public record LegacyWorkspaceLayout(
                 width,
                 height,
                 Math.min(sidebar, Math.max(1, width / 2)),
-                Math.min(42, height));
+                Math.min(LegacyLumiTheme.PAGE_HEADER_HEIGHT, height));
     }
 
     public int contentX() {

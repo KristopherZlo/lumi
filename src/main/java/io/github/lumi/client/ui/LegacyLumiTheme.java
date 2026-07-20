@@ -4,6 +4,7 @@ import net.minecraft.client.gui.GuiGraphics;
 
 /** Colors and simple surfaces retained from the legacy Lumi presentation. */
 final class LegacyLumiTheme {
+    static final int PAGE_HEADER_HEIGHT = 42;
     static final int TEXT = 0xfff4f1ea;
     static final int MUTED = 0xffa9a39a;
     static final int ACCENT = 0xffd9b86c;
