@@ -30,6 +30,8 @@ class LumiMoreScreenTest {
         assertFalse(more.contains("luma.action.settings"));
         assertFalse(more.contains("luma.action.buy_me_a_coffee"));
         assertFalse(more.contains("luma.action.paypal_donate"));
+        assertFalse(more.contains("luma.window.credit"));
+        assertFalse(more.contains("luma.window.mod_version"));
         assertTrue(client.contains("new LumiCleanupScreen("));
         assertTrue(client.contains("new LumiComparePickerScreen("));
         assertTrue(cleanup.contains("luma.action.inspect_unused_files"));

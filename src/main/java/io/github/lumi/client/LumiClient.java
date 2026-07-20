@@ -118,7 +118,7 @@ public final class LumiClient implements ClientModInitializer {
                 new HotkeyActionDispatcher.Actions() {
                     @Override public void openDashboard() {
                         Minecraft client = Minecraft.getInstance();
-                        client.setScreen(dashboard(client.screen));
+                        LumiClient.openDashboard(client.screen);
                     }
 
                     @Override public void openSave() {
@@ -218,6 +218,13 @@ public final class LumiClient implements ClientModInitializer {
                 LumiClient::showCompareChanges);
     }
 
+    private static void openDashboard(Screen parent) {
+        Minecraft client = Minecraft.getInstance();
+        LumiDashboardScreen dashboard = dashboard(parent);
+        client.setScreen(dashboard);
+        activeZone().ifPresent(zone -> openZones(dashboard));
+    }
+
     private static void showFeedback(String value) {
         var player = Minecraft.getInstance().player;
         if (player == null) {
@@ -247,6 +254,14 @@ public final class LumiClient implements ClientModInitializer {
                 ZONE_OVERLAY::label, ZONE_OVERLAY::cycle,
                 NETWORKING::enterZone, NETWORKING::leaveZone);
         client.setScreen(zones);
+        activeZone().ifPresent(zone -> openZoneDetails(zones, zone));
+    }
+
+    private static Optional<HistorySnapshotPayload.ZoneView> activeZone() {
+        return HISTORY.state().snapshot().stream()
+                .flatMap(snapshot -> snapshot.zones().stream())
+                .filter(HistorySnapshotPayload.ZoneView::active)
+                .findFirst();
     }
 
     private static void openDimensions(Screen parent) {

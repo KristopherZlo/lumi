@@ -38,7 +38,7 @@ public final class LumiLegacyButton extends Button {
             Component message, OnPress onPress, Kind kind,
             String iconName, Integer accentColor) {
         super(
-                x, y, iconName == null ? width : ICON_BUTTON_WIDTH,
+                x, y, width,
                 CONTROL_HEIGHT,
                 message, onPress, DEFAULT_NARRATION);
         this.kind = kind;
@@ -89,17 +89,20 @@ public final class LumiLegacyButton extends Button {
         if (icon != null) {
             int preferredSize = LumiUiScale.current().targetGuiScale() == 3 ? 8 : 12;
             int size = Math.min(preferredSize, Math.min(getWidth(), getHeight()));
+            int iconX = getWidth() > ICON_BUTTON_WIDTH
+                    ? getX() + 4 : getX() + (getWidth() - size) / 2;
             graphics.blit(
                     RenderPipelines.GUI_TEXTURED, active ? icon : disabledIcon,
-                    getX() + (getWidth() - size) / 2,
+                    iconX,
                     getY() + (getHeight() - size) / 2,
                     0, 0, size, size,
                     ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE,
                     ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE);
-            return;
+            if (getWidth() <= ICON_BUTTON_WIDTH) return;
         }
         var font = Minecraft.getInstance().font;
-        int available = Math.max(0, getWidth() - 8);
+        int textX = getX() + (icon == null ? 4 : 20);
+        int available = Math.max(0, getX() + getWidth() - 4 - textX);
         String label = getMessage().getString();
         if (font.width(label) > available) {
             String suffix = available >= font.width("…") ? "…" : "";
@@ -108,11 +111,11 @@ public final class LumiLegacyButton extends Button {
             setTooltip(Tooltip.create(getMessage()));
         }
         graphics.enableScissor(
-                getX() + 2, getY() + 1,
+                textX, getY() + 1,
                 getX() + getWidth() - 2, getY() + getHeight() - 1);
         graphics.drawCenteredString(
                 font, label,
-                getX() + getWidth() / 2,
+                textX + available / 2,
                 getY() + (getHeight() - 8) / 2,
                 active ? TEXT : TEXT_DISABLED);
         graphics.disableScissor();

@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.client.onboarding.OnboardingTour;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
@@ -20,6 +21,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -39,6 +41,9 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private static final int HISTORY_ROW_STRIDE = 34;
     private static final int COMPACT_HISTORY_ROW_HEIGHT = 54;
     private static final int COMPACT_HISTORY_ROW_STRIDE = 58;
+    private static final int SUPPORT_PANEL_OFFSET = 103;
+    private static final int SUPPORT_CREDIT_OFFSET = 23;
+    private static final int SIDEBAR_BUTTON_STRIDE = 19;
     private static final java.net.URI COFFEE_URI =
             java.net.URI.create("https://buymeacoffee.com/zl0yxp");
     private static final java.net.URI PAYPAL_URI = java.net.URI.create(
@@ -67,6 +72,7 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     private final Consumer<HistorySnapshotPayload.Version> createBranch;
     private final BiConsumer<CommitId, VersionTags> updateTags;
     private final Consumer<VersionCompareController.Target> openCompare;
+    private final String modVersion;
     private final HistoryViewController historyView = new HistoryViewController();
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
     private HistorySnapshotPayload snapshot;
@@ -140,6 +146,10 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         this.createBranch = Objects.requireNonNull(createBranch, "createBranch");
         this.updateTags = Objects.requireNonNull(updateTags, "updateTags");
         this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
+        modVersion = FabricLoader.getInstance().getModContainer(LumiMod.MOD_ID)
+                .map(container -> container.getMetadata()
+                        .getVersion().getFriendlyString())
+                .orElse("?");
     }
 
     @Override
@@ -337,72 +347,92 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
         }
         int x = layout.windowX() + 12;
         int width = layout.sidebarWidth() - 24;
-        int y = layout.windowY() + 108;
+        int y = layout.windowY() + 102;
         Integer zoneColor = activeZoneColor().orElse(null);
         addButton(x, y, width, "luma.tab.history", this::showHistory,
                 tabKind(LegacyProjectTab.HISTORY));
-        addButton(x, y + 22, width, "luma.tab.zones",
+        addButton(x, y + SIDEBAR_BUTTON_STRIDE, width, "luma.tab.zones",
                 () -> openTab(LegacyProjectTab.ZONES, openZones),
                 tabKind(LegacyProjectTab.ZONES), zoneColor);
-        addButton(x, y + 44, width, "luma.tab.variants",
+        addButton(x, y + SIDEBAR_BUTTON_STRIDE * 2, width, "luma.tab.variants",
                 () -> openTab(LegacyProjectTab.VARIANTS, openBranches),
                 tabKind(LegacyProjectTab.VARIANTS), zoneColor);
-        addButton(x, y + 66, width, "luma.tab.compare", this::showCompare,
+        addButton(x, y + SIDEBAR_BUTTON_STRIDE * 3, width,
+                "luma.tab.compare", this::showCompare,
                 tabKind(LegacyProjectTab.COMPARE));
-        addButton(x, y + 88, width, "luma.tab.import_export",
+        addButton(x, y + SIDEBAR_BUTTON_STRIDE * 4, width,
+                "luma.tab.import_export",
                 () -> openTab(LegacyProjectTab.IMPORT_EXPORT, openPackages),
                 tabKind(LegacyProjectTab.IMPORT_EXPORT));
-        addButton(x, y + 110, width, "luma.action.settings",
+        addButton(x, y + SIDEBAR_BUTTON_STRIDE * 5, width,
+                "luma.action.settings",
                 () -> openTab(LegacyProjectTab.SETTINGS, openSettings),
                 tabKind(LegacyProjectTab.SETTINGS));
-        addButton(x, y + 132, width, "luma.action.more",
+        addButton(x, y + SIDEBAR_BUTTON_STRIDE * 6, width,
+                "luma.action.more",
                 () -> openTab(LegacyProjectTab.MORE, openMore),
                 tabKind(LegacyProjectTab.MORE));
     }
 
     private void addCompactSidebarButtons() {
         Integer zoneColor = activeZoneColor().orElse(null);
-        addIconButton(compactSidebarActionX(layout, 0),
-                compactSidebarActionY(layout, 0),
+        addCompactSidebarButton(0,
                 "graph", "luma.tab.history", this::showHistory,
                 tabKind(LegacyProjectTab.HISTORY));
-        addIconButton(compactSidebarActionX(layout, 1),
-                compactSidebarActionY(layout, 1),
+        addCompactSidebarButton(1,
                 "bookmarks", "luma.tab.zones",
                 () -> openTab(LegacyProjectTab.ZONES, openZones),
                 tabKind(LegacyProjectTab.ZONES), zoneColor);
-        addIconButton(compactSidebarActionX(layout, 2),
-                compactSidebarActionY(layout, 2),
+        addCompactSidebarButton(2,
                 "branch", "luma.tab.variants",
                 () -> openTab(LegacyProjectTab.VARIANTS, openBranches),
                 tabKind(LegacyProjectTab.VARIANTS), zoneColor);
-        addIconButton(compactSidebarActionX(layout, 3),
-                compactSidebarActionY(layout, 3),
+        addCompactSidebarButton(3,
                 "see-changes", "luma.tab.compare",
                 this::showCompare, tabKind(LegacyProjectTab.COMPARE));
-        addIconButton(compactSidebarActionX(layout, 4),
-                compactSidebarActionY(layout, 4),
+        addCompactSidebarButton(4,
                 "folder", "luma.tab.import_export",
                 () -> openTab(LegacyProjectTab.IMPORT_EXPORT, openPackages),
                 tabKind(LegacyProjectTab.IMPORT_EXPORT));
-        addIconButton(compactSidebarActionX(layout, 5),
-                compactSidebarActionY(layout, 5),
+        addCompactSidebarButton(5,
                 "sliders", "luma.action.settings",
                 () -> openTab(LegacyProjectTab.SETTINGS, openSettings),
                 tabKind(LegacyProjectTab.SETTINGS));
-        addIconButton(compactSidebarActionX(layout, 6),
-                compactSidebarActionY(layout, 6),
+        addCompactSidebarButton(6,
                 "unordered-list", "luma.action.more",
                 () -> openTab(LegacyProjectTab.MORE, openMore),
                 tabKind(LegacyProjectTab.MORE));
     }
 
+    private void addCompactSidebarButton(
+            int index, String icon, String translation,
+            Runnable action, LumiLegacyButton.Kind kind) {
+        addCompactSidebarButton(index, icon, translation, action, kind, null);
+    }
+
+    private void addCompactSidebarButton(
+            int index, String icon, String translation,
+            Runnable action, LumiLegacyButton.Kind kind, Integer accent) {
+        addRenderableWidget(new LumiLegacyButton(
+                compactSidebarActionX(layout, index),
+                compactSidebarActionY(layout, index),
+                compactSidebarActionWidth(layout), 20,
+                Component.translatable(translation), ignored -> action.run(),
+                kind, icon, accent));
+    }
+
     static int compactSidebarActionX(LegacyWorkspaceLayout layout, int index) {
-        return layout.windowX() + 11 + index % 4 * 28;
+        return layout.windowX() + 11 + (tinySidebar(layout)
+                ? index * 16 : index % 4 * 28);
     }
 
     static int compactSidebarActionY(LegacyWorkspaceLayout layout, int index) {
-        return layout.windowY() + 60 + index / 4 * 24;
+        return layout.windowY() + (tinySidebar(layout)
+                ? 30 : 60 + index / 4 * 24);
+    }
+
+    static int compactSidebarActionWidth(LegacyWorkspaceLayout layout) {
+        return tinySidebar(layout) ? 14 : ICON_BUTTON_WIDTH;
     }
 
     void selectTab(LegacyProjectTab tab) {
@@ -446,16 +476,36 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
 
     private void addSupportButtons() {
         int x = layout.windowX() + 16;
-        int y = layout.windowY() + layout.windowHeight() - 36;
-        addIconButton(x, y, "buymeacoffee", "luma.action.buy_me_a_coffee",
+        int y = supportTop(layout) + 17;
+        int width = layout.sidebarWidth() - 32;
+        addSupportButton(x, y, width,
+                "buymeacoffee", "luma.action.buy_me_a_coffee",
                 () -> Util.getPlatform().openUri(COFFEE_URI),
                 LumiLegacyButton.Kind.NORMAL);
-        addIconButton(x + 32, y, "paypal", "luma.action.paypal_donate",
+        addSupportButton(x, y + 20, width,
+                "paypal", "luma.action.paypal_donate",
                 () -> Util.getPlatform().openUri(PAYPAL_URI),
                 LumiLegacyButton.Kind.NORMAL);
-        addIconButton(x + 64, y, "bug", "luma.action.report_bug",
+        addSupportButton(x, y + 40, width,
+                "bug", "luma.action.report_bug",
                 () -> Util.getPlatform().openUri(BUG_URI),
                 LumiLegacyButton.Kind.NORMAL);
+    }
+
+    private void addSupportButton(
+            int x, int y, int width, String icon, String translation,
+            Runnable action, LumiLegacyButton.Kind kind) {
+        addRenderableWidget(new LumiLegacyButton(
+                x, y, width, 20, Component.translatable(translation),
+                ignored -> action.run(), kind, icon));
+    }
+
+    static int supportTop(LegacyWorkspaceLayout layout) {
+        return layout.windowY() + layout.windowHeight() - SUPPORT_PANEL_OFFSET;
+    }
+
+    static int supportCreditY(LegacyWorkspaceLayout layout) {
+        return layout.windowY() + layout.windowHeight() - SUPPORT_CREDIT_OFFSET;
     }
 
     public void openBranchHistory(String branch) {
@@ -621,15 +671,28 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
                 y + layout.titleHeight(), LegacyLumiTheme.TITLEBAR);
         graphics.drawString(font, "Lumi", x + 14, y + 18,
                 LegacyLumiTheme.TEXT, false);
-        graphics.drawString(font, Component.translatable("luma.window.mode"),
-                x + 14, y + 43, LegacyLumiTheme.MUTED, false);
-        int supportY = y + layout.windowHeight() - 58;
+        if (!tinySidebar(layout)) {
+            graphics.drawString(font, Component.translatable("luma.window.mode"),
+                    x + 14, y + 43, LegacyLumiTheme.MUTED, false);
+        }
+        int supportY = supportTop(layout);
+        int creditY = supportCreditY(layout);
         LegacyLumiTheme.outlined(
                 graphics, x + 10, supportY,
-                layout.sidebarWidth() - 20, 48,
+                layout.sidebarWidth() - 20, creditY - 4 - supportY,
                 LegacyLumiTheme.PANEL, LegacyLumiTheme.PANEL_BORDER);
         graphics.drawString(font, Component.translatable("luma.window.support"),
                 x + 16, supportY + 7, LegacyLumiTheme.MUTED, false);
+        int footerWidth = Math.max(1, layout.sidebarWidth() - 32);
+        graphics.drawString(font, font.plainSubstrByWidth(
+                        Component.translatable("luma.window.credit").getString(),
+                        footerWidth),
+                x + 16, creditY, LegacyLumiTheme.MUTED, false);
+        graphics.drawString(font, font.plainSubstrByWidth(
+                        Component.translatable(
+                                "luma.window.mod_version", modVersion).getString(),
+                        footerWidth),
+                x + 16, creditY + 11, LegacyLumiTheme.MUTED, false);
         if (snapshot != null) {
             if (!compactSidebar()) {
                 drawChip(graphics, x + 14, y + 62,
@@ -889,7 +952,11 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     }
 
     private boolean compactSidebar() {
-        return layout.sidebarWidth() < 136 || layout.windowHeight() < 320;
+        return layout.sidebarWidth() < 136 || layout.windowHeight() < 340;
+    }
+
+    private static boolean tinySidebar(LegacyWorkspaceLayout layout) {
+        return layout.windowHeight() < 220;
     }
 
     record DashboardGeometry(

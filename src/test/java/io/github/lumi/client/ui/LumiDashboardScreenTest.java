@@ -62,15 +62,18 @@ class LumiDashboardScreenTest {
     @Test
     void compactNavigationStaysAboveTheSupportPanel() {
         LegacyWorkspaceLayout tiny = LegacyWorkspaceLayout.fit(320, 180);
-        int supportTop = tiny.windowY() + tiny.windowHeight() - 58;
+        int supportTop = LumiDashboardScreen.supportTop(tiny);
 
         for (int index = 0; index < 7; index++) {
             int x = LumiDashboardScreen.compactSidebarActionX(tiny, index);
             int y = LumiDashboardScreen.compactSidebarActionY(tiny, index);
             assertTrue(x >= tiny.windowX() + 10);
-            assertTrue(x + 26 <= tiny.contentX() - 10);
+            assertTrue(x + LumiDashboardScreen.compactSidebarActionWidth(tiny)
+                    <= tiny.contentX() - 10);
             assertTrue(y + 18 <= supportTop);
         }
+        assertTrue(LumiDashboardScreen.supportCreditY(tiny) + 11
+                < tiny.windowY() + tiny.windowHeight());
     }
 
     @Test
@@ -132,7 +135,10 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("luma.action.paypal_donate"));
         assertTrue(source.contains("luma.action.report_bug"));
         assertTrue(source.contains("luma.window.support"));
-        assertTrue(source.contains("addButton(x, y + 132, width, \"luma.action.more\""));
+        assertTrue(source.contains("luma.window.credit"));
+        assertTrue(source.contains("luma.window.mod_version"));
+        assertTrue(source.contains("addSupportButton("));
+        assertTrue(source.contains("SIDEBAR_BUTTON_STRIDE * 6"));
         assertTrue(source.contains("addCompactSidebarButtons"));
         assertTrue(source.contains("activeZoneColor()"));
         assertTrue(source.contains(

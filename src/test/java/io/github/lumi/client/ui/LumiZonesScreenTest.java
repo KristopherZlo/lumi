@@ -1,7 +1,6 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -49,16 +48,21 @@ class LumiZonesScreenTest {
     }
 
     @Test
-    void opensTheZoneListInsideTheProjectMenu() throws Exception {
+    void opensActiveZoneHistoryInsideTheProjectMenu() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClient.java"));
+        int openDashboard = source.indexOf(
+                "private static void openDashboard(Screen parent)");
         int openZones = source.indexOf("private static void openZones(");
         int openDimensions = source.indexOf(
                 "private static void openDimensions(", openZones);
         String method = source.substring(openZones, openDimensions);
 
+        assertTrue(openDashboard > 0);
+        assertTrue(source.indexOf("client.setScreen(dashboard);", openDashboard)
+                < source.indexOf("activeZone().ifPresent", openDashboard));
         assertTrue(method.contains("client.setScreen(zones);"));
-        assertFalse(method.contains(
-                ".ifPresent(zone -> openZoneDetails(zones, zone))"));
+        assertTrue(method.contains(
+                "activeZone().ifPresent(zone -> openZoneDetails(zones, zone))"));
     }
 }

@@ -1,11 +1,9 @@
 package io.github.lumi.client.ui;
 
-import io.github.lumi.LumiMod;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -25,7 +23,6 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
     private int panelY;
     private int panelWidth;
     private int panelHeight;
-    private int creditY;
     private int actionTop;
     private int actionBottom;
     private int actionScroll;
@@ -70,8 +67,7 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
                         panelX + 12, panelY + 50, panelWidth - 24);
         actionTop = panelY + 58
                 + (hintVisible ? contextualHintOffset(8) : 0);
-        creditY = panelY + panelHeight - 32;
-        actionBottom = creditY - 4;
+        actionBottom = panelY + panelHeight - 12;
         addActions(List.of(
                 new MoreAction("luma.action.dimensions", dimensions),
                 new MoreAction("luma.more.deleted_saves_title", deletedVersions),
@@ -129,16 +125,6 @@ public final class LumiMoreScreen extends LumiLegacyPageScreen {
                         Component.translatable("luma.more.help").getString(), textWidth),
                 textX, panelY + 40, LegacyLumiTheme.MUTED, false);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
-        String version = FabricLoader.getInstance().getModContainer(LumiMod.MOD_ID)
-                .map(container -> container.getMetadata().getVersion().getFriendlyString())
-                .orElse("?");
-        graphics.drawString(font, font.plainSubstrByWidth(
-                        Component.translatable("luma.window.credit").getString(), textWidth),
-                textX, creditY, LegacyLumiTheme.MUTED, false);
-        graphics.drawString(font, font.plainSubstrByWidth(
-                        Component.translatable("luma.window.mod_version", version).getString(),
-                        textWidth),
-                textX, creditY + 11, LegacyLumiTheme.MUTED, false);
         } finally {
             endLegacyRender(graphics);
         }

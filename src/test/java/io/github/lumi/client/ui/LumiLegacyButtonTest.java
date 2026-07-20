@@ -16,7 +16,9 @@ class LumiLegacyButtonTest {
                 "src/main/java/io/github/lumi/client/ui/LumiLegacyButton.java"));
 
         assertTrue(source.contains("font.plainSubstrByWidth"));
-        assertTrue(source.contains("iconName == null ? width : ICON_BUTTON_WIDTH"));
+        assertTrue(source.contains("x, y, width,"));
+        assertTrue(source.contains("getWidth() > ICON_BUTTON_WIDTH"));
+        assertTrue(source.contains("icon == null ? 4 : 20"));
         assertTrue(source.contains("graphics.enableScissor"));
         assertTrue(source.contains("private static final int CONTROL_HEIGHT = 18;"));
         assertTrue(source.contains("private static final int ICON_BUTTON_WIDTH = 26;"));

@@ -12,7 +12,8 @@ abstract class LumiLegacyPageScreen extends LumiLegacyModalScreen {
             Screen parent, Component title, LegacyProjectTab tab) {
         super(parent, title);
         this.parent = parent;
-        if (parent instanceof LumiDashboardScreen dashboard) {
+        LumiDashboardScreen dashboard = dashboardParent();
+        if (dashboard != null) {
             dashboard.selectTab(tab);
         }
     }
@@ -29,11 +30,18 @@ abstract class LumiLegacyPageScreen extends LumiLegacyModalScreen {
         LegacyWorkspaceLayout layout = pageLayout();
         double x = virtualCoordinate(click.x());
         double y = virtualCoordinate(click.y());
-        return parent instanceof LumiDashboardScreen dashboard
+        LumiDashboardScreen dashboard = dashboardParent();
+        return dashboard != null
                 && x >= layout.windowX() && x < layout.contentX()
                 && y >= layout.windowY()
                 && y < layout.windowY() + layout.windowHeight()
                 && dashboard.mouseClicked(click, doubled);
+    }
+
+    private LumiDashboardScreen dashboardParent() {
+        if (parent instanceof LumiDashboardScreen dashboard) return dashboard;
+        return parent instanceof LumiLegacyPageScreen page
+                ? page.dashboardParent() : null;
     }
 
     @Override

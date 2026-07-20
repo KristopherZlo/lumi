@@ -58,6 +58,7 @@ class LumiLegacyNavigationTest {
         assertFalse(page.contains("forwardsParentInput"));
         assertTrue(page.contains("x < layout.contentX()"));
         assertTrue(page.contains("dashboard.mouseClicked(click, doubled)"));
+        assertTrue(page.contains("page.dashboardParent()"));
     }
 
     @Test
