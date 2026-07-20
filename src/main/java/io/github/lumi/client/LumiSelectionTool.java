@@ -18,7 +18,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import org.lwjgl.glfw.GLFW;
 
-/** Raw wooden-sword world input for scoped legacy selection behavior. */
+/** Raw wooden-sword world input for scoped Lumi selections. */
 public final class LumiSelectionTool {
     private static LumiSelectionTool active;
     private final ClientSelection selection;

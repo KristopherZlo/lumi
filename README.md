@@ -15,9 +15,9 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - Every initialized dimension exposes one protected Initial save as the first
   history entry, so builders can always restore the world starting point.
 - Restore verifies the applied result before publishing a ref.
-- Full Restore is a minimal confirmation. Partial Restore is a separate save
-  action that consumes only the current wooden-sword selection, shows exact
-  changed block/section counts, and requires a clean-state preview before Apply.
+- Restore is one confirmation flow. With both an active wooden-sword selection
+  and the sword held, it offers whole-save, selected-area, and outside-selection
+  modes; both partial modes require an exact server preview before Apply.
 - Singleplayer and multiplayer use the same server-authoritative path.
 - Idle play performs no history work when nothing is dirty.
 - Automatic versions are opt-in per workspace. When enabled, dirty work
@@ -38,7 +38,7 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   Cards expose preview, Open, Restore and Create branch; the branch browser
   supports Create, Switch, Merge, protected Delete and persistent explicit
   Action+1..0 assignments. Restoring an older version keeps its still-restorable
-  forward versions visible, matching the legacy menu.
+  forward versions visible.
 - Successful integrated Save and Amend operations capture a bounded world
   transparent isometric render for their new history entry; no player
   framebuffer or open menu is captured.

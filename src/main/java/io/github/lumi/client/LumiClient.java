@@ -43,7 +43,6 @@ import io.github.lumi.client.ui.LumiZoneDetailsScreen;
 import io.github.lumi.client.ui.LumiZoneRestoreScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.client.ui.LumiRestoreScreen;
-import io.github.lumi.client.ui.LumiPartialRestoreScreen;
 import io.github.lumi.client.ui.LumiVersionDetailsScreen;
 import io.github.lumi.client.ui.BranchNameController;
 import io.github.lumi.client.ui.SaveScreenController;
@@ -458,16 +457,9 @@ public final class LumiClient implements ClientModInitializer {
                 parent, version.id(), version.message(),
                 includeEntities
                         ? NETWORKING::restore
-                        : NETWORKING::restoreWithoutEntities));
-    }
-
-    private static void openPartialRestore(
-            Screen parent, HistorySnapshotPayload.Version version) {
-        Minecraft.getInstance().setScreen(new LumiPartialRestoreScreen(
-                parent, version.id(), version.message(),
-                SELECTION.bounds().orElseThrow(
-                        () -> new IllegalStateException(
-                                "Select an area with the wooden sword first")),
+                        : NETWORKING::restoreWithoutEntities,
+                LumiSelectionTool.held(Minecraft.getInstance())
+                        ? SELECTION.bounds() : Optional.empty(),
                 NETWORKING::previewRestoreArea,
                 NETWORKING::applyRestoreArea));
     }
@@ -693,8 +685,7 @@ public final class LumiClient implements ClientModInitializer {
     }
 
     private static void showPartialRestorePlan(PartialRestorePlanPayload result) {
-        if (Minecraft.getInstance().screen
-                instanceof LumiPartialRestoreScreen restore) {
+        if (Minecraft.getInstance().screen instanceof LumiRestoreScreen restore) {
             restore.accept(result);
         }
     }
