@@ -26,7 +26,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Util;
 
 /** Project-window presentation backed by the immutable V2 history snapshot. */
 public final class LumiDashboardScreen extends LumiPageScreen {
@@ -43,15 +42,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private static final int HISTORY_ROW_STRIDE = 34;
     private static final int COMPACT_HISTORY_ROW_HEIGHT = 54;
     private static final int COMPACT_HISTORY_ROW_STRIDE = 58;
-    private static final int SUPPORT_PANEL_OFFSET = 111;
-    private static final int SUPPORT_CREDIT_OFFSET = 23;
-    private static final int SIDEBAR_BUTTON_STRIDE = 19;
-    private static final java.net.URI COFFEE_URI =
-            java.net.URI.create("https://buymeacoffee.com/zl0yxp");
-    private static final java.net.URI PAYPAL_URI = java.net.URI.create(
-            "https://www.paypal.com/donate/?hosted_button_id=CY7A2U64JWY4W");
-    private static final java.net.URI BUG_URI =
-            java.net.URI.create("https://github.com/KristopherZlo/lumi/issues/new");
     private final Screen parent;
     private final ClientHistoryStore history;
     private final ClientHistoryPageStore historyPages;
@@ -62,11 +52,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private final ClientVersionPreviewStore previews;
     private final Runnable openSave;
     private final Runnable openAmend;
-    private final Consumer<Screen> openBranches;
-    private final Consumer<Screen> openZones;
-    private final Consumer<Screen> openPackages;
-    private final Consumer<Screen> openMore;
-    private final Consumer<Screen> openSettings;
     private final Runnable showChanges;
     private final Runnable quickRollback;
     private final Consumer<HistorySnapshotPayload.Version> openDetails;
@@ -84,7 +69,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private String searchQuery = "";
     private boolean searchResultsDirty;
     private boolean refocusSearch;
-    private ProjectTab activeTab = ProjectTab.HISTORY;
     private LumiHistoryGraphView graphView;
     private WorkspaceHistoryController pagedHistory;
     private HistoryPagePayload renderedPage;
@@ -138,11 +122,11 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 requestPendingStatistics, "requestPendingStatistics");
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openAmend = Objects.requireNonNull(openAmend, "openAmend");
-        this.openBranches = Objects.requireNonNull(openBranches, "openBranches");
-        this.openZones = Objects.requireNonNull(openZones, "openZones");
-        this.openPackages = Objects.requireNonNull(openPackages, "openPackages");
-        this.openMore = Objects.requireNonNull(openMore, "openMore");
-        this.openSettings = Objects.requireNonNull(openSettings, "openSettings");
+        Objects.requireNonNull(openBranches, "openBranches");
+        Objects.requireNonNull(openZones, "openZones");
+        Objects.requireNonNull(openPackages, "openPackages");
+        Objects.requireNonNull(openMore, "openMore");
+        Objects.requireNonNull(openSettings, "openSettings");
         this.showChanges = Objects.requireNonNull(showChanges, "showChanges");
         this.quickRollback = Objects.requireNonNull(quickRollback, "quickRollback");
         this.openDetails = Objects.requireNonNull(openDetails, "openDetails");
@@ -351,120 +335,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 ClientContextualHelpHint.QUICK_ROLLBACK, x, y, width);
     }
 
-    private void addSidebarButtons() {
-        if (compactSidebar()) {
-            addCompactSidebarButtons();
-            return;
-        }
-        int x = layout.windowX() + 12;
-        int width = layout.sidebarWidth() - 24;
-        int y = layout.windowY() + 102;
-        Integer zoneColor = activeZoneColor().orElse(null);
-        addButton(x, y, width, "luma.tab.history", this::showHistory,
-                tabKind(ProjectTab.HISTORY));
-        addButton(x, y + SIDEBAR_BUTTON_STRIDE, width, "luma.tab.zones",
-                () -> openTab(ProjectTab.ZONES, openZones),
-                tabKind(ProjectTab.ZONES), zoneColor);
-        addButton(x, y + SIDEBAR_BUTTON_STRIDE * 2, width, "luma.tab.variants",
-                () -> openTab(ProjectTab.VARIANTS, openBranches),
-                tabKind(ProjectTab.VARIANTS), zoneColor);
-        addButton(x, y + SIDEBAR_BUTTON_STRIDE * 3, width,
-                "luma.tab.compare", this::showCompare,
-                tabKind(ProjectTab.COMPARE));
-        addButton(x, y + SIDEBAR_BUTTON_STRIDE * 4, width,
-                "luma.tab.import_export",
-                () -> openTab(ProjectTab.IMPORT_EXPORT, openPackages),
-                tabKind(ProjectTab.IMPORT_EXPORT));
-        addButton(x, y + SIDEBAR_BUTTON_STRIDE * 5, width,
-                "luma.action.settings",
-                () -> openTab(ProjectTab.SETTINGS, openSettings),
-                tabKind(ProjectTab.SETTINGS));
-        addButton(x, y + SIDEBAR_BUTTON_STRIDE * 6, width,
-                "luma.action.more",
-                () -> openTab(ProjectTab.MORE, openMore),
-                tabKind(ProjectTab.MORE));
-    }
-
-    private void addCompactSidebarButtons() {
-        Integer zoneColor = activeZoneColor().orElse(null);
-        addCompactSidebarButton(0,
-                "graph", "luma.tab.history", this::showHistory,
-                tabKind(ProjectTab.HISTORY));
-        addCompactSidebarButton(1,
-                "bookmarks", "luma.tab.zones",
-                () -> openTab(ProjectTab.ZONES, openZones),
-                tabKind(ProjectTab.ZONES), zoneColor);
-        addCompactSidebarButton(2,
-                "branch", "luma.tab.variants",
-                () -> openTab(ProjectTab.VARIANTS, openBranches),
-                tabKind(ProjectTab.VARIANTS), zoneColor);
-        addCompactSidebarButton(3,
-                "see-changes", "luma.tab.compare",
-                this::showCompare, tabKind(ProjectTab.COMPARE));
-        addCompactSidebarButton(4,
-                "folder", "luma.tab.import_export",
-                () -> openTab(ProjectTab.IMPORT_EXPORT, openPackages),
-                tabKind(ProjectTab.IMPORT_EXPORT));
-        addCompactSidebarButton(5,
-                "sliders", "luma.action.settings",
-                () -> openTab(ProjectTab.SETTINGS, openSettings),
-                tabKind(ProjectTab.SETTINGS));
-        addCompactSidebarButton(6,
-                "unordered-list", "luma.action.more",
-                () -> openTab(ProjectTab.MORE, openMore),
-                tabKind(ProjectTab.MORE));
-    }
-
-    private void addCompactSidebarButton(
-            int index, String icon, String translation,
-            Runnable action, LumiButton.Kind kind) {
-        addCompactSidebarButton(index, icon, translation, action, kind, null);
-    }
-
-    private void addCompactSidebarButton(
-            int index, String icon, String translation,
-            Runnable action, LumiButton.Kind kind, Integer accent) {
-        addRenderableWidget(new LumiButton(
-                compactSidebarActionX(layout, index),
-                compactSidebarActionY(layout, index),
-                compactSidebarActionWidth(layout), 20,
-                Component.translatable(translation), ignored -> action.run(),
-                kind, icon, accent));
-    }
-
-    static int compactSidebarActionX(LumiPageLayout layout, int index) {
-        return layout.windowX() + 11 + (tinySidebar(layout)
-                ? index * 16 : index % 4 * 28);
-    }
-
-    static int compactSidebarActionY(LumiPageLayout layout, int index) {
-        return layout.windowY() + (tinySidebar(layout)
-                ? 30 : 60 + index / 4 * 24);
-    }
-
-    static int compactSidebarActionWidth(LumiPageLayout layout) {
-        return tinySidebar(layout) ? 14 : ICON_BUTTON_WIDTH;
-    }
-
-    void selectTab(ProjectTab tab) {
-        if (activeTab != tab) {
-            activeTab = tab;
-            rebuildWidgets();
-        }
-    }
-
-    private void openTab(ProjectTab tab, Consumer<Screen> destination) {
-        selectTab(tab);
-        destination.accept(this);
-    }
-
-    private void showHistory() {
-        selectTab(ProjectTab.HISTORY);
-        if (minecraft.screen != this) {
-            minecraft.setScreen(this);
-        }
-    }
-
     OnboardingSpotlightLayout.Rect onboardingTarget(
             OnboardingTour.Kind kind) {
         return switch (kind) {
@@ -485,40 +355,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         };
     }
 
-    private void addSupportButtons() {
-        int x = layout.windowX() + 16;
-        int y = supportTop(layout) + 17;
-        int width = layout.sidebarWidth() - 32;
-        addSupportButton(x, y, width,
-                "buymeacoffee", "luma.action.buy_me_a_coffee",
-                () -> Util.getPlatform().openUri(COFFEE_URI),
-                LumiButton.Kind.NORMAL);
-        addSupportButton(x, y + 20, width,
-                "paypal", "luma.action.paypal_donate",
-                () -> Util.getPlatform().openUri(PAYPAL_URI),
-                LumiButton.Kind.NORMAL);
-        addSupportButton(x, y + 40, width,
-                "bug", "luma.action.report_bug",
-                () -> Util.getPlatform().openUri(BUG_URI),
-                LumiButton.Kind.NORMAL);
-    }
-
-    private void addSupportButton(
-            int x, int y, int width, String icon, String translation,
-            Runnable action, LumiButton.Kind kind) {
-        addRenderableWidget(new LumiButton(
-                x, y, width, 20, Component.translatable(translation),
-                ignored -> action.run(), kind, icon));
-    }
-
-    static int supportTop(LumiPageLayout layout) {
-        return layout.windowY() + layout.windowHeight() - SUPPORT_PANEL_OFFSET;
-    }
-
-    static int supportCreditY(LumiPageLayout layout) {
-        return layout.windowY() + layout.windowHeight() - SUPPORT_CREDIT_OFFSET;
-    }
-
     public void openBranchHistory(String branch) {
         if (snapshot == null) return;
         if (pagedHistory == null || !pagedHistory.matches(snapshot)) {
@@ -527,7 +363,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         }
         pagedHistory.selectBranch(branch);
         historyScroll = 0;
-        activeTab = ProjectTab.HISTORY;
         minecraft.setScreen(this);
     }
 
@@ -535,7 +370,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         if (snapshot == null) {
             return;
         }
-        selectTab(ProjectTab.COMPARE);
         minecraft.setScreen(new LumiComparePickerScreen(
                 this, snapshot, previews, historyPages, requestComparePage,
                 openCompare));
@@ -605,11 +439,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private static String shortBranch(String value) {
         int slash = value.lastIndexOf('/');
         return slash < 0 ? value : value.substring(slash + 1);
-    }
-
-    private LumiButton.Kind tabKind(ProjectTab tab) {
-        return activeTab == tab
-                ? LumiButton.Kind.SELECTED : LumiButton.Kind.NORMAL;
     }
 
     private void addButton(

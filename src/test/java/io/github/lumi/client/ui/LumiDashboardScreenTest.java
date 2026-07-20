@@ -75,19 +75,19 @@ class LumiDashboardScreenTest {
     @Test
     void compactNavigationStaysAboveTheSupportPanel() {
         LumiPageLayout tiny = LumiPageLayout.fit(320, 180);
-        int supportTop = LumiDashboardScreen.supportTop(tiny);
+        int supportTop = LumiPageScreen.supportTop(tiny);
 
         for (int index = 0; index < 7; index++) {
-            int x = LumiDashboardScreen.compactSidebarActionX(tiny, index);
-            int y = LumiDashboardScreen.compactSidebarActionY(tiny, index);
+            int x = LumiPageScreen.compactSidebarActionX(tiny, index);
+            int y = LumiPageScreen.compactSidebarActionY(tiny, index);
             assertTrue(x >= tiny.windowX() + 10);
-            assertTrue(x + LumiDashboardScreen.compactSidebarActionWidth(tiny)
+            assertTrue(x + LumiPageScreen.compactSidebarActionWidth(tiny)
                     <= tiny.contentX() - 10);
             assertTrue(y + 18 <= supportTop);
         }
-        assertTrue(LumiDashboardScreen.supportCreditY(tiny) + 11
+        assertTrue(LumiPageScreen.supportCreditY(tiny) + 11
                 < tiny.windowY() + tiny.windowHeight());
-        assertTrue(LumiDashboardScreen.supportCreditY(tiny) - 4
+        assertTrue(LumiPageScreen.supportCreditY(tiny) - 4
                 - (supportTop + 75) >= 8);
     }
 
@@ -130,6 +130,8 @@ class LumiDashboardScreenTest {
     void restoresV2ActionsAndCompactIconNavigation() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));
+        String pageSource = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiPageScreen.java"));
         String cardSource = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiCommitCard.java"));
 
@@ -144,19 +146,19 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("new LumiHistoryGraphView("));
         assertTrue(source.contains("graphView.renderHover("));
         assertTrue(source.contains("new LumiComparePickerScreen("));
-        assertTrue(source.contains("luma.tab.variants"));
-        assertTrue(source.contains("luma.action.settings"));
-        assertTrue(source.contains("luma.action.buy_me_a_coffee"));
-        assertTrue(source.contains("luma.action.paypal_donate"));
-        assertTrue(source.contains("luma.action.report_bug"));
-        assertTrue(source.contains("luma.window.support"));
-        assertTrue(source.contains("luma.window.credit"));
-        assertTrue(source.contains("luma.window.mod_version"));
-        assertTrue(source.contains("addSupportButton("));
-        assertTrue(source.contains("SIDEBAR_BUTTON_STRIDE * 6"));
-        assertTrue(source.contains("addCompactSidebarButtons"));
-        assertTrue(source.contains("activeZoneColor()"));
-        assertTrue(source.contains(
+        assertTrue(pageSource.contains("luma.tab.variants"));
+        assertTrue(pageSource.contains("luma.action.settings"));
+        assertTrue(pageSource.contains("luma.action.buy_me_a_coffee"));
+        assertTrue(pageSource.contains("luma.action.paypal_donate"));
+        assertTrue(pageSource.contains("luma.action.report_bug"));
+        assertTrue(pageSource.contains("luma.window.support"));
+        assertTrue(pageSource.contains("luma.window.credit"));
+        assertTrue(pageSource.contains("luma.window.mod_version"));
+        assertTrue(pageSource.contains("addSupportButton("));
+        assertTrue(pageSource.contains("SIDEBAR_BUTTON_STRIDE * 6"));
+        assertTrue(pageSource.contains("addCompactSidebarButtons"));
+        assertTrue(pageSource.contains("activeZoneColor()"));
+        assertTrue(pageSource.contains(
                 "activeZoneColor().orElse(LumiTheme.WINDOW_BORDER)"));
         assertTrue(source.contains("\"rollback\", \"luma.action.restore\""));
         assertTrue(source.contains("\"folder\", \"luma.action.open_details\""));
