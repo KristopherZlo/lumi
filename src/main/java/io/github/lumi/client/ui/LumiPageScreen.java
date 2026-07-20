@@ -7,11 +7,19 @@ import net.minecraft.network.chat.Component;
 /** One project sidebar page rendered inside its retained Dashboard shell. */
 abstract class LumiPageScreen extends LumiModalScreen {
     private final Screen parent;
+    private final LumiPageSession pageSession;
 
     protected LumiPageScreen(
             Screen parent, Component title, ProjectTab tab) {
+        this(parent, title, tab, ((LumiPageScreen) parent).pageSession);
+    }
+
+    protected LumiPageScreen(
+            Screen parent, Component title, ProjectTab tab,
+            LumiPageSession pageSession) {
         super(parent, title);
         this.parent = parent;
+        this.pageSession = pageSession;
         LumiDashboardScreen dashboard = dashboardParent();
         if (dashboard != null) {
             dashboard.selectTab(tab);
@@ -36,6 +44,10 @@ abstract class LumiPageScreen extends LumiModalScreen {
                 && y >= layout.windowY()
                 && y < layout.windowY() + layout.windowHeight()
                 && dashboard.mouseClicked(click, doubled);
+    }
+
+    protected final LumiPageSession pageSession() {
+        return pageSession;
     }
 
     private LumiDashboardScreen dashboardParent() {

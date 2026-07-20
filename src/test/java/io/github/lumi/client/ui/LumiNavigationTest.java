@@ -58,6 +58,10 @@ class LumiNavigationTest {
         assertTrue(onboarding.contains(
                 "alignNavigation(panelX, panelY, panelWidth)"));
         String page = Files.readString(ui.resolve("LumiPageScreen.java"));
+        String session = Files.readString(ui.resolve("LumiPageSession.java"));
+        assertTrue(page.contains("private final LumiPageSession pageSession"));
+        assertTrue(session.contains("new EnumMap<>(ProjectTab.class)"));
+        assertTrue(session.contains("destination.accept(historyPage)"));
         assertFalse(page.contains("forwardsParentInput"));
         assertTrue(page.contains("x < layout.contentX()"));
         assertTrue(page.contains("dashboard.mouseClicked(click, doubled)"));

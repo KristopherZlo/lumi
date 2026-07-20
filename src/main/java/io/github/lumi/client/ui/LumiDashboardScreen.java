@@ -124,7 +124,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             BiConsumer<CommitId, VersionTags> updateTags,
             Consumer<VersionCompareController.Target> openCompare) {
         super(parent, Component.translatable("luma.screen.dashboard.title"),
-                ProjectTab.HISTORY);
+                ProjectTab.HISTORY, new LumiPageSession(history));
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
         this.previews = Objects.requireNonNull(previews, "previews");
@@ -154,6 +154,13 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 .map(container -> container.getMetadata()
                         .getVersion().getFriendlyString())
                 .orElse("?");
+        pageSession().attachHistory(this);
+        pageSession().route(ProjectTab.ZONES, openZones);
+        pageSession().route(ProjectTab.VARIANTS, openBranches);
+        pageSession().route(ProjectTab.COMPARE, ignored -> showCompare());
+        pageSession().route(ProjectTab.IMPORT_EXPORT, openPackages);
+        pageSession().route(ProjectTab.SETTINGS, openSettings);
+        pageSession().route(ProjectTab.MORE, openMore);
     }
 
     @Override
