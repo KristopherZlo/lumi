@@ -203,7 +203,7 @@ public final class HistoryQueryService {
 
     private static boolean visible(CommitKind kind, boolean includeZoneCommits) {
         return switch (kind) {
-            case HIDDEN_SAFETY, HIDDEN_RETURN -> false;
+            case HIDDEN_RETURN -> false;
             case ZONE -> includeZoneCommits;
             default -> true;
         };

@@ -169,21 +169,25 @@ class HistoryQueryServiceTest {
     }
 
     @Test
-    void neverShowsInternalSafetyCommitsInBuilderHistory() throws Exception {
+    void showsInitialSaveButKeepsReturnPointsInternal() throws Exception {
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
         CommitRepository commits = new CommitRepository(repositoryRoot);
         BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
         var tree = objects.write(new DimensionTree(Map.of()));
         UUID workspace = new UUID(0, 2);
+        CommitId initial = commits.write(new Commit(
+                tree, List.of(), new CommitAuthor(new UUID(0, 1), "Builder"), "Initial",
+                Instant.EPOCH, workspace, Optional.empty(), CommitKind.HIDDEN_SAFETY,
+                new CommitStatistics(0, 0, 0, 0)));
         CommitId hidden = commits.write(new Commit(
-                tree, List.of(), new CommitAuthor(new UUID(0, 1), "Builder"), "Checkpoint",
+                tree, List.of(initial), new CommitAuthor(new UUID(0, 1), "Builder"), "Checkpoint",
                 Instant.EPOCH, workspace, Optional.empty(), CommitKind.HIDDEN_RETURN,
                 new CommitStatistics(0, 0, 0, 0)));
         CommitId manual = commits.write(commit(tree, List.of(hidden), "Visible", 1));
         BranchName branch = new BranchName("main");
         refs.create(branch, manual);
 
-        assertEquals(List.of(manual), query(commits, refs)
+        assertEquals(List.of(manual, initial), query(commits, refs)
                 .firstParent(branch, workspace, true, 10).stream()
                 .map(HistoryEntry::id).toList());
     }

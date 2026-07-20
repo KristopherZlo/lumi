@@ -12,6 +12,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - Save reflects visible blocks, block entities, durable non-player entities,
   and saved player spawn positions.
 - Published commits and refs survive crashes.
+- Every initialized dimension exposes one protected Initial save as the first
+  history entry, so builders can always restore the world starting point.
 - Restore verifies the applied result before publishing a ref.
 - Full Restore is a minimal confirmation. Partial Restore is a separate save
   action that consumes only the current wooden-sword selection, shows exact

@@ -97,15 +97,15 @@ class DimensionHistoryViewServiceTest {
         assertEquals(workspaceId, view.activeWorkspace().id());
         assertEquals(List.of(workspaceId),
                 view.workspaces().stream().map(workspace -> workspace.id()).toList());
-        assertEquals(List.of(manual),
+        assertEquals(List.of(manual, main.commit()),
                 view.history(10).stream().map(entry -> entry.id()).toList());
         var historyPage = view.historyPage(new BranchName("main"), 0, 1, "");
         assertEquals(List.of(manual),
                 historyPage.entries().stream().map(entry -> entry.id()).toList());
-        assertEquals(false, historyPage.hasMore());
+        assertEquals(true, historyPage.hasMore());
         workspaces.updateActiveSettings(
                 new WorkspaceSettings(true, true, true, true, true));
-        assertEquals(List.of(automatic, manual),
+        assertEquals(List.of(automatic, manual, main.commit()),
                 view.history(10).stream().map(entry -> entry.id()).toList());
         assertEquals(List.of(manual),
                 view.historyPage(
