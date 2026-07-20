@@ -57,6 +57,20 @@ class LumiDashboardScreenTest {
     }
 
     @Test
+    void compactNavigationStaysAboveTheSupportPanel() {
+        LegacyWorkspaceLayout tiny = LegacyWorkspaceLayout.fit(320, 180);
+        int supportTop = tiny.windowY() + tiny.windowHeight() - 58;
+
+        for (int index = 0; index < 7; index++) {
+            int x = LumiDashboardScreen.compactSidebarActionX(tiny, index);
+            int y = LumiDashboardScreen.compactSidebarActionY(tiny, index);
+            assertTrue(x >= tiny.windowX() + 10);
+            assertTrue(x + 26 <= tiny.contentX() - 10);
+            assertTrue(y + 18 <= supportTop);
+        }
+    }
+
+    @Test
     void contextualHintPushesActionsWithoutCrossingDashboardBands() {
         LegacyWorkspaceLayout layout = LegacyWorkspaceLayout.fit(640, 360);
         int hintHeight = 54;

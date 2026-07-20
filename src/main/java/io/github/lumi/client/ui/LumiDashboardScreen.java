@@ -373,28 +373,48 @@ public final class LumiDashboardScreen extends LumiLegacyModalScreen {
     }
 
     private void addCompactSidebarButtons() {
-        int x = layout.windowX() + 12;
-        int y = layout.windowY() + 60;
         Integer zoneColor = activeZoneColor().orElse(null);
-        addIconButton(x, y, "graph", "luma.tab.history", this::showHistory,
+        addIconButton(compactSidebarActionX(layout, 0),
+                compactSidebarActionY(layout, 0),
+                "graph", "luma.tab.history", this::showHistory,
                 tabKind(LegacyProjectTab.HISTORY));
-        addIconButton(x + 32, y, "bookmarks", "luma.tab.zones",
+        addIconButton(compactSidebarActionX(layout, 1),
+                compactSidebarActionY(layout, 1),
+                "bookmarks", "luma.tab.zones",
                 () -> openTab(LegacyProjectTab.ZONES, openZones),
                 tabKind(LegacyProjectTab.ZONES), zoneColor);
-        addIconButton(x, y + 26, "branch", "luma.tab.variants",
+        addIconButton(compactSidebarActionX(layout, 2),
+                compactSidebarActionY(layout, 2),
+                "branch", "luma.tab.variants",
                 () -> openTab(LegacyProjectTab.VARIANTS, openBranches),
                 tabKind(LegacyProjectTab.VARIANTS), zoneColor);
-        addIconButton(x + 32, y + 26, "see-changes", "luma.tab.compare",
+        addIconButton(compactSidebarActionX(layout, 3),
+                compactSidebarActionY(layout, 3),
+                "see-changes", "luma.tab.compare",
                 this::showCompare, tabKind(LegacyProjectTab.COMPARE));
-        addIconButton(x, y + 52, "folder", "luma.tab.import_export",
+        addIconButton(compactSidebarActionX(layout, 4),
+                compactSidebarActionY(layout, 4),
+                "folder", "luma.tab.import_export",
                 () -> openTab(LegacyProjectTab.IMPORT_EXPORT, openPackages),
                 tabKind(LegacyProjectTab.IMPORT_EXPORT));
-        addIconButton(x + 32, y + 52, "sliders", "luma.action.settings",
+        addIconButton(compactSidebarActionX(layout, 5),
+                compactSidebarActionY(layout, 5),
+                "sliders", "luma.action.settings",
                 () -> openTab(LegacyProjectTab.SETTINGS, openSettings),
                 tabKind(LegacyProjectTab.SETTINGS));
-        addIconButton(x, y + 78, "unordered-list", "luma.action.more",
+        addIconButton(compactSidebarActionX(layout, 6),
+                compactSidebarActionY(layout, 6),
+                "unordered-list", "luma.action.more",
                 () -> openTab(LegacyProjectTab.MORE, openMore),
                 tabKind(LegacyProjectTab.MORE));
+    }
+
+    static int compactSidebarActionX(LegacyWorkspaceLayout layout, int index) {
+        return layout.windowX() + 11 + index % 4 * 28;
+    }
+
+    static int compactSidebarActionY(LegacyWorkspaceLayout layout, int index) {
+        return layout.windowY() + 60 + index / 4 * 24;
     }
 
     void selectTab(LegacyProjectTab tab) {
