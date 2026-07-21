@@ -221,7 +221,9 @@ public final class LumiClient implements ClientModInitializer {
                 version -> openRestore(client.screen, version),
                 version -> openBranchAt(client.screen, version),
                 NETWORKING::updateVersionTags,
-                LumiClient::showCompareChanges);
+                LumiClient::showCompareChanges,
+                COMPARISONS::highlightVisible,
+                COMPARISONS::toggleVisibility);
     }
 
     private static void openDashboard(Screen parent) {

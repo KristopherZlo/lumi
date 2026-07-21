@@ -3,9 +3,13 @@ package io.github.lumi.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import io.github.lumi.domain.model.BlockChange;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.renderer.ShapeRenderer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.phys.shapes.Shapes;
 
 /** Renders exact directional Compare blocks without reading client world state. */
@@ -23,6 +27,7 @@ final class LumiCompareOverlayRenderer {
         VertexConsumer fills = context.consumers().getBuffer(
                 LumiCompareRenderTypes.fill(xray));
         int alpha = xray ? XRAY_ALPHA : NORMAL_ALPHA;
+        Set<Long> occupied = positions(changes);
         for (BlockChange change : changes) {
             double x = change.x() - camera.x;
             double y = change.y() - camera.y;
@@ -32,11 +37,18 @@ final class LumiCompareOverlayRenderer {
                 continue;
             }
             int color = color(change.kind());
-            renderSolidBox(
-                    context.matrices(), fills,
-                    (float) x, (float) y, (float) z,
-                    (float) x + 1, (float) y + 1, (float) z + 1,
-                    (color >> 16) & 255, (color >> 8) & 255, color & 255, alpha);
+            for (Direction side : Direction.values()) {
+                if (!occupied.contains(BlockPos.asLong(
+                        change.x() + side.getStepX(),
+                        change.y() + side.getStepY(),
+                        change.z() + side.getStepZ()))) {
+                    renderFace(context.matrices(), fills,
+                            (float) x, (float) y, (float) z,
+                            (float) x + 1, (float) y + 1, (float) z + 1,
+                            side, (color >> 16) & 255,
+                            (color >> 8) & 255, color & 255, alpha);
+                }
+            }
         }
         VertexConsumer lines = context.consumers().getBuffer(
                 LumiCompareRenderTypes.outline(xray));
@@ -67,6 +79,27 @@ final class LumiCompareOverlayRenderer {
         return x * x + y * y + z * z;
     }
 
+    static int exposedFaceCount(List<BlockChange> changes) {
+        Set<Long> occupied = positions(changes);
+        int count = 0;
+        for (BlockChange change : changes) {
+            for (Direction side : Direction.values()) {
+                if (!occupied.contains(BlockPos.asLong(
+                        change.x() + side.getStepX(),
+                        change.y() + side.getStepY(),
+                        change.z() + side.getStepZ()))) count++;
+            }
+        }
+        return count;
+    }
+
+    private static Set<Long> positions(List<BlockChange> changes) {
+        Set<Long> occupied = new HashSet<>();
+        changes.forEach(change -> occupied.add(
+                BlockPos.asLong(change.x(), change.y(), change.z())));
+        return occupied;
+    }
+
     static void renderSolidBox(
             PoseStack matrices,
             VertexConsumer consumer,
@@ -76,19 +109,34 @@ final class LumiCompareOverlayRenderer {
             int green,
             int blue,
             int alpha) {
+        for (Direction side : Direction.values()) {
+            renderFace(matrices, consumer, x1, y1, z1, x2, y2, z2,
+                    side, red, green, blue, alpha);
+        }
+    }
+
+    static void renderFace(
+            PoseStack matrices,
+            VertexConsumer consumer,
+            float x1, float y1, float z1,
+            float x2, float y2, float z2,
+            Direction side,
+            int red, int green, int blue, int alpha) {
         PoseStack.Pose pose = matrices.last();
-        quad(pose, consumer, red, green, blue, alpha,
-                x1, y1, z1, x2, y1, z1, x2, y2, z1, x1, y2, z1);
-        quad(pose, consumer, red, green, blue, alpha,
-                x1, y1, z2, x1, y2, z2, x2, y2, z2, x2, y1, z2);
-        quad(pose, consumer, red, green, blue, alpha,
-                x1, y1, z1, x1, y2, z1, x1, y2, z2, x1, y1, z2);
-        quad(pose, consumer, red, green, blue, alpha,
-                x2, y1, z1, x2, y1, z2, x2, y2, z2, x2, y2, z1);
-        quad(pose, consumer, red, green, blue, alpha,
-                x1, y1, z1, x1, y1, z2, x2, y1, z2, x2, y1, z1);
-        quad(pose, consumer, red, green, blue, alpha,
-                x1, y2, z1, x2, y2, z1, x2, y2, z2, x1, y2, z2);
+        switch (side) {
+            case NORTH -> quad(pose, consumer, red, green, blue, alpha,
+                    x1, y1, z1, x2, y1, z1, x2, y2, z1, x1, y2, z1);
+            case SOUTH -> quad(pose, consumer, red, green, blue, alpha,
+                    x1, y1, z2, x1, y2, z2, x2, y2, z2, x2, y1, z2);
+            case WEST -> quad(pose, consumer, red, green, blue, alpha,
+                    x1, y1, z1, x1, y2, z1, x1, y2, z2, x1, y1, z2);
+            case EAST -> quad(pose, consumer, red, green, blue, alpha,
+                    x2, y1, z1, x2, y1, z2, x2, y2, z2, x2, y2, z1);
+            case DOWN -> quad(pose, consumer, red, green, blue, alpha,
+                    x1, y1, z1, x1, y1, z2, x2, y1, z2, x2, y1, z1);
+            case UP -> quad(pose, consumer, red, green, blue, alpha,
+                    x1, y2, z1, x2, y2, z1, x2, y2, z2, x1, y2, z2);
+        }
     }
 
     private static void quad(

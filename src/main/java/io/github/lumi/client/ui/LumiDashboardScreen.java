@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -57,6 +58,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private final Consumer<HistorySnapshotPayload.Version> createBranch;
     private final BiConsumer<CommitId, VersionTags> updateTags;
     private final Consumer<VersionCompareController.Target> openCompare;
+    private final BooleanSupplier compareHighlightVisible;
+    private final Runnable toggleCompareHighlight;
     private final HistoryViewController historyView =
             new HistoryViewController(new HistoryScope.Workspace());
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
@@ -102,7 +105,9 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             Consumer<HistorySnapshotPayload.Version> openRestore,
             Consumer<HistorySnapshotPayload.Version> createBranch,
             BiConsumer<CommitId, VersionTags> updateTags,
-            Consumer<VersionCompareController.Target> openCompare) {
+            Consumer<VersionCompareController.Target> openCompare,
+            BooleanSupplier compareHighlightVisible,
+            Runnable toggleCompareHighlight) {
         super(parent, Component.translatable("luma.screen.dashboard.title"),
                 ProjectTab.HISTORY, new LumiPageSession(history));
         this.parent = parent;
@@ -130,6 +135,10 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         this.createBranch = Objects.requireNonNull(createBranch, "createBranch");
         this.updateTags = Objects.requireNonNull(updateTags, "updateTags");
         this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
+        this.compareHighlightVisible = Objects.requireNonNull(
+                compareHighlightVisible, "compareHighlightVisible");
+        this.toggleCompareHighlight = Objects.requireNonNull(
+                toggleCompareHighlight, "toggleCompareHighlight");
         pageSession().attachHistory(this);
         pageSession().route(ProjectTab.ZONES, openZones);
         pageSession().route(ProjectTab.VARIANTS, openBranches);
@@ -365,7 +374,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         }
         minecraft.setScreen(new LumiComparePickerScreen(
                 this, snapshot, previews, historyPages, requestComparePage,
-                openCompare));
+                openCompare, compareHighlightVisible, toggleCompareHighlight));
     }
 
     private void search(String value) {

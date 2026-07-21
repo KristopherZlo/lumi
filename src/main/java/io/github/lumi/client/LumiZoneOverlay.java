@@ -13,6 +13,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShapeRenderer;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -125,10 +126,11 @@ public final class LumiZoneOverlay {
             for (ZoneShellFace face : zone.faces()) {
                 AABB box = box(face).move(
                         -camera.x, -camera.y, -camera.z);
-                LumiCompareOverlayRenderer.renderSolidBox(
+                LumiCompareOverlayRenderer.renderFace(
                         context.matrices(), fills,
                         (float) box.minX, (float) box.minY, (float) box.minZ,
                         (float) box.maxX, (float) box.maxY, (float) box.maxZ,
+                        Direction.valueOf(face.side().name()),
                         color >> 16 & 255, color >> 8 & 255, color & 255,
                         alpha);
             }

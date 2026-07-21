@@ -46,7 +46,7 @@ class LumiZoneOverlayTest {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiZoneOverlay.java"));
         int fillBuffer = source.indexOf("LumiCompareRenderTypes.fill(false)");
-        int fill = source.indexOf("renderSolidBox(", fillBuffer);
+        int fill = source.indexOf("renderFace(", fillBuffer);
         int outlineBuffer = source.indexOf(
                 "LumiCompareRenderTypes.outline(false)", fillBuffer);
 

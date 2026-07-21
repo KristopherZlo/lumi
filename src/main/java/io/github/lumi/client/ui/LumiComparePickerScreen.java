@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -38,6 +39,8 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
     private final HistorySnapshotPayload snapshot;
     private final ClientVersionPreviewStore previews;
     private final Consumer<VersionCompareController.Target> compare;
+    private final BooleanSupplier highlightVisible;
+    private final Runnable toggleHighlight;
     private final VersionCompareController controller = new VersionCompareController();
     private final WorkspaceHistoryController leftHistory;
     private final WorkspaceHistoryController rightHistory;
@@ -55,12 +58,18 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
             ClientVersionPreviewStore previews,
             ClientHistoryPageStore historyPages,
             PageRequester requestPage,
-            Consumer<VersionCompareController.Target> compare) {
+            Consumer<VersionCompareController.Target> compare,
+            BooleanSupplier highlightVisible,
+            Runnable toggleHighlight) {
         super(parent, Component.translatable("luma.compare.pick_title"),
                 ProjectTab.COMPARE);
         this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
         this.previews = Objects.requireNonNull(previews, "previews");
         this.compare = Objects.requireNonNull(compare, "compare");
+        this.highlightVisible = Objects.requireNonNull(
+                highlightVisible, "highlightVisible");
+        this.toggleHighlight = Objects.requireNonNull(
+                toggleHighlight, "toggleHighlight");
         Objects.requireNonNull(historyPages, "historyPages");
         Objects.requireNonNull(requestPage, "requestPage");
         leftHistory = history(
@@ -112,8 +121,8 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
         LumiButton submit = addIconButton(
                 layout.x() + layout.width() - 42, footerY, "eye-open",
                 Component.translatable("luma.action.see_changes"),
-                this::compareSelected, LumiButton.Kind.PRIMARY);
-        submit.active = target().isPresent();
+                this::compareOrToggleHighlight, LumiButton.Kind.PRIMARY);
+        submit.active = target().isPresent() || highlightVisible.getAsBoolean();
     }
 
     private void addColumnButtons(boolean left) {
@@ -177,6 +186,15 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
             minecraft.setScreen(null);
             compare.accept(selected);
         });
+    }
+
+    private void compareOrToggleHighlight() {
+        if (target().isPresent()) {
+            compareSelected();
+        } else if (highlightVisible.getAsBoolean()) {
+            toggleHighlight.run();
+            rebuildWidgets();
+        }
     }
 
     private java.util.Optional<VersionCompareController.Target> target() {

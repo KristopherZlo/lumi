@@ -30,6 +30,9 @@ class LumiComparePickerScreenTest {
         assertTrue(source.contains("\"textures/gui/icons/see-changes.png\""));
         assertTrue(source.contains("\"eye-open\""));
         assertTrue(source.contains(
+                "target().isPresent() || highlightVisible.getAsBoolean()"));
+        assertTrue(source.contains("toggleHighlight.run()"));
+        assertTrue(source.contains(
                 "layout.x() + layout.width() - 42, footerY"));
         assertTrue(source.contains("minecraft.setScreen(null)"));
         assertTrue(source.contains(
