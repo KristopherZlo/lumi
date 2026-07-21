@@ -112,11 +112,11 @@ class MutationDurabilityTrackerTest {
         BlockPosition newer = new BlockPosition(4, 5, 6);
         long first = tracker.registerSectionMutation(
                 key, MutationDurabilityTrackerTest::airSection);
-        tracker.recordBlockMutation(saved, first);
+        tracker.recordBuilderBlockMutation(saved, first);
         var captured = tracker.snapshot();
         long second = tracker.registerSectionMutation(
                 key, MutationDurabilityTrackerTest::airSection);
-        tracker.recordBlockMutation(newer, second);
+        tracker.recordBuilderBlockMutation(newer, second);
 
         tracker.clear(captured);
 
@@ -124,6 +124,32 @@ class MutationDurabilityTrackerTest {
         assertEquals(List.of(newer), preview.blocks());
         assertEquals(new BlockBox(0, 0, 0, 15, 15, 15),
                 preview.bounds().orElseThrow());
+    }
+
+    @Test
+    void pendingPreviewExcludesAmbientMutations() throws Exception {
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), command -> { });
+        SectionKey ambient = new SectionKey(0, 0, 0);
+        SectionKey builder = new SectionKey(2, 0, 0);
+        long ambientGeneration = tracker.registerSectionMutation(
+                ambient, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBlockMutation(
+                new BlockPosition(1, 2, 3), ambientGeneration);
+        long builderGeneration = tracker.registerSectionMutation(
+                builder, MutationDurabilityTrackerTest::airSection);
+        BlockPosition playerChange = new BlockPosition(33, 2, 3);
+        tracker.recordBuilderBlockMutation(playerChange, builderGeneration);
+
+        var preview = tracker.preview(ignored -> true, 16);
+
+        assertEquals(1, preview.totalKeys());
+        assertEquals(List.of(playerChange), preview.blocks());
+        assertEquals(new BlockBox(32, 0, 0, 47, 15, 15),
+                preview.bounds().orElseThrow());
+        assertEquals(Map.of(ambient, ambientGeneration, builder, builderGeneration),
+                tracker.snapshot().generations());
     }
 
     @Test

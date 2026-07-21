@@ -995,13 +995,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private WorkingIndexSnapshot pendingBoundary(
             io.github.lumi.domain.model.Workspace workspace) {
-        Map<HistoryKey, Long> selected = new java.util.LinkedHashMap<>();
-        mutations.snapshot().generations().forEach((key, generation) -> {
-            if (workspace.includes(key)) {
-                selected.put(key, generation);
-            }
-        });
-        return new WorkingIndexSnapshot(selected);
+        return mutations.builderSnapshot(workspace::includes);
     }
 
     public List<io.github.lumi.domain.model.HistoryEntry> history(int limit)

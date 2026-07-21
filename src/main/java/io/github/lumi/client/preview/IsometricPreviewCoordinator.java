@@ -82,8 +82,8 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
                     discard(event.requestId());
                     return;
                 }
-                Optional<BlockBox> bounds = event.previewBounds()
-                        .or(item::previewBounds);
+                Optional<BlockBox> bounds = item.previewBounds()
+                        .or(event::previewBounds);
                 if (bounds.isEmpty()) {
                     discard(event.requestId());
                     return;

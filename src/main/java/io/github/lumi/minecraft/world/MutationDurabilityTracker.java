@@ -226,33 +226,39 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         if (maximumBlocks < 0) {
             throw new IllegalArgumentException("maximumBlocks must be non-negative");
         }
-        WorkingIndexPreview keys = working.preview(scope, 0);
+        Map<HistoryKey, Long> visible = new LinkedHashMap<>();
+        builderGenerations.forEach((key, generation) -> {
+            if (scope.test(key)) {
+                visible.put(key, generation);
+            }
+        });
+        WorkingIndexSnapshot builders = new WorkingIndexSnapshot(visible);
         var blocks = new java.util.ArrayList<BlockPosition>(
                 Math.min(maximumBlocks, pendingBlocks.size()));
         var entries = List.copyOf(pendingBlocks.values());
         for (int index = entries.size() - 1;
                 index >= 0 && blocks.size() < maximumBlocks; index--) {
             PendingBlock pending = entries.get(index);
-            Long generation = working.generation(pending.section());
+            Long generation = visible.get(pending.section());
             if (generation != null && generation >= pending.generation()
-                    && scope.test(pending.section())) {
+                    && pending.builder()) {
                 blocks.add(pending.position());
             }
         }
         return new WorkingIndexPreview(
-                keys.totalKeys(), List.of(), blocks, keys.bounds());
+                visible.size(), List.of(), blocks, builders.sectionBounds());
     }
 
     public synchronized void recordBlockMutation(
             BlockPosition position, long generation) {
-        recordBlockMutationLocked(position, generation);
+        recordBlockMutationLocked(position, generation, false);
     }
 
     public void recordBuilderBlockMutation(
             BlockPosition position, long generation) {
         boolean scheduleIndex;
         synchronized (this) {
-            recordBlockMutationLocked(position, generation);
+            recordBlockMutationLocked(position, generation, true);
             scheduleIndex = markBuilderMutationLocked(section(position), generation);
         }
         if (scheduleIndex) {
@@ -290,7 +296,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     }
 
     private void recordBlockMutationLocked(
-            BlockPosition position, long generation) {
+            BlockPosition position, long generation, boolean builder) {
         Objects.requireNonNull(position, "position");
         SectionKey section = section(position);
         Long current = working.generation(section);
@@ -299,7 +305,8 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                     "Pending block generation is outside its dirty section");
         }
         pendingBlocks.remove(position);
-        pendingBlocks.put(position, new PendingBlock(position, section, generation));
+        pendingBlocks.put(position, new PendingBlock(
+                position, section, generation, builder));
         while (pendingBlocks.size() > MAX_PENDING_BLOCKS) {
             pendingBlocks.remove(pendingBlocks.keySet().iterator().next());
         }
@@ -645,7 +652,8 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private record PendingOriginWrite(HistoryKey key, OriginPersistence persistence) { }
 
     private record PendingBlock(
-            BlockPosition position, SectionKey section, long generation) { }
+            BlockPosition position, SectionKey section,
+            long generation, boolean builder) { }
 
     private record ChunkCoordinate(int x, int z) { }
 
