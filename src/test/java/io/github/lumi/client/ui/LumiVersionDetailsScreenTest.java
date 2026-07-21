@@ -66,8 +66,8 @@ class LumiVersionDetailsScreenTest {
         assertTrue(details.contains("sourceWidth, sourceHeight"));
         assertTrue(dashboard.contains("\"folder\", \"luma.action.open_details\""));
         assertTrue(client.contains("new LumiVersionDetailsScreen("));
-        assertTrue(client.contains("() -> openRestore(parent, version)"));
-        assertTrue(client.contains("() -> openDelete(parent, version)"));
+        assertTrue(client.contains("() -> openRestore(client.screen, version)"));
+        assertTrue(client.contains("() -> openDelete(client.screen, version)"));
         assertTrue(client.contains("NETWORKING.updateVersionTags(version.id(), tags)"));
         assertTrue(client.contains("NETWORKING.renameVersion(version.id(), name)"));
         assertTrue(client.contains("NETWORKING.createBranchAt(name, version.id())"));

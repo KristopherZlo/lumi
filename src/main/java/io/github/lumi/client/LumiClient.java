@@ -453,9 +453,9 @@ public final class LumiClient implements ClientModInitializer {
                 : Optional.<Runnable>empty();
         client.setScreen(new LumiVersionDetailsScreen(
                 parent, snapshot.dimensionId(), version, PREVIEW_STORE,
-                () -> openRestore(parent, version), compare,
+                () -> openRestore(client.screen, version), compare,
                 createBranch,
-                () -> openDelete(parent, version),
+                () -> openDelete(client.screen, version),
                 tags -> NETWORKING.updateVersionTags(version.id(), tags),
                 name -> NETWORKING.renameVersion(version.id(), name)));
     }
@@ -602,7 +602,7 @@ public final class LumiClient implements ClientModInitializer {
                 idle ? Optional.of((Runnable) () ->
                         openBranchAt(client.screen, version))
                         : Optional.empty(),
-                () -> openDelete(zoneDetails, version),
+                () -> openDelete(client.screen, version),
                 tags -> NETWORKING.updateVersionTags(version.id(), tags),
                 name -> NETWORKING.renameVersion(version.id(), name)));
     }
