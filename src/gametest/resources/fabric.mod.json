@@ -6,9 +6,10 @@
   "environment": "*",
   "entrypoints": {
     "fabric-client-gametest": [
+      "io.github.lumi.gametest.LumiHistoryBenchmarkClientGameTest",
+      "io.github.lumi.gametest.LumiUiWorkflowClientGameTest",
       "io.github.lumi.gametest.LumiUiContractClientGameTest",
-      "io.github.lumi.gametest.LumiRecoveryClientGameTest",
-      "io.github.lumi.gametest.LumiHistoryBenchmarkClientGameTest"
+      "io.github.lumi.gametest.LumiRecoveryClientGameTest"
     ],
     "fabric-gametest": [
       "io.github.lumi.gametest.LumiLiveActionGameTests",
