@@ -9,6 +9,19 @@ import org.junit.jupiter.api.Test;
 
 class LumiServerNetworkingTest {
     @Test
+    void preparesInitialHistorySnapshotOffTheServerThread() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));
+        int join = source.indexOf("ServerPlayConnectionEvents.JOIN.register");
+        int disconnect = source.indexOf("ServerPlayConnectionEvents.DISCONNECT.register", join);
+
+        assertTrue(source.substring(join, disconnect).contains("sendInitialSnapshot("));
+        assertTrue(source.contains("CompletableFuture.supplyAsync("));
+        assertTrue(source.contains("runtime.backgroundExecutor()"));
+        assertTrue(source.contains("runtime.level().getServer().execute("));
+    }
+
+    @Test
     void defersTerminalSnapshotUntilCoordinatorReleasesOwnership() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));

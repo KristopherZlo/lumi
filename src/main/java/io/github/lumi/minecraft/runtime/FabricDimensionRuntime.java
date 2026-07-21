@@ -1664,6 +1664,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public Path repository() { return repository; }
     public DimensionFreezeState freeze() { return freeze; }
     public DimensionOperationCoordinator operations() { return operations; }
+    public Executor backgroundExecutor() { return background; }
     public MutationDurabilityTracker mutations() { return mutations; }
     public SavePreparation savePreparation() { return savePreparation; }
     public BranchRef activeRef() throws IOException {
