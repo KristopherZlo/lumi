@@ -77,6 +77,10 @@ tasks.named('runClientGameTest') {
         name.toString().startsWith('lumi.benchmark.')
                 || name == 'lumi.gametest.operationTimeoutTicks'
     }.each { name, value -> systemProperty name.toString(), value }
+    def benchmarkHeap = System.getProperty('lumi.benchmark.heap')
+    if (benchmarkHeap != null && !benchmarkHeap.isBlank()) {
+        jvmArgs "-Xmx${benchmarkHeap}"
+    }
 }
 
 dependencies {

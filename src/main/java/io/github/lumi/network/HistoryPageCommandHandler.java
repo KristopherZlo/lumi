@@ -1,5 +1,6 @@
 package io.github.lumi.network;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.HistoryEntry;
 import io.github.lumi.domain.model.HistoryPage;
 import io.github.lumi.domain.model.BranchName;
@@ -29,6 +30,11 @@ final class HistoryPageCommandHandler {
             FabricDimensionRuntime runtime,
             HistoryPageRequestPayload request,
             ServerPlayNetworking.Context context) {
+        long started = System.nanoTime();
+        LumiMod.LOGGER.info(
+                "Lumi history page started: branch={}, zone={}, offset={}, limit={}",
+                request.branch(), request.zoneId().orElse(null),
+                request.offset(), request.limit());
         String actualDimension =
                 runtime.level().dimension().identifier().toString();
         boolean browse = request.browsesDimension();
@@ -62,6 +68,10 @@ final class HistoryPageCommandHandler {
             HistoryPagePayload result = failure == null
                     ? success(request, runtime, prepared)
                     : failure(request, failureMessage.apply(failure));
+            LumiMod.LOGGER.info(
+                    "Lumi history page prepared in {} ms: versions={}, error={}",
+                    (System.nanoTime() - started) / 1_000_000,
+                    result.versions().size(), result.error());
             context.server().execute(() -> {
                     if (context.server().getPlayerList()
                             .getPlayer(player.getUUID()) != player) {
