@@ -77,7 +77,7 @@ class LumiDashboardScreenTest {
         LumiPageLayout tiny = LumiPageLayout.fit(320, 180);
         int supportTop = LumiPageScreen.supportTop(tiny);
 
-        for (int index = 0; index < 7; index++) {
+        for (int index = 0; index < 6; index++) {
             int x = LumiPageScreen.compactSidebarActionX(tiny, index);
             int y = LumiPageScreen.compactSidebarActionY(tiny, index);
             assertTrue(x >= tiny.windowX() + 10);
@@ -155,7 +155,9 @@ class LumiDashboardScreenTest {
         assertTrue(pageSource.contains("luma.window.credit"));
         assertTrue(pageSource.contains("luma.window.mod_version"));
         assertTrue(pageSource.contains("addSupportButton("));
-        assertTrue(pageSource.contains("SIDEBAR_BUTTON_STRIDE * 6"));
+        assertTrue(pageSource.contains("SIDEBAR_BUTTON_STRIDE * 5"));
+        assertFalse(pageSource.contains(
+                "\"luma.tab.import_export\", ProjectTab.IMPORT_EXPORT"));
         assertTrue(pageSource.contains("addCompactSidebarButtons"));
         assertTrue(pageSource.contains("activeZoneColor()"));
         assertTrue(pageSource.contains(

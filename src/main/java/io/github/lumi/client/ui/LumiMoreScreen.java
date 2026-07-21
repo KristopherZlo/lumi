@@ -12,13 +12,13 @@ import net.minecraft.network.chat.Component;
 public final class LumiMoreScreen extends LumiPageScreen {
     private final Runnable dimensions;
     private final Runnable deletedVersions;
+    private final Runnable importExport;
     private final Runnable onboarding;
     private final Runnable hotkeys;
     private final Runnable thanks;
     private final Runnable diagnostics;
     private final Runnable updates;
     private final Runnable cleanup;
-    private final Runnable manualCompare;
     private int panelX;
     private int panelY;
     private int panelWidth;
@@ -33,25 +33,25 @@ public final class LumiMoreScreen extends LumiPageScreen {
             Screen parent,
             Runnable dimensions,
             Runnable deletedVersions,
+            Runnable importExport,
             Runnable onboarding,
             Runnable hotkeys,
             Runnable thanks,
             Runnable diagnostics,
             Runnable updates,
-            Runnable cleanup,
-            Runnable manualCompare) {
+            Runnable cleanup) {
         super(parent, Component.translatable("luma.screen.more.title"),
                 ProjectTab.MORE);
         this.dimensions = Objects.requireNonNull(dimensions, "dimensions");
         this.deletedVersions = Objects.requireNonNull(
                 deletedVersions, "deletedVersions");
+        this.importExport = Objects.requireNonNull(importExport, "importExport");
         this.onboarding = Objects.requireNonNull(onboarding, "onboarding");
         this.hotkeys = Objects.requireNonNull(hotkeys, "hotkeys");
         this.thanks = Objects.requireNonNull(thanks, "thanks");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         this.updates = Objects.requireNonNull(updates, "updates");
         this.cleanup = Objects.requireNonNull(cleanup, "cleanup");
-        this.manualCompare = Objects.requireNonNull(manualCompare, "manualCompare");
     }
 
     @Override
@@ -73,7 +73,7 @@ public final class LumiMoreScreen extends LumiPageScreen {
                 new MoreCategory("luma.more.category_history", List.of(
                         new MoreAction("luma.action.dimensions", dimensions),
                         new MoreAction("luma.more.deleted_saves_title", deletedVersions),
-                        new MoreAction("luma.action.manual_compare", manualCompare))),
+                        new MoreAction("luma.tab.import_export", importExport))),
                 new MoreCategory("luma.more.category_guides", List.of(
                         new MoreAction("luma.more.onboarding_title", onboarding),
                         new MoreAction("luma.hotkeys.title", hotkeys),

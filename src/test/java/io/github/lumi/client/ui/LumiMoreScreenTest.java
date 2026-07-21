@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class LumiMoreScreenTest {
     @Test
-    void retainsV2CleanupAndManualCompareRoutes() throws Exception {
+    void keepsImportExportAndCleanupInMoreWithoutManualHighlight() throws Exception {
         String more = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiMoreScreen.java"));
         String client = Files.readString(Path.of(
@@ -20,7 +20,8 @@ class LumiMoreScreenTest {
 
         assertTrue(more.contains("luma.action.open_cleanup"));
         assertTrue(more.contains("luma.action.dimensions"));
-        assertTrue(more.contains("luma.action.manual_compare"));
+        assertTrue(more.contains("luma.tab.import_export"));
+        assertFalse(more.contains("luma.action.manual_compare"));
         assertTrue(more.contains("ClientContextualHelpHint.MORE"));
         assertTrue(more.contains("luma.action.reset_contextual_hints"));
         assertTrue(more.contains("resetContextualHints"));
@@ -36,7 +37,7 @@ class LumiMoreScreenTest {
         assertFalse(more.contains("luma.window.credit"));
         assertFalse(more.contains("luma.window.mod_version"));
         assertTrue(client.contains("new LumiCleanupScreen("));
-        assertTrue(client.contains("new LumiComparePickerScreen("));
+        assertTrue(client.contains("() -> openPackages(client.screen)"));
         assertTrue(cleanup.contains("luma.action.inspect_unused_files"));
         assertTrue(cleanup.contains("luma.action.clean_up"));
         assertTrue(cleanup.contains("!result.applied()"));

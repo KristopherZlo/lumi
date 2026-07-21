@@ -515,6 +515,7 @@ public final class LumiClient implements ClientModInitializer {
                         client.screen, HISTORY,
                         NETWORKING::restoreDeletedVersion,
                         NETWORKING::cleanupVersion)),
+                () -> openPackages(client.screen),
                 () -> openOnboarding(client.screen),
                 () -> client.setScreen(new LumiHotkeyScreen(
                         client.screen,
@@ -525,15 +526,7 @@ public final class LumiClient implements ClientModInitializer {
                         client.screen, UPDATE_CHECKER, UPDATE_PREFERENCES)),
                 () -> client.setScreen(new LumiCleanupScreen(
                         client.screen,
-                        NETWORKING::inspectCleanup, NETWORKING::applyCleanup)),
-                () -> {
-                    var snapshot = HISTORY.state().snapshot().orElseThrow();
-                    Screen more = client.screen;
-                    client.setScreen(new LumiComparePickerScreen(
-                            more, snapshot, PREVIEW_STORE, HISTORY_PAGES,
-                            NETWORKING::requestHistoryPage,
-                            LumiClient::showCompareChanges));
-                }));
+                        NETWORKING::inspectCleanup, NETWORKING::applyCleanup))));
     }
 
     private static void openZoneDetails(

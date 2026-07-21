@@ -79,10 +79,8 @@ abstract class LumiPageScreen extends LumiScreen {
         addPageButton(x, y + SIDEBAR_BUTTON_STRIDE * 3, width,
                 "luma.tab.compare", ProjectTab.COMPARE, null);
         addPageButton(x, y + SIDEBAR_BUTTON_STRIDE * 4, width,
-                "luma.tab.import_export", ProjectTab.IMPORT_EXPORT, null);
-        addPageButton(x, y + SIDEBAR_BUTTON_STRIDE * 5, width,
                 "luma.action.settings", ProjectTab.SETTINGS, null);
-        addPageButton(x, y + SIDEBAR_BUTTON_STRIDE * 6, width,
+        addPageButton(x, y + SIDEBAR_BUTTON_STRIDE * 5, width,
                 "luma.action.more", ProjectTab.MORE, null);
     }
 
@@ -105,11 +103,9 @@ abstract class LumiPageScreen extends LumiScreen {
                 ProjectTab.VARIANTS, zoneColor);
         addCompactSidebarButton(3, "see-changes", "luma.tab.compare",
                 ProjectTab.COMPARE, null);
-        addCompactSidebarButton(4, "folder", "luma.tab.import_export",
-                ProjectTab.IMPORT_EXPORT, null);
-        addCompactSidebarButton(5, "sliders", "luma.action.settings",
+        addCompactSidebarButton(4, "sliders", "luma.action.settings",
                 ProjectTab.SETTINGS, null);
-        addCompactSidebarButton(6, "unordered-list", "luma.action.more",
+        addCompactSidebarButton(5, "unordered-list", "luma.action.more",
                 ProjectTab.MORE, null);
     }
 
