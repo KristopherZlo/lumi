@@ -33,6 +33,24 @@ class ClientHistoryPageStoreTest {
     }
 
     @Test
+    void keepsTheRenderedPageUntilItsReplacementArrives() {
+        ClientHistoryPageStore store = new ClientHistoryPageStore();
+        UUID current = new UUID(0, 12);
+        UUID replacement = new UUID(0, 13);
+        store.begin(current, "minecraft:overworld", WORKSPACE,
+                MAIN, Optional.empty(), 0);
+        assertTrue(store.accept(page(current, 0)));
+
+        store.begin(replacement, "minecraft:overworld", WORKSPACE,
+                MAIN, Optional.empty(), 0);
+
+        assertTrue(store.page(
+                "minecraft:overworld", WORKSPACE, MAIN, Optional.empty())
+                .filter(page -> page.requestId().equals(current))
+                .isPresent());
+    }
+
+    @Test
     void keepsZoneAndWorkspaceScopesIndependent() {
         ClientHistoryPageStore store = new ClientHistoryPageStore();
         UUID workspaceRequest = new UUID(0, 4);

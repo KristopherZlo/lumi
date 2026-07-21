@@ -45,7 +45,6 @@ public final class ClientHistoryPageStore {
                 channel, new Scope(dimensionId, workspaceId, branch, zoneId));
         pending.remove(scope);
         pending.put(scope, new Pending(requestId, offset));
-        pages.remove(scope);
         trim(pending);
     }
 

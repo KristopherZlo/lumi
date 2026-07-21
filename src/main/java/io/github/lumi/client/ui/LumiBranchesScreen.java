@@ -16,7 +16,6 @@ import net.minecraft.network.chat.Component;
 
 /** Bounded native branch list with create, switch and merge actions. */
 public final class LumiBranchesScreen extends LumiPageScreen {
-    private static final int MAX_ROWS = 6;
     private static final int FORM_TOP = LumiTheme.PAGE_HEADER_HEIGHT + 8;
     private static final int FIELD_TOP = FORM_TOP + 14;
     private static final int LIST_TOP = FIELD_TOP + 28;
@@ -321,9 +320,8 @@ public final class LumiBranchesScreen extends LumiPageScreen {
     }
 
     static int visibleRows(int layoutHeight, int contentOffset, int layoutWidth) {
-        return Math.min(MAX_ROWS, Math.max(
-                0, (layoutHeight - LIST_TOP - 10 - contentOffset)
-                        / rowStride(layoutWidth)));
+        return Math.max(0, (layoutHeight - LIST_TOP - 10 - contentOffset)
+                / rowStride(layoutWidth));
     }
 
     @Override

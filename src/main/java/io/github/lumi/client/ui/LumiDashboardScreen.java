@@ -64,7 +64,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private LumiPageLayout layout;
     private EditBox search;
     private String searchQuery = "";
-    private boolean searchResultsDirty;
     private boolean refocusSearch;
     private LumiHistoryGraphView graphView;
     private WorkspaceHistoryController pagedHistory;
@@ -150,10 +149,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 ? null : pendingStatistics.result(latest).orElse(null);
         if (!Objects.equals(snapshot, latest)
                 || !Objects.equals(renderedPage, latestPage)
-                || !Objects.equals(renderedStatistics, latestStatistics)
-                || searchResultsDirty) {
+                || !Objects.equals(renderedStatistics, latestStatistics)) {
             refocusSearch = search != null && search.isFocused();
-            searchResultsDirty = false;
             renderedPage = latestPage;
             renderedStatistics = latestStatistics;
             rebuildWidgets();
@@ -303,11 +300,10 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         addIconButton(card.actionX(2), card.actionY(),
                 "branch", "luma.action.create_idea",
                 () -> createBranch.accept(version), LumiButton.Kind.NORMAL);
-        if (!VersionText.immutable(version)) {
-            addIconButton(card.actionX(3), card.actionY(),
-                    "tags", "luma.action.edit_tags",
-                    () -> editTags(version), LumiButton.Kind.NORMAL);
-        }
+        LumiButton tags = addIconButton(card.actionX(3), card.actionY(),
+                "tags", "luma.action.edit_tags",
+                () -> editTags(version), LumiButton.Kind.NORMAL);
+        tags.active = !VersionText.immutable(version);
     }
 
     private boolean addDashboardHint(int y) {
@@ -380,7 +376,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         if (pagedHistory != null) {
             pagedHistory.search(value);
         }
-        searchResultsDirty = true;
     }
 
     private void addBranchTabs(int x, int right) {
@@ -455,10 +450,11 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 ignored -> action.run(), kind, null, accent));
     }
 
-    private void addIconButton(
+    private LumiButton addIconButton(
             int x, int y, String icon, String translation,
             Runnable action, LumiButton.Kind kind) {
-        addIconButton(x, y, icon, Component.translatable(translation), action, kind);
+        return addIconButton(
+                x, y, icon, Component.translatable(translation), action, kind);
     }
 
     private void addIconButton(

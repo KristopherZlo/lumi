@@ -42,7 +42,6 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     private String searchValue = "";
     private int historyScroll;
     private boolean historyRequested;
-    private boolean searchDirty;
     private boolean focusSearchAfterInit;
     private HistoryPagePayload renderedPage;
     private PendingStatisticsPayload renderedStatistics;
@@ -88,11 +87,10 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         PendingStatisticsPayload statistics =
                 pendingStatistics.result(snapshot).orElse(null);
         if (!Objects.equals(renderedPage, latest)
-                || !Objects.equals(renderedStatistics, statistics)
-                || searchDirty) {
+                || !Objects.equals(renderedStatistics, statistics)) {
+            focusSearchAfterInit = search != null && search.isFocused();
             renderedPage = latest;
             renderedStatistics = statistics;
-            searchDirty = false;
             rebuildWidgets();
         }
     }
@@ -262,8 +260,6 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         if (searchValue.equals(value)) return;
         searchValue = value;
         zoneHistory.search(value);
-        searchDirty = true;
-        focusSearchAfterInit = true;
     }
 
     private void selectBranch(String branch) {

@@ -21,7 +21,7 @@ public final class ZoneHistoryController {
     private int offset;
     private String query = "";
     private final List<HistorySnapshotPayload.Version> loaded = new ArrayList<>();
-    private int loadedOffset = -1;
+    private UUID loadedRequest;
     private long observedRevision;
     private boolean awaitingRefresh;
 
@@ -53,11 +53,11 @@ public final class ZoneHistoryController {
     List<HistorySnapshotPayload.Version> versions(
             List<HistorySnapshotPayload.Version> initial) {
         Optional<HistoryPagePayload> currentPage = page();
-        currentPage.filter(current -> current.offset() != loadedOffset)
+        currentPage.filter(current -> !current.requestId().equals(loadedRequest))
                 .ifPresent(current -> {
                     if (current.offset() == 0) loaded.clear();
                     loaded.addAll(current.versions());
-                    loadedOffset = current.offset();
+                    loadedRequest = current.requestId();
                     awaitingRefresh = false;
                 });
         if (!loaded.isEmpty()) return List.copyOf(loaded);
@@ -136,7 +136,7 @@ public final class ZoneHistoryController {
     private void reset() {
         offset = 0;
         loaded.clear();
-        loadedOffset = -1;
+        loadedRequest = null;
     }
 
     private void synchronizeInvalidation() {

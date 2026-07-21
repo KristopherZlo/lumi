@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 /** Owns branch-filtered, incrementally loaded history for the scroll view. */
 final class WorkspaceHistoryController {
@@ -20,7 +21,7 @@ final class WorkspaceHistoryController {
     private int pageSize;
     private String query = "";
     private final List<HistorySnapshotPayload.Version> loaded = new ArrayList<>();
-    private int loadedOffset = -1;
+    private UUID loadedRequest;
     private long observedRevision;
     private boolean awaitingRefresh;
 
@@ -75,11 +76,11 @@ final class WorkspaceHistoryController {
 
     List<HistorySnapshotPayload.Version> versions() {
         Optional<HistoryPagePayload> currentPage = page();
-        currentPage.filter(current -> current.offset() != loadedOffset)
+        currentPage.filter(current -> !current.requestId().equals(loadedRequest))
                 .ifPresent(current -> {
                     if (current.offset() == 0) loaded.clear();
                     loaded.addAll(current.versions());
-                    loadedOffset = current.offset();
+                    loadedRequest = current.requestId();
                     awaitingRefresh = false;
                 });
         if (!loaded.isEmpty()) return List.copyOf(loaded);
@@ -160,7 +161,7 @@ final class WorkspaceHistoryController {
     private void reset() {
         offset = 0;
         loaded.clear();
-        loadedOffset = -1;
+        loadedRequest = null;
     }
 
     private void request() {

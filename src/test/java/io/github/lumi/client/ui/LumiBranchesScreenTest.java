@@ -23,6 +23,7 @@ class LumiBranchesScreenTest {
         assertTrue(LumiBranchesScreen.branchNameWidth(smallWidth) > 0);
         assertEquals(50, LumiBranchesScreen.rowStride(smallWidth));
         assertTrue(LumiBranchesScreen.visibleRows(220, 0, smallWidth) > 0);
+        assertTrue(LumiBranchesScreen.visibleRows(600, 0, referenceWidth) > 6);
     }
 
     @Test

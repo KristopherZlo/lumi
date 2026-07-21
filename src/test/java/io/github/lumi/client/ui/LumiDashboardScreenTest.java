@@ -200,15 +200,14 @@ class LumiDashboardScreenTest {
     }
 
     @Test
-    void defersSearchRebuildUntilAfterTheInputEvent() throws Exception {
+    void keepsSearchResultsUntilTheCorrelatedPageArrives() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));
         int start = source.indexOf("private void search(String value)");
         int end = source.indexOf("private void addBranchTabs(", start);
         String searchMethod = source.substring(start, end);
 
-        assertTrue(searchMethod.contains("searchResultsDirty = true;"));
         assertFalse(searchMethod.contains("rebuildWidgets()"));
-        assertTrue(source.contains("|| searchResultsDirty"));
+        assertFalse(source.contains("searchResultsDirty"));
     }
 }

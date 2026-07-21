@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -39,14 +40,13 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     private LumiHistoryGraphView graphView;
     private EditBox search;
     private String query = "";
-    private int loadedOffset = -1;
+    private UUID loadedRequest;
     private int scroll;
     private int panelX;
     private int panelY;
     private int panelWidth;
     private int panelHeight;
     private boolean requested;
-    private boolean queryDirty;
     private boolean refocusSearch;
     private long observedHistoryRevision;
     private LumiCommitCard commitCards;
@@ -152,25 +152,16 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
         if (historyRevision != observedHistoryRevision) {
             observedHistoryRevision = historyRevision;
             loaded.clear();
-            loadedOffset = -1;
+            loadedRequest = null;
             renderedPage = null;
             scroll = 0;
             request(0);
             rebuildWidgets();
             return;
         }
-        if (queryDirty) {
-            queryDirty = false;
-            loaded.clear();
-            loadedOffset = -1;
-            scroll = 0;
-            refocusSearch = search != null && search.isFocused();
-            request(0);
-            rebuildWidgets();
-            return;
-        }
         HistoryPagePayload latest = page().orElse(null);
         if (!Objects.equals(renderedPage, latest)) {
+            refocusSearch = search != null && search.isFocused();
             renderedPage = latest;
             syncPage();
             rebuildWidgets();
@@ -312,7 +303,8 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     private void search(String replacement) {
         if (!query.equals(replacement.trim())) {
             query = replacement.trim();
-            queryDirty = true;
+            scroll = 0;
+            request(0);
         }
     }
 
@@ -333,11 +325,11 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     }
 
     private void syncPage() {
-        page().filter(current -> current.offset() != loadedOffset)
+        page().filter(current -> !current.requestId().equals(loadedRequest))
                 .ifPresent(current -> {
                     if (current.offset() == 0) loaded.clear();
                     if (current.error().isEmpty()) loaded.addAll(current.versions());
-                    loadedOffset = current.offset();
+                    loadedRequest = current.requestId();
                     renderedPage = current;
                 });
     }
