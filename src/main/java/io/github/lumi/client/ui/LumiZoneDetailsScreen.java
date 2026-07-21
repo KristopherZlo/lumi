@@ -251,9 +251,10 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                 "branch", Component.translatable("luma.action.create_idea"),
                 () -> actions.createBranch().accept(version),
                 LumiButton.Kind.NORMAL);
-        addIconButton(card.actionX(3), card.actionY(),
+        LumiButton tags = addIconButton(card.actionX(3), card.actionY(),
                 "tags", Component.translatable("luma.action.edit_tags"),
                 () -> editTags(version), LumiButton.Kind.NORMAL);
+        tags.active = !VersionText.immutable(version);
     }
 
     private void search(String value) {

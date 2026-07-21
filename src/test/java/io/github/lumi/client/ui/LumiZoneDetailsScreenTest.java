@@ -46,6 +46,8 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains("PendingStatisticsText::summary"));
         assertTrue(source.contains("actions.updateTags().accept"));
         assertTrue(source.contains("optimisticTags"));
+        assertTrue(source.contains(
+                "tags.active = !VersionText.immutable(version)"));
         assertTrue(source.contains("snapshot.head().equals(version.id())"));
 
         int restore = source.indexOf("luma.action.restore");
