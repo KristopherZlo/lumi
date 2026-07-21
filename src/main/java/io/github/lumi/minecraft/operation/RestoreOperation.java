@@ -97,19 +97,53 @@ public final class RestoreOperation implements DimensionMutation {
             UUID operationId,
             RestoreStateListener stateListener,
             BranchSwitchPlan plan) throws IOException {
+        return startBranchSwitch(
+                restore, world, publication, journals, operationId,
+                stateListener, plan, plan.source().commit(), Optional.empty());
+    }
+
+    public static RestoreOperation startBranchSwitch(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            BranchSwitchPlan plan,
+            CommitId returnPoint,
+            WorkingIndexSnapshot capturedGenerations) throws IOException {
+        return startBranchSwitch(
+                restore, world, publication, journals, operationId,
+                stateListener, plan, returnPoint,
+                Optional.of(Objects.requireNonNull(
+                        capturedGenerations, "capturedGenerations")));
+    }
+
+    private static RestoreOperation startBranchSwitch(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            BranchSwitchPlan plan,
+            CommitId returnPoint,
+            Optional<WorkingIndexSnapshot> capturedGenerations) throws IOException {
         Objects.requireNonNull(plan, "plan");
+        Objects.requireNonNull(returnPoint, "returnPoint");
         if (!restore.expectedRef().equals(plan.source())
                 || !restore.targetCommit().equals(plan.target().commit())) {
             throw new IOException("Prepared Restore does not match branch switch plan");
         }
         OperationTarget target = new OperationTarget(
                 plan.source().name(), plan.source().commit(), plan.source().revision(),
-                Optional.of(plan.target().commit()), Optional.of(plan.source().commit()),
+                Optional.of(plan.target().commit()), Optional.of(returnPoint),
                 Optional.of(new BranchSwitchTarget(
                         plan.target().name(), plan.target().revision(),
                         plan.expectedActive().revision())));
         return start(restore, world, publication, journals, operationId,
-                stateListener, OperationKind.BRANCH_SWITCH, target);
+                stateListener, OperationKind.BRANCH_SWITCH, target,
+                capturedGenerations);
     }
 
     public static RestoreOperation startWorkspaceSwitch(

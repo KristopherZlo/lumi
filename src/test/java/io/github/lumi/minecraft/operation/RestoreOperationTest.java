@@ -18,6 +18,8 @@ import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationTarget;
+import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.model.WorkspaceSwitchTarget;
 import io.github.lumi.domain.model.Zone;
@@ -85,6 +87,27 @@ class RestoreOperationTest {
         assertEquals(io.github.lumi.domain.model.OperationKind.BRANCH_SWITCH, journal.kind());
         assertEquals(Optional.of(new BranchSwitchTarget(target.name(), 4, 6)),
                 journal.target().branchSwitch());
+    }
+
+    @Test
+    void recordsBranchSwitchReturnPointAndCapturedAmbientBoundary() throws IOException {
+        BranchRef source = new BranchRef(new BranchName("main"), id('d'), 2);
+        BranchRef target = new BranchRef(new BranchName("redstone-test"), id('e'), 4);
+        var plan = new BranchSwitchPlan(new ActiveBranch(source.name(), 6), source, target);
+        var restore = new PreparedRestore(
+                source, target.commit(), Map.of(), Map.of(), Map.of(), Map.of());
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        CommitId returnPoint = id('f');
+        var captured = new WorkingIndexSnapshot(Map.of(new SectionKey(1, 2, 3), 7L));
+
+        RestoreOperation operation = RestoreOperation.startBranchSwitch(
+                restore, new RepairThenVerify(), ignored -> { }, journals, UUID.randomUUID(),
+                RestoreStateListener.NONE, plan, returnPoint, captured);
+        operation.tick(Long.MAX_VALUE);
+
+        var journal = journals.read().orElseThrow();
+        assertEquals(Optional.of(returnPoint), journal.target().returnPoint());
+        assertEquals(Optional.of(captured), journal.capturedGenerations());
     }
 
     @Test

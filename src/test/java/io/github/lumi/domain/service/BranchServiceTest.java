@@ -53,7 +53,11 @@ class BranchServiceTest {
                 branches.visible().stream().map(ref -> ref.name()).sorted(
                         java.util.Comparator.comparing(BranchName::value)).toList());
 
-        working.write(new WorkingIndexSnapshot(Map.of(new SectionKey(0, 0, 0), 1L)));
+        var ambient = new WorkingIndexSnapshot(Map.of(new SectionKey(0, 0, 0), 1L));
+        working.write(new WorkingIndexRepository.State(
+                ambient, WorkingIndexSnapshot.empty()));
+        branches.prepareSwitch(created.name());
+        working.write(new WorkingIndexRepository.State(ambient, ambient));
         assertThrows(IllegalStateException.class,
                 () -> branches.prepareSwitch(created.name()));
         working.write(WorkingIndexSnapshot.empty());

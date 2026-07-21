@@ -141,8 +141,8 @@ public final class BranchService {
     }
 
     private void ensureClean() throws IOException {
-        if (!working.read().generations().isEmpty()) {
-            throw new IllegalStateException("Branch switch requires no pending world changes");
+        if (!working.readState().builder().generations().isEmpty()) {
+            throw new IllegalStateException("Branch switch requires no pending builder changes");
         }
     }
 }
