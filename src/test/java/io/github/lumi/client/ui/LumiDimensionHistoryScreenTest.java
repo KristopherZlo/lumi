@@ -23,4 +23,16 @@ class LumiDimensionHistoryScreenTest {
         assertTrue(source.contains("ProjectTab.HISTORY"));
         assertTrue(source.contains("return dimensionId;"));
     }
+
+    @Test
+    void reusesDashboardGeometryCardsAndStableDisabledActions() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiDimensionHistoryScreen.java"));
+        assertTrue(source.contains("LumiDashboardScreen.dashboardGeometry("));
+        assertTrue(source.contains("LumiDashboardScreen.versionCardLayout("));
+        assertTrue(source.contains("luma.action.save_build"));
+        assertTrue(source.contains("luma.action.restore"));
+        assertTrue(source.contains("restore.active = false"));
+        assertTrue(source.contains("tags.active = false"));
+    }
 }
