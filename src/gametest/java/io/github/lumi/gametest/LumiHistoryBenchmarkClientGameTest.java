@@ -13,10 +13,12 @@ public final class LumiHistoryBenchmarkClientGameTest
             return;
         }
         LumiHistoryBenchmarkConfig config = LumiHistoryBenchmarkConfig.load();
-        LumiClientBehaviorWorld.run(
-                context, config.reportName(), (test, world, report) ->
-                        new LumiHistoryBenchmarkScenario(
-                                test, world, report, config)
-                                .run(new LumiUiTestDriver(test)));
+        try (var ignored = LumiUiScaleTestScope.readableViewport()) {
+            LumiClientBehaviorWorld.run(
+                    context, config.reportName(), (test, world, report) ->
+                            new LumiHistoryBenchmarkScenario(
+                                    test, world, report, config)
+                                    .run(new LumiUiTestDriver(test)));
+        }
     }
 }

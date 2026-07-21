@@ -10,7 +10,6 @@ import io.github.lumi.client.ui.LumiDeleteZoneScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
 import io.github.lumi.client.ui.LumiRestoreScreen;
 import io.github.lumi.client.ui.LumiSaveScreen;
-import io.github.lumi.client.ui.LumiUiScale;
 import io.github.lumi.client.ui.LumiVersionDetailsScreen;
 import io.github.lumi.client.ui.LumiVersionTagsScreen;
 import io.github.lumi.client.ui.LumiZoneDetailsScreen;
@@ -29,10 +28,7 @@ import net.minecraft.world.item.Items;
 public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
-        String property = LumiUiScale.TARGET_GUI_SCALE_PROPERTY;
-        String previous = System.getProperty(property);
-        System.setProperty(property, "1");
-        try {
+        try (var ignored = LumiUiScaleTestScope.readableViewport()) {
             LumiClientBehaviorWorld.run(
                     context, "ui-workflow", (test, world, report) -> {
                 LumiUiTestDriver ui = new LumiUiTestDriver(test);
@@ -59,12 +55,9 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
                 verifyZones(test, ui, report);
 
                 report.event("ui_contract", "stateful_workflow", "succeeded",
-                        0, 0, "SAVE HIST DETAIL RESTORE BRANCH COMPARE; first="
+                        0, 0, "SAVE HIST DETAIL RESTORE BRANCH COMPARE ZONE; first="
                                 + firstSave.hex() + ";second=" + secondSave.hex());
             });
-        } finally {
-            if (previous == null) System.clearProperty(property);
-            else System.setProperty(property, previous);
         }
     }
 

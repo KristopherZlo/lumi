@@ -2,6 +2,7 @@ package io.github.lumi.gametest;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.TreeMap;
@@ -17,7 +18,12 @@ final class LumiRepositoryMetrics {
         if (Files.exists(repository)) {
             try (Stream<Path> paths = Files.walk(repository)) {
                 for (Path path : paths.filter(Files::isRegularFile).toList()) {
-                    long size = Files.size(path);
+                    long size;
+                    try {
+                        size = Files.size(path);
+                    } catch (NoSuchFileException disappeared) {
+                        continue;
+                    }
                     bytes += size;
                     files++;
                     Path relative = repository.relativize(path);

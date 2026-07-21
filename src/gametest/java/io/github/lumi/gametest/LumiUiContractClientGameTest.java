@@ -14,7 +14,6 @@ import io.github.lumi.client.ui.LumiPackageScreen;
 import io.github.lumi.client.ui.LumiSettingsScreen;
 import io.github.lumi.client.ui.LumiSpecialThanksScreen;
 import io.github.lumi.client.ui.LumiUpdateScreen;
-import io.github.lumi.client.ui.LumiUiScale;
 import io.github.lumi.client.ui.LumiZonesScreen;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -25,10 +24,7 @@ import net.minecraft.client.gui.screens.Screen;
 public final class LumiUiContractClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
-        String property = LumiUiScale.TARGET_GUI_SCALE_PROPERTY;
-        String previous = System.getProperty(property);
-        System.setProperty(property, "1");
-        try {
+        try (var ignored = LumiUiScaleTestScope.readableViewport()) {
             LumiClientBehaviorWorld.run(
                     context, "ui-contract", (test, world, report) -> {
                 LumiUiTestDriver ui = new LumiUiTestDriver(test);
@@ -38,12 +34,6 @@ public final class LumiUiContractClientGameTest implements FabricClientGameTest 
                 verifyPrimaryPages(ui, report);
                 verifyMorePages(ui, report);
             });
-        } finally {
-            if (previous == null) {
-                System.clearProperty(property);
-            } else {
-                System.setProperty(property, previous);
-            }
         }
     }
 
