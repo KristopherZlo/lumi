@@ -1474,8 +1474,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             return builder.generations().isEmpty()
                     ? new NoChangeMutation("luma.status.nothing_to_restore")
                     : new LiveRecordedMutation(
-                            liveActions, author.id(),
-                            createQuickRollback(author, builder, selection));
+                            liveActions, author.id(), action ->
+                            createQuickRollback(author, builder, selection, action));
         });
         operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
         return operation;
@@ -1523,7 +1523,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private ReturnPointRestoreOperation createQuickRollback(
             CommitAuthor author, WorkingIndexSnapshot builder,
-            Optional<BlockBox> selection)
+            Optional<BlockBox> selection, UUID liveAction)
             throws IOException {
         BranchRef expected = activeRef();
         UUID operationId = UUID.randomUUID();
@@ -1549,6 +1549,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                 : restores.preparePartial(
                                         expected, saved.commitId(), expected.commit(),
                                         selection.orElseThrow(), false);
+                        liveActions.recordRestore(liveAction, prepared);
                         return RestoreOperation.startQuickRollback(
                                 prepared, worldApply, new WorkingIndexClearPublication(
                                         mutations, clearableQuickRollbackKeys(

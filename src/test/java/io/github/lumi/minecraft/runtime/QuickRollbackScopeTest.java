@@ -11,9 +11,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class QuickRollbackScopeTest {
+    @Test
+    void recordsPreparedRollbackIntoTheLiveAction() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/minecraft/runtime/FabricDimensionRuntime.java"));
+
+        assertTrue(source.contains(
+                "createQuickRollback(author, builder, selection, action)"));
+        assertTrue(source.contains(
+                "liveActions.recordRestore(liveAction, prepared)"));
+    }
+
     @Test
     void filtersSectionsAndEntityChunksWithNegativeFlooring() {
         Optional<BlockBox> area = Optional.of(

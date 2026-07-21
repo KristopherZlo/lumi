@@ -3,6 +3,10 @@ package io.github.lumi.domain.service;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.SectionKey;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -107,6 +111,39 @@ public final class LiveActionJournal {
             action.entities.put(entityId, updated);
         }
         entityOwners.set(entityId, action, updatedBytes != 0 && action.applied);
+    }
+
+    /** Records one already-prepared Restore as a reversible live action off-thread. */
+    public synchronized void recordRestore(
+            UUID actionId, PreparedRestore restore) {
+        MutableAction action = requireAction(actionId);
+        Objects.requireNonNull(restore, "restore");
+        for (var entry : restore.sections().entrySet()) {
+            SectionKey section = entry.getKey();
+            SectionBlob after = entry.getValue();
+            SectionBlob before = restore.returnSections().get(section);
+            for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+                String oldState = before.blockStates().get(index);
+                String newState = after.blockStates().get(index);
+                var oldNbt = before.blockEntities().get(index);
+                var newNbt = after.blockEntities().get(index);
+                if (oldState.equals(newState) && Objects.equals(oldNbt, newNbt)) continue;
+                record(actionId, position(section, index),
+                        new BlockSnapshot(oldState, Optional.ofNullable(oldNbt)),
+                        new BlockSnapshot(newState, Optional.ofNullable(newNbt)));
+                if (!action.available) return;
+            }
+        }
+        Map<UUID, EntityState> beforeEntities = entities(restore.returnEntities());
+        Map<UUID, EntityState> afterEntities = entities(restore.entities());
+        var ids = new java.util.LinkedHashSet<>(beforeEntities.keySet());
+        ids.addAll(afterEntities.keySet());
+        for (UUID id : ids) {
+            recordEntity(actionId, id,
+                    Optional.ofNullable(beforeEntities.get(id)),
+                    Optional.ofNullable(afterEntities.get(id)));
+            if (!action.available) return;
+        }
     }
 
     public synchronized void refreshEntityBefore(
@@ -490,6 +527,26 @@ public final class LiveActionJournal {
                     Objects.requireNonNull(value, "value")));
             return Collections.unmodifiableMap(copy);
         }
+    }
+
+    private static BlockPosition position(SectionKey section, int index) {
+        return new BlockPosition(
+                section.chunkX() * 16 + (index & 15),
+                section.sectionY() * 16 + (index >>> 8 & 15),
+                section.chunkZ() * 16 + (index >>> 4 & 15));
+    }
+
+    private static Map<UUID, EntityState> entities(
+            Map<EntityChunkKey, EntityChunkBlob> chunks) {
+        Map<UUID, EntityState> entities = new LinkedHashMap<>();
+        chunks.values().stream().flatMap(chunk -> chunk.entities().stream())
+                .forEach(entity -> {
+                    if (entities.put(entity.id(), entity) != null) {
+                        throw new IllegalArgumentException(
+                                "Duplicate entity in prepared Restore: " + entity.id());
+                    }
+                });
+        return entities;
     }
 
     public record ActionSummary(

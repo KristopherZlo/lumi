@@ -6,9 +6,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
+import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CanonicalNbt;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.SectionKey;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -35,6 +46,35 @@ class LiveActionJournalTest {
         var redo = journal.prepareRedo(PLAYER_A).orElseThrow();
         assertEquals(block("stone"), redo.expected().get(POSITION));
         assertEquals(block("gold_block"), redo.replacement().get(POSITION));
+    }
+
+    @Test
+    void recordsPreparedQuickRollbackForExactUndoRedo() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER_A);
+        SectionKey section = new SectionKey(-1, 2, 3);
+        SectionBlob before = section("minecraft:stone");
+        SectionBlob after = section("minecraft:air");
+        EntityChunkKey entities = new EntityChunkKey(-1, 3);
+        PreparedRestore restore = new PreparedRestore(
+                new BranchRef(new BranchName("main"), commit('1'), 0),
+                commit('1'), Map.of(section, after),
+                Map.of(entities, new EntityChunkBlob(List.of())),
+                Map.of(section, before),
+                Map.of(entities, new EntityChunkBlob(List.of(entity(1)))));
+
+        journal.recordRestore(action, restore);
+        journal.close(action);
+
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(block("air"), undo.expected().get(
+                new BlockPosition(-16, 32, 48)));
+        assertEquals(block("stone"), undo.replacement().get(
+                new BlockPosition(-16, 32, 48)));
+        assertEquals(Optional.empty(), undo.expectedEntities().get(ENTITY));
+        assertEquals(Optional.of(entity(1)), undo.replacementEntities().get(ENTITY));
+        journal.complete(undo);
+        assertTrue(journal.prepareRedo(PLAYER_A).isPresent());
     }
 
     @Test
@@ -295,5 +335,16 @@ class LiveActionJournalTest {
         return new EntityState(
                 ENTITY, "minecraft:armor_stand",
                 new CanonicalNbt(new byte[] {(byte) state}));
+    }
+
+    private static SectionBlob section(String first) {
+        List<String> blocks = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:air"));
+        blocks.set(0, first);
+        return new SectionBlob(blocks, Map.of());
+    }
+
+    private static CommitId commit(char value) {
+        return new CommitId(new ObjectId(String.valueOf(value).repeat(64)));
     }
 }

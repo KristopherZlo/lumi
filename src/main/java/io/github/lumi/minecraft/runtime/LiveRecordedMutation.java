@@ -23,6 +23,19 @@ public final class LiveRecordedMutation implements DimensionMutation {
         action = journal.begin(Objects.requireNonNull(player, "player"));
     }
 
+    public LiveRecordedMutation(
+            LiveActionJournal journal, UUID player, Factory factory) throws IOException {
+        this.journal = Objects.requireNonNull(journal, "journal");
+        action = journal.begin(Objects.requireNonNull(player, "player"));
+        try {
+            delegate = Objects.requireNonNull(
+                    factory.create(action), "live mutation delegate");
+        } catch (IOException | RuntimeException failed) {
+            discardAction();
+            throw failed;
+        }
+    }
+
     public UUID actionId() {
         return action;
     }
@@ -33,8 +46,11 @@ public final class LiveRecordedMutation implements DimensionMutation {
             delegate.advance(deadlineNanos);
         }
         if (delegate.isTerminal() && !closed) {
-            journal.close(action);
-            closed = true;
+            if (delegate.terminalState() == MutationTerminalState.SUCCEEDED) {
+                closeAction();
+            } else {
+                discardAction();
+            }
         }
     }
 
@@ -55,7 +71,7 @@ public final class LiveRecordedMutation implements DimensionMutation {
     public boolean cancel() throws IOException {
         boolean cancelled = delegate.cancel();
         if (cancelled) {
-            closeAction();
+            discardAction();
         }
         return cancelled;
     }
@@ -65,7 +81,12 @@ public final class LiveRecordedMutation implements DimensionMutation {
         try {
             delegate.close();
         } finally {
-            closeAction();
+            if (delegate.isTerminal()
+                    && delegate.terminalState() == MutationTerminalState.SUCCEEDED) {
+                closeAction();
+            } else {
+                discardAction();
+            }
         }
     }
 
@@ -74,5 +95,18 @@ public final class LiveRecordedMutation implements DimensionMutation {
             journal.close(action);
             closed = true;
         }
+    }
+
+    private void discardAction() {
+        if (!closed) {
+            journal.makeUnavailable(action, "Live operation did not complete");
+            journal.close(action);
+            closed = true;
+        }
+    }
+
+    @FunctionalInterface
+    public interface Factory {
+        DimensionMutation create(UUID actionId) throws IOException;
     }
 }

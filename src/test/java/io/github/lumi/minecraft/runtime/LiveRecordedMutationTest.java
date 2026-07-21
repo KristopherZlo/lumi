@@ -54,6 +54,18 @@ class LiveRecordedMutationTest {
         assertEquals(Optional.empty(), journal.prepareUndo(PLAYER));
     }
 
+    @Test
+    void dropsRecordedStateWhenTheDelegateFails() throws Exception {
+        LiveActionJournal journal = new LiveActionJournal();
+        LiveRecordedMutation operation = new LiveRecordedMutation(
+                journal, PLAYER, new FailedRecordingMutation(journal));
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(MutationTerminalState.FAILED, operation.terminalState());
+        assertEquals(Optional.empty(), journal.prepareUndo(PLAYER));
+    }
+
     private static BlockSnapshot block(String id) {
         return new BlockSnapshot("minecraft:" + id, Optional.empty());
     }
@@ -98,6 +110,29 @@ class LiveRecordedMutationTest {
         @Override public boolean isSafeToRelease() { return cancelled; }
         @Override public MutationTerminalState terminalState() {
             return MutationTerminalState.CANCELLED;
+        }
+    }
+
+    private static final class FailedRecordingMutation implements DimensionMutation {
+        private final LiveActionJournal journal;
+        private boolean failed;
+
+        private FailedRecordingMutation(LiveActionJournal journal) {
+            this.journal = journal;
+        }
+
+        @Override
+        public void advance(long deadlineNanos) {
+            journal.record(
+                    DirectLiveActionContext.current(journal).orElseThrow(),
+                    POSITION, block("stone"), block("air"));
+            failed = true;
+        }
+
+        @Override public boolean isTerminal() { return failed; }
+        @Override public boolean isSafeToRelease() { return failed; }
+        @Override public MutationTerminalState terminalState() {
+            return MutationTerminalState.FAILED;
         }
     }
 }
