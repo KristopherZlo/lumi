@@ -56,7 +56,7 @@ class SpecialThanksSupportTest {
     }
 
     @Test
-    void resolverUsesLegacySkinManagerFetchAndHostedHttps() throws Exception {
+    void resolverKeepsTheNativeSkinLookupLiveAndHostedHttps() throws Exception {
         assertEquals(URI.create("https://example.com/skin.png"),
                 MinecraftSpecialThanksSkinResolver.requireHttps(
                         "https://example.com/skin.png"));
@@ -71,11 +71,13 @@ class SpecialThanksSupportTest {
                 "src/main/java/io/github/lumi/client/specialthanks/"
                         + "MinecraftSpecialThanksSkinResolver.java"));
         assertTrue(resolver.contains("Util.backgroundExecutor()"));
-        assertTrue(resolver.contains("getSkinManager().get(profile.orElseThrow()).join()"));
+        assertTrue(resolver.contains(
+                "getSkinManager().createLookup(profile.orElseThrow(), true)"));
         assertFalse(resolver.contains("sessionService().fetchProfile("));
-        assertFalse(resolver.contains(".createLookup(profile, true)"));
+        assertFalse(resolver.contains("getSkinManager().get("));
         assertTrue(resolver.contains("loggedFailures.add(entry)"));
         assertTrue(resolver.contains("new ClientAsset.ResourceTexture(id, id)"));
-        assertTrue(resolver.contains("getNow(DefaultPlayerSkin.getDefaultSkin())"));
+        assertTrue(resolver.contains(
+                "getNow(DefaultPlayerSkin::getDefaultSkin).get()"));
     }
 }
