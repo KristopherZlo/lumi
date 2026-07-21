@@ -60,6 +60,10 @@ public final class ClientPendingStatisticsStore {
                 && pending.revision() == current.revision();
     }
 
+    public synchronized boolean needsRequest(HistorySnapshotPayload snapshot) {
+        return result(snapshot).isEmpty() && !pending(snapshot);
+    }
+
     public synchronized void clear() {
         pending = null;
         result = null;

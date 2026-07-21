@@ -31,6 +31,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
     private EditBox tags;
     private LumiButton save;
     private LumiButton amend;
+    private int observedPending = Integer.MIN_VALUE;
     private String error = "";
 
     public LumiSaveScreen(
@@ -140,13 +141,25 @@ public final class LumiSaveScreen extends LumiModalScreen {
     }
 
     private void setSubmitActive(boolean active) {
-        boolean hasChanges = history.state().snapshot()
-                .map(snapshot -> snapshot.pendingKeys() > 0).orElse(false);
+        int pending = history.state().snapshot()
+                .map(snapshot -> snapshot.pendingKeys()).orElse(0);
+        observedPending = pending;
+        boolean hasChanges = pending > 0;
         if (save != null) {
             save.active = active && hasChanges;
         }
         if (amend != null) {
             amend.active = active && hasChanges;
+        }
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        int pending = history.state().snapshot()
+                .map(snapshot -> snapshot.pendingKeys()).orElse(0);
+        if (pending != observedPending && message != null) {
+            setSubmitActive(!message.getValue().trim().isEmpty());
         }
     }
 

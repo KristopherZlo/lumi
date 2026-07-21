@@ -49,13 +49,13 @@ public final class LumiUiContractClientGameTest implements FabricClientGameTest 
                 "luma.history.view_cards", true);
         ui.assertButton(LumiDashboardScreen.class,
                 "luma.history.view_graph", true);
-        ui.assertButton(LumiDashboardScreen.class,
+        ui.assertButtonEventually(LumiDashboardScreen.class,
                 "luma.action.restore", true);
-        ui.assertButton(LumiDashboardScreen.class,
+        ui.assertButtonEventually(LumiDashboardScreen.class,
                 "luma.action.open_details", true);
-        ui.assertButton(LumiDashboardScreen.class,
+        ui.assertButtonEventually(LumiDashboardScreen.class,
                 "luma.action.create_idea", true);
-        ui.assertButton(LumiDashboardScreen.class,
+        ui.assertButtonEventually(LumiDashboardScreen.class,
                 "luma.action.edit_tags", false);
         for (String tab : new String[] {
                 "luma.tab.history", "luma.tab.zones", "luma.tab.variants",

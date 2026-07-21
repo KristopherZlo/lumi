@@ -23,5 +23,7 @@ class LumiSaveScreenTest {
         assertTrue(source.contains("tags.getValue()"));
         assertTrue(source.contains("luma.zones.save_button"));
         assertTrue(source.contains("ZONE(\"luma.zones.save_title\""));
+        assertTrue(source.contains("pending != observedPending"));
+        assertFalse(source.contains("pending != observedPending && rebuildWidgets()"));
     }
 }

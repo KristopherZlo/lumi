@@ -620,8 +620,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
 
     private void requestPendingStatistics() {
         if (snapshot.pendingKeys() > 0
-                && pendingStatistics.result(snapshot).isEmpty()
-                && !pendingStatistics.pending(snapshot)) {
+                && pendingStatistics.needsRequest(snapshot)) {
             requestPendingStatistics.run();
         }
     }

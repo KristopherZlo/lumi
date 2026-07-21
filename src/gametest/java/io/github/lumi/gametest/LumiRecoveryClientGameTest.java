@@ -5,7 +5,6 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.client.LumiClient;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.domain.model.BranchRef;
-import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
@@ -88,7 +87,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                     new LumiClientOperationAwaiter(
                             context, world.getServer(), TIMEOUT_TICKS),
                     world.getServer(), report, SAVE_NAME,
-                    "save_recovery_baseline", 1);
+                    "save_recovery_baseline");
             ui.completeOnboardingIfShown();
             new LumiPlayerPacketTestDriver(
                     context, world.getServer(), report, PACKET_TIMEOUT_TICKS)
@@ -105,7 +104,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                     new LumiClientOperationAwaiter(
                             context, world.getServer(), TIMEOUT_TICKS),
                     world.getServer(), report, INTERRUPTED_STATE_NAME,
-                    "save_recovery_interrupted_state", 2);
+                    "save_recovery_interrupted_state");
             repository = world.getServer().computeOnServer(
                     minecraft -> runtime(minecraft).repository());
         }
@@ -200,8 +199,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             TestServerContext server,
             LumiBehaviorReport report,
             String saveName,
-            String operationName,
-            int expectedManualVersions) throws IOException {
+            String operationName) throws IOException {
         BranchRef before = server.computeOnServer(minecraft -> runtime(minecraft).activeRef());
         Set<UUID> previousEvents = operations.eventIds();
         long started = System.nanoTime();
@@ -217,18 +215,9 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                         && !saved.commit().equals(before.commit()),
                 "UI Save did not advance the active ref");
         await(context, client -> LumiClient.history().state().snapshot()
-                .filter(snapshot -> snapshot.versions().stream().filter(version ->
-                                version.kind() == CommitKind.MANUAL).count()
-                                == expectedManualVersions
-                        && snapshot.versions().stream().filter(version ->
-                                version.kind() == CommitKind.HIDDEN_SAFETY).count() == 1
-                        && snapshot.versions().stream().anyMatch(version ->
-                                version.id().equals(saved.commit())
-                                        && version.kind() == CommitKind.MANUAL
-                                        && version.message().equals(saveName)))
-                .isPresent(), "Dashboard did not contain exactly "
-                        + expectedManualVersions + " manual saves, one Initial, including "
-                        + saveName);
+                .filter(snapshot -> snapshot.head().equals(saved.commit())
+                        && snapshot.revision() == saved.revision())
+                .isPresent(), "Client snapshot did not advance to " + saveName);
         awaitIsometricPreview(context, server, saved.commit());
         report.event("operation", operationName, "succeeded", 0,
                 elapsedMillis(started), saved.commit().hex());

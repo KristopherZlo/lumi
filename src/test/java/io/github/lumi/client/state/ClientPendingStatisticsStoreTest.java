@@ -58,6 +58,20 @@ class ClientPendingStatisticsStoreTest {
         assertTrue(store.pending(snapshot));
     }
 
+    @Test
+    void requestsOnlyWhenTheCurrentContextHasNoRequestOrResult() {
+        ClientPendingStatisticsStore store = new ClientPendingStatisticsStore();
+        HistorySnapshotPayload snapshot = snapshot('1', 2);
+        UUID request = new UUID(0, 7);
+
+        assertTrue(store.needsRequest(snapshot));
+        store.begin(request, snapshot);
+        assertFalse(store.needsRequest(snapshot));
+        assertTrue(store.accept(result(request, snapshot)));
+        assertFalse(store.needsRequest(snapshot));
+        assertTrue(store.needsRequest(snapshot('2', 3)));
+    }
+
     private static PendingStatisticsPayload result(
             UUID request, HistorySnapshotPayload snapshot) {
         return new PendingStatisticsPayload(

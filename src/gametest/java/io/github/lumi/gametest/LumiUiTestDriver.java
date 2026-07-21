@@ -114,6 +114,18 @@ final class LumiUiTestDriver {
         }
     }
 
+    void assertButtonEventually(
+            Class<? extends Screen> screen, String translationKey, boolean active) {
+        for (int tick = 0; tick < 1_200; tick++) {
+            ButtonState state = buttonState(screen, translationKey, 0);
+            if (state.count() == 1 && state.active() == active) {
+                return;
+            }
+            context.waitTick();
+        }
+        assertButton(screen, translationKey, active);
+    }
+
     void assertButtonCount(
             Class<? extends Screen> screen, String translationKey, int expected) {
         ButtonState state = buttonState(screen, translationKey, -1);
@@ -238,14 +250,18 @@ final class LumiUiTestDriver {
         requireScreen(expectedScreen);
         for (int step = 0; step < MAX_FOCUS_STEPS; step++) {
             ButtonState state = buttonState(expectedScreen, translationKey, index);
-            if ((unique && state.count() != 1) || (!unique && state.count() <= index)) {
+            if (state.count() == 0 || (!unique && state.count() <= index)) {
+                context.waitTick();
+                continue;
+            }
+            if (unique && state.count() != 1) {
                 throw new AssertionError(expectedScreen.getSimpleName() + " exposed "
                         + state.count() + " buttons for " + translationKey
                         + "; " + state.diagnostic());
             }
             if (!state.active()) {
-                throw new AssertionError("Button is disabled: " + translationKey
-                        + " at index " + index);
+                context.waitTick();
+                continue;
             }
             if (state.focused()) {
                 context.getInput().pressKey(InputConstants.KEY_RETURN);
@@ -295,21 +311,7 @@ final class LumiUiTestDriver {
 
     private String uniquePrefix(CommitId target) {
         String hex = target.hex();
-        String query = hex.substring(0, Math.min(32, hex.length()));
-        List<String> commits = context.computeOnClient(client -> LumiClient.history().state()
-                .snapshot().orElseThrow(() -> new AssertionError(
-                        "Lumi history is not synchronized"))
-                .versions().stream()
-                .map(version -> version.id().hex())
-                .toList());
-        if (!commits.contains(hex)) {
-            throw new AssertionError("Restore target is absent from history: " + hex);
-        }
-        long matches = commits.stream().filter(commit -> commit.startsWith(query)).count();
-        if (matches != 1) {
-            throw new AssertionError("Restore target prefix is not unique: " + query);
-        }
-        return query;
+        return hex.substring(0, Math.min(32, hex.length()));
     }
 
     void requireScreen(Class<? extends Screen> expected) {

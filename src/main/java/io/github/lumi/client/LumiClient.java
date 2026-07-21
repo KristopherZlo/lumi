@@ -622,7 +622,8 @@ public final class LumiClient implements ClientModInitializer {
         BRANCH_SLOTS.synchronize(snapshot);
         if (snapshot.pendingKeys() == 0) {
             PENDING_STATISTICS.clear();
-        } else if (!snapshot.operationActive()) {
+        } else if (!snapshot.operationActive()
+                && PENDING_STATISTICS.needsRequest(snapshot)) {
             NETWORKING.requestPendingStatistics();
         }
         if (SURVIVAL_SETTINGS.needsRequest()) {
