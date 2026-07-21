@@ -176,6 +176,29 @@ class LiveActionOperationTest {
     }
 
     @Test
+    void missingPreparedEntityRefusesWholeActionBeforeBlockWrite() throws IOException {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID action = journal.begin(PLAYER);
+        journal.record(action, POSITION, block("stone"), block("gold_block"));
+        journal.recordEntity(
+                action, ENTITY, Optional.of(entity(1)), Optional.empty());
+        journal.close(action);
+        FakeWorld blocks = new FakeWorld(block("gold_block"));
+        FakeEntityWorld entities = new FakeEntityWorld(Optional.empty());
+        entities.prepared = false;
+        LiveActionOperation operation = new LiveActionOperation(
+                journal, PLAYER, LiveActionJournal.Direction.UNDO,
+                blocks, entities, ignored -> { });
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(MutationTerminalState.FAILED, operation.terminalState());
+        assertTrue(operation.isSafeToRelease());
+        assertEquals(0, blocks.writes);
+        assertEquals(0, entities.writes);
+    }
+
+    @Test
     void reselectsSettledEntityBeforeConflictValidation() throws IOException {
         EntityState initial = entity(1);
         EntityState settled = entity(2);
@@ -242,6 +265,9 @@ class LiveActionOperationTest {
         }
 
         @Override
+        public void requirePrepared(BlockSnapshot state) { }
+
+        @Override
         public BlockSnapshot read(BlockPosition position) {
             return states.get(position);
         }
@@ -260,6 +286,7 @@ class LiveActionOperationTest {
 
     private static final class FakeEntityWorld implements LiveEntityWorldAccess {
         private Optional<EntityState> state;
+        private boolean prepared = true;
         private int writes;
 
         private FakeEntityWorld(Optional<EntityState> state) {
@@ -269,6 +296,13 @@ class LiveActionOperationTest {
         @Override
         public Optional<EntityState> read(UUID entityId) {
             return state;
+        }
+
+        @Override
+        public void requirePrepared(Optional<EntityState> replacement) throws IOException {
+            if (!prepared && replacement.isPresent()) {
+                throw new IOException("not prepared");
+            }
         }
 
         @Override

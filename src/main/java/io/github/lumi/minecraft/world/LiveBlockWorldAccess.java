@@ -6,6 +6,8 @@ import java.io.IOException;
 
 /** Narrow server-thread port used by verified session Undo/Redo. */
 public interface LiveBlockWorldAccess {
+    void requirePrepared(BlockSnapshot state) throws IOException;
+
     BlockSnapshot read(BlockPosition position) throws IOException;
 
     void write(BlockPosition position, BlockSnapshot state) throws IOException;

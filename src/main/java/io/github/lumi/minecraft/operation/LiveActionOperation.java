@@ -195,6 +195,7 @@ public final class LiveActionOperation implements DimensionMutation {
             return;
         }
         WorldChange<?> change = cursor.next();
+        change.requireReplacementPrepared();
         if (!change.matchesExpected()) {
             failure = new IllegalStateException(
                     "Visible world conflicts with live action at " + change.conflict());
@@ -303,6 +304,10 @@ public final class LiveActionOperation implements DimensionMutation {
             return expected.equals(actual);
         }
 
+        private void requireReplacementPrepared() throws IOException {
+            requirePrepared(replacement);
+        }
+
         private boolean matchesReplacement() throws IOException {
             actual = read();
             return replacement.equals(actual);
@@ -321,6 +326,8 @@ public final class LiveActionOperation implements DimensionMutation {
         }
 
         protected abstract S read() throws IOException;
+
+        protected abstract void requirePrepared(S state) throws IOException;
 
         protected abstract void write(S state) throws IOException;
 
@@ -342,6 +349,9 @@ public final class LiveActionOperation implements DimensionMutation {
         }
 
         @Override protected BlockSnapshot read() throws IOException { return world.read(position); }
+        @Override protected void requirePrepared(BlockSnapshot state) throws IOException {
+            world.requirePrepared(state);
+        }
         @Override protected void write(BlockSnapshot state) throws IOException { world.write(position, state); }
         @Override protected String target() { return "block " + position; }
     }
@@ -361,6 +371,9 @@ public final class LiveActionOperation implements DimensionMutation {
         }
 
         @Override protected Optional<EntityState> read() throws IOException { return world.read(entityId); }
+        @Override protected void requirePrepared(Optional<EntityState> state) throws IOException {
+            world.requirePrepared(state);
+        }
         @Override protected void write(Optional<EntityState> state) throws IOException { world.write(entityId, state); }
         @Override protected String target() { return "entity " + entityId; }
     }

@@ -64,6 +64,16 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     }
 
     @Override
+    public void requirePrepared(Optional<EntityState> replacement) throws IOException {
+        Optional<EntityState> missing = Objects.requireNonNull(
+                replacement, "replacement").filter(state -> !prepared.containsKey(state));
+        if (missing.isPresent()) {
+            throw new IOException("Live entity state was not prepared before apply: "
+                    + missing.orElseThrow().id());
+        }
+    }
+
+    @Override
     public Optional<EntityState> read(UUID entityId) throws IOException {
         Optional<Entity> current = find(entityId);
         return current.isEmpty() ? Optional.empty() : capture(current.orElseThrow());
@@ -72,7 +82,8 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     @Override
     public void write(UUID entityId, Optional<EntityState> replacement) throws IOException {
         Objects.requireNonNull(entityId, "entityId");
-        Objects.requireNonNull(replacement, "replacement");
+        requirePrepared(replacement);
+        DecodedEntity decoded = replacement.map(prepared::get).orElse(null);
         find(entityId).ifPresent(entity -> {
             var graph = entity.getSelfAndPassengers()
                     .filter(member -> !(member instanceof Player)).toList();
@@ -81,11 +92,6 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
         });
         if (replacement.isEmpty()) {
             return;
-        }
-        EntityState state = replacement.orElseThrow();
-        DecodedEntity decoded = prepared.get(state);
-        if (decoded == null) {
-            throw new IOException("Live entity state was not prepared before apply: " + entityId);
         }
         Entity entity = EntityType.loadEntityRecursive(
                 decoded.type(), decoded.nbt().copy(), level,

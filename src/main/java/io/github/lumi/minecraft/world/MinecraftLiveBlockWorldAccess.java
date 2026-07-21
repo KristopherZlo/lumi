@@ -60,6 +60,13 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
     }
 
     @Override
+    public void requirePrepared(BlockSnapshot snapshot) throws IOException {
+        if (!prepared.containsKey(Objects.requireNonNull(snapshot, "snapshot"))) {
+            throw new IOException("Live block state was not prepared before apply");
+        }
+    }
+
+    @Override
     public BlockSnapshot read(BlockPosition position) throws IOException {
         BlockPos blockPos = minecraft(position);
         LevelChunk chunk = requireChunk(blockPos);
@@ -77,10 +84,8 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
 
     @Override
     public void write(BlockPosition position, BlockSnapshot snapshot) throws IOException {
-        PreparedBlock target = prepared.get(Objects.requireNonNull(snapshot, "snapshot"));
-        if (target == null) {
-            throw new IOException("Live block state was not prepared before apply");
-        }
+        requirePrepared(snapshot);
+        PreparedBlock target = prepared.get(snapshot);
         BlockPos blockPos = minecraft(position);
         LevelChunk chunk = requireChunk(blockPos);
         freeze.runAuthorized(() -> {

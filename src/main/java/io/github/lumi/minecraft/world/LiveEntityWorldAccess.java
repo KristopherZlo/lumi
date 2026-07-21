@@ -9,6 +9,11 @@ import java.util.UUID;
 public interface LiveEntityWorldAccess {
     LiveEntityWorldAccess UNSUPPORTED = new LiveEntityWorldAccess() {
         @Override
+        public void requirePrepared(Optional<EntityState> state) throws IOException {
+            throw new IOException("Live entity access is unavailable");
+        }
+
+        @Override
         public Optional<EntityState> read(UUID entityId) throws IOException {
             throw new IOException("Live entity access is unavailable");
         }
@@ -18,6 +23,8 @@ public interface LiveEntityWorldAccess {
             throw new IOException("Live entity access is unavailable");
         }
     };
+
+    void requirePrepared(Optional<EntityState> state) throws IOException;
 
     Optional<EntityState> read(UUID entityId) throws IOException;
 
