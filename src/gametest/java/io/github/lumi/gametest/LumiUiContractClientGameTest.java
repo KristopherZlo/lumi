@@ -77,7 +77,7 @@ public final class LumiUiContractClientGameTest implements FabricClientGameTest 
             ui.assertButton(LumiDashboardScreen.class, tab, true);
         }
         report.event("ui_contract", "clean_history", "succeeded", 0, 0,
-                "HIST-01..13 NAV-01..06");
+                "HIST-01..05 HIST-09..12 NAV-01..06");
         ui.closeScreen(LumiDashboardScreen.class, null);
     }
 
@@ -127,7 +127,7 @@ public final class LumiUiContractClientGameTest implements FabricClientGameTest 
         ui.closeScreen(LumiSettingsScreen.class, LumiDashboardScreen.class);
         ui.closeScreen(LumiDashboardScreen.class, null);
         report.event("ui_contract", "primary_pages", "succeeded", 0, 0,
-                "ZONE-01..03 BRANCH-01..10 COMP-01..05 SETTING-01..04");
+                "ZONE-01..03 BRANCH-01..02 BRANCH-05..10 COMP-01 COMP-05 SETTING-01..04");
     }
 
     private static void verifyMorePages(

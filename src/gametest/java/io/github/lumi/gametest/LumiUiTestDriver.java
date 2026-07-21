@@ -31,6 +31,7 @@ final class LumiUiTestDriver {
     }
 
     void save(String name) {
+        completeOnboardingIfShown();
         pressChord("key.lumi.quick_save");
         context.waitForScreen(LumiSaveScreen.class);
         typeIntoFocusedTextBox(LumiSaveScreen.class, name);
@@ -42,9 +43,7 @@ final class LumiUiTestDriver {
         String query = uniquePrefix(target);
         openDashboard();
         typeIntoFocusedTextBox(LumiDashboardScreen.class, query);
-        assertButtonEventually(LumiDashboardScreen.class,
-                "luma.action.restore", true);
-        pressUniqueButton(LumiDashboardScreen.class, "luma.action.restore");
+        pressFilteredHistoryAction("luma.action.restore");
         context.waitForScreen(LumiRestoreScreen.class);
         pressUniqueButton(LumiRestoreScreen.class, "luma.action.restore");
         context.waitForScreen(LumiDashboardScreen.class);
@@ -54,10 +53,23 @@ final class LumiUiTestDriver {
     void openVersionDetails(CommitId target) {
         openDashboard();
         typeIntoFocusedTextBox(LumiDashboardScreen.class, uniquePrefix(target));
-        assertButtonEventually(LumiDashboardScreen.class,
-                "luma.action.open_details", true);
-        pressUniqueButton(LumiDashboardScreen.class, "luma.action.open_details");
+        pressFilteredHistoryAction("luma.action.open_details");
         context.waitForScreen(LumiVersionDetailsScreen.class);
+    }
+
+    private void pressFilteredHistoryAction(String translationKey) {
+        for (int tick = 0; tick < 1_200; tick++) {
+            ButtonState state = buttonState(
+                    LumiDashboardScreen.class, translationKey, -1);
+            if (state.count() >= 1 && state.count() <= 2) {
+                pressButton(LumiDashboardScreen.class, translationKey,
+                        state.count() - 1, false);
+                return;
+            }
+            context.waitTick();
+        }
+        throw new AssertionError("Filtered History did not expose "
+                + translationKey);
     }
 
     void createBranch(String name) {
@@ -93,6 +105,7 @@ final class LumiUiTestDriver {
     }
 
     void openDashboard() {
+        completeOnboardingIfShown();
         pressStandalone("key.lumi.open_dashboard");
         context.waitForScreen(LumiDashboardScreen.class);
     }
@@ -106,6 +119,20 @@ final class LumiUiTestDriver {
             context.waitTick();
         }
         throw new AssertionError("Lumi history did not synchronize");
+    }
+
+    void awaitZone(String name, boolean active) {
+        for (int tick = 0; tick < 1_200; tick++) {
+            boolean found = context.computeOnClient(client ->
+                    LumiClient.history().state().snapshot().stream()
+                            .flatMap(snapshot -> snapshot.zones().stream())
+                            .anyMatch(zone -> zone.name().equals(name)
+                                    && zone.active() == active));
+            if (found) return;
+            context.waitTick();
+        }
+        throw new AssertionError("Lumi zone did not become "
+                + (active ? "active: " : "inactive: ") + name);
     }
 
     <T extends Screen> void openTab(String translationKey, Class<T> screen) {
@@ -421,7 +448,7 @@ final class LumiUiTestDriver {
 
     private String uniquePrefix(CommitId target) {
         String hex = target.hex();
-        return hex.substring(0, Math.min(32, hex.length()));
+        return hex.substring(0, Math.min(12, hex.length()));
     }
 
     void requireScreen(Class<? extends Screen> expected) {
