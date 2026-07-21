@@ -9,8 +9,10 @@ import io.github.lumi.client.ui.LumiOnboardingScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.client.ui.LumiRestoreScreen;
 import io.github.lumi.client.ui.LumiSaveScreen;
+import io.github.lumi.client.ui.LumiSettingsScreen;
 import io.github.lumi.client.ui.LumiVersionDetailsScreen;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.List;
 import java.util.Objects;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -119,6 +121,22 @@ final class LumiUiTestDriver {
             context.waitTick();
         }
         throw new AssertionError("Lumi history did not synchronize");
+    }
+
+    void disablePreviewGeneration() {
+        if (!previewGenerationEnabled()) return;
+        openTab("luma.action.settings", LumiSettingsScreen.class);
+        pressUniqueButton(
+                LumiSettingsScreen.class, "luma.settings.preview_generation");
+        for (int tick = 0; tick < 1_200; tick++) {
+            if (!previewGenerationEnabled()) {
+                closeScreen(LumiSettingsScreen.class, LumiDashboardScreen.class);
+                closeScreen(LumiDashboardScreen.class, null);
+                return;
+            }
+            context.waitTick();
+        }
+        throw new AssertionError("Preview generation remained enabled");
     }
 
     void awaitZone(String name, boolean active) {
@@ -314,6 +332,13 @@ final class LumiUiTestDriver {
             closeScreen(LumiBranchesScreen.class, LumiDashboardScreen.class);
         }
         closeScreen(LumiDashboardScreen.class, null);
+    }
+
+    private boolean previewGenerationEnabled() {
+        return context.computeOnClient(client -> LumiClient.history().state()
+                .snapshot().orElseThrow().workspaces().stream()
+                .filter(HistorySnapshotPayload.WorkspaceView::active)
+                .findFirst().orElseThrow().previewGenerationEnabled());
     }
 
     void closeScreen(

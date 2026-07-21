@@ -52,8 +52,10 @@ final class LumiHistoryBenchmarkScenario {
     void run(LumiUiTestDriver ui) throws IOException {
         ui.completeOnboardingIfShown();
         ui.awaitHistory();
+        ui.disablePreviewGeneration();
         report.event("benchmark", "configuration", "started", 0, 0,
-                config.describe() + ";baseArea=" + describe(baseArea));
+                config.describe() + ";previewGeneration=false;baseArea="
+                        + describe(baseArea));
 
         Path repository = operations.repository();
         LumiRepositoryMetrics.Snapshot previous = metrics.capture(repository);
@@ -113,6 +115,11 @@ final class LumiHistoryBenchmarkScenario {
             String name,
             LumiRepositoryMetrics.Snapshot snapshot,
             long previousBytes) {
+        long previewBytes = snapshot.categoryBytes().getOrDefault("previews", 0L);
+        if (previewBytes != 0) {
+            throw new AssertionError(
+                    "Benchmark generated " + previewBytes + " preview bytes");
+        }
         report.event("storage", name, "measured", 0,
                 snapshot.measurementMillis(), snapshot.describe(previousBytes));
     }

@@ -31,7 +31,7 @@ record LumiHistoryBenchmarkConfig(
         return new LumiHistoryBenchmarkConfig(
                 integer("baseSize", 5_000),
                 integer("changeSize", 1_000),
-                integer("layers", 1),
+                integer("layers", 16),
                 integer("commits", 200),
                 integer("restoreSamples", 8),
                 integer("measureEvery", 1),
