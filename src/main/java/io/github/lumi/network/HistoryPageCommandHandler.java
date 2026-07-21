@@ -2,6 +2,7 @@ package io.github.lumi.network;
 
 import io.github.lumi.domain.model.HistoryEntry;
 import io.github.lumi.domain.model.HistoryPage;
+import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import java.io.IOException;
 import java.util.Optional;
@@ -50,12 +51,16 @@ final class HistoryPageCommandHandler {
                 ? runtime.zoneHistoryPage(
                         branch, request.zoneId().orElseThrow(),
                         request.offset(), request.limit(), request.query())
+                        .thenApply(result -> new Result(
+                                result.page(), result.branches().stream()
+                                        .map(ref -> ref.name()).toList()))
                 : runtime.historyPage(
                         branch, request.offset(), request.limit(),
-                        request.query());
-        future.whenComplete((page, failure) -> {
+                        request.query())
+                        .thenApply(page -> new Result(page, java.util.List.of()));
+        future.whenComplete((prepared, failure) -> {
             HistoryPagePayload result = failure == null
-                    ? success(request, runtime, page)
+                    ? success(request, runtime, prepared)
                     : failure(request, failureMessage.apply(failure));
             context.server().execute(() -> {
                     if (context.server().getPlayerList()
@@ -70,7 +75,8 @@ final class HistoryPageCommandHandler {
     private static HistoryPagePayload success(
             HistoryPageRequestPayload request,
             FabricDimensionRuntime runtime,
-            HistoryPage page) {
+            Result result) {
+        HistoryPage page = result.page();
         return new HistoryPagePayload(
                 request.requestId(), request.dimensionId(),
                 request.workspaceId(), request.branch(), request.zoneId(),
@@ -78,6 +84,7 @@ final class HistoryPageCommandHandler {
                 page.entries().stream()
                         .map(entry -> version(runtime, entry))
                         .toList(),
+                result.branches(),
                 "");
     }
 
@@ -109,4 +116,6 @@ final class HistoryPageCommandHandler {
     interface ResultSender {
         void send(ServerPlayer player, HistoryPagePayload payload);
     }
+
+    private record Result(HistoryPage page, java.util.List<BranchName> branches) { }
 }

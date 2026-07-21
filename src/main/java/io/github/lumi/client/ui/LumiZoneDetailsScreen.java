@@ -192,13 +192,14 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     }
 
     private void addBranchDropdown() {
-        if (branchDropdownWidth < 24 || snapshot.branches().isEmpty()) return;
+        List<HistorySnapshotPayload.Branch> branches = zoneBranches();
+        if (branchDropdownWidth < 24 || branches.isEmpty()) return;
         int y = geometry.historyY() + LumiDashboardScreen.HISTORY_TOOLBAR_OFFSET;
         addRenderableWidget(new LumiBranchDropdown(
                 branchDropdownX, y, branchDropdownWidth,
                 geometry.historyY() + geometry.historyHeight()
                         - y - LumiDashboardScreen.CONTROL_HEIGHT,
-                snapshot.branches(), zoneHistory.branch().value(),
+                branches, zoneHistory.branch().value(),
                 this::selectBranch));
     }
 
@@ -213,7 +214,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
             graphView = new LumiHistoryGraphView(
                     snapshot.dimensionId(), previews,
                     graphLayout.window(
-                            graphLayout.build(versions, snapshot.branches()),
+                            graphLayout.build(versions, zoneBranches()),
                             historyScroll, capacity),
                     snapshot.zones(),
                     layout.bodyX() + LumiDashboardScreen.PANEL_PADDING,
@@ -267,6 +268,10 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         zoneHistory.selectBranch(branch);
         historyScroll = 0;
         rebuildWidgets();
+    }
+
+    private List<HistorySnapshotPayload.Branch> zoneBranches() {
+        return zoneHistory.branches(snapshot.branches());
     }
 
     private void showMode(HistoryViewController.Mode mode) {

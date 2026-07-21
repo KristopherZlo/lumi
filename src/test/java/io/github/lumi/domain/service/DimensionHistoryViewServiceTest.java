@@ -63,6 +63,7 @@ class DimensionHistoryViewServiceTest {
                 tree, List.of(manual), workspaceId, Optional.of(zoneId),
                 CommitKind.ZONE, "Zone", 20));
         refs.compareAndSet(main, zone);
+        refs.create(new BranchName("idea"), manual);
         var autoVersions = new AutoVersionService(commits, refs);
         var automatic = commits.write(commit(
                 tree, List.of(zone), workspaceId, Optional.empty(),
@@ -119,6 +120,9 @@ class DimensionHistoryViewServiceTest {
                 view.zoneHistoryPage(new BranchName("main"), zoneId, 0, 1, "")
                         .entries().stream().map(entry -> entry.id()).toList());
         assertEquals(List.of(new BranchName("main")),
+                view.zoneHistory(new BranchName("main"), zoneId, 0, 1, "")
+                        .branches().stream().map(ref -> ref.name()).toList());
+        assertEquals(List.of(new BranchName("idea"), new BranchName("main")),
                 view.branches().stream().map(ref -> ref.name()).toList());
         assertEquals(List.of(zoneId),
                 view.zones().stream().map(visible -> visible.id()).toList());

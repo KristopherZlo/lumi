@@ -1068,7 +1068,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }, background);
     }
 
-    public CompletableFuture<io.github.lumi.domain.model.HistoryPage> zoneHistoryPage(
+    public CompletableFuture<io.github.lumi.domain.model.ZoneHistoryPage> zoneHistoryPage(
             BranchName branch,
             UUID zoneId,
             int offset,
@@ -1076,7 +1076,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             String query) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return historyViews.zoneHistoryPage(
+                return historyViews.zoneHistory(
                         branch, zoneId, offset, limit, query);
             } catch (IOException failed) {
                 throw new CompletionException(failed);

@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.HistoryEntry;
 import io.github.lumi.domain.model.HistoryPage;
 import io.github.lumi.domain.model.Workspace;
 import io.github.lumi.domain.model.Zone;
+import io.github.lumi.domain.model.ZoneHistoryPage;
 import io.github.lumi.storage.repository.CommitRepository;
 import java.io.IOException;
 import java.util.List;
@@ -95,6 +96,28 @@ public final class DimensionHistoryViewService {
                 history.firstParentForZone(
                         branch, workspace.id(), zoneId, queryLimit),
                 normalized));
+    }
+
+    public ZoneHistoryPage zoneHistory(
+            BranchName branch,
+            UUID zoneId,
+            int offset,
+            int limit,
+            String query) throws IOException {
+        HistoryPage page = zoneHistoryPage(
+                branch, zoneId, offset, limit, query);
+        if (offset > 0) {
+            return new ZoneHistoryPage(page, List.of());
+        }
+        Workspace workspace = activeWorkspace();
+        var related = new java.util.ArrayList<BranchRef>();
+        for (BranchRef ref : branches()) {
+            if (!history.firstParentForZone(
+                    ref.name(), workspace.id(), zoneId, 1).isEmpty()) {
+                related.add(ref);
+            }
+        }
+        return new ZoneHistoryPage(page, related);
     }
 
     private List<HistoryEntry> filter(

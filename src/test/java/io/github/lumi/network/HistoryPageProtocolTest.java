@@ -30,7 +30,8 @@ class HistoryPageProtocolTest {
                 CommitKind.ZONE);
         var result = new HistoryPagePayload(
                 request, "minecraft:overworld", workspace, branch,
-                Optional.of(zone), 24, true, List.of(version), "");
+                Optional.of(zone), 24, true, List.of(version),
+                List.of(new BranchName("main"), branch), "");
 
         assertEquals(requestPayload,
                 roundTrip(HistoryPageRequestPayload.CODEC, requestPayload));

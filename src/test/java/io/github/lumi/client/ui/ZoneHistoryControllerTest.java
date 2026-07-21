@@ -40,8 +40,10 @@ class ZoneHistoryControllerTest {
         assertTrue(pages.accept(new HistoryPagePayload(
                 request, snapshot.dimensionId(), workspace,
                 new BranchName("main"), Optional.of(zone), 0, true,
-                List.of(version()), "")));
+                List.of(version()), List.of(
+                        new BranchName("main"), new BranchName("idea")), "")));
         assertTrue(controller.hasNext());
+        assertEquals(2, controller.branches(snapshot.branches()).size());
 
         controller.nextBranch(snapshot.branches());
         assertEquals(new BranchName("idea"), requestedBranch.get());

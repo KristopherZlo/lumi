@@ -21,6 +21,7 @@ public final class ZoneHistoryController {
     private int offset;
     private String query = "";
     private final List<HistorySnapshotPayload.Version> loaded = new ArrayList<>();
+    private List<BranchName> availableBranches = List.of();
     private UUID loadedRequest;
     private long observedRevision;
     private boolean awaitingRefresh;
@@ -52,18 +53,33 @@ public final class ZoneHistoryController {
 
     List<HistorySnapshotPayload.Version> versions(
             List<HistorySnapshotPayload.Version> initial) {
-        Optional<HistoryPagePayload> currentPage = page();
-        currentPage.filter(current -> !current.requestId().equals(loadedRequest))
-                .ifPresent(current -> {
-                    if (current.offset() == 0) loaded.clear();
-                    loaded.addAll(current.versions());
-                    loadedRequest = current.requestId();
-                    awaitingRefresh = false;
-                });
+        acceptPage();
         if (!loaded.isEmpty()) return List.copyOf(loaded);
         if (awaitingRefresh) return List.of();
         return offset == 0 && branch.value().equals(snapshot.branchName())
                 ? List.copyOf(initial) : List.of();
+    }
+
+    List<HistorySnapshotPayload.Branch> branches(
+            List<HistorySnapshotPayload.Branch> workspaceBranches) {
+        acceptPage();
+        return workspaceBranches.stream()
+                .filter(candidate -> availableBranches.stream().anyMatch(
+                        name -> name.value().equals(candidate.name())))
+                .toList();
+    }
+
+    private void acceptPage() {
+        page().filter(current -> !current.requestId().equals(loadedRequest))
+                .ifPresent(current -> {
+                    if (current.offset() == 0) {
+                        loaded.clear();
+                        availableBranches = current.branches();
+                    }
+                    loaded.addAll(current.versions());
+                    loadedRequest = current.requestId();
+                    awaitingRefresh = false;
+                });
     }
 
     BranchName branch() {
