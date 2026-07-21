@@ -14,6 +14,8 @@ import net.minecraft.core.BlockPos;
 
 /** Creates dense random history and measures real UI Save and Restore workflows. */
 final class LumiHistoryBenchmarkScenario {
+    private static final int EDIT_TILE_SIZE = 256;
+    private static final int TILES_PER_DURABILITY_BARRIER = 4;
     private final LumiHistoryBenchmarkConfig config;
     private final LumiBehaviorReport report;
     private final LumiBehaviorActions actions;
@@ -63,7 +65,7 @@ final class LumiHistoryBenchmarkScenario {
         List<CommitId> commits = new ArrayList<>();
         commits.add(operations.activeCommit());
 
-        actions.worldEditRandomVolume("benchmark_base_edit", baseArea, 0);
+        editRandomVolume("benchmark_base_edit", baseArea, 0);
         commits.add(operations.save("benchmark-base"));
         previous = recordStorage("save-base", repository, previous.bytes());
         recordMemory("save-base");
@@ -71,7 +73,7 @@ final class LumiHistoryBenchmarkScenario {
         for (int index = 1; index <= config.commits(); index++) {
             BlockBox change = nextChangeArea();
             String suffix = String.format("%03d", index);
-            actions.worldEditRandomVolume(
+            editRandomVolume(
                     "benchmark_change_edit_" + suffix, change, index);
             commits.add(operations.save("benchmark-" + suffix));
             if (index % config.measureEvery() == 0
@@ -102,6 +104,32 @@ final class LumiHistoryBenchmarkScenario {
                 minX, baseArea.minY(), minZ,
                 minX + config.changeSize() - 1, baseArea.maxY(),
                 minZ + config.changeSize() - 1);
+    }
+
+    private void editRandomVolume(String name, BlockBox area, int paletteOffset) {
+        long started = System.nanoTime();
+        int tile = 0;
+        for (int z = area.minZ(); z <= area.maxZ(); z += EDIT_TILE_SIZE) {
+            for (int x = area.minX(); x <= area.maxX(); x += EDIT_TILE_SIZE) {
+                BlockBox batch = new BlockBox(
+                        x, area.minY(), z,
+                        Math.min(area.maxX(), x + EDIT_TILE_SIZE - 1),
+                        area.maxY(),
+                        Math.min(area.maxZ(), z + EDIT_TILE_SIZE - 1));
+                actions.worldEditRandomVolume(
+                        name + "_tile_" + String.format("%04d", ++tile),
+                        batch, paletteOffset + tile);
+                if (tile % TILES_PER_DURABILITY_BARRIER == 0) {
+                    operations.awaitDurability(name + "_batch_" + tile);
+                }
+            }
+        }
+        if (tile % TILES_PER_DURABILITY_BARRIER != 0) {
+            operations.awaitDurability(name + "_batch_" + tile);
+        }
+        report.event("change", name, "succeeded", 0,
+                (System.nanoTime() - started) / 1_000_000,
+                "tiles=" + tile + ";tileSize=" + EDIT_TILE_SIZE);
     }
 
     private LumiRepositoryMetrics.Snapshot recordStorage(

@@ -57,6 +57,26 @@ final class LumiBehaviorOperations {
         return server.computeOnServer(minecraft -> runtime(minecraft).repository());
     }
 
+    void awaitDurability(String name) {
+        var boundary = server.computeOnServer(minecraft ->
+                runtime(minecraft).mutations().durabilityBoundary());
+        int keys = boundary.working().generations().size();
+        long started = System.nanoTime();
+        for (int ticks = 0; ticks < OPERATION_TIMEOUT_TICKS; ticks++) {
+            boolean durable = server.computeOnServer(minecraft ->
+                    runtime(minecraft).mutations().isDurable(boundary));
+            if (durable) {
+                context.waitTick();
+                report.event("durability", name, "succeeded", ticks,
+                        elapsedMillis(started), "keys=" + keys);
+                return;
+            }
+            context.waitTick();
+        }
+        throw new AssertionError(name + " did not become durable within "
+                + OPERATION_TIMEOUT_TICKS + " ticks; keys=" + keys);
+    }
+
     CommitId save(String name) throws IOException {
         return runOperation("save_" + name, () -> ui.save(name)).head();
     }
