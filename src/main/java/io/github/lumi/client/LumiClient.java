@@ -199,9 +199,8 @@ public final class LumiClient implements ClientModInitializer {
                 NETWORKING::requestPendingStatistics,
                 () -> LumiClient.openSave(client.screen,
                         SaveScreenController.Intent.SAVE, ""),
-                () -> LumiClient.openSave(client.screen,
-                        SaveScreenController.Intent.AMEND,
-                        latestVersionMessage()),
+                message -> LumiClient.openSave(client.screen,
+                        SaveScreenController.Intent.AMEND, message),
                 LumiClient::openBranches,
                 LumiClient::openZones,
                 LumiClient::openPackages,
@@ -418,9 +417,15 @@ public final class LumiClient implements ClientModInitializer {
             Screen parent, HistorySnapshotPayload.Version version) {
         Minecraft client = Minecraft.getInstance();
         HistorySnapshotPayload snapshot = HISTORY.state().snapshot().orElseThrow();
-        int index = snapshot.versions().indexOf(version);
+        List<HistorySnapshotPayload.Version> versions = HISTORY_PAGES.page(
+                        snapshot.dimensionId(), snapshot.workspaceId(),
+                        new io.github.lumi.domain.model.BranchName(snapshot.branchName()),
+                        Optional.empty())
+                .map(io.github.lumi.network.HistoryPagePayload::versions)
+                .orElse(snapshot.versions());
+        int index = versions.indexOf(version);
         var compare = new VersionCompareController()
-                .target(snapshot.versions(), index)
+                .target(versions, index)
                 .map(target -> (Runnable) () -> showCompareChanges(target));
         boolean idle = !snapshot.operationActive();
         var createBranch = idle ? Optional.of((Runnable) () ->
@@ -499,12 +504,6 @@ public final class LumiClient implements ClientModInitializer {
             showFeedback(failed.getMessage() == null
                     ? "luma.status.compare_failed" : failed.getMessage());
         }
-    }
-
-    private static String latestVersionMessage() {
-        return HISTORY.state().snapshot().stream()
-                .flatMap(snapshot -> snapshot.versions().stream())
-                .findFirst().map(HistorySnapshotPayload.Version::message).orElse("");
     }
 
     private static void openMore(Screen parent) {

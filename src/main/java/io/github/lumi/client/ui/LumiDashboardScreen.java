@@ -49,7 +49,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private final Runnable requestPendingStatistics;
     private final ClientVersionPreviewStore previews;
     private final Runnable openSave;
-    private final Runnable openAmend;
+    private final Consumer<String> openAmend;
     private final Runnable showChanges;
     private final Runnable quickRollback;
     private final Consumer<HistorySnapshotPayload.Version> openDetails;
@@ -91,7 +91,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             ClientPendingStatisticsStore pendingStatistics,
             Runnable requestPendingStatistics,
             Runnable openSave,
-            Runnable openAmend,
+            Consumer<String> openAmend,
             Consumer<Screen> openBranches,
             Consumer<Screen> openZones,
             Consumer<Screen> openPackages,
@@ -193,7 +193,9 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         x += saveButton.getWidth() + CONTROL_GAP;
         LumiButton amendButton = addContentButton(
                 x, actionY, maximumTextWidth,
-                Component.translatable("luma.action.amend_version"), openAmend,
+                Component.translatable("luma.action.amend_version"),
+                () -> openAmend.accept(latestCreated()
+                        .map(HistorySnapshotPayload.Version::message).orElse("")),
                 LumiButton.Kind.NORMAL);
         amendButton.active = snapshot != null && snapshot.pendingKeys() > 0;
         x += amendButton.getWidth() + CONTROL_GAP;
@@ -414,7 +416,10 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     }
 
     private Optional<HistorySnapshotPayload.Version> latestCreated() {
-        return snapshot == null ? Optional.empty() : snapshot.versions().stream()
+        List<HistorySnapshotPayload.Version> versions = pagedHistory == null
+                ? snapshot == null ? List.of() : snapshot.versions()
+                : pagedHistory.versions();
+        return versions.stream()
                 .filter(VersionText::featured).max(
                 Comparator.comparingLong(
                         HistorySnapshotPayload.Version::timestampMillis));

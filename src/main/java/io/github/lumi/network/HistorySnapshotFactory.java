@@ -7,7 +7,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import net.minecraft.server.level.ServerPlayer;
 
-/** Builds one bounded player-specific view from dimension-owned history state. */
+/** Builds bounded join metadata; history rows are loaded through paged queries. */
 final class HistorySnapshotFactory {
     HistorySnapshotPayload create(
             ServerPlayer player, FabricDimensionRuntime runtime) throws IOException {
@@ -25,16 +25,7 @@ final class HistorySnapshotFactory {
                         visible.settings().workspaceHudEnabled(),
                         visible.settings().automaticVersionsEnabled()))
                 .toList();
-        var versions = runtime.history(32).stream()
-                .map(entry -> new HistorySnapshotPayload.Version(
-                        entry.id(), runtime.versionDisplayName(
-                                entry.id(), entry.commit().message()),
-                        entry.commit().author().name(),
-                        entry.commit().timestamp().toEpochMilli(),
-                        entry.commit().kind(), runtime.versionTags(entry.id()),
-                        entry.commit().parents(), entry.commit().statistics(),
-                        entry.commit().zoneId()))
-                .toList();
+        var versions = java.util.List.<HistorySnapshotPayload.Version>of();
         var branchViews = runtime.visibleBranches().stream()
                 .map(ref -> new HistorySnapshotPayload.Branch(
                         ref.name().value(), ref.commit(), ref.name().equals(head.name())))
@@ -42,10 +33,11 @@ final class HistorySnapshotFactory {
         var visibleZones = runtime.visibleZones().stream().limit(64).toList();
         var sharedCells = new io.github.lumi.domain.service.ZoneOverlapCounter()
                 .count(visibleZones);
-        var zoneHistories = runtime.zoneHistories(
-                visibleZones.stream().map(io.github.lumi.domain.model.Zone::id)
-                        .collect(Collectors.toSet()),
-                8);
+        var activeZoneIds = visibleZones.stream()
+                .filter(zone -> zone.activeActors().contains(player.getUUID()))
+                .map(io.github.lumi.domain.model.Zone::id)
+                .collect(Collectors.toSet());
+        var zoneHistories = runtime.zoneHistories(activeZoneIds, 1);
         var zoneViews = visibleZones.stream()
                 .map(zone -> new HistorySnapshotPayload.ZoneView(
                         zone.id(), zone.name(), zone.color(), zone.cells().size(),

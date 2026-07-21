@@ -9,16 +9,21 @@ import org.junit.jupiter.api.Test;
 
 class LumiServerNetworkingTest {
     @Test
-    void preparesInitialHistorySnapshotOffTheServerThread() throws Exception {
-        String source = Files.readString(Path.of(
+    void keepsJoinSnapshotBoundedOnTheServerThread() throws Exception {
+        String networking = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));
-        int join = source.indexOf("ServerPlayConnectionEvents.JOIN.register");
-        int disconnect = source.indexOf("ServerPlayConnectionEvents.DISCONNECT.register", join);
+        String factory = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/network/HistorySnapshotFactory.java"));
+        int join = networking.indexOf("ServerPlayConnectionEvents.JOIN.register");
+        int disconnect = networking.indexOf(
+                "ServerPlayConnectionEvents.DISCONNECT.register", join);
 
-        assertTrue(source.substring(join, disconnect).contains("sendInitialSnapshot("));
-        assertTrue(source.contains("CompletableFuture.supplyAsync("));
-        assertTrue(source.contains("runtime.backgroundExecutor()"));
-        assertTrue(source.contains("runtime.level().getServer().execute("));
+        assertTrue(networking.substring(join, disconnect).contains("sendSnapshot("));
+        assertFalse(networking.contains("sendInitialSnapshot("));
+        assertFalse(factory.contains("runtime.history("));
+        assertTrue(factory.contains("runtime.zoneHistories("));
+        assertTrue(factory.contains("activeZoneIds"));
+        assertTrue(factory.contains("1);"));
     }
 
     @Test

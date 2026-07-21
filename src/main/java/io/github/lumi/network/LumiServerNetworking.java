@@ -25,7 +25,6 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -106,7 +105,7 @@ public final class LumiServerNetworking {
                 LumiServerNetworking::pendingStatistics);
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 LumiMod.serverRuntime().find(handler.getPlayer().level()).ifPresent(runtime ->
-                        sendInitialSnapshot(handler.getPlayer(), runtime)));
+                        sendSnapshot(handler.getPlayer(), runtime)));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             cleanupPlayer(handler.getPlayer().getUUID());
         });
@@ -979,27 +978,6 @@ public final class LumiServerNetworking {
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi history snapshot", failed);
         }
-    }
-
-    private static void sendInitialSnapshot(
-            ServerPlayer player, FabricDimensionRuntime runtime) {
-        CompletableFuture.supplyAsync(() -> {
-            try {
-                return SNAPSHOTS.create(player, runtime);
-            } catch (IOException failed) {
-                throw new CompletionException(failed);
-            }
-        }, runtime.backgroundExecutor()).whenComplete((snapshot, failed) ->
-                runtime.level().getServer().execute(() -> {
-                    if (failed != null) {
-                        LumiMod.LOGGER.error(
-                                "Cannot prepare initial Lumi history snapshot", failed);
-                        return;
-                    }
-                    LumiMod.serverRuntime().find(player.level())
-                            .filter(current -> current == runtime)
-                            .ifPresent(current -> send(player, snapshot));
-                }));
     }
 
     private static void broadcastSnapshot(FabricDimensionRuntime runtime) {
