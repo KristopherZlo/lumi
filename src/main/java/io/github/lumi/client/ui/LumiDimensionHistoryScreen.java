@@ -5,9 +5,6 @@ import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -21,13 +18,7 @@ import net.minecraft.network.chat.Component;
 
 /** Scrollable read-only history for one loaded dimension runtime. */
 public final class LumiDimensionHistoryScreen extends LumiPageScreen {
-    private static final int ROW_HEIGHT = 30;
-    private static final int ROW_STRIDE = 34;
-    private static final int LATEST_HEIGHT = 54;
     private static final int SECTION_GAP = 5;
-    private static final DateTimeFormatter TIME =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-                    .withZone(ZoneId.systemDefault());
     private final String dimensionId;
     private final ClientHistoryPageStore pages;
     private final ClientVersionPreviewStore previews;
@@ -112,14 +103,12 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
             search.moveCursorToEnd(false);
             refocusSearch = false;
         }
-        latestCreated().ifPresent(version -> addIconButton(
-                right - 26, panelY + 64, "folder",
-                Component.translatable("luma.action.open_details"),
-                () -> openDetails.accept(version), LumiButton.Kind.NORMAL));
-        addRows(right);
+        latestCreated().ifPresent(version -> addVersionActions(
+                version, latestCardY()));
+        addRows();
     }
 
-    private void addRows(int right) {
+    private void addRows() {
         int capacity = capacity();
         scroll = Math.min(scroll, Math.max(0, loaded.size() - capacity));
         List<HistorySnapshotPayload.Version> visible = loaded.stream()
@@ -137,12 +126,31 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
         graphView = null;
         for (int index = 0; index < visible.size(); index++) {
             HistorySnapshotPayload.Version version = visible.get(index);
-            addIconButton(right - 26,
-                    rowsY() + 6 + index * ROW_STRIDE,
-                    "folder", Component.translatable("luma.action.open_details"),
-                    () -> openDetails.accept(version),
-                    LumiButton.Kind.NORMAL);
+            addVersionActions(version,
+                    rowsY() + index
+                            * LumiDashboardScreen.historyRowStride(panelWidth));
         }
+    }
+
+    private void addVersionActions(
+            HistorySnapshotPayload.Version version, int rowY) {
+        LumiCommitCard.Layout card = LumiDashboardScreen.versionCardLayout(
+                panelX, panelWidth, rowY);
+        LumiButton restore = addIconButton(card.actionX(0), card.actionY(),
+                "rollback", Component.translatable("luma.action.restore"),
+                () -> { }, LumiButton.Kind.PRIMARY);
+        restore.active = false;
+        addIconButton(card.actionX(1), card.actionY(),
+                "folder", Component.translatable("luma.action.open_details"),
+                () -> openDetails.accept(version), LumiButton.Kind.NORMAL);
+        LumiButton branch = addIconButton(card.actionX(2), card.actionY(),
+                "branch", Component.translatable("luma.action.create_idea"),
+                () -> { }, LumiButton.Kind.NORMAL);
+        branch.active = false;
+        LumiButton tags = addIconButton(card.actionX(3), card.actionY(),
+                "tags", Component.translatable("luma.action.edit_tags"),
+                () -> { }, LumiButton.Kind.NORMAL);
+        tags.active = false;
     }
 
     @Override
@@ -202,25 +210,12 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
                 .skip(scroll).limit(capacity()).toList();
         for (int index = 0; index < visible.size(); index++) {
             HistorySnapshotPayload.Version version = visible.get(index);
-            int y = rowsY() + index * ROW_STRIDE;
-            LumiTheme.outlined(
-                    graphics, panelX + 18, y, panelWidth - 36, ROW_HEIGHT,
-                    LumiTheme.INSET,
-                    scroll + index == 0
-                            ? LumiTheme.ACCENT
-                            : LumiTheme.INSET_BORDER);
-            graphics.drawString(font,
-                    font.plainSubstrByWidth(
-                            VersionText.name(version), panelWidth - 100),
-                    panelX + 26, y + 5, LumiTheme.TEXT, false);
-            String tags = version.tags().isEmpty() ? ""
-                    : " · #" + String.join(" #", version.tags().values());
-            String metadata = version.author() + " · "
-                    + TIME.format(Instant.ofEpochMilli(version.timestampMillis()))
-                    + tags;
-            graphics.drawString(font,
-                    font.plainSubstrByWidth(metadata, panelWidth - 100),
-                    panelX + 26, y + 17, LumiTheme.MUTED, false);
+            int y = rowsY() + index
+                    * LumiDashboardScreen.historyRowStride(panelWidth);
+            commitCards.render(
+                    graphics, version, version.tags(),
+                    LumiDashboardScreen.versionCardLayout(panelX, panelWidth, y),
+                    LumiTheme.ACCENT, false, false);
         }
         if (loaded.isEmpty()) {
             Optional<HistoryPagePayload> page = page();
@@ -244,15 +239,14 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     private void renderLatest(GuiGraphics graphics) {
         latestCreated().ifPresent(version -> {
             renderPanel(graphics, panelX + 12, panelY + 46,
-                    panelWidth - 24, LATEST_HEIGHT);
+                    panelWidth - 24, latestHeight());
             graphics.drawString(font,
                     Component.translatable("luma.dashboard.latest_badge"),
                     panelX + 18, panelY + 52, LumiTheme.TEXT, false);
             commitCards.render(
                     graphics, version, version.tags(),
-                    LumiCommitCard.layout(
-                            panelX + 18, panelY + 66, panelWidth - 36,
-                            ROW_HEIGHT, true, false, false),
+                    LumiDashboardScreen.versionCardLayout(
+                            panelX, panelWidth, latestCardY()),
                     LumiTheme.ACCENT, false, true);
         });
     }
@@ -265,11 +259,11 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
 
     private int historyY() {
         return panelY + 46 + (latestCreated().isPresent()
-                ? LATEST_HEIGHT + SECTION_GAP : 0);
+                ? latestHeight() + SECTION_GAP : 0);
     }
 
     private int rowsY() {
-        return historyY() + 38;
+        return historyY() + LumiDashboardScreen.HISTORY_FIRST_ROW_OFFSET;
     }
 
     private int historyHeight() {
@@ -335,8 +329,16 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     }
 
     private int capacity() {
-        return Math.max(0,
-                (panelY + panelHeight - 12 - rowsY()) / ROW_STRIDE);
+        return LumiDashboardScreen.visibleHistoryRows(
+                historyHeight(), loaded.size(), panelWidth);
+    }
+
+    private int latestHeight() {
+        return 22 + LumiDashboardScreen.historyRowHeight(panelWidth) + 6;
+    }
+
+    private int latestCardY() {
+        return panelY + 68;
     }
 
     @Override
