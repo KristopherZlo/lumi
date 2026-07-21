@@ -61,12 +61,12 @@ final class LumiBranchDropdown extends LumiButton {
                 open ? CHEVRON_UP : CHEVRON_DOWN,
                 getX() + getWidth() - 16, getY() + 3,
                 0, 0, 12, 12, 24, 24, 24, 24);
-        if (!open) return;
-        var font = Minecraft.getInstance().font;
         long now = System.nanoTime();
         long elapsedMillis = Math.min(
                 HOVER_MILLIS, (now - lastRenderNanos) / 1_000_000L);
         lastRenderNanos = now;
+        if (!open) return;
+        var font = Minecraft.getInstance().font;
         for (int row = 0; row < visibleRows; row++) {
             int index = scroll + row;
             int y = menuY() + row * ROW_HEIGHT;
