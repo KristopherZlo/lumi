@@ -11,12 +11,16 @@ import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
+import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.model.WorkspaceSwitchTarget;
 import io.github.lumi.storage.repository.ActiveBranchRepository;
 import io.github.lumi.storage.repository.ActiveWorkspaceRepository;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.OperationJournalRepository;
+import io.github.lumi.storage.repository.WorkingIndexRepository;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -92,6 +96,34 @@ class PublishedApplyRecoveryTest {
         assertTrue(new PublishedApplyRecovery(
                 refs, activeBranch, activeWorkspace, journals).finalizeIfPublished(journal));
         assertTrue(journals.read().isEmpty());
+    }
+
+    @Test
+    void clearsCapturedAmbientWorkBeforeFinalizingPublishedBranchSwitch() throws Exception {
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var source = refs.create(new BranchName("main"), id('7'));
+        var target = refs.create(new BranchName("variant"), id('8'));
+        var active = new ActiveBranchRepository(repositoryRoot);
+        var expectedActive = active.create(source.name());
+        active.compareAndSet(expectedActive, target.name());
+        OperationTarget operationTarget = new OperationTarget(
+                source.name(), source.commit(), source.revision(), Optional.of(target.commit()),
+                Optional.of(id('9')), Optional.of(new BranchSwitchTarget(
+                        target.name(), target.revision(), expectedActive.revision())));
+        var captured = new WorkingIndexSnapshot(Map.of(new SectionKey(1, 0, 1), 4L));
+        var working = new WorkingIndexRepository(repositoryRoot);
+        working.write(new WorkingIndexRepository.State(
+                captured, WorkingIndexSnapshot.empty()));
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        OperationJournal journal = journals.create(new OperationJournal(
+                UUID.randomUUID(), OperationKind.BRANCH_SWITCH,
+                OperationPhase.VERIFYING, operationTarget, Optional.of(captured)));
+
+        assertTrue(new PublishedApplyRecovery(
+                refs, active, null, working, journals)
+                .finalizeIfPublished(journal));
+        assertTrue(journals.read().isEmpty());
+        assertTrue(working.read().generations().isEmpty());
     }
 
     private static CommitId id(char digit) {

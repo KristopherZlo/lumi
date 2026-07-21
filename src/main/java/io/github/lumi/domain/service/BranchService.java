@@ -127,6 +127,13 @@ public final class BranchService {
         validateRefs(plan);
     }
 
+    /** Preserves the stricter pre-existing guard for workflows without a return point. */
+    public void requireNoPendingChanges() throws IOException {
+        if (!working.read().generations().isEmpty()) {
+            throw new IllegalStateException("Switch requires no pending world changes");
+        }
+    }
+
     private void validateRefs(BranchSwitchPlan plan) throws IOException {
         BranchRef source = refs.read(plan.source().name()).orElseThrow(
                 () -> new RefConflictException("Source branch no longer exists"));

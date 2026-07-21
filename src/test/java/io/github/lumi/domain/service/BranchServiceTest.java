@@ -57,6 +57,7 @@ class BranchServiceTest {
         working.write(new WorkingIndexRepository.State(
                 ambient, WorkingIndexSnapshot.empty()));
         branches.prepareSwitch(created.name());
+        assertThrows(IllegalStateException.class, branches::requireNoPendingChanges);
         working.write(new WorkingIndexRepository.State(ambient, ambient));
         assertThrows(IllegalStateException.class,
                 () -> branches.prepareSwitch(created.name()));

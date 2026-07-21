@@ -325,7 +325,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         UUID defaultWorkspaceId = workspaceService.defaultWorkspaceId();
         workspaceService.initializeDefault(defaultWorkspaceId);
         if (interrupted.isPresent()
-                && new PublishedApplyRecovery(refs, active, activeWorkspaces, journals)
+                && new PublishedApplyRecovery(
+                        refs, active, activeWorkspaces, working, journals)
                         .finalizeIfPublished(interrupted.orElseThrow())) {
             interrupted = Optional.empty();
         }
@@ -544,7 +545,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         workspaceTarget.targetWorkspace(), plan);
                 return workspaceSwitchPublication(workspacePlan);
             }
-            return new BranchSwitchRestorePublication(branches, plan);
+            return journal.capturedGenerations()
+                    .<RestorePublication>map(captured ->
+                            new BranchSwitchRestorePublication(
+                                    branches, plan, mutations, captured))
+                    .orElseGet(() -> new BranchSwitchRestorePublication(
+                            branches, plan));
         }
         if (journal.target().blockArea().isPresent()
                 || journal.target().zoneRestore().isPresent()) {
@@ -832,25 +838,36 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return operation;
     }
 
-    private BackgroundPreparedMutation<RestoreOperation> createBranchSwitch(
+    private ReturnPointRestoreOperation createBranchSwitch(
             BranchName target) throws IOException {
         BranchSwitchPlan plan = branches.prepareSwitch(target, activeWorkspaceId());
         UUID operationId = UUID.randomUUID();
-        CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
-            try {
-                var prepared = restores.prepare(plan.source(), plan.target().commit());
-                return RestoreOperation.startBranchSwitch(
-                        prepared, worldApply,
-                        new BranchSwitchRestorePublication(branches, plan),
-                        journals, operationId, restoreStateListener, plan);
-            } catch (IOException failed) {
-                throw new CompletionException(failed);
-            }
-        }, background);
-        var operation = new BackgroundPreparedMutation<>(
-                preparation, () -> branches.validateSwitch(plan),
-                RestoreOperation::cancelBeforeApply, true);
-        return operation;
+        BranchName hidden = new BranchName("hidden/branch-switch/" + operationId);
+        SaveRequest checkpointRequest = new SaveRequest(
+                plan.source(), AUTO_AUTHOR,
+                "Checkpoint before Branch Switch", Instant.now(), activeWorkspaceId(),
+                Optional.empty(), CommitKind.HIDDEN_RETURN);
+        SaveCaptureOperation checkpoint = createChunkReadySave(
+                checkpointRequest, scopedSavePreparation(checkpointRequest),
+                (request, captured) -> saves.checkpoint(request, captured, hidden),
+                ignored -> { });
+        return new ReturnPointRestoreOperation(checkpoint, saved ->
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        branches.validateSwitch(plan);
+                        var prepared = restores.prepare(
+                                plan.source(), saved.commitId(), plan.target().commit());
+                        return RestoreOperation.startBranchSwitch(
+                                prepared, worldApply,
+                                new BranchSwitchRestorePublication(
+                                        branches, plan, mutations,
+                                        saved.capturedGenerations()),
+                                journals, operationId, restoreStateListener, plan,
+                                saved.commitId(), saved.capturedGenerations());
+                    } catch (IOException failed) {
+                        throw new CompletionException(failed);
+                    }
+                }, background));
     }
 
     public synchronized DimensionMutation startWorkspaceSwitch(
@@ -872,6 +889,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private BackgroundPreparedMutation<RestoreOperation> createWorkspaceSwitch(
             UUID targetWorkspace) throws IOException {
+        branches.requireNoPendingChanges();
         BranchSwitchPlan branch = branches.prepareSwitch(
                 WorkspaceService.mainBranch(targetWorkspace));
         WorkspaceSwitchPlan plan = workspaces.prepareSwitch(targetWorkspace, branch);
@@ -887,6 +905,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             }
         }, background);
         var operation = new BackgroundPreparedMutation<>(preparation, () -> {
+            branches.requireNoPendingChanges();
             branches.validateSwitch(branch);
             workspaces.validateSwitch(plan);
         }, RestoreOperation::cancelBeforeApply, true);

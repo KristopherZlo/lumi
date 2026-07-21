@@ -10,6 +10,7 @@ import io.github.lumi.storage.repository.ActiveBranchRepository;
 import io.github.lumi.storage.repository.ActiveWorkspaceRepository;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.OperationJournalRepository;
+import io.github.lumi.storage.repository.WorkingIndexRepository;
 import java.io.IOException;
 import java.util.Objects;
 
@@ -18,6 +19,7 @@ public final class PublishedApplyRecovery {
     private final BranchRefRepository refs;
     private final ActiveBranchRepository active;
     private final ActiveWorkspaceRepository activeWorkspace;
+    private final WorkingIndexRepository working;
     private final OperationJournalRepository journals;
 
     public PublishedApplyRecovery(
@@ -32,9 +34,19 @@ public final class PublishedApplyRecovery {
             ActiveBranchRepository active,
             ActiveWorkspaceRepository activeWorkspace,
             OperationJournalRepository journals) {
+        this(refs, active, activeWorkspace, null, journals);
+    }
+
+    public PublishedApplyRecovery(
+            BranchRefRepository refs,
+            ActiveBranchRepository active,
+            ActiveWorkspaceRepository activeWorkspace,
+            WorkingIndexRepository working,
+            OperationJournalRepository journals) {
         this.refs = Objects.requireNonNull(refs, "refs");
         this.active = Objects.requireNonNull(active, "active");
         this.activeWorkspace = activeWorkspace;
+        this.working = working;
         this.journals = Objects.requireNonNull(journals, "journals");
     }
 
@@ -42,6 +54,12 @@ public final class PublishedApplyRecovery {
         Objects.requireNonNull(journal, "journal");
         if (!isPublished(journal)) {
             return false;
+        }
+        if (journal.capturedGenerations().isPresent()) {
+            if (working == null) {
+                return false;
+            }
+            working.clearCaptured(journal.capturedGenerations().orElseThrow());
         }
         if (journal.phase() != OperationPhase.REF_PUBLISHED
                 && journal.phase() != OperationPhase.COMPLETE) {
