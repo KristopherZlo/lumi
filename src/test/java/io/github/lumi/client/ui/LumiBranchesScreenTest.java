@@ -34,6 +34,7 @@ class LumiBranchesScreenTest {
         assertTrue(source.contains("luma.action.variant_create"));
         assertTrue(source.contains("luma.action.merge_into_current"));
         assertTrue(source.contains("luma.action.variant_switch"));
+        assertFalse(source.contains("luma.status.variant_switched"));
         assertTrue(source.contains("visibleRows()"));
         assertTrue(source.contains("addIconButton"));
         assertTrue(source.contains("name = addTextField("));

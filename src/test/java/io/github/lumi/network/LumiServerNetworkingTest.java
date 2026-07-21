@@ -1,6 +1,7 @@
 package io.github.lumi.network;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -48,5 +49,19 @@ class LumiServerNetworkingTest {
         assertTrue(source.contains("ServerTickEvents.END_SERVER_TICK"));
         assertTrue(source.contains("runtime.pendingRevision()"));
         assertTrue(source.contains("PENDING_REFRESH_TICKS"));
+    }
+
+    @Test
+    void reportsTheActualBranchSwitchOutcome() {
+        assertEquals("luma.status.variant_switched",
+                LumiServerNetworking.branchSwitchMessage(
+                        HistoryCommandPayload.Kind.BRANCH_SWITCH,
+                        OperationEventPayload.State.SUCCEEDED,
+                        "Operation completed"));
+        assertEquals("luma.status.variant_switch_requires_saved_draft",
+                LumiServerNetworking.branchSwitchMessage(
+                        HistoryCommandPayload.Kind.BRANCH_SWITCH,
+                        OperationEventPayload.State.FAILED,
+                        "Branch switch requires no pending builder changes"));
     }
 }

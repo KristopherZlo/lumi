@@ -250,7 +250,8 @@ public final class LumiClient implements ClientModInitializer {
             HISTORY_PAGES.invalidateDimension(event.dimensionId());
             NETWORKING.refreshSnapshot();
         }
-        if (event.state() == OperationEventPayload.State.SUCCEEDED
+        if (event.state() != OperationEventPayload.State.ACCEPTED
+                && event.state() != OperationEventPayload.State.PROGRESS
                 && event.message().startsWith("luma.")) {
             showFeedback(event.message());
         }

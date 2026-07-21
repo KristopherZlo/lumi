@@ -526,7 +526,7 @@
   "luma.status.variant_name_required": "Сначала введите название ветки.",
   "luma.status.variant_already_exists": "Ветка с таким названием уже существует.",
   "luma.status.variant_base_missing": "Выбранное сохранение больше не найдено.",
-  "luma.status.variant_switch_requires_saved_draft": "Сохраните или отмените текущий черновик восстановления перед переключением веток.",
+  "luma.status.variant_switch_requires_saved_draft": "Сделайте коммит текущих изменений перед переключением веток.",
   "luma.status.variant_switch_key_updated": "Привязка ветки обновлена.",
   "luma.status.preview_refreshed": "Превью обновлено.",
   "luma.status.preview_requested": "Обновление превью поставлено в очередь.",

@@ -791,10 +791,24 @@ public final class LumiServerNetworking {
                 .or(() -> operation.completionMessage()
                         .filter(value -> !value.isBlank()))
                 .orElseGet(() -> terminalMessage(operation.terminalState()));
+        message = branchSwitchMessage(payload.kind(), state, message);
         sendEvent(
                 player, payload.requestId(), runtime, state, message,
                 Optional.empty(), -1, previewBounds(operation));
         deferSnapshotBroadcast(runtime);
+    }
+
+    static String branchSwitchMessage(
+            HistoryCommandPayload.Kind kind,
+            OperationEventPayload.State state,
+            String message) {
+        if (kind != HistoryCommandPayload.Kind.BRANCH_SWITCH) return message;
+        if (state == OperationEventPayload.State.SUCCEEDED) {
+            return "luma.status.variant_switched";
+        }
+        return "Branch switch requires no pending builder changes".equals(message)
+                ? "luma.status.variant_switch_requires_saved_draft"
+                : message;
     }
 
     private static Optional<BlockBox> previewBounds(

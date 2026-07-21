@@ -148,10 +148,6 @@ public final class LumiBranchesScreen extends LumiPageScreen {
     private void switchBranch(String name) {
         try {
             switcher.accept(name);
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(
-                        Component.translatable("luma.status.variant_switched"), true);
-            }
             onClose();
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null
