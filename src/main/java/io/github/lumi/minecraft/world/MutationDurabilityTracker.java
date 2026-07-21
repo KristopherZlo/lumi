@@ -248,6 +248,10 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 visible.size(), List.of(), blocks, builders.sectionBounds());
     }
 
+    public synchronized long pendingRevision() {
+        return indexRevision;
+    }
+
     public synchronized void recordBlockMutation(
             BlockPosition position, long generation) {
         recordBlockMutationLocked(position, generation, false);

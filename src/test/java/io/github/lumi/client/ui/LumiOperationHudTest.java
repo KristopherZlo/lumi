@@ -31,6 +31,8 @@ class LumiOperationHudTest {
         assertTrue(source.contains("WorkspaceView::active"));
         assertTrue(source.contains("WorkspaceView::workspaceHudEnabled"));
         assertTrue(source.contains("LumiHotkeys.actionModifierDown("));
+        assertTrue(source.contains("result.workspace().total()"));
+        assertTrue(source.contains("drawClipped(graphics,"));
         assertTrue(source.contains("\"key.lumi.quick_rollback\""));
         assertTrue(source.contains("\"key.lumi.open_dashboard\""));
         assertFalse(source.contains("\"Alt+R rollback\""));

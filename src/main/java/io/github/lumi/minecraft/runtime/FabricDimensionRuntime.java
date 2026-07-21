@@ -1023,6 +1023,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return mutations.preview(workspace::includes, maximumSections);
     }
 
+    public long pendingRevision() {
+        return mutations.pendingRevision();
+    }
+
     public synchronized PendingStatisticsOperation startPendingStatistics(
             BranchRef expected,
             Consumer<DimensionMutation> terminalObserver) throws IOException {

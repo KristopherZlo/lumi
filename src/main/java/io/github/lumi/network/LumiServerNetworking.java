@@ -32,6 +32,8 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerBossEvent;
@@ -60,6 +62,9 @@ public final class LumiServerNetworking {
                     LumiServerNetworking::send);
     private static final ConcurrentHashMap<UUID, PendingPackage> PACKAGE_INSPECTIONS =
             new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<UUID, PendingRefresh> PENDING_REFRESHES =
+            new ConcurrentHashMap<>();
+    private static final int PENDING_REFRESH_TICKS = 5;
     private static final HistorySnapshotFactory SNAPSHOTS = new HistorySnapshotFactory();
 
     private LumiServerNetworking() { }
@@ -104,12 +109,41 @@ public final class LumiServerNetworking {
                 PendingStatisticsRequestPayload.TYPE,
                 LumiServerNetworking::pendingStatistics);
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-                LumiMod.serverRuntime().find(handler.getPlayer().level()).ifPresent(runtime ->
-                        sendSnapshot(handler.getPlayer(), runtime)));
+                LumiMod.serverRuntime().find(handler.getPlayer().level()).ifPresent(runtime -> {
+                    sendSnapshot(handler.getPlayer(), runtime);
+                    PENDING_REFRESHES.put(handler.getPlayer().getUUID(),
+                            new PendingRefresh(
+                                    dimension(runtime), runtime.pendingRevision(), -1));
+                }));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             cleanupPlayer(handler.getPlayer().getUUID());
         });
+        ServerTickEvents.END_SERVER_TICK.register(
+                LumiServerNetworking::refreshPendingSnapshots);
         ServerLifecycleEvents.SERVER_STOPPED.register(ignored -> clearState());
+    }
+
+    private static void refreshPendingSnapshots(MinecraftServer server) {
+        int tick = server.getTickCount();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            FabricDimensionRuntime runtime = LumiMod.serverRuntime()
+                    .find(player.level()).orElse(null);
+            if (runtime == null) continue;
+            String dimension = dimension(runtime);
+            long revision = runtime.pendingRevision();
+            PendingRefresh current = PENDING_REFRESHES.get(player.getUUID());
+            if (current == null || !current.dimensionId().equals(dimension)
+                    || current.revision() != revision) {
+                PENDING_REFRESHES.put(player.getUUID(), new PendingRefresh(
+                        dimension, revision, tick + PENDING_REFRESH_TICKS));
+                continue;
+            }
+            if (current.dueTick() >= 0 && tick >= current.dueTick()) {
+                sendSnapshot(player, runtime);
+                PENDING_REFRESHES.put(player.getUUID(), new PendingRefresh(
+                        dimension, revision, -1));
+            }
+        }
     }
 
     private static void receive(
@@ -481,6 +515,7 @@ public final class LumiServerNetworking {
         COMPARES.cleanupPlayer(playerId);
         ZONE_OVERLAYS.cleanupPlayer(playerId);
         PACKAGE_INSPECTIONS.remove(playerId);
+        PENDING_REFRESHES.remove(playerId);
         TICKET_OWNERS.forEach((ticketId, owner) -> {
             if (owner.playerId().equals(playerId)
                     && TICKET_OWNERS.remove(ticketId, owner)) {
@@ -495,6 +530,7 @@ public final class LumiServerNetworking {
         BOSS_BARS.keySet().forEach(LumiServerNetworking::removeBossBar);
         TICKET_OWNERS.clear();
         PACKAGE_INSPECTIONS.clear();
+        PENDING_REFRESHES.clear();
     }
 
     private static String failureMessage(Throwable failure) {
@@ -1011,4 +1047,6 @@ public final class LumiServerNetworking {
             String dimensionId,
             PackageName name,
             io.github.lumi.domain.service.ImportExportService.PackageInspection inspection) { }
+    private record PendingRefresh(
+            String dimensionId, long revision, int dueTick) { }
 }

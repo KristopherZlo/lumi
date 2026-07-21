@@ -39,4 +39,14 @@ class LumiServerNetworkingTest {
         assertFalse(terminal.contains("broadcastSnapshot(runtime);"));
         assertTrue(source.contains("server.schedule(new TickTask("));
     }
+
+    @Test
+    void refreshesPendingHudAfterBuilderChangesSettle() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));
+
+        assertTrue(source.contains("ServerTickEvents.END_SERVER_TICK"));
+        assertTrue(source.contains("runtime.pendingRevision()"));
+        assertTrue(source.contains("PENDING_REFRESH_TICKS"));
+    }
 }

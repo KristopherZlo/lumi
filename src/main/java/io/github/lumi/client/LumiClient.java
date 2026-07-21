@@ -182,7 +182,7 @@ public final class LumiClient implements ClientModInitializer {
         new LumiSelectionOverlay(SELECTION).register();
         new LumiSelectionHud(SELECTION).register();
         ZONE_OVERLAY.register();
-        new LumiOperationHud(HISTORY).register();
+        new LumiOperationHud(HISTORY, PENDING_STATISTICS).register();
         new LumiPendingChangeOverlay(
                 HISTORY, COMPARISONS, NETWORKING::refreshSnapshot).register();
         ONBOARDING_WORLD.register();
@@ -601,6 +601,10 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void acceptSnapshot(HistorySnapshotPayload snapshot) {
         BRANCH_SLOTS.synchronize(snapshot);
+        PENDING_STATISTICS.clear();
+        if (snapshot.pendingKeys() > 0 && !snapshot.operationActive()) {
+            NETWORKING.requestPendingStatistics();
+        }
         if (SURVIVAL_SETTINGS.needsRequest()) {
             NETWORKING.requestSurvivalSettings();
         }
