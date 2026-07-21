@@ -73,6 +73,10 @@ tasks.named('runGameTest') {
 
 tasks.named('runClientGameTest') {
     systemProperty 'fabric.client.gametest.disableNetworkSynchronizer', 'true'
+    System.properties.findAll { name, ignored ->
+        name.toString().startsWith('lumi.benchmark.')
+                || name == 'lumi.gametest.operationTimeoutTicks'
+    }.each { name, value -> systemProperty name.toString(), value }
 }
 
 dependencies {

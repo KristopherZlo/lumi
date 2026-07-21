@@ -38,6 +38,16 @@ import net.minecraft.world.phys.Vec3;
 
 /** Performs the requested changes through real player and command entry points. */
 final class LumiBehaviorActions {
+    private static final List<String> DENSE_BLOCK_PALETTE = List.of(
+            "stone", "granite", "diorite", "andesite", "deepslate",
+            "tuff", "calcite", "dripstone_block", "terracotta",
+            "white_concrete", "orange_concrete", "magenta_concrete",
+            "light_blue_concrete", "yellow_concrete", "lime_concrete",
+            "pink_concrete", "gray_concrete", "light_gray_concrete",
+            "cyan_concrete", "purple_concrete", "blue_concrete",
+            "brown_concrete", "green_concrete", "red_concrete",
+            "black_concrete", "bricks", "mud_bricks", "quartz_block",
+            "prismarine", "dark_prismarine", "purpur_block", "end_stone");
     private final TestServerContext server;
     private final LumiBehaviorReport report;
 
@@ -394,6 +404,18 @@ final class LumiBehaviorActions {
                 "//replacenear 30 dirt smooth_stone");
     }
 
+    void worldEditRandomVolume(String name, BlockBox area, int paletteOffset) {
+        List<String> palette = new ArrayList<>(DENSE_BLOCK_PALETTE.size());
+        for (int index = 0; index < DENSE_BLOCK_PALETTE.size(); index++) {
+            palette.add(DENSE_BLOCK_PALETTE.get(Math.floorMod(
+                    index + paletteOffset, DENSE_BLOCK_PALETTE.size())));
+        }
+        worldEdit(name, List.of(
+                "//pos1 " + area.minX() + "," + area.minY() + "," + area.minZ(),
+                "//pos2 " + area.maxX() + "," + area.maxY() + "," + area.maxZ(),
+                "//set " + String.join(",", palette)));
+    }
+
     void buildOakCube(BlockPos center) {
         BlockPos min = center.offset(-2, 0, -2);
         BlockPos max = center.offset(2, 4, 2);
@@ -429,6 +451,10 @@ final class LumiBehaviorActions {
     }
 
     private void worldEdit(String name, String command) {
+        worldEdit(name, List.of(command));
+    }
+
+    private void worldEdit(String name, List<String> commands) {
         timed(name, () -> server.runOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
             FabricPermissionsProvider previous =
@@ -443,7 +469,9 @@ final class LumiBehaviorActions {
                 public void registerPermission(String permission) { }
             });
             try {
-                execute(minecraft, player, command);
+                for (String command : commands) {
+                    execute(minecraft, player, command);
+                }
             } finally {
                 FabricWorldEdit.inst.setPermissionsProvider(previous);
             }

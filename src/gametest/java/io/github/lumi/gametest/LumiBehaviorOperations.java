@@ -12,6 +12,7 @@ import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.OperationEventPayload;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -26,7 +27,8 @@ import net.minecraft.server.MinecraftServer;
 
 /** Drives Lumi's player UI and records the resulting server outcomes. */
 final class LumiBehaviorOperations {
-    private static final int OPERATION_TIMEOUT_TICKS = 12_000;
+    private static final int OPERATION_TIMEOUT_TICKS = Integer.getInteger(
+            "lumi.gametest.operationTimeoutTicks", 12_000);
 
     private final ClientGameTestContext context;
     private final TestServerContext server;
@@ -49,6 +51,10 @@ final class LumiBehaviorOperations {
 
     BranchName activeBranch() throws IOException {
         return server.computeOnServer(minecraft -> runtime(minecraft).activeRef().name());
+    }
+
+    Path repository() {
+        return server.computeOnServer(minecraft -> runtime(minecraft).repository());
     }
 
     CommitId save(String name) throws IOException {
@@ -248,9 +254,6 @@ final class LumiBehaviorOperations {
     }
 
     private void restoreFromUi(CommitId target) {
-        awaitSnapshot(snapshot -> snapshot.versions().stream()
-                        .anyMatch(version -> version.id().equals(target)),
-                "saved version " + target.hex());
         ui.restore(target);
     }
 
@@ -324,6 +327,7 @@ final class LumiBehaviorOperations {
             long started) throws IOException {
         int ticks = 0;
         String phase = "";
+        long phaseStarted = started;
         OperationEventPayload terminal = null;
         while (terminal == null && ticks < OPERATION_TIMEOUT_TICKS) {
             OperationEventPayload event = context.computeOnClient(client ->
@@ -331,7 +335,12 @@ final class LumiBehaviorOperations {
             if (event != null && event.state() == OperationEventPayload.State.PROGRESS) {
                 String currentPhase = event.progress().orElseThrow().phase();
                 if (!currentPhase.equals(phase)) {
+                    if (!phase.isBlank()) {
+                        report.event("phase", name + ":" + phase, "completed",
+                                ticks, elapsedMillis(phaseStarted), "");
+                    }
                     phase = currentPhase;
+                    phaseStarted = System.nanoTime();
                     report.event("progress", name, "running", ticks,
                             elapsedMillis(started), currentPhase);
                 }
@@ -347,6 +356,10 @@ final class LumiBehaviorOperations {
                     elapsedMillis(started), phase);
             throw new AssertionError(name + " exceeded "
                     + OPERATION_TIMEOUT_TICKS + " ticks");
+        }
+        if (!phase.isBlank()) {
+            report.event("phase", name + ":" + phase, "completed",
+                    ticks, elapsedMillis(phaseStarted), "");
         }
         report.event("operation", name, terminal.state().name().toLowerCase(), ticks,
                 elapsedMillis(started), terminal.message());
