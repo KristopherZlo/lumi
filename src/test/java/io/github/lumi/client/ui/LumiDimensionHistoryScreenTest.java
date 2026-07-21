@@ -8,6 +8,11 @@ import org.junit.jupiter.api.Test;
 
 class LumiDimensionHistoryScreenTest {
     @Test
+    void selectedDimensionUsesItsOwnHistoryChip() {
+        assertTrue(LumiPageScreen.shortDimension("example:moon").equals("moon"));
+    }
+
+    @Test
     void keepsRemoteDimensionHistoryReadOnlyAndScrollable() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDimensionHistoryScreen.java"));
@@ -15,5 +20,7 @@ class LumiDimensionHistoryScreenTest {
         assertTrue(source.contains("HistoryViewController.Mode.GRAPH"));
         assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("HistoryPageRequestPayload.ACTIVE_WORKSPACE"));
+        assertTrue(source.contains("ProjectTab.HISTORY"));
+        assertTrue(source.contains("return dimensionId;"));
     }
 }

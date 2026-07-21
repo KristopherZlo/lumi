@@ -23,6 +23,7 @@ class LumiUpdateScreenTest {
         assertTrue(source.contains("preferences.dismiss("));
         assertTrue(source.contains("startCheck();"));
         assertTrue(source.contains("luma.action.checking_updates"));
+        assertTrue(source.contains("font.split("));
         assertFalse(source.contains("this::check"));
     }
 

@@ -2,6 +2,7 @@ package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import org.junit.jupiter.api.Test;
 
@@ -24,5 +25,15 @@ class LumiHistoryGraphViewTest {
         assertEquals(new LumiHistoryGraphView.TooltipPosition(100, 44),
                 LumiHistoryGraphView.tooltipPosition(
                         190, 90, 0, 0, 200, 100, 100, 56));
+    }
+
+    @Test
+    void graphNodesDoNotInstallTheObstructiveOpenTooltip() throws Exception {
+        String source = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/io/github/lumi/client/ui/LumiHistoryGraphNodeButton.java"));
+
+        assertFalse(source.contains("setTooltip("));
+        org.junit.jupiter.api.Assertions.assertTrue(source.contains(
+                "nodeX - 5, nodeY - 5, 11, 11"));
     }
 }

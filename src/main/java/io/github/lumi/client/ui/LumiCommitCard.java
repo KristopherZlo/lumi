@@ -50,11 +50,6 @@ final class LumiCommitCard {
         LumiTheme.outlined(
                 graphics, layout.x(), layout.y(), layout.width(), layout.height(),
                 featured ? LumiTheme.PANEL : LumiTheme.INSET, border);
-        if (featured && layout.height() > 2) {
-            graphics.fill(
-                    layout.x() + 1, layout.y() + 1,
-                    layout.x() + 3, layout.bottom() - 1, accentColor);
-        }
         if (layout.showPreview()) {
             drawPreview(graphics, version, layout.previewX(), layout.previewY());
         }

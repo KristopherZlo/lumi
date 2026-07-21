@@ -45,6 +45,13 @@ class LumiComparePickerScreenTest {
     }
 
     @Test
+    void branchSelectorsUseTheBuilderFacingName() {
+        assertEquals("roof", LumiComparePickerScreen.shortBranch(
+                "workspace/1234/roof"));
+        assertEquals("main", LumiComparePickerScreen.shortBranch("main"));
+    }
+
+    @Test
     void everySupportedViewportKeepsSelectableRowsAboveTheFooter() {
         int[] heights = {160, 220, 340, 500};
         int[] expectedRows = {1, 2, 5, 8};

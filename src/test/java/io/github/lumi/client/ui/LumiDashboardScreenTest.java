@@ -167,6 +167,7 @@ class LumiDashboardScreenTest {
         assertTrue(cardSource.contains("version.statistics().blocks()"));
         assertTrue(cardSource.contains("previews.texture(dimensionId, version.id())"));
         assertTrue(cardSource.contains("luma.dashboard.latest_badge"));
+        assertFalse(cardSource.contains("layout.x() + 3"));
         assertTrue(source.contains("new LumiCommitCard("));
         assertTrue(source.contains(
                 "pagedHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS)"));

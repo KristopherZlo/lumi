@@ -198,11 +198,11 @@ abstract class LumiPageScreen extends LumiScreen {
         int y = shellLayout.windowY();
         if (!compactSidebar()) {
             drawChip(graphics, x + 14, y + 62,
-                    shortDimension(snapshot.dimensionId()));
+                    shortDimension(displayedDimensionId(snapshot)));
             drawChip(graphics, x + 14, y + 84,
                     shortBranch(snapshot.branchName()));
         }
-        if (tab == ProjectTab.HISTORY) {
+        if (tab == ProjectTab.HISTORY && rendersProjectHeader()) {
             renderPageHeader(
                     graphics, shellLayout.contentX(), y,
                     shellLayout.contentWidth(),
@@ -210,6 +210,14 @@ abstract class LumiPageScreen extends LumiScreen {
                             "luma.screen.project.title", snapshot.workspaceName()),
                     Component.translatable("luma.window.home_help"));
         }
+    }
+
+    protected String displayedDimensionId(HistorySnapshotPayload snapshot) {
+        return snapshot.dimensionId();
+    }
+
+    protected boolean rendersProjectHeader() {
+        return true;
     }
 
     private void drawChip(GuiGraphics graphics, int x, int y, String text) {
@@ -270,11 +278,15 @@ abstract class LumiPageScreen extends LumiScreen {
         return slash < 0 ? value : value.substring(slash + 1);
     }
 
-    private static String shortDimension(String value) {
+    static String shortDimension(String value) {
         return switch (value) {
+            case "minecraft:overworld" -> "Overworld";
             case "minecraft:the_nether" -> "Nether";
             case "minecraft:the_end" -> "End";
-            default -> "Overworld";
+            default -> {
+                int separator = value.indexOf(':');
+                yield separator < 0 ? value : value.substring(separator + 1);
+            }
         };
     }
 

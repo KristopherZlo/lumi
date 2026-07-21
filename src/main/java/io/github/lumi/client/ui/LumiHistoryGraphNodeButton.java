@@ -5,7 +5,6 @@ import java.util.Objects;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
 
 /** One full-row graph hit target; the visible node remains at its branch lane. */
@@ -30,7 +29,6 @@ final class LumiHistoryGraphNodeButton extends Button {
         this.graphX = graphX;
         this.laneSpacing = laneSpacing;
         this.zoneColor = zoneColor;
-        setTooltip(Tooltip.create(Component.translatable("luma.action.open_save")));
     }
 
     @Override
@@ -44,7 +42,7 @@ final class LumiHistoryGraphNodeButton extends Button {
         int nodeY = getY() + getHeight() / 2;
         int color = zoneColor == null ? laneColor(node.lane()) : 0xff000000 | zoneColor;
         if (node.activeHead()) {
-            LumiTheme.outlined(graphics, nodeX - 5, nodeY - 5, 10, 10,
+            LumiTheme.outlined(graphics, nodeX - 5, nodeY - 5, 11, 11,
                     LumiTheme.WINDOW, LumiTheme.ACCENT);
         }
         graphics.fill(nodeX - 3, nodeY - 3, nodeX + 4, nodeY + 4, color);

@@ -60,7 +60,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
             Consumer<HistorySnapshotPayload.Version> openDetails) {
         super(parent, Component.translatable(
                 "luma.dimensions.history_title", dimensionId),
-                ProjectTab.MORE);
+                ProjectTab.HISTORY);
         this.dimensionId = Objects.requireNonNull(dimensionId, "dimensionId");
         this.pages = Objects.requireNonNull(pages, "pages");
         this.previews = Objects.requireNonNull(previews, "previews");
@@ -345,6 +345,16 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     private int capacity() {
         return Math.max(0,
                 (panelY + panelHeight - 12 - rowsY()) / ROW_STRIDE);
+    }
+
+    @Override
+    protected String displayedDimensionId(HistorySnapshotPayload snapshot) {
+        return dimensionId;
+    }
+
+    @Override
+    protected boolean rendersProjectHeader() {
+        return false;
     }
 
     @Override public boolean isPauseScreen() { return false; }

@@ -105,8 +105,14 @@ public final class LumiUpdateScreen extends LumiModalScreen {
         renderWindow(graphics, panelX, panelY, panelWidth, panelHeight);
         graphics.drawString(font, title, panelX + 16, panelY + 18,
                 LumiTheme.TEXT, false);
-        graphics.drawString(font, Component.translatable("luma.more.updates_help"),
-                panelX + 16, panelY + 42, LumiTheme.MUTED, false);
+        int helpY = panelY + 40;
+        for (var line : font.split(
+                Component.translatable("luma.more.updates_help"), panelWidth - 32)) {
+            if (helpY > panelY + 54) break;
+            graphics.drawString(font, line, panelX + 16, helpY,
+                    LumiTheme.MUTED, false);
+            helpY += 11;
+        }
         renderPanel(graphics, panelX + 12, panelY + 66,
                 panelWidth - 24, Math.max(1, resultBottom - panelY - 66));
         renderResult(graphics);
