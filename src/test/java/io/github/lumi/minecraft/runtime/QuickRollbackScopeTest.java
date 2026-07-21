@@ -23,8 +23,10 @@ class QuickRollbackScopeTest {
 
         assertTrue(source.contains(
                 "createQuickRollback(author, builder, selection, action)"));
-        assertTrue(source.contains(
-                "liveActions.recordRestore(liveAction, prepared)"));
+        int blocks = source.indexOf("liveWorld.prepareRestore(");
+        int entities = source.indexOf("liveEntityWorld.prepareRestore(");
+        int record = source.indexOf("liveActions.recordRestore(");
+        assertTrue(blocks >= 0 && entities > blocks && record > entities);
     }
 
     @Test

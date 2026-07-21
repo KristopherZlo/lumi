@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import java.io.IOException;
 import java.util.HashMap;
@@ -8,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityProcessor;
@@ -20,6 +22,8 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
     private final MinecraftEntityChunkCapture capture = new MinecraftEntityChunkCapture();
+    private final MinecraftEntityStateDecoder decoder = new MinecraftEntityStateDecoder(
+            BuiltInRegistries.ENTITY_TYPE);
     private final ChunkEntityLookup entityLookup;
     private final Map<EntityState, DecodedEntity> prepared = new HashMap<>();
     private final Map<EntityState, EntityChunkKey> chunks = new HashMap<>();
@@ -28,6 +32,21 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         entityLookup = ChunkEntityLookup.forLevel(level);
+    }
+
+    /** Decodes persistent Restore entities and remembers their owning chunks off-thread. */
+    public Map<EntityChunkKey, EntityChunkBlob> prepareRestore(
+            Map<EntityChunkKey, EntityChunkBlob> source) throws IOException {
+        Map<EntityChunkKey, EntityChunkBlob> normalized = decoder.normalize(source);
+        for (var entry : normalized.entrySet()) {
+            var states = entry.getValue().entities();
+            var decoded = decoder.decodeNormalized(entry.getValue()).entities();
+            for (int index = 0; index < states.size(); index++) {
+                prepared.put(states.get(index), decoded.get(index));
+                chunks.put(states.get(index), entry.getKey());
+            }
+        }
+        return normalized;
     }
 
     public Optional<EntityState> capture(Entity entity) throws IOException {

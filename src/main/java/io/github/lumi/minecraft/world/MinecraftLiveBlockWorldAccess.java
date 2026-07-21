@@ -1,8 +1,11 @@
 package io.github.lumi.minecraft.world;
 
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.model.CanonicalNbt;
+import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -10,6 +13,8 @@ import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
@@ -26,11 +31,32 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
 
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
+    private final HolderLookup<Block> blocks;
     private final Map<BlockSnapshot, PreparedBlock> prepared = new HashMap<>();
 
     public MinecraftLiveBlockWorldAccess(ServerLevel level, DimensionFreezeState freeze) {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
+        blocks = level.registryAccess().lookupOrThrow(Registries.BLOCK);
+    }
+
+    /** Decodes only changed Restore endpoints before a later live Undo/Redo. */
+    public void prepareRestore(
+            Map<SectionKey, SectionBlob> target,
+            Map<SectionKey, SectionBlob> checkpoint) throws IOException {
+        for (var entry : target.entrySet()) {
+            SectionBlob after = entry.getValue();
+            SectionBlob before = checkpoint.get(entry.getKey());
+            for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+                var oldNbt = before.blockEntities().get(index);
+                var newNbt = after.blockEntities().get(index);
+                String oldState = before.blockStates().get(index);
+                String newState = after.blockStates().get(index);
+                if (oldState.equals(newState) && Objects.equals(oldNbt, newNbt)) continue;
+                prepare(new BlockSnapshot(oldState, Optional.ofNullable(oldNbt)));
+                prepare(new BlockSnapshot(newState, Optional.ofNullable(newNbt)));
+            }
+        }
     }
 
     @Override
@@ -65,6 +91,25 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
 
     public void clear() {
         prepared.clear();
+    }
+
+    private void prepare(BlockSnapshot snapshot) throws IOException {
+        if (prepared.containsKey(snapshot)) {
+            return;
+        }
+        final BlockState state;
+        try {
+            state = BlockStateParser.parseForBlock(
+                    blocks, snapshot.blockState(), false).blockState();
+        } catch (CommandSyntaxException invalid) {
+            throw new IOException(
+                    "Invalid persistent block state: " + snapshot.blockState(), invalid);
+        }
+        Optional<CompoundTag> nbt = snapshot.blockEntity().isEmpty()
+                ? Optional.empty()
+                : Optional.of(MinecraftNbtCodec.decode(
+                        snapshot.blockEntity().orElseThrow()));
+        prepared.put(snapshot, new PreparedBlock(state, nbt));
     }
 
     private void applyBlockEntity(LevelChunk chunk, BlockPos position, Optional<CompoundTag> nbt) {

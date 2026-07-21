@@ -57,6 +57,7 @@ import io.github.lumi.domain.service.ImportExportService;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.MergeService;
 import io.github.lumi.domain.service.PreparedMerge;
+import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.domain.service.BranchService;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SavePublisher;
@@ -1568,7 +1569,18 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                 : restores.preparePartial(
                                         expected, saved.commitId(), expected.commit(),
                                         selection.orElseThrow(), false);
-                        liveActions.recordRestore(liveAction, prepared);
+                        liveWorld.prepareRestore(
+                                prepared.sections(), prepared.returnSections());
+                        var targetEntities = liveEntityWorld.prepareRestore(
+                                prepared.entities());
+                        var returnEntities = liveEntityWorld.prepareRestore(
+                                prepared.returnEntities());
+                        liveActions.recordRestore(liveAction, new PreparedRestore(
+                                prepared.expectedRef(), prepared.targetCommit(),
+                                prepared.sections(), targetEntities,
+                                prepared.returnSections(), returnEntities,
+                                prepared.playerSpawns(), prepared.returnPlayerSpawns(),
+                                prepared.restorePlayerSpawns()));
                         return RestoreOperation.startQuickRollback(
                                 prepared, worldApply, new WorkingIndexClearPublication(
                                         mutations, clearableQuickRollbackKeys(
@@ -1593,7 +1605,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private static WorkingIndexSnapshot clearableQuickRollbackKeys(
             WorkingIndexSnapshot captured,
-            io.github.lumi.domain.service.PreparedRestore full,
+            PreparedRestore full,
             Optional<BlockBox> selection) {
         if (selection.isEmpty()) {
             return captured;
