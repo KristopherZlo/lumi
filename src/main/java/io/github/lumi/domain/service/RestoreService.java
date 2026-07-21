@@ -70,8 +70,16 @@ public final class RestoreService {
     public PreparedRestore prepare(
             BranchRef expectedRef, CommitId sourceCommit, CommitId targetCommit)
             throws IOException {
+        return prepare(expectedRef, sourceCommit, targetCommit, NO_PROGRESS);
+    }
+
+    public PreparedRestore prepare(
+            BranchRef expectedRef,
+            CommitId sourceCommit,
+            CommitId targetCommit,
+            Consumer<PreparationProgress> progress) throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
-                targetCommit, null, false, true, null, NO_PROGRESS);
+                targetCommit, null, false, true, null, progress);
     }
 
     public PreparedRestore prepareWithoutEntities(
@@ -91,8 +99,17 @@ public final class RestoreService {
     public PreparedRestore prepareWithoutEntities(
             BranchRef expectedRef, CommitId sourceCommit, CommitId targetCommit)
             throws IOException {
+        return prepareWithoutEntities(
+                expectedRef, sourceCommit, targetCommit, NO_PROGRESS);
+    }
+
+    public PreparedRestore prepareWithoutEntities(
+            BranchRef expectedRef,
+            CommitId sourceCommit,
+            CommitId targetCommit,
+            Consumer<PreparationProgress> progress) throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
-                targetCommit, null, false, false, null, NO_PROGRESS);
+                targetCommit, null, false, false, null, progress);
     }
 
     public PreparedRestore preparePartial(
@@ -108,9 +125,20 @@ public final class RestoreService {
             CommitId targetCommit,
             BlockBox area,
             boolean outside) throws IOException {
+        return preparePartial(expectedRef, sourceCommit, targetCommit,
+                area, outside, NO_PROGRESS);
+    }
+
+    public PreparedRestore preparePartial(
+            BranchRef expectedRef,
+            CommitId sourceCommit,
+            CommitId targetCommit,
+            BlockBox area,
+            boolean outside,
+            Consumer<PreparationProgress> progress) throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
                 targetCommit, Objects.requireNonNull(area, "area"), outside,
-                false, null, NO_PROGRESS);
+                false, null, progress);
     }
 
     public PartialRestorePlan planPartial(

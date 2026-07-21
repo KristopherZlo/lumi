@@ -119,7 +119,7 @@ public final class RestoreOperation implements DimensionMutation {
             BranchSwitchPlan plan) throws IOException {
         return startBranchSwitch(
                 restore, world, publication, journals, operationId,
-                stateListener, plan, plan.source().commit(), Optional.empty());
+                stateListener, plan, plan.source().commit(), Optional.empty(), NO_PROGRESS);
     }
 
     public static RestoreOperation startBranchSwitch(
@@ -134,9 +134,25 @@ public final class RestoreOperation implements DimensionMutation {
             WorkingIndexSnapshot capturedGenerations) throws IOException {
         return startBranchSwitch(
                 restore, world, publication, journals, operationId,
+                stateListener, plan, returnPoint, capturedGenerations, NO_PROGRESS);
+    }
+
+    public static RestoreOperation startBranchSwitch(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            BranchSwitchPlan plan,
+            CommitId returnPoint,
+            WorkingIndexSnapshot capturedGenerations,
+            Consumer<OperationProgress> progress) throws IOException {
+        return startBranchSwitch(
+                restore, world, publication, journals, operationId,
                 stateListener, plan, returnPoint,
                 Optional.of(Objects.requireNonNull(
-                        capturedGenerations, "capturedGenerations")));
+                        capturedGenerations, "capturedGenerations")), progress);
     }
 
     private static RestoreOperation startBranchSwitch(
@@ -148,7 +164,8 @@ public final class RestoreOperation implements DimensionMutation {
             RestoreStateListener stateListener,
             BranchSwitchPlan plan,
             CommitId returnPoint,
-            Optional<WorkingIndexSnapshot> capturedGenerations) throws IOException {
+            Optional<WorkingIndexSnapshot> capturedGenerations,
+            Consumer<OperationProgress> progress) throws IOException {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(returnPoint, "returnPoint");
         if (!restore.expectedRef().equals(plan.source())
@@ -163,7 +180,7 @@ public final class RestoreOperation implements DimensionMutation {
                         plan.expectedActive().revision())));
         return start(restore, world, publication, journals, operationId,
                 stateListener, OperationKind.BRANCH_SWITCH, target,
-                capturedGenerations, NO_PROGRESS);
+                capturedGenerations, progress);
     }
 
     public static RestoreOperation startWorkspaceSwitch(
@@ -174,6 +191,19 @@ public final class RestoreOperation implements DimensionMutation {
             UUID operationId,
             RestoreStateListener stateListener,
             WorkspaceSwitchPlan plan) throws IOException {
+        return startWorkspaceSwitch(restore, world, publication, journals,
+                operationId, stateListener, plan, NO_PROGRESS);
+    }
+
+    public static RestoreOperation startWorkspaceSwitch(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            WorkspaceSwitchPlan plan,
+            Consumer<OperationProgress> progress) throws IOException {
         Objects.requireNonNull(plan, "plan");
         BranchSwitchPlan branch = plan.branch();
         if (!restore.expectedRef().equals(branch.source())
@@ -191,7 +221,8 @@ public final class RestoreOperation implements DimensionMutation {
                         plan.expectedActive().id(), plan.targetWorkspace(),
                         plan.expectedActive().revision())));
         return start(restore, world, publication, journals, operationId,
-                stateListener, OperationKind.BRANCH_SWITCH, target);
+                stateListener, OperationKind.BRANCH_SWITCH, target,
+                Optional.empty(), progress);
     }
 
     public static RestoreOperation startMerge(
@@ -201,12 +232,25 @@ public final class RestoreOperation implements DimensionMutation {
             OperationJournalRepository journals,
             UUID operationId,
             RestoreStateListener stateListener) throws IOException {
+        return startMerge(restore, world, publication, journals,
+                operationId, stateListener, NO_PROGRESS);
+    }
+
+    public static RestoreOperation startMerge(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            Consumer<OperationProgress> progress) throws IOException {
         OperationTarget target = new OperationTarget(
                 restore.expectedRef().name(), restore.expectedRef().commit(),
                 restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
                 Optional.of(restore.expectedRef().commit()));
         return start(restore, world, publication, journals, operationId,
-                stateListener, OperationKind.MERGE, target);
+                stateListener, OperationKind.MERGE, target,
+                Optional.empty(), progress);
     }
 
     public static RestoreOperation startPartial(
@@ -218,6 +262,20 @@ public final class RestoreOperation implements DimensionMutation {
             RestoreStateListener stateListener,
             BlockAreaTarget area,
             CommitId returnPoint) throws IOException {
+        return startPartial(restore, world, publication, journals, operationId,
+                stateListener, area, returnPoint, NO_PROGRESS);
+    }
+
+    public static RestoreOperation startPartial(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            BlockAreaTarget area,
+            CommitId returnPoint,
+            Consumer<OperationProgress> progress) throws IOException {
         Objects.requireNonNull(area, "area");
         Objects.requireNonNull(returnPoint, "returnPoint");
         OperationTarget target = new OperationTarget(
@@ -226,7 +284,8 @@ public final class RestoreOperation implements DimensionMutation {
                 Optional.of(returnPoint), Optional.empty(),
                 Optional.of(area));
         return start(restore, world, publication, journals, operationId,
-                stateListener, OperationKind.RESTORE, target);
+                stateListener, OperationKind.RESTORE, target,
+                Optional.empty(), progress);
     }
 
     public static RestoreOperation startZone(
@@ -238,6 +297,20 @@ public final class RestoreOperation implements DimensionMutation {
             RestoreStateListener stateListener,
             Zone zone,
             CommitId returnPoint) throws IOException {
+        return startZone(restore, world, publication, journals, operationId,
+                stateListener, zone, returnPoint, NO_PROGRESS);
+    }
+
+    public static RestoreOperation startZone(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            Zone zone,
+            CommitId returnPoint,
+            Consumer<OperationProgress> progress) throws IOException {
         Objects.requireNonNull(zone, "zone");
         Objects.requireNonNull(returnPoint, "returnPoint");
         OperationTarget target = new OperationTarget(
@@ -247,7 +320,8 @@ public final class RestoreOperation implements DimensionMutation {
                 Optional.empty(), Optional.of(new ZoneRestoreTarget(
                         zone.workspaceId(), zone.id(), zone.revision())));
         return start(restore, world, publication, journals, operationId,
-                stateListener, OperationKind.RESTORE, target);
+                stateListener, OperationKind.RESTORE, target,
+                Optional.empty(), progress);
     }
 
     public static RestoreOperation startWithoutEntities(
@@ -289,6 +363,21 @@ public final class RestoreOperation implements DimensionMutation {
             RestoreStateListener stateListener,
             CommitId returnPoint,
             WorkingIndexSnapshot capturedGenerations) throws IOException {
+        return startQuickRollback(restore, world, publication, journals,
+                operationId, stateListener, returnPoint, capturedGenerations,
+                NO_PROGRESS);
+    }
+
+    public static RestoreOperation startQuickRollback(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            CommitId returnPoint,
+            WorkingIndexSnapshot capturedGenerations,
+            Consumer<OperationProgress> progress) throws IOException {
         Objects.requireNonNull(returnPoint, "returnPoint");
         Objects.requireNonNull(capturedGenerations, "capturedGenerations");
         if (!restore.targetCommit().equals(restore.expectedRef().commit())) {
@@ -300,7 +389,7 @@ public final class RestoreOperation implements DimensionMutation {
                 Optional.of(returnPoint));
         return start(restore, world, publication, journals, operationId,
                 stateListener, OperationKind.QUICK_ROLLBACK, target,
-                Optional.of(capturedGenerations), NO_PROGRESS);
+                Optional.of(capturedGenerations), progress);
     }
 
     public static RestoreOperation start(
@@ -320,6 +409,19 @@ public final class RestoreOperation implements DimensionMutation {
             OperationJournalRepository journals,
             OperationJournal journal,
             RestoreStateListener stateListener) throws IOException {
+        return resume(restore, world, publication, journals, journal,
+                stateListener, NO_PROGRESS);
+    }
+
+    /** Rebuilds idempotent apply cursors around an already durable crash journal. */
+    public static RestoreOperation resume(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            OperationJournal journal,
+            RestoreStateListener stateListener,
+            Consumer<OperationProgress> progress) throws IOException {
         Objects.requireNonNull(journals, "journals");
         Objects.requireNonNull(journal, "journal");
         if (journal.kind() == OperationKind.SAVE) {
@@ -328,7 +430,8 @@ public final class RestoreOperation implements DimensionMutation {
         if (!journals.read().filter(journal::equals).isPresent()) {
             throw new IOException("Recovery journal changed before Resume");
         }
-        return prepare(restore, world, publication, journals, journal, stateListener);
+        return prepare(restore, world, publication, journals, journal,
+                stateListener, progress);
     }
 
     public static RestoreOperation start(
@@ -403,18 +506,21 @@ public final class RestoreOperation implements DimensionMutation {
             RestorePublication publication,
             OperationJournalRepository journals,
             OperationJournal journal,
-            RestoreStateListener stateListener) throws IOException {
+            RestoreStateListener stateListener,
+            Consumer<OperationProgress> progress) throws IOException {
         Objects.requireNonNull(restore, "restore");
         Objects.requireNonNull(world, "world");
         Objects.requireNonNull(publication, "publication");
         Objects.requireNonNull(stateListener, "stateListener");
-        WorldStateApply.PreparedState preparedTarget = world.prepare(
-                new WorldStateApply.State(
-                        restore.sections(), restore.entities(), restore.playerSpawns()));
-        WorldStateApply.PreparedState preparedReturn = world.prepare(
-                new WorldStateApply.State(
+        WorldStateApply.PreparedState preparedTarget = prepareWorldState(
+                world, new WorldStateApply.State(
+                        restore.sections(), restore.entities(), restore.playerSpawns()),
+                "Restore: decoding target", progress);
+        WorldStateApply.PreparedState preparedReturn = prepareWorldState(
+                world, new WorldStateApply.State(
                         restore.returnSections(), restore.returnEntities(),
-                        restore.returnPlayerSpawns()));
+                        restore.returnPlayerSpawns()),
+                "Restore: decoding return point", progress);
         return new RestoreOperation(
                 restore, world, publication, journals, journal, true,
                 preparedTarget, preparedReturn, stateListener);

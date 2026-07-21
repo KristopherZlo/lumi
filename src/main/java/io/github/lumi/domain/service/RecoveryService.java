@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import java.io.IOException;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /** Reconstructs either safe direction from immutable crash-journal targets. */
 public final class RecoveryService {
@@ -23,8 +24,16 @@ public final class RecoveryService {
 
     public PreparedRestore prepare(OperationJournal journal, RecoveryChoice choice)
             throws IOException {
+        return prepare(journal, choice, ignored -> { });
+    }
+
+    public PreparedRestore prepare(
+            OperationJournal journal,
+            RecoveryChoice choice,
+            Consumer<RestoreService.PreparationProgress> progress) throws IOException {
         Objects.requireNonNull(journal, "journal");
         Objects.requireNonNull(choice, "choice");
+        Objects.requireNonNull(progress, "progress");
         if (journal.kind() == OperationKind.SAVE) {
             throw new IOException("Interrupted Save has no world apply to recover");
         }
@@ -41,7 +50,7 @@ public final class RecoveryService {
         if (target.blockArea().isPresent()) {
             var area = target.blockArea().orElseThrow();
             return restores.preparePartial(
-                    expected, source, desired, area.area(), area.outside());
+                    expected, source, desired, area.area(), area.outside(), progress);
         }
         if (target.zoneRestore().isPresent()) {
             if (zones == null) {
@@ -52,11 +61,11 @@ public final class RecoveryService {
             if (zone.revision() != zoneTarget.revision()) {
                 throw new IOException("Zone changed since Restore started: " + zone.id());
             }
-            return restores.prepareZone(expected, source, desired, zone);
+            return restores.prepareZone(expected, source, desired, zone, progress);
         }
         if (target.excludeEntities()) {
-            return restores.prepareWithoutEntities(expected, source, desired);
+            return restores.prepareWithoutEntities(expected, source, desired, progress);
         }
-        return restores.prepare(expected, source, desired);
+        return restores.prepare(expected, source, desired, progress);
     }
 }
