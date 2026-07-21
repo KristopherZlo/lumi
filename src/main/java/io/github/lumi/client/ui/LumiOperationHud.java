@@ -40,15 +40,22 @@ public final class LumiOperationHud {
         graphics.fill(x, y, x + width, y + 28, 0xd9111419);
         graphics.drawString(font, font.plainSubstrByWidth(text, width - 16),
                 x + 8, y + 6, 0xfff0f3f6, false);
-        event.progress().flatMap(progress -> progress.fraction().isPresent()
-                ? java.util.Optional.of(progress.fraction().orElseThrow())
-                : java.util.Optional.empty()).ifPresent(fraction -> {
-                    int barWidth = width - 16;
-                    graphics.fill(x + 8, y + 20, x + 8 + barWidth, y + 23, 0xff343a43);
-                    graphics.fill(x + 8, y + 20,
-                            x + 8 + (int) Math.round(barWidth * fraction), y + 23,
-                            0xff70d6a5);
-                });
+        event.progress().ifPresent(progress -> {
+            int barWidth = width - 16;
+            graphics.fill(x + 8, y + 20, x + 8 + barWidth, y + 23, 0xff343a43);
+            if (progress.fraction().isPresent()) {
+                double fraction = progress.fraction().orElseThrow();
+                graphics.fill(x + 8, y + 20,
+                        x + 8 + (int) Math.round(barWidth * fraction), y + 23,
+                        0xff70d6a5);
+                return;
+            }
+            int segmentWidth = Math.max(12, barWidth / 4);
+            int offset = indeterminateOffset(
+                    System.currentTimeMillis(), barWidth - segmentWidth);
+            graphics.fill(x + 8 + offset, y + 20,
+                    x + 8 + offset + segmentWidth, y + 23, 0xff70d6a5);
+        });
     }
 
     private int renderWorkspace(GuiGraphics graphics) {
@@ -103,6 +110,12 @@ public final class LumiOperationHud {
 
     static int nextPanelY(int top, int height) {
         return top + height + 6;
+    }
+
+    static int indeterminateOffset(long millis, int travelWidth) {
+        long position = Math.floorMod(millis / 20, travelWidth * 2L);
+        return (int) (position <= travelWidth
+                ? position : travelWidth * 2L - position);
     }
 
     private static String binding(Minecraft client, String name) {

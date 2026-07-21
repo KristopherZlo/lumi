@@ -17,6 +17,13 @@ class LumiOperationHudTest {
     }
 
     @Test
+    void movesIndeterminateProgressBackAndForth() {
+        assertEquals(0, LumiOperationHud.indeterminateOffset(0, 40));
+        assertEquals(40, LumiOperationHud.indeterminateOffset(800, 40));
+        assertEquals(0, LumiOperationHud.indeterminateOffset(1_600, 40));
+    }
+
+    @Test
     void honorsTheActiveWorkspaceHudSetting() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiOperationHud.java"));

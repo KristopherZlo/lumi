@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.world.level.block.Block;
@@ -14,6 +15,8 @@ import net.minecraft.world.level.block.state.BlockState;
 /** Converts persistent strings and canonical NBT into Minecraft-native apply data. */
 public final class MinecraftBlockStateDecoder {
     private final HolderLookup<Block> blocks;
+    private final ConcurrentHashMap<String, BlockState> decodedStates =
+            new ConcurrentHashMap<>();
 
     public MinecraftBlockStateDecoder(HolderLookup<Block> blocks) {
         this.blocks = Objects.requireNonNull(blocks, "blocks");
@@ -23,16 +26,31 @@ public final class MinecraftBlockStateDecoder {
         Objects.requireNonNull(source, "source");
         var states = new ArrayList<BlockState>(SectionBlob.BLOCK_COUNT);
         for (String encoded : source.blockStates()) {
-            try {
-                states.add(BlockStateParser.parseForBlock(blocks, encoded, false).blockState());
-            } catch (CommandSyntaxException invalid) {
-                throw new IOException("Invalid persistent block state: " + encoded, invalid);
-            }
+            states.add(decodeState(encoded));
         }
         var blockEntities = new HashMap<Integer, net.minecraft.nbt.CompoundTag>();
         for (var entry : source.blockEntities().entrySet()) {
             blockEntities.put(entry.getKey(), MinecraftNbtCodec.decode(entry.getValue()));
         }
         return new DecodedSection(states, blockEntities);
+    }
+
+    private BlockState decodeState(String encoded) throws IOException {
+        BlockState cached = decodedStates.get(encoded);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            BlockState decoded = BlockStateParser.parseForBlock(
+                    blocks, encoded, false).blockState();
+            BlockState raced = decodedStates.putIfAbsent(encoded, decoded);
+            return raced == null ? decoded : raced;
+        } catch (CommandSyntaxException invalid) {
+            throw new IOException("Invalid persistent block state: " + encoded, invalid);
+        }
+    }
+
+    int cachedStateCount() {
+        return decodedStates.size();
     }
 }

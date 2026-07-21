@@ -50,6 +50,20 @@ class MinecraftRestorePreparationTest {
     }
 
     @Test
+    void parsesEachPersistentBlockStateOnlyOnceAcrossRestoreSections() throws Exception {
+        var decoder = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK);
+        var states = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone"));
+        states.set(0, "minecraft:oak_stairs[facing=north,half=bottom,shape=straight,waterlogged=false]");
+        SectionBlob section = new SectionBlob(states, Map.of());
+
+        decoder.decode(section);
+        decoder.decode(section);
+
+        assertEquals(2, decoder.cachedStateCount());
+    }
+
+    @Test
     void preparesLegacyEntityNbtInItsReloadStableForm() throws Exception {
         EntityChunkKey key = new EntityChunkKey(2, 3);
         UUID id = UUID.fromString("30000000-0000-0000-0000-000000000003");
