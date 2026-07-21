@@ -39,8 +39,7 @@ class LumiBranchesScreenTest {
         assertTrue(source.contains("name = addTextField("));
         assertTrue(source.contains("create.submit(name.getValue())"));
         assertTrue(source.contains("luma.action.delete_branch"));
-        assertTrue(source.contains("deleter.accept(pendingDelete.name())"));
-        assertTrue(source.contains("addDeleteConfirmation"));
+        assertTrue(source.contains("new LumiDeleteBranchScreen("));
         assertTrue(source.contains("ClientContextualHelpHint.BRANCHES"));
         assertTrue(source.contains("contentOffset"));
         assertTrue(source.contains("bindingLabel.apply(branch)"));

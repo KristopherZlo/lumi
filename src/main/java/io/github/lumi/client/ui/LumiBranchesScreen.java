@@ -37,7 +37,6 @@ public final class LumiBranchesScreen extends LumiPageScreen {
     private int scroll;
     private int contentOffset;
     private String error = "";
-    private HistorySnapshotPayload.Branch pendingDelete;
 
     public LumiBranchesScreen(
             Screen parent,
@@ -94,11 +93,6 @@ public final class LumiBranchesScreen extends LumiPageScreen {
                 this::createBranch,
                 LumiButton.Kind.PRIMARY);
         updateCreateButton();
-
-        if (pendingDelete != null) {
-            addDeleteConfirmation(x, y, contentWidth);
-            return;
-        }
 
         int rows = visibleRows();
         int start = rows == 0 ? 0 : Math.min(scroll, branches.size());
@@ -184,37 +178,8 @@ public final class LumiBranchesScreen extends LumiPageScreen {
     }
 
     private void confirmDelete(HistorySnapshotPayload.Branch branch) {
-        pendingDelete = branch;
-        error = "";
-        rebuildWidgets();
-    }
-
-    private void addDeleteConfirmation(int x, int y, int contentWidth) {
-        int buttonWidth = Math.max(0, (contentWidth - 8) / 2);
-        addButton(x + 16, y + LIST_TOP + 64 + contentOffset, buttonWidth,
-                Component.translatable("luma.action.delete_branch"),
-                this::deleteBranch, LumiButton.Kind.DANGER);
-        addButton(x + 24 + buttonWidth,
-                y + LIST_TOP + 64 + contentOffset, buttonWidth,
-                Component.translatable("luma.action.cancel"), () -> {
-                    pendingDelete = null;
-                    error = "";
-                    rebuildWidgets();
-                }, LumiButton.Kind.NORMAL);
-    }
-
-    private void deleteBranch() {
-        try {
-            deleter.accept(pendingDelete.name());
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(
-                        Component.translatable("luma.status.variant_deleted"), true);
-            }
-            onClose();
-        } catch (RuntimeException failed) {
-            error = failed.getMessage() == null
-                    ? "Lumi branch could not be deleted" : failed.getMessage();
-        }
+        minecraft.setScreen(new LumiDeleteBranchScreen(
+                this, branch, deleter, this::onClose));
     }
 
     @Override
@@ -231,50 +196,32 @@ public final class LumiBranchesScreen extends LumiPageScreen {
                 layout.x() + 16,
                 layout.y() + FORM_TOP + contentOffset,
                 LumiTheme.MUTED, false);
-        if (pendingDelete == null) {
-            int rows = visibleRows();
-            int start = rows == 0 ? 0 : Math.min(scroll, branches.size());
-            int end = Math.min(start + rows, branches.size());
-            for (int index = start; index < end; index++) {
-                HistorySnapshotPayload.Branch branch = branches.get(index);
-                int rowY = layout.y() + LIST_TOP + contentOffset
-                        + (index - start) * rowStride(layout.width());
-                renderPanel(graphics,
-                        layout.x() + 16, rowY, layout.width() - 32,
-                        rowHeight(layout.width()));
-                int nameWidth = branchNameWidth(layout.width());
-                if (nameWidth > 0) {
-                    graphics.drawString(font,
-                            font.plainSubstrByWidth(
-                                    shortName(branch.name()), nameWidth),
-                            layout.x() + 24, rowY + (stacksActions(layout.width()) ? 8 : 9),
-                            branch.active()
-                                    ? LumiTheme.ACCENT : LumiTheme.TEXT,
-                            false);
-                }
+        int rows = visibleRows();
+        int start = rows == 0 ? 0 : Math.min(scroll, branches.size());
+        int end = Math.min(start + rows, branches.size());
+        for (int index = start; index < end; index++) {
+            HistorySnapshotPayload.Branch branch = branches.get(index);
+            int rowY = layout.y() + LIST_TOP + contentOffset
+                    + (index - start) * rowStride(layout.width());
+            renderPanel(graphics,
+                    layout.x() + 16, rowY, layout.width() - 32,
+                    rowHeight(layout.width()));
+            int nameWidth = branchNameWidth(layout.width());
+            if (nameWidth > 0) {
+                graphics.drawString(font,
+                        font.plainSubstrByWidth(
+                                shortName(branch.name()), nameWidth),
+                        layout.x() + 24, rowY + (stacksActions(layout.width()) ? 8 : 9),
+                        branch.active() ? LumiTheme.ACCENT : LumiTheme.TEXT,
+                        false);
             }
-            renderScrollbar(
-                    graphics, layout.x() + 16,
-                    layout.y() + LIST_TOP + contentOffset,
-                    layout.width() - 20,
-                    Math.max(0, layout.height() - LIST_TOP - contentOffset - 10),
-                    branches.size(), rows, scroll, value -> scroll = value);
-        } else {
-            renderPanel(graphics, layout.x() + 16,
-                    layout.y() + LIST_TOP + contentOffset,
-                    layout.width() - 32, 54);
-            graphics.drawCenteredString(font,
-                    Component.translatable("luma.action.delete_branch"),
-                    layout.x() + layout.width() / 2,
-                    layout.y() + LIST_TOP + 12 + contentOffset,
-                    LumiTheme.DANGER);
-            graphics.drawCenteredString(font,
-                    font.plainSubstrByWidth(
-                            shortName(pendingDelete.name()), layout.width() - 64),
-                    layout.x() + layout.width() / 2,
-                    layout.y() + LIST_TOP + 32 + contentOffset,
-                    LumiTheme.TEXT);
         }
+        renderScrollbar(
+                graphics, layout.x() + 16,
+                layout.y() + LIST_TOP + contentOffset,
+                layout.width() - 20,
+                Math.max(0, layout.height() - LIST_TOP - contentOffset - 10),
+                branches.size(), rows, scroll, value -> scroll = value);
         if (branches.isEmpty()) {
             graphics.drawCenteredString(font,
                     Component.translatable("luma.merge.no_sources"),
