@@ -39,11 +39,13 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   supports Create, Switch, Merge, protected Delete and persistent explicit
   Action+1..0 assignments. Restoring an older version keeps its still-restorable
   forward versions visible.
-- Successful integrated Save and Amend operations capture a bounded world
-  transparent isometric render for their new history entry; no player
-  framebuffer or open menu is captured. The successful operation carries the
-  exact captured-section bounds, so an asynchronous Save-form refresh cannot
-  drop or misframe the preview.
+- Successful integrated Save and Amend operations with builder changes capture
+  a bounded transparent isometric render for their new history entry; ambient
+  random ticks, the player framebuffer and open menus are excluded. The
+  successful operation carries the exact builder-section bounds, so an
+  asynchronous Save-form refresh cannot drop or misframe the preview. Preview
+  files load asynchronously behind the bundled loader; fully transparent PNGs
+  use the normal missing-image icon.
 - The Save modal refreshes its state automatically and has no manual preview
   refresh control.
 - Work zones support empty color-assigned creation, exclusive Enter/Leave,

@@ -127,6 +127,8 @@ class DurableSavePreparationTest {
         background.runNext();
         assertTrue(session.prepareUntil(Long.MAX_VALUE));
         assertEquals(Map.of(key, generation), session.finish().generations());
+        assertEquals(Map.of(key, generation),
+                session.previewGenerations().generations());
     }
 
     private static EntityChunkBlob entities(int marker) {

@@ -766,8 +766,7 @@ public final class LumiServerNetworking {
         if (!(operation instanceof SaveCaptureOperation save)) {
             return Optional.empty();
         }
-        return save.result().flatMap(result ->
-                result.capturedGenerations().sectionBounds());
+        return save.previewGenerations().sectionBounds();
     }
 
     private static void cancel(

@@ -97,6 +97,14 @@ public final class DurableSavePreparation implements SavePreparation {
         }
 
         @Override
+        public WorkingIndexSnapshot previewGenerations() {
+            if (!complete) {
+                throw new IllegalStateException("Save preparation is not durable");
+            }
+            return boundary.builder();
+        }
+
+        @Override
         public OperationProgress progress() {
             if (next < keys.size()) {
                 return new OperationProgress(

@@ -82,12 +82,13 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
                     discard(event.requestId());
                     return;
                 }
-                Optional<BlockBox> bounds = item.previewBounds()
-                        .or(event::previewBounds);
+                Optional<BlockBox> bounds = event.previewBounds()
+                        .or(item::previewBounds);
                 if (bounds.isEmpty()) {
                     discard(event.requestId());
                     return;
                 }
+                store.beginLoading(item.dimensionId(), event.head());
                 startBuild(
                         event.requestId(), item.withBounds(
                                 boundsLimiter.limit(bounds.orElseThrow())),
@@ -126,6 +127,9 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
             } catch (RuntimeException failed) {
                 pending.remove(requestId);
                 closeCapture(requestId, item);
+                if (item.target() != null) {
+                    store.failLoading(item.dimensionId(), item.target());
+                }
                 LumiMod.LOGGER.warn(
                         "Failed to render immutable Lumi preview", failed);
                 return;
@@ -165,6 +169,9 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
     private void discard(UUID requestId) {
         Pending removed = pending.remove(requestId);
         closeCapture(requestId, removed);
+        if (removed != null && removed.target() != null) {
+            store.failLoading(removed.dimensionId(), removed.target());
+        }
     }
 
     private TexturedPreviewCaptureService capture() {

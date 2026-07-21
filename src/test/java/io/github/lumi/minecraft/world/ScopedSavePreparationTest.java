@@ -16,6 +16,8 @@ class ScopedSavePreparationTest {
         SectionKey included = new SectionKey(1, 2, 3);
         SectionKey excluded = new SectionKey(4, 5, 6);
         EntityChunkKey entities = new EntityChunkKey(1, 3);
+        WorkingIndexSnapshot preview = new WorkingIndexSnapshot(Map.of(
+                included, 7L, excluded, 8L));
         SavePreparation source = () -> new SavePreparation.Session() {
             private int calls;
 
@@ -29,6 +31,11 @@ class ScopedSavePreparationTest {
                 return new WorkingIndexSnapshot(Map.of(
                         included, 7L, excluded, 8L, entities, 9L));
             }
+
+            @Override
+            public WorkingIndexSnapshot previewGenerations() {
+                return preview;
+            }
         };
         SavePreparation.Session session = new ScopedSavePreparation(
                 source, key -> key.equals(included) || key.equals(entities)).begin();
@@ -36,5 +43,7 @@ class ScopedSavePreparationTest {
         assertFalse(session.prepareUntil(1));
         assertTrue(session.prepareUntil(2));
         assertEquals(Map.of(included, 7L, entities, 9L), session.finish().generations());
+        assertEquals(Map.of(included, 7L),
+                session.previewGenerations().generations());
     }
 }

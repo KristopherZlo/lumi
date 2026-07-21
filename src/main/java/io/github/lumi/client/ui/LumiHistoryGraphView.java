@@ -89,11 +89,17 @@ final class LumiHistoryGraphView {
         int cardY = position.y();
         LumiTheme.outlined(graphics, cardX, cardY, cardWidth, 56,
                 LumiTheme.PANEL, LumiTheme.ACCENT);
-        previews.texture(dimensionId, version.id()).ifPresent(texture ->
-                graphics.blit(RenderPipelines.GUI_TEXTURED, texture.id(),
-                        cardX + 5, cardY + 5, 0, 0, 64, 36,
-                        texture.width(), texture.height(),
-                        texture.width(), texture.height()));
+        var texture = previews.texture(dimensionId, version.id()).orElse(null);
+        if (texture == null) {
+            LumiPreviewRenderer.drawPlaceholder(
+                    graphics, cardX + 5, cardY + 5, 64, 36,
+                    previews.isLoading(dimensionId, version.id()));
+        } else {
+            graphics.blit(RenderPipelines.GUI_TEXTURED, texture.id(),
+                    cardX + 5, cardY + 5, 0, 0, 64, 36,
+                    texture.width(), texture.height(),
+                    texture.width(), texture.height());
+        }
         int textX = cardX + 74;
         graphics.drawString(font,
                 font.plainSubstrByWidth(VersionText.name(version), cardWidth - 79),

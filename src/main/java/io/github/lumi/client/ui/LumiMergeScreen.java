@@ -247,12 +247,18 @@ public final class LumiMergeScreen extends LumiModalScreen {
         LumiTheme.outlined(
                 graphics, x, y, previewWidth, previewHeight,
                 LumiTheme.INSET, LumiTheme.INSET_BORDER);
-        previews.texture(dimensionId, branch.head()).ifPresent(texture ->
-                graphics.blit(
-                        RenderPipelines.GUI_TEXTURED, texture.id(),
-                        x, y, 0, 0, previewWidth, previewHeight,
-                        texture.width(), texture.height(),
-                        texture.width(), texture.height()));
+        var texture = previews.texture(dimensionId, branch.head()).orElse(null);
+        if (texture == null) {
+            LumiPreviewRenderer.drawPlaceholder(
+                    graphics, x, y, previewWidth, previewHeight,
+                    previews.isLoading(dimensionId, branch.head()));
+        } else {
+            graphics.blit(
+                    RenderPipelines.GUI_TEXTURED, texture.id(),
+                    x, y, 0, 0, previewWidth, previewHeight,
+                    texture.width(), texture.height(),
+                    texture.width(), texture.height());
+        }
         graphics.drawCenteredString(
                 font, font.plainSubstrByWidth(
                         shortName(branch.name()), Math.max(1, previewWidth - 8)),

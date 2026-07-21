@@ -54,10 +54,12 @@ class SaveCaptureOperationTest {
         assertEquals(SaveOperationStatus.PREPARING, operation.status());
         assertTrue(!operation.isSafeToRelease());
         assertEquals(0, world.session.captureCalls);
+        assertEquals(WorkingIndexSnapshot.empty(), operation.previewGenerations());
 
         operation.advance(100L);
         assertEquals(SaveOperationStatus.CAPTURING, operation.status());
         assertEquals(1, world.session.captureCalls);
+        assertEquals(dirty, operation.previewGenerations());
     }
 
     @Test
@@ -212,6 +214,9 @@ class SaveCaptureOperationTest {
             return new Session() {
                 @Override public boolean prepareUntil(long deadlineNanos) { return ++calls == 2; }
                 @Override public io.github.lumi.domain.model.WorkingIndexSnapshot finish() {
+                    return dirty;
+                }
+                @Override public WorkingIndexSnapshot previewGenerations() {
                     return dirty;
                 }
                 @Override public void close() { closeCalls++; }

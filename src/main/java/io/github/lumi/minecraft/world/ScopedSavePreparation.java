@@ -24,6 +24,8 @@ public final class ScopedSavePreparation implements SavePreparation {
 
     private final class ScopedSession implements Session {
         private final Session sourceSession;
+        private WorkingIndexSnapshot boundary;
+        private WorkingIndexSnapshot preview;
 
         private ScopedSession(Session sourceSession) {
             this.sourceSession = Objects.requireNonNull(sourceSession, "sourceSession");
@@ -36,8 +38,21 @@ public final class ScopedSavePreparation implements SavePreparation {
 
         @Override
         public WorkingIndexSnapshot finish() {
+            if (boundary != null) return boundary;
+            boundary = filter(sourceSession.finish());
+            preview = filter(sourceSession.previewGenerations());
+            return boundary;
+        }
+
+        @Override
+        public WorkingIndexSnapshot previewGenerations() {
+            finish();
+            return preview;
+        }
+
+        private WorkingIndexSnapshot filter(WorkingIndexSnapshot source) {
             var selected = new LinkedHashMap<HistoryKey, Long>();
-            sourceSession.finish().generations().forEach((key, generation) -> {
+            source.generations().forEach((key, generation) -> {
                 if (includes.test(key)) {
                     selected.put(key, generation);
                 }

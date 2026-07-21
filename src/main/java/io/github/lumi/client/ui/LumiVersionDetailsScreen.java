@@ -258,10 +258,9 @@ public final class LumiVersionDetailsScreen extends LumiModalScreen {
             LumiTheme.outlined(
                     graphics, x, y, previewWidth, previewHeight,
                     LumiTheme.INSET, LumiTheme.INSET_BORDER);
-            graphics.drawCenteredString(font,
-                    Component.translatable("luma.history.no_preview"),
-                    x + previewWidth / 2, y + previewHeight / 2 - 4,
-                    LumiTheme.MUTED);
+            LumiPreviewRenderer.drawPlaceholder(
+                    graphics, x, y, previewWidth, previewHeight,
+                    previews.isLoading(dimensionId, version.id()));
             return;
         }
         int sourceWidth = Math.max(1, texture.width() / previewZoom);

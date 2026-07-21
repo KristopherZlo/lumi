@@ -32,8 +32,6 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
     private static final int COMPACT_PREVIEW_HEIGHT = 16;
     private static final Identifier CENTER_ICON = Identifier.fromNamespaceAndPath(
             LumiMod.MOD_ID, "textures/gui/icons/see-changes.png");
-    private static final Identifier NO_PREVIEW_ICON = Identifier.fromNamespaceAndPath(
-            LumiMod.MOD_ID, "textures/gui/new-icons/image.png");
     private static final DateTimeFormatter DATE_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
                     .withZone(ZoneId.systemDefault());
@@ -285,11 +283,9 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
         LumiTheme.outlined(
                 graphics, x, y, width, height,
                 LumiTheme.WINDOW, LumiTheme.INSET_BORDER);
-        graphics.blit(
-                RenderPipelines.GUI_TEXTURED, NO_PREVIEW_ICON,
-                x + (width - 12) / 2,
-                y + (height - 12) / 2,
-                0, 0, 12, 12, 24, 24, 24, 24);
+        LumiPreviewRenderer.drawPlaceholder(
+                graphics, x, y, width, height,
+                previews.isLoading(snapshot.dimensionId(), version.id()));
     }
 
     private void renderDivider(GuiGraphics graphics) {

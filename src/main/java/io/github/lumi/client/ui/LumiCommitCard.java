@@ -1,6 +1,5 @@
 package io.github.lumi.client.ui;
 
-import io.github.lumi.LumiMod;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.network.HistorySnapshotPayload;
@@ -11,7 +10,6 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 
 /** Draws one bounded save card and owns its content/action geometry. */
 final class LumiCommitCard {
@@ -25,12 +23,9 @@ final class LumiCommitCard {
     private static final int ACTION_COUNT = 4;
     private static final int ACTION_CLUSTER_WIDTH =
             ACTION_WIDTH + ACTION_STRIDE * (ACTION_COUNT - 1);
-    private static final int ICON_TEXTURE_SIZE = 24;
     private static final DateTimeFormatter HISTORY_TIME =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
                     .withZone(ZoneId.systemDefault());
-    private static final Identifier NO_PREVIEW_ICON = Identifier.fromNamespaceAndPath(
-            LumiMod.MOD_ID, "textures/gui/new-icons/image.png");
     private final Font font;
     private final ClientVersionPreviewStore previews;
     private final String dimensionId;
@@ -105,14 +100,9 @@ final class LumiCommitCard {
         LumiTheme.outlined(
                 graphics, x, y, PREVIEW_WIDTH, PREVIEW_HEIGHT,
                 LumiTheme.WINDOW, LumiTheme.INSET_BORDER);
-        int iconSize = 12;
-        graphics.blit(
-                RenderPipelines.GUI_TEXTURED, NO_PREVIEW_ICON,
-                x + (PREVIEW_WIDTH - iconSize) / 2,
-                y + (PREVIEW_HEIGHT - iconSize) / 2,
-                0, 0, iconSize, iconSize,
-                ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE,
-                ICON_TEXTURE_SIZE, ICON_TEXTURE_SIZE);
+        LumiPreviewRenderer.drawPlaceholder(
+                graphics, x, y, PREVIEW_WIDTH, PREVIEW_HEIGHT,
+                previews.isLoading(dimensionId, version.id()));
     }
 
     static Layout layout(

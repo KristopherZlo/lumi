@@ -13,6 +13,10 @@ public interface SavePreparation {
 
         WorkingIndexSnapshot finish();
 
+        default WorkingIndexSnapshot previewGenerations() {
+            return WorkingIndexSnapshot.empty();
+        }
+
         default OperationProgress progress() {
             return OperationProgress.indeterminate("Save: preparing visible state");
         }

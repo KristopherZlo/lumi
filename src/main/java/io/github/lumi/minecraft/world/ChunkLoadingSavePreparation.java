@@ -24,6 +24,7 @@ public final class ChunkLoadingSavePreparation implements SavePreparation {
     private final class LoadingSession implements Session {
         private final Session delegateSession;
         private WorkingIndexSnapshot boundary;
+        private WorkingIndexSnapshot preview;
 
         private LoadingSession(Session delegateSession) {
             this.delegateSession = Objects.requireNonNull(delegateSession, "delegate session");
@@ -36,6 +37,7 @@ public final class ChunkLoadingSavePreparation implements SavePreparation {
                     return false;
                 }
                 boundary = delegateSession.finish();
+                preview = delegateSession.previewGenerations();
                 chunks.retain(boundary.generations().keySet());
             }
             return chunks.loadUntil(deadlineNanos);
@@ -47,6 +49,14 @@ public final class ChunkLoadingSavePreparation implements SavePreparation {
                 throw new IllegalStateException("Chunk loading preparation is not complete");
             }
             return boundary;
+        }
+
+        @Override
+        public WorkingIndexSnapshot previewGenerations() {
+            if (preview == null) {
+                throw new IllegalStateException("Chunk loading preparation is not complete");
+            }
+            return preview;
         }
 
         @Override

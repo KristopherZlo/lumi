@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,17 +39,43 @@ public final class ClientVersionPreviewStore {
     private final Map<String, CachedPreview> textures =
             new LinkedHashMap<>(16, 0.75F, true);
     private final Set<String> missing = new HashSet<>();
+    private final Set<String> loading = new HashSet<>();
+    private final Map<String, CompletableFuture<Optional<NativeImage>>> loads =
+            new LinkedHashMap<>();
+
+    public synchronized void beginLoading(String dimensionId, CommitId commit) {
+        String key = key(dimensionId, commit);
+        missing.remove(key);
+        loading.add(key);
+    }
+
+    public synchronized void failLoading(String dimensionId, CommitId commit) {
+        String key = key(dimensionId, commit);
+        loading.remove(key);
+        missing.add(key);
+    }
+
+    public synchronized boolean isLoading(String dimensionId, CommitId commit) {
+        return loading.contains(key(dimensionId, commit));
+    }
 
     public void save(String dimensionId, CommitId commit, NativeImage image) {
         Optional<VersionPreviewRepository> repository = repository(dimensionId);
         if (repository.isEmpty()) {
             image.close();
+            failLoading(dimensionId, commit);
             return;
         }
         String key = key(dimensionId, commit);
         CompletableFuture.runAsync(() -> {
             Path temporary = null;
             try (image) {
+                if (!hasVisiblePixel(image)) {
+                    synchronized (this) {
+                        missing.add(key);
+                    }
+                    return;
+                }
                 temporary = Files.createTempFile("lumi-preview-", ".png");
                 image.writeToFile(temporary);
                 repository.orElseThrow().save(commit, Files.readAllBytes(temporary));
@@ -56,8 +83,14 @@ public final class ClientVersionPreviewStore {
                     missing.remove(key);
                 }
             } catch (Exception failed) {
+                synchronized (this) {
+                    missing.add(key);
+                }
                 LumiMod.LOGGER.warn("Failed to store preview for {}", commit.hex(), failed);
             } finally {
+                synchronized (this) {
+                    loading.remove(key);
+                }
                 try {
                     if (temporary != null) Files.deleteIfExists(temporary);
                 } catch (IOException failed) {
@@ -77,15 +110,33 @@ public final class ClientVersionPreviewStore {
         if (missing.contains(key)) {
             return Optional.empty();
         }
-        try {
+        CompletableFuture<Optional<NativeImage>> load = loads.get(key);
+        if (load == null) {
+            if (loading.contains(key)) {
+                return Optional.empty();
+            }
             Optional<VersionPreviewRepository> repository = repository(dimensionId);
-            Optional<byte[]> png = repository.isEmpty()
-                    ? Optional.empty() : repository.orElseThrow().load(commit);
-            if (png.isEmpty()) {
+            if (repository.isEmpty()) {
                 missing.add(key);
                 return Optional.empty();
             }
-            NativeImage image = NativeImage.read(png.orElseThrow());
+            loading.add(key);
+            loads.put(key, CompletableFuture.supplyAsync(
+                    () -> load(repository.orElseThrow(), commit), writer));
+            return Optional.empty();
+        }
+        if (!load.isDone()) {
+            return Optional.empty();
+        }
+        loads.remove(key);
+        loading.remove(key);
+        try {
+            Optional<NativeImage> loadedImage = load.join();
+            if (loadedImage.isEmpty()) {
+                missing.add(key);
+                return Optional.empty();
+            }
+            NativeImage image = loadedImage.orElseThrow();
             Identifier id = Identifier.fromNamespaceAndPath(
                     LumiMod.MOD_ID, "preview/" + sanitize(dimensionId) + "/" + commit.hex());
             DynamicTexture texture = new DynamicTexture(
@@ -105,9 +156,34 @@ public final class ClientVersionPreviewStore {
     }
 
     public synchronized void releaseAll() {
+        loads.values().forEach(load -> load.thenAccept(image ->
+                image.ifPresent(NativeImage::close)));
+        loads.clear();
         textures.values().forEach(this::release);
         textures.clear();
         missing.clear();
+        loading.clear();
+    }
+
+    private static Optional<NativeImage> load(
+            VersionPreviewRepository repository, CommitId commit) {
+        try {
+            Optional<byte[]> png = repository.load(commit);
+            if (png.isEmpty()) return Optional.empty();
+            NativeImage image = NativeImage.read(png.orElseThrow());
+            if (hasVisiblePixel(image)) return Optional.of(image);
+            image.close();
+            return Optional.empty();
+        } catch (Exception failed) {
+            throw new CompletionException(failed);
+        }
+    }
+
+    static boolean hasVisiblePixel(NativeImage image) {
+        for (int pixel : image.getPixelsABGR()) {
+            if ((pixel >>> 24) != 0) return true;
+        }
+        return false;
     }
 
     private void trim() {

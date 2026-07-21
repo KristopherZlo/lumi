@@ -25,6 +25,7 @@ public final class SaveCaptureOperation implements DimensionMutation {
     private final CapturedGenerationCompletion completion;
     private final Executor backgroundExecutor;
     private WorkingIndexSnapshot dirty;
+    private WorkingIndexSnapshot previewDirty = WorkingIndexSnapshot.empty();
     private SavePreparation.Session preparationSession;
     private WorldStateCapture.CaptureSession session;
     private CompletableFuture<SaveResult> background;
@@ -83,6 +84,8 @@ public final class SaveCaptureOperation implements DimensionMutation {
             return;
         }
         dirty = Objects.requireNonNull(preparationSession.finish(), "prepared generations");
+        previewDirty = Objects.requireNonNull(
+                preparationSession.previewGenerations(), "preview generations");
         LumiMod.LOGGER.info(
                 "Lumi Save prepared {} dirty keys in {} ms",
                 dirty.generations().size(), elapsedMillis());
@@ -143,6 +146,10 @@ public final class SaveCaptureOperation implements DimensionMutation {
 
     public Optional<SaveResult> result() {
         return Optional.ofNullable(result);
+    }
+
+    public WorkingIndexSnapshot previewGenerations() {
+        return previewDirty;
     }
 
     @Override
@@ -264,6 +271,7 @@ public final class SaveCaptureOperation implements DimensionMutation {
         return () -> new SavePreparation.Session() {
             @Override public boolean prepareUntil(long deadlineNanos) { return true; }
             @Override public WorkingIndexSnapshot finish() { return fixed; }
+            @Override public WorkingIndexSnapshot previewGenerations() { return fixed; }
         };
     }
 
