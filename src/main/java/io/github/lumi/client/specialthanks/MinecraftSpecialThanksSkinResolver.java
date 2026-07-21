@@ -11,7 +11,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.SkinTextureDownloader;
 import net.minecraft.client.resources.DefaultPlayerSkin;
@@ -24,9 +23,7 @@ import net.minecraft.world.entity.player.PlayerSkin;
 public final class MinecraftSpecialThanksSkinResolver {
     private final Minecraft client;
     private final SkinTextureDownloader downloader;
-    private static final Supplier<PlayerSkin> DEFAULT_SKIN =
-            DefaultPlayerSkin::getDefaultSkin;
-    private final Map<SpecialThanksEntry, CompletableFuture<Supplier<PlayerSkin>>> skins =
+    private final Map<SpecialThanksEntry, CompletableFuture<PlayerSkin>> skins =
             new ConcurrentHashMap<>();
     private final Set<SpecialThanksEntry> loggedFailures =
             ConcurrentHashMap.newKeySet();
@@ -42,33 +39,27 @@ public final class MinecraftSpecialThanksSkinResolver {
             return DefaultPlayerSkin.getDefaultSkin();
         }
         return skins.computeIfAbsent(entry, this::load)
-                .getNow(DEFAULT_SKIN).get();
+                .getNow(DefaultPlayerSkin.getDefaultSkin());
     }
 
-    private CompletableFuture<Supplier<PlayerSkin>> load(
-            SpecialThanksEntry entry) {
-        CompletableFuture<Supplier<PlayerSkin>> base =
+    private CompletableFuture<PlayerSkin> load(SpecialThanksEntry entry) {
+        CompletableFuture<PlayerSkin> base =
                 entry.profileSkinName().isBlank()
-                ? CompletableFuture.completedFuture(DEFAULT_SKIN)
+                ? CompletableFuture.completedFuture(
+                        DefaultPlayerSkin.getDefaultSkin())
                 : CompletableFuture.supplyAsync(
-                        () -> loadProfile(entry.profileSkinName()),
+                        () -> loadProfileSkin(entry.profileSkinName()),
                         Util.backgroundExecutor())
-                        .thenApplyAsync(
-                                profile -> client.getSkinManager()
-                                        .createLookup(profile, true),
-                                client)
                         .exceptionally(failed -> fallback(entry, failed));
         ClientAsset.Texture bundled = bundledTexture(entry.skinAsset());
         if (bundled != null) {
-            return base.thenApply(skin ->
-                    () -> withBody(skin.get(), bundled));
+            return base.thenApply(skin -> withBody(skin, bundled));
         }
         if (entry.skinUrl().isBlank()) {
             return base;
         }
         return base.thenCompose(skin -> download(entry.skinUrl())
-                .thenApply(texture -> (Supplier<PlayerSkin>)
-                        () -> withBody(skin.get(), texture))
+                .thenApply(texture -> withBody(skin, texture))
                 .exceptionally(failed -> fallback(entry, skin, failed)));
     }
 
@@ -110,25 +101,23 @@ public final class MinecraftSpecialThanksSkinResolver {
         return uri;
     }
 
-    private GameProfile loadProfile(String name) {
+    private PlayerSkin loadProfileSkin(String name) {
         Optional<GameProfile> profile = client.services().profileResolver().fetchByName(name);
-        GameProfile partial = profile.orElseThrow(() ->
-                new IllegalStateException("Minecraft profile was not found"));
-        var complete = client.services().sessionService().fetchProfile(
-                partial.id(), true);
-        GameProfile resolved = complete == null
-                ? partial : complete.profile();
-        return resolved;
+        if (profile.isEmpty()) {
+            return DefaultPlayerSkin.getDefaultSkin();
+        }
+        return client.getSkinManager().get(profile.orElseThrow()).join()
+                .orElseGet(DefaultPlayerSkin::getDefaultSkin);
     }
 
-    private Supplier<PlayerSkin> fallback(
+    private PlayerSkin fallback(
             SpecialThanksEntry entry, Throwable failed) {
-        return fallback(entry, DEFAULT_SKIN, failed);
+        return fallback(entry, DefaultPlayerSkin.getDefaultSkin(), failed);
     }
 
-    private Supplier<PlayerSkin> fallback(
+    private PlayerSkin fallback(
             SpecialThanksEntry entry,
-            Supplier<PlayerSkin> base,
+            PlayerSkin base,
             Throwable failed) {
         if (loggedFailures.add(entry)) {
             LumiMod.LOGGER.warn(
