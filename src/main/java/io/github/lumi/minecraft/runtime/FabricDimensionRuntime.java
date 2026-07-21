@@ -14,6 +14,7 @@ import io.github.lumi.minecraft.operation.CapturedGenerationCompletion;
 import io.github.lumi.minecraft.operation.PendingRestorePublication;
 import io.github.lumi.minecraft.operation.PendingStatisticsOperation;
 import io.github.lumi.minecraft.operation.OperationPriority;
+import io.github.lumi.minecraft.operation.OperationProgress;
 import io.github.lumi.minecraft.operation.RestoreOperation;
 import io.github.lumi.minecraft.operation.RestorePublication;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
@@ -126,6 +127,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -491,12 +493,15 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
         OperationJournal journal = pendingRecovery;
         RestorePublication publication = recoveryPublication(journal, choice);
+        var progress = new AtomicReference<>(OperationProgress.indeterminate(
+                "Restore: reading saved state"));
         CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
             try {
-                var restore = recoveries.prepare(journal, choice);
+                var restore = recoveries.prepare(journal, choice,
+                        value -> publishRestoreDiffProgress(progress::set, value));
                 return RestoreOperation.resume(
                         restore, worldApply, publication, journals, journal,
-                        restoreStateListener);
+                        restoreStateListener, progress::set);
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }
@@ -508,7 +513,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         throw new IOException("Recovery journal changed during preparation");
                     }
                 },
-                ignored -> { }, true, true);
+                ignored -> { }, true, true, progress::get);
         var lease = recoveryLease;
         recoveryLease = null;
         operations.startWithLease(operation, lease, completed -> {
@@ -875,19 +880,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 checkpointRequest, scopedSavePreparation(checkpointRequest),
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
                 ignored -> { });
-        return new ReturnPointRestoreOperation(checkpoint, saved ->
+        return new ReturnPointRestoreOperation(checkpoint, (saved, progress) ->
                 CompletableFuture.supplyAsync(() -> {
                     try {
                         branches.validateSwitch(plan);
                         var prepared = restores.prepare(
-                                plan.source(), saved.commitId(), plan.target().commit());
+                                plan.source(), saved.commitId(), plan.target().commit(),
+                                value -> publishRestoreDiffProgress(progress, value));
                         return RestoreOperation.startBranchSwitch(
                                 prepared, worldApply,
                                 new BranchSwitchRestorePublication(
                                         branches, plan, mutations,
                                         saved.capturedGenerations()),
                                 journals, operationId, restoreStateListener, plan,
-                                saved.commitId(), saved.capturedGenerations());
+                                saved.commitId(), saved.capturedGenerations(), progress);
                     } catch (IOException failed) {
                         throw new CompletionException(failed);
                     }
@@ -918,12 +924,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 WorkspaceService.mainBranch(targetWorkspace));
         WorkspaceSwitchPlan plan = workspaces.prepareSwitch(targetWorkspace, branch);
         UUID operationId = UUID.randomUUID();
+        var progress = new AtomicReference<>(OperationProgress.indeterminate(
+                "Restore: reading saved state"));
         CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
             try {
-                var prepared = restores.prepare(branch.source(), branch.target().commit());
+                var prepared = restores.prepare(
+                        branch.source(), branch.target().commit(),
+                        value -> publishRestoreDiffProgress(progress::set, value));
                 return RestoreOperation.startWorkspaceSwitch(
                         prepared, worldApply, workspaceSwitchPublication(plan),
-                        journals, operationId, restoreStateListener, plan);
+                        journals, operationId, restoreStateListener, plan, progress::set);
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }
@@ -932,7 +942,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             branches.requireNoPendingChanges();
             branches.validateSwitch(branch);
             workspaces.validateSwitch(plan);
-        }, RestoreOperation::cancelBeforeApply, true);
+        }, RestoreOperation::cancelBeforeApply, true, false, progress::get);
         return operation;
     }
 
@@ -1330,20 +1340,23 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             throws IOException {
         validateMerge(plan);
         UUID operationId = UUID.randomUUID();
+        var progress = new AtomicReference<>(OperationProgress.indeterminate(
+                "Restore: reading saved state"));
         CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
             try {
                 var prepared = restores.prepare(
-                        plan.request().current(), plan.result().commit());
+                        plan.request().current(), plan.result().commit(),
+                        value -> publishRestoreDiffProgress(progress::set, value));
                 return RestoreOperation.startMerge(
                         prepared, worldApply, new BranchRefRestorePublication(refs),
-                        journals, operationId, restoreStateListener);
+                        journals, operationId, restoreStateListener, progress::set);
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }
         }, background);
         var operation = new BackgroundPreparedMutation<>(
                 preparation, () -> validateMerge(plan),
-                RestoreOperation::cancelBeforeApply, true);
+                RestoreOperation::cancelBeforeApply, true, false, progress::get);
         return operation;
     }
 
@@ -1395,18 +1408,19 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 checkpointRequest, savePreparation,
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
                 ignored -> { });
-        var operation = new ReturnPointRestoreOperation(checkpoint, saved ->
+        var operation = new ReturnPointRestoreOperation(checkpoint, (saved, progress) ->
                 CompletableFuture.supplyAsync(() -> {
                     try {
                         if (!activeRef().equals(expected)) {
                             throw new IOException("Active branch changed during partial Restore");
                         }
                         var prepared = restores.preparePartial(
-                                expected, saved.commitId(), target, area.area(), area.outside());
+                                expected, saved.commitId(), target, area.area(), area.outside(),
+                                value -> publishRestoreDiffProgress(progress, value));
                         return RestoreOperation.startPartial(
                                 prepared, worldApply, new PendingRestorePublication(mutations),
                                 journals, operationId, restoreStateListener, area,
-                                saved.commitId());
+                                saved.commitId(), progress);
                     } catch (IOException failed) {
                         throw new CompletionException(failed);
                     }
@@ -1454,7 +1468,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 checkpointRequest, scoped,
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
                 ignored -> { });
-        var operation = new ReturnPointRestoreOperation(checkpoint, saved ->
+        var operation = new ReturnPointRestoreOperation(checkpoint, (saved, progress) ->
                 CompletableFuture.supplyAsync(() -> {
                     try {
                         if (!activeRef().equals(expected)) {
@@ -1465,11 +1479,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                             throw new IOException("Zone changed during Restore preparation");
                         }
                         var prepared = restores.prepareZone(
-                                expected, saved.commitId(), target, zone);
+                                expected, saved.commitId(), target, zone,
+                                value -> publishRestoreDiffProgress(progress, value));
                         return RestoreOperation.startZone(
                                 prepared, worldApply, new PendingRestorePublication(mutations),
                                 journals, operationId, restoreStateListener, zone,
-                                saved.commitId());
+                                saved.commitId(), progress);
                     } catch (IOException failed) {
                         throw new CompletionException(failed);
                     }
@@ -1580,18 +1595,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 scopedSavePreparation(builder.generations()::containsKey),
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
                 ignored -> { });
-        var operation = new ReturnPointRestoreOperation(checkpoint, saved ->
+        var operation = new ReturnPointRestoreOperation(checkpoint, (saved, progress) ->
                 CompletableFuture.supplyAsync(() -> {
                     try {
                         if (!activeRef().equals(expected)) {
                             throw new IOException("Active branch changed during Quick Rollback");
                         }
                         var full = restores.prepare(
-                                expected, saved.commitId(), expected.commit());
+                                expected, saved.commitId(), expected.commit(),
+                                value -> publishRestoreDiffProgress(progress, value));
                         var prepared = selection.isEmpty() ? full
                                 : restores.preparePartial(
                                         expected, saved.commitId(), expected.commit(),
-                                        selection.orElseThrow(), false);
+                                        selection.orElseThrow(), false,
+                                        value -> publishRestoreDiffProgress(progress, value));
                         liveWorld.prepareRestore(
                                 prepared.sections(), prepared.returnSections());
                         var targetEntities = liveEntityWorld.prepareRestore(
@@ -1610,12 +1627,21 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                                 saved.capturedGenerations(),
                                                 full, selection)),
                                 journals, operationId, restoreStateListener,
-                                saved.commitId(), saved.capturedGenerations());
+                                saved.commitId(), saved.capturedGenerations(), progress);
                     } catch (IOException failed) {
                         throw new CompletionException(failed);
                     }
                 }, background));
         return operation;
+    }
+
+    private static void publishRestoreDiffProgress(
+            Consumer<OperationProgress> target,
+            RestoreService.PreparationProgress progress) {
+        target.accept(new OperationProgress(
+                "Restore: comparing region " + progress.regionIndex()
+                        + "/" + progress.regionTotal(),
+                progress.chunkCompleted(), progress.chunkTotal()));
     }
 
     static boolean inside(Optional<BlockBox> selection, HistoryKey key) {

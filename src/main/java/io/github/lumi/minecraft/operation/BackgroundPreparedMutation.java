@@ -5,6 +5,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.function.Supplier;
 
 /** Owns an operation while it prepares off-thread, then validates and delegates under freeze. */
 public final class BackgroundPreparedMutation<T extends DimensionMutation>
@@ -14,6 +15,7 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
     private final PreparedDiscard<T> discard;
     private final boolean freezeDuringPreparation;
     private final boolean degradeOnFailure;
+    private final Supplier<OperationProgress> preparationProgress;
     private T delegate;
     private Throwable failure;
     private boolean cancelled;
@@ -39,12 +41,26 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
             PreparedDiscard<T> discard,
             boolean freezeDuringPreparation,
             boolean degradeOnFailure) {
+        this(preparation, validation, discard, freezeDuringPreparation,
+                degradeOnFailure,
+                () -> OperationProgress.indeterminate("Preparing world state"));
+    }
+
+    public BackgroundPreparedMutation(
+            CompletableFuture<T> preparation,
+            FrozenValidation validation,
+            PreparedDiscard<T> discard,
+            boolean freezeDuringPreparation,
+            boolean degradeOnFailure,
+            Supplier<OperationProgress> preparationProgress) {
         this.validation = Objects.requireNonNull(validation, "validation");
         this.discard = Objects.requireNonNull(discard, "discard");
         this.preparation = new PreparedMutationOwnership<>(
                 Objects.requireNonNull(preparation, "preparation"), this::discardPrepared);
         this.freezeDuringPreparation = freezeDuringPreparation;
         this.degradeOnFailure = degradeOnFailure;
+        this.preparationProgress = Objects.requireNonNull(
+                preparationProgress, "preparationProgress");
     }
 
     @Override
@@ -93,7 +109,7 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
     }
 
     @Override public OperationProgress progress() {
-        return delegate == null ? OperationProgress.indeterminate("Preparing world state")
+        return delegate == null ? preparationProgress.get()
                 : delegate.progress();
     }
 

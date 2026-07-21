@@ -9,9 +9,22 @@ import java.io.IOException;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class BackgroundPreparedMutationTest {
+    @Test
+    void exposesLivePreparationProgressUntilDelegateIsReady() {
+        CompletableFuture<TestMutation> future = new CompletableFuture<>();
+        var progress = new AtomicReference<>(new OperationProgress("Reading", 0, 0));
+        BackgroundPreparedMutation<TestMutation> prepared = new BackgroundPreparedMutation<>(
+                future, () -> { }, ignored -> { }, false, false, progress::get);
+
+        progress.set(new OperationProgress("Comparing", 2, 5));
+
+        assertEquals(new OperationProgress("Comparing", 2, 5), prepared.progress());
+    }
+
     @Test
     void canHoldFreezeWhilePreparationIsPending() throws Exception {
         CompletableFuture<TestMutation> future = new CompletableFuture<>();
