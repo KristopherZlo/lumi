@@ -28,6 +28,34 @@ import org.junit.jupiter.api.Test;
 
 class ReturnPointRestoreOperationTest {
     @Test
+    void publishesPreparationProgressBeforeTheRestoreIsReady() throws Exception {
+        WorkingIndexSnapshot clean = WorkingIndexSnapshot.empty();
+        SaveResult returnPoint = new SaveResult(
+                id('2'), new BranchRef(new BranchName("main"), id('2'), 1), clean);
+        SaveCaptureOperation save = new SaveCaptureOperation(
+                request(), clean,
+                dirty -> immediateCapture(new CapturedWorldState(
+                        Map.of(), Map.of(), clean,
+                        new io.github.lumi.domain.model.CommitStatistics(0, 0, 0, 0))),
+                (request, captured) -> returnPoint, ignored -> { }, Runnable::run);
+        CompletableFuture<DimensionMutation> prepared = new CompletableFuture<>();
+        ReturnPointRestoreOperation operation = new ReturnPointRestoreOperation(
+                save, (ignored, progress) -> {
+                    progress.accept(new OperationProgress(
+                            "Restore: comparing region 1/2", 3, 5));
+                    return prepared;
+                });
+
+        operation.advance(Long.MAX_VALUE);
+        operation.advance(Long.MAX_VALUE);
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(new OperationProgress(
+                "Restore: comparing region 1/2", 3, 5), operation.progress());
+        assertFalse(operation.isTerminal());
+    }
+
+    @Test
     void keepsOneFreezeFromReturnCaptureThroughPreparedRestore() throws Exception {
         ManualExecutor saveWriter = new ManualExecutor();
         WorkingIndexSnapshot clean = new WorkingIndexSnapshot(Map.of());

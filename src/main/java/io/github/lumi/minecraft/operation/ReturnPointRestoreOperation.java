@@ -6,11 +6,16 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 /** Keeps one freeze across a hidden return-point Save and the following full Restore. */
 public final class ReturnPointRestoreOperation implements DimensionMutation {
     private final SaveCaptureOperation returnPointSave;
     private final RestorePreparation restorePreparation;
+    private final AtomicReference<OperationProgress> preparationProgress =
+            new AtomicReference<>(OperationProgress.indeterminate(
+                    "Restore: reading saved state"));
     private Phase phase = Phase.SAVING_RETURN_POINT;
     private PreparedMutationOwnership<DimensionMutation> preparation;
     private DimensionMutation restore;
@@ -23,6 +28,12 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
             RestorePreparation restorePreparation) {
         this.returnPointSave = Objects.requireNonNull(returnPointSave, "returnPointSave");
         this.restorePreparation = Objects.requireNonNull(restorePreparation, "restorePreparation");
+    }
+
+    public ReturnPointRestoreOperation(
+            SaveCaptureOperation returnPointSave,
+            LegacyRestorePreparation restorePreparation) {
+        this(returnPointSave, (result, ignored) -> restorePreparation.prepare(result));
     }
 
     @Override
@@ -50,7 +61,8 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
                 () -> new IllegalStateException("Completed return-point Save has no result"));
         try {
             CompletableFuture<? extends DimensionMutation> prepared = Objects.requireNonNull(
-                    restorePreparation.prepare(returnPoint), "restore preparation");
+                    restorePreparation.prepare(returnPoint, preparationProgress::set),
+                    "restore preparation");
             preparation = new PreparedMutationOwnership<>(
                     prepared.thenApply(operation -> operation), DimensionMutation::close);
             phase = Phase.PREPARING_RESTORE;
@@ -111,7 +123,7 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
     @Override public OperationProgress progress() {
         return switch (phase) {
             case SAVING_RETURN_POINT -> returnPointSave.progress();
-            case PREPARING_RESTORE -> OperationProgress.indeterminate("Preparing Restore");
+            case PREPARING_RESTORE -> preparationProgress.get();
             case RESTORING -> restore.progress();
         };
     }
@@ -156,6 +168,13 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
 
     @FunctionalInterface
     public interface RestorePreparation {
+        CompletableFuture<? extends DimensionMutation> prepare(
+                SaveResult returnPoint,
+                Consumer<OperationProgress> progress);
+    }
+
+    @FunctionalInterface
+    public interface LegacyRestorePreparation {
         CompletableFuture<? extends DimensionMutation> prepare(SaveResult returnPoint);
     }
 

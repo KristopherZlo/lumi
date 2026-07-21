@@ -15,6 +15,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 
 /** Makes the hidden return ref durable before preparing a journaled Restore. */
 public final class ReturnPointRestorePreparation {
@@ -68,18 +69,32 @@ public final class ReturnPointRestorePreparation {
             BranchName hiddenRef,
             UUID operationId,
             boolean includeEntities) {
+        return prepare(returnPoint, target, hiddenRef, operationId,
+                includeEntities, ignored -> { });
+    }
+
+    public CompletableFuture<RestoreOperation> prepare(
+            SaveResult returnPoint,
+            CommitId target,
+            BranchName hiddenRef,
+            UUID operationId,
+            boolean includeEntities,
+            Consumer<OperationProgress> progress) {
         Objects.requireNonNull(returnPoint, "returnPoint");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(hiddenRef, "hiddenRef");
         Objects.requireNonNull(operationId, "operationId");
+        Objects.requireNonNull(progress, "progress");
         return CompletableFuture.supplyAsync(() -> {
             try {
                 refs.create(hiddenRef, returnPoint.commitId());
                 forwardHistory.retain(returnPoint.branchRef());
                 long diffStarted = System.nanoTime();
                 var restore = includeEntities
-                        ? restores.prepare(returnPoint.branchRef(), target)
-                        : restores.prepareWithoutEntities(returnPoint.branchRef(), target);
+                        ? restores.prepare(returnPoint.branchRef(), target,
+                                value -> publishDiffProgress(progress, value))
+                        : restores.prepareWithoutEntities(returnPoint.branchRef(), target,
+                                value -> publishDiffProgress(progress, value));
                 long diffMillis = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
                         System.nanoTime() - diffStarted);
                 long decodeStarted = System.nanoTime();
@@ -102,5 +117,14 @@ public final class ReturnPointRestorePreparation {
                 throw new CompletionException(failed);
             }
         }, background);
+    }
+
+    private static void publishDiffProgress(
+            Consumer<OperationProgress> target,
+            RestoreService.PreparationProgress progress) {
+        target.accept(new OperationProgress(
+                "Restore: comparing region " + progress.regionIndex()
+                        + "/" + progress.regionTotal(),
+                progress.chunkCompleted(), progress.chunkTotal()));
     }
 }

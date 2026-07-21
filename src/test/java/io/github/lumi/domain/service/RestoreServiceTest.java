@@ -60,12 +60,16 @@ class RestoreServiceTest {
         var current = commits.write(commit(changedTree, List.of(target)));
         BranchRef currentRef = new BranchRef(new BranchName("main"), current, 1);
 
+        List<RestoreService.PreparationProgress> progress = new ArrayList<>();
         PreparedRestore prepared = new RestoreService(objects, commits, new OriginStore(repositoryRoot))
-                .prepare(currentRef, target);
+                .prepare(currentRef, target, progress::add);
 
         assertEquals(Map.of(key, section("minecraft:air")), prepared.sections());
         assertEquals(Map.of(key, section("minecraft:stone")), prepared.returnSections());
         assertEquals(target, prepared.targetCommit());
+        assertEquals(List.of(
+                new RestoreService.PreparationProgress(1, 1, 0, 1),
+                new RestoreService.PreparationProgress(1, 1, 1, 1)), progress);
     }
 
     @Test

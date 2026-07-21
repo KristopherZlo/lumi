@@ -29,9 +29,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public final class RestoreService {
     private static final int REGION_SIZE = 32;
+    private static final Consumer<PreparationProgress> NO_PROGRESS = ignored -> { };
     private final WorldObjectRepository objects;
     private final CommitRepository commits;
     private final OriginStore origins;
@@ -53,33 +55,51 @@ public final class RestoreService {
     }
 
     public PreparedRestore prepare(BranchRef currentRef, CommitId targetCommit) throws IOException {
-        return prepare(currentRef, currentRef.commit(), targetCommit, null, false, true, null);
+        return prepare(currentRef, currentRef.commit(), targetCommit,
+                null, false, true, null, NO_PROGRESS);
+    }
+
+    public PreparedRestore prepare(
+            BranchRef currentRef,
+            CommitId targetCommit,
+            Consumer<PreparationProgress> progress) throws IOException {
+        return prepare(currentRef, currentRef.commit(), targetCommit,
+                null, false, true, null, progress);
     }
 
     public PreparedRestore prepare(
             BranchRef expectedRef, CommitId sourceCommit, CommitId targetCommit)
             throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
-                targetCommit, null, false, true, null);
+                targetCommit, null, false, true, null, NO_PROGRESS);
     }
 
     public PreparedRestore prepareWithoutEntities(
             BranchRef currentRef, CommitId targetCommit) throws IOException {
-        return prepare(currentRef, currentRef.commit(), targetCommit, null, false, false, null);
+        return prepare(currentRef, currentRef.commit(), targetCommit,
+                null, false, false, null, NO_PROGRESS);
+    }
+
+    public PreparedRestore prepareWithoutEntities(
+            BranchRef currentRef,
+            CommitId targetCommit,
+            Consumer<PreparationProgress> progress) throws IOException {
+        return prepare(currentRef, currentRef.commit(), targetCommit,
+                null, false, false, null, progress);
     }
 
     public PreparedRestore prepareWithoutEntities(
             BranchRef expectedRef, CommitId sourceCommit, CommitId targetCommit)
             throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
-                targetCommit, null, false, false, null);
+                targetCommit, null, false, false, null, NO_PROGRESS);
     }
 
     public PreparedRestore preparePartial(
             BranchRef currentRef, CommitId targetCommit, BlockBox area, boolean outside)
             throws IOException {
         return prepare(currentRef, currentRef.commit(), targetCommit,
-                Objects.requireNonNull(area, "area"), outside, false, null);
+                Objects.requireNonNull(area, "area"), outside, false, null, NO_PROGRESS);
     }
 
     public PreparedRestore preparePartial(
@@ -89,7 +109,8 @@ public final class RestoreService {
             BlockBox area,
             boolean outside) throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
-                targetCommit, Objects.requireNonNull(area, "area"), outside, false, null);
+                targetCommit, Objects.requireNonNull(area, "area"), outside,
+                false, null, NO_PROGRESS);
     }
 
     public PartialRestorePlan planPartial(
@@ -117,7 +138,7 @@ public final class RestoreService {
     public PreparedRestore prepareZone(
             BranchRef currentRef, CommitId targetCommit, ZoneScope scope) throws IOException {
         return prepare(currentRef, currentRef.commit(), targetCommit,
-                null, false, true, Objects.requireNonNull(scope, "scope"));
+                null, false, true, Objects.requireNonNull(scope, "scope"), NO_PROGRESS);
     }
 
     public PreparedRestore prepareZone(
@@ -126,7 +147,8 @@ public final class RestoreService {
             CommitId targetCommit,
             ZoneScope scope) throws IOException {
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
-                targetCommit, null, false, true, Objects.requireNonNull(scope, "scope"));
+                targetCommit, null, false, true,
+                Objects.requireNonNull(scope, "scope"), NO_PROGRESS);
     }
 
     public PreparedRestore prepareZone(
@@ -134,6 +156,15 @@ public final class RestoreService {
             CommitId sourceCommit,
             CommitId targetCommit,
             Zone zone) throws IOException {
+        return prepareZone(expectedRef, sourceCommit, targetCommit, zone, NO_PROGRESS);
+    }
+
+    public PreparedRestore prepareZone(
+            BranchRef expectedRef,
+            CommitId sourceCommit,
+            CommitId targetCommit,
+            Zone zone,
+            Consumer<PreparationProgress> progress) throws IOException {
         Objects.requireNonNull(zone, "zone");
         Commit target = commits.read(targetCommit);
         if (!target.workspaceId().equals(zone.workspaceId())
@@ -141,13 +172,15 @@ public final class RestoreService {
             throw new IOException("Restore target does not belong to zone: " + zone.id());
         }
         return prepare(expectedRef, Objects.requireNonNull(sourceCommit, "sourceCommit"),
-                targetCommit, null, false, true, new ZoneScope(zone));
+                targetCommit, null, false, true, new ZoneScope(zone), progress);
     }
 
     private PreparedRestore prepare(
             BranchRef currentRef, CommitId sourceCommit, CommitId targetCommit,
-            BlockBox area, boolean outside, boolean includeEntities, ZoneScope scope)
+            BlockBox area, boolean outside, boolean includeEntities, ZoneScope scope,
+            Consumer<PreparationProgress> progress)
             throws IOException {
+        Objects.requireNonNull(progress, "progress");
         Commit currentCommit = commits.read(sourceCommit);
         Commit targetCommitValue = commits.read(targetCommit);
         DimensionTree current = objects.readDimension(currentCommit.tree());
@@ -156,19 +189,22 @@ public final class RestoreService {
         Map<EntityChunkKey, EntityChunkBlob> entities = new HashMap<>();
         Map<SectionKey, SectionBlob> returnSections = new HashMap<>();
         Map<EntityChunkKey, EntityChunkBlob> returnEntities = new HashMap<>();
-        for (RegionCoordinate regionCoordinate : union(current.regions().keySet(), target.regions().keySet())) {
+        var changedRegions = union(current.regions().keySet(), target.regions().keySet())
+                .stream().filter(region -> !Objects.equals(
+                        current.regions().get(region), target.regions().get(region)))
+                .toList();
+        for (int regionIndex = 0; regionIndex < changedRegions.size(); regionIndex++) {
+            RegionCoordinate regionCoordinate = changedRegions.get(regionIndex);
             Optional<ObjectId> currentRegionId = Optional.ofNullable(current.regions().get(regionCoordinate));
             Optional<ObjectId> targetRegionId = Optional.ofNullable(target.regions().get(regionCoordinate));
-            if (currentRegionId.equals(targetRegionId)) {
-                continue;
-            }
             RegionTree currentRegion = currentRegionId.isPresent()
                     ? objects.readRegion(currentRegionId.orElseThrow()) : new RegionTree(Map.of());
             RegionTree targetRegion = targetRegionId.isPresent()
                     ? objects.readRegion(targetRegionId.orElseThrow()) : new RegionTree(Map.of());
             prepareRegion(regionCoordinate, currentRegion, targetRegion,
                     sections, entities, returnSections, returnEntities,
-                    area, outside, includeEntities, scope);
+                    area, outside, includeEntities, scope,
+                    regionIndex + 1, changedRegions.size(), progress);
         }
         boolean restorePlayerSpawns = area == null && scope == null;
         return new PreparedRestore(currentRef, targetCommit,
@@ -189,13 +225,20 @@ public final class RestoreService {
             BlockBox area,
             boolean outside,
             boolean includeEntities,
-            ZoneScope scope) throws IOException {
-        for (ChunkInRegion local : union(currentRegion.chunks().keySet(), targetRegion.chunks().keySet())) {
+            ZoneScope scope,
+            int regionIndex,
+            int regionTotal,
+            Consumer<PreparationProgress> progress) throws IOException {
+        var changedChunks = union(currentRegion.chunks().keySet(), targetRegion.chunks().keySet())
+                .stream().filter(chunk -> !Objects.equals(
+                        currentRegion.chunks().get(chunk), targetRegion.chunks().get(chunk)))
+                .toList();
+        progress.accept(new PreparationProgress(
+                regionIndex, regionTotal, 0, changedChunks.size()));
+        for (int chunkIndex = 0; chunkIndex < changedChunks.size(); chunkIndex++) {
+            ChunkInRegion local = changedChunks.get(chunkIndex);
             Optional<ObjectId> currentId = Optional.ofNullable(currentRegion.chunks().get(local));
             Optional<ObjectId> targetId = Optional.ofNullable(targetRegion.chunks().get(local));
-            if (currentId.equals(targetId)) {
-                continue;
-            }
             ChunkTree current = currentId.isPresent()
                     ? objects.readChunk(currentId.orElseThrow()) : new ChunkTree(Map.of(), Optional.empty());
             ChunkTree target = targetId.isPresent()
@@ -205,6 +248,8 @@ public final class RestoreService {
             prepareChunk(chunkX, chunkZ, current, target,
                     sections, entities, returnSections, returnEntities,
                     area, outside, includeEntities, scope);
+            progress.accept(new PreparationProgress(
+                    regionIndex, regionTotal, chunkIndex + 1, changedChunks.size()));
         }
     }
 
@@ -310,4 +355,17 @@ public final class RestoreService {
         return union;
     }
 
+    public record PreparationProgress(
+            int regionIndex,
+            int regionTotal,
+            int chunkCompleted,
+            int chunkTotal) {
+        public PreparationProgress {
+            if (regionIndex < 1 || regionIndex > regionTotal
+                    || chunkCompleted < 0 || chunkCompleted > chunkTotal) {
+                throw new IllegalArgumentException(
+                        "Invalid Restore preparation progress");
+            }
+        }
+    }
 }

@@ -736,8 +736,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 workspaceId, Optional.empty(), CommitKind.HIDDEN_RETURN);
         BranchName hiddenRef = new BranchName("hidden/return/" + operationId);
         var operation = new ReturnPointRestoreOperation(
-                createSave(returnPoint), saved -> returnPointRestores.prepare(
-                        saved, target, hiddenRef, operationId, includeEntities));
+                createSave(returnPoint), (saved, progress) -> returnPointRestores.prepare(
+                        saved, target, hiddenRef, operationId, includeEntities, progress));
         return operation;
     }
 
