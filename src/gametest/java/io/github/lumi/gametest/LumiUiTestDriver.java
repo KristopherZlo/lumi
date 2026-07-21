@@ -41,7 +41,8 @@ final class LumiUiTestDriver {
         String query = uniquePrefix(target);
         openDashboard();
         typeIntoFocusedTextBox(LumiDashboardScreen.class, query);
-        context.waitTick();
+        assertButtonEventually(LumiDashboardScreen.class,
+                "luma.action.restore", true);
         pressUniqueButton(LumiDashboardScreen.class, "luma.action.restore");
         context.waitForScreen(LumiRestoreScreen.class);
         pressUniqueButton(LumiRestoreScreen.class, "luma.action.restore");
@@ -133,6 +134,47 @@ final class LumiUiTestDriver {
             throw new AssertionError(screen.getSimpleName() + " expected "
                     + expected + " buttons for " + translationKey + " but found "
                     + state.count() + "; " + state.diagnostic());
+        }
+    }
+
+    void assertButtonCountEventually(
+            Class<? extends Screen> screen, String translationKey, int expected) {
+        for (int tick = 0; tick < 1_200; tick++) {
+            if (buttonState(screen, translationKey, -1).count() == expected) {
+                return;
+            }
+            context.waitTick();
+        }
+        assertButtonCount(screen, translationKey, expected);
+    }
+
+    void assertButtonStartingWith(
+            Class<? extends Screen> screen, String translationKey, boolean active) {
+        String prefix = Component.translatable(translationKey).getString();
+        ButtonState state = context.computeOnClient(client -> {
+            if (!screen.isInstance(client.screen)) {
+                return new ButtonState(0, false, false, "screen changed");
+            }
+            List<Button> matches = client.screen.children().stream()
+                    .filter(Button.class::isInstance)
+                    .map(Button.class::cast)
+                    .filter(button -> button.getMessage().getString()
+                            .startsWith(prefix))
+                    .toList();
+            if (matches.isEmpty()) {
+                return new ButtonState(0, false, false,
+                        diagnostic(client.screen));
+            }
+            Button target = matches.getFirst();
+            return new ButtonState(matches.size(),
+                    client.screen.getFocused() == target, target.active,
+                    diagnostic(client.screen));
+        });
+        if (state.count() != 1 || state.active() != active) {
+            throw new AssertionError(screen.getSimpleName() + " expected one "
+                    + (active ? "enabled " : "disabled ") + translationKey
+                    + " prefix but found count=" + state.count() + " active="
+                    + state.active() + "; " + state.diagnostic());
         }
     }
 

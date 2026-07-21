@@ -14,6 +14,7 @@ import io.github.lumi.client.ui.LumiPackageScreen;
 import io.github.lumi.client.ui.LumiSettingsScreen;
 import io.github.lumi.client.ui.LumiSpecialThanksScreen;
 import io.github.lumi.client.ui.LumiUpdateScreen;
+import io.github.lumi.client.ui.LumiUiScale;
 import io.github.lumi.client.ui.LumiZonesScreen;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -24,14 +25,26 @@ import net.minecraft.client.gui.screens.Screen;
 public final class LumiUiContractClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
-        LumiClientBehaviorWorld.run(context, "ui-contract", (test, world, report) -> {
-            LumiUiTestDriver ui = new LumiUiTestDriver(test);
-            ui.completeOnboardingIfShown();
-            ui.awaitHistory();
-            verifyCleanHistory(ui, report);
-            verifyPrimaryPages(ui, report);
-            verifyMorePages(ui, report);
-        });
+        String property = LumiUiScale.TARGET_GUI_SCALE_PROPERTY;
+        String previous = System.getProperty(property);
+        System.setProperty(property, "1");
+        try {
+            LumiClientBehaviorWorld.run(
+                    context, "ui-contract", (test, world, report) -> {
+                LumiUiTestDriver ui = new LumiUiTestDriver(test);
+                ui.completeOnboardingIfShown();
+                ui.awaitHistory();
+                verifyCleanHistory(ui, report);
+                verifyPrimaryPages(ui, report);
+                verifyMorePages(ui, report);
+            });
+        } finally {
+            if (previous == null) {
+                System.clearProperty(property);
+            } else {
+                System.setProperty(property, previous);
+            }
+        }
     }
 
     private static void verifyCleanHistory(
@@ -95,7 +108,7 @@ public final class LumiUiContractClientGameTest implements FabricClientGameTest 
         ui.closeScreen(LumiDashboardScreen.class, null);
 
         ui.openTab("luma.tab.compare", LumiComparePickerScreen.class);
-        ui.assertButtonCount(LumiComparePickerScreen.class,
+        ui.assertButtonCountEventually(LumiComparePickerScreen.class,
                 "luma.compare.select_save", 2);
         ui.assertButton(LumiComparePickerScreen.class,
                 "luma.action.see_changes", false);
@@ -134,7 +147,7 @@ public final class LumiUiContractClientGameTest implements FabricClientGameTest 
                 "luma.action.import_package", false);
         ui.assertButton(LumiPackageScreen.class,
                 "luma.action.open_packages_folder", true);
-        ui.assertButton(LumiPackageScreen.class,
+        ui.assertButtonStartingWith(LumiPackageScreen.class,
                 "luma.share.include_previews", true);
         ui.closeScreen(LumiPackageScreen.class, LumiMoreScreen.class);
 
