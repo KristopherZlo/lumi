@@ -627,8 +627,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private SaveCaptureOperation createSave(SaveRequest request) throws IOException {
+        Predicate<io.github.lumi.domain.model.HistoryKey> scope = saveScope(request);
+        if (requiresBuilderChanges(request.kind())
+                && mutations.builderSnapshot(scope).generations().isEmpty()) {
+            throw new IOException("luma.save.empty_title");
+        }
         return createChunkReadySave(
-                request, scopedSavePreparation(request), saves, mutations);
+                request, scopedSavePreparation(scope), saves, mutations);
     }
 
     private SaveCaptureOperation createChunkReadySave(
@@ -645,6 +650,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private SavePreparation scopedSavePreparation(SaveRequest request) throws IOException {
+        return scopedSavePreparation(saveScope(request));
+    }
+
+    private Predicate<io.github.lumi.domain.model.HistoryKey> saveScope(
+            SaveRequest request) throws IOException {
         var workspace = workspaces.require(request.workspaceId());
         if (!workspace.id().equals(workspaces.active().id())) {
             throw new IOException("Save workspace is not active: " + workspace.id());
@@ -660,7 +670,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         } else if (request.kind() == CommitKind.ZONE) {
             throw new IOException("Zone commit requires a zone ID");
         }
-        return scopedSavePreparation(scope);
+        return scope;
+    }
+
+    static boolean requiresBuilderChanges(CommitKind kind) {
+        return kind == CommitKind.MANUAL
+                || kind == CommitKind.AMEND
+                || kind == CommitKind.ZONE;
     }
 
     private SavePreparation scopedSavePreparation(

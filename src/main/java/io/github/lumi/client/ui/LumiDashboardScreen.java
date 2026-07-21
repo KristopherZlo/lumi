@@ -187,6 +187,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         LumiButton saveButton = addContentButton(
                 x, actionY, maximumTextWidth, saveLabel, openSave,
                 LumiButton.Kind.PRIMARY);
+        saveButton.active = snapshot != null && snapshot.pendingKeys() > 0;
         saveActionX = saveButton.getX();
         actionButtonWidth = saveButton.getWidth();
         x += saveButton.getWidth() + CONTROL_GAP;
@@ -194,6 +195,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 x, actionY, maximumTextWidth,
                 Component.translatable("luma.action.amend_version"), openAmend,
                 LumiButton.Kind.NORMAL);
+        amendButton.active = snapshot != null && snapshot.pendingKeys() > 0;
         x += amendButton.getWidth() + CONTROL_GAP;
         changesActionX = x;
         addIconButton(x, actionY,

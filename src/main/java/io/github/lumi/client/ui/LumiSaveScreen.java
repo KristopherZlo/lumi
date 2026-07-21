@@ -140,11 +140,13 @@ public final class LumiSaveScreen extends LumiModalScreen {
     }
 
     private void setSubmitActive(boolean active) {
+        boolean hasChanges = history.state().snapshot()
+                .map(snapshot -> snapshot.pendingKeys() > 0).orElse(false);
         if (save != null) {
-            save.active = active;
+            save.active = active && hasChanges;
         }
         if (amend != null) {
-            amend.active = active;
+            amend.active = active && hasChanges;
         }
     }
 

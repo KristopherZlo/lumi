@@ -153,6 +153,26 @@ class MutationDurabilityTrackerTest {
     }
 
     @Test
+    void ambientFollowUpDoesNotHideThePlayerTouchedBlock() throws Exception {
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), command -> { });
+        SectionKey key = new SectionKey(0, 0, 0);
+        BlockPosition position = new BlockPosition(1, 2, 3);
+        long builder = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBuilderBlockMutation(position, builder);
+        long ambient = tracker.registerSectionMutation(
+                key, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBlockMutation(position, ambient);
+
+        var preview = tracker.preview(ignored -> true, 16);
+
+        assertEquals(1, preview.totalKeys());
+        assertEquals(List.of(position), preview.blocks());
+    }
+
+    @Test
     void neverPublishesDirtyIndexBeforeItsOriginWhenWorkersRunOutOfOrder()
             throws Exception {
         ManualExecutor background = new ManualExecutor();

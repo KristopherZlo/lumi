@@ -240,8 +240,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 index >= 0 && blocks.size() < maximumBlocks; index--) {
             PendingBlock pending = entries.get(index);
             Long generation = visible.get(pending.section());
-            if (generation != null && generation >= pending.generation()
-                    && pending.builder()) {
+            if (generation != null && pending.builder()) {
                 blocks.add(pending.position());
             }
         }
@@ -304,9 +303,10 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             throw new IllegalArgumentException(
                     "Pending block generation is outside its dirty section");
         }
-        pendingBlocks.remove(position);
+        PendingBlock previous = pendingBlocks.remove(position);
+        boolean builderMutation = builder || previous != null && previous.builder();
         pendingBlocks.put(position, new PendingBlock(
-                position, section, generation, builder));
+                position, section, generation, builderMutation));
         while (pendingBlocks.size() > MAX_PENDING_BLOCKS) {
             pendingBlocks.remove(pendingBlocks.keySet().iterator().next());
         }
