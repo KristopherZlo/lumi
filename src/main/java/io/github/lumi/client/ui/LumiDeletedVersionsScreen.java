@@ -90,7 +90,6 @@ public final class LumiDeletedVersionsScreen extends LumiPageScreen {
     private void restoreVersion(HistorySnapshotPayload.Version version) {
         try {
             restore.accept(version.id());
-            feedback("luma.status.version_restored");
             onClose();
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null
@@ -101,17 +100,10 @@ public final class LumiDeletedVersionsScreen extends LumiPageScreen {
     private void cleanup() {
         try {
             cleanup.accept(pendingCleanup.id());
-            feedback("luma.status.cleanup_applied");
             onClose();
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null
                     ? "Lumi cleanup failed" : failed.getMessage();
-        }
-    }
-
-    private void feedback(String key) {
-        if (minecraft.player != null) {
-            minecraft.player.displayClientMessage(Component.translatable(key), true);
         }
     }
 

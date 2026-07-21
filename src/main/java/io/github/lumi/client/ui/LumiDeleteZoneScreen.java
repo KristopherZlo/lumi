@@ -77,10 +77,6 @@ public final class LumiDeleteZoneScreen extends LumiModalScreen {
         }
         try {
             delete.accept(zone.id(), zone.revision());
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(
-                        Component.translatable("luma.status.zone_deleted"), true);
-            }
             minecraft.setScreen(parent);
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null

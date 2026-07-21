@@ -72,10 +72,6 @@ public final class LumiBranchScreen extends LumiModalScreen {
         BranchNameController.Submission submission = controller.submit(name.getValue());
         error = submission.error();
         if (submission.accepted()) {
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(
-                        Component.translatable("luma.status.variant_created"), true);
-            }
             minecraft.setScreen(parent);
         }
     }

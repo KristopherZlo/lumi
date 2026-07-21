@@ -41,7 +41,6 @@ public final class HotkeyActionDispatcher {
                         feedback.accept("luma.selection.undo");
                     } else {
                         actions.undo();
-                        feedback.accept("luma.status.undo_started");
                     }
                 }
                 case REDO -> {
@@ -49,13 +48,11 @@ public final class HotkeyActionDispatcher {
                         feedback.accept("luma.selection.redo");
                     } else {
                         actions.redo();
-                        feedback.accept("luma.status.redo_started");
                     }
                 }
                 case COMPARE_OVERLAY -> feedback.accept(actions.toggleCompareOverlay());
                 case QUICK_ROLLBACK -> {
                     actions.quickRollback();
-                    feedback.accept("luma.status.quick_rollback_started");
                 }
             }
         } catch (RuntimeException failed) {

@@ -155,10 +155,6 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
 
     private void leaveZone() {
         leaveZone.run();
-        if (minecraft.player != null) {
-            minecraft.player.displayClientMessage(
-                    Component.translatable("luma.status.zone_cleared"), true);
-        }
         minecraft.setScreen(parent);
     }
 

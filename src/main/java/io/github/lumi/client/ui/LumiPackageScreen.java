@@ -183,8 +183,7 @@ public final class LumiPackageScreen extends LumiPageScreen {
                 value, action, action == PackageScreenController.Action.EXPORT
                         && includePreview);
         failed = !result.accepted();
-        status = result.accepted() ? (action == PackageScreenController.Action.EXPORT
-                ? "Export started" : "Inspecting package") : result.error();
+        status = result.error();
     }
 
     private void loadLocalPackages() {

@@ -172,7 +172,6 @@ public final class LumiZonesScreen extends LumiPageScreen {
                 controller.create(name.getValue());
         error = submission.error();
         if (submission.accepted()) {
-            feedback("luma.status.zone_created");
             onClose();
         }
     }
@@ -181,24 +180,16 @@ public final class LumiZonesScreen extends LumiPageScreen {
         try {
             if (zone.active()) {
                 leave.accept(zone.id());
-                feedback("luma.status.zone_cleared");
                 onClose();
                 return;
             }
             enter.accept(zone.id());
             pendingEnterZone = zone.id();
-            feedback("luma.status.zone_selected");
             rebuildWidgets();
         } catch (RuntimeException failed) {
             pendingEnterZone = null;
             error = failed.getMessage() == null
                     ? "Lumi zone could not be updated" : failed.getMessage();
-        }
-    }
-
-    private void feedback(String key) {
-        if (minecraft.player != null) {
-            minecraft.player.displayClientMessage(Component.translatable(key), true);
         }
     }
 

@@ -62,9 +62,11 @@ import io.github.lumi.update.ClientUpdatePreferenceRepository;
 import java.util.List;
 import java.util.Optional;
 import net.fabricmc.api.ClientModInitializer;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.level.GameType;
 
 /** Client entrypoint; retained UI controllers consume this single networking facade. */
@@ -234,13 +236,18 @@ public final class LumiClient implements ClientModInitializer {
     }
 
     private static void showFeedback(String value) {
+        showFeedback(value, "luma.status.survival_disabled".equals(value)
+                ? ChatFormatting.RED : ChatFormatting.WHITE);
+    }
+
+    private static void showFeedback(String value, ChatFormatting color) {
         var player = Minecraft.getInstance().player;
         if (player == null) {
             return;
         }
-        Component message = value.startsWith("luma.")
+        MutableComponent message = value.startsWith("luma.")
                 ? Component.translatable(value) : Component.literal(value);
-        player.displayClientMessage(message, true);
+        player.displayClientMessage(message.withStyle(color), true);
     }
 
     private static void acceptOperationEvent(OperationEventPayload event) {
@@ -251,10 +258,20 @@ public final class LumiClient implements ClientModInitializer {
             NETWORKING.refreshSnapshot();
         }
         if (event.state() != OperationEventPayload.State.ACCEPTED
-                && event.state() != OperationEventPayload.State.PROGRESS
-                && event.message().startsWith("luma.")) {
-            showFeedback(event.message());
+                && event.state() != OperationEventPayload.State.PROGRESS) {
+            showFeedback(event.message(), eventColor(event.state()));
         }
+    }
+
+    static ChatFormatting eventColor(OperationEventPayload.State state) {
+        return switch (state) {
+            case SUCCEEDED -> ChatFormatting.GREEN;
+            case FAILED -> ChatFormatting.RED;
+            case CANCELLED -> ChatFormatting.YELLOW;
+            case RETURNED -> ChatFormatting.GOLD;
+            case DEGRADED -> ChatFormatting.DARK_RED;
+            case ACCEPTED, PROGRESS -> ChatFormatting.WHITE;
+        };
     }
 
     private static void openZones(Screen parent) {
@@ -502,10 +519,11 @@ public final class LumiClient implements ClientModInitializer {
         client.setScreen(null);
         try {
             request.run();
-            showFeedback("luma.status.compare_loading");
+            showFeedback("luma.status.compare_loading", ChatFormatting.YELLOW);
         } catch (RuntimeException failed) {
             showFeedback(failed.getMessage() == null
-                    ? "luma.status.compare_failed" : failed.getMessage());
+                    ? "luma.status.compare_failed" : failed.getMessage(),
+                    ChatFormatting.RED);
         }
     }
 
@@ -699,12 +717,14 @@ public final class LumiClient implements ClientModInitializer {
             return;
         }
         if (!result.error().isEmpty()) {
-            showFeedback(result.error());
+            showFeedback(result.error(), ChatFormatting.RED);
         } else {
-            showFeedback(result.changedBlocks() == 0
-                    && result.changedEntityChunks() == 0
+            boolean empty = result.changedBlocks() == 0
+                    && result.changedEntityChunks() == 0;
+            showFeedback(empty
                     ? "luma.status.compare_no_changes"
-                    : "luma.status.compare_ready");
+                    : "luma.status.compare_ready",
+                    empty ? ChatFormatting.YELLOW : ChatFormatting.GREEN);
         }
     }
 

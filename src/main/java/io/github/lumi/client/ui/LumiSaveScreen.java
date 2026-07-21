@@ -174,10 +174,6 @@ public final class LumiSaveScreen extends LumiModalScreen {
         error = submission.error();
         if (submission.accepted()) {
             submission.requestId().ifPresent(previewCapture);
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(
-                        Component.translatable("luma.status.save_started"), true);
-            }
             accepted.run();
             minecraft.setScreen(parent);
         }

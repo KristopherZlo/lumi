@@ -548,7 +548,9 @@
 
   "luma.status.singleplayer_only": "This workflow is currently supported in local singleplayer only.",
   "luma.status.admin_required": "Lumi requires operator rights or cheats enabled in this world.",
-  "luma.status.survival_disabled": "Lumi is disabled for Survival mode. Enable it in Lumi settings to use it here.",
+  "luma.status.survival_disabled": "Lumi is disabled in Survival mode. You can enable it in Lumi settings.",
+  "luma.status.dimension_not_ready": "Lumi is still loading this dimension. Try again in a moment.",
+  "luma.status.operation_feedback_failed": "Lumi could not report the operation result. Check the server log before continuing.",
   "luma.status.dashboard_ready": "Dashboard loaded.",
   "luma.status.opening_workspace": "Opening workspace...",
   "luma.status.dashboard_failed": "Dashboard could not be loaded.",

@@ -64,4 +64,17 @@ class LumiServerNetworkingTest {
                         OperationEventPayload.State.FAILED,
                         "Branch switch requires no pending builder changes"));
     }
+
+    @Test
+    void reportsFailuresEvenWhenTheDimensionRuntimeIsUnavailable() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));
+        int reject = source.indexOf("private static void reject(");
+        int sendEvent = source.indexOf("private static void sendEvent(", reject);
+
+        assertTrue(source.substring(reject, sendEvent)
+                .contains("notifyFailure(player, message)"));
+        assertTrue(source.contains("luma.status.dimension_not_ready"));
+        assertTrue(source.contains("luma.status.operation_feedback_failed"));
+    }
 }

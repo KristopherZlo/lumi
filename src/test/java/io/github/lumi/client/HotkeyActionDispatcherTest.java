@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 class HotkeyActionDispatcherTest {
     @Test
-    void mapsEveryChordToOneUserIntentAndImmediateStatus() {
+    void mapsEveryChordWithoutClaimingServerActionsAlreadyStarted() {
         var calls = new ArrayList<String>();
         var statuses = new ArrayList<String>();
         HotkeyActionDispatcher dispatcher = new HotkeyActionDispatcher(
@@ -36,9 +36,7 @@ class HotkeyActionDispatcherTest {
         assertEquals(java.util.List.of(
                 "dashboard", "save", "hotkeys", "undo", "redo", "compare", "rollback"), calls);
         assertEquals(java.util.List.of(
-                "luma.status.undo_started", "luma.status.redo_started",
-                "luma.status.compare_overlay_hidden",
-                "luma.status.quick_rollback_started"), statuses);
+                "luma.status.compare_overlay_hidden"), statuses);
 
         dispatcher.switchBranch(
                 com.mojang.blaze3d.platform.InputConstants.KEY_P);

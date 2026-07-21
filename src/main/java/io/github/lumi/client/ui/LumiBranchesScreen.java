@@ -159,10 +159,6 @@ public final class LumiBranchesScreen extends LumiPageScreen {
         BranchNameController.Submission submission = create.submit(name.getValue());
         error = submission.error();
         if (submission.accepted()) {
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(
-                        Component.translatable("luma.status.variant_created"), true);
-            }
             onClose();
         }
     }

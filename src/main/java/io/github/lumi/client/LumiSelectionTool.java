@@ -116,9 +116,6 @@ public final class LumiSelectionTool {
         }
         try {
             editZone.accept(add, area.orElseThrow());
-            feedback.accept(add
-                    ? "luma.selection.zone_added"
-                    : "luma.selection.zone_removed");
         } catch (RuntimeException failed) {
             feedback.accept("luma.selection.zone_failed");
         }

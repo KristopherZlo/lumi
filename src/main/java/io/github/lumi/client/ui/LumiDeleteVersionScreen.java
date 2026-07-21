@@ -65,10 +65,6 @@ public final class LumiDeleteVersionScreen extends LumiModalScreen {
         if (requestId == null || !requestId.equals(event.requestId())) return false;
         if (event.state() == OperationEventPayload.State.SUCCEEDED) {
             requestId = null;
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(
-                        Component.translatable("luma.status.version_deleted"), true);
-            }
             minecraft.setScreen(parent);
             return true;
         }

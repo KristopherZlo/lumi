@@ -114,10 +114,6 @@ public final class LumiMergeScreen extends LumiModalScreen {
     private void submit(String source) {
         try {
             merge.accept(source);
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(
-                        Component.translatable("luma.status.merge_started"), true);
-            }
             minecraft.setScreen(parent);
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null

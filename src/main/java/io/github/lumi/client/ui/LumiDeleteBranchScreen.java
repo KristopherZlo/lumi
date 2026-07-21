@@ -76,10 +76,6 @@ public final class LumiDeleteBranchScreen extends LumiModalScreen {
         if (!shortName(branch.name()).equals(confirmation.getValue())) return;
         try {
             delete.accept(branch.name());
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(
-                        Component.translatable("luma.status.variant_deleted"), true);
-            }
             deleted.run();
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null

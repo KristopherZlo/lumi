@@ -53,10 +53,6 @@ public final class LumiZoneRestoreScreen extends LumiModalScreen {
     private void restore() {
         try {
             restore.accept(zone.id(), version.id());
-            if (minecraft.player != null) {
-                minecraft.player.displayClientMessage(
-                        Component.translatable("luma.status.zone_restore_started"), true);
-            }
             minecraft.setScreen(successParent);
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null

@@ -33,11 +33,13 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.ChatFormatting;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.BossEvent;
 
 /** Registers and dispatches the server-authoritative V2 play protocol. */
@@ -152,7 +154,7 @@ public final class LumiServerNetworking {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime()
                 .find(player.level()).orElse(null);
         if (runtime == null) {
-            reject(player, payload, null, "Lumi is not ready for this dimension");
+            reject(player, payload, null, "luma.status.dimension_not_ready");
             return;
         }
         LumiMod.LOGGER.info(
@@ -825,14 +827,18 @@ public final class LumiServerNetworking {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime()
                 .find(player.level()).orElse(null);
         if (runtime == null) {
+            notifyFailure(player, "luma.status.dimension_not_ready");
             return;
         }
         try {
-            if (LumiMod.serverRuntime().permission(player) != PermissionDecision.ALLOWED) {
+            PermissionDecision permission = LumiMod.serverRuntime().permission(player);
+            if (permission != PermissionDecision.ALLOWED) {
+                notifyFailure(player, permissionMessage(permission));
                 return;
             }
         } catch (IOException unavailable) {
             LumiMod.LOGGER.error("Cannot read Lumi permissions", unavailable);
+            notifyFailure(player, failureMessage(unavailable));
             return;
         }
         TicketOwner owner = TICKET_OWNERS.get(payload.ticketId());
@@ -904,6 +910,7 @@ public final class LumiServerNetworking {
             String message) {
         if (runtime == null) {
             LumiMod.LOGGER.warn("Rejected Lumi request {}: {}", payload.requestId(), message);
+            notifyFailure(player, message);
             return;
         }
         sendEvent(player, payload, runtime, OperationEventPayload.State.FAILED, message);
@@ -976,7 +983,14 @@ public final class LumiServerNetworking {
             }
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi operation event", failed);
+            notifyFailure(player, "luma.status.operation_feedback_failed");
         }
+    }
+
+    private static void notifyFailure(ServerPlayer player, String value) {
+        MutableComponent message = value.startsWith("luma.")
+                ? Component.translatable(value) : Component.literal(value);
+        player.displayClientMessage(message.withStyle(ChatFormatting.RED), true);
     }
 
     private static void sendProgress(
