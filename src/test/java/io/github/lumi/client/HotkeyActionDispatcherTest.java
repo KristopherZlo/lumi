@@ -70,4 +70,37 @@ class HotkeyActionDispatcherTest {
         assertEquals(java.util.List.of(
                 "luma.selection.undo", "luma.selection.redo"), statuses);
     }
+
+    @Test
+    void disabledSurvivalAccessRejectsEveryHotkeyBeforeItsAction() {
+        var calls = new ArrayList<String>();
+        var statuses = new ArrayList<String>();
+        HotkeyActionDispatcher dispatcher = new HotkeyActionDispatcher(
+                actions(calls), statuses::add, () -> false);
+
+        dispatcher.dispatch(HotkeyActionDispatcher.Action.DASHBOARD);
+        dispatcher.dispatch(HotkeyActionDispatcher.Action.UNDO);
+        dispatcher.switchBranch(65);
+
+        assertEquals(java.util.List.of(), calls);
+        assertEquals(java.util.List.of(
+                "luma.status.survival_disabled",
+                "luma.status.survival_disabled",
+                "luma.status.survival_disabled"), statuses);
+    }
+
+    private static HotkeyActionDispatcher.Actions actions(ArrayList<String> calls) {
+        return new HotkeyActionDispatcher.Actions() {
+            @Override public void openDashboard() { calls.add("dashboard"); }
+            @Override public void openSave() { calls.add("save"); }
+            @Override public void openHotkeys() { calls.add("hotkeys"); }
+            @Override public boolean undoSelection() { return false; }
+            @Override public boolean redoSelection() { return false; }
+            @Override public void undo() { calls.add("undo"); }
+            @Override public void redo() { calls.add("redo"); }
+            @Override public String toggleCompareOverlay() { return "compare"; }
+            @Override public void quickRollback() { calls.add("rollback"); }
+            @Override public void switchBranch(int keyCode) { calls.add("branch"); }
+        };
+    }
 }

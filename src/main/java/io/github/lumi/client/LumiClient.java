@@ -65,6 +65,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.GameType;
 
 /** Client entrypoint; retained UI controllers consume this single networking facade. */
 public final class LumiClient implements ClientModInitializer {
@@ -170,7 +171,7 @@ public final class LumiClient implements ClientModInitializer {
                             NETWORKING.switchBranch(branch.name());
                         }
                     }
-                }, LumiClient::showFeedback),
+                }, LumiClient::showFeedback, LumiClient::hotkeysEnabled),
                 () -> HISTORY.state().snapshot()
                         .map(BRANCH_SLOTS::keys).orElseGet(List::of),
                 LumiClient::acceptOnboardingEvent);
@@ -599,6 +600,9 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void acceptSnapshot(HistorySnapshotPayload snapshot) {
         BRANCH_SLOTS.synchronize(snapshot);
+        if (SURVIVAL_SETTINGS.needsRequest()) {
+            NETWORKING.requestSurvivalSettings();
+        }
         showRecovery(snapshot);
         Minecraft client = Minecraft.getInstance();
         if (snapshot.recoveryPending() || snapshot.operationActive()
@@ -617,6 +621,15 @@ public final class LumiClient implements ClientModInitializer {
         ONBOARDING.markCompleted();
         activeOnboarding = null;
         showTelemetryNotice();
+    }
+
+    private static boolean hotkeysEnabled() {
+        Minecraft client = Minecraft.getInstance();
+        return client.gameMode == null
+                || client.gameMode.getPlayerMode() != GameType.SURVIVAL
+                || SURVIVAL_SETTINGS.snapshot()
+                        .map(ClientSurvivalSettingsStore.Snapshot::enabled)
+                        .orElse(false);
     }
 
     private static void openOnboarding(Screen returnScreen) {

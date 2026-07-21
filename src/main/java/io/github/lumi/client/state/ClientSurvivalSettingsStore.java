@@ -30,6 +30,10 @@ public final class ClientSurvivalSettingsStore {
         return Optional.ofNullable(snapshot);
     }
 
+    public synchronized boolean needsRequest() {
+        return pending == null && snapshot == null;
+    }
+
     public synchronized long revision() {
         return revision;
     }

@@ -11,11 +11,10 @@ import org.junit.jupiter.api.Test;
 
 class LumiHotkeysTest {
     @Test
-    void dashboardUsesAltLOnlyDuringNormalPlay() {
-        assertEquals(InputConstants.KEY_L, LumiHotkeys.defaultDashboardKey());
-        assertFalse(LumiHotkeys.canOpenDashboard(true, false));
-        assertTrue(LumiHotkeys.canOpenDashboard(true, true));
-        assertFalse(LumiHotkeys.canOpenDashboard(false, true));
+    void dashboardUsesStandaloneUOnlyDuringNormalPlay() {
+        assertEquals(InputConstants.KEY_U, LumiHotkeys.defaultDashboardKey());
+        assertTrue(LumiHotkeys.canOpenDashboard(true));
+        assertFalse(LumiHotkeys.canOpenDashboard(false));
     }
 
     @Test
@@ -72,7 +71,7 @@ class LumiHotkeysTest {
     }
 
     @Test
-    void altLIsConsumedBeforeVanillaAdvancements() throws Exception {
+    void aRemappedDashboardConflictIsConsumedBeforeVanillaAdvancements() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiHotkeys.java"));
 

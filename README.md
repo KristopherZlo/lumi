@@ -32,7 +32,8 @@ projects. The old world remains ordinary Minecraft data; new history lives in
 - The same form can replace the latest version with a crash-safe Amend.
 - Another branch can be merged through the same verified apply pipeline;
   overlapping conflicts explicitly use the source branch.
-- Alt+L opens paged Cards/Graph history with branch and full-window server
+- The remappable `Open Lumi` control defaults to U and opens paged Cards/Graph
+  history with branch and full-window server
   tag/text filtering. Its workspace header reports exact added, removed and
   changed pending block totals.
   Cards expose preview, Open, Restore and Create branch; the branch browser

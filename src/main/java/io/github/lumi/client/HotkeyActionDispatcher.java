@@ -2,20 +2,34 @@ package io.github.lumi.client;
 
 import io.github.lumi.LumiMod;
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /** Maps one accepted client chord to one intent and immediate local feedback. */
 public final class HotkeyActionDispatcher {
     private final Actions actions;
     private final Consumer<String> feedback;
+    private final BooleanSupplier enabled;
 
     public HotkeyActionDispatcher(Actions actions, Consumer<String> feedback) {
+        this(actions, feedback, () -> true);
+    }
+
+    public HotkeyActionDispatcher(
+            Actions actions,
+            Consumer<String> feedback,
+            BooleanSupplier enabled) {
         this.actions = Objects.requireNonNull(actions, "actions");
         this.feedback = Objects.requireNonNull(feedback, "feedback");
+        this.enabled = Objects.requireNonNull(enabled, "enabled");
     }
 
     public void dispatch(Action action) {
         Objects.requireNonNull(action, "action");
+        if (!enabled.getAsBoolean()) {
+            feedback.accept("luma.status.survival_disabled");
+            return;
+        }
         LumiMod.LOGGER.info("Lumi client hotkey action invoked: {}", action);
         try {
             switch (action) {
@@ -55,6 +69,10 @@ public final class HotkeyActionDispatcher {
     public void switchBranch(int keyCode) {
         if (keyCode < 32 || keyCode > 348) {
             throw new IllegalArgumentException("Invalid branch shortcut key");
+        }
+        if (!enabled.getAsBoolean()) {
+            feedback.accept("luma.status.survival_disabled");
+            return;
         }
         LumiMod.LOGGER.info(
                 "Lumi client branch hotkey invoked: key={}", keyCode);

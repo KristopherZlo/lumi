@@ -12,10 +12,12 @@ class ClientSurvivalSettingsStoreTest {
     void acceptsOnlyTheLatestCorrelatedResponse() {
         ClientSurvivalSettingsStore store =
                 new ClientSurvivalSettingsStore();
+        assertTrue(store.needsRequest());
         UUID old = UUID.randomUUID();
         UUID current = UUID.randomUUID();
         store.begin(old);
         store.begin(current);
+        assertFalse(store.needsRequest());
 
         assertFalse(store.accept(
                 new SurvivalSettingsPayload(old, true, true)));
@@ -23,5 +25,6 @@ class ClientSurvivalSettingsStoreTest {
                 new SurvivalSettingsPayload(current, true, true)));
         assertTrue(store.snapshot().orElseThrow().enabled());
         assertTrue(store.snapshot().orElseThrow().configurable());
+        assertFalse(store.needsRequest());
     }
 }

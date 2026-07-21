@@ -843,7 +843,7 @@ public final class LumiServerNetworking {
         return switch (decision) {
             case ALLOWED -> "Operation allowed";
             case OPERATOR_REQUIRED -> "Lumi requires operator permission";
-            case SURVIVAL_OPT_IN_REQUIRED -> "Enable Lumi in Survival before using it";
+            case SURVIVAL_OPT_IN_REQUIRED -> "luma.status.survival_disabled";
         };
     }
 

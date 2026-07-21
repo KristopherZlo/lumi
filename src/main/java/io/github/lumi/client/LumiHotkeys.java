@@ -16,7 +16,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 
-/** Registers Lumi chords plus standalone H and R world actions. */
+/** Registers the standalone dashboard key plus Lumi action chords. */
 public final class LumiHotkeys {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "general"));
@@ -74,7 +74,7 @@ public final class LumiHotkeys {
         boolean normalPlay = client.player != null && client.screen == null;
         boolean altDown = actionModifier.isDown();
         publishOnboardingEdges(altDown);
-        if (consume(dashboard) && canOpenDashboard(normalPlay, altDown)) {
+        if (consume(dashboard) && canOpenDashboard(normalPlay)) {
             if (dashboard.same(client.options.keyAdvancements)) {
                 consume(client.options.keyAdvancements);
             }
@@ -96,7 +96,7 @@ public final class LumiHotkeys {
         publishEdge(OnboardingEvent.ShortcutKind.SAVE,
                 modifierDown && save.isDown());
         publishEdge(OnboardingEvent.ShortcutKind.DASHBOARD,
-                modifierDown && dashboard.isDown());
+                dashboard.isDown());
         publishEdge(OnboardingEvent.ShortcutKind.HOTKEYS,
                 modifierDown && info.isDown());
     }
@@ -129,15 +129,15 @@ public final class LumiHotkeys {
     }
 
     static int defaultDashboardKey() {
-        return InputConstants.KEY_L;
+        return InputConstants.KEY_U;
     }
 
     static int defaultCompareOverlayKey() {
         return InputConstants.KEY_H;
     }
 
-    static boolean canOpenDashboard(boolean normalPlay, boolean altDown) {
-        return normalPlay && altDown;
+    static boolean canOpenDashboard(boolean normalPlay) {
+        return normalPlay;
     }
 
     private void consume(
@@ -166,7 +166,7 @@ public final class LumiHotkeys {
     public static List<Shortcut> shortcuts(KeyMapping[] mappings) {
         return List.of(
                 shortcut("luma.hotkeys.open_workspace", "luma.hotkeys.open_workspace_help",
-                        mapping(mappings, "key.lumi.open_dashboard"), true),
+                        mapping(mappings, "key.lumi.open_dashboard"), false),
                 shortcut("luma.hotkeys.quick_save", "luma.hotkeys.quick_save_help",
                         mapping(mappings, "key.lumi.quick_save"), true),
                 shortcut("luma.hotkeys.undo", "luma.hotkeys.undo_help",
