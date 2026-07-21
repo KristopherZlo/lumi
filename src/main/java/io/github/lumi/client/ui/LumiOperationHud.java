@@ -80,7 +80,7 @@ public final class LumiOperationHud {
         String pending = pendingStatistics.result(snapshot)
                 .filter(result -> result.error().isEmpty())
                 .map(result -> Long.toString(result.workspace().total()))
-                .orElseGet(() -> snapshot.pendingKeys() == 0 ? "0" : "…");
+                .orElseGet(() -> Integer.toString(snapshot.pendingKeys()));
         String title = snapshot.workspaceName() + " · " + branch
                 + " · " + pending + " pending";
         int height = expanded ? 68 : 22;

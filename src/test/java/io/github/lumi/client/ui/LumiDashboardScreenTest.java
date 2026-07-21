@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.network.HistorySnapshotPayload;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -154,6 +157,9 @@ class LumiDashboardScreenTest {
         assertTrue(pageSource.contains("luma.window.support"));
         assertTrue(pageSource.contains("luma.window.credit"));
         assertTrue(pageSource.contains("luma.window.mod_version"));
+        assertTrue(pageSource.contains("projectContext(snapshot)"));
+        assertFalse(pageSource.contains("luma.window.mode"));
+        assertFalse(pageSource.contains("drawChip("));
         assertTrue(pageSource.contains("addSupportButton("));
         assertTrue(pageSource.contains("SIDEBAR_BUTTON_STRIDE * 5"));
         assertFalse(pageSource.contains(
@@ -190,12 +196,23 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains(
                 "PendingStatisticsText.summary(result.workspace())"));
         assertTrue(source.contains("requestPendingStatistics.run()"));
+        assertFalse(source.contains("renderedStatistics"));
 
         int restore = source.indexOf("\"rollback\", \"luma.action.restore\"");
         int open = source.indexOf("\"folder\", \"luma.action.open_details\"", restore);
         int branch = source.indexOf("\"branch\", \"luma.action.create_idea\"", open);
         int tags = source.indexOf("\"tags\", \"luma.action.edit_tags\"", branch);
         assertTrue(restore < open && open < branch && branch < tags);
+    }
+
+    @Test
+    void pendingOnlySnapshotsDoNotRequireWidgetRebuild() {
+        HistorySnapshotPayload before = snapshot('a', 1);
+
+        assertTrue(LumiDashboardScreen.samePresentation(
+                before, snapshot('a', 5)));
+        assertFalse(LumiDashboardScreen.samePresentation(
+                before, snapshot('b', 1)));
     }
 
     @Test
@@ -208,5 +225,12 @@ class LumiDashboardScreenTest {
 
         assertFalse(searchMethod.contains("rebuildWidgets()"));
         assertFalse(source.contains("searchResultsDirty"));
+    }
+
+    private static HistorySnapshotPayload snapshot(char head, int pending) {
+        return new HistorySnapshotPayload(
+                "minecraft:overworld",
+                new CommitId(new ObjectId(String.valueOf(head).repeat(64))),
+                0, pending, false);
     }
 }

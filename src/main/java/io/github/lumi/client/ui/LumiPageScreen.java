@@ -164,8 +164,9 @@ abstract class LumiPageScreen extends LumiScreen {
         graphics.drawString(font, "Lumi", x + 14, y + 18,
                 LumiTheme.TEXT, false);
         if (!tinySidebar(shellLayout)) {
-            graphics.drawString(font, Component.translatable("luma.window.mode"),
-                    x + 14, y + 43, LumiTheme.MUTED, false);
+            pageSession.snapshot().ifPresent(snapshot -> graphics.drawString(
+                    font, projectContext(snapshot), x + 14, y + 43,
+                    LumiTheme.MUTED, false));
         }
         int supportY = supportTop(shellLayout);
         int creditY = supportCreditY(shellLayout);
@@ -192,12 +193,6 @@ abstract class LumiPageScreen extends LumiScreen {
             GuiGraphics graphics, HistorySnapshotPayload snapshot) {
         int x = shellLayout.windowX();
         int y = shellLayout.windowY();
-        if (!compactSidebar()) {
-            drawChip(graphics, x + 14, y + 62,
-                    shortDimension(displayedDimensionId(snapshot)));
-            drawChip(graphics, x + 14, y + 84,
-                    shortBranch(snapshot.branchName()));
-        }
         if (tab == ProjectTab.HISTORY && rendersProjectHeader()) {
             renderPageHeader(
                     graphics, shellLayout.contentX(), y,
@@ -216,13 +211,9 @@ abstract class LumiPageScreen extends LumiScreen {
         return true;
     }
 
-    private void drawChip(GuiGraphics graphics, int x, int y, String text) {
-        int chipWidth = Math.min(
-                shellLayout.sidebarWidth() - 28, font.width(text) + 12);
-        LumiTheme.outlined(graphics, x, y, chipWidth, 17,
-                LumiTheme.CHIP, LumiTheme.CHIP_BORDER);
-        graphics.drawString(font, text, x + 6, y + 5,
-                LumiTheme.MUTED, false);
+    private String projectContext(HistorySnapshotPayload snapshot) {
+        return shortDimension(displayedDimensionId(snapshot)) + ": "
+                + shortBranch(snapshot.branchName());
     }
 
     private LumiButton.Kind tabKind(ProjectTab candidate) {

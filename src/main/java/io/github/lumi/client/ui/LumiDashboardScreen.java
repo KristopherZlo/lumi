@@ -11,7 +11,6 @@ import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
-import io.github.lumi.network.PendingStatisticsPayload;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -71,7 +70,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private LumiHistoryGraphView graphView;
     private WorkspaceHistoryController pagedHistory;
     private HistoryPagePayload renderedPage;
-    private PendingStatisticsPayload renderedStatistics;
+    private LumiButton saveButton;
+    private LumiButton amendButton;
     private int historyY;
     private int historyHeight;
     private int historyScroll;
@@ -156,14 +156,14 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         HistorySnapshotPayload latest = history.state().snapshot().orElse(null);
         HistoryPagePayload latestPage = pagedHistory == null
                 ? null : pagedHistory.page().orElse(null);
-        PendingStatisticsPayload latestStatistics = latest == null
-                ? null : pendingStatistics.result(latest).orElse(null);
-        if (!Objects.equals(snapshot, latest)
-                || !Objects.equals(renderedPage, latestPage)
-                || !Objects.equals(renderedStatistics, latestStatistics)) {
+        boolean presentationChanged = !samePresentation(snapshot, latest);
+        if (!presentationChanged && !Objects.equals(snapshot, latest)) {
+            snapshot = latest;
+            updatePendingActions();
+        }
+        if (presentationChanged || !Objects.equals(renderedPage, latestPage)) {
             refocusSearch = search != null && search.isFocused();
             renderedPage = latestPage;
-            renderedStatistics = latestStatistics;
             rebuildWidgets();
         }
     }
@@ -192,14 +192,14 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         int maximumTextWidth = Math.max(0,
                 (available - ICON_BUTTON_WIDTH * 2 - CONTROL_GAP * 3) / 2);
         Component saveLabel = Component.translatable("luma.action.save_build");
-        LumiButton saveButton = addContentButton(
+        saveButton = addContentButton(
                 x, actionY, maximumTextWidth, saveLabel, openSave,
                 LumiButton.Kind.PRIMARY);
         saveButton.active = snapshot != null && snapshot.pendingKeys() > 0;
         saveActionX = saveButton.getX();
         actionButtonWidth = saveButton.getWidth();
         x += saveButton.getWidth() + CONTROL_GAP;
-        LumiButton amendButton = addContentButton(
+        amendButton = addContentButton(
                 x, actionY, maximumTextWidth,
                 Component.translatable("luma.action.amend_version"),
                 () -> openAmend.accept(latestCreated()
@@ -230,7 +230,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         pagedHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS);
         pagedHistory.search(searchQuery);
         renderedPage = pagedHistory.page().orElse(null);
-        renderedStatistics = pendingStatistics.result(snapshot).orElse(null);
         if (dashboardGeometry.latestVisible()) {
             latestCreated().ifPresent(version -> addVersionActions(
                     version, latestCardY(dashboardGeometry)));
@@ -625,6 +624,30 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 && !pendingStatistics.pending(snapshot)) {
             requestPendingStatistics.run();
         }
+    }
+
+    private void updatePendingActions() {
+        boolean active = snapshot != null && snapshot.pendingKeys() > 0;
+        if (saveButton != null) saveButton.active = active;
+        if (amendButton != null) amendButton.active = active;
+    }
+
+    static boolean samePresentation(
+            HistorySnapshotPayload left, HistorySnapshotPayload right) {
+        if (left == null || right == null) return left == right;
+        return left.dimensionId().equals(right.dimensionId())
+                && left.head().equals(right.head())
+                && left.revision() == right.revision()
+                && left.operationActive() == right.operationActive()
+                && left.recoveryPending() == right.recoveryPending()
+                && left.workspaceId().equals(right.workspaceId())
+                && left.workspaceName().equals(right.workspaceName())
+                && left.branchName().equals(right.branchName())
+                && left.workspaces().equals(right.workspaces())
+                && left.versions().equals(right.versions())
+                && left.branches().equals(right.branches())
+                && left.zones().equals(right.zones())
+                && left.deletedVersions().equals(right.deletedVersions());
     }
 
     static DashboardGeometry dashboardGeometry(

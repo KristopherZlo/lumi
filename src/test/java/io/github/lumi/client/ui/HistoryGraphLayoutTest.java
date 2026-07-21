@@ -25,7 +25,7 @@ class HistoryGraphLayoutTest {
         var nodes = layout.build(
                 List.of(idea, main, root),
                 List.of(branch("idea", idea.id(), false),
-                        branch("main", main.id(), true)));
+                        branch("workspace/id/main", main.id(), true)));
 
         assertEquals(main.id(), nodes.get(1).version().id());
         assertEquals(0, nodes.get(1).lane());

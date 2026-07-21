@@ -49,7 +49,7 @@ final class HistoryGraphLayout {
                 continue;
             }
             heads.computeIfAbsent(branch.head(), ignored -> new ArrayList<>())
-                    .add(branch.name());
+                    .add(LumiBranchDropdown.shortName(branch.name()));
             if (lanes.containsKey(branch.head())) {
                 continue;
             }

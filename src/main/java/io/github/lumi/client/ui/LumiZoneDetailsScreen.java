@@ -8,7 +8,6 @@ import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
-import io.github.lumi.network.PendingStatisticsPayload;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -47,7 +46,6 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     private boolean historyRequested;
     private boolean focusSearchAfterInit;
     private HistoryPagePayload renderedPage;
-    private PendingStatisticsPayload renderedStatistics;
     private LumiHistoryGraphView graphView;
     private LumiCommitCard commitCards;
 
@@ -89,13 +87,9 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     public void tick() {
         super.tick();
         HistoryPagePayload latest = zoneHistory.page().orElse(null);
-        PendingStatisticsPayload statistics =
-                pendingStatistics.result(snapshot).orElse(null);
-        if (!Objects.equals(renderedPage, latest)
-                || !Objects.equals(renderedStatistics, statistics)) {
+        if (!Objects.equals(renderedPage, latest)) {
             focusSearchAfterInit = search != null && search.isFocused();
             renderedPage = latest;
-            renderedStatistics = statistics;
             rebuildWidgets();
         }
     }
@@ -115,7 +109,6 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
             zoneHistory.request();
         }
         renderedPage = zoneHistory.page().orElse(null);
-        renderedStatistics = pendingStatistics.result(snapshot).orElse(null);
         latestCreated().filter(ignored -> geometry.latestVisible())
                 .ifPresent(version -> addVersionActions(
                         version, LumiDashboardScreen.latestCardY(geometry)));

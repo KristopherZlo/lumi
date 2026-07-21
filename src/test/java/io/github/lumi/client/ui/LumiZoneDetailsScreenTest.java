@@ -51,6 +51,7 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains(
                 "tags.active = !VersionText.immutable(version)"));
         assertTrue(source.contains("snapshot.head().equals(version.id())"));
+        assertFalse(source.contains("renderedStatistics"));
 
         int restore = source.indexOf("luma.action.restore");
         int open = source.indexOf("luma.action.open_details", restore);
