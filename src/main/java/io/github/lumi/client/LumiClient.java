@@ -620,8 +620,9 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void acceptSnapshot(HistorySnapshotPayload snapshot) {
         BRANCH_SLOTS.synchronize(snapshot);
-        PENDING_STATISTICS.clear();
-        if (snapshot.pendingKeys() > 0 && !snapshot.operationActive()) {
+        if (snapshot.pendingKeys() == 0) {
+            PENDING_STATISTICS.clear();
+        } else if (!snapshot.operationActive()) {
             NETWORKING.requestPendingStatistics();
         }
         if (SURVIVAL_SETTINGS.needsRequest()) {

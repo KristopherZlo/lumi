@@ -19,7 +19,6 @@ public final class ClientPendingStatisticsStore {
         pending = new Pending(
                 requestId, current.dimensionId(), current.workspaceId(),
                 current.head(), current.revision());
-        result = null;
     }
 
     public synchronized boolean accept(PendingStatisticsPayload payload) {

@@ -44,6 +44,20 @@ class ClientPendingStatisticsStoreTest {
         assertTrue(store.result(snapshot('2', 3)).isEmpty());
     }
 
+    @Test
+    void keepsTheLastNumberVisibleWhileItsReplacementLoads() {
+        ClientPendingStatisticsStore store = new ClientPendingStatisticsStore();
+        HistorySnapshotPayload snapshot = snapshot('1', 2);
+        UUID first = new UUID(0, 5);
+        store.begin(first, snapshot);
+        assertTrue(store.accept(result(first, snapshot)));
+
+        store.begin(new UUID(0, 6), snapshot);
+
+        assertTrue(store.result(snapshot).isPresent());
+        assertTrue(store.pending(snapshot));
+    }
+
     private static PendingStatisticsPayload result(
             UUID request, HistorySnapshotPayload snapshot) {
         return new PendingStatisticsPayload(
