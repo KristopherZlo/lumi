@@ -299,6 +299,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             DimensionRepositoryLayout layout,
             Executor background,
             Executor durabilityBackground) throws IOException {
+        long started = System.nanoTime();
         Objects.requireNonNull(level, "level");
         Objects.requireNonNull(layout, "layout");
         Objects.requireNonNull(background, "background");
@@ -339,7 +340,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var branches = new BranchService(commits, refs, active, working);
         var trees = new MerkleTreeEditor(objects);
         var restoreService = new RestoreService(objects, commits, origins);
-        return new FabricDimensionRuntime(
+        FabricDimensionRuntime runtime = new FabricDimensionRuntime(
                 level, repository, freeze, new DimensionOperationCoordinator(
                         freeze,
                         operation -> logTerminal(level, operation),
@@ -355,6 +356,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 new ZoneService(new ZoneRepository(repository)),
                 defaultWorkspaceId, activeWorkspaceId,
                 interrupted.orElse(null), recoveryLease);
+        LumiMod.LOGGER.info(
+                "Lumi opened dimension {} in {} ms",
+                level.dimension().identifier(),
+                java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                        System.nanoTime() - started));
+        return runtime;
     }
 
     private static void logTerminal(ServerLevel level, DimensionMutation operation) {

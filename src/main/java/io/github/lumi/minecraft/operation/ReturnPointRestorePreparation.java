@@ -1,5 +1,6 @@
 package io.github.lumi.minecraft.operation;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.service.ForwardHistoryService;
@@ -75,14 +76,28 @@ public final class ReturnPointRestorePreparation {
             try {
                 refs.create(hiddenRef, returnPoint.commitId());
                 forwardHistory.retain(returnPoint.branchRef());
+                long diffStarted = System.nanoTime();
                 var restore = includeEntities
                         ? restores.prepare(returnPoint.branchRef(), target)
                         : restores.prepareWithoutEntities(returnPoint.branchRef(), target);
-                return includeEntities
+                long diffMillis = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                        System.nanoTime() - diffStarted);
+                long decodeStarted = System.nanoTime();
+                RestoreOperation operation = includeEntities
                         ? RestoreOperation.start(
                                 restore, world, refs, journals, operationId, stateListener)
                         : RestoreOperation.startWithoutEntities(
                                 restore, world, refs, journals, operationId, stateListener);
+                long decodeMillis = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                        System.nanoTime() - decodeStarted);
+                LumiMod.LOGGER.info(
+                        "Lumi prepared Restore in {} ms: diff={} ms, decode={} ms, "
+                                + "targetSections={}, returnSections={}, "
+                                + "targetEntityChunks={}, returnEntityChunks={}",
+                        diffMillis + decodeMillis, diffMillis, decodeMillis,
+                        restore.sections().size(), restore.returnSections().size(),
+                        restore.entities().size(), restore.returnEntities().size());
+                return operation;
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }

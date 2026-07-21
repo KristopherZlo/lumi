@@ -1,7 +1,9 @@
 package io.github.lumi.network;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -9,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 final class HistorySnapshotFactory {
     HistorySnapshotPayload create(
             ServerPlayer player, FabricDimensionRuntime runtime) throws IOException {
+        long started = System.nanoTime();
         var head = runtime.activeRef();
         var workspace = runtime.activeWorkspace();
         var pending = runtime.pendingPreview(512);
@@ -70,7 +73,7 @@ final class HistorySnapshotFactory {
                         entry.commit().parents(), entry.commit().statistics(),
                         entry.commit().zoneId()))
                 .toList();
-        return new HistorySnapshotPayload(
+        HistorySnapshotPayload snapshot = new HistorySnapshotPayload(
                 runtime.level().dimension().identifier().toString(),
                 head.commit(), head.revision(), pending.totalKeys(),
                 pending.blocks().stream()
@@ -82,5 +85,11 @@ final class HistorySnapshotFactory {
                 runtime.recoveryJournal().isPresent(),
                 workspace.id(), workspace.name(), head.name().value(),
                 workspaceViews, versions, branchViews, zoneViews, deleted);
+        LumiMod.LOGGER.info(
+                "Lumi prepared history snapshot in {} ms "
+                        + "(versions={}, zones={}, deleted={})",
+                TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started),
+                versions.size(), zoneViews.size(), deleted.size());
+        return snapshot;
     }
 }
