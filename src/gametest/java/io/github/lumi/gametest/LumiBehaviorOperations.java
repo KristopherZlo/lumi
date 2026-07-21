@@ -131,20 +131,21 @@ final class LumiBehaviorOperations {
     }
 
     void quickRollback() throws IOException {
-        runOperation("quick_rollback", () -> ui.pressChord("key.lumi.quick_rollback"));
+        runOperation("quick_rollback", () ->
+                ui.pressStandalone("key.lumi.quick_rollback"));
     }
 
     void quickRollback(String name) throws IOException {
         runOperation(
                 "quick_rollback_" + name,
-                () -> ui.pressChord("key.lumi.quick_rollback"));
+                () -> ui.pressStandalone("key.lumi.quick_rollback"));
     }
 
     OperationBoundary quickRollback(String name, List<BlockBox> areas)
             throws IOException {
         return runOperation(
                 "quick_rollback_" + name, areas,
-                () -> ui.pressChord("key.lumi.quick_rollback"));
+                () -> ui.pressStandalone("key.lumi.quick_rollback"));
     }
 
     BranchRef createBranch(String name) throws IOException {

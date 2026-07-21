@@ -2,7 +2,6 @@ package io.github.lumi.gametest;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.LumiClient;
-import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiBranchesScreen;
 import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
@@ -52,19 +51,18 @@ final class LumiUiTestDriver {
 
     void createBranch(String name) {
         openBranches();
+        typeIntoFocusedTextBox(LumiBranchesScreen.class, name);
         pressUniqueButton(LumiBranchesScreen.class, "luma.action.variant_create");
-        context.waitForScreen(LumiBranchScreen.class);
-        typeIntoFocusedTextBox(LumiBranchScreen.class, name);
-        pressUniqueButton(LumiBranchScreen.class, "luma.action.variant_create");
-        context.waitForScreen(LumiBranchesScreen.class);
-        closeBranches();
+        context.waitForScreen(LumiDashboardScreen.class);
+        closeScreen(LumiDashboardScreen.class, null);
     }
 
     void merge(int sourceButton) {
         openBranches();
         pressUniqueButton(LumiBranchesScreen.class, "luma.action.merge_into_current");
         context.waitForScreen(LumiMergeScreen.class);
-        pressButton(LumiMergeScreen.class, "luma.action.merge_into_current", sourceButton, false);
+        pressButton(LumiMergeScreen.class, "luma.action.preview", sourceButton, false);
+        pressUniqueButton(LumiMergeScreen.class, "luma.action.merge_into_current");
         context.waitForScreen(LumiBranchesScreen.class);
         closeBranches();
     }
@@ -79,13 +77,71 @@ final class LumiUiTestDriver {
         if (!isScreen(LumiOnboardingScreen.class)) {
             return;
         }
-        pressUniqueButton(LumiOnboardingScreen.class, "luma.action.close");
+        pressUniqueButton(LumiOnboardingScreen.class, "luma.action.skip");
         context.waitForScreen(null);
+    }
+
+    void openDashboard() {
+        pressStandalone("key.lumi.open_dashboard");
+        context.waitForScreen(LumiDashboardScreen.class);
+    }
+
+    void awaitHistory() {
+        for (int tick = 0; tick < 12_000; tick++) {
+            if (context.computeOnClient(client ->
+                    LumiClient.history().state().snapshot().isPresent())) {
+                return;
+            }
+            context.waitTick();
+        }
+        throw new AssertionError("Lumi history did not synchronize");
+    }
+
+    <T extends Screen> void openTab(String translationKey, Class<T> screen) {
+        openDashboard();
+        pressUniqueButton(LumiDashboardScreen.class, translationKey);
+        context.waitForScreen(screen);
+    }
+
+    void assertButton(
+            Class<? extends Screen> screen, String translationKey, boolean active) {
+        ButtonState state = buttonState(screen, translationKey, 0);
+        if (state.count() != 1 || state.active() != active) {
+            throw new AssertionError(screen.getSimpleName() + " expected one "
+                    + (active ? "enabled " : "disabled ") + translationKey
+                    + " but found count=" + state.count() + " active="
+                    + state.active() + "; " + state.diagnostic());
+        }
+    }
+
+    void assertButtonCount(
+            Class<? extends Screen> screen, String translationKey, int expected) {
+        ButtonState state = buttonState(screen, translationKey, -1);
+        if (state.count() != expected) {
+            throw new AssertionError(screen.getSimpleName() + " expected "
+                    + expected + " buttons for " + translationKey + " but found "
+                    + state.count() + "; " + state.diagnostic());
+        }
+    }
+
+    void pressStandalone(String mappingName) {
+        requireScreen(null);
+        context.getInput().pressKey(mapping(mappingName));
     }
 
     void pressChord(String mappingName) {
         requireScreen(null);
-        KeyMapping mapping = context.computeOnClient(client -> {
+        KeyMapping mapping = mapping(mappingName);
+        context.getInput().holdAlt();
+        try {
+            context.getInput().pressKey(mapping);
+        } finally {
+            context.getInput().releaseAlt();
+        }
+    }
+
+    private KeyMapping mapping(String mappingName) {
+        return context.computeOnClient(client -> {
             if (client.player == null) {
                 throw new AssertionError("Lumi hotkey requires a player: " + mappingName);
             }
@@ -96,17 +152,6 @@ final class LumiUiTestDriver {
             }
             throw new AssertionError("Missing Lumi key mapping: " + mappingName);
         });
-        context.getInput().holdAlt();
-        try {
-            context.getInput().pressKey(mapping);
-        } finally {
-            context.getInput().releaseAlt();
-        }
-    }
-
-    private void openDashboard() {
-        pressChord("key.lumi.open_dashboard");
-        context.waitForScreen(LumiDashboardScreen.class);
     }
 
     private void openBranches() {
@@ -116,11 +161,13 @@ final class LumiUiTestDriver {
     }
 
     private void closeBranches() {
-        closeScreen(LumiBranchesScreen.class, LumiDashboardScreen.class);
+        if (isScreen(LumiBranchesScreen.class)) {
+            closeScreen(LumiBranchesScreen.class, LumiDashboardScreen.class);
+        }
         closeScreen(LumiDashboardScreen.class, null);
     }
 
-    private void closeScreen(
+    void closeScreen(
             Class<? extends Screen> current, Class<? extends Screen> next) {
         requireScreen(current);
         context.waitTick();
@@ -128,7 +175,7 @@ final class LumiUiTestDriver {
         context.waitForScreen(next);
     }
 
-    private void typeIntoFocusedTextBox(
+    void typeIntoFocusedTextBox(
             Class<? extends Screen> expectedScreen, String text) {
         requireScreen(expectedScreen);
         for (int step = 0; step < MAX_FOCUS_STEPS; step++) {
@@ -152,12 +199,38 @@ final class LumiUiTestDriver {
                 + expectedScreen.getSimpleName());
     }
 
-    private void pressUniqueButton(
+    void pressUniqueButton(
             Class<? extends Screen> expectedScreen, String translationKey) {
         pressButton(expectedScreen, translationKey, 0, true);
     }
 
-    private void pressButton(
+    void pressUniqueButtonAfterScrolling(
+            Class<? extends Screen> expectedScreen, String translationKey) {
+        for (int step = 0; step < 32; step++) {
+            if (buttonState(expectedScreen, translationKey, 0).count() == 1) {
+                pressUniqueButton(expectedScreen, translationKey);
+                return;
+            }
+            scrollDown(expectedScreen);
+        }
+        throw new AssertionError("Could not reveal button " + translationKey
+                + " in " + expectedScreen.getSimpleName());
+    }
+
+    void scrollDown(Class<? extends Screen> expectedScreen) {
+        requireScreen(expectedScreen);
+        boolean consumed = context.computeOnClient(client -> client.screen.mouseScrolled(
+                client.screen.width * 0.75,
+                client.screen.height * 0.5,
+                0.0, -1.0));
+        if (!consumed) {
+            throw new AssertionError(expectedScreen.getSimpleName()
+                    + " did not consume downward scroll");
+        }
+        context.waitTick();
+    }
+
+    void pressButton(
             Class<? extends Screen> expectedScreen,
             String translationKey,
             int index,
@@ -239,7 +312,7 @@ final class LumiUiTestDriver {
         return query;
     }
 
-    private void requireScreen(Class<? extends Screen> expected) {
+    void requireScreen(Class<? extends Screen> expected) {
         boolean matches = expected == null
                 ? context.computeOnClient(client -> client.screen == null)
                 : isScreen(expected);
