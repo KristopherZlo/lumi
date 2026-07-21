@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.LongConsumer;
 
 /** Converts one persistent Restore state into an immutable Minecraft-native state. */
 public final class MinecraftRestorePreparation {
@@ -21,16 +22,26 @@ public final class MinecraftRestorePreparation {
     }
 
     public PreparedMinecraftState prepare(WorldStateApply.State source) throws IOException {
+        return prepare(source, ignored -> { });
+    }
+
+    public PreparedMinecraftState prepare(
+            WorldStateApply.State source,
+            LongConsumer progress) throws IOException {
         Objects.requireNonNull(source, "source");
+        Objects.requireNonNull(progress, "progress");
+        long completed = 0;
         Map<SectionKey, DecodedSection> decodedSections = new HashMap<>();
         for (var entry : source.sections().entrySet()) {
             decodedSections.put(entry.getKey(), sections.decode(entry.getValue()));
+            progress.accept(++completed);
         }
         Map<EntityChunkKey, EntityChunkBlob> normalizedEntities =
                 entities.normalize(source.entities());
         Map<EntityChunkKey, DecodedEntityChunk> decodedEntities = new HashMap<>();
         for (var entry : normalizedEntities.entrySet()) {
             decodedEntities.put(entry.getKey(), entities.decodeNormalized(entry.getValue()));
+            progress.accept(++completed);
         }
         var normalizedSource = new WorldStateApply.State(
                 source.sections(), normalizedEntities, source.playerSpawns());

@@ -9,11 +9,18 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.io.IOException;
+import java.util.function.LongConsumer;
 
 /** Server-thread port for bounded application of already decoded world state. */
 public interface WorldStateApply {
     /** Called off-thread; implementations must decode all persistent representations here. */
     PreparedState prepare(State target) throws IOException;
+
+    default PreparedState prepare(State target, LongConsumer progress) throws IOException {
+        PreparedState prepared = prepare(target);
+        progress.accept((long) target.sections().size() + target.entities().size());
+        return prepared;
+    }
 
     /** Creates cursors only. World mutation starts with {@link ApplySession#applyUntil(long)}. */
     ApplySession begin(PreparedState target);

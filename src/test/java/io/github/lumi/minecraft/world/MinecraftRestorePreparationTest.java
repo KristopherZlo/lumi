@@ -40,13 +40,15 @@ class MinecraftRestorePreparationTest {
         var preparation = new MinecraftRestorePreparation(
                 new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                 new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
+        List<Long> progress = new ArrayList<>();
 
-        PreparedMinecraftState prepared = preparation.prepare(source);
+        PreparedMinecraftState prepared = preparation.prepare(source, progress::add);
 
         assertEquals(source, prepared.source());
         assertEquals(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(),
                 prepared.sections().get(sectionKey).blockStates().getFirst());
         assertEquals(List.of(), prepared.entities().get(entityKey).entities());
+        assertEquals(List.of(1L, 2L), progress);
     }
 
     @Test

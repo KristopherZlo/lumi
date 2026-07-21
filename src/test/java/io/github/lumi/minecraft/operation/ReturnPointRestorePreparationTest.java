@@ -49,10 +49,12 @@ class ReturnPointRestorePreparationTest {
                 new RestoreService(objects, commits, new OriginStore(repositoryRoot)),
                 new NoOpWorldApply(), refs, journals,
                 new ForwardHistoryService(commits, refs), Runnable::run);
+        var progress = new java.util.ArrayList<OperationProgress>();
 
         RestoreOperation operation = preparation.prepare(
                 saved, target, hidden,
-                UUID.fromString("10000000-0000-0000-0000-000000000001"), false).join();
+                UUID.fromString("10000000-0000-0000-0000-000000000001"), false,
+                progress::add).join();
 
         assertEquals(returnCommit, refs.read(hidden).orElseThrow().commit());
         assertEquals(List.of(target), new ForwardHistoryService(commits, refs)
@@ -64,6 +66,10 @@ class ReturnPointRestorePreparationTest {
         assertTrue(journals.read().isPresent());
         assertTrue(journals.read().orElseThrow().target().excludeEntities());
         assertEquals(RestoreStatus.APPLYING, operation.status());
+        assertTrue(progress.stream().anyMatch(value ->
+                value.phase().equals("Restore: decoding target")));
+        assertTrue(progress.stream().anyMatch(value ->
+                value.phase().equals("Restore: decoding return point")));
     }
 
     private static Commit commit(

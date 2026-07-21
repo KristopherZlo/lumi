@@ -100,9 +100,11 @@ public final class ReturnPointRestorePreparation {
                 long decodeStarted = System.nanoTime();
                 RestoreOperation operation = includeEntities
                         ? RestoreOperation.start(
-                                restore, world, refs, journals, operationId, stateListener)
+                                restore, world, refs, journals, operationId,
+                                stateListener, progress)
                         : RestoreOperation.startWithoutEntities(
-                                restore, world, refs, journals, operationId, stateListener);
+                                restore, world, refs, journals, operationId,
+                                stateListener, progress);
                 long decodeMillis = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
                         System.nanoTime() - decodeStarted);
                 LumiMod.LOGGER.info(

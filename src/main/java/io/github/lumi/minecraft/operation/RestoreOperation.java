@@ -21,9 +21,11 @@ import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /** Advances one frozen-dimension restore without exceeding the caller's tick deadline. */
 public final class RestoreOperation implements DimensionMutation {
+    private static final Consumer<OperationProgress> NO_PROGRESS = ignored -> { };
     private final PreparedRestore restore;
     private final WorldStateApply world;
     private final RestorePublication publication;
@@ -84,9 +86,27 @@ public final class RestoreOperation implements DimensionMutation {
             OperationJournalRepository journals,
             UUID operationId,
             RestoreStateListener stateListener) throws IOException {
+        return start(restore, world, refs, journals, operationId,
+                stateListener, NO_PROGRESS);
+    }
+
+    public static RestoreOperation start(
+            PreparedRestore restore,
+            WorldStateApply world,
+            BranchRefRepository refs,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            Consumer<OperationProgress> progress) throws IOException {
         Objects.requireNonNull(refs, "refs");
         return start(restore, world, new BranchRefRestorePublication(refs),
-                journals, operationId, stateListener);
+                journals, operationId, stateListener, OperationKind.RESTORE,
+                new OperationTarget(
+                        restore.expectedRef().name(), restore.expectedRef().commit(),
+                        restore.expectedRef().revision(),
+                        Optional.of(restore.targetCommit()),
+                        Optional.of(restore.expectedRef().commit())),
+                Optional.empty(), progress);
     }
 
     public static RestoreOperation startBranchSwitch(
@@ -143,7 +163,7 @@ public final class RestoreOperation implements DimensionMutation {
                         plan.expectedActive().revision())));
         return start(restore, world, publication, journals, operationId,
                 stateListener, OperationKind.BRANCH_SWITCH, target,
-                capturedGenerations);
+                capturedGenerations, NO_PROGRESS);
     }
 
     public static RestoreOperation startWorkspaceSwitch(
@@ -237,6 +257,18 @@ public final class RestoreOperation implements DimensionMutation {
             OperationJournalRepository journals,
             UUID operationId,
             RestoreStateListener stateListener) throws IOException {
+        return startWithoutEntities(restore, world, refs, journals,
+                operationId, stateListener, NO_PROGRESS);
+    }
+
+    public static RestoreOperation startWithoutEntities(
+            PreparedRestore restore,
+            WorldStateApply world,
+            BranchRefRepository refs,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            Consumer<OperationProgress> progress) throws IOException {
         Objects.requireNonNull(refs, "refs");
         OperationTarget target = new OperationTarget(
                 restore.expectedRef().name(), restore.expectedRef().commit(),
@@ -244,7 +276,8 @@ public final class RestoreOperation implements DimensionMutation {
                 Optional.of(restore.expectedRef().commit()), Optional.empty(),
                 Optional.empty(), true);
         return start(restore, world, new BranchRefRestorePublication(refs),
-                journals, operationId, stateListener, OperationKind.RESTORE, target);
+                journals, operationId, stateListener, OperationKind.RESTORE,
+                target, Optional.empty(), progress);
     }
 
     public static RestoreOperation startQuickRollback(
@@ -267,7 +300,7 @@ public final class RestoreOperation implements DimensionMutation {
                 Optional.of(returnPoint));
         return start(restore, world, publication, journals, operationId,
                 stateListener, OperationKind.QUICK_ROLLBACK, target,
-                Optional.of(capturedGenerations));
+                Optional.of(capturedGenerations), NO_PROGRESS);
     }
 
     public static RestoreOperation start(
@@ -325,7 +358,7 @@ public final class RestoreOperation implements DimensionMutation {
             OperationKind kind,
             OperationTarget target) throws IOException {
         return start(restore, world, publication, journals, operationId,
-                stateListener, kind, target, Optional.empty());
+                stateListener, kind, target, Optional.empty(), NO_PROGRESS);
     }
 
     private static RestoreOperation start(
@@ -337,19 +370,23 @@ public final class RestoreOperation implements DimensionMutation {
             RestoreStateListener stateListener,
             OperationKind kind,
             OperationTarget target,
-            Optional<WorkingIndexSnapshot> capturedGenerations) throws IOException {
+            Optional<WorkingIndexSnapshot> capturedGenerations,
+            Consumer<OperationProgress> progress) throws IOException {
         Objects.requireNonNull(restore, "restore");
         Objects.requireNonNull(world, "world");
         Objects.requireNonNull(publication, "publication");
         Objects.requireNonNull(journals, "journals");
         Objects.requireNonNull(stateListener, "stateListener");
-        WorldStateApply.PreparedState preparedTarget = world.prepare(
-                new WorldStateApply.State(
-                        restore.sections(), restore.entities(), restore.playerSpawns()));
-        WorldStateApply.PreparedState preparedReturn = world.prepare(
-                new WorldStateApply.State(
+        Objects.requireNonNull(progress, "progress");
+        WorldStateApply.PreparedState preparedTarget = prepareWorldState(
+                world, new WorldStateApply.State(
+                        restore.sections(), restore.entities(), restore.playerSpawns()),
+                "Restore: decoding target", progress);
+        WorldStateApply.PreparedState preparedReturn = prepareWorldState(
+                world, new WorldStateApply.State(
                         restore.returnSections(), restore.returnEntities(),
-                        restore.returnPlayerSpawns()));
+                        restore.returnPlayerSpawns()),
+                "Restore: decoding return point", progress);
         OperationJournal journal = new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
@@ -381,6 +418,17 @@ public final class RestoreOperation implements DimensionMutation {
         return new RestoreOperation(
                 restore, world, publication, journals, journal, true,
                 preparedTarget, preparedReturn, stateListener);
+    }
+
+    private static WorldStateApply.PreparedState prepareWorldState(
+            WorldStateApply world,
+            WorldStateApply.State state,
+            String phase,
+            Consumer<OperationProgress> progress) throws IOException {
+        long total = (long) state.sections().size() + state.entities().size();
+        progress.accept(new OperationProgress(phase, 0, total));
+        return world.prepare(state, completed -> progress.accept(
+                new OperationProgress(phase, completed, total)));
     }
 
     public RestoreStatus tick(long deadlineNanos) throws IOException {

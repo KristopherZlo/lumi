@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.function.LongConsumer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
@@ -24,6 +25,11 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     @Override
     public PreparedState prepare(State target) throws IOException {
         return preparation.prepare(target);
+    }
+
+    @Override
+    public PreparedState prepare(State target, LongConsumer progress) throws IOException {
+        return preparation.prepare(target, progress);
     }
 
     @Override
