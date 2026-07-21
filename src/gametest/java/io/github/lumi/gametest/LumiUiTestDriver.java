@@ -9,6 +9,7 @@ import io.github.lumi.client.ui.LumiOnboardingScreen;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.client.ui.LumiRestoreScreen;
 import io.github.lumi.client.ui.LumiSaveScreen;
+import io.github.lumi.client.ui.LumiVersionDetailsScreen;
 import io.github.lumi.domain.model.CommitId;
 import java.util.List;
 import java.util.Objects;
@@ -48,6 +49,15 @@ final class LumiUiTestDriver {
         pressUniqueButton(LumiRestoreScreen.class, "luma.action.restore");
         context.waitForScreen(LumiDashboardScreen.class);
         closeScreen(LumiDashboardScreen.class, null);
+    }
+
+    void openVersionDetails(CommitId target) {
+        openDashboard();
+        typeIntoFocusedTextBox(LumiDashboardScreen.class, uniquePrefix(target));
+        assertButtonEventually(LumiDashboardScreen.class,
+                "luma.action.open_details", true);
+        pressUniqueButton(LumiDashboardScreen.class, "luma.action.open_details");
+        context.waitForScreen(LumiVersionDetailsScreen.class);
     }
 
     void createBranch(String name) {
@@ -176,6 +186,64 @@ final class LumiUiTestDriver {
                     + " prefix but found count=" + state.count() + " active="
                     + state.active() + "; " + state.diagnostic());
         }
+    }
+
+    void assertButtonStates(
+            Class<? extends Screen> screen,
+            String translationKey,
+            int enabled,
+            int disabled) {
+        String label = Component.translatable(translationKey).getString();
+        int[] counts = context.computeOnClient(client -> {
+            if (!screen.isInstance(client.screen)) return new int[] {0, 0};
+            List<Button> matches = client.screen.children().stream()
+                    .filter(Button.class::isInstance)
+                    .map(Button.class::cast)
+                    .filter(button -> button.getMessage().getString().equals(label))
+                    .toList();
+            return new int[] {
+                    (int) matches.stream().filter(button -> button.active).count(),
+                    (int) matches.stream().filter(button -> !button.active).count()
+            };
+        });
+        if (counts[0] != enabled || counts[1] != disabled) {
+            throw new AssertionError(screen.getSimpleName() + " expected "
+                    + enabled + " enabled and " + disabled + " disabled "
+                    + translationKey + " buttons, got " + counts[0] + " and "
+                    + counts[1]);
+        }
+    }
+
+    void assertFocusedText(
+            Class<? extends Screen> screen, String expected) {
+        String actual = context.computeOnClient(client -> {
+            if (!screen.isInstance(client.screen)
+                    || !(client.screen.getFocused() instanceof EditBox field)) {
+                return null;
+            }
+            return field.getValue();
+        });
+        if (!Objects.equals(expected, actual)) {
+            throw new AssertionError(screen.getSimpleName() + " expected focused text '"
+                    + expected + "' but got '" + actual + "'");
+        }
+    }
+
+    int firstActiveButton(
+            Class<? extends Screen> screen, String translationKey) {
+        String label = Component.translatable(translationKey).getString();
+        return context.computeOnClient(client -> {
+            if (!screen.isInstance(client.screen)) return -1;
+            List<Button> matches = client.screen.children().stream()
+                    .filter(Button.class::isInstance)
+                    .map(Button.class::cast)
+                    .filter(button -> button.getMessage().getString().equals(label))
+                    .toList();
+            for (int index = 0; index < matches.size(); index++) {
+                if (matches.get(index).active) return index;
+            }
+            return -1;
+        });
     }
 
     void pressStandalone(String mappingName) {
