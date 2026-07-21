@@ -25,8 +25,8 @@ class LumiComparePickerScreenTest {
         assertTrue(source.contains("history(left).next()"));
         assertTrue(source.contains("leftSelection"));
         assertTrue(source.contains("rightSelection"));
-        assertTrue(source.contains(
-                "history(left).nextBranch(snapshot.branches())"));
+        assertTrue(source.contains("new LumiBranchDropdown("));
+        assertTrue(source.contains("history(left).selectBranch(branch)"));
         assertTrue(source.contains("\"textures/gui/icons/see-changes.png\""));
         assertTrue(source.contains("\"eye-open\""));
         assertTrue(source.contains(
@@ -45,13 +45,6 @@ class LumiComparePickerScreenTest {
         assertEquals(205, LumiComparePickerScreen.columnWidth(484));
         assertEquals(108, LumiComparePickerScreen.columnWidth(271));
         assertEquals(55, LumiComparePickerScreen.columnWidth(164));
-    }
-
-    @Test
-    void branchSelectorsUseTheBuilderFacingName() {
-        assertEquals("roof", LumiComparePickerScreen.shortBranch(
-                "workspace/1234/roof"));
-        assertEquals("main", LumiComparePickerScreen.shortBranch("main"));
     }
 
     @Test

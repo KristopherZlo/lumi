@@ -117,6 +117,8 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
         renderedRightPage = rightHistory.page().orElse(null);
         addColumnButtons(true);
         addColumnButtons(false);
+        addBranchSelector(true);
+        addBranchSelector(false);
         int footerY = layout.y() + layout.height() - 28;
         LumiButton submit = addIconButton(
                 layout.x() + layout.width() - 42, footerY, "eye-open",
@@ -126,14 +128,9 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
     }
 
     private void addColumnButtons(boolean left) {
-        WorkspaceHistoryController history = history(left);
         List<HistorySnapshotPayload.Version> versions = versions(left);
         int x = left ? leftX() : rightX();
         int width = columnWidth();
-        addRenderableWidget(new LumiButton(
-                x, layout.y() + 66, width, 18,
-                Component.literal(shortBranch(history.branch().value())),
-                ignored -> changeBranch(left), LumiButton.Kind.NORMAL));
         int rows = visibleRows();
         int scroll = scroll(left);
         int contentWidth = width - (versions.size() > rows
@@ -170,8 +167,17 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
         rebuildWidgets();
     }
 
-    private void changeBranch(boolean left) {
-        history(left).nextBranch(snapshot.branches());
+    private void addBranchSelector(boolean left) {
+        int y = layout.y() + 66;
+        addRenderableWidget(new LumiBranchDropdown(
+                left ? leftX() : rightX(), y, columnWidth(),
+                layout.y() + layout.height() - 28 - y - 18,
+                snapshot.branches(), history(left).branch().value(),
+                branch -> changeBranch(left, branch)));
+    }
+
+    private void changeBranch(boolean left, String branch) {
+        history(left).selectBranch(branch);
         setScroll(left, 0);
         if (left) {
             leftSelection = null;
@@ -385,11 +391,6 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
     private void setScroll(boolean left, int value) {
         if (left) leftScroll = value;
         else rightScroll = value;
-    }
-
-    static String shortBranch(String value) {
-        int slash = value.lastIndexOf('/');
-        return slash < 0 ? value : value.substring(slash + 1);
     }
 
     @Override

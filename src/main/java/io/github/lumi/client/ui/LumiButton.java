@@ -10,7 +10,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 /** Flat Lumi control used instead of Minecraft's textured button. */
-public final class LumiButton extends Button {
+public class LumiButton extends Button {
     private static final int TEXT = 0xfff4f1ea;
     private static final int TEXT_DISABLED = 0xff77736d;
     private static final int CONTROL_HEIGHT = 18;

@@ -40,7 +40,7 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains("actions.openDetails()"));
         assertTrue(source.contains("actions.createBranch()"));
         assertTrue(source.contains("zoneHistory.selectBranch(branch)"));
-        assertTrue(source.contains("LumiButton tab = addContentButton("));
+        assertTrue(source.contains("new LumiBranchDropdown("));
         assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("zoneStatistics()"));
         assertTrue(source.contains("PendingStatisticsText::summary"));

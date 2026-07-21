@@ -176,8 +176,7 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("pagedHistory.next()"));
         assertFalse(source.contains("addHistoryPageButtons"));
         assertTrue(source.contains("public boolean mouseScrolled("));
-        assertTrue(source.contains("addBranchTabs("));
-        assertTrue(source.contains("addContentButton("));
+        assertTrue(source.contains("new LumiBranchDropdown("));
         assertTrue(source.contains("pagedHistory.selectBranch(branch)"));
         assertTrue(source.contains("latestCreated()"));
         assertTrue(source.contains(
@@ -204,7 +203,7 @@ class LumiDashboardScreenTest {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));
         int start = source.indexOf("private void search(String value)");
-        int end = source.indexOf("private void addBranchTabs(", start);
+        int end = source.indexOf("private void addBranchDropdown(", start);
         String searchMethod = source.substring(start, end);
 
         assertFalse(searchMethod.contains("rebuildWidgets()"));

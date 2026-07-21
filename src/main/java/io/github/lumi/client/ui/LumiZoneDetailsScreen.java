@@ -41,6 +41,8 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     private EditBox search;
     private String searchValue = "";
     private int historyScroll;
+    private int branchDropdownX;
+    private int branchDropdownWidth;
     private boolean historyRequested;
     private boolean focusSearchAfterInit;
     private HistoryPagePayload renderedPage;
@@ -117,6 +119,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         if (geometry.historyHeight() < 28) return;
         addHistoryToolbar();
         addHistoryActions();
+        addBranchDropdown();
     }
 
     private void addWorkspaceActions() {
@@ -178,8 +181,8 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         search.setHint(Component.translatable("luma.dashboard.search"));
         search.setValue(searchValue);
         search.setResponder(this::search);
-        addBranchTabs(left + searchWidth + LumiDashboardScreen.CONTROL_GAP,
-                right - 60, toolbarY);
+        branchDropdownX = left + searchWidth + LumiDashboardScreen.CONTROL_GAP;
+        branchDropdownWidth = Math.max(0, right - 60 - branchDropdownX);
         if (focusSearchAfterInit) {
             setInitialFocus(search);
             search.setFocused(true);
@@ -188,18 +191,15 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         }
     }
 
-    private void addBranchTabs(int x, int right, int y) {
-        for (HistorySnapshotPayload.Branch branch : snapshot.branches()) {
-            if (right - x < 24) break;
-            LumiButton tab = addContentButton(
-                    x, y, right - x,
-                    Component.literal(shortBranch(branch.name())),
-                    () -> selectBranch(branch.name()),
-                    zoneHistory.branch().value().equals(branch.name())
-                            ? LumiButton.Kind.SELECTED
-                            : LumiButton.Kind.NORMAL);
-            x += tab.getWidth() + LumiDashboardScreen.CONTROL_GAP;
-        }
+    private void addBranchDropdown() {
+        if (branchDropdownWidth < 24 || snapshot.branches().isEmpty()) return;
+        int y = geometry.historyY() + LumiDashboardScreen.HISTORY_TOOLBAR_OFFSET;
+        addRenderableWidget(new LumiBranchDropdown(
+                branchDropdownX, y, branchDropdownWidth,
+                geometry.historyY() + geometry.historyHeight()
+                        - y - LumiDashboardScreen.CONTROL_HEIGHT,
+                snapshot.branches(), zoneHistory.branch().value(),
+                this::selectBranch));
     }
 
     private void addHistoryActions() {
@@ -299,11 +299,6 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     private int visibleHistoryRows() {
         return LumiDashboardScreen.visibleHistoryRows(
                 geometry.historyHeight(), Integer.MAX_VALUE, layout.bodyWidth());
-    }
-
-    private static String shortBranch(String value) {
-        int slash = value.lastIndexOf('/');
-        return slash < 0 ? value : value.substring(slash + 1);
     }
 
     @Override
