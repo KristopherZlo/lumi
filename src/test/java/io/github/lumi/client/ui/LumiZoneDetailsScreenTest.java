@@ -35,6 +35,8 @@ class LumiZoneDetailsScreenTest {
         assertTrue(source.contains("luma.action.amend_version"));
         assertTrue(source.contains("\"see-changes\""));
         assertTrue(source.contains("showChanges.run()"));
+        assertTrue(source.contains("Component.translatable(\"luma.zones.leave\")"));
+        assertTrue(source.contains("leaveZone.run()"));
         assertTrue(source.contains("luma.history.view_cards"));
         assertTrue(source.contains("luma.history.view_graph"));
         assertTrue(source.contains("actions.openDetails()"));

@@ -33,6 +33,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     private final Runnable openSave;
     private final Runnable openAmend;
     private final Runnable showChanges;
+    private final Runnable leaveZone;
     private final HistoryViewController historyView;
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
     private final Map<CommitId, VersionTags> optimisticTags = new HashMap<>();
@@ -62,7 +63,8 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
             ZoneHistoryActions actions,
             Runnable openSave,
             Runnable openAmend,
-            Runnable showChanges) {
+            Runnable showChanges,
+            Runnable leaveZone) {
         super(parent, Component.translatable(
                 "luma.zones.details_title", zone.name()), ProjectTab.ZONES);
         this.parent = parent;
@@ -77,6 +79,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         this.openSave = Objects.requireNonNull(openSave, "openSave");
         this.openAmend = Objects.requireNonNull(openAmend, "openAmend");
         this.showChanges = Objects.requireNonNull(showChanges, "showChanges");
+        this.leaveZone = Objects.requireNonNull(leaveZone, "leaveZone");
         historyView = new HistoryViewController(new HistoryScope.Zone(zone.id()));
         zoneHistory = new ZoneHistoryController(
                 snapshot, zone.id(), pages, requestPage);
@@ -127,8 +130,8 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         int available = Math.max(0,
                 layout.bodyWidth() - LumiDashboardScreen.PANEL_PADDING * 2);
         int maximumTextWidth = Math.max(0,
-                (available - LumiDashboardScreen.ICON_BUTTON_WIDTH
-                        - LumiDashboardScreen.CONTROL_GAP * 2) / 2);
+                (available - LumiDashboardScreen.ICON_BUTTON_WIDTH * 2
+                        - LumiDashboardScreen.CONTROL_GAP * 3) / 2);
         LumiButton save = addContentButton(
                 x, geometry.actionY(), maximumTextWidth,
                 Component.translatable("luma.zones.save_button"), openSave,
@@ -148,6 +151,22 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                     minecraft.setScreen(null);
                 }, LumiButton.Kind.NORMAL);
         changes.active = zone.active();
+        LumiButton leave = addIconButton(
+                x + LumiDashboardScreen.ICON_BUTTON_WIDTH
+                        + LumiDashboardScreen.CONTROL_GAP,
+                geometry.actionY(), "leave",
+                Component.translatable("luma.zones.leave"), this::leaveZone,
+                LumiButton.Kind.DANGER);
+        leave.active = zone.active();
+    }
+
+    private void leaveZone() {
+        leaveZone.run();
+        if (minecraft.player != null) {
+            minecraft.player.displayClientMessage(
+                    Component.translatable("luma.status.zone_cleared"), true);
+        }
+        minecraft.setScreen(parent);
     }
 
     private void addHistoryToolbar() {

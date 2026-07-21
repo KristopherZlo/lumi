@@ -558,7 +558,7 @@ public final class LumiClient implements ClientModInitializer {
                 () -> {
                     NETWORKING.refreshSnapshot();
                     showFeedback("luma.hotkeys.pending_preview_help");
-                }));
+                }, () -> NETWORKING.leaveZone(zone.id())));
     }
 
     private static void openZoneVersionDetails(
