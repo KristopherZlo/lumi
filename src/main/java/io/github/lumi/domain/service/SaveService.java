@@ -71,6 +71,13 @@ public final class SaveService implements SavePublisher {
         Objects.requireNonNull(captured, "captured");
         Objects.requireNonNull(progress, "progress");
         Objects.requireNonNull(completion, "completion");
+        Optional<SaveResult> cleanReturn = cleanReturnPoint(request, captured);
+        if (cleanReturn.isPresent()) {
+            progress.accept(SavePublicationProgress.indeterminate(
+                    "Save: reusing current version"));
+            completion.complete(captured.generations());
+            return cleanReturn.orElseThrow();
+        }
         CommitId commitId = writeCommit(request, captured, progress);
         if (!request.tags().isEmpty()) {
             progress.accept(SavePublicationProgress.indeterminate(
@@ -97,6 +104,25 @@ public final class SaveService implements SavePublisher {
         journal = journals.advance(journal, OperationPhase.COMPLETE);
         journals.clear(journal);
         return new SaveResult(commitId, branch, captured.generations());
+    }
+
+    private Optional<SaveResult> cleanReturnPoint(
+            SaveRequest request, CapturedWorldState captured) throws IOException {
+        if (request.kind() != CommitKind.HIDDEN_RETURN
+                || !captured.generations().generations().isEmpty()) {
+            return Optional.empty();
+        }
+        Commit current = commits.read(request.expectedRef().commit());
+        if (!current.workspaceId().equals(request.workspaceId())) {
+            throw new IOException("Save workspace does not match the source branch");
+        }
+        if (!current.playerSpawns().equals(captured.playerSpawns())) {
+            return Optional.empty();
+        }
+        requireCurrent(request);
+        return Optional.of(new SaveResult(
+                request.expectedRef().commit(), request.expectedRef(),
+                captured.generations()));
     }
 
     public SaveResult checkpoint(

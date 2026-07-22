@@ -120,6 +120,49 @@ class SaveServiceTest {
     }
 
     @Test
+    void reusesCleanHeadForHiddenReturnPoint() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        var initialId = commits.write(commit(tree, List.of(), "Initial"));
+        var initialRef = refs.create(new BranchName("main"), initialId);
+        SaveService service = new SaveService(
+                objects, new MerkleTreeEditor(objects), commits, refs,
+                new OperationJournalRepository(repositoryRoot),
+                new VersionTagRepository(repositoryRoot));
+        var completionCalled = new AtomicBoolean();
+
+        SaveResult result = service.save(new SaveRequest(
+                initialRef, author(), "Return point", Instant.EPOCH,
+                UUID.fromString("20000000-0000-0000-0000-000000000002"),
+                Optional.empty(), CommitKind.HIDDEN_RETURN),
+                new CapturedWorldState(Map.of(), Map.of(), WorkingIndexSnapshot.empty(),
+                        new CommitStatistics(0, 0, 0, 0)), ignored -> { },
+                ignored -> completionCalled.set(true));
+
+        assertEquals(initialId, result.commitId());
+        assertEquals(initialRef, result.branchRef());
+        assertTrue(completionCalled.get());
+        assertTrue(new OperationJournalRepository(repositoryRoot).read().isEmpty());
+        try (var files = Files.walk(repositoryRoot.resolve("commits"))) {
+            assertEquals(1, files.filter(Files::isRegularFile).count());
+        }
+
+        UUID player = UUID.fromString("30000000-0000-0000-0000-000000000003");
+        PlayerSpawn spawn = new PlayerSpawn(4, 80, -6, 90.0F, 0.0F, false);
+        SaveResult changedSpawn = service.save(new SaveRequest(
+                initialRef, author(), "Changed spawn return point", Instant.EPOCH,
+                UUID.fromString("20000000-0000-0000-0000-000000000002"),
+                Optional.empty(), CommitKind.HIDDEN_RETURN),
+                new CapturedWorldState(Map.of(), Map.of(), WorkingIndexSnapshot.empty(),
+                        new CommitStatistics(0, 0, 0, 0), Map.of(player, spawn)));
+
+        assertNotEquals(initialId, changedSpawn.commitId());
+        assertEquals(Map.of(player, spawn), commits.read(changedSpawn.commitId()).playerSpawns());
+    }
+
+    @Test
     void rejectsSaveIntoABranchOwnedByAnotherWorkspace() throws IOException {
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
         CommitRepository commits = new CommitRepository(repositoryRoot);

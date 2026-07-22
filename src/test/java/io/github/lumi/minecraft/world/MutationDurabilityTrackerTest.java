@@ -31,6 +31,19 @@ class MutationDurabilityTrackerTest {
     Path repositoryRoot;
 
     @Test
+    void completingEmptyBoundaryDoesNotScheduleIndexWrite() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+
+        tracker.complete(WorkingIndexSnapshot.empty());
+
+        assertEquals(0, background.size());
+        assertTrue(tracker.snapshot().generations().isEmpty());
+    }
+
+    @Test
     void coalescesRepeatedMutationAndBlocksChunkUntilOriginAndLatestGenerationAreDurable()
             throws Exception {
         ManualExecutor background = new ManualExecutor();

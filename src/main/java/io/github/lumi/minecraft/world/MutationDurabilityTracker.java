@@ -351,6 +351,9 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
 
     @Override
     public void complete(WorkingIndexSnapshot captured) throws IOException {
+        if (captured.generations().isEmpty()) {
+            return;
+        }
         awaitDurable(clearAndRevision(captured));
     }
 
