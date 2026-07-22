@@ -2,15 +2,31 @@ package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.EntityState;
+import java.io.IOException;
+import java.util.Optional;
+import java.util.UUID;
+import net.minecraft.SharedConstants;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.ChunkPos;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class MinecraftEntityChunkCaptureTest {
+    @BeforeAll
+    static void bootstrapMinecraft() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
+
     @Test
     void mapsNegativeChunkCoordinatesWithoutRepackingLoss() {
         assertEquals(new EntityChunkKey(-7, 11),
@@ -49,5 +65,45 @@ class MinecraftEntityChunkCaptureTest {
                 .getCompoundOrEmpty(0).getStringOr("id", ""));
         assertTrue(saved.contains("id"));
         assertTrue(saved.contains("UUID"));
+    }
+
+    @Test
+    void capturesPhysicallyStoredEntityChunkWithoutMaterializingEntities() throws Exception {
+        EntityChunkKey key = new EntityChunkKey(-4, 9);
+        UUID id = UUID.fromString("10000000-0000-0000-0000-000000000001");
+        CompoundTag entity = new CompoundTag();
+        entity.putString("id", "minecraft:armor_stand");
+        entity.store("UUID", UUIDUtil.CODEC, id);
+        entity.putString("CustomName", "stored marker");
+        ListTag entities = new ListTag();
+        entities.add(entity);
+        CompoundTag root = storedRoot(key, entities);
+
+        EntityState captured = new MinecraftEntityChunkCapture()
+                .captureStored(key, Optional.of(root)).entities().getFirst();
+
+        assertEquals(id, captured.id());
+        assertEquals("minecraft:armor_stand", captured.type());
+        assertEquals("stored marker", MinecraftNbtCodec.decode(captured.nbt())
+                .getStringOr("CustomName", ""));
+    }
+
+    @Test
+    void rejectsMalformedPhysicallyStoredEntityChunk() {
+        EntityChunkKey key = new EntityChunkKey(2, 3);
+        CompoundTag entity = new CompoundTag();
+        entity.putString("id", "minecraft:armor_stand");
+        ListTag entities = new ListTag();
+        entities.add(entity);
+
+        assertThrows(IOException.class, () -> new MinecraftEntityChunkCapture()
+                .captureStored(key, Optional.of(storedRoot(key, entities))));
+    }
+
+    private static CompoundTag storedRoot(EntityChunkKey key, ListTag entities) {
+        CompoundTag root = new CompoundTag();
+        root.store("Position", ChunkPos.CODEC, new ChunkPos(key.chunkX(), key.chunkZ()));
+        root.put("Entities", entities);
+        return root;
     }
 }

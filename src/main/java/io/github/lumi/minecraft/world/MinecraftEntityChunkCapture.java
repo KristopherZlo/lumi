@@ -6,10 +6,14 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Stream;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
@@ -81,6 +85,41 @@ public final class MinecraftEntityChunkCapture {
 
     CanonicalNbt canonicalEntityNbt(CompoundTag saved) throws IOException {
         return MinecraftNbtCodec.encode(canonicalizer.normalize(saved));
+    }
+
+    EntityChunkBlob captureStored(
+            EntityChunkKey key, Optional<CompoundTag> stored) throws IOException {
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(stored, "stored");
+        if (stored.isEmpty()) {
+            return new EntityChunkBlob(List.of());
+        }
+        CompoundTag root = stored.orElseThrow();
+        ChunkPos position = root.read("Position", ChunkPos.CODEC).orElseThrow(() ->
+                new IOException("Persisted entity chunk has no Position: " + key));
+        if (!position.equals(new ChunkPos(key.chunkX(), key.chunkZ()))) {
+            throw new IOException("Persisted entity chunk is misplaced: " + key);
+        }
+        ListTag entities = root.getList("Entities").orElseThrow(() ->
+                new IOException("Persisted entity chunk has no Entities list: " + key));
+        var states = new ArrayList<EntityState>(entities.size());
+        for (int index = 0; index < entities.size(); index++) {
+            CompoundTag entity = entities.getCompound(index).orElse(null);
+            if (entity == null) {
+                throw new IOException("Malformed entity " + index + " in " + key);
+            }
+            UUID id = entity.read("UUID", UUIDUtil.CODEC).orElseThrow(() ->
+                    new IOException("Entity has no valid UUID in " + key));
+            String type = entity.getString("id")
+                    .filter(value -> !value.isBlank()).orElseThrow(() ->
+                            new IOException("Entity has no valid id in " + key));
+            states.add(new EntityState(id, type, canonicalEntityNbt(entity)));
+        }
+        try {
+            return new EntityChunkBlob(states);
+        } catch (IllegalArgumentException malformed) {
+            throw new IOException("Malformed persisted entity chunk " + key, malformed);
+        }
     }
 
     public record CapturedEntity(EntityState state, DecodedEntity decoded) {

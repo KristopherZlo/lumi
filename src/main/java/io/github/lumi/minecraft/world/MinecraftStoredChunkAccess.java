@@ -233,7 +233,7 @@ final class MinecraftStoredChunkAccess {
                 replaceBlockEntities(data.blockEntities(), target), lightChanged).write();
     }
 
-    private boolean matches(
+    boolean matches(
             ChunkPos position,
             CompoundTag source,
             Map<SectionKey, DecodedSection> target) throws IOException {
