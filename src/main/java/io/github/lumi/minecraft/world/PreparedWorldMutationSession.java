@@ -205,8 +205,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         private final List<SectionApplyResult> appliedChunkSections = new ArrayList<>();
         private boolean chunkBlockEntitiesChanged;
         private final Set<ChunkCoordinate> storageAttempted = new HashSet<>();
-        private CompletableFuture<StoredChunkApplyResult> storedApply;
-        private ChunkCoordinate storedCoordinate;
+        private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> storedApply;
+        private Map<ChunkCoordinate, StoredChunkApplyResult> storedResults = Map.of();
         private Phase phase = Phase.BLOCKS;
 
         private boolean advance(long deadlineNanos) throws IOException {
@@ -235,50 +235,86 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             }
             SectionKey first = sections.get(sectionIndex);
             ChunkCoordinate coordinate = ChunkCoordinate.from(first);
+            if (storedChunks.contains(coordinate)) {
+                skipChunk(first);
+                return StorageAttempt.APPLIED;
+            }
+            StoredChunkApplyResult ready = storedResults.get(coordinate);
+            if (ready != null) {
+                storedResults = without(storedResults, coordinate);
+                if (!ready.applied()) {
+                    return StorageAttempt.FALLBACK;
+                }
+                skipChunk(first);
+                return StorageAttempt.APPLIED;
+            }
             if (storageAttempted.contains(coordinate) && storedApply == null) {
                 return StorageAttempt.FALLBACK;
             }
             if (storedApply == null) {
-                storageAttempted.add(coordinate);
-                storedCoordinate = coordinate;
-                Map<SectionKey, DecodedSection> chunkSections = new LinkedHashMap<>();
-                for (int index = sectionIndex; index < sections.size(); index++) {
-                    SectionKey key = sections.get(index);
-                    if (!sameChunk(first, key)) {
-                        break;
+                Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> batch =
+                        storedBatch(sectionIndex);
+                storageAttempted.addAll(batch.keySet());
+                Set<ChunkCoordinate> entityChunks = new HashSet<>();
+                batch.keySet().forEach(chunk -> {
+                    if (target.entities().containsKey(
+                            new EntityChunkKey(chunk.x(), chunk.z()))) {
+                        entityChunks.add(chunk);
                     }
-                    chunkSections.put(key, target.sections().get(key));
-                }
-                boolean entitiesChanged = target.entities().containsKey(
-                        new EntityChunkKey(coordinate.x(), coordinate.z()));
-                storedApply = world.applyStoredChunk(
-                        coordinate, Map.copyOf(chunkSections), entitiesChanged);
+                });
+                storedApply = world.applyStoredChunks(batch, Set.copyOf(entityChunks));
             }
             if (!storedApply.isDone()) {
                 return StorageAttempt.WAITING;
             }
-            final StoredChunkApplyResult result;
             try {
-                result = storedApply.join();
+                storedResults = storedApply.join();
             } catch (CompletionException failed) {
                 Throwable cause = failed.getCause() == null ? failed : failed.getCause();
                 if (cause instanceof IOException io) {
                     throw io;
                 }
-                throw new IOException(
-                        "Stored Restore failed for " + storedCoordinate, cause);
+                throw new IOException("Stored Restore batch failed", cause);
             }
             storedApply = null;
-            if (!result.applied()) {
-                return StorageAttempt.FALLBACK;
+            storedResults.forEach((chunk, result) -> {
+                if (result.applied()) {
+                    storedChunks.add(chunk);
+                    metrics.storedChunk(result);
+                }
+            });
+            return tryStoredChunk();
+        }
+
+        private Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> storedBatch(
+                int start) {
+            Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> batch =
+                    new LinkedHashMap<>();
+            for (int index = start; index < sections.size(); index++) {
+                SectionKey key = sections.get(index);
+                ChunkCoordinate chunk = ChunkCoordinate.from(key);
+                if (!batch.containsKey(chunk)
+                        && batch.size() == StreamingPreparedWorldMutationSession.MAX_CHUNKS) {
+                    break;
+                }
+                batch.computeIfAbsent(chunk, ignored -> new LinkedHashMap<>())
+                        .put(key, target.sections().get(key));
             }
-            metrics.storedChunk(result);
-            storedChunks.add(coordinate);
+            batch.replaceAll((ignored, value) -> Map.copyOf(value));
+            return Map.copyOf(batch);
+        }
+
+        private void skipChunk(SectionKey first) {
             do {
                 sectionIndex++;
             } while (sectionIndex < sections.size()
                     && sameChunk(first, sections.get(sectionIndex)));
-            return StorageAttempt.APPLIED;
+        }
+
+        private static <K, V> Map<K, V> without(Map<K, V> source, K key) {
+            Map<K, V> copy = new LinkedHashMap<>(source);
+            copy.remove(key);
+            return Map.copyOf(copy);
         }
 
         private io.github.lumi.domain.model.HistoryKey requiredChunk() {

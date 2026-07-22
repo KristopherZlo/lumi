@@ -7,6 +7,8 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.PlayerSpawn;
 import java.io.IOException;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Set;
 import java.util.UUID;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -26,6 +28,23 @@ public interface PreparedWorldAccess {
             Map<SectionKey, DecodedSection> sections,
             boolean entitiesChanged) {
         return CompletableFuture.completedFuture(StoredChunkApplyResult.FALLBACK);
+    }
+
+    default CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>>
+            applyStoredChunks(
+                    Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> chunks,
+                    Set<ChunkCoordinate> entityChunks) {
+        Map<ChunkCoordinate, CompletableFuture<StoredChunkApplyResult>> pending =
+                new LinkedHashMap<>();
+        chunks.forEach((chunk, sections) -> pending.put(chunk,
+                applyStoredChunk(chunk, sections, entityChunks.contains(chunk))));
+        return CompletableFuture.allOf(pending.values().toArray(CompletableFuture[]::new))
+                .thenApply(ignored -> {
+                    Map<ChunkCoordinate, StoredChunkApplyResult> results =
+                            new LinkedHashMap<>();
+                    pending.forEach((chunk, result) -> results.put(chunk, result.join()));
+                    return Map.copyOf(results);
+                });
     }
 
     default String mutationPhase() {

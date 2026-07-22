@@ -5,12 +5,14 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
@@ -27,7 +29,8 @@ import net.minecraft.world.level.levelgen.Heightmap;
 final class MinecraftStoredChunkAccess {
     private final ServerLevel level;
     private final PalettedContainerFactory containers;
-    private final Map<ChunkCoordinate, ChunkLoadGate.Lease> gates = new HashMap<>();
+    private final Map<ChunkCoordinate, ChunkLoadGate.Lease> gates =
+            new ConcurrentHashMap<>();
     private volatile String phase = "loaded apply";
 
     MinecraftStoredChunkAccess(ServerLevel level) {
@@ -39,76 +42,152 @@ final class MinecraftStoredChunkAccess {
             ChunkCoordinate coordinate,
             Map<SectionKey, DecodedSection> target,
             boolean entitiesChanged) {
+        Set<ChunkCoordinate> entityChunks = entitiesChanged
+                ? Set.of(coordinate) : Set.of();
+        return apply(Map.of(coordinate, target), entityChunks)
+                .thenApply(results -> results.get(coordinate));
+    }
+
+    CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> apply(
+            Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> targets,
+            Set<ChunkCoordinate> entityChunks) {
+        Objects.requireNonNull(targets, "targets");
+        Objects.requireNonNull(entityChunks, "entityChunks");
+        Map<ChunkCoordinate, CompletableFuture<PreparedWrite>> preparing =
+                new LinkedHashMap<>();
+        targets.forEach((coordinate, target) -> preparing.put(coordinate,
+                prepare(coordinate, target, entityChunks.contains(coordinate))));
+        return CompletableFuture.allOf(
+                        preparing.values().toArray(CompletableFuture[]::new))
+                .thenCompose(ignored -> writeAndVerify(preparing));
+    }
+
+    private CompletableFuture<PreparedWrite> prepare(
+            ChunkCoordinate coordinate,
+            Map<SectionKey, DecodedSection> target,
+            boolean entitiesChanged) {
         Objects.requireNonNull(coordinate, "coordinate");
         Objects.requireNonNull(target, "target");
         if (entitiesChanged || target.isEmpty() || target.values().stream()
                 .anyMatch(section -> !section.hasPreparedDelta()
                         || section.preparedDelta().poiIndexes().length != 0)) {
-            return CompletableFuture.completedFuture(StoredChunkApplyResult.FALLBACK);
+            return CompletableFuture.completedFuture(null);
         }
         ChunkPos position = new ChunkPos(coordinate.x(), coordinate.z());
         ChunkLoadGate.Lease gate = gates.get(coordinate);
         if (gate == null) {
             gate = ChunkLoadGate.tryAcquire(level, position);
             if (gate == null) {
-                return CompletableFuture.completedFuture(StoredChunkApplyResult.FALLBACK);
+                return CompletableFuture.completedFuture(null);
             }
             gates.put(coordinate, gate);
         }
         phase = "stored read";
         StorageTimings timings = new StorageTimings(System.nanoTime());
-        return level.getChunkSource().chunkMap.read(position).thenCompose(stored -> {
+        return level.getChunkSource().chunkMap.read(position).thenApply(stored -> {
             timings.readNanos = System.nanoTime() - timings.startedNanos;
             if (stored.isEmpty()) {
-                return fallback(coordinate);
+                release(coordinate);
+                return null;
             }
-            final CompoundTag patched;
             try {
-                patched = patch(position, stored.orElseThrow(), target);
+                return new PreparedWrite(coordinate, position, target,
+                        patch(position, stored.orElseThrow(), target), timings);
             } catch (UnsupportedChunk unsupported) {
-                return fallback(coordinate);
+                release(coordinate);
+                return null;
             } catch (IOException failed) {
-                return CompletableFuture.failedFuture(failed);
+                throw new CompletionException(failed);
             }
-            phase = "stored write";
-            timings.startedNanos = System.nanoTime();
-            return level.getChunkSource().chunkMap.write(position, patched)
-                    .thenCompose(ignored -> {
-                        timings.writeNanos = System.nanoTime() - timings.startedNanos;
-                        phase = "storage sync";
-                        timings.startedNanos = System.nanoTime();
-                        return level.getChunkSource().chunkMap.synchronize(true);
-                    })
-                    .thenCompose(ignored -> {
-                        timings.syncNanos = System.nanoTime() - timings.startedNanos;
-                        phase = "verification";
-                        timings.startedNanos = System.nanoTime();
-                        return level.getChunkSource().chunkMap.read(position);
-                    })
-                    .thenApply(reread -> {
-                        timings.verifyNanos = System.nanoTime() - timings.startedNanos;
-                        try {
-                            if (reread.isEmpty()
-                                    || !matches(position, reread.orElseThrow(), target)) {
-                                throw new IOException(
-                                        "Stored Restore verification failed for " + position);
-                            }
-                            release(coordinate);
-                            return StoredChunkApplyResult.applied(
-                                    timings.readNanos, timings.writeNanos,
-                                    timings.syncNanos, timings.verifyNanos);
-                        } catch (IOException failed) {
-                            throw new CompletionException(failed);
-                        }
-                    });
         });
     }
+
+    private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> writeAndVerify(
+            Map<ChunkCoordinate, CompletableFuture<PreparedWrite>> preparing) {
+        Map<ChunkCoordinate, StoredChunkApplyResult> results = new LinkedHashMap<>();
+        List<PreparedWrite> writes = new ArrayList<>();
+        preparing.forEach((coordinate, pending) -> {
+            PreparedWrite write = pending.join();
+            if (write == null) {
+                results.put(coordinate, StoredChunkApplyResult.FALLBACK);
+            } else {
+                writes.add(write);
+            }
+        });
+        if (writes.isEmpty()) {
+            phase = "loaded apply";
+            return CompletableFuture.completedFuture(Map.copyOf(results));
+        }
+        phase = "stored write";
+        List<CompletableFuture<Void>> pendingWrites = writes.stream().map(write -> {
+            write.timings().startedNanos = System.nanoTime();
+            return level.getChunkSource().chunkMap.write(write.position(), write.patched())
+                    .thenRun(() -> write.timings().writeNanos =
+                            System.nanoTime() - write.timings().startedNanos);
+        }).toList();
+        return CompletableFuture.allOf(pendingWrites.toArray(CompletableFuture[]::new))
+                .thenCompose(ignored -> synchronizeAndVerify(writes, results));
+    }
+
+    private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> synchronizeAndVerify(
+            List<PreparedWrite> writes,
+            Map<ChunkCoordinate, StoredChunkApplyResult> results) {
+        phase = "storage sync";
+        long syncStarted = System.nanoTime();
+        return level.getChunkSource().chunkMap.synchronize(true).thenCompose(ignored -> {
+            long syncNanos = System.nanoTime() - syncStarted;
+            phase = "verification";
+            Map<PreparedWrite, CompletableFuture<java.util.Optional<CompoundTag>>> reads =
+                    new LinkedHashMap<>();
+            for (PreparedWrite write : writes) {
+                write.timings().startedNanos = System.nanoTime();
+                reads.put(write, level.getChunkSource().chunkMap.read(write.position()));
+            }
+            return CompletableFuture.allOf(reads.values().toArray(CompletableFuture[]::new))
+                    .thenApply(done -> verifiedResults(reads, results, syncNanos));
+        });
+    }
+
+    private Map<ChunkCoordinate, StoredChunkApplyResult> verifiedResults(
+            Map<PreparedWrite, CompletableFuture<java.util.Optional<CompoundTag>>> reads,
+            Map<ChunkCoordinate, StoredChunkApplyResult> results,
+            long syncNanos) {
+        boolean first = true;
+        for (var entry : reads.entrySet()) {
+            PreparedWrite write = entry.getKey();
+            write.timings().verifyNanos =
+                    System.nanoTime() - write.timings().startedNanos;
+            try {
+                var stored = entry.getValue().join();
+                if (stored.isEmpty() || !matches(
+                        write.position(), stored.orElseThrow(), write.target())) {
+                    throw new IOException(
+                            "Stored Restore verification failed for " + write.position());
+                }
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+            release(write.coordinate());
+            results.put(write.coordinate(), StoredChunkApplyResult.applied(
+                    write.timings().readNanos, write.timings().writeNanos,
+                    first ? syncNanos : 0, write.timings().verifyNanos));
+            first = false;
+        }
+        phase = "loaded apply";
+        return Map.copyOf(results);
+    }
+
+    private record PreparedWrite(
+            ChunkCoordinate coordinate,
+            ChunkPos position,
+            Map<SectionKey, DecodedSection> target,
+            CompoundTag patched,
+            StorageTimings timings) { }
 
     private static final class StorageTimings {
         private long startedNanos;
         private long readNanos;
         private long writeNanos;
-        private long syncNanos;
         private long verifyNanos;
 
         private StorageTimings(long startedNanos) {

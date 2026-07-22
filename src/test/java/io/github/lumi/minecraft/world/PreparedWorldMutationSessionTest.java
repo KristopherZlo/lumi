@@ -13,8 +13,10 @@ import io.github.lumi.domain.model.PlayerSpawn;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.UUID;
@@ -244,12 +246,44 @@ class PreparedWorldMutationSessionTest {
                 session.verifyUntil(Long.MAX_VALUE));
     }
 
+    @Test
+    void groupsStoredWritesIntoWindowsOfThirtyTwoChunks() throws Exception {
+        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
+        DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
+                .decode(source);
+        Map<SectionKey, SectionBlob> persistent = new LinkedHashMap<>();
+        Map<SectionKey, DecodedSection> prepared = new LinkedHashMap<>();
+        List<SectionKey> order = new ArrayList<>();
+        for (int chunkX = 0; chunkX < 40; chunkX++) {
+            SectionKey key = new SectionKey(chunkX, 0, 0);
+            persistent.put(key, source);
+            prepared.put(key, decoded);
+            order.add(key);
+        }
+        var target = new PreparedMinecraftState(
+                new WorldStateApply.State(persistent, Map.of()), prepared,
+                Map.of(), order, List.of());
+        FakeWorld world = new FakeWorld(new AtomicLong(), source);
+        world.storedResult = StoredChunkApplyResult.APPLIED;
+        var session = new PreparedWorldMutationSession(
+                target, world, () -> 0L,
+                new ChunkLoadSession(new ImmediateChunkAccess(), () -> 0L));
+
+        assertTrue(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(2, world.storedBatches);
+        assertEquals(32, world.maxStoredBatch);
+        assertEquals(40, session.statistics().storedChunks());
+    }
+
     private static final class FakeWorld implements PreparedWorldAccess {
         private final AtomicLong clock;
         private final SectionBlob captured;
         private int sectionWrites;
         private int synchronizedChunks;
         private int storedWrites;
+        private int storedBatches;
+        private int maxStoredBatch;
         private StoredChunkApplyResult storedResult = StoredChunkApplyResult.FALLBACK;
         private List<UUID> entityIds = List.of();
         private Map<EntityChunkKey, List<UUID>> entityIdsByChunk = Map.of();
@@ -283,6 +317,17 @@ class PreparedWorldMutationSessionTest {
                 boolean entitiesChanged) {
             storedWrites++;
             return CompletableFuture.completedFuture(storedResult);
+        }
+        @Override public CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>>
+                applyStoredChunks(
+                        Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> chunks,
+                        Set<ChunkCoordinate> entityChunks) {
+            storedBatches++;
+            maxStoredBatch = Math.max(maxStoredBatch, chunks.size());
+            storedWrites += chunks.size();
+            Map<ChunkCoordinate, StoredChunkApplyResult> results = new LinkedHashMap<>();
+            chunks.keySet().forEach(chunk -> results.put(chunk, storedResult));
+            return CompletableFuture.completedFuture(Map.copyOf(results));
         }
         @Override public List<Integer> blockEntityIndexes(SectionKey key) { return List.of(); }
         @Override public void removeBlockEntity(SectionKey key, int localIndex) { }

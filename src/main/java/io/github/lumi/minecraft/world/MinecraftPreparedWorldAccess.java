@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
@@ -75,6 +76,13 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             Map<SectionKey, DecodedSection> sections,
             boolean entitiesChanged) {
         return storedChunks.apply(chunk, sections, entitiesChanged);
+    }
+
+    @Override
+    public CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> applyStoredChunks(
+            Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> chunks,
+            Set<ChunkCoordinate> entityChunks) {
+        return storedChunks.apply(chunks, entityChunks);
     }
 
     @Override
