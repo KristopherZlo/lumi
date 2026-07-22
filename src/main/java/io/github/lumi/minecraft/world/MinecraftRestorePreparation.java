@@ -94,8 +94,8 @@ public final class MinecraftRestorePreparation {
         try {
             long completed = 0;
             for (var entry : source.sections().entrySet()) {
-                sections.decode(entry.getValue()).prepareAgainst(
-                        sections.decode(base.sections().get(entry.getKey())));
+                sections.validate(entry.getValue());
+                sections.validate(base.sections().get(entry.getKey()));
                 progress.accept(++completed);
             }
             Map<EntityChunkKey, EntityChunkBlob> normalizedSource =

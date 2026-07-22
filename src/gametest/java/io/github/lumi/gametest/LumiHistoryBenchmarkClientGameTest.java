@@ -13,6 +13,7 @@ public final class LumiHistoryBenchmarkClientGameTest
             return;
         }
         LumiHistoryBenchmarkConfig config = LumiHistoryBenchmarkConfig.load();
+        config.requireRunnableFixture();
         try (var ignored = LumiUiScaleTestScope.readableViewport()) {
             LumiClientBehaviorWorld.run(
                     context, config.reportName(), (test, world, report) ->

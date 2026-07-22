@@ -14,6 +14,7 @@ final class PreparedSectionDelta {
     private final int[] changedIndexes;
     private final short[] changedCells;
     private final short[] lightColumns;
+    private final int[] heightmapIndexes;
     private final int[] poiIndexes;
     private final boolean lightChanged;
     private final boolean blockEntitiesChanged;
@@ -22,12 +23,14 @@ final class PreparedSectionDelta {
             int[] changedIndexes,
             short[] changedCells,
             short[] lightColumns,
+            int[] heightmapIndexes,
             int[] poiIndexes,
             boolean lightChanged,
             boolean blockEntitiesChanged) {
         this.changedIndexes = changedIndexes;
         this.changedCells = changedCells;
         this.lightColumns = lightColumns;
+        this.heightmapIndexes = heightmapIndexes;
         this.poiIndexes = poiIndexes;
         this.lightChanged = lightChanged;
         this.blockEntitiesChanged = blockEntitiesChanged;
@@ -54,6 +57,8 @@ final class PreparedSectionDelta {
         int[] indexes = new int[SectionBlob.BLOCK_COUNT];
         short[] cells = new short[SectionBlob.BLOCK_COUNT];
         short[] light = new short[256];
+        int[] heightmaps = new int[256];
+        Arrays.fill(heightmaps, -1);
         int[] pois = new int[SectionBlob.BLOCK_COUNT];
         boolean hasLight = false;
         int count = 0;
@@ -70,6 +75,7 @@ final class PreparedSectionDelta {
             int z = (index >>> 4) & 15;
             int y = (index >>> 8) & 15;
             cells[count++] = (short) ((x << 8) | (z << 4) | y);
+            heightmaps[x | (z << 4)] = index;
             if (!PoiTypes.forState(current).equals(PoiTypes.forState(replacement))) {
                 pois[poiCount++] = index;
             }
@@ -78,9 +84,17 @@ final class PreparedSectionDelta {
                 hasLight = true;
             }
         }
+        int[] heightmapIndexes = new int[256];
+        int heightmapCount = 0;
+        for (int index : heightmaps) {
+            if (index >= 0) {
+                heightmapIndexes[heightmapCount++] = index;
+            }
+        }
         return new PreparedSectionDelta(
                 Arrays.copyOf(indexes, count), Arrays.copyOf(cells, count),
-                light, Arrays.copyOf(pois, poiCount),
+                light, Arrays.copyOf(heightmapIndexes, heightmapCount),
+                Arrays.copyOf(pois, poiCount),
                 hasLight, blockEntitiesChanged);
     }
 
@@ -94,6 +108,10 @@ final class PreparedSectionDelta {
 
     short[] lightColumns() {
         return lightColumns;
+    }
+
+    int[] heightmapIndexes() {
+        return heightmapIndexes;
     }
 
     int[] poiIndexes() {

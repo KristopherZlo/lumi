@@ -40,7 +40,7 @@ final class MinecraftSectionRewriter {
 
         chunk.getSections()[sectionIndex] = replacementSection;
         updatePois(key, replacementSection, delta.poiIndexes());
-        updateHeightmaps(chunk, key, replacementSection, delta.changedIndexes());
+        updateHeightmaps(chunk, key, replacementSection, delta.heightmapIndexes());
         if (delta.lightChanged()) {
             ((SectionLightBatchScheduler) level.getLightEngine())
                     .lumi$scheduleSectionChecks(

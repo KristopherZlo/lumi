@@ -1,5 +1,6 @@
 package io.github.lumi.minecraft.world;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -64,7 +65,7 @@ class MinecraftBlockStateDecoderTest {
 
         assertThrows(IOException.class, () ->
                 new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
-                        .decode(new SectionBlob(states, Map.of())));
+                        .validate(new SectionBlob(states, Map.of())));
     }
 
     @Test
@@ -76,7 +77,25 @@ class MinecraftBlockStateDecoderTest {
                         "missing:not_a_block_entity", "custom", "value"))));
 
         assertThrows(IOException.class, () ->
-                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK).decode(source));
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK).validate(source));
+    }
+
+    @Test
+    void preparesOnlyTheHighestHeightmapChangePerColumn() throws Exception {
+        var beforeStates = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone"));
+        var targetStates = new ArrayList<>(beforeStates);
+        targetStates.set((3 << 8) | (2 << 4) | 1, "minecraft:air");
+        targetStates.set((10 << 8) | (2 << 4) | 1, "minecraft:dirt");
+        targetStates.set((2 << 8) | (5 << 4) | 4, "minecraft:granite");
+        var decoder = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK);
+
+        DecodedSection target = decoder.decode(new SectionBlob(targetStates, Map.of()))
+                .prepareAgainst(decoder.decode(new SectionBlob(beforeStates, Map.of())));
+
+        assertArrayEquals(new int[]{(10 << 8) | (2 << 4) | 1,
+                        (2 << 8) | (5 << 4) | 4},
+                target.preparedDelta().heightmapIndexes());
     }
 
     private static net.minecraft.nbt.CompoundTag tag(String key, String value) {

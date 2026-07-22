@@ -13,6 +13,7 @@ record LumiHistoryBenchmarkConfig(
         long seed) {
     static final String PREFIX = "lumi.benchmark.";
     static final String ENABLED_PROPERTY = PREFIX + "enabled";
+    private static final long MAX_LIVE_FIXTURE_CHUNKS = 1_089;
 
     LumiHistoryBenchmarkConfig {
         requireRange("baseSize", baseSize, 16, 10_000);
@@ -29,13 +30,25 @@ record LumiHistoryBenchmarkConfig(
 
     static LumiHistoryBenchmarkConfig load() {
         return new LumiHistoryBenchmarkConfig(
-                integer("baseSize", 5_000),
-                integer("changeSize", 1_000),
-                integer("layers", 16),
-                integer("commits", 200),
-                integer("restoreSamples", 8),
+                integer("baseSize", 64),
+                integer("changeSize", 32),
+                integer("layers", 2),
+                integer("commits", 3),
+                integer("restoreSamples", 4),
                 integer("measureEvery", 1),
                 Long.getLong(PREFIX + "seed", 710L));
+    }
+
+    void requireRunnableFixture() {
+        long chunksPerAxis = (baseSize + 30L) / 16L;
+        long chunks = chunksPerAxis * chunksPerAxis;
+        if (chunks > MAX_LIVE_FIXTURE_CHUNKS) {
+            throw new IllegalArgumentException(
+                    "Dense benchmark would FULL-load about " + chunks
+                            + " chunks. The live fixture is limited to "
+                            + MAX_LIVE_FIXTURE_CHUNKS
+                            + "; use a bounded stored-chunk fixture for this profile.");
+        }
     }
 
     long baseBlocks() {
