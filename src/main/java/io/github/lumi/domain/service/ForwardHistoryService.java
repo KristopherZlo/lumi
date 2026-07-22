@@ -32,10 +32,11 @@ public final class ForwardHistoryService {
     public void retain(BranchRef checkpointRef) throws IOException {
         Objects.requireNonNull(checkpointRef, "checkpointRef");
         var checkpoint = commits.read(checkpointRef.commit());
-        if (checkpoint.kind() != CommitKind.HIDDEN_RETURN || checkpoint.parents().isEmpty()) {
+        if (checkpoint.kind() == CommitKind.HIDDEN_RETURN && checkpoint.parents().isEmpty()) {
             throw new IOException("Restore checkpoint has no source history");
         }
-        CommitId source = checkpoint.parents().getFirst();
+        CommitId source = checkpoint.kind() == CommitKind.HIDDEN_RETURN
+                ? checkpoint.parents().getFirst() : checkpointRef.commit();
         BranchName name = new BranchName(prefix(checkpointRef.name()) + source.hex());
         Optional<BranchRef> existing = refs.read(name);
         if (existing.isPresent()) {

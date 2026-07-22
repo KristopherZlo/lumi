@@ -72,6 +72,33 @@ class ReturnPointRestorePreparationTest {
                 value.phase().equals("Restore: preflight return point")));
     }
 
+    @Test
+    void acceptsCurrentHeadAsCleanReturnPoint() throws Exception {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        var target = commits.write(commit(tree, List.of(), CommitKind.MANUAL));
+        var current = commits.write(commit(tree, List.of(target), CommitKind.MANUAL));
+        var main = refs.create(new BranchName("main"), current);
+        var saved = new SaveResult(current, main, WorkingIndexSnapshot.empty());
+        BranchName hidden = new BranchName("hidden/return/clean");
+        ReturnPointRestorePreparation preparation = new ReturnPointRestorePreparation(
+                new RestoreService(objects, commits, new OriginStore(repositoryRoot)),
+                new NoOpWorldApply(), refs, journals,
+                new ForwardHistoryService(commits, refs), Runnable::run);
+
+        RestoreOperation operation = preparation.prepare(
+                saved, target, hidden, UUID.randomUUID(), false).join();
+
+        assertEquals(current, refs.read(hidden).orElseThrow().commit());
+        assertEquals(List.of(current), new ForwardHistoryService(commits, refs)
+                .roots(new BranchName("main"), Optional.of(new UUID(1, 1))));
+        operation.tick(Long.MAX_VALUE);
+        assertTrue(journals.read().isPresent());
+    }
+
     private static Commit commit(
             io.github.lumi.domain.model.ObjectId tree,
             List<io.github.lumi.domain.model.CommitId> parents,
