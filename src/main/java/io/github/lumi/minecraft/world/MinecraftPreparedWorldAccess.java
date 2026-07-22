@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
@@ -34,12 +35,14 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     private final MinecraftSectionCapture sections = new MinecraftSectionCapture();
     private final MinecraftEntityChunkCapture entities = new MinecraftEntityChunkCapture();
     private final ChunkEntityLookup entityLookup;
+    private final MinecraftStoredChunkAccess storedChunks;
 
     public MinecraftPreparedWorldAccess(ServerLevel level, DimensionFreezeState freeze) {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         sectionRewriter = new MinecraftSectionRewriter(level);
         entityLookup = ChunkEntityLookup.forLevel(level);
+        storedChunks = new MinecraftStoredChunkAccess(level);
     }
 
     @Override
@@ -59,6 +62,14 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
         sectionRewriter.synchronize(
                 requireChunk(coordinate.x(), coordinate.z()),
                 changedSections, blockEntitiesChanged);
+    }
+
+    @Override
+    public CompletableFuture<StoredChunkApplyResult> applyStoredChunk(
+            ChunkCoordinate chunk,
+            Map<SectionKey, DecodedSection> sections,
+            boolean entitiesChanged) {
+        return storedChunks.apply(chunk, sections, entitiesChanged);
     }
 
     @Override

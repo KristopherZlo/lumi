@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.nbt.CompoundTag;
 
 /** Minimal Minecraft mutation/readback port used by the deadline-bounded apply cursor. */
@@ -19,6 +20,13 @@ public interface PreparedWorldAccess {
             ChunkCoordinate chunk,
             List<SectionApplyResult> sections,
             boolean blockEntitiesChanged) throws IOException;
+
+    default CompletableFuture<StoredChunkApplyResult> applyStoredChunk(
+            ChunkCoordinate chunk,
+            Map<SectionKey, DecodedSection> sections,
+            boolean entitiesChanged) {
+        return CompletableFuture.completedFuture(StoredChunkApplyResult.FALLBACK);
+    }
 
     List<Integer> blockEntityIndexes(SectionKey key) throws IOException;
 

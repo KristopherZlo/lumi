@@ -4,8 +4,14 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.LongSupplier;
 import java.util.UUID;
 
@@ -22,6 +28,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private int sectionVerificationIndex;
     private int entityVerificationIndex;
     private boolean playerSpawnsVerified;
+    private final Set<ChunkCoordinate> storedChunks = new HashSet<>();
 
     public PreparedWorldMutationSession(
             PreparedMinecraftState target, PreparedWorldAccess world, LongSupplier nanoTime) {
@@ -52,6 +59,14 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         while (sectionVerificationIndex < sections.size()
                 && nanoTime.getAsLong() < deadlineNanos) {
             SectionKey key = sections.get(sectionVerificationIndex);
+            ChunkCoordinate coordinate = ChunkCoordinate.from(key);
+            if (storedChunks.contains(coordinate)) {
+                do {
+                    sectionVerificationIndex++;
+                } while (sectionVerificationIndex < sections.size()
+                        && sameChunk(key, sections.get(sectionVerificationIndex)));
+                continue;
+            }
             if (!loadUntil(key, deadlineNanos)) {
                 return WorldStateApply.Verification.IN_PROGRESS;
             }
@@ -147,10 +162,20 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         private SectionApplyResult appliedSection;
         private final List<SectionApplyResult> appliedChunkSections = new ArrayList<>();
         private boolean chunkBlockEntitiesChanged;
+        private final Set<ChunkCoordinate> storageAttempted = new HashSet<>();
+        private CompletableFuture<StoredChunkApplyResult> storedApply;
+        private ChunkCoordinate storedCoordinate;
         private Phase phase = Phase.BLOCKS;
 
         private boolean advance(long deadlineNanos) throws IOException {
             while (phase != Phase.COMPLETE && nanoTime.getAsLong() < deadlineNanos) {
+                StorageAttempt storage = tryStoredChunk();
+                if (storage == StorageAttempt.WAITING) {
+                    return false;
+                }
+                if (storage == StorageAttempt.APPLIED) {
+                    continue;
+                }
                 var required = requiredChunk();
                 if (required != null && !loadUntil(required, deadlineNanos)) {
                     return false;
@@ -158,6 +183,57 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 step();
             }
             return phase == Phase.COMPLETE;
+        }
+
+        private StorageAttempt tryStoredChunk() throws IOException {
+            if (phase != Phase.BLOCKS || sectionIndex >= sections.size()) {
+                return StorageAttempt.FALLBACK;
+            }
+            SectionKey first = sections.get(sectionIndex);
+            ChunkCoordinate coordinate = ChunkCoordinate.from(first);
+            if (storageAttempted.contains(coordinate) && storedApply == null) {
+                return StorageAttempt.FALLBACK;
+            }
+            if (storedApply == null) {
+                storageAttempted.add(coordinate);
+                storedCoordinate = coordinate;
+                Map<SectionKey, DecodedSection> chunkSections = new LinkedHashMap<>();
+                for (int index = sectionIndex; index < sections.size(); index++) {
+                    SectionKey key = sections.get(index);
+                    if (!sameChunk(first, key)) {
+                        break;
+                    }
+                    chunkSections.put(key, target.sections().get(key));
+                }
+                boolean entitiesChanged = target.entities().containsKey(
+                        new EntityChunkKey(coordinate.x(), coordinate.z()));
+                storedApply = world.applyStoredChunk(
+                        coordinate, Map.copyOf(chunkSections), entitiesChanged);
+            }
+            if (!storedApply.isDone()) {
+                return StorageAttempt.WAITING;
+            }
+            final StoredChunkApplyResult result;
+            try {
+                result = storedApply.join();
+            } catch (CompletionException failed) {
+                Throwable cause = failed.getCause() == null ? failed : failed.getCause();
+                if (cause instanceof IOException io) {
+                    throw io;
+                }
+                throw new IOException(
+                        "Stored Restore failed for " + storedCoordinate, cause);
+            }
+            storedApply = null;
+            if (result == StoredChunkApplyResult.FALLBACK) {
+                return StorageAttempt.FALLBACK;
+            }
+            storedChunks.add(coordinate);
+            do {
+                sectionIndex++;
+            } while (sectionIndex < sections.size()
+                    && sameChunk(first, sections.get(sectionIndex)));
+            return StorageAttempt.APPLIED;
         }
 
         private io.github.lumi.domain.model.HistoryKey requiredChunk() {
@@ -279,5 +355,11 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         REMOVE_ENTITIES,
         ADD_ENTITIES,
         COMPLETE
+    }
+
+    private enum StorageAttempt {
+        WAITING,
+        APPLIED,
+        FALLBACK
     }
 }

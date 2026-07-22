@@ -212,11 +212,39 @@ class PreparedWorldMutationSessionTest {
         assertEquals(40, access.released.size());
     }
 
+    @Test
+    void skipsFullLoadingAndReadbackAfterVerifiedStoredApply() throws Exception {
+        SectionKey low = new SectionKey(12, 0, -8);
+        SectionKey high = new SectionKey(12, 1, -8);
+        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
+        DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
+                .decode(source);
+        var target = new PreparedMinecraftState(
+                new WorldStateApply.State(Map.of(low, source, high, source), Map.of()),
+                Map.of(low, decoded, high, decoded), Map.of(),
+                List.of(low, high), List.of());
+        FakeWorld world = new FakeWorld(new AtomicLong(), source);
+        world.storedResult = StoredChunkApplyResult.APPLIED;
+        ImmediateChunkAccess chunks = new ImmediateChunkAccess();
+        var session = new PreparedWorldMutationSession(
+                target, world, () -> 0L, new ChunkLoadSession(chunks, () -> 0L));
+
+        assertTrue(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(1, world.storedWrites);
+        assertEquals(0, world.sectionWrites);
+        assertEquals(0, chunks.retained.size());
+        assertEquals(WorldStateApply.Verification.VERIFIED,
+                session.verifyUntil(Long.MAX_VALUE));
+    }
+
     private static final class FakeWorld implements PreparedWorldAccess {
         private final AtomicLong clock;
         private final SectionBlob captured;
         private int sectionWrites;
         private int synchronizedChunks;
+        private int storedWrites;
+        private StoredChunkApplyResult storedResult = StoredChunkApplyResult.FALLBACK;
         private List<UUID> entityIds = List.of();
         private Map<EntityChunkKey, List<UUID>> entityIdsByChunk = Map.of();
         private EntityChunkBlob capturedEntities = new EntityChunkBlob(List.of());
@@ -241,6 +269,13 @@ class PreparedWorldMutationSessionTest {
                 List<SectionApplyResult> sections,
                 boolean blockEntitiesChanged) {
             synchronizedChunks++;
+        }
+        @Override public CompletableFuture<StoredChunkApplyResult> applyStoredChunk(
+                ChunkCoordinate chunk,
+                Map<SectionKey, DecodedSection> sections,
+                boolean entitiesChanged) {
+            storedWrites++;
+            return CompletableFuture.completedFuture(storedResult);
         }
         @Override public List<Integer> blockEntityIndexes(SectionKey key) { return List.of(); }
         @Override public void removeBlockEntity(SectionKey key, int localIndex) { }
