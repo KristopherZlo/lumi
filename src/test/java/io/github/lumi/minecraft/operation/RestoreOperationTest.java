@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.operation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -30,6 +31,8 @@ import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.OperationJournalRepository;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,6 +43,20 @@ import org.junit.jupiter.api.io.TempDir;
 class RestoreOperationTest {
     @TempDir
     Path repositoryRoot;
+
+    @Test
+    void preservesOmittedPlayerSpawnsDuringPartialRestorePreparation() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('a'), 1);
+        var world = new RecordingPreparationWorld();
+
+        RestoreOperation.start(
+                new PreparedRestore(
+                        expected, id('b'), Map.of(), Map.of(), Map.of(), Map.of()),
+                world, ignored -> { }, new OperationJournalRepository(repositoryRoot),
+                UUID.randomUUID());
+
+        assertEquals(List.of(false, false), world.playerSpawnPresence);
+    }
 
     @Test
     void delegatesPublicationAfterExactVerification() throws IOException {
@@ -261,6 +278,28 @@ class RestoreOperationTest {
     }
 
     @Test
+    void doesNotPublishBeforeWorldPersistenceCompletes() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('2'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        BlockingPersistenceWorld world = new BlockingPersistenceWorld();
+        AtomicInteger publications = new AtomicInteger();
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('3'), Map.of(), Map.of(), Map.of(), Map.of()),
+                world, ignored -> publications.incrementAndGet(), journals, UUID.randomUUID());
+
+        activate(operation, journals);
+        assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.PERSISTING, operation.tick(Long.MAX_VALUE));
+        assertEquals(OperationPhase.VERIFYING, journals.read().orElseThrow().phase());
+        assertEquals(0, publications.get());
+
+        world.persisted = true;
+        assertEquals(RestoreStatus.COMPLETE, operation.tick(Long.MAX_VALUE));
+        assertEquals(1, publications.get());
+        assertTrue(journals.read().isEmpty());
+    }
+
+    @Test
     void repairsOneMismatchBeforePublishing() throws IOException {
         CommitId current = id('3');
         CommitId target = id('4');
@@ -333,6 +372,55 @@ class RestoreOperationTest {
         assertTrue(operation.isSafeToRelease());
         assertTrue(journals.read().isEmpty());
         assertEquals(current, refs.read(expectedRef.name()).orElseThrow().commit());
+    }
+
+    @Test
+    void persistsSafeReturnBeforePublishingItAfterTargetPersistenceFailure()
+            throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('6'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        FailingTargetPersistenceWorld world = new FailingTargetPersistenceWorld();
+        DelayedPublication publication = new DelayedPublication();
+        publication.returnDurable = true;
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('7'), Map.of(), Map.of(), Map.of(), Map.of()),
+                world, publication, journals, UUID.randomUUID());
+
+        activate(operation, journals);
+        assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.RETURNING, operation.tick(Long.MAX_VALUE));
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+        assertFalse(publication.returnPublished);
+
+        world.returnPersisted = true;
+        assertEquals(RestoreStatus.RETURNED, operation.tick(Long.MAX_VALUE));
+        assertTrue(publication.returnPublished);
+        assertTrue(journals.read().isEmpty());
+    }
+
+    @Test
+    void keepsFreezeAndJournalWhenSafeReturnPersistenceFails() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('8'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        FailingTargetPersistenceWorld world = new FailingTargetPersistenceWorld();
+        world.returnFails = true;
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('9'), Map.of(), Map.of(), Map.of(), Map.of()),
+                world, ignored -> { }, journals, UUID.randomUUID());
+
+        activate(operation, journals);
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+        assertEquals(RestoreStatus.DEGRADED, operation.tick(Long.MAX_VALUE));
+
+        assertFalse(operation.isSafeToRelease());
+        assertEquals(OperationPhase.DEGRADED, journals.read().orElseThrow().phase());
+        assertEquals("Cannot persist return world",
+                operation.failure().orElseThrow().getMessage());
+        assertEquals("Cannot persist target world",
+                operation.failure().orElseThrow().getSuppressed()[0].getMessage());
     }
 
     @Test
@@ -420,7 +508,8 @@ class RestoreOperationTest {
         operation.tick(Long.MAX_VALUE);
 
         assertEquals(RestoreStatus.PUBLISHING, operation.status());
-        assertEquals(OperationPhase.VERIFYING, journals.read().orElseThrow().phase());
+        assertEquals(OperationPhase.WORLD_PERSISTED,
+                journals.read().orElseThrow().phase());
         publication.durable = true;
         operation.tick(Long.MAX_VALUE);
         assertEquals(RestoreStatus.COMPLETE, operation.status());
@@ -464,8 +553,9 @@ class RestoreOperationTest {
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
         assertThrows(IOException.class, () -> operation.tick(Long.MAX_VALUE));
 
-        assertEquals(RestoreStatus.VERIFYING, operation.status());
-        assertEquals(OperationPhase.VERIFYING, journals.read().orElseThrow().phase());
+        assertEquals(RestoreStatus.PERSISTING, operation.status());
+        assertEquals(OperationPhase.WORLD_PERSISTED,
+                journals.read().orElseThrow().phase());
     }
 
     @Test
@@ -575,6 +665,37 @@ class RestoreOperationTest {
                 @Override public boolean applyUntil(long deadlineNanos) { return true; }
                 @Override public Verification verifyUntil(long deadlineNanos) {
                     return Verification.VERIFIED;
+                }
+                @Override public boolean repairUntil(long deadlineNanos) { return true; }
+                @Override public void restartVerification() { }
+            };
+        }
+    }
+
+    private static final class RecordingPreparationWorld implements TestWorldApply {
+        private final List<Boolean> playerSpawnPresence = new ArrayList<>();
+
+        @Override public PreparedState prepare(State target) {
+            playerSpawnPresence.add(target.playerSpawnsIncluded());
+            return new TestPrepared(target);
+        }
+
+        @Override public ApplySession begin(PreparedState target) {
+            return new ImmediatelyVerified().begin(target);
+        }
+    }
+
+    private static final class BlockingPersistenceWorld implements TestWorldApply {
+        private boolean persisted;
+
+        @Override public ApplySession begin(PreparedState target) {
+            return new TestApplySession() {
+                @Override public boolean applyUntil(long deadlineNanos) { return true; }
+                @Override public Verification verifyUntil(long deadlineNanos) {
+                    return Verification.VERIFIED;
+                }
+                @Override public boolean persistUntil(long deadlineNanos) {
+                    return persisted;
                 }
                 @Override public boolean repairUntil(long deadlineNanos) { return true; }
                 @Override public void restartVerification() { }
@@ -757,6 +878,33 @@ class RestoreOperationTest {
                 }
                 @Override public Verification verifyUntil(long deadlineNanos) {
                     return Verification.VERIFIED;
+                }
+                @Override public boolean repairUntil(long deadlineNanos) { return true; }
+                @Override public void restartVerification() { }
+            };
+        }
+    }
+
+    private static final class FailingTargetPersistenceWorld implements TestWorldApply {
+        private int begins;
+        private boolean returnPersisted;
+        private boolean returnFails;
+
+        @Override public ApplySession begin(PreparedState target) {
+            boolean targetSession = ++begins == 1;
+            return new TestApplySession() {
+                @Override public boolean applyUntil(long deadlineNanos) { return true; }
+                @Override public Verification verifyUntil(long deadlineNanos) {
+                    return Verification.VERIFIED;
+                }
+                @Override public boolean persistUntil(long deadlineNanos) throws IOException {
+                    if (targetSession) {
+                        throw new IOException("Cannot persist target world");
+                    }
+                    if (returnFails) {
+                        throw new IOException("Cannot persist return world");
+                    }
+                    return returnPersisted;
                 }
                 @Override public boolean repairUntil(long deadlineNanos) { return true; }
                 @Override public void restartVerification() { }

@@ -30,19 +30,27 @@ class PublishedApplyRecoveryTest {
     @TempDir Path repositoryRoot;
 
     @Test
-    void clearsJournalWhenRefProvesVerifiedPublicationCompleted() throws Exception {
-        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+    void clearsPersistedJournalWhenRefProvesPublicationCompleted() throws Exception {
+        assertPublishedJournalCleared(
+                repositoryRoot.resolve("legacy"), OperationPhase.VERIFYING);
+        assertPublishedJournalCleared(
+                repositoryRoot.resolve("durable"), OperationPhase.WORLD_PERSISTED);
+    }
+
+    private static void assertPublishedJournalCleared(
+            Path root, OperationPhase phase) throws Exception {
+        BranchRefRepository refs = new BranchRefRepository(root);
         var expected = refs.create(new BranchName("main"), id('1'));
         CommitId target = id('2');
         refs.compareAndSet(expected, target);
-        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        OperationJournalRepository journals = new OperationJournalRepository(root);
         OperationJournal journal = journals.create(new OperationJournal(
-                UUID.randomUUID(), OperationKind.RESTORE, OperationPhase.VERIFYING,
+                UUID.randomUUID(), OperationKind.RESTORE, phase,
                 new OperationTarget(expected.name(), expected.commit(), expected.revision(),
                         Optional.of(target), Optional.of(expected.commit()))));
 
         boolean completed = new PublishedApplyRecovery(
-                refs, new ActiveBranchRepository(repositoryRoot), journals)
+                refs, new ActiveBranchRepository(root), journals)
                 .finalizeIfPublished(journal);
 
         assertTrue(completed);

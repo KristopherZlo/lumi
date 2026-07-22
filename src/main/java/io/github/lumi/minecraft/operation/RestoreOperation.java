@@ -47,7 +47,8 @@ public final class RestoreOperation implements DimensionMutation {
     private ReturnPhase returnPhase;
 
     @Override public OperationProgress progress() {
-        if (status == RestoreStatus.APPLYING || status == RestoreStatus.REPAIRING) {
+        if (status == RestoreStatus.APPLYING || status == RestoreStatus.REPAIRING
+                || status == RestoreStatus.PERSISTING) {
             return operationProgress(targetSession.progress(), "Restore: ");
         }
         if (status == RestoreStatus.RETURNING && returnSession != null) {
@@ -549,13 +550,14 @@ public final class RestoreOperation implements DimensionMutation {
 
     private static WorldStateApply.State targetState(PreparedRestore restore) {
         return new WorldStateApply.State(
-                restore.sections(), restore.entities(), restore.playerSpawns());
+                restore.sections(), restore.entities(), restore.playerSpawns(),
+                restore.restorePlayerSpawns());
     }
 
     private static WorldStateApply.State returnState(PreparedRestore restore) {
         return new WorldStateApply.State(
                 restore.returnSections(), restore.returnEntities(),
-                restore.returnPlayerSpawns());
+                restore.returnPlayerSpawns(), restore.restorePlayerSpawns());
     }
 
     public RestoreStatus tick(long deadlineNanos) throws IOException {
@@ -568,6 +570,7 @@ public final class RestoreOperation implements DimensionMutation {
             case APPLYING -> applyTarget(deadlineNanos);
             case VERIFYING -> verifyTarget(deadlineNanos);
             case REPAIRING -> repairTarget(deadlineNanos);
+            case PERSISTING -> persistTarget(deadlineNanos);
             case PUBLISHING -> finishPublication();
             case RETURNING -> returnToPreviousState(deadlineNanos);
             default -> { }
@@ -602,7 +605,10 @@ public final class RestoreOperation implements DimensionMutation {
         }
         switch (verification) {
             case IN_PROGRESS -> { }
-            case VERIFIED -> publishTarget();
+            case VERIFIED -> {
+                status = RestoreStatus.PERSISTING;
+                persistTarget(deadlineNanos);
+            }
             case MISMATCH -> {
                 if (targetRepairAttempted) {
                     beginReturnAfter(new IOException(
@@ -626,6 +632,20 @@ public final class RestoreOperation implements DimensionMutation {
         if (repaired) {
             targetSession.restartVerification();
             status = RestoreStatus.VERIFYING;
+        }
+    }
+
+    private void persistTarget(long deadlineNanos) throws IOException {
+        final boolean persisted;
+        try {
+            persisted = targetSession.persistUntil(deadlineNanos);
+        } catch (IOException targetFailure) {
+            beginReturnAfter(targetFailure);
+            return;
+        }
+        if (persisted) {
+            journal = journals.advance(journal, OperationPhase.WORLD_PERSISTED);
+            publishTarget();
         }
     }
 
@@ -673,19 +693,8 @@ public final class RestoreOperation implements DimensionMutation {
             } else if (returnPhase == ReturnPhase.VERIFYING) {
                 WorldStateApply.Verification verification = returnSession.verifyUntil(deadlineNanos);
                 if (verification == WorldStateApply.Verification.VERIFIED) {
-                    if (!returnPublicationStarted) {
-                        publication.publishReturn(restore);
-                        returnPublicationStarted = true;
-                    }
-                    if (!publication.isReturnDurable()) {
-                        return;
-                    }
-                    journal = journals.advance(journal, OperationPhase.COMPLETE);
-                    journals.clear(journal);
-                    logStatistics("safe-return", returnSession.statistics());
-                    returnSession.close();
-                    status = RestoreStatus.RETURNED;
-                    stateListener.returned(preparedReturn.source());
+                    returnPhase = ReturnPhase.PERSISTING;
+                    persistReturn(deadlineNanos);
                 } else if (verification == WorldStateApply.Verification.MISMATCH) {
                     if (returnRepairAttempted) {
                         var mismatch = new IOException(
@@ -699,6 +708,8 @@ public final class RestoreOperation implements DimensionMutation {
                         returnPhase = ReturnPhase.REPAIRING;
                     }
                 }
+            } else if (returnPhase == ReturnPhase.PERSISTING) {
+                persistReturn(deadlineNanos);
             } else if (returnPhase == ReturnPhase.REPAIRING
                     && returnSession.repairUntil(deadlineNanos)) {
                 returnSession.restartVerification();
@@ -708,8 +719,29 @@ public final class RestoreOperation implements DimensionMutation {
             if (failure != null && returnFailure != failure) {
                 returnFailure.addSuppressed(failure);
             }
-            throw returnFailure;
+            failure = returnFailure;
+            journal = journals.advance(journal, OperationPhase.DEGRADED);
+            status = RestoreStatus.DEGRADED;
         }
+    }
+
+    private void persistReturn(long deadlineNanos) throws IOException {
+        if (!returnSession.persistUntil(deadlineNanos)) {
+            return;
+        }
+        if (!returnPublicationStarted) {
+            publication.publishReturn(restore);
+            returnPublicationStarted = true;
+        }
+        if (!publication.isReturnDurable()) {
+            return;
+        }
+        journal = journals.advance(journal, OperationPhase.COMPLETE);
+        journals.clear(journal);
+        logStatistics("safe-return", returnSession.statistics());
+        returnSession.close();
+        status = RestoreStatus.RETURNED;
+        stateListener.returned(preparedReturn.source());
     }
 
     private static void logStatistics(
@@ -821,6 +853,7 @@ public final class RestoreOperation implements DimensionMutation {
     private enum ReturnPhase {
         APPLYING,
         VERIFYING,
+        PERSISTING,
         REPAIRING
     }
 }

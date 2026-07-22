@@ -2,7 +2,7 @@ package io.github.lumi.domain.model;
 
 public enum OperationPhase {
     PREPARED(0), CAPTURING(1), WRITING_OBJECTS(2), COMMIT_WRITTEN(3), APPLYING(4), VERIFYING(5),
-    REF_PUBLISHED(6), ROLLING_BACK(7), COMPLETE(8), DEGRADED(9);
+    REF_PUBLISHED(6), ROLLING_BACK(7), COMPLETE(8), DEGRADED(9), WORLD_PERSISTED(10);
 
     private final int code;
 

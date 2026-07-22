@@ -45,9 +45,13 @@ class OperationJournalRepositoryTest {
                 target()));
 
         OperationJournal applying = repository.advance(created, OperationPhase.APPLYING);
+        OperationJournal persisted = repository.advance(
+                applying, OperationPhase.WORLD_PERSISTED);
 
-        assertEquals(created.target(), applying.target());
-        assertEquals(applying, new OperationJournalRepository(repositoryRoot).read().orElseThrow());
+        assertEquals(10, OperationPhase.WORLD_PERSISTED.code());
+        assertEquals(created.target(), persisted.target());
+        assertEquals(persisted,
+                new OperationJournalRepository(repositoryRoot).read().orElseThrow());
     }
 
     @Test
