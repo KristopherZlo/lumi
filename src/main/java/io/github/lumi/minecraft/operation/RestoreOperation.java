@@ -45,7 +45,21 @@ public final class RestoreOperation implements DimensionMutation {
     private ReturnPhase returnPhase;
 
     @Override public OperationProgress progress() {
-        return OperationProgress.indeterminate("Restore: " + status.name().toLowerCase());
+        if (status == RestoreStatus.APPLYING || status == RestoreStatus.REPAIRING) {
+            return operationProgress(targetSession.progress(), "Restore: ");
+        }
+        if (status == RestoreStatus.RETURNING && returnSession != null) {
+            return operationProgress(returnSession.progress(), "Restore: safe return / ");
+        }
+        return OperationProgress.indeterminate(status == RestoreStatus.VERIFYING
+                ? "Restore: verification"
+                : "Restore: " + status.name().toLowerCase());
+    }
+
+    private static OperationProgress operationProgress(
+            WorldStateApply.ApplyProgress progress, String prefix) {
+        return new OperationProgress(
+                prefix + progress.phase(), progress.completed(), progress.total());
     }
 
     private RestoreOperation(
@@ -484,10 +498,10 @@ public final class RestoreOperation implements DimensionMutation {
         WorldStateApply.State targetState = targetState(restore);
         WorldStateApply.State returnState = returnState(restore);
         WorldStateApply.PreparedState preparedTarget = prepareWorldState(
-                world, targetState, returnState, "Restore: decoding target", progress);
+                world, targetState, returnState, "Restore: preflight target", progress);
         WorldStateApply.PreparedState preparedReturn = prepareWorldState(
                 world, returnState, targetState,
-                "Restore: decoding return point", progress);
+                "Restore: preflight return point", progress);
         OperationJournal journal = new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
@@ -513,10 +527,10 @@ public final class RestoreOperation implements DimensionMutation {
         WorldStateApply.State targetState = targetState(restore);
         WorldStateApply.State returnState = returnState(restore);
         WorldStateApply.PreparedState preparedTarget = prepareWorldState(
-                world, targetState, returnState, "Restore: decoding target", progress);
+                world, targetState, returnState, "Restore: preflight target", progress);
         WorldStateApply.PreparedState preparedReturn = prepareWorldState(
                 world, returnState, targetState,
-                "Restore: decoding return point", progress);
+                "Restore: preflight return point", progress);
         return new RestoreOperation(
                 restore, world, publication, journals, journal, true,
                 preparedTarget, preparedReturn, stateListener);

@@ -60,8 +60,22 @@ public interface WorldStateApply {
 
         void restartVerification();
 
+        default ApplyProgress progress() {
+            return new ApplyProgress("apply", 0, 0);
+        }
+
         @Override
         default void close() { }
+    }
+
+    record ApplyProgress(String phase, long completed, long total) {
+        public ApplyProgress {
+            Objects.requireNonNull(phase, "phase");
+            if (phase.isBlank() || completed < 0 || total < 0
+                    || total > 0 && completed > total) {
+                throw new IllegalArgumentException("Invalid world apply progress");
+            }
+        }
     }
 
     enum Verification {

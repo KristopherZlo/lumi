@@ -55,6 +55,11 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     }
 
     @Override
+    public String mutationPhase() {
+        return storedChunks.phase();
+    }
+
+    @Override
     public void finishChunk(
             ChunkCoordinate coordinate,
             List<SectionApplyResult> changedSections,

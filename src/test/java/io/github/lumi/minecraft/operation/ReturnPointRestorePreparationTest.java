@@ -67,9 +67,9 @@ class ReturnPointRestorePreparationTest {
         assertTrue(journals.read().orElseThrow().target().excludeEntities());
         assertEquals(RestoreStatus.APPLYING, operation.status());
         assertTrue(progress.stream().anyMatch(value ->
-                value.phase().equals("Restore: decoding target")));
+                value.phase().equals("Restore: preflight target")));
         assertTrue(progress.stream().anyMatch(value ->
-                value.phase().equals("Restore: decoding return point")));
+                value.phase().equals("Restore: preflight return point")));
     }
 
     private static Commit commit(

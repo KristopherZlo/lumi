@@ -197,6 +197,25 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     @Override public void restartVerification() { }
 
     @Override
+    public WorldStateApply.ApplyProgress progress() {
+        String name = switch (phase) {
+            case PREPARING -> "preparing batch";
+            case APPLYING -> current == null ? "loaded apply" : current.progress().phase();
+            case VERIFYING -> "verification";
+            case REPAIRING -> "repairing";
+            case COMPLETE -> "verification";
+        };
+        long completed = batchStart;
+        if (current != null && batchStart < plan.sectionKeys().size()) {
+            completed += Math.min(
+                    current.progress().completed(), batchEnd - batchStart);
+        }
+        return new WorldStateApply.ApplyProgress(
+                name, Math.min(completed, plan.sectionKeys().size()),
+                plan.sectionKeys().size());
+    }
+
+    @Override
     public void close() {
         if (preparing != null) {
             preparing.cancel(true);

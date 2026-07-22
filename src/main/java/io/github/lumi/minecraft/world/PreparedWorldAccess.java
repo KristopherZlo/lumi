@@ -28,6 +28,10 @@ public interface PreparedWorldAccess {
         return CompletableFuture.completedFuture(StoredChunkApplyResult.FALLBACK);
     }
 
+    default String mutationPhase() {
+        return "loaded apply";
+    }
+
     List<Integer> blockEntityIndexes(SectionKey key) throws IOException;
 
     void removeBlockEntity(SectionKey key, int localIndex) throws IOException;

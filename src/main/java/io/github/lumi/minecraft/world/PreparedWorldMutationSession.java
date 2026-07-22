@@ -129,6 +129,12 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         }
     }
 
+    @Override
+    public WorldStateApply.ApplyProgress progress() {
+        return new WorldStateApply.ApplyProgress(
+                world.mutationPhase(), apply.sectionIndex, sections.size());
+    }
+
     private boolean loadUntil(
             io.github.lumi.domain.model.HistoryKey key,
             long deadlineNanos) throws IOException {

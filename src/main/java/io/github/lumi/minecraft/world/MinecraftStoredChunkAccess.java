@@ -28,6 +28,7 @@ final class MinecraftStoredChunkAccess {
     private final ServerLevel level;
     private final PalettedContainerFactory containers;
     private final Map<ChunkCoordinate, ChunkLoadGate.Lease> gates = new HashMap<>();
+    private volatile String phase = "loaded apply";
 
     MinecraftStoredChunkAccess(ServerLevel level) {
         this.level = Objects.requireNonNull(level, "level");
@@ -54,6 +55,7 @@ final class MinecraftStoredChunkAccess {
             }
             gates.put(coordinate, gate);
         }
+        phase = "stored read";
         return level.getChunkSource().chunkMap.read(position).thenCompose(stored -> {
             if (stored.isEmpty()) {
                 return fallback(coordinate);
@@ -66,9 +68,16 @@ final class MinecraftStoredChunkAccess {
             } catch (IOException failed) {
                 return CompletableFuture.failedFuture(failed);
             }
+            phase = "stored write";
             return level.getChunkSource().chunkMap.write(position, patched)
-                    .thenCompose(ignored -> level.getChunkSource().chunkMap.synchronize(true))
-                    .thenCompose(ignored -> level.getChunkSource().chunkMap.read(position))
+                    .thenCompose(ignored -> {
+                        phase = "storage sync";
+                        return level.getChunkSource().chunkMap.synchronize(true);
+                    })
+                    .thenCompose(ignored -> {
+                        phase = "verification";
+                        return level.getChunkSource().chunkMap.read(position);
+                    })
                     .thenApply(reread -> {
                         try {
                             if (reread.isEmpty()
@@ -83,6 +92,10 @@ final class MinecraftStoredChunkAccess {
                         }
                     });
         });
+    }
+
+    String phase() {
+        return phase;
     }
 
     private CompoundTag patch(
@@ -260,6 +273,7 @@ final class MinecraftStoredChunkAccess {
     private CompletableFuture<StoredChunkApplyResult> fallback(
             ChunkCoordinate coordinate) {
         release(coordinate);
+        phase = "loaded apply";
         return CompletableFuture.completedFuture(StoredChunkApplyResult.FALLBACK);
     }
 
@@ -268,6 +282,7 @@ final class MinecraftStoredChunkAccess {
         if (gate != null) {
             gate.close();
         }
+        phase = "loaded apply";
     }
 
     private static final class UnsupportedChunk extends Exception { }
