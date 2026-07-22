@@ -4,12 +4,14 @@ import io.github.lumi.domain.model.SectionKey;
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
 import java.util.BitSet;
 import java.util.List;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -37,6 +39,7 @@ final class MinecraftSectionRewriter {
         }
 
         chunk.getSections()[sectionIndex] = replacementSection;
+        updatePois(key, replacementSection, delta.poiIndexes());
         updateHeightmaps(chunk, key, replacementSection, delta.changedIndexes());
         if (delta.lightChanged()) {
             ((SectionLightBatchScheduler) level.getLightEngine())
@@ -97,6 +100,29 @@ final class MinecraftSectionRewriter {
                     }
                 }
             }
+        }
+    }
+
+    private void updatePois(
+            SectionKey key,
+            LevelChunkSection section,
+            int[] changedIndexes) {
+        var pois = level.getChunkSource().getPoiManager();
+        for (int localIndex : changedIndexes) {
+            int x = localIndex & 15;
+            int z = (localIndex >>> 4) & 15;
+            int y = (localIndex >>> 8) & 15;
+            BlockPos position = new BlockPos(
+                    key.chunkX() * 16 + x,
+                    key.sectionY() * 16 + y,
+                    key.chunkZ() * 16 + z);
+            var target = PoiTypes.forState(section.getBlockState(x, y, z));
+            var current = pois.getType(position);
+            if (current.equals(target)) {
+                continue;
+            }
+            current.ifPresent(ignored -> pois.remove(position));
+            target.ifPresent(type -> pois.add(position, type));
         }
     }
 

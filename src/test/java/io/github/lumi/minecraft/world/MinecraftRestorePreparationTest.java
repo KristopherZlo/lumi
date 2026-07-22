@@ -75,6 +75,7 @@ class MinecraftRestorePreparationTest {
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));
         var targetStates = new ArrayList<>(beforeStates);
         targetStates.set(17, "minecraft:glowstone");
+        targetStates.set(18, "minecraft:lectern[facing=north,has_book=false,powered=false]");
         var before = new WorldStateApply.State(
                 Map.of(key, new SectionBlob(beforeStates, Map.of())), Map.of());
         var target = new WorldStateApply.State(
@@ -86,8 +87,9 @@ class MinecraftRestorePreparationTest {
         PreparedSectionDelta delta = preparation.prepare(target, before, ignored -> { })
                 .sections().get(key).deltaFrom(null);
 
-        assertArrayEquals(new int[] {17}, delta.changedIndexes());
-        assertEquals(1, delta.changedCells().length);
+        assertArrayEquals(new int[] {17, 18}, delta.changedIndexes());
+        assertArrayEquals(new int[] {18}, delta.poiIndexes());
+        assertEquals(2, delta.changedCells().length);
         assertTrue(delta.lightChanged());
         assertFalse(delta.blockEntitiesChanged());
     }

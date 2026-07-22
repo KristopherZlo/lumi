@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 
 /** Immutable block delta computed before the server-tick apply path. */
 @SuppressWarnings("deprecation")
@@ -13,6 +14,7 @@ final class PreparedSectionDelta {
     private final int[] changedIndexes;
     private final short[] changedCells;
     private final short[] lightColumns;
+    private final int[] poiIndexes;
     private final boolean lightChanged;
     private final boolean blockEntitiesChanged;
 
@@ -20,11 +22,13 @@ final class PreparedSectionDelta {
             int[] changedIndexes,
             short[] changedCells,
             short[] lightColumns,
+            int[] poiIndexes,
             boolean lightChanged,
             boolean blockEntitiesChanged) {
         this.changedIndexes = changedIndexes;
         this.changedCells = changedCells;
         this.lightColumns = lightColumns;
+        this.poiIndexes = poiIndexes;
         this.lightChanged = lightChanged;
         this.blockEntitiesChanged = blockEntitiesChanged;
     }
@@ -50,8 +54,10 @@ final class PreparedSectionDelta {
         int[] indexes = new int[SectionBlob.BLOCK_COUNT];
         short[] cells = new short[SectionBlob.BLOCK_COUNT];
         short[] light = new short[256];
+        int[] pois = new int[SectionBlob.BLOCK_COUNT];
         boolean hasLight = false;
         int count = 0;
+        int poiCount = 0;
         List<BlockState> targetStates = target.blockStates();
         for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
             BlockState current = before.apply(index);
@@ -64,6 +70,9 @@ final class PreparedSectionDelta {
             int z = (index >>> 4) & 15;
             int y = (index >>> 8) & 15;
             cells[count++] = (short) ((x << 8) | (z << 4) | y);
+            if (!PoiTypes.forState(current).equals(PoiTypes.forState(replacement))) {
+                pois[poiCount++] = index;
+            }
             if (requiresLightCheck(current, replacement)) {
                 MinecraftSectionRewriter.markLightChange(light, x, y, z);
                 hasLight = true;
@@ -71,7 +80,8 @@ final class PreparedSectionDelta {
         }
         return new PreparedSectionDelta(
                 Arrays.copyOf(indexes, count), Arrays.copyOf(cells, count),
-                light, hasLight, blockEntitiesChanged);
+                light, Arrays.copyOf(pois, poiCount),
+                hasLight, blockEntitiesChanged);
     }
 
     int[] changedIndexes() {
@@ -84,6 +94,10 @@ final class PreparedSectionDelta {
 
     short[] lightColumns() {
         return lightColumns;
+    }
+
+    int[] poiIndexes() {
+        return poiIndexes;
     }
 
     boolean lightChanged() {
