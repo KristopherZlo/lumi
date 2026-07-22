@@ -196,6 +196,7 @@ public final class LumiHistoryGameTests {
                         helper, runtime, level, chunk, chunkLoad.get()))
                 .thenExecute(() -> {
                     level.setBlockAndUpdate(target, Blocks.GOLD_BLOCK.defaultBlockState());
+                    markBuilderMutation(helper, runtime, target);
                     releaseChunk(level, chunk);
                 })
                 .thenWaitUntil(() -> requireUnloaded(helper, level, chunk))
@@ -215,6 +216,7 @@ public final class LumiHistoryGameTests {
                 .thenExecute(() -> {
                     assertBlock(helper, level, target, Blocks.GOLD_BLOCK);
                     level.setBlockAndUpdate(target, Blocks.DIAMOND_BLOCK.defaultBlockState());
+                    markBuilderMutation(helper, runtime, target);
                     releaseChunk(level, chunk);
                 })
                 .thenWaitUntil(() -> requireUnloaded(helper, level, chunk))
@@ -357,6 +359,16 @@ public final class LumiHistoryGameTests {
             GameTestHelper helper, ServerLevel level, ChunkPos chunk) {
         helper.assertTrue(level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null,
                 "Test chunk is still loaded");
+        helper.assertTrue(level.getChunkSource().chunkMap
+                        .getUpdatingChunkIfPresent(chunk.toLong()) == null,
+                "Test chunk still has an active holder");
+    }
+
+    private static void markBuilderMutation(
+            GameTestHelper helper, FabricDimensionRuntime runtime, BlockPos position) {
+        helper.assertTrue(runtime.mutations().markBuilderMutation(
+                        MinecraftSectionCapture.key(position)),
+                "Test mutation was not tracked as a builder change");
     }
 
     private static void assertBlock(
@@ -413,10 +425,13 @@ public final class LumiHistoryGameTests {
             GameTestHelper helper,
             FabricDimensionRuntime runtime,
             AtomicReference<DimensionMutation> current) {
-        helper.assertFalse(runtime.operations().hasActiveOperation()
-                        || runtime.operations().queuedCount() > 0,
-                "Lumi operation is still active: "
-                        + current.get().progress().phase());
+        DimensionMutation operation = current.get();
+        String phase = operation == null ? "not started" : operation.progress().phase();
+        helper.assertTrue(operation != null
+                        && operation.isTerminal()
+                        && !runtime.operations().hasActiveOperation()
+                        && runtime.operations().queuedCount() == 0,
+                "Lumi operation is still active: " + phase);
     }
 
     private static void requireSucceeded(
