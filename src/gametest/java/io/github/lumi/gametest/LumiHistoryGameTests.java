@@ -252,6 +252,7 @@ public final class LumiHistoryGameTests {
                 .thenWaitUntil(() -> requireIdle(helper, runtime, current))
                 .thenExecute(() -> {
                     requireSucceeded(helper, terminal.get(), "Restore unloaded gold");
+                    requireStoredRestore(helper, current.get(), chunks.size());
                     chunkLoad.set(loadChunks(level, chunks));
                 })
                 .thenWaitUntil(() -> requireLoaded(
@@ -474,5 +475,15 @@ public final class LumiHistoryGameTests {
         helper.assertValueEqual(
                 MutationTerminalState.SUCCEEDED, terminal,
                 operation + " did not succeed");
+    }
+
+    private static void requireStoredRestore(
+            GameTestHelper helper, DimensionMutation operation, int expectedChunks) {
+        var statistics = operation.restoreStatistics().orElseThrow(() ->
+                helper.assertionException("Restore did not publish apply statistics"));
+        helper.assertValueEqual(0L, statistics.loadedChunks(),
+                "Unloaded Restore fell back to the FULL-loaded path");
+        helper.assertValueEqual((long) expectedChunks, statistics.storedChunks(),
+                "Unloaded Restore did not use vanilla storage for every chunk");
     }
 }

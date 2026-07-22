@@ -1,6 +1,7 @@
 package io.github.lumi.gametest;
 
 import io.github.lumi.minecraft.world.RestoreApplyStatistics;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /** End-to-end and apply-path measurements for one durably published Restore. */
@@ -12,6 +13,7 @@ record LumiRestoreMeasurement(
         long maximumServerTickNanos,
         RestoreApplyStatistics apply) {
     LumiRestoreMeasurement {
+        Objects.requireNonNull(apply, "apply");
         if (operationMillis < 0 || uiToAcceptedMillis < 0
                 || heapBeforeBytes < 0 || peakHeapBytes < heapBeforeBytes
                 || maximumServerTickNanos < 0) {
@@ -29,12 +31,30 @@ record LumiRestoreMeasurement(
                 + apply.storageSyncNanos();
     }
 
+    String chunkPath() {
+        return chunkPath(apply.loadedChunks(), apply.storedChunks());
+    }
+
+    static String chunkPath(long loadedChunks, long storedChunks) {
+        if (loadedChunks > 0 && storedChunks > 0) {
+            return "mixed";
+        }
+        if (loadedChunks > 0) {
+            return "loaded-only";
+        }
+        if (storedChunks > 0) {
+            return "stored-only";
+        }
+        return "none";
+    }
+
     String describe() {
         return "operationMs=" + operationMillis
                 + ";uiToAcceptedMs=" + uiToAcceptedMillis
                 + ";applicationMs=" + TimeUnit.NANOSECONDS.toMillis(applicationNanos())
                 + ";extraHeapBytes=" + extraHeapBytes()
                 + ";maximumServerTickMs=" + millis(maximumServerTickNanos)
+                + ";chunkPath=" + chunkPath()
                 + ";loadedChunks=" + apply.loadedChunks()
                 + ";storedChunks=" + apply.storedChunks()
                 + ";sectionSwaps=" + apply.sectionSwaps()

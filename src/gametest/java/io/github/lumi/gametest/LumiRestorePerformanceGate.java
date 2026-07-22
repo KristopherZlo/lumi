@@ -26,7 +26,14 @@ final class LumiRestorePerformanceGate {
         long maximumTick = measurements.stream()
                 .mapToLong(LumiRestoreMeasurement::maximumServerTickNanos)
                 .max().orElseThrow();
+        long loadedChunks = measurements.stream()
+                .mapToLong(measurement -> measurement.apply().loadedChunks()).sum();
+        long storedChunks = measurements.stream()
+                .mapToLong(measurement -> measurement.apply().storedChunks()).sum();
 
+        if (loadedChunks == 0 && storedChunks == 0) {
+            throw new AssertionError("Restore benchmark exercised no chunk apply path");
+        }
         requireAtMost("additional Restore heap", maximumExtraHeap, MAX_EXTRA_HEAP);
         if (maximumTick == 0) {
             throw new AssertionError("Restore benchmark observed no complete server tick");
@@ -43,7 +50,7 @@ final class LumiRestorePerformanceGate {
             requireAtMost("5000x5000x16 full Restore", maximumTotalMillis, 60_000);
         }
         return new Result(applicationP50, maximumTotalMillis,
-                maximumExtraHeap, maximumTick);
+                maximumExtraHeap, maximumTick, loadedChunks, storedChunks);
     }
 
     private static long median(List<Long> values) {
@@ -62,14 +69,20 @@ final class LumiRestorePerformanceGate {
             long applicationP50Nanos,
             long maximumTotalMillis,
             long maximumExtraHeapBytes,
-            long maximumServerTickNanos) {
+            long maximumServerTickNanos,
+            long loadedChunks,
+            long storedChunks) {
         String describe() {
             return "applicationP50Ms="
                     + TimeUnit.NANOSECONDS.toMillis(applicationP50Nanos)
                     + ";maximumTotalMs=" + maximumTotalMillis
                     + ";maximumExtraHeapBytes=" + maximumExtraHeapBytes
                     + ";maximumServerTickMs="
-                    + TimeUnit.NANOSECONDS.toMillis(maximumServerTickNanos);
+                    + TimeUnit.NANOSECONDS.toMillis(maximumServerTickNanos)
+                    + ";chunkPathCoverage="
+                    + LumiRestoreMeasurement.chunkPath(loadedChunks, storedChunks)
+                    + ";loadedChunks=" + loadedChunks
+                    + ";storedChunks=" + storedChunks;
         }
     }
 }

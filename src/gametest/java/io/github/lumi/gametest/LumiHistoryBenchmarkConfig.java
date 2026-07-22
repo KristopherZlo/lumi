@@ -65,7 +65,8 @@ record LumiHistoryBenchmarkConfig(
     }
 
     String describe() {
-        return "baseSize=" + baseSize
+        return "fixture=loaded-native-sections"
+                + ";baseSize=" + baseSize
                 + ";changeSize=" + changeSize
                 + ";layers=" + layers
                 + ";commits=" + commits
