@@ -239,9 +239,10 @@ class PreparedWorldMutationSessionTest {
         assertEquals(0, world.sectionWrites);
         assertEquals(0, chunks.retained.size());
         assertEquals(1, session.statistics().storedChunks());
-        assertEquals(5, session.statistics().storageReadNanos());
+        assertEquals(1, session.statistics().storageReadNanos());
         assertEquals(2, session.statistics().storageWriteNanos());
         assertEquals(3, session.statistics().storageSyncNanos());
+        assertEquals(4, session.statistics().verificationNanos());
         assertEquals(WorldStateApply.Verification.VERIFIED,
                 session.verifyUntil(Long.MAX_VALUE));
     }

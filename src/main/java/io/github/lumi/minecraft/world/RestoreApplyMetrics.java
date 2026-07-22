@@ -39,9 +39,10 @@ final class RestoreApplyMetrics {
 
     void storedChunk(StoredChunkApplyResult result) {
         storedChunks.increment();
-        storageReadNanos.add(result.readNanos() + result.verifyNanos());
+        storageReadNanos.add(result.readNanos());
         storageWriteNanos.add(result.writeNanos());
         storageSyncNanos.add(result.syncNanos());
+        verificationNanos.add(result.verifyNanos());
     }
 
     void chunkLoad(long nanos) { chunkLoadNanos.add(nanos); }

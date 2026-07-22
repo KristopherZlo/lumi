@@ -53,13 +53,15 @@ final class MinecraftStoredChunkAccess {
             Set<ChunkCoordinate> entityChunks) {
         Objects.requireNonNull(targets, "targets");
         Objects.requireNonNull(entityChunks, "entityChunks");
+        long readStarted = System.nanoTime();
         Map<ChunkCoordinate, CompletableFuture<PreparedWrite>> preparing =
                 new LinkedHashMap<>();
         targets.forEach((coordinate, target) -> preparing.put(coordinate,
                 prepare(coordinate, target, entityChunks.contains(coordinate))));
         return CompletableFuture.allOf(
                         preparing.values().toArray(CompletableFuture[]::new))
-                .thenCompose(ignored -> writeAndVerify(preparing));
+                .thenCompose(ignored -> writeAndVerify(
+                        preparing, System.nanoTime() - readStarted));
     }
 
     private CompletableFuture<PreparedWrite> prepare(
@@ -83,16 +85,14 @@ final class MinecraftStoredChunkAccess {
             gates.put(coordinate, gate);
         }
         phase = "stored read";
-        StorageTimings timings = new StorageTimings(System.nanoTime());
         return level.getChunkSource().chunkMap.read(position).thenApply(stored -> {
-            timings.readNanos = System.nanoTime() - timings.startedNanos;
             if (stored.isEmpty()) {
                 release(coordinate);
                 return null;
             }
             try {
                 return new PreparedWrite(coordinate, position, target,
-                        patch(position, stored.orElseThrow(), target), timings);
+                        patch(position, stored.orElseThrow(), target));
             } catch (UnsupportedChunk unsupported) {
                 release(coordinate);
                 return null;
@@ -103,7 +103,8 @@ final class MinecraftStoredChunkAccess {
     }
 
     private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> writeAndVerify(
-            Map<ChunkCoordinate, CompletableFuture<PreparedWrite>> preparing) {
+            Map<ChunkCoordinate, CompletableFuture<PreparedWrite>> preparing,
+            long readNanos) {
         Map<ChunkCoordinate, StoredChunkApplyResult> results = new LinkedHashMap<>();
         List<PreparedWrite> writes = new ArrayList<>();
         preparing.forEach((coordinate, pending) -> {
@@ -119,44 +120,50 @@ final class MinecraftStoredChunkAccess {
             return CompletableFuture.completedFuture(Map.copyOf(results));
         }
         phase = "stored write";
-        List<CompletableFuture<Void>> pendingWrites = writes.stream().map(write -> {
-            write.timings().startedNanos = System.nanoTime();
-            return level.getChunkSource().chunkMap.write(write.position(), write.patched())
-                    .thenRun(() -> write.timings().writeNanos =
-                            System.nanoTime() - write.timings().startedNanos);
-        }).toList();
+        long writeStarted = System.nanoTime();
+        List<CompletableFuture<Void>> pendingWrites = writes.stream()
+                .map(write -> level.getChunkSource().chunkMap.write(
+                        write.position(), write.patched()))
+                .toList();
         return CompletableFuture.allOf(pendingWrites.toArray(CompletableFuture[]::new))
-                .thenCompose(ignored -> synchronizeAndVerify(writes, results));
+                .thenCompose(ignored -> synchronizeAndVerify(
+                        writes, results, readNanos,
+                        System.nanoTime() - writeStarted));
     }
 
     private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> synchronizeAndVerify(
             List<PreparedWrite> writes,
-            Map<ChunkCoordinate, StoredChunkApplyResult> results) {
+            Map<ChunkCoordinate, StoredChunkApplyResult> results,
+            long readNanos,
+            long writeNanos) {
         phase = "storage sync";
         long syncStarted = System.nanoTime();
         return level.getChunkSource().chunkMap.synchronize(true).thenCompose(ignored -> {
             long syncNanos = System.nanoTime() - syncStarted;
             phase = "verification";
+            long verifyStarted = System.nanoTime();
             Map<PreparedWrite, CompletableFuture<java.util.Optional<CompoundTag>>> reads =
                     new LinkedHashMap<>();
             for (PreparedWrite write : writes) {
-                write.timings().startedNanos = System.nanoTime();
                 reads.put(write, level.getChunkSource().chunkMap.read(write.position()));
             }
             return CompletableFuture.allOf(reads.values().toArray(CompletableFuture[]::new))
-                    .thenApply(done -> verifiedResults(reads, results, syncNanos));
+                    .thenApply(done -> verifiedResults(
+                            reads, results, readNanos, writeNanos, syncNanos,
+                            System.nanoTime() - verifyStarted));
         });
     }
 
     private Map<ChunkCoordinate, StoredChunkApplyResult> verifiedResults(
             Map<PreparedWrite, CompletableFuture<java.util.Optional<CompoundTag>>> reads,
             Map<ChunkCoordinate, StoredChunkApplyResult> results,
-            long syncNanos) {
+            long readNanos,
+            long writeNanos,
+            long syncNanos,
+            long verifyNanos) {
         boolean first = true;
         for (var entry : reads.entrySet()) {
             PreparedWrite write = entry.getKey();
-            write.timings().verifyNanos =
-                    System.nanoTime() - write.timings().startedNanos;
             try {
                 var stored = entry.getValue().join();
                 if (stored.isEmpty() || !matches(
@@ -169,8 +176,10 @@ final class MinecraftStoredChunkAccess {
             }
             release(write.coordinate());
             results.put(write.coordinate(), StoredChunkApplyResult.applied(
-                    write.timings().readNanos, write.timings().writeNanos,
-                    first ? syncNanos : 0, write.timings().verifyNanos));
+                    first ? readNanos : 0,
+                    first ? writeNanos : 0,
+                    first ? syncNanos : 0,
+                    first ? verifyNanos : 0));
             first = false;
         }
         phase = "loaded apply";
@@ -181,19 +190,7 @@ final class MinecraftStoredChunkAccess {
             ChunkCoordinate coordinate,
             ChunkPos position,
             Map<SectionKey, DecodedSection> target,
-            CompoundTag patched,
-            StorageTimings timings) { }
-
-    private static final class StorageTimings {
-        private long startedNanos;
-        private long readNanos;
-        private long writeNanos;
-        private long verifyNanos;
-
-        private StorageTimings(long startedNanos) {
-            this.startedNanos = startedNanos;
-        }
-    }
+            CompoundTag patched) { }
 
     String phase() {
         return phase;
