@@ -14,5 +14,9 @@ class PendingBuilderBoundaryTest {
 
         assertTrue(source.contains(
                 "return mutations.builderSnapshot(workspace::includes);"));
+        assertTrue(source.contains(
+                "mutations.durabilityBoundary(boundary)"));
+        assertTrue(source.contains(
+                "mutations.isDurable(durability)"));
     }
 }

@@ -1046,12 +1046,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
         var workspace = activeWorkspace();
         WorkingIndexSnapshot boundary = pendingBoundary(workspace);
+        var durability = mutations.durabilityBoundary(boundary);
         ChunkLoadSession chunks = new ChunkLoadSession(
                 new MinecraftChunkLoadAccess(level));
         chunks.retain(boundary.generations().keySet());
         var operation = new PendingStatisticsOperation(
                 expected.commit(), boundary, historyViews.zones(), worldReader,
-                () -> pendingBoundary(workspace), pendingStatistics,
+                () -> pendingBoundary(workspace),
+                () -> mutations.isDurable(durability), pendingStatistics,
                 background, chunks);
         operations.enqueue(
                 operation, OperationPriority.NORMAL,

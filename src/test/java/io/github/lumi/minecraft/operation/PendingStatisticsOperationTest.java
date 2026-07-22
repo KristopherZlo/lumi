@@ -14,6 +14,8 @@ import io.github.lumi.minecraft.world.WorldStateReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -30,6 +32,7 @@ class PendingStatisticsOperationTest {
                 new AtomicReference<>();
         var operation = new PendingStatisticsOperation(
                 HEAD, boundary, List.of(), reader(), () -> boundary,
+                () -> true,
                 (head, sections, zones) -> {
                     calculated.set(sections);
                     return result(new PendingChangeStatistics(2, 1, 3));
@@ -54,6 +57,7 @@ class PendingStatisticsOperationTest {
                 new AtomicReference<>(boundary);
         var operation = new PendingStatisticsOperation(
                 HEAD, boundary, List.of(), reader(), current::get,
+                () -> true,
                 (head, sections, zones) -> {
                     current.set(new WorkingIndexSnapshot(Map.of(SECTION, 2L)));
                     return result(PendingChangeStatistics.NONE);
@@ -69,10 +73,42 @@ class PendingStatisticsOperationTest {
                 operation.terminalState());
     }
 
+    @Test
+    void waitsForTheCapturedBoundaryToBecomeDurable() throws Exception {
+        WorkingIndexSnapshot boundary = new WorkingIndexSnapshot(
+                Map.of(SECTION, 1L));
+        AtomicBoolean durable = new AtomicBoolean();
+        AtomicInteger reads = new AtomicInteger();
+        WorldStateReader reader = reader(() -> reads.incrementAndGet());
+        var operation = new PendingStatisticsOperation(
+                HEAD, boundary, List.of(), reader, () -> boundary, durable::get,
+                (head, sections, zones) -> result(PendingChangeStatistics.NONE),
+                Runnable::run, System::nanoTime);
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(0, reads.get());
+        assertEquals("Waiting for pending-statistics writes",
+                operation.progress().phase());
+
+        durable.set(true);
+        operation.advance(Long.MAX_VALUE);
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(1, reads.get());
+        assertEquals(MutationTerminalState.SUCCEEDED,
+                operation.terminalState());
+    }
+
     private static WorldStateReader reader() {
+        return reader(() -> { });
+    }
+
+    private static WorldStateReader reader(Runnable beforeRead) {
         return new WorldStateReader() {
             @Override
             public SectionBlob read(SectionKey key) {
+                beforeRead.run();
                 return section();
             }
 

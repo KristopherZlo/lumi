@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
@@ -29,6 +30,7 @@ public final class PendingStatisticsOperation implements DimensionMutation {
     private final List<Zone> zones;
     private final WorldStateReader reader;
     private final Supplier<WorkingIndexSnapshot> currentBoundary;
+    private final BooleanSupplier boundaryDurable;
     private final Calculator calculator;
     private final Executor background;
     private final LongSupplier nanoTime;
@@ -38,6 +40,7 @@ public final class PendingStatisticsOperation implements DimensionMutation {
     private CompletableFuture<PendingChangeStatisticsService.Result> future;
     private PendingChangeStatisticsService.Result result;
     private Throwable failure;
+    private boolean durabilityReady;
     private boolean chunksReady;
     private boolean chunksReleased;
 
@@ -47,9 +50,10 @@ public final class PendingStatisticsOperation implements DimensionMutation {
             List<Zone> zones,
             WorldStateReader reader,
             Supplier<WorkingIndexSnapshot> currentBoundary,
+            BooleanSupplier boundaryDurable,
             PendingChangeStatisticsService calculator,
             Executor background) {
-        this(head, boundary, zones, reader, currentBoundary,
+        this(head, boundary, zones, reader, currentBoundary, boundaryDurable,
                 calculator::calculate, background, System::nanoTime, null);
     }
 
@@ -59,10 +63,11 @@ public final class PendingStatisticsOperation implements DimensionMutation {
             List<Zone> zones,
             WorldStateReader reader,
             Supplier<WorkingIndexSnapshot> currentBoundary,
+            BooleanSupplier boundaryDurable,
             PendingChangeStatisticsService calculator,
             Executor background,
             ChunkLoadSession chunks) {
-        this(head, boundary, zones, reader, currentBoundary,
+        this(head, boundary, zones, reader, currentBoundary, boundaryDurable,
                 calculator::calculate, background, System::nanoTime,
                 Objects.requireNonNull(chunks, "chunks"));
     }
@@ -73,10 +78,11 @@ public final class PendingStatisticsOperation implements DimensionMutation {
             List<Zone> zones,
             WorldStateReader reader,
             Supplier<WorkingIndexSnapshot> currentBoundary,
+            BooleanSupplier boundaryDurable,
             Calculator calculator,
             Executor background,
             LongSupplier nanoTime) {
-        this(head, boundary, zones, reader, currentBoundary,
+        this(head, boundary, zones, reader, currentBoundary, boundaryDurable,
                 calculator, background, nanoTime, null);
     }
 
@@ -86,6 +92,7 @@ public final class PendingStatisticsOperation implements DimensionMutation {
             List<Zone> zones,
             WorldStateReader reader,
             Supplier<WorkingIndexSnapshot> currentBoundary,
+            BooleanSupplier boundaryDurable,
             Calculator calculator,
             Executor background,
             LongSupplier nanoTime,
@@ -96,6 +103,8 @@ public final class PendingStatisticsOperation implements DimensionMutation {
         this.reader = Objects.requireNonNull(reader, "reader");
         this.currentBoundary = Objects.requireNonNull(
                 currentBoundary, "currentBoundary");
+        this.boundaryDurable = Objects.requireNonNull(
+                boundaryDurable, "boundaryDurable");
         this.calculator = Objects.requireNonNull(calculator, "calculator");
         this.background = Objects.requireNonNull(background, "background");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
@@ -120,6 +129,17 @@ public final class PendingStatisticsOperation implements DimensionMutation {
     public void advance(long deadlineNanos) throws IOException {
         if (isTerminal()) {
             return;
+        }
+        if (!durabilityReady) {
+            if (!boundary.equals(currentBoundary.get())) {
+                fail(new IOException(
+                        "Pending changes moved while statistics awaited durability"));
+                return;
+            }
+            if (!boundaryDurable.getAsBoolean()) {
+                return;
+            }
+            durabilityReady = true;
         }
         if (future == null) {
             if (!chunksReady) {
@@ -205,6 +225,10 @@ public final class PendingStatisticsOperation implements DimensionMutation {
 
     @Override
     public OperationProgress progress() {
+        if (!durabilityReady) {
+            return OperationProgress.indeterminate(
+                    "Waiting for pending-statistics writes");
+        }
         if (!chunksReady && chunks != null) {
             return new OperationProgress(
                     "Loading pending-statistics chunks",
