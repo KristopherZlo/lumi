@@ -131,6 +131,13 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     }
 
     @Override
+    public boolean matchesSection(
+            SectionKey key, SectionBlob source, DecodedSection target) throws IOException {
+        return sections.matches(level, requireChunk(key.chunkX(), key.chunkZ()),
+                key.sectionY(), source, target);
+    }
+
+    @Override
     public List<UUID> durableEntityIds(EntityChunkKey key) {
         return matchingEntities(key).filter(MinecraftEntityChunkCapture::isDurableRoot)
                 .map(Entity::getUUID).toList();

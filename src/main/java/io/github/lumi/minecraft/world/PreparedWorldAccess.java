@@ -59,6 +59,11 @@ public interface PreparedWorldAccess {
 
     SectionBlob captureSection(SectionKey key) throws IOException;
 
+    default boolean matchesSection(
+            SectionKey key, SectionBlob source, DecodedSection target) throws IOException {
+        return source.equals(captureSection(key));
+    }
+
     List<UUID> durableEntityIds(EntityChunkKey key) throws IOException;
 
     void removeEntity(EntityChunkKey key, UUID id) throws IOException;

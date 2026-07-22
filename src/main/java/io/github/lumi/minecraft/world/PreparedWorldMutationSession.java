@@ -93,7 +93,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 return WorldStateApply.Verification.IN_PROGRESS;
             }
             sectionVerificationIndex++;
-            if (!target.source().sections().get(key).equals(world.captureSection(key))) {
+            if (!world.matchesSection(
+                    key, target.source().sections().get(key), target.sections().get(key))) {
                 release(key);
                 return WorldStateApply.Verification.MISMATCH;
             }

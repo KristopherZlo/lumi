@@ -5,11 +5,28 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.SectionBlob;
+import java.util.ArrayList;
+import java.util.Collections;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.level.chunk.Strategy;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class MinecraftSectionCaptureTest {
+    @BeforeAll
+    static void bootstrapMinecraft() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
+
     @Test
     void mapsNegativeWorldCoordinatesToSectionAndLocalIndex() {
         BlockPos position = new BlockPos(-1, -1, -1);
@@ -39,5 +56,20 @@ class MinecraftSectionCaptureTest {
         assertFalse(canonical.contains("y"));
         assertFalse(canonical.contains("z"));
         assertTrue(saved.contains("x"));
+    }
+
+    @Test
+    void comparesNativeSectionStatesWithoutSerializingThem() {
+        var section = new LevelChunkSection(new PalettedContainer<>(
+                Blocks.AIR.defaultBlockState(),
+                Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY)), null);
+        section.setBlockState(1, 2, 3, Blocks.STONE.defaultBlockState(), false);
+        var expected = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, Blocks.AIR.defaultBlockState()));
+        expected.set((2 << 8) | (3 << 4) | 1, Blocks.STONE.defaultBlockState());
+
+        assertTrue(MinecraftSectionCapture.matchesStates(section, expected));
+        expected.set(0, Blocks.DIRT.defaultBlockState());
+        assertFalse(MinecraftSectionCapture.matchesStates(section, expected));
     }
 }
