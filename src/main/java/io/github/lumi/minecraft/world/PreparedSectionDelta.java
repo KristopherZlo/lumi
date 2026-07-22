@@ -1,6 +1,8 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.SectionBlob;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -37,13 +39,31 @@ final class PreparedSectionDelta {
     }
 
     static PreparedSectionDelta between(
-            List<BlockState> beforeStates,
-            java.util.Map<Integer, net.minecraft.nbt.CompoundTag> beforeBlockEntities,
-            DecodedSection target) {
-        Objects.requireNonNull(beforeStates, "beforeStates");
-        Objects.requireNonNull(beforeBlockEntities, "beforeBlockEntities");
-        return create(beforeStates::get, target,
-                !beforeBlockEntities.equals(target.blockEntities()));
+            SectionBlob source,
+            SectionBlob before,
+            MinecraftBlockStateDecoder decoder,
+            DecodedSection target) throws IOException {
+        Objects.requireNonNull(source, "source");
+        Objects.requireNonNull(before, "before");
+        Objects.requireNonNull(decoder, "decoder");
+        List<String> sourceStates = source.blockStates();
+        List<String> beforeStates = before.blockStates();
+        List<BlockState> targetStates = target.blockStates();
+        try {
+            return create(index -> {
+                String encoded = beforeStates.get(index);
+                if (encoded.equals(sourceStates.get(index))) {
+                    return targetStates.get(index);
+                }
+                try {
+                    return decoder.decodeState(encoded);
+                } catch (IOException failed) {
+                    throw new UncheckedIOException(failed);
+                }
+            }, target, !before.blockEntities().equals(source.blockEntities()));
+        } catch (UncheckedIOException failed) {
+            throw failed.getCause();
+        }
     }
 
     static PreparedSectionDelta inspect(

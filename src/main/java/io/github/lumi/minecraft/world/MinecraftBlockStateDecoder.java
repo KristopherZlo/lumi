@@ -33,9 +33,9 @@ public final class MinecraftBlockStateDecoder {
     DecodedSection decodeAgainst(SectionBlob source, SectionBlob before)
             throws IOException {
         DecodedPayload target = decodePayload(source);
-        DecodedPayload base = decodePayload(before);
+        validateBlockEntities(before);
         return new DecodedSection(target.states(), target.blockEntities())
-                .prepareAgainst(base.states(), base.blockEntities());
+                .prepareAgainst(source, before, this);
     }
 
     private DecodedPayload decodePayload(SectionBlob source) throws IOException {
@@ -44,13 +44,18 @@ public final class MinecraftBlockStateDecoder {
         for (String encoded : source.blockStates()) {
             states.add(decodeState(encoded));
         }
+        return new DecodedPayload(states, decodeBlockEntities(source));
+    }
+
+    private static HashMap<Integer, net.minecraft.nbt.CompoundTag> decodeBlockEntities(
+            SectionBlob source) throws IOException {
         var blockEntities = new HashMap<Integer, net.minecraft.nbt.CompoundTag>();
         for (var entry : source.blockEntities().entrySet()) {
             var decoded = MinecraftNbtCodec.decode(entry.getValue());
             validateBlockEntityType(decoded);
             blockEntities.put(entry.getKey(), decoded);
         }
-        return new DecodedPayload(states, blockEntities);
+        return blockEntities;
     }
 
     /** Validates persistent types without allocating a native section container. */
@@ -59,6 +64,10 @@ public final class MinecraftBlockStateDecoder {
         for (String encoded : new HashSet<>(source.blockStates())) {
             decodeState(encoded);
         }
+        validateBlockEntities(source);
+    }
+
+    private static void validateBlockEntities(SectionBlob source) throws IOException {
         for (var encoded : source.blockEntities().values()) {
             validateBlockEntityType(MinecraftNbtCodec.decode(encoded));
         }
@@ -73,7 +82,7 @@ public final class MinecraftBlockStateDecoder {
         }
     }
 
-    private BlockState decodeState(String encoded) throws IOException {
+    BlockState decodeState(String encoded) throws IOException {
         BlockState cached = decodedStates.get(encoded);
         if (cached != null) {
             return cached;

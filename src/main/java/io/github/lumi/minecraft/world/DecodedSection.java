@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.SectionBlob;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -58,12 +59,12 @@ public final class DecodedSection {
     }
 
     DecodedSection prepareAgainst(
-            List<BlockState> beforeStates,
-            Map<Integer, CompoundTag> beforeBlockEntities) {
+            SectionBlob source,
+            SectionBlob before,
+            MinecraftBlockStateDecoder decoder) throws IOException {
         return new DecodedSection(
                 blockStates, blockEntities, preparedStates,
-                PreparedSectionDelta.between(
-                        beforeStates, beforeBlockEntities, this));
+                PreparedSectionDelta.between(source, before, decoder, this));
     }
 
     PreparedSectionDelta deltaFrom(LevelChunkSection current) {

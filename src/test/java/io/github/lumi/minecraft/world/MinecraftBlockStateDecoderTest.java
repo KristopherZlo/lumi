@@ -81,6 +81,19 @@ class MinecraftBlockStateDecoderTest {
     }
 
     @Test
+    void rejectsUnknownChangedBaseStateDuringDirectionalDecode() {
+        var target = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone"));
+        var before = new ArrayList<>(target);
+        before.set(17, "missing:not_a_block");
+
+        assertThrows(IOException.class, () ->
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK).decodeAgainst(
+                        new SectionBlob(target, Map.of()),
+                        new SectionBlob(before, Map.of())));
+    }
+
+    @Test
     void preparesOnlyTheHighestHeightmapChangePerColumn() throws Exception {
         var beforeStates = new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));
