@@ -23,6 +23,16 @@ public final class EntityChunkDurabilityGate {
         pending.remove(key);
     }
 
+    /** Rebases a resident chunk without turning a storage-only Restore into a live baseline. */
+    public synchronized void rebaseTracked(EntityChunkKey key, EntityChunkBlob state) {
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(state, "state");
+        if (baselines.containsKey(key)) {
+            baselines.put(key, state);
+            pending.remove(key);
+        }
+    }
+
     public synchronized boolean permitStore(EntityChunkKey key, EntityChunkBlob current) {
         observeCurrent(key, current);
         if (!mutations.canPublish(key)) {

@@ -84,6 +84,24 @@ class EntityChunkDurabilityGateTest {
     }
 
     @Test
+    void rebasesOnlyChunksThatAreStillResident() throws Exception {
+        MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), Runnable::run);
+        EntityChunkDurabilityGate gate = new EntityChunkDurabilityGate(mutations);
+        EntityChunkKey resident = new EntityChunkKey(3, 4);
+        EntityChunkKey storageOnly = new EntityChunkKey(8, 9);
+        gate.rememberLoaded(resident, entities(1));
+
+        gate.rebaseTracked(resident, entities(2));
+        gate.rebaseTracked(storageOnly, entities(2));
+
+        assertEquals(Set.of(resident), gate.trackedKeys());
+        assertTrue(gate.permitStore(resident, entities(2)));
+        assertTrue(mutations.snapshot().generations().isEmpty());
+    }
+
+    @Test
     void observesReturnToBaselineAfterIntermediateStateWasSaved() throws Exception {
         ManualExecutor background = new ManualExecutor();
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(

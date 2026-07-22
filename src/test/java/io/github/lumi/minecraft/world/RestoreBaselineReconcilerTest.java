@@ -1,5 +1,6 @@
 package io.github.lumi.minecraft.world;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -19,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import org.junit.jupiter.api.Test;
@@ -36,17 +38,20 @@ class RestoreBaselineReconcilerTest {
         EntityChunkDurabilityGate entities = new EntityChunkDurabilityGate(mutations);
         BlockEntityBaselineStore blockEntities = new BlockEntityBaselineStore();
         EntityChunkKey entityKey = new EntityChunkKey(2, 3);
+        EntityChunkKey storageOnlyKey = new EntityChunkKey(8, 9);
         SectionKey sectionKey = new SectionKey(2, 4, 3);
         EntityChunkBlob original = entities(1);
         EntityChunkBlob target = entities(2);
         entities.rememberLoaded(entityKey, original);
         blockEntities.remember(sectionKey, Map.of(0, new CanonicalNbt(new byte[] {1})));
         var state = new WorldStateApply.State(
-                Map.of(sectionKey, section()), Map.of(entityKey, target));
+                Map.of(sectionKey, section()),
+                Map.of(entityKey, target, storageOnlyKey, target));
 
         new RestoreBaselineReconciler(entities, blockEntities).restored(state);
 
         assertFalse(blockEntities.contains(sectionKey));
+        assertEquals(Set.of(entityKey), entities.trackedKeys());
         assertTrue(entities.permitStore(entityKey, target));
         assertTrue(mutations.snapshot().generations().isEmpty());
         assertTrue(background.isEmpty());

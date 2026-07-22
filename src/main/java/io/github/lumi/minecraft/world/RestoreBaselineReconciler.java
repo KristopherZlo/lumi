@@ -33,6 +33,6 @@ public final class RestoreBaselineReconciler implements RestoreStateListener {
             Iterable<SectionKey> sections,
             Map<EntityChunkKey, EntityChunkBlob> entityChunks) {
         sections.forEach(blockEntities::discard);
-        entityChunks.forEach(entities::rememberLoaded);
+        entityChunks.forEach(entities::rebaseTracked);
     }
 }
