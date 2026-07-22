@@ -1,9 +1,11 @@
 package io.github.lumi.minecraft.world;
 
+import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -27,11 +29,14 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private final RestoreApplyMetrics metrics = new RestoreApplyMetrics();
     private int batchStart;
     private int batchEnd;
+    private int entityBatchStart;
+    private int entityBatchEnd;
     private CompletableFuture<PreparedMinecraftState> preparing;
     private PreparedWorldMutationSession current;
+    private BatchKind currentKind;
     private Phase phase = Phase.PREPARING;
     private boolean repairAttempted;
-    private boolean tailStarted;
+    private boolean spawnsStarted;
 
     StreamingPreparedWorldMutationSession(
             PreparedMinecraftPlanState plan,
@@ -81,7 +86,12 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         if (current != null) {
             current.close();
             current = null;
-            batchStart = batchEnd;
+            if (currentKind == BatchKind.SECTIONS) {
+                batchStart = batchEnd;
+            } else if (currentKind == BatchKind.ENTITIES) {
+                entityBatchStart = entityBatchEnd;
+            }
+            currentKind = null;
             repairAttempted = false;
         }
         if (batchStart < plan.sectionKeys().size()) {
@@ -101,17 +111,26 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             }
             current = new PreparedWorldMutationSession(
                     claimPrepared(), world, System::nanoTime, chunkLoads.get(), metrics);
+            currentKind = BatchKind.SECTIONS;
             phase = Phase.APPLYING;
             return true;
         }
-        if (!tailStarted) {
-            tailStarted = true;
-            var source = new WorldStateApply.State(
-                    Map.of(), plan.source().entities(), plan.source().playerSpawns());
-            var tail = new PreparedMinecraftState(
-                    source, Map.of(), plan.entities(), List.of(), plan.entityKeys());
+        if (entityBatchStart < plan.entityKeys().size()) {
+            PreparedMinecraftState entities = nextEntityBatch();
             current = new PreparedWorldMutationSession(
-                    tail, world, System::nanoTime, chunkLoads.get(), metrics);
+                    entities, world, System::nanoTime, chunkLoads.get(), metrics);
+            currentKind = BatchKind.ENTITIES;
+            phase = Phase.APPLYING;
+            return true;
+        }
+        if (!spawnsStarted) {
+            spawnsStarted = true;
+            var source = new WorldStateApply.State(
+                    Map.of(), Map.of(), plan.source().playerSpawns());
+            current = new PreparedWorldMutationSession(
+                    new PreparedMinecraftState(source, Map.of(), Map.of()),
+                    world, System::nanoTime, chunkLoads.get(), metrics);
+            currentKind = BatchKind.SPAWNS;
             phase = Phase.APPLYING;
             return true;
         }
@@ -148,6 +167,22 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 new WorldStateApply.State(base, Map.of()), end);
     }
 
+    private PreparedMinecraftState nextEntityBatch() {
+        entityBatchEnd = entityBatchEnd(plan.entityKeys().size(), entityBatchStart);
+        List<EntityChunkKey> keys = plan.entityKeys().subList(
+                entityBatchStart, entityBatchEnd);
+        Map<EntityChunkKey, io.github.lumi.domain.model.EntityChunkBlob> source =
+                new LinkedHashMap<>();
+        Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
+        for (EntityChunkKey key : keys) {
+            source.put(key, plan.source().entities().get(key));
+            decoded.put(key, plan.entities().get(key));
+        }
+        return new PreparedMinecraftState(
+                new WorldStateApply.State(Map.of(), source), Map.of(), decoded,
+                List.of(), keys);
+    }
+
     static int batchEnd(List<SectionKey> keys, int start) {
         int chunks = 0;
         long bytes = 0;
@@ -169,6 +204,10 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             end++;
         }
         return end;
+    }
+
+    static int entityBatchEnd(int total, int start) {
+        return Math.min(total, start + MAX_CHUNKS);
     }
 
     private void verifyCurrent(long deadlineNanos) throws IOException {
@@ -240,5 +279,6 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             WorldStateApply.State base,
             int end) { }
 
+    private enum BatchKind { SECTIONS, ENTITIES, SPAWNS }
     private enum Phase { PREPARING, APPLYING, VERIFYING, REPAIRING, COMPLETE }
 }

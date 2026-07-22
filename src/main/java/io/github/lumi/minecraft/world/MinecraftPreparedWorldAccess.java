@@ -20,10 +20,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityProcessor;
-import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.storage.LevelData;
@@ -36,6 +32,7 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     private final MinecraftSectionCapture sections = new MinecraftSectionCapture();
     private final MinecraftEntityChunkCapture entities = new MinecraftEntityChunkCapture();
     private final ChunkEntityLookup entityLookup;
+    private final MinecraftEntityRestorer entityRestorer;
     private final MinecraftStoredChunkAccess storedChunks;
 
     public MinecraftPreparedWorldAccess(ServerLevel level, DimensionFreezeState freeze) {
@@ -43,6 +40,7 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         sectionRewriter = new MinecraftSectionRewriter(level);
         entityLookup = ChunkEntityLookup.forLevel(level);
+        entityRestorer = new MinecraftEntityRestorer(level, freeze, entities, entityLookup);
         storedChunks = new MinecraftStoredChunkAccess(level);
     }
 
@@ -145,31 +143,12 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
 
     @Override
     public void removeEntity(EntityChunkKey key, UUID id) throws IOException {
-        Entity entity = matchingEntities(key)
-                .filter(candidate -> candidate.getUUID().equals(id))
-                .filter(MinecraftEntityChunkCapture::isDurableRoot)
-                .findFirst().orElseThrow(
-                        () -> new IOException("Restored entity disappeared before removal: " + id));
-        List<Entity> graph = entity.getSelfAndPassengers()
-                .filter(member -> !(member instanceof Player)).toList();
-        freeze.runAuthorized(() -> graph.forEach(member ->
-                member.setRemoved(Entity.RemovalReason.UNLOADED_WITH_PLAYER)));
+        entityRestorer.remove(key, id);
     }
 
     @Override
     public void addEntity(EntityChunkKey key, DecodedEntity decoded) throws IOException {
-        Entity entity = EntityType.loadEntityRecursive(
-                decoded.type(), decoded.nbt().copy(), level,
-                EntitySpawnReason.LOAD, EntityProcessor.NOP);
-        if (entity == null || entity.chunkPosition().x != key.chunkX()
-                || entity.chunkPosition().z != key.chunkZ()) {
-            throw new IOException("Restored entity position does not match " + key);
-        }
-        boolean[] added = {false};
-        freeze.runAuthorized(() -> added[0] = level.tryAddFreshEntityWithPassengers(entity));
-        if (!added[0]) {
-            throw new IOException("Cannot add restored entity " + decoded.id());
-        }
+        entityRestorer.restore(key, decoded);
     }
 
     @Override

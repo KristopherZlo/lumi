@@ -28,4 +28,10 @@ class StreamingPreparedWorldMutationSessionTest {
 
         assertEquals(1_024, StreamingPreparedWorldMutationSession.batchEnd(keys, 0));
     }
+
+    @Test
+    void boundsEntityTicketsToThirtyTwoChunks() {
+        assertEquals(32, StreamingPreparedWorldMutationSession.entityBatchEnd(40, 0));
+        assertEquals(40, StreamingPreparedWorldMutationSession.entityBatchEnd(40, 32));
+    }
 }

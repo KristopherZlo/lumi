@@ -41,6 +41,7 @@ class MinecraftEntityStateDecoderTest {
 
         assertEquals(EntityType.ARMOR_STAND, decoded.type());
         assertEquals(id, decoded.id());
+        assertEquals(source.entities().getFirst(), decoded.state());
         assertEquals("minecraft:armor_stand", decoded.nbt().getStringOr("id", ""));
         assertEquals(id, net.minecraft.core.UUIDUtil.uuidFromIntArray(
                 decoded.nbt().getIntArray("UUID").orElseThrow()));

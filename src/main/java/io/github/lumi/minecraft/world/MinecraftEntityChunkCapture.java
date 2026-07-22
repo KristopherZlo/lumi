@@ -70,7 +70,7 @@ public final class MinecraftEntityChunkCapture {
                 entity.getUUID(), EntityType.getKey(entity.getType()).toString(),
                 canonicalEntityNbt(full));
         return Optional.of(new CapturedEntity(
-                state, new DecodedEntity(state.id(), entity.getType(), full)));
+                state, new DecodedEntity(state, entity.getType(), full)));
     }
 
     public static boolean isDurableRoot(Entity entity) {

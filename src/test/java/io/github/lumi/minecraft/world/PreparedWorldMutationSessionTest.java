@@ -118,6 +118,36 @@ class PreparedWorldMutationSessionTest {
     }
 
     @Test
+    void retainsEntityChunksAcrossTheGlobalRemoveAndAddPasses() throws Exception {
+        EntityChunkKey key = new EntityChunkKey(4, -2);
+        UUID oldId = new UUID(0, 1);
+        UUID targetId = new UUID(0, 2);
+        var source = new EntityChunkBlob(List.of(new EntityState(
+                targetId, "minecraft:armor_stand",
+                MinecraftNbtCodec.encode(new net.minecraft.nbt.CompoundTag()))));
+        DecodedEntityChunk decoded = new MinecraftEntityStateDecoder(
+                BuiltInRegistries.ENTITY_TYPE).decode(source);
+        var target = new PreparedMinecraftState(
+                new WorldStateApply.State(Map.of(), Map.of(key, source)),
+                Map.of(), Map.of(key, decoded));
+        FakeWorld world = new FakeWorld(new AtomicLong(), null);
+        world.entityIds = List.of(oldId);
+        world.capturedEntities = source;
+        ImmediateChunkAccess access = new ImmediateChunkAccess();
+        var session = new PreparedWorldMutationSession(
+                target, world, () -> 0L,
+                new ChunkLoadSession(access, () -> 0L));
+
+        assertTrue(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(1, access.active);
+        assertEquals(List.of(), access.released);
+        assertEquals(WorldStateApply.Verification.VERIFIED,
+                session.verifyUntil(Long.MAX_VALUE));
+        assertEquals(0, access.active);
+        assertEquals(List.of(new ChunkCoordinate(4, -2)), access.released);
+    }
+
+    @Test
     void appliesAndVerifiesSavedPlayerSpawns() throws Exception {
         UUID player = UUID.fromString("10000000-0000-0000-0000-000000000001");
         PlayerSpawn spawn = new PlayerSpawn(8, 72, -3, 45.0F, 5.0F, true);

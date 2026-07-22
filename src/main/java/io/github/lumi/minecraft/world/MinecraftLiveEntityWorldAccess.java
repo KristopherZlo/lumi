@@ -12,10 +12,6 @@ import java.util.UUID;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityProcessor;
-import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.player.Player;
 
 /** Captures and applies durable live entities without decoding on the frozen path. */
 public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAccess {
@@ -25,6 +21,7 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     private final MinecraftEntityStateDecoder decoder = new MinecraftEntityStateDecoder(
             BuiltInRegistries.ENTITY_TYPE);
     private final ChunkEntityLookup entityLookup;
+    private final MinecraftEntityRestorer entityRestorer;
     private final Map<EntityState, DecodedEntity> prepared = new HashMap<>();
     private final Map<EntityState, EntityChunkKey> chunks = new HashMap<>();
 
@@ -32,6 +29,7 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         entityLookup = ChunkEntityLookup.forLevel(level);
+        entityRestorer = new MinecraftEntityRestorer(level, freeze, capture, entityLookup);
     }
 
     /** Decodes persistent Restore entities and remembers their owning chunks off-thread. */
@@ -75,7 +73,7 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
 
     @Override
     public Optional<EntityState> read(UUID entityId) throws IOException {
-        Optional<Entity> current = find(entityId);
+        Optional<Entity> current = entityRestorer.findDurableRoot(entityId);
         return current.isEmpty() ? Optional.empty() : capture(current.orElseThrow());
     }
 
@@ -83,27 +81,12 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
     public void write(UUID entityId, Optional<EntityState> replacement) throws IOException {
         Objects.requireNonNull(entityId, "entityId");
         requirePrepared(replacement);
-        DecodedEntity decoded = replacement.map(prepared::get).orElse(null);
-        find(entityId).ifPresent(entity -> {
-            var graph = entity.getSelfAndPassengers()
-                    .filter(member -> !(member instanceof Player)).toList();
-            freeze.runAuthorized(() -> graph.forEach(member ->
-                    member.setRemoved(Entity.RemovalReason.UNLOADED_WITH_PLAYER)));
-        });
         if (replacement.isEmpty()) {
+            entityRestorer.remove(entityId);
             return;
         }
-        Entity entity = EntityType.loadEntityRecursive(
-                decoded.type(), decoded.nbt().copy(), level,
-                EntitySpawnReason.LOAD, EntityProcessor.NOP);
-        if (entity == null || !entity.getUUID().equals(entityId)) {
-            throw new IOException("Cannot create live entity " + entityId);
-        }
-        boolean[] added = {false};
-        freeze.runAuthorized(() -> added[0] = level.tryAddFreshEntityWithPassengers(entity));
-        if (!added[0]) {
-            throw new IOException("Cannot add live entity " + entityId);
-        }
+        EntityState state = replacement.orElseThrow();
+        entityRestorer.restore(chunk(state), prepared.get(state));
     }
 
     public void clear() {
@@ -117,14 +100,5 @@ public final class MinecraftLiveEntityWorldAccess implements LiveEntityWorldAcce
             throw new IOException("Live entity chunk was not prepared: " + state.id());
         }
         return key;
-    }
-
-    private Optional<Entity> find(UUID entityId) {
-        return entityLookup.byId(entityId).stream()
-                .filter(Entity.class::isInstance)
-                .map(Entity.class::cast)
-                .filter(MinecraftEntityChunkCapture::isDurableRoot)
-                .filter(entity -> !entity.isRemoved())
-                .findFirst();
     }
 }

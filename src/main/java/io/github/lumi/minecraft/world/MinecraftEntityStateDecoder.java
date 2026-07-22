@@ -91,7 +91,7 @@ public final class MinecraftEntityStateDecoder {
             var nbt = MinecraftNbtCodec.decode(entity.nbt());
             nbt.putString("id", entity.type());
             nbt.putIntArray("UUID", UUIDUtil.uuidToIntArray(entity.id()));
-            decoded.add(new DecodedEntity(entity.id(), type, nbt));
+            decoded.add(new DecodedEntity(entity, type, nbt));
         }
         return new DecodedEntityChunk(decoded);
     }

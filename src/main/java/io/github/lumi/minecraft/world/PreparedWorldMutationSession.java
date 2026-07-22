@@ -408,7 +408,6 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 world.removeEntity(key, entityRemovals.get(entityRemovalIndex++));
             } else {
                 entityIndex++;
-                release(key);
                 entityRemovals = List.of();
                 entityRemovalIndex = 0;
                 phase = Phase.BLOCKS;
@@ -426,7 +425,6 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 world.addEntity(key, entityChunk.entities().get(entityAddIndex++));
             } else {
                 entityIndex++;
-                release(key);
                 entityAddIndex = 0;
             }
         }
