@@ -2,10 +2,8 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.SectionKey;
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
@@ -32,51 +30,24 @@ final class MinecraftSectionRewriter {
         }
         LevelChunkSection section = chunk.getSection(sectionIndex);
         LevelChunkSection replacementSection = target.replacementFor(section);
-        short[] changedCells = new short[4096];
-        int changedCount = 0;
-        short[] changedLightColumns = new short[16 * 16];
-        boolean lightChanged = false;
-        int[] highestChangedByColumn = new int[16 * 16];
-        Arrays.fill(highestChangedByColumn, -1);
-        BlockPos.MutableBlockPos position = new BlockPos.MutableBlockPos();
-
-        for (int localIndex = 0; localIndex < target.blockStates().size(); localIndex++) {
-            int x = localIndex & 15;
-            int z = (localIndex >>> 4) & 15;
-            int y = (localIndex >>> 8) & 15;
-            BlockState current = section.getBlockState(x, y, z);
-            BlockState replacement = target.blockStates().get(localIndex);
-            if (current.equals(replacement)) {
-                continue;
-            }
-            position.set(
-                    key.chunkX() * 16 + x,
-                    key.sectionY() * 16 + y,
-                    key.chunkZ() * 16 + z);
-            changedCells[changedCount++] = SectionPos.sectionRelativePos(position);
-            int column = x | (z << 4);
-            if (highestChangedByColumn[column] < localIndex) {
-                highestChangedByColumn[column] = localIndex;
-            }
-            if (requiresLightCheck(current, replacement)) {
-                markLightChange(changedLightColumns, x, y, z);
-                lightChanged = true;
-            }
-        }
-        if (changedCount == 0) {
-            return new SectionApplyResult(key, changedCells, 0);
+        PreparedSectionDelta delta = target.deltaFrom(section);
+        if (delta.changedIndexes().length == 0) {
+            return new SectionApplyResult(key, delta.changedCells(), 0,
+                    delta.blockEntitiesChanged());
         }
 
         chunk.getSections()[sectionIndex] = replacementSection;
-        updateHeightmaps(chunk, key, replacementSection, highestChangedByColumn);
-        if (lightChanged) {
+        updateHeightmaps(chunk, key, replacementSection, delta.changedIndexes());
+        if (delta.lightChanged()) {
             ((SectionLightBatchScheduler) level.getLightEngine())
                     .lumi$scheduleSectionChecks(
                             key.chunkX(), key.sectionY(), key.chunkZ(),
-                            changedLightColumns);
+                            delta.lightColumns());
         }
         chunk.markUnsaved();
-        return new SectionApplyResult(key, changedCells, changedCount);
+        return new SectionApplyResult(
+                key, delta.changedCells(), delta.changedCells().length,
+                delta.blockEntitiesChanged());
     }
 
     static void markLightChange(short[] updates, int x, int y, int z) {
@@ -87,11 +58,9 @@ final class MinecraftSectionRewriter {
             LevelChunk chunk,
             SectionKey key,
             LevelChunkSection section,
-            int[] highestChangedByColumn) {
-        for (int localIndex : highestChangedByColumn) {
-            if (localIndex < 0) {
-                continue;
-            }
+            int[] changedIndexes) {
+        for (int changed = changedIndexes.length - 1; changed >= 0; changed--) {
+            int localIndex = changedIndexes[changed];
             int x = localIndex & 15;
             int z = (localIndex >>> 4) & 15;
             int y = (localIndex >>> 8) & 15;
@@ -144,13 +113,4 @@ final class MinecraftSectionRewriter {
                 changedCells, chunk.getSection(sectionIndex));
     }
 
-    private static boolean requiresLightCheck(BlockState current, BlockState target) {
-        return current.getLightEmission() != target.getLightEmission()
-                || current.getLightBlock() != target.getLightBlock()
-                || current.useShapeForLightOcclusion() != target.useShapeForLightOcclusion()
-                || current.propagatesSkylightDown() != target.propagatesSkylightDown()
-                || current.canOcclude() != target.canOcclude()
-                || current.blocksMotion() != target.blocksMotion()
-                || !current.getFluidState().equals(target.getFluidState());
-    }
 }

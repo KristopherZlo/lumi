@@ -22,6 +22,11 @@ public interface WorldStateApply {
         return prepared;
     }
 
+    default PreparedState prepare(
+            State target, State base, LongConsumer progress) throws IOException {
+        return prepare(target, progress);
+    }
+
     /** Creates cursors only. World mutation starts with {@link ApplySession#applyUntil(long)}. */
     ApplySession begin(PreparedState target);
 

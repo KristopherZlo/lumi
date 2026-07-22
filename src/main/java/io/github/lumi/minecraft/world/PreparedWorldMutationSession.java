@@ -159,8 +159,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 removals = currentBlockEntities.stream()
                         .filter(index -> !section.blockEntities().containsKey(index))
                         .toList();
-                chunkBlockEntitiesChanged |= !currentBlockEntities.isEmpty()
-                        || !section.blockEntities().isEmpty();
+                chunkBlockEntitiesChanged |= appliedSection.blockEntitiesChanged();
                 phase = Phase.REMOVE_BLOCK_ENTITIES;
             } else if (phase == Phase.REMOVE_BLOCK_ENTITIES) {
                 if (removalIndex < removals.size()) {

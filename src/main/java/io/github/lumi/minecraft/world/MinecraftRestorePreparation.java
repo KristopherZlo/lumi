@@ -30,12 +30,28 @@ public final class MinecraftRestorePreparation {
     public PreparedMinecraftState prepare(
             WorldStateApply.State source,
             LongConsumer progress) throws IOException {
+        return prepare(source, null, progress);
+    }
+
+    public PreparedMinecraftState prepare(
+            WorldStateApply.State source,
+            WorldStateApply.State base,
+            LongConsumer progress) throws IOException {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(progress, "progress");
+        if (base != null && (!source.sections().keySet().equals(base.sections().keySet())
+                || !source.entities().keySet().equals(base.entities().keySet()))) {
+            throw new IllegalArgumentException("Restore target and base keys must match");
+        }
         long completed = 0;
         Map<SectionKey, DecodedSection> decodedSections = new HashMap<>();
         for (var entry : source.sections().entrySet()) {
-            decodedSections.put(entry.getKey(), sections.decode(entry.getValue()));
+            DecodedSection target = sections.decode(entry.getValue());
+            if (base != null) {
+                target = target.prepareAgainst(sections.decode(
+                        base.sections().get(entry.getKey())));
+            }
+            decodedSections.put(entry.getKey(), target);
             progress.accept(++completed);
         }
         Map<EntityChunkKey, EntityChunkBlob> normalizedEntities =

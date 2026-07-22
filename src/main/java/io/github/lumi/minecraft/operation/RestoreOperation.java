@@ -481,14 +481,12 @@ public final class RestoreOperation implements DimensionMutation {
         Objects.requireNonNull(journals, "journals");
         Objects.requireNonNull(stateListener, "stateListener");
         Objects.requireNonNull(progress, "progress");
+        WorldStateApply.State targetState = targetState(restore);
+        WorldStateApply.State returnState = returnState(restore);
         WorldStateApply.PreparedState preparedTarget = prepareWorldState(
-                world, new WorldStateApply.State(
-                        restore.sections(), restore.entities(), restore.playerSpawns()),
-                "Restore: decoding target", progress);
+                world, targetState, returnState, "Restore: decoding target", progress);
         WorldStateApply.PreparedState preparedReturn = prepareWorldState(
-                world, new WorldStateApply.State(
-                        restore.returnSections(), restore.returnEntities(),
-                        restore.returnPlayerSpawns()),
+                world, returnState, targetState,
                 "Restore: decoding return point", progress);
         OperationJournal journal = new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
@@ -512,14 +510,12 @@ public final class RestoreOperation implements DimensionMutation {
         Objects.requireNonNull(world, "world");
         Objects.requireNonNull(publication, "publication");
         Objects.requireNonNull(stateListener, "stateListener");
+        WorldStateApply.State targetState = targetState(restore);
+        WorldStateApply.State returnState = returnState(restore);
         WorldStateApply.PreparedState preparedTarget = prepareWorldState(
-                world, new WorldStateApply.State(
-                        restore.sections(), restore.entities(), restore.playerSpawns()),
-                "Restore: decoding target", progress);
+                world, targetState, returnState, "Restore: decoding target", progress);
         WorldStateApply.PreparedState preparedReturn = prepareWorldState(
-                world, new WorldStateApply.State(
-                        restore.returnSections(), restore.returnEntities(),
-                        restore.returnPlayerSpawns()),
+                world, returnState, targetState,
                 "Restore: decoding return point", progress);
         return new RestoreOperation(
                 restore, world, publication, journals, journal, true,
@@ -529,12 +525,24 @@ public final class RestoreOperation implements DimensionMutation {
     private static WorldStateApply.PreparedState prepareWorldState(
             WorldStateApply world,
             WorldStateApply.State state,
+            WorldStateApply.State base,
             String phase,
             Consumer<OperationProgress> progress) throws IOException {
         long total = (long) state.sections().size() + state.entities().size();
         progress.accept(new OperationProgress(phase, 0, total));
-        return world.prepare(state, completed -> progress.accept(
+        return world.prepare(state, base, completed -> progress.accept(
                 new OperationProgress(phase, completed, total)));
+    }
+
+    private static WorldStateApply.State targetState(PreparedRestore restore) {
+        return new WorldStateApply.State(
+                restore.sections(), restore.entities(), restore.playerSpawns());
+    }
+
+    private static WorldStateApply.State returnState(PreparedRestore restore) {
+        return new WorldStateApply.State(
+                restore.returnSections(), restore.returnEntities(),
+                restore.returnPlayerSpawns());
     }
 
     public RestoreStatus tick(long deadlineNanos) throws IOException {

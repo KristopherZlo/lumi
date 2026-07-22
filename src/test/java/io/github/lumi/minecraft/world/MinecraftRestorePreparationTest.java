@@ -2,6 +2,9 @@ package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
@@ -63,6 +66,30 @@ class MinecraftRestorePreparationTest {
         decoder.decode(section);
 
         assertEquals(2, decoder.cachedStateCount());
+    }
+
+    @Test
+    void precomputesExactBlockAndLightDeltaAgainstReturnState() throws Exception {
+        SectionKey key = new SectionKey(2, 1, -3);
+        var beforeStates = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone"));
+        var targetStates = new ArrayList<>(beforeStates);
+        targetStates.set(17, "minecraft:glowstone");
+        var before = new WorldStateApply.State(
+                Map.of(key, new SectionBlob(beforeStates, Map.of())), Map.of());
+        var target = new WorldStateApply.State(
+                Map.of(key, new SectionBlob(targetStates, Map.of())), Map.of());
+        var preparation = new MinecraftRestorePreparation(
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
+                new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
+
+        PreparedSectionDelta delta = preparation.prepare(target, before, ignored -> { })
+                .sections().get(key).deltaFrom(null);
+
+        assertArrayEquals(new int[] {17}, delta.changedIndexes());
+        assertEquals(1, delta.changedCells().length);
+        assertTrue(delta.lightChanged());
+        assertFalse(delta.blockEntitiesChanged());
     }
 
     @Test

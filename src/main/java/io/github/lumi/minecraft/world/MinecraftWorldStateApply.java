@@ -33,6 +33,12 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     }
 
     @Override
+    public PreparedState prepare(
+            State target, State base, LongConsumer progress) throws IOException {
+        return preparation.prepare(target, base, progress);
+    }
+
+    @Override
     public ApplySession begin(PreparedState target) {
         if (!(target instanceof PreparedMinecraftState minecraft)) {
             throw new IllegalArgumentException("Restore state was not prepared for Minecraft");
