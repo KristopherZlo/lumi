@@ -22,7 +22,6 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private int sectionVerificationIndex;
     private int entityVerificationIndex;
     private boolean playerSpawnsVerified;
-    private boolean chunksRetained;
 
     public PreparedWorldMutationSession(
             PreparedMinecraftState target, PreparedWorldAccess world, LongSupplier nanoTime) {
@@ -45,37 +44,40 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
 
     @Override
     public boolean applyUntil(long deadlineNanos) throws IOException {
-        if (chunks != null && !prepareChunksUntil(deadlineNanos)) {
-            return false;
-        }
         return apply.advance(deadlineNanos);
-    }
-
-    private boolean prepareChunksUntil(long deadlineNanos) throws IOException {
-        if (!chunksRetained) {
-            chunks.retain(sections);
-            chunks.retain(entities);
-            chunksRetained = true;
-        }
-        return chunks.loadUntil(deadlineNanos);
     }
 
     @Override
     public WorldStateApply.Verification verifyUntil(long deadlineNanos) throws IOException {
         while (sectionVerificationIndex < sections.size()
                 && nanoTime.getAsLong() < deadlineNanos) {
-            SectionKey key = sections.get(sectionVerificationIndex++);
+            SectionKey key = sections.get(sectionVerificationIndex);
+            if (!loadUntil(key, deadlineNanos)) {
+                return WorldStateApply.Verification.IN_PROGRESS;
+            }
+            sectionVerificationIndex++;
             if (!target.source().sections().get(key).equals(world.captureSection(key))) {
+                release(key);
                 return WorldStateApply.Verification.MISMATCH;
+            }
+            if (sectionVerificationIndex == sections.size()
+                    || !sameChunk(key, sections.get(sectionVerificationIndex))) {
+                release(key);
             }
         }
         while (sectionVerificationIndex == sections.size()
                 && entityVerificationIndex < entities.size()
                 && nanoTime.getAsLong() < deadlineNanos) {
-            EntityChunkKey key = entities.get(entityVerificationIndex++);
+            EntityChunkKey key = entities.get(entityVerificationIndex);
+            if (!loadUntil(key, deadlineNanos)) {
+                return WorldStateApply.Verification.IN_PROGRESS;
+            }
+            entityVerificationIndex++;
             if (!target.source().entities().get(key).equals(world.captureEntities(key))) {
+                release(key);
                 return WorldStateApply.Verification.MISMATCH;
             }
+            release(key);
         }
         if (sectionVerificationIndex == sections.size()
                 && entityVerificationIndex == entities.size()
@@ -112,6 +114,23 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         }
     }
 
+    private boolean loadUntil(
+            io.github.lumi.domain.model.HistoryKey key,
+            long deadlineNanos) throws IOException {
+        return chunks == null || chunks.loadOneUntil(
+                ChunkCoordinate.from(key), deadlineNanos);
+    }
+
+    private void release(io.github.lumi.domain.model.HistoryKey key) {
+        if (chunks != null) {
+            chunks.release(ChunkCoordinate.from(key));
+        }
+    }
+
+    private static boolean sameChunk(SectionKey left, SectionKey right) {
+        return left.chunkX() == right.chunkX() && left.chunkZ() == right.chunkZ();
+    }
+
     private final class MutationCursor {
         private int sectionIndex;
         private List<Integer> removals = List.of();
@@ -132,9 +151,23 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
 
         private boolean advance(long deadlineNanos) throws IOException {
             while (phase != Phase.COMPLETE && nanoTime.getAsLong() < deadlineNanos) {
+                var required = requiredChunk();
+                if (required != null && !loadUntil(required, deadlineNanos)) {
+                    return false;
+                }
                 step();
             }
             return phase == Phase.COMPLETE;
+        }
+
+        private io.github.lumi.domain.model.HistoryKey requiredChunk() {
+            if (sectionIndex < sections.size()) {
+                return sections.get(sectionIndex);
+            }
+            if (!entitiesApplied && entityIndex < entities.size()) {
+                return entities.get(entityIndex);
+            }
+            return null;
         }
 
         private void step() throws IOException {
@@ -182,6 +215,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                             chunkBlockEntitiesChanged);
                     appliedChunkSections.clear();
                     chunkBlockEntitiesChanged = false;
+                    release(key);
                 }
                 removals = List.of();
                 removalIndex = 0;
@@ -214,14 +248,11 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 world.removeEntity(key, entityRemovals.get(entityRemovalIndex++));
             } else {
                 entityIndex++;
+                release(key);
                 entityRemovals = List.of();
                 entityRemovalIndex = 0;
                 phase = Phase.BLOCKS;
             }
-        }
-
-        private boolean sameChunk(SectionKey left, SectionKey right) {
-            return left.chunkX() == right.chunkX() && left.chunkZ() == right.chunkZ();
         }
 
         private void addEntity() throws IOException {
@@ -235,6 +266,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 world.addEntity(key, entityChunk.entities().get(entityAddIndex++));
             } else {
                 entityIndex++;
+                release(key);
                 entityAddIndex = 0;
             }
         }

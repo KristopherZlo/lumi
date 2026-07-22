@@ -7,6 +7,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.LongSupplier;
@@ -16,12 +18,14 @@ public final class ChunkLoadSession implements AutoCloseable {
     private final ChunkLoadAccess access;
     private final LongSupplier nanoTime;
     private final Map<ChunkCoordinate, CompletableFuture<Void>> retained = new LinkedHashMap<>();
+    private final Set<ChunkCoordinate> ready = new HashSet<>();
     private final ArrayDeque<Iterator<? extends HistoryKey>> pendingRetentions =
             new ArrayDeque<>();
     private Iterator<Map.Entry<ChunkCoordinate, CompletableFuture<Void>>> loading;
     private Map.Entry<ChunkCoordinate, CompletableFuture<Void>> current;
     private int completed;
     private boolean loadingStarted;
+    private boolean windowed;
     private boolean closed;
 
     public ChunkLoadSession(ChunkLoadAccess access) {
@@ -44,6 +48,9 @@ public final class ChunkLoadSession implements AutoCloseable {
     }
 
     public boolean loadUntil(long deadlineNanos) throws IOException {
+        if (windowed) {
+            throw new IllegalStateException("Windowed chunk loading is already active");
+        }
         loadingStarted = true;
         while (nanoTime.getAsLong() < deadlineNanos) {
             if (!pendingRetentions.isEmpty()) {
@@ -81,6 +88,47 @@ public final class ChunkLoadSession implements AutoCloseable {
             completed++;
         }
         return false;
+    }
+
+    public boolean loadOneUntil(
+            ChunkCoordinate chunk, long deadlineNanos) throws IOException {
+        Objects.requireNonNull(chunk, "chunk");
+        if (closed) {
+            throw new IllegalStateException("Chunk load session is closed");
+        }
+        if (!pendingRetentions.isEmpty() || (loadingStarted && !windowed)) {
+            throw new IllegalStateException("Bulk chunk loading is already active");
+        }
+        windowed = true;
+        loadingStarted = true;
+        if (ready.contains(chunk)) {
+            return true;
+        }
+        CompletableFuture<Void> future = retained.computeIfAbsent(chunk, access::retain);
+        if (nanoTime.getAsLong() >= deadlineNanos || !future.isDone()) {
+            return false;
+        }
+        try {
+            future.join();
+        } catch (CompletionException failed) {
+            Throwable cause = failed.getCause() == null ? failed : failed.getCause();
+            throw new IOException("Cannot load Lumi chunk " + chunk, cause);
+        }
+        if (!access.isReady(chunk)) {
+            return false;
+        }
+        ready.add(chunk);
+        return true;
+    }
+
+    public void release(ChunkCoordinate chunk) {
+        CompletableFuture<Void> removed = retained.remove(
+                Objects.requireNonNull(chunk, "chunk"));
+        if (removed != null) {
+            ready.remove(chunk);
+            access.release(chunk);
+            completed++;
+        }
     }
 
     public int completedChunks() {

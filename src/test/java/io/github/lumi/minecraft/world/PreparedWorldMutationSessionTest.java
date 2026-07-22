@@ -12,6 +12,7 @@ import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.PlayerSpawn;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -183,6 +184,34 @@ class PreparedWorldMutationSessionTest {
         assertEquals(2, world.synchronizedChunks);
     }
 
+    @Test
+    void releasesEachFullChunkBeforeLoadingTheNextOne() throws Exception {
+        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
+        DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
+                .decode(source);
+        Map<SectionKey, SectionBlob> persistentSections = new HashMap<>();
+        Map<SectionKey, DecodedSection> decodedSections = new HashMap<>();
+        List<SectionKey> order = new ArrayList<>();
+        for (int chunkX = 0; chunkX < 40; chunkX++) {
+            SectionKey key = new SectionKey(chunkX, 0, 0);
+            persistentSections.put(key, source);
+            decodedSections.put(key, decoded);
+            order.add(key);
+        }
+        var target = new PreparedMinecraftState(
+                new WorldStateApply.State(persistentSections, Map.of()),
+                decodedSections, Map.of(), order, List.of());
+        var access = new ImmediateChunkAccess();
+        var session = new PreparedWorldMutationSession(
+                target, new FakeWorld(new AtomicLong(), source), () -> 0L,
+                new ChunkLoadSession(access, () -> 0L));
+
+        assertTrue(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(1, access.peakRetained);
+        assertEquals(40, access.released.size());
+    }
+
     private static final class FakeWorld implements PreparedWorldAccess {
         private final AtomicLong clock;
         private final SectionBlob captured;
@@ -254,5 +283,23 @@ class PreparedWorldMutationSessionTest {
         }
         @Override public boolean isReady(ChunkCoordinate chunk) { return ready; }
         @Override public void release(ChunkCoordinate chunk) { released.add(chunk); }
+    }
+
+    private static final class ImmediateChunkAccess implements ChunkLoadAccess {
+        private final List<ChunkCoordinate> retained = new ArrayList<>();
+        private final List<ChunkCoordinate> released = new ArrayList<>();
+        private int active;
+        private int peakRetained;
+
+        @Override public CompletableFuture<Void> retain(ChunkCoordinate chunk) {
+            retained.add(chunk);
+            peakRetained = Math.max(peakRetained, ++active);
+            return CompletableFuture.completedFuture(null);
+        }
+        @Override public boolean isReady(ChunkCoordinate chunk) { return true; }
+        @Override public void release(ChunkCoordinate chunk) {
+            released.add(chunk);
+            active--;
+        }
     }
 }
