@@ -352,7 +352,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 new SaveService(objects, trees, commits, refs, journals,
                         new VersionTagRepository(repository)),
                 restoreService,
-                new MinecraftWorldStateApply(level, freeze), journals,
+                new MinecraftWorldStateApply(level, freeze, background), journals,
                 background, refs, branches,
                 new MergeService(objects, commits, origins, trees), workspaceService,
                 new ZoneService(new ZoneRepository(repository)),

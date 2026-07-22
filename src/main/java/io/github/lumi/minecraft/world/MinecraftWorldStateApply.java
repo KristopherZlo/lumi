@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.world;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.function.LongConsumer;
+import java.util.concurrent.Executor;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
@@ -12,9 +13,16 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     private final MinecraftRestorePreparation preparation;
     private final PreparedWorldAccess world;
     private final ServerLevel level;
+    private final Executor background;
 
     public MinecraftWorldStateApply(ServerLevel level, DimensionFreezeState freeze) {
+        this(level, freeze, Runnable::run);
+    }
+
+    public MinecraftWorldStateApply(
+            ServerLevel level, DimensionFreezeState freeze, Executor background) {
         this.level = Objects.requireNonNull(level, "level");
+        this.background = Objects.requireNonNull(background, "background");
         preparation = new MinecraftRestorePreparation(
                 new MinecraftBlockStateDecoder(
                         level.registryAccess().lookupOrThrow(Registries.BLOCK)),
@@ -35,11 +43,16 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     @Override
     public PreparedState prepare(
             State target, State base, LongConsumer progress) throws IOException {
-        return preparation.prepare(target, base, progress);
+        return preparation.preflight(target, base, progress);
     }
 
     @Override
     public ApplySession begin(PreparedState target) {
+        if (target instanceof PreparedMinecraftPlanState plan) {
+            return new StreamingPreparedWorldMutationSession(
+                    plan, preparation, world, background,
+                    () -> new ChunkLoadSession(new MinecraftChunkLoadAccess(level)));
+        }
         if (!(target instanceof PreparedMinecraftState minecraft)) {
             throw new IllegalArgumentException("Restore state was not prepared for Minecraft");
         }
