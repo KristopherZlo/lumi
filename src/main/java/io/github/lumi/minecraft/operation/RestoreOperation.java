@@ -736,6 +736,15 @@ public final class RestoreOperation implements DimensionMutation {
         return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(nanos);
     }
 
+    @Override public Optional<RestoreApplyStatistics> restoreStatistics() {
+        return switch (status) {
+            case COMPLETE -> Optional.of(targetSession.statistics());
+            case RETURNED, DEGRADED -> returnSession == null
+                    ? Optional.empty() : Optional.of(returnSession.statistics());
+            default -> Optional.empty();
+        };
+    }
+
     public RestoreStatus status() {
         return status;
     }

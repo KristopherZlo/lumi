@@ -45,6 +45,8 @@ class BackgroundPreparedMutationTest {
 
         coordinator.tick();
         assertEquals(1, freeze.releaseCalls);
+        assertEquals(io.github.lumi.minecraft.world.RestoreApplyStatistics.EMPTY,
+                prepared.restoreStatistics().orElseThrow());
     }
 
     @Test
@@ -201,6 +203,10 @@ class BackgroundPreparedMutationTest {
         @Override public void advance(long deadlineNanos) { advances++; }
         @Override public boolean isTerminal() { return advances == 1; }
         @Override public boolean isSafeToRelease() { return advances == 1; }
+        @Override public Optional<io.github.lumi.minecraft.world.RestoreApplyStatistics>
+                restoreStatistics() {
+            return Optional.of(io.github.lumi.minecraft.world.RestoreApplyStatistics.EMPTY);
+        }
         @Override public void close() { closeCalls++; }
     }
 

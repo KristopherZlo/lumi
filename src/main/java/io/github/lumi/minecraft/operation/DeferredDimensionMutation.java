@@ -1,5 +1,6 @@
 package io.github.lumi.minecraft.operation;
 
+import io.github.lumi.minecraft.world.RestoreApplyStatistics;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
@@ -81,6 +82,10 @@ public final class DeferredDimensionMutation implements DimensionMutation {
         return cancelled ? OperationProgress.indeterminate("Cancelled")
                 : delegate == null ? OperationProgress.indeterminate("Resolving request")
                 : delegate.progress();
+    }
+
+    @Override public Optional<RestoreApplyStatistics> restoreStatistics() {
+        return delegate == null ? Optional.empty() : delegate.restoreStatistics();
     }
 
     @Override

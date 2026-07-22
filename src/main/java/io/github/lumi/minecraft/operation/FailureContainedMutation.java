@@ -1,5 +1,6 @@
 package io.github.lumi.minecraft.operation;
 
+import io.github.lumi.minecraft.world.RestoreApplyStatistics;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
@@ -79,6 +80,10 @@ final class FailureContainedMutation implements DimensionMutation {
     @Override
     public OperationProgress progress() {
         return delegate.progress();
+    }
+
+    @Override public Optional<RestoreApplyStatistics> restoreStatistics() {
+        return delegate.restoreStatistics();
     }
 
     @Override

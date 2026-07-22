@@ -25,6 +25,8 @@ class DeferredDimensionMutationTest {
         assertTrue(deferred.requiresFreeze());
         deferred.advance(2);
         assertTrue(deferred.isTerminal());
+        assertEquals(io.github.lumi.minecraft.world.RestoreApplyStatistics.EMPTY,
+                deferred.restoreStatistics().orElseThrow());
     }
 
     @Test
@@ -89,6 +91,11 @@ class DeferredDimensionMutationTest {
         @Override public void advance(long deadlineNanos) { ticks++; }
         @Override public boolean isTerminal() { return ticks == 1; }
         @Override public boolean isSafeToRelease() { return isTerminal(); }
+        @Override public java.util.Optional<io.github.lumi.minecraft.world.RestoreApplyStatistics>
+                restoreStatistics() {
+            return java.util.Optional.of(
+                    io.github.lumi.minecraft.world.RestoreApplyStatistics.EMPTY);
+        }
         @Override public void close() { closeCalls++; }
     }
 }

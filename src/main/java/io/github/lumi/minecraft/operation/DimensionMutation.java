@@ -1,5 +1,6 @@
 package io.github.lumi.minecraft.operation;
 
+import io.github.lumi.minecraft.world.RestoreApplyStatistics;
 import java.io.IOException;
 import java.util.Optional;
 
@@ -29,6 +30,11 @@ public interface DimensionMutation extends AutoCloseable {
 
     /** Optional user-facing message for a successful terminal outcome. */
     default Optional<String> completionMessage() {
+        return Optional.empty();
+    }
+
+    /** Exact apply measurements when this mutation completed a Restore endpoint. */
+    default Optional<RestoreApplyStatistics> restoreStatistics() {
         return Optional.empty();
     }
 

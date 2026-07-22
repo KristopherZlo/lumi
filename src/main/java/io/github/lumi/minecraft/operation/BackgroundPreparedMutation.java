@@ -1,5 +1,6 @@
 package io.github.lumi.minecraft.operation;
 
+import io.github.lumi.minecraft.world.RestoreApplyStatistics;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
@@ -111,6 +112,10 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
     @Override public OperationProgress progress() {
         return delegate == null ? preparationProgress.get()
                 : delegate.progress();
+    }
+
+    @Override public Optional<RestoreApplyStatistics> restoreStatistics() {
+        return delegate == null ? Optional.empty() : delegate.restoreStatistics();
     }
 
     @Override

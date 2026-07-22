@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.operation;
 
 import io.github.lumi.domain.service.SaveResult;
+import io.github.lumi.minecraft.world.RestoreApplyStatistics;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
@@ -171,6 +172,10 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
         CompletableFuture<? extends DimensionMutation> prepare(
                 SaveResult returnPoint,
                 Consumer<OperationProgress> progress);
+    }
+
+    @Override public Optional<RestoreApplyStatistics> restoreStatistics() {
+        return restore == null ? Optional.empty() : restore.restoreStatistics();
     }
 
     @FunctionalInterface

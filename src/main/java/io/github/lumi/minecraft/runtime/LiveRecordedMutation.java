@@ -4,6 +4,7 @@ import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.operation.OperationProgress;
+import io.github.lumi.minecraft.world.RestoreApplyStatistics;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
@@ -66,6 +67,9 @@ public final class LiveRecordedMutation implements DimensionMutation {
         return delegate.unhandledFailureState();
     }
     @Override public OperationProgress progress() { return delegate.progress(); }
+    @Override public Optional<RestoreApplyStatistics> restoreStatistics() {
+        return delegate.restoreStatistics();
+    }
 
     @Override
     public boolean cancel() throws IOException {

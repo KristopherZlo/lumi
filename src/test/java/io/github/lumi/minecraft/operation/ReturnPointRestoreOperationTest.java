@@ -90,6 +90,8 @@ class ReturnPointRestoreOperationTest {
         coordinator.tick();
         assertEquals(1, freeze.releaseCalls);
         assertTrue(!coordinator.hasActiveOperation());
+        assertEquals(io.github.lumi.minecraft.world.RestoreApplyStatistics.EMPTY,
+                operation.restoreStatistics().orElseThrow());
     }
 
     @Test
@@ -219,6 +221,10 @@ class ReturnPointRestoreOperationTest {
         @Override public void advance(long deadlineNanos) { complete = true; }
         @Override public boolean isTerminal() { return complete; }
         @Override public boolean isSafeToRelease() { return complete; }
+        @Override public Optional<io.github.lumi.minecraft.world.RestoreApplyStatistics>
+                restoreStatistics() {
+            return Optional.of(io.github.lumi.minecraft.world.RestoreApplyStatistics.EMPTY);
+        }
     }
 
     private static final class CloseTrackingMutation implements DimensionMutation {
