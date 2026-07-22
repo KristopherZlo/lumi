@@ -1,5 +1,6 @@
 package io.github.lumi.minecraft.operation;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.BranchSwitchTarget;
@@ -15,6 +16,7 @@ import io.github.lumi.domain.model.Zone;
 import io.github.lumi.domain.model.ZoneRestoreTarget;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.minecraft.world.WorldStateApply;
+import io.github.lumi.minecraft.world.RestoreApplyStatistics;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.OperationJournalRepository;
 import java.io.IOException;
@@ -643,6 +645,7 @@ public final class RestoreOperation implements DimensionMutation {
         journal = journals.advance(journal, OperationPhase.REF_PUBLISHED);
         journal = journals.advance(journal, OperationPhase.COMPLETE);
         journals.clear(journal);
+        logStatistics("target", targetSession.statistics());
         targetSession.close();
         status = RestoreStatus.COMPLETE;
         stateListener.restored(preparedTarget.source());
@@ -682,6 +685,7 @@ public final class RestoreOperation implements DimensionMutation {
                     }
                     journal = journals.advance(journal, OperationPhase.COMPLETE);
                     journals.clear(journal);
+                    logStatistics("safe-return", returnSession.statistics());
                     returnSession.close();
                     status = RestoreStatus.RETURNED;
                     stateListener.returned(preparedReturn.source());
@@ -709,6 +713,27 @@ public final class RestoreOperation implements DimensionMutation {
             }
             throw returnFailure;
         }
+    }
+
+    private static void logStatistics(
+            String endpoint, RestoreApplyStatistics statistics) {
+        LumiMod.LOGGER.info(
+                "Lumi Restore {} metrics: loadedChunks={}, storedChunks={}, "
+                        + "sectionSwaps={}, changedBlocks={}, lightSections={}, "
+                        + "fullChunkPackets={}, sectionPackets={}, packetPayloadBytes={}, "
+                        + "chunkLoadMs={}, loadedApplyMs={}, storageReadMs={}, "
+                        + "storageWriteMs={}, storageSyncMs={}, verificationMs={}",
+                endpoint, statistics.loadedChunks(), statistics.storedChunks(),
+                statistics.sectionSwaps(), statistics.changedBlocks(),
+                statistics.lightSections(), statistics.fullChunkPackets(),
+                statistics.sectionPackets(), statistics.packetPayloadBytes(),
+                millis(statistics.chunkLoadNanos()), millis(statistics.loadedApplyNanos()),
+                millis(statistics.storageReadNanos()), millis(statistics.storageWriteNanos()),
+                millis(statistics.storageSyncNanos()), millis(statistics.verificationNanos()));
+    }
+
+    private static long millis(long nanos) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(nanos);
     }
 
     public RestoreStatus status() {
