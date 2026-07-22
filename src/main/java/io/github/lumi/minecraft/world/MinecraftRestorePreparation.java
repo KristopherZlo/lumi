@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.LongConsumer;
 
 /** Converts one persistent Restore state into an immutable Minecraft-native state. */
@@ -71,5 +72,56 @@ public final class MinecraftRestorePreparation {
         return new PreparedMinecraftState(
                 normalizedSource, decodedSections, decodedEntities,
                 sectionOrder, List.copyOf(decodedEntities.keySet()));
+    }
+
+    public PreparedMinecraftPlanState preflight(
+            WorldStateApply.State source,
+            WorldStateApply.State base,
+            LongConsumer progress) throws IOException {
+        Objects.requireNonNull(source, "source");
+        Objects.requireNonNull(base, "base");
+        Objects.requireNonNull(progress, "progress");
+        if (!source.sections().keySet().equals(base.sections().keySet())
+                || !source.entities().keySet().equals(base.entities().keySet())) {
+            throw new IllegalArgumentException("Restore target and base keys must match");
+        }
+        long completed = 0;
+        for (var entry : source.sections().entrySet()) {
+            sections.decode(entry.getValue()).prepareAgainst(
+                    sections.decode(base.sections().get(entry.getKey())));
+            progress.accept(++completed);
+        }
+        Map<EntityChunkKey, EntityChunkBlob> normalizedSource =
+                entities.normalize(source.entities());
+        Map<EntityChunkKey, EntityChunkBlob> normalizedBase =
+                entities.normalize(base.entities());
+        Map<EntityChunkKey, DecodedEntityChunk> decodedEntities = new HashMap<>();
+        for (var entry : normalizedSource.entrySet()) {
+            decodedEntities.put(entry.getKey(), entities.decodeNormalized(entry.getValue()));
+            entities.decodeNormalized(normalizedBase.get(entry.getKey()));
+            progress.accept(++completed);
+        }
+        var normalizedTarget = new WorldStateApply.State(
+                source.sections(), normalizedSource, source.playerSpawns());
+        var normalizedReturn = new WorldStateApply.State(
+                base.sections(), normalizedBase, base.playerSpawns());
+        return new PreparedMinecraftPlanState(
+                normalizedTarget, normalizedReturn, decodedEntities,
+                orderedSections(source.sections().keySet()),
+                List.copyOf(decodedEntities.keySet()));
+    }
+
+    PreparedMinecraftState prepareBatch(
+            WorldStateApply.State source,
+            WorldStateApply.State base) throws IOException {
+        return prepare(source, base, ignored -> { });
+    }
+
+    private static List<SectionKey> orderedSections(Set<SectionKey> keys) {
+        return keys.stream()
+                .sorted(Comparator.comparingInt(SectionKey::chunkX)
+                        .thenComparingInt(SectionKey::chunkZ)
+                        .thenComparingInt(SectionKey::sectionY))
+                .toList();
     }
 }

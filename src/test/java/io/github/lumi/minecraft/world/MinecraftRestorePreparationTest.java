@@ -95,6 +95,25 @@ class MinecraftRestorePreparationTest {
     }
 
     @Test
+    void preflightsWithoutRetainingDecodedSectionPayloads() throws Exception {
+        SectionKey key = new SectionKey(0, 0, 0);
+        var states = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone"));
+        var source = new WorldStateApply.State(
+                Map.of(key, new SectionBlob(states, Map.of())), Map.of());
+        var preparation = new MinecraftRestorePreparation(
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
+                new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
+
+        PreparedMinecraftPlanState plan = preparation.preflight(
+                source, source, ignored -> { });
+
+        assertEquals(List.of(key), plan.sectionKeys());
+        assertEquals(source, plan.source());
+        assertEquals(Map.of(), plan.entities());
+    }
+
+    @Test
     void preparesLegacyEntityNbtInItsReloadStableForm() throws Exception {
         EntityChunkKey key = new EntityChunkKey(2, 3);
         UUID id = UUID.fromString("30000000-0000-0000-0000-000000000003");
