@@ -9,6 +9,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.operation.SaveOperationStatus;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
+import io.github.lumi.minecraft.world.RestoreApplyStatistics;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.OperationEventPayload;
 import java.io.IOException;
@@ -130,6 +131,42 @@ final class LumiBehaviorOperations {
 
     void restore(String name, CommitId target) throws IOException {
         runOperation("restore_" + name, () -> restoreFromUi(target));
+    }
+
+    LumiRestoreMeasurement measureRestore(String name, CommitId target)
+            throws IOException {
+        awaitHistoryReady();
+        AtomicReference<RestoreApplyStatistics> statistics = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        server.computeOnServer(minecraft -> {
+            FabricDimensionRuntime runtime = runtime(minecraft);
+            runtime.operations().observeNextEnqueue((ticket, ignored) ->
+                    runtime.operations().observeTerminal(ticket, completed -> {
+                        Optional<RestoreApplyStatistics> measured =
+                                completed.restoreStatistics();
+                        if (measured.isEmpty()) {
+                            failure.compareAndSet(null, new AssertionError(
+                                    "Restore completed without apply statistics"));
+                        } else {
+                            statistics.set(measured.orElseThrow());
+                        }
+                    }));
+            return null;
+        });
+        Runtime jvm = Runtime.getRuntime();
+        long heapBefore = usedHeap(jvm);
+        long[] peakHeap = {heapBefore};
+        long started = System.nanoTime();
+        awaitOperation("restore_" + name,
+                send("restore_" + name, () -> restoreFromUi(target), started),
+                failure, started,
+                () -> peakHeap[0] = Math.max(peakHeap[0], usedHeap(jvm)));
+        RestoreApplyStatistics measured = statistics.get();
+        if (measured == null) {
+            throw new AssertionError("Restore metrics observer did not complete");
+        }
+        return new LumiRestoreMeasurement(
+                elapsedMillis(started), heapBefore, peakHeap[0], measured);
     }
 
     OperationBoundary restore(
@@ -345,11 +382,21 @@ final class LumiBehaviorOperations {
             UUID requestId,
             AtomicReference<Throwable> failure,
             long started) throws IOException {
+        return awaitOperation(name, requestId, failure, started, () -> { });
+    }
+
+    private OperationEventPayload awaitOperation(
+            String name,
+            UUID requestId,
+            AtomicReference<Throwable> failure,
+            long started,
+            Runnable sample) throws IOException {
         int ticks = 0;
         String phase = "";
         long phaseStarted = started;
         OperationEventPayload terminal = null;
         while (terminal == null && ticks < OPERATION_TIMEOUT_TICKS) {
+            sample.run();
             OperationEventPayload event = context.computeOnClient(client ->
                     LumiClient.history().state().events().get(requestId));
             if (event != null && event.state() == OperationEventPayload.State.PROGRESS) {
@@ -389,6 +436,10 @@ final class LumiBehaviorOperations {
         }
         throwFailure(name, failure.get());
         return terminal;
+    }
+
+    private static long usedHeap(Runtime runtime) {
+        return runtime.totalMemory() - runtime.freeMemory();
     }
 
     private void awaitHistoryReady() {

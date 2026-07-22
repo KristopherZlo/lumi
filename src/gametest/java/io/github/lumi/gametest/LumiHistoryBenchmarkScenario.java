@@ -87,7 +87,10 @@ final class LumiHistoryBenchmarkScenario {
         int restoreNumber = 0;
         for (int index : restoreIndices(commits.size(), config.restoreSamples())) {
             String name = String.format("%02d-index-%03d", ++restoreNumber, index);
-            operations.restore(name, commits.get(index));
+            LumiRestoreMeasurement restore =
+                    operations.measureRestore(name, commits.get(index));
+            report.event("restore_metrics", name, "measured", 0,
+                    restore.totalMillis(), restore.describe());
             previous = recordStorage(
                     "restore-" + name, repository, previous.bytes());
             recordMemory("restore-" + name);
