@@ -58,9 +58,10 @@ final class LumiBehaviorOperations {
         return server.computeOnServer(minecraft -> runtime(minecraft).repository());
     }
 
-    int pendingKeyCount() {
+    int pendingBuilderKeyCount() {
         return server.computeOnServer(minecraft ->
-                runtime(minecraft).mutations().snapshot().generations().size());
+                runtime(minecraft).mutations().builderSnapshot()
+                        .generations().size());
     }
 
     void awaitDurability(String name) {

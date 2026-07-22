@@ -62,8 +62,10 @@ final class LumiHistoryBenchmarkScenario {
         fixture.markBaseline("benchmark_initial_marker");
         operations.awaitDurability("benchmark_initial_world");
         CommitId initial = operations.save("benchmark-initial");
-        if (operations.pendingKeyCount() != 0) {
-            throw new AssertionError("Initial benchmark Save left pending history keys");
+        int initialBuilderKeys = operations.pendingBuilderKeyCount();
+        if (initialBuilderKeys != 0) {
+            throw new AssertionError("Initial benchmark Save left "
+                    + initialBuilderKeys + " pending builder keys");
         }
         Path repository = operations.repository();
         LumiRepositoryMetrics.Snapshot previous = metrics.capture(repository);
@@ -153,7 +155,7 @@ final class LumiHistoryBenchmarkScenario {
             operations.awaitDurability(name + "_batch_" + tile);
         }
         long expectedKeys = sectionCount(area);
-        int actualKeys = operations.pendingKeyCount();
+        int actualKeys = operations.pendingBuilderKeyCount();
         if (actualKeys != expectedKeys) {
             throw new AssertionError(name + " dirtied " + actualKeys
                     + " history keys; expected exactly " + expectedKeys);
