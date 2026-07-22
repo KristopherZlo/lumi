@@ -730,11 +730,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return operation;
     }
 
-    private ReturnPointRestoreOperation createRestore(
+    private DimensionMutation createRestore(
             CommitId target, CommitAuthor author, boolean includeEntities) throws IOException {
         BranchRef expected = activeRef();
         UUID workspaceId = activeWorkspaceId();
         restores.requireTargetInWorkspace(target, workspaceId);
+        if (isRestoreNoOp(expected.commit(), target, mutations.hasPendingChanges())) {
+            return new NoChangeMutation("luma.status.nothing_to_restore");
+        }
         UUID operationId = UUID.randomUUID();
         SaveRequest returnPoint = new SaveRequest(
                 expected, author, "Return point before Restore", Instant.now(),
@@ -980,6 +983,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }, background);
         operations.enqueue(operation, OperationPriority.NORMAL, terminalObserver);
         return operation;
+    }
+
+    static boolean isRestoreNoOp(
+            CommitId head, CommitId target, boolean hasPendingChanges) {
+        return Objects.requireNonNull(head, "head").equals(
+                Objects.requireNonNull(target, "target")) && !hasPendingChanges;
     }
 
     public void deleteBranch(BranchName name) throws IOException {
