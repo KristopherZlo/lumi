@@ -46,6 +46,10 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private CompletableFuture<Void> lighting;
     private CompletableFuture<Void> synchronization;
     private Phase phase = Phase.LIGHTING;
+    private long phaseStartedNanos;
+    private long writeNanos;
+    private long syncNanos;
+    private long verificationNanos;
 
     MinecraftRestorePersistenceSession(
             ServerLevel level,
@@ -103,6 +107,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         verifier = new MinecraftPersistedBatchVerifier(
                 level, background, storedChunks, entityCapture, chunkTargets,
                 entityTargets, chunks, entityChunks, entityStorage);
+        phaseStartedNanos = System.nanoTime();
     }
 
     @Override
@@ -139,13 +144,13 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             return false;
         }
         MinecraftPersistenceFuture.join(lighting, "Restore lighting");
-        phase = Phase.CHUNKS;
+        transitionTo(Phase.CHUNKS);
         return true;
     }
 
     private boolean saveChunk() throws IOException {
         if (nextChunk == chunks.size()) {
-            phase = Phase.ENTITIES;
+            transitionTo(Phase.ENTITIES);
             return true;
         }
         ChunkCoordinate coordinate = chunks.get(nextChunk);
@@ -182,7 +187,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
 
     private boolean saveEntityChunk() throws IOException {
         if (nextEntityChunk == entityChunks.size()) {
-            phase = Phase.PLAYERS;
+            transitionTo(Phase.PLAYERS);
             return true;
         }
         EntityChunkKey key = entityChunks.get(nextEntityChunk);
@@ -199,7 +204,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
 
     private boolean savePlayer() throws IOException {
         if (nextPlayer == players.size()) {
-            phase = Phase.SYNCHRONIZING;
+            transitionTo(Phase.SYNCHRONIZING);
             return true;
         }
         PlayerTarget target = players.get(nextPlayer++);
@@ -252,15 +257,28 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         }
         MinecraftPersistenceFuture.join(
                 synchronization, "Restore storage synchronization");
-        phase = Phase.VERIFYING;
+        transitionTo(Phase.VERIFYING);
         return true;
     }
 
     private boolean verifyPersisted(long deadlineNanos) throws IOException {
         if (verifier.advanceUntil(deadlineNanos)) {
-            phase = Phase.COMPLETE;
+            transitionTo(Phase.COMPLETE);
         }
         return phase == Phase.COMPLETE;
+    }
+
+    private void transitionTo(Phase next) {
+        long now = System.nanoTime();
+        long elapsed = Math.max(0, now - phaseStartedNanos);
+        switch (phase) {
+            case LIGHTING, SYNCHRONIZING -> syncNanos += elapsed;
+            case CHUNKS, ENTITIES, PLAYERS -> writeNanos += elapsed;
+            case VERIFYING -> verificationNanos += elapsed;
+            case COMPLETE -> { }
+        }
+        phase = next;
+        phaseStartedNanos = now;
     }
 
     @SuppressWarnings("unchecked")
@@ -280,6 +298,11 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             case VERIFYING -> verifier.phase();
             case COMPLETE -> "verification";
         };
+    }
+
+    @Override
+    public Timings timings() {
+        return new Timings(writeNanos, syncNanos, verificationNanos);
     }
 
     private enum Phase { LIGHTING, CHUNKS, ENTITIES, PLAYERS, SYNCHRONIZING, VERIFYING, COMPLETE }

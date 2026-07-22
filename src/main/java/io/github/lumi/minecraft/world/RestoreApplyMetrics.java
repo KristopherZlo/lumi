@@ -49,6 +49,12 @@ final class RestoreApplyMetrics {
     void loadedApply(long nanos) { loadedApplyNanos.add(nanos); }
     void verification(long nanos) { verificationNanos.add(nanos); }
 
+    void persistence(WorldPersistenceSession.Timings timings) {
+        storageWriteNanos.add(timings.writeNanos());
+        storageSyncNanos.add(timings.syncNanos());
+        verificationNanos.add(timings.verificationNanos());
+    }
+
     RestoreApplyStatistics snapshot() {
         return new RestoreApplyStatistics(
                 loadedChunks.sum(), storedChunks.sum(), sectionSwaps.sum(),

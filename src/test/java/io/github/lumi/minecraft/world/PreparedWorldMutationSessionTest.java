@@ -147,11 +147,17 @@ class PreparedWorldMutationSessionTest {
         assertEquals(1, access.active);
         assertEquals(List.of(), access.released);
         ManualPersistence persistence = new ManualPersistence();
+        persistence.timings = new WorldPersistenceSession.Timings(5, 7, 11);
         world.persistence = persistence;
         assertFalse(session.persistUntil(Long.MAX_VALUE));
         assertEquals(1, access.active);
         persistence.complete = true;
         assertTrue(session.persistUntil(Long.MAX_VALUE));
+        assertEquals(5, session.statistics().storageWriteNanos());
+        assertEquals(7, session.statistics().storageSyncNanos());
+        assertEquals(11, session.statistics().verificationNanos());
+        assertTrue(session.persistUntil(Long.MAX_VALUE));
+        assertEquals(5, session.statistics().storageWriteNanos());
         assertEquals(1, access.active);
         session.close();
         assertEquals(0, access.active);
@@ -514,7 +520,9 @@ class PreparedWorldMutationSessionTest {
 
     private static final class ManualPersistence implements WorldPersistenceSession {
         private boolean complete;
+        private Timings timings = Timings.EMPTY;
         @Override public boolean advanceUntil(long deadlineNanos) { return complete; }
+        @Override public Timings timings() { return timings; }
     }
 
     private static final class RecordingChunkAccess implements ChunkLoadAccess {

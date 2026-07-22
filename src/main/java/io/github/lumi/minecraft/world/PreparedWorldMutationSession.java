@@ -32,6 +32,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private boolean playerSpawnsVerified;
     private boolean verified;
     private WorldPersistenceSession persistence;
+    private boolean persistenceMeasured;
     private final Set<ChunkCoordinate> storedChunks = new HashSet<>();
     private final Map<ChunkCoordinate, Long> loadStarts = new LinkedHashMap<>();
 
@@ -140,7 +141,12 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             persistence = world.beginPersistence(
                     target, Set.copyOf(storedChunks), playerSpawnsIncluded);
         }
-        return persistence.advanceUntil(deadlineNanos);
+        boolean complete = persistence.advanceUntil(deadlineNanos);
+        if (complete && !persistenceMeasured) {
+            metrics.persistence(persistence.timings());
+            persistenceMeasured = true;
+        }
+        return complete;
     }
 
     @Override
