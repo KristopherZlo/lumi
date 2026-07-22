@@ -125,6 +125,9 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         private int entityAddIndex;
         private boolean entitiesApplied;
         private boolean playerSpawnsApplied;
+        private SectionApplyResult appliedSection;
+        private final List<SectionApplyResult> appliedChunkSections = new ArrayList<>();
+        private boolean chunkBlockEntitiesChanged;
         private Phase phase = Phase.BLOCKS;
 
         private boolean advance(long deadlineNanos) throws IOException {
@@ -151,10 +154,13 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             SectionKey key = sections.get(sectionIndex);
             DecodedSection section = target.sections().get(key);
             if (phase == Phase.BLOCKS) {
-                world.applySection(key, section);
-                removals = world.blockEntityIndexes(key).stream()
+                appliedSection = world.applySection(key, section);
+                List<Integer> currentBlockEntities = world.blockEntityIndexes(key);
+                removals = currentBlockEntities.stream()
                         .filter(index -> !section.blockEntities().containsKey(index))
                         .toList();
+                chunkBlockEntitiesChanged |= !currentBlockEntities.isEmpty()
+                        || !section.blockEntities().isEmpty();
                 phase = Phase.REMOVE_BLOCK_ENTITIES;
             } else if (phase == Phase.REMOVE_BLOCK_ENTITIES) {
                 if (removalIndex < removals.size()) {
@@ -167,7 +173,17 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 var blockEntity = blockEntities.get(blockEntityIndex++);
                 world.loadBlockEntity(key, blockEntity.getKey(), blockEntity.getValue());
             } else {
+                appliedChunkSections.add(appliedSection);
                 sectionIndex++;
+                if (sectionIndex == sections.size()
+                        || !sameChunk(key, sections.get(sectionIndex))) {
+                    world.finishChunk(
+                            new ChunkCoordinate(key.chunkX(), key.chunkZ()),
+                            List.copyOf(appliedChunkSections),
+                            chunkBlockEntitiesChanged);
+                    appliedChunkSections.clear();
+                    chunkBlockEntitiesChanged = false;
+                }
                 removals = List.of();
                 removalIndex = 0;
                 blockEntities = List.of();
@@ -203,6 +219,10 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 entityRemovalIndex = 0;
                 phase = Phase.BLOCKS;
             }
+        }
+
+        private boolean sameChunk(SectionKey left, SectionKey right) {
+            return left.chunkX() == right.chunkX() && left.chunkZ() == right.chunkZ();
         }
 
         private void addEntity() throws IOException {

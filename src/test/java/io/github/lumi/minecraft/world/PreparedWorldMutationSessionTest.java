@@ -159,10 +159,35 @@ class PreparedWorldMutationSessionTest {
         assertEquals(List.of(new ChunkCoordinate(7, -3)), access.released);
     }
 
+    @Test
+    void synchronizesAllSectionsInOneChunkOnce() throws Exception {
+        SectionKey low = new SectionKey(1, 0, 2);
+        SectionKey high = new SectionKey(1, 1, 2);
+        SectionKey other = new SectionKey(3, 0, 4);
+        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
+        DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
+                .decode(source);
+        var persistent = new WorldStateApply.State(
+                Map.of(low, source, high, source, other, source), Map.of());
+        var target = new PreparedMinecraftState(
+                persistent,
+                Map.of(low, decoded, high, decoded, other, decoded),
+                Map.of(), List.of(low, high, other), List.of());
+        FakeWorld world = new FakeWorld(new AtomicLong(), source);
+
+        assertTrue(new PreparedWorldMutationSession(target, world, () -> 0L)
+                .applyUntil(Long.MAX_VALUE));
+
+        assertEquals(3, world.sectionWrites);
+        assertEquals(2, world.synchronizedChunks);
+    }
+
     private static final class FakeWorld implements PreparedWorldAccess {
         private final AtomicLong clock;
         private final SectionBlob captured;
         private int sectionWrites;
+        private int synchronizedChunks;
         private List<UUID> entityIds = List.of();
         private Map<EntityChunkKey, List<UUID>> entityIdsByChunk = Map.of();
         private EntityChunkBlob capturedEntities = new EntityChunkBlob(List.of());
@@ -176,9 +201,17 @@ class PreparedWorldMutationSessionTest {
             this.captured = captured;
         }
 
-        @Override public void applySection(SectionKey key, DecodedSection section) {
+        @Override public SectionApplyResult applySection(
+                SectionKey key, DecodedSection section) {
             sectionWrites++;
             clock.incrementAndGet();
+            return new SectionApplyResult(key, new short[] {0}, 1);
+        }
+        @Override public void finishChunk(
+                ChunkCoordinate chunk,
+                List<SectionApplyResult> sections,
+                boolean blockEntitiesChanged) {
+            synchronizedChunks++;
         }
         @Override public List<Integer> blockEntityIndexes(SectionKey key) { return List.of(); }
         @Override public void removeBlockEntity(SectionKey key, int localIndex) { }

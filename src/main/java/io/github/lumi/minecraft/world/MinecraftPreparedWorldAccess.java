@@ -43,9 +43,22 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     }
 
     @Override
-    public void applySection(SectionKey key, DecodedSection section) throws IOException {
+    public SectionApplyResult applySection(
+            SectionKey key, DecodedSection section) throws IOException {
         LevelChunk chunk = requireChunk(key.chunkX(), key.chunkZ());
-        freeze.runAuthorized(() -> sectionRewriter.apply(chunk, key, section));
+        SectionApplyResult[] result = new SectionApplyResult[1];
+        freeze.runAuthorized(() -> result[0] = sectionRewriter.apply(chunk, key, section));
+        return result[0];
+    }
+
+    @Override
+    public void finishChunk(
+            ChunkCoordinate coordinate,
+            List<SectionApplyResult> changedSections,
+            boolean blockEntitiesChanged) throws IOException {
+        sectionRewriter.synchronize(
+                requireChunk(coordinate.x(), coordinate.z()),
+                changedSections, blockEntitiesChanged);
     }
 
     @Override

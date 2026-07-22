@@ -4,7 +4,9 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.LongConsumer;
@@ -45,6 +47,13 @@ public final class MinecraftRestorePreparation {
         }
         var normalizedSource = new WorldStateApply.State(
                 source.sections(), normalizedEntities, source.playerSpawns());
-        return new PreparedMinecraftState(normalizedSource, decodedSections, decodedEntities);
+        var sectionOrder = decodedSections.keySet().stream()
+                .sorted(Comparator.comparingInt(SectionKey::chunkX)
+                        .thenComparingInt(SectionKey::chunkZ)
+                        .thenComparingInt(SectionKey::sectionY))
+                .toList();
+        return new PreparedMinecraftState(
+                normalizedSource, decodedSections, decodedEntities,
+                sectionOrder, List.copyOf(decodedEntities.keySet()));
     }
 }

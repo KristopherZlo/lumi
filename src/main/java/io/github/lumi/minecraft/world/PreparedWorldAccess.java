@@ -13,7 +13,12 @@ import net.minecraft.nbt.CompoundTag;
 
 /** Minimal Minecraft mutation/readback port used by the deadline-bounded apply cursor. */
 public interface PreparedWorldAccess {
-    void applySection(SectionKey key, DecodedSection section) throws IOException;
+    SectionApplyResult applySection(SectionKey key, DecodedSection section) throws IOException;
+
+    void finishChunk(
+            ChunkCoordinate chunk,
+            List<SectionApplyResult> sections,
+            boolean blockEntitiesChanged) throws IOException;
 
     List<Integer> blockEntityIndexes(SectionKey key) throws IOException;
 

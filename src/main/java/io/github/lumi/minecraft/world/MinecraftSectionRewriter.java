@@ -2,10 +2,14 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.SectionKey;
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
-import it.unimi.dsi.fastutil.shorts.ShortSet;
 import java.util.Arrays;
+import java.util.BitSet;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
@@ -21,14 +25,15 @@ final class MinecraftSectionRewriter {
         this.level = level;
     }
 
-    void apply(LevelChunk chunk, SectionKey key, DecodedSection target) {
+    SectionApplyResult apply(LevelChunk chunk, SectionKey key, DecodedSection target) {
         int sectionIndex = chunk.getSectionIndexFromSectionY(key.sectionY());
         if (sectionIndex < 0 || sectionIndex >= chunk.getSections().length) {
             throw new IllegalArgumentException("Section is outside the loaded chunk: " + key);
         }
         LevelChunkSection section = chunk.getSection(sectionIndex);
         LevelChunkSection replacementSection = target.replacementFor(section);
-        ShortSet changedCells = new ShortOpenHashSet();
+        short[] changedCells = new short[4096];
+        int changedCount = 0;
         short[] changedLightColumns = new short[16 * 16];
         boolean lightChanged = false;
         int[] highestChangedByColumn = new int[16 * 16];
@@ -48,7 +53,7 @@ final class MinecraftSectionRewriter {
                     key.chunkX() * 16 + x,
                     key.sectionY() * 16 + y,
                     key.chunkZ() * 16 + z);
-            changedCells.add(SectionPos.sectionRelativePos(position));
+            changedCells[changedCount++] = SectionPos.sectionRelativePos(position);
             int column = x | (z << 4);
             if (highestChangedByColumn[column] < localIndex) {
                 highestChangedByColumn[column] = localIndex;
@@ -58,8 +63,8 @@ final class MinecraftSectionRewriter {
                 lightChanged = true;
             }
         }
-        if (changedCells.isEmpty()) {
-            return;
+        if (changedCount == 0) {
+            return new SectionApplyResult(key, changedCells, 0);
         }
 
         chunk.getSections()[sectionIndex] = replacementSection;
@@ -71,7 +76,7 @@ final class MinecraftSectionRewriter {
                             changedLightColumns);
         }
         chunk.markUnsaved();
-        broadcast(chunk, key, changedCells, replacementSection);
+        return new SectionApplyResult(key, changedCells, changedCount);
     }
 
     static void markLightChange(short[] updates, int x, int y, int z) {
@@ -98,18 +103,45 @@ final class MinecraftSectionRewriter {
         }
     }
 
-    private void broadcast(
+    void synchronize(
             LevelChunk chunk,
-            SectionKey key,
-            ShortSet changedCells,
-            LevelChunkSection section) {
-        SectionPos sectionPos = SectionPos.of(chunk.getPos(), key.sectionY());
-        var packet = new ClientboundSectionBlocksUpdatePacket(
-                sectionPos, changedCells, section);
+            List<SectionApplyResult> sections,
+            boolean blockEntitiesChanged) {
+        int changedCells = sections.stream()
+                .mapToInt(SectionApplyResult::changedCount).sum();
+        if (changedCells == 0 && !blockEntitiesChanged) {
+            return;
+        }
+        Packet<ClientGamePacketListener> packet = useFullChunkPacket(
+                changedCells, blockEntitiesChanged)
+                ? new ClientboundLevelChunkWithLightPacket(
+                        chunk, level.getLightEngine(), new BitSet(), new BitSet())
+                : null;
         for (var player : level.getChunkSource().chunkMap
                 .getPlayers(chunk.getPos(), false)) {
-            player.connection.send(packet);
+            if (packet != null) {
+                player.connection.send(packet);
+            } else {
+                for (SectionApplyResult section : sections) {
+                    if (section.changedCount() > 0) {
+                        player.connection.send(sectionPacket(chunk, section));
+                    }
+                }
+            }
         }
+    }
+
+    static boolean useFullChunkPacket(int changedCells, boolean blockEntitiesChanged) {
+        return blockEntitiesChanged || changedCells >= 1024;
+    }
+
+    private static ClientboundSectionBlocksUpdatePacket sectionPacket(
+            LevelChunk chunk, SectionApplyResult result) {
+        var changedCells = new ShortOpenHashSet(result.changedCells());
+        int sectionIndex = chunk.getSectionIndexFromSectionY(result.key().sectionY());
+        return new ClientboundSectionBlocksUpdatePacket(
+                SectionPos.of(chunk.getPos(), result.key().sectionY()),
+                changedCells, chunk.getSection(sectionIndex));
     }
 
     private static boolean requiresLightCheck(BlockState current, BlockState target) {
