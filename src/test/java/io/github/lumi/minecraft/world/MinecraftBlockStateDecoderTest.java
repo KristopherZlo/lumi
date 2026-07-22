@@ -33,7 +33,8 @@ class MinecraftBlockStateDecoderTest {
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));
         states.set(17, "minecraft:oak_log[axis=x]");
         var source = new SectionBlob(states, Map.of(
-                17, MinecraftNbtCodec.encode(tag("custom", "value"))));
+                17, MinecraftNbtCodec.encode(blockEntityTag(
+                        "minecraft:chest", "custom", "value"))));
 
         DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
                 .decode(source);
@@ -66,9 +67,28 @@ class MinecraftBlockStateDecoderTest {
                         .decode(new SectionBlob(states, Map.of())));
     }
 
+    @Test
+    void rejectsUnknownBlockEntityTypeDuringPreflight() throws Exception {
+        var states = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone"));
+        var source = new SectionBlob(states, Map.of(
+                0, MinecraftNbtCodec.encode(blockEntityTag(
+                        "missing:not_a_block_entity", "custom", "value"))));
+
+        assertThrows(IOException.class, () ->
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK).decode(source));
+    }
+
     private static net.minecraft.nbt.CompoundTag tag(String key, String value) {
         var tag = new net.minecraft.nbt.CompoundTag();
         tag.putString(key, value);
+        return tag;
+    }
+
+    private static net.minecraft.nbt.CompoundTag blockEntityTag(
+            String type, String key, String value) {
+        var tag = tag(key, value);
+        tag.putString("id", type);
         return tag;
     }
 }

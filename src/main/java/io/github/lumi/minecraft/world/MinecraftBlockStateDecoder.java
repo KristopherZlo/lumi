@@ -9,6 +9,8 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -30,9 +32,20 @@ public final class MinecraftBlockStateDecoder {
         }
         var blockEntities = new HashMap<Integer, net.minecraft.nbt.CompoundTag>();
         for (var entry : source.blockEntities().entrySet()) {
-            blockEntities.put(entry.getKey(), MinecraftNbtCodec.decode(entry.getValue()));
+            var decoded = MinecraftNbtCodec.decode(entry.getValue());
+            validateBlockEntityType(decoded);
+            blockEntities.put(entry.getKey(), decoded);
         }
         return new DecodedSection(states, blockEntities);
+    }
+
+    private static void validateBlockEntityType(
+            net.minecraft.nbt.CompoundTag blockEntity) throws IOException {
+        String encoded = blockEntity.getStringOr("id", "");
+        Identifier id = Identifier.tryParse(encoded);
+        if (id == null || !BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(id)) {
+            throw new IOException("Unknown persistent block entity type: " + encoded);
+        }
     }
 
     private BlockState decodeState(String encoded) throws IOException {
