@@ -66,6 +66,7 @@ import io.github.lumi.domain.service.SaveService;
 import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.domain.service.RecoveryChoice;
 import io.github.lumi.domain.service.RecoveryService;
+import io.github.lumi.domain.service.RetentionService;
 import io.github.lumi.domain.service.SaveJournalRecovery;
 import io.github.lumi.domain.service.PublishedApplyRecovery;
 import io.github.lumi.domain.service.PendingChangeStatisticsService;
@@ -270,6 +271,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         returnPointRestores = new ReturnPointRestorePreparation(
                 restores, worldApply, refs, journals,
                 new ForwardHistoryService(commits, refs),
+                new RetentionService(commits, refs),
                 restoreStateListener, background);
         packages = new DimensionPackageService(
                 level.dimension().identifier().toString(), repository,

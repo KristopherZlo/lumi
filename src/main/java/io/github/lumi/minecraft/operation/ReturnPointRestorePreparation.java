@@ -4,6 +4,7 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.service.ForwardHistoryService;
+import io.github.lumi.domain.service.RetentionService;
 import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.domain.service.SaveResult;
 import io.github.lumi.minecraft.world.WorldStateApply;
@@ -24,6 +25,7 @@ public final class ReturnPointRestorePreparation {
     private final BranchRefRepository refs;
     private final OperationJournalRepository journals;
     private final ForwardHistoryService forwardHistory;
+    private final RetentionService retention;
     private final RestoreStateListener stateListener;
     private final Executor background;
 
@@ -33,8 +35,9 @@ public final class ReturnPointRestorePreparation {
             BranchRefRepository refs,
             OperationJournalRepository journals,
             ForwardHistoryService forwardHistory,
+            RetentionService retention,
             Executor background) {
-        this(restores, world, refs, journals, forwardHistory,
+        this(restores, world, refs, journals, forwardHistory, retention,
                 RestoreStateListener.NONE, background);
     }
 
@@ -44,6 +47,7 @@ public final class ReturnPointRestorePreparation {
             BranchRefRepository refs,
             OperationJournalRepository journals,
             ForwardHistoryService forwardHistory,
+            RetentionService retention,
             RestoreStateListener stateListener,
             Executor background) {
         this.restores = Objects.requireNonNull(restores, "restores");
@@ -51,6 +55,7 @@ public final class ReturnPointRestorePreparation {
         this.refs = Objects.requireNonNull(refs, "refs");
         this.journals = Objects.requireNonNull(journals, "journals");
         this.forwardHistory = Objects.requireNonNull(forwardHistory, "forwardHistory");
+        this.retention = Objects.requireNonNull(retention, "retention");
         this.stateListener = Objects.requireNonNull(stateListener, "stateListener");
         this.background = Objects.requireNonNull(background, "background");
     }
@@ -87,7 +92,8 @@ public final class ReturnPointRestorePreparation {
         Objects.requireNonNull(progress, "progress");
         return CompletableFuture.supplyAsync(() -> {
             try {
-                refs.create(hiddenRef, returnPoint.commitId());
+                var createdRef = refs.create(hiddenRef, returnPoint.commitId());
+                retention.pruneAfterPublication(16, createdRef);
                 forwardHistory.retain(returnPoint.branchRef());
                 long diffStarted = System.nanoTime();
                 var restore = includeEntities

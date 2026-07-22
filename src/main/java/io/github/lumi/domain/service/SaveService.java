@@ -71,12 +71,15 @@ public final class SaveService implements SavePublisher {
         Objects.requireNonNull(captured, "captured");
         Objects.requireNonNull(progress, "progress");
         Objects.requireNonNull(completion, "completion");
-        Optional<SaveResult> cleanReturn = cleanReturnPoint(request, captured);
+        Optional<CommitId> cleanReturn = reusableReturnPoint(request, captured);
         if (cleanReturn.isPresent()) {
+            requireCurrent(request);
             progress.accept(SavePublicationProgress.indeterminate(
                     "Save: reusing current version"));
             completion.complete(captured.generations());
-            return cleanReturn.orElseThrow();
+            return new SaveResult(
+                    cleanReturn.orElseThrow(), request.expectedRef(),
+                    captured.generations());
         }
         CommitId commitId = writeCommit(request, captured, progress);
         if (!request.tags().isEmpty()) {
@@ -106,7 +109,7 @@ public final class SaveService implements SavePublisher {
         return new SaveResult(commitId, branch, captured.generations());
     }
 
-    private Optional<SaveResult> cleanReturnPoint(
+    private Optional<CommitId> reusableReturnPoint(
             SaveRequest request, CapturedWorldState captured) throws IOException {
         if (request.kind() != CommitKind.HIDDEN_RETURN
                 || !captured.generations().generations().isEmpty()) {
@@ -119,10 +122,7 @@ public final class SaveService implements SavePublisher {
         if (!current.playerSpawns().equals(captured.playerSpawns())) {
             return Optional.empty();
         }
-        requireCurrent(request);
-        return Optional.of(new SaveResult(
-                request.expectedRef().commit(), request.expectedRef(),
-                captured.generations()));
+        return Optional.of(request.expectedRef().commit());
     }
 
     public SaveResult checkpoint(
@@ -134,11 +134,17 @@ public final class SaveService implements SavePublisher {
         if (!hiddenRef.value().startsWith("hidden/")) {
             throw new IllegalArgumentException("Checkpoint ref must be hidden");
         }
-        requireCurrent(request);
-        CommitId commitId = writeCommit(request, captured);
+        Optional<CommitId> reusable = reusableReturnPoint(request, captured);
+        CommitId commitId;
+        if (reusable.isPresent()) {
+            commitId = reusable.orElseThrow();
+        } else {
+            requireCurrent(request);
+            commitId = writeCommit(request, captured);
+        }
         requireCurrent(request);
         var branch = refs.create(hiddenRef, commitId);
-        new RetentionService(commits, refs).pruneHiddenRefs(16);
+        new RetentionService(commits, refs).pruneAfterPublication(16, branch);
         return new SaveResult(commitId, branch, captured.generations());
     }
 

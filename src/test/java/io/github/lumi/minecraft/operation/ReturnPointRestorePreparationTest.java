@@ -12,6 +12,7 @@ import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.domain.service.ForwardHistoryService;
+import io.github.lumi.domain.service.RetentionService;
 import io.github.lumi.domain.service.SaveResult;
 import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.storage.repository.BranchRefRepository;
@@ -48,7 +49,8 @@ class ReturnPointRestorePreparationTest {
         ReturnPointRestorePreparation preparation = new ReturnPointRestorePreparation(
                 new RestoreService(objects, commits, new OriginStore(repositoryRoot)),
                 new NoOpWorldApply(), refs, journals,
-                new ForwardHistoryService(commits, refs), Runnable::run);
+                new ForwardHistoryService(commits, refs),
+                new RetentionService(commits, refs), Runnable::run);
         var progress = new java.util.ArrayList<OperationProgress>();
 
         RestoreOperation operation = preparation.prepare(
@@ -83,16 +85,22 @@ class ReturnPointRestorePreparationTest {
         var current = commits.write(commit(tree, List.of(target), CommitKind.MANUAL));
         var main = refs.create(new BranchName("main"), current);
         var saved = new SaveResult(current, main, WorkingIndexSnapshot.empty());
-        BranchName hidden = new BranchName("hidden/return/clean");
+        BranchName hidden = new BranchName("hidden/return/zz-current");
+        for (int index = 0; index < 16; index++) {
+            refs.create(new BranchName("hidden/return/existing-" + index), current);
+        }
         ReturnPointRestorePreparation preparation = new ReturnPointRestorePreparation(
                 new RestoreService(objects, commits, new OriginStore(repositoryRoot)),
                 new NoOpWorldApply(), refs, journals,
-                new ForwardHistoryService(commits, refs), Runnable::run);
+                new ForwardHistoryService(commits, refs),
+                new RetentionService(commits, refs), Runnable::run);
 
         RestoreOperation operation = preparation.prepare(
                 saved, target, hidden, UUID.randomUUID(), false).join();
 
         assertEquals(current, refs.read(hidden).orElseThrow().commit());
+        assertEquals(16, refs.list().stream().filter(ref ->
+                ref.name().value().startsWith("hidden/return/")).count());
         assertEquals(List.of(current), new ForwardHistoryService(commits, refs)
                 .roots(new BranchName("main"), Optional.of(new UUID(1, 1))));
         operation.tick(Long.MAX_VALUE);

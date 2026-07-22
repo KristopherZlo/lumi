@@ -20,6 +20,7 @@ import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.MerkleTreeEditor;
 import io.github.lumi.storage.repository.OperationJournalRepository;
+import io.github.lumi.storage.repository.RefConflictException;
 import io.github.lumi.storage.repository.VersionTagRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import io.github.lumi.storage.object.ObjectStore;
@@ -120,7 +121,7 @@ class SaveServiceTest {
     }
 
     @Test
-    void reusesCleanHeadForHiddenReturnPoint() throws IOException {
+    void reusesCleanHeadForHiddenReturnSaveAndCheckpoint() throws IOException {
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
         CommitRepository commits = new CommitRepository(repositoryRoot);
         BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
@@ -132,13 +133,15 @@ class SaveServiceTest {
                 new OperationJournalRepository(repositoryRoot),
                 new VersionTagRepository(repositoryRoot));
         var completionCalled = new AtomicBoolean();
-
-        SaveResult result = service.save(new SaveRequest(
+        var request = new SaveRequest(
                 initialRef, author(), "Return point", Instant.EPOCH,
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
-                Optional.empty(), CommitKind.HIDDEN_RETURN),
-                new CapturedWorldState(Map.of(), Map.of(), WorkingIndexSnapshot.empty(),
-                        new CommitStatistics(0, 0, 0, 0)), ignored -> { },
+                Optional.empty(), CommitKind.HIDDEN_RETURN);
+        var clean = new CapturedWorldState(
+                Map.of(), Map.of(), WorkingIndexSnapshot.empty(),
+                new CommitStatistics(0, 0, 0, 0));
+
+        SaveResult result = service.save(request, clean, ignored -> { },
                 ignored -> completionCalled.set(true));
 
         assertEquals(initialId, result.commitId());
@@ -148,18 +151,36 @@ class SaveServiceTest {
         try (var files = Files.walk(repositoryRoot.resolve("commits"))) {
             assertEquals(1, files.filter(Files::isRegularFile).count());
         }
+        int objectsBefore = new ObjectStore(repositoryRoot.resolve("objects"))
+                .listIds().size();
+        BranchName cleanRef = new BranchName("hidden/return/clean");
+        SaveResult checkpoint = service.checkpoint(request, clean, cleanRef);
+        assertEquals(initialId, checkpoint.commitId());
+        assertEquals(initialId, refs.read(cleanRef).orElseThrow().commit());
+        assertEquals(initialRef, refs.read(initialRef.name()).orElseThrow());
+        assertEquals(objectsBefore, new ObjectStore(repositoryRoot.resolve("objects"))
+                .listIds().size());
 
         UUID player = UUID.fromString("30000000-0000-0000-0000-000000000003");
         PlayerSpawn spawn = new PlayerSpawn(4, 80, -6, 90.0F, 0.0F, false);
-        SaveResult changedSpawn = service.save(new SaveRequest(
+        SaveResult changedSpawn = service.checkpoint(new SaveRequest(
                 initialRef, author(), "Changed spawn return point", Instant.EPOCH,
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 Optional.empty(), CommitKind.HIDDEN_RETURN),
                 new CapturedWorldState(Map.of(), Map.of(), WorkingIndexSnapshot.empty(),
-                        new CommitStatistics(0, 0, 0, 0), Map.of(player, spawn)));
+                        new CommitStatistics(0, 0, 0, 0), Map.of(player, spawn)),
+                new BranchName("hidden/return/spawn"));
 
         assertNotEquals(initialId, changedSpawn.commitId());
         assertEquals(Map.of(player, spawn), commits.read(changedSpawn.commitId()).playerSpawns());
+        refs.compareAndSet(initialRef, changedSpawn.commitId());
+        BranchName staleRef = new BranchName("hidden/return/stale");
+        assertThrows(RefConflictException.class,
+                () -> service.checkpoint(request, clean, staleRef));
+        assertTrue(refs.read(staleRef).isEmpty());
+        try (var files = Files.walk(repositoryRoot.resolve("commits"))) {
+            assertEquals(2, files.filter(Files::isRegularFile).count());
+        }
     }
 
     @Test
@@ -304,6 +325,16 @@ class SaveServiceTest {
         assertEquals(result.branchRef(), refs.read(result.branchRef().name()).orElseThrow());
         assertEquals(result.commitId(), result.branchRef().commit());
         assertEquals(captured.generations(), result.capturedGenerations());
+
+        BranchName automaticRef = new BranchName("hidden/auto/main/version");
+        SaveResult automatic = service.checkpoint(new SaveRequest(
+                initialRef, author(), "Automatic version", Instant.EPOCH,
+                request.workspaceId(), Optional.empty(), CommitKind.AUTO),
+                new CapturedWorldState(
+                        Map.of(), Map.of(), WorkingIndexSnapshot.empty(),
+                        new CommitStatistics(0, 0, 0, 0)), automaticRef);
+        assertEquals(automatic.commitId(), refs.read(automaticRef).orElseThrow().commit());
+        assertEquals(initialRef, refs.read(initialRef.name()).orElseThrow());
     }
 
     @Test
