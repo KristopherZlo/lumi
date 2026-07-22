@@ -58,6 +58,15 @@ final class LumiDenseSectionFixture {
     private static void fillOnServer(
             ServerLevel level, BlockBox area, int paletteOffset) {
         var runtime = LumiMod.serverRuntime().find(level).orElseThrow();
+        runtime.freeze().runAuthorized(() ->
+                fillAuthorized(level, area, paletteOffset, runtime));
+    }
+
+    private static void fillAuthorized(
+            ServerLevel level,
+            BlockBox area,
+            int paletteOffset,
+            io.github.lumi.minecraft.runtime.FabricDimensionRuntime runtime) {
         var capture = new MinecraftSectionCapture();
         int minChunkX = SectionPos.blockToSectionCoord(area.minX());
         int maxChunkX = SectionPos.blockToSectionCoord(area.maxX());

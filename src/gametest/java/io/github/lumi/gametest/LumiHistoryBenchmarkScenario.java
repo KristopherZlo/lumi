@@ -146,9 +146,26 @@ final class LumiHistoryBenchmarkScenario {
         if (tile % TILES_PER_DURABILITY_BARRIER != 0) {
             operations.awaitDurability(name + "_batch_" + tile);
         }
+        long expectedKeys = sectionCount(area);
+        int actualKeys = operations.pendingKeyCount();
+        if (actualKeys != expectedKeys) {
+            throw new AssertionError(name + " dirtied " + actualKeys
+                    + " history keys; expected exactly " + expectedKeys);
+        }
         report.event("change", name, "succeeded", 0,
                 (System.nanoTime() - started) / 1_000_000,
-                "tiles=" + tile + ";tileSize=" + EDIT_TILE_SIZE);
+                "tiles=" + tile + ";tileSize=" + EDIT_TILE_SIZE
+                        + ";historyKeys=" + actualKeys);
+    }
+
+    private static long sectionCount(BlockBox area) {
+        long x = Math.floorDiv(area.maxX(), 16)
+                - Math.floorDiv(area.minX(), 16) + 1L;
+        long y = Math.floorDiv(area.maxY(), 16)
+                - Math.floorDiv(area.minY(), 16) + 1L;
+        long z = Math.floorDiv(area.maxZ(), 16)
+                - Math.floorDiv(area.minZ(), 16) + 1L;
+        return x * y * z;
     }
 
     private LumiRepositoryMetrics.Snapshot recordStorage(
