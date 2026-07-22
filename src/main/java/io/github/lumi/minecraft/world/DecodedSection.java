@@ -64,6 +64,17 @@ public final class DecodedSection {
         return delta == null ? PreparedSectionDelta.inspect(current, this) : delta;
     }
 
+    boolean hasPreparedDelta() {
+        return delta != null;
+    }
+
+    PreparedSectionDelta preparedDelta() {
+        if (delta == null) {
+            throw new IllegalStateException("Section has no directional Restore delta");
+        }
+        return delta;
+    }
+
     private static PalettedContainer<BlockState> prepare(List<BlockState> states) {
         var prepared = new PalettedContainer<>(
                 Blocks.AIR.defaultBlockState(), BLOCK_STATES);
