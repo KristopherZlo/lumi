@@ -20,7 +20,7 @@ final class LumiRestorePerformanceGate {
                 .mapToLong(LumiRestoreMeasurement::applicationNanos)
                 .boxed().toList());
         long maximumTotalMillis = measurements.stream()
-                .mapToLong(LumiRestoreMeasurement::totalMillis).max().orElseThrow();
+                .mapToLong(LumiRestoreMeasurement::operationMillis).max().orElseThrow();
         long maximumExtraHeap = measurements.stream()
                 .mapToLong(LumiRestoreMeasurement::extraHeapBytes).max().orElseThrow();
         long maximumTick = measurements.stream()

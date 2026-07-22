@@ -100,7 +100,7 @@ final class LumiHistoryBenchmarkScenario {
                     operations.measureRestore(name, commits.get(index));
             restores.add(restore);
             report.event("restore_metrics", name, "measured", 0,
-                    restore.totalMillis(), restore.describe());
+                    restore.operationMillis(), restore.describe());
             previous = recordStorage(
                     "restore-" + name, repository, previous.bytes());
             recordMemory("restore-" + name);

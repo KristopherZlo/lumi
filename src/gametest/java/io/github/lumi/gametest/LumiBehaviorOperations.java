@@ -20,6 +20,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -143,40 +144,57 @@ final class LumiBehaviorOperations {
             throws IOException {
         awaitHistoryReady();
         AtomicReference<RestoreApplyStatistics> statistics = new AtomicReference<>();
+        AtomicReference<LumiServerTickProbe> tickProbe = new AtomicReference<>();
+        AtomicLong acceptedNanos = new AtomicLong();
+        AtomicLong terminalNanos = new AtomicLong();
         AtomicReference<Throwable> failure = new AtomicReference<>();
         server.computeOnServer(minecraft -> {
             FabricDimensionRuntime runtime = runtime(minecraft);
-            runtime.operations().observeNextEnqueue((ticket, ignored) ->
-                    runtime.operations().observeTerminal(ticket, completed -> {
-                        Optional<RestoreApplyStatistics> measured =
-                                completed.restoreStatistics();
-                        if (measured.isEmpty()) {
-                            failure.compareAndSet(null, new AssertionError(
-                                    "Restore completed without apply statistics"));
-                        } else {
-                            statistics.set(measured.orElseThrow());
-                        }
-                    }));
+            runtime.operations().observeNextEnqueue((ticket, ignored) -> {
+                acceptedNanos.set(System.nanoTime());
+                tickProbe.set(LumiServerTickProbe.open());
+                runtime.operations().observeTerminal(ticket, completed -> {
+                    terminalNanos.set(System.nanoTime());
+                    Optional<RestoreApplyStatistics> measured =
+                            completed.restoreStatistics();
+                    if (measured.isEmpty()) {
+                        failure.compareAndSet(null, new AssertionError(
+                                "Restore completed without apply statistics"));
+                    } else {
+                        statistics.set(measured.orElseThrow());
+                    }
+                });
+            });
             return null;
         });
         Runtime jvm = Runtime.getRuntime();
         long heapBefore = usedHeap(jvm);
         long[] peakHeap = {heapBefore};
-        long started = System.nanoTime();
+        long uiStarted = System.nanoTime();
         long maximumServerTick;
-        try (LumiServerTickProbe ticks = LumiServerTickProbe.open()) {
+        try {
             awaitOperation("restore_" + name,
-                    send("restore_" + name, () -> restoreFromUi(target), started),
-                    failure, started,
+                    send("restore_" + name, () -> restoreFromUi(target), uiStarted),
+                    failure, uiStarted,
                     () -> peakHeap[0] = Math.max(peakHeap[0], usedHeap(jvm)));
-            maximumServerTick = ticks.maximumNanos();
+        } finally {
+            LumiServerTickProbe probe = tickProbe.get();
+            maximumServerTick = probe == null ? 0 : probe.maximumNanos();
+            if (probe != null) {
+                probe.close();
+            }
         }
         RestoreApplyStatistics measured = statistics.get();
         if (measured == null) {
             throw new AssertionError("Restore metrics observer did not complete");
         }
+        if (acceptedNanos.get() == 0 || terminalNanos.get() == 0) {
+            throw new AssertionError("Restore server timing observer did not complete");
+        }
         return new LumiRestoreMeasurement(
-                elapsedMillis(started), heapBefore, peakHeap[0],
+                elapsedMillis(acceptedNanos.get(), terminalNanos.get()),
+                elapsedMillis(uiStarted, acceptedNanos.get()),
+                heapBefore, peakHeap[0],
                 maximumServerTick, measured);
     }
 
@@ -524,6 +542,10 @@ final class LumiBehaviorOperations {
 
     private static long elapsedMillis(long started) {
         return (System.nanoTime() - started) / 1_000_000;
+    }
+
+    private static long elapsedMillis(long started, long finished) {
+        return Math.max(0, finished - started) / 1_000_000;
     }
 
     record OperationBoundary(

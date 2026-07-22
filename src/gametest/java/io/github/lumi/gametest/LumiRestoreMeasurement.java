@@ -5,13 +5,15 @@ import java.util.concurrent.TimeUnit;
 
 /** End-to-end and apply-path measurements for one durably published Restore. */
 record LumiRestoreMeasurement(
-        long totalMillis,
+        long operationMillis,
+        long uiToAcceptedMillis,
         long heapBeforeBytes,
         long peakHeapBytes,
         long maximumServerTickNanos,
         RestoreApplyStatistics apply) {
     LumiRestoreMeasurement {
-        if (totalMillis < 0 || heapBeforeBytes < 0 || peakHeapBytes < heapBeforeBytes
+        if (operationMillis < 0 || uiToAcceptedMillis < 0
+                || heapBeforeBytes < 0 || peakHeapBytes < heapBeforeBytes
                 || maximumServerTickNanos < 0) {
             throw new IllegalArgumentException("Invalid Restore measurement");
         }
@@ -28,7 +30,8 @@ record LumiRestoreMeasurement(
     }
 
     String describe() {
-        return "totalMs=" + totalMillis
+        return "operationMs=" + operationMillis
+                + ";uiToAcceptedMs=" + uiToAcceptedMillis
                 + ";applicationMs=" + TimeUnit.NANOSECONDS.toMillis(applicationNanos())
                 + ";extraHeapBytes=" + extraHeapBytes()
                 + ";maximumServerTickMs=" + millis(maximumServerTickNanos)
