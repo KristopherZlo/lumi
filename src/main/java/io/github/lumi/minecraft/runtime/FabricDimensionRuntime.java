@@ -602,6 +602,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public boolean permitEntityStore(
             ChunkPos position, Stream<? extends EntityAccess> entities)
             throws IOException {
+        if (freeze.isAuthorizedMutation()) {
+            return true;
+        }
+        if (freeze.isFrozen()) {
+            return false;
+        }
         var key = MinecraftEntityChunkCapture.key(position);
         return entityDurability.permitStore(key, entityCapture.capture(level, entities));
     }

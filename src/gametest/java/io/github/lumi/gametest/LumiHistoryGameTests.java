@@ -9,6 +9,7 @@ import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
+import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.WorldObjectGraph;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -53,6 +54,10 @@ public final class LumiHistoryGameTests {
             existing.discard();
             helper.assertFalse(existing.isRemoved(),
                     "Frozen dimension removed an ordinary entity");
+            ((ServerLevelEntityManagerAccessor) helper.getLevel())
+                    .lumi$entityManager().saveAll();
+            helper.assertFalse(existing.isRemoved(),
+                    "Frozen forced save changed entity lifecycle state");
         } finally {
             lease.release();
         }
