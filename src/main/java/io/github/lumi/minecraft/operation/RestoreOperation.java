@@ -499,11 +499,8 @@ public final class RestoreOperation implements DimensionMutation {
         Objects.requireNonNull(progress, "progress");
         WorldStateApply.State targetState = targetState(restore);
         WorldStateApply.State returnState = returnState(restore);
-        WorldStateApply.PreparedState preparedTarget = prepareWorldState(
-                world, targetState, returnState, "Restore: preflight target", progress);
-        WorldStateApply.PreparedState preparedReturn = prepareWorldState(
-                world, returnState, targetState,
-                "Restore: preflight return point", progress);
+        WorldStateApply.PreparedStates prepared = prepareWorldStates(
+                world, targetState, returnState, progress);
         OperationJournal journal = new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
@@ -511,7 +508,7 @@ public final class RestoreOperation implements DimensionMutation {
                 Objects.requireNonNull(capturedGenerations, "capturedGenerations"));
         return new RestoreOperation(
                 restore, world, publication, journals, journal, false,
-                preparedTarget, preparedReturn, stateListener);
+                prepared.target(), prepared.returnPoint(), stateListener);
     }
 
     private static RestoreOperation prepare(
@@ -528,26 +525,26 @@ public final class RestoreOperation implements DimensionMutation {
         Objects.requireNonNull(stateListener, "stateListener");
         WorldStateApply.State targetState = targetState(restore);
         WorldStateApply.State returnState = returnState(restore);
-        WorldStateApply.PreparedState preparedTarget = prepareWorldState(
-                world, targetState, returnState, "Restore: preflight target", progress);
-        WorldStateApply.PreparedState preparedReturn = prepareWorldState(
-                world, returnState, targetState,
-                "Restore: preflight return point", progress);
+        WorldStateApply.PreparedStates prepared = prepareWorldStates(
+                world, targetState, returnState, progress);
         return new RestoreOperation(
                 restore, world, publication, journals, journal, true,
-                preparedTarget, preparedReturn, stateListener);
+                prepared.target(), prepared.returnPoint(), stateListener);
     }
 
-    private static WorldStateApply.PreparedState prepareWorldState(
+    private static WorldStateApply.PreparedStates prepareWorldStates(
             WorldStateApply world,
-            WorldStateApply.State state,
-            WorldStateApply.State base,
-            String phase,
+            WorldStateApply.State target,
+            WorldStateApply.State returnPoint,
             Consumer<OperationProgress> progress) throws IOException {
-        long total = (long) state.sections().size() + state.entities().size();
-        progress.accept(new OperationProgress(phase, 0, total));
-        return world.prepare(state, base, completed -> progress.accept(
-                new OperationProgress(phase, completed, total)));
+        long targetTotal = (long) target.sections().size() + target.entities().size();
+        long returnTotal = (long) returnPoint.sections().size()
+                + returnPoint.entities().size();
+        return world.prepareBoth(target, returnPoint,
+                completed -> progress.accept(new OperationProgress(
+                        "Restore: preflight target", completed, targetTotal)),
+                completed -> progress.accept(new OperationProgress(
+                        "Restore: preflight return point", completed, returnTotal)));
     }
 
     private static WorldStateApply.State targetState(PreparedRestore restore) {

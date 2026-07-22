@@ -101,15 +101,20 @@ class MinecraftRestorePreparationTest {
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));
         var source = new WorldStateApply.State(
                 Map.of(key, new SectionBlob(states, Map.of())), Map.of());
+        var baseStates = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:dirt"));
+        var base = new WorldStateApply.State(
+                Map.of(key, new SectionBlob(baseStates, Map.of())), Map.of());
         var preparation = new MinecraftRestorePreparation(
                 new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                 new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
 
         PreparedMinecraftPlanState plan = preparation.preflight(
-                source, source, ignored -> { });
+                source, base, ignored -> { });
 
         assertEquals(List.of(key), plan.sectionKeys());
         assertEquals(source, plan.source());
+        assertEquals(base, plan.reversed().source());
         assertEquals(Map.of(), plan.entities());
     }
 

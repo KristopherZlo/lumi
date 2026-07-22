@@ -28,11 +28,30 @@ public interface WorldStateApply {
         return prepare(target, progress);
     }
 
+    default PreparedStates prepareBoth(
+            State target,
+            State returnPoint,
+            LongConsumer targetProgress,
+            LongConsumer returnProgress) throws IOException {
+        targetProgress.accept(0);
+        PreparedState preparedTarget = prepare(target, returnPoint, targetProgress);
+        returnProgress.accept(0);
+        PreparedState preparedReturn = prepare(returnPoint, target, returnProgress);
+        return new PreparedStates(preparedTarget, preparedReturn);
+    }
+
     /** Creates cursors only. World mutation starts with {@link ApplySession#applyUntil(long)}. */
     ApplySession begin(PreparedState target);
 
     interface PreparedState {
         State source();
+    }
+
+    record PreparedStates(PreparedState target, PreparedState returnPoint) {
+        public PreparedStates {
+            Objects.requireNonNull(target, "target");
+            Objects.requireNonNull(returnPoint, "returnPoint");
+        }
     }
 
     record State(

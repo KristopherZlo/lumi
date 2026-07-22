@@ -103,10 +103,12 @@ public final class MinecraftRestorePreparation {
             Map<EntityChunkKey, EntityChunkBlob> normalizedBase =
                     entities.normalize(base.entities());
             Map<EntityChunkKey, DecodedEntityChunk> decodedEntities = new HashMap<>();
+            Map<EntityChunkKey, DecodedEntityChunk> decodedBaseEntities = new HashMap<>();
             for (var entry : normalizedSource.entrySet()) {
                 decodedEntities.put(
                         entry.getKey(), entities.decodeNormalized(entry.getValue()));
-                entities.decodeNormalized(normalizedBase.get(entry.getKey()));
+                decodedBaseEntities.put(entry.getKey(), entities.decodeNormalized(
+                        normalizedBase.get(entry.getKey())));
                 progress.accept(++completed);
             }
             var normalizedTarget = new WorldStateApply.State(
@@ -115,6 +117,7 @@ public final class MinecraftRestorePreparation {
                     base.sections(), normalizedBase, base.playerSpawns());
             return new PreparedMinecraftPlanState(
                     normalizedTarget, normalizedReturn, decodedEntities,
+                    decodedBaseEntities,
                     orderedSections(source.sections().keySet()),
                     List.copyOf(decodedEntities.keySet()));
         } catch (UncheckedIOException failed) {

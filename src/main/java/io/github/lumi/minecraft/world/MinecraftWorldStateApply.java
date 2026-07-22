@@ -51,6 +51,22 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     }
 
     @Override
+    public PreparedStates prepareBoth(
+            State target,
+            State returnPoint,
+            LongConsumer targetProgress,
+            LongConsumer returnProgress) throws IOException {
+        targetProgress.accept(0);
+        PreparedMinecraftPlanState plan = preparation.preflight(
+                target, returnPoint, targetProgress);
+        plan = plan.withSectionKeys(prioritize(plan.sectionKeys(), playerChunks()));
+        returnProgress.accept(0);
+        returnProgress.accept((long) returnPoint.sections().size()
+                + returnPoint.entities().size());
+        return new PreparedStates(plan, plan.reversed());
+    }
+
+    @Override
     public ApplySession begin(PreparedState target) {
         if (target instanceof PreparedMinecraftPlanState plan) {
             return new StreamingPreparedWorldMutationSession(
