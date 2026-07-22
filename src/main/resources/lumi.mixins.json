@@ -7,6 +7,7 @@
     "AxiomSetBufferMixin",
     "BlockEntityMixin",
     "ChunkMapMixin",
+    "ChunkMapLoadGateMixin",
     "CommandsMixin",
     "EntityMixin",
     "EntityStorageMixin",
