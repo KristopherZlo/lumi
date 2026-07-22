@@ -18,8 +18,8 @@ final class LumiHistoryBenchmarkScenario {
     private static final int TILES_PER_DURABILITY_BARRIER = 4;
     private final LumiHistoryBenchmarkConfig config;
     private final LumiBehaviorReport report;
-    private final LumiBehaviorActions actions;
     private final LumiBehaviorOperations operations;
+    private final LumiDenseSectionFixture fixture;
     private final LumiRepositoryMetrics metrics = new LumiRepositoryMetrics();
     private final Random random;
     private final BlockBox baseArea;
@@ -31,9 +31,9 @@ final class LumiHistoryBenchmarkScenario {
             LumiHistoryBenchmarkConfig config) {
         this.config = config;
         this.report = report;
-        actions = new LumiBehaviorActions(singleplayer.getServer(), report);
         operations = new LumiBehaviorOperations(
                 context, singleplayer.getServer(), report);
+        fixture = new LumiDenseSectionFixture(singleplayer.getServer(), report);
         random = new Random(config.seed());
         baseArea = singleplayer.getServer().computeOnServer(server -> {
             var player = server.getPlayerList().getPlayers().getFirst();
@@ -116,7 +116,7 @@ final class LumiHistoryBenchmarkScenario {
                         Math.min(area.maxX(), x + EDIT_TILE_SIZE - 1),
                         area.maxY(),
                         Math.min(area.maxZ(), z + EDIT_TILE_SIZE - 1));
-                actions.worldEditRandomVolume(
+                fixture.fill(
                         name + "_tile_" + String.format("%04d", ++tile),
                         batch, paletteOffset + tile);
                 if (tile % TILES_PER_DURABILITY_BARRIER == 0) {
