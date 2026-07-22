@@ -10,6 +10,7 @@ import io.github.lumi.domain.model.PlayerSpawn;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.io.IOException;
 
 public record PreparedRestore(
         BranchRef expectedRef,
@@ -24,10 +25,10 @@ public record PreparedRestore(
     public PreparedRestore {
         Objects.requireNonNull(expectedRef, "expectedRef");
         Objects.requireNonNull(targetCommit, "targetCommit");
-        sections = Map.copyOf(Objects.requireNonNull(sections, "sections"));
-        entities = Map.copyOf(Objects.requireNonNull(entities, "entities"));
-        returnSections = Map.copyOf(Objects.requireNonNull(returnSections, "returnSections"));
-        returnEntities = Map.copyOf(Objects.requireNonNull(returnEntities, "returnEntities"));
+        sections = immutable(Objects.requireNonNull(sections, "sections"));
+        entities = immutable(Objects.requireNonNull(entities, "entities"));
+        returnSections = immutable(Objects.requireNonNull(returnSections, "returnSections"));
+        returnEntities = immutable(Objects.requireNonNull(returnEntities, "returnEntities"));
         playerSpawns = Map.copyOf(Objects.requireNonNull(playerSpawns, "playerSpawns"));
         returnPlayerSpawns = Map.copyOf(
                 Objects.requireNonNull(returnPlayerSpawns, "returnPlayerSpawns"));
@@ -54,5 +55,26 @@ public record PreparedRestore(
     public int changeCount() {
         return sections.size() + entities.size()
                 + (restorePlayerSpawns ? playerSpawns.size() : 0);
+    }
+
+    public PreparedRestore materialize() throws IOException {
+        return new PreparedRestore(
+                expectedRef, targetCommit,
+                materialize(sections), materialize(entities),
+                materialize(returnSections), materialize(returnEntities),
+                playerSpawns, returnPlayerSpawns, restorePlayerSpawns);
+    }
+
+    private static <K, V> Map<K, V> immutable(Map<K, V> values) {
+        return values instanceof RestorePlanMap<?, ?> ? values : Map.copyOf(values);
+    }
+
+    private static <K, V> Map<K, V> materialize(Map<K, V> values) throws IOException {
+        if (values instanceof RestorePlanMap<?, ?> lazy) {
+            @SuppressWarnings("unchecked")
+            RestorePlanMap<K, V> typed = (RestorePlanMap<K, V>) lazy;
+            return typed.materialize();
+        }
+        return values;
     }
 }

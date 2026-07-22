@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.PlayerSpawn;
+import io.github.lumi.domain.service.RestorePlanMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -39,8 +40,8 @@ public interface WorldStateApply {
             Map<EntityChunkKey, EntityChunkBlob> entities,
             Map<UUID, PlayerSpawn> playerSpawns) {
         public State {
-            sections = Map.copyOf(Objects.requireNonNull(sections, "sections"));
-            entities = Map.copyOf(Objects.requireNonNull(entities, "entities"));
+            sections = immutable(Objects.requireNonNull(sections, "sections"));
+            entities = immutable(Objects.requireNonNull(entities, "entities"));
             playerSpawns = Map.copyOf(Objects.requireNonNull(playerSpawns, "playerSpawns"));
         }
 
@@ -48,6 +49,10 @@ public interface WorldStateApply {
                 Map<SectionKey, SectionBlob> sections,
                 Map<EntityChunkKey, EntityChunkBlob> entities) {
             this(sections, entities, Map.of());
+        }
+
+        private static <K, V> Map<K, V> immutable(Map<K, V> values) {
+            return values instanceof RestorePlanMap<?, ?> ? values : Map.copyOf(values);
         }
     }
 
