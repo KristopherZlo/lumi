@@ -24,6 +24,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private final PreparedWorldAccess world;
     private final Executor background;
     private final Supplier<ChunkLoadSession> chunkLoads;
+    private final RestoreApplyMetrics metrics = new RestoreApplyMetrics();
     private int batchStart;
     private int batchEnd;
     private CompletableFuture<PreparedMinecraftState> preparing;
@@ -99,7 +100,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 return false;
             }
             current = new PreparedWorldMutationSession(
-                    claimPrepared(), world, System::nanoTime, chunkLoads.get());
+                    claimPrepared(), world, System::nanoTime, chunkLoads.get(), metrics);
             phase = Phase.APPLYING;
             return true;
         }
@@ -110,7 +111,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             var tail = new PreparedMinecraftState(
                     source, Map.of(), plan.entities(), List.of(), plan.entityKeys());
             current = new PreparedWorldMutationSession(
-                    tail, world, System::nanoTime, chunkLoads.get());
+                    tail, world, System::nanoTime, chunkLoads.get(), metrics);
             phase = Phase.APPLYING;
             return true;
         }
@@ -213,6 +214,11 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         return new WorldStateApply.ApplyProgress(
                 name, Math.min(completed, plan.sectionKeys().size()),
                 plan.sectionKeys().size());
+    }
+
+    @Override
+    public RestoreApplyStatistics statistics() {
+        return metrics.snapshot();
     }
 
     @Override

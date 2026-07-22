@@ -210,6 +210,8 @@ class PreparedWorldMutationSessionTest {
         assertTrue(session.applyUntil(Long.MAX_VALUE));
         assertEquals(1, access.peakRetained);
         assertEquals(40, access.released.size());
+        assertEquals(40, session.statistics().loadedChunks());
+        assertEquals(40, session.statistics().sectionSwaps());
     }
 
     @Test
@@ -225,7 +227,7 @@ class PreparedWorldMutationSessionTest {
                 Map.of(low, decoded, high, decoded), Map.of(),
                 List.of(low, high), List.of());
         FakeWorld world = new FakeWorld(new AtomicLong(), source);
-        world.storedResult = StoredChunkApplyResult.APPLIED;
+        world.storedResult = StoredChunkApplyResult.applied(1, 2, 3, 4);
         ImmediateChunkAccess chunks = new ImmediateChunkAccess();
         var session = new PreparedWorldMutationSession(
                 target, world, () -> 0L, new ChunkLoadSession(chunks, () -> 0L));
@@ -234,6 +236,10 @@ class PreparedWorldMutationSessionTest {
         assertEquals(1, world.storedWrites);
         assertEquals(0, world.sectionWrites);
         assertEquals(0, chunks.retained.size());
+        assertEquals(1, session.statistics().storedChunks());
+        assertEquals(5, session.statistics().storageReadNanos());
+        assertEquals(2, session.statistics().storageWriteNanos());
+        assertEquals(3, session.statistics().storageSyncNanos());
         assertEquals(WorldStateApply.Verification.VERIFIED,
                 session.verifyUntil(Long.MAX_VALUE));
     }
@@ -264,11 +270,12 @@ class PreparedWorldMutationSessionTest {
             clock.incrementAndGet();
             return new SectionApplyResult(key, new short[] {0}, 1);
         }
-        @Override public void finishChunk(
+        @Override public ChunkSyncResult finishChunk(
                 ChunkCoordinate chunk,
                 List<SectionApplyResult> sections,
                 boolean blockEntitiesChanged) {
             synchronizedChunks++;
+            return ChunkSyncResult.NONE;
         }
         @Override public CompletableFuture<StoredChunkApplyResult> applyStoredChunk(
                 ChunkCoordinate chunk,

@@ -60,11 +60,11 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     }
 
     @Override
-    public void finishChunk(
+    public ChunkSyncResult finishChunk(
             ChunkCoordinate coordinate,
             List<SectionApplyResult> changedSections,
             boolean blockEntitiesChanged) throws IOException {
-        sectionRewriter.synchronize(
+        return sectionRewriter.synchronize(
                 requireChunk(coordinate.x(), coordinate.z()),
                 changedSections, blockEntitiesChanged);
     }

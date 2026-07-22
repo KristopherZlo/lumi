@@ -9,9 +9,10 @@ public final class SectionApplyResult {
     private final SectionKey key;
     private final short[] changedCells;
     private final boolean blockEntitiesChanged;
+    private final boolean lightChanged;
 
     public SectionApplyResult(SectionKey key, short[] changedCells, int changedCount) {
-        this(key, changedCells, changedCount, false);
+        this(key, changedCells, changedCount, false, false);
     }
 
     public SectionApplyResult(
@@ -19,6 +20,15 @@ public final class SectionApplyResult {
             short[] changedCells,
             int changedCount,
             boolean blockEntitiesChanged) {
+        this(key, changedCells, changedCount, blockEntitiesChanged, false);
+    }
+
+    public SectionApplyResult(
+            SectionKey key,
+            short[] changedCells,
+            int changedCount,
+            boolean blockEntitiesChanged,
+            boolean lightChanged) {
         this.key = Objects.requireNonNull(key, "key");
         Objects.requireNonNull(changedCells, "changedCells");
         if (changedCount < 0 || changedCount > changedCells.length) {
@@ -26,6 +36,7 @@ public final class SectionApplyResult {
         }
         this.changedCells = Arrays.copyOf(changedCells, changedCount);
         this.blockEntitiesChanged = blockEntitiesChanged;
+        this.lightChanged = lightChanged;
     }
 
     public SectionKey key() {
@@ -38,6 +49,10 @@ public final class SectionApplyResult {
 
     public boolean blockEntitiesChanged() {
         return blockEntitiesChanged;
+    }
+
+    public boolean lightChanged() {
+        return lightChanged;
     }
 
     short[] changedCells() {

@@ -69,6 +69,10 @@ public interface WorldStateApply {
             return new ApplyProgress("apply", 0, 0);
         }
 
+        default RestoreApplyStatistics statistics() {
+            return RestoreApplyStatistics.EMPTY;
+        }
+
         @Override
         default void close() { }
     }

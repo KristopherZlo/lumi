@@ -21,6 +21,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private final PreparedWorldAccess world;
     private final LongSupplier nanoTime;
     private final ChunkLoadSession chunks;
+    private final RestoreApplyMetrics metrics;
     private final List<SectionKey> sections;
     private final List<EntityChunkKey> entities;
     private MutationCursor apply;
@@ -29,10 +30,11 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private int entityVerificationIndex;
     private boolean playerSpawnsVerified;
     private final Set<ChunkCoordinate> storedChunks = new HashSet<>();
+    private final Map<ChunkCoordinate, Long> loadStarts = new LinkedHashMap<>();
 
     public PreparedWorldMutationSession(
             PreparedMinecraftState target, PreparedWorldAccess world, LongSupplier nanoTime) {
-        this(target, world, nanoTime, null);
+        this(target, world, nanoTime, null, new RestoreApplyMetrics());
     }
 
     public PreparedWorldMutationSession(
@@ -40,10 +42,20 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             PreparedWorldAccess world,
             LongSupplier nanoTime,
             ChunkLoadSession chunks) {
+        this(target, world, nanoTime, chunks, new RestoreApplyMetrics());
+    }
+
+    PreparedWorldMutationSession(
+            PreparedMinecraftState target,
+            PreparedWorldAccess world,
+            LongSupplier nanoTime,
+            ChunkLoadSession chunks,
+            RestoreApplyMetrics metrics) {
         this.target = Objects.requireNonNull(target, "target");
         this.world = Objects.requireNonNull(world, "world");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         this.chunks = chunks;
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
         sections = target.sectionKeys();
         entities = target.entityKeys();
         apply = new MutationCursor();
@@ -56,6 +68,16 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
 
     @Override
     public WorldStateApply.Verification verifyUntil(long deadlineNanos) throws IOException {
+        long started = nanoTime.getAsLong();
+        try {
+            return verifyStepUntil(deadlineNanos);
+        } finally {
+            metrics.verification(Math.max(0, nanoTime.getAsLong() - started));
+        }
+    }
+
+    private WorldStateApply.Verification verifyStepUntil(
+            long deadlineNanos) throws IOException {
         while (sectionVerificationIndex < sections.size()
                 && nanoTime.getAsLong() < deadlineNanos) {
             SectionKey key = sections.get(sectionVerificationIndex);
@@ -135,11 +157,25 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 world.mutationPhase(), apply.sectionIndex, sections.size());
     }
 
+    @Override
+    public RestoreApplyStatistics statistics() {
+        return metrics.snapshot();
+    }
+
     private boolean loadUntil(
             io.github.lumi.domain.model.HistoryKey key,
             long deadlineNanos) throws IOException {
-        return chunks == null || chunks.loadOneUntil(
-                ChunkCoordinate.from(key), deadlineNanos);
+        if (chunks == null) {
+            return true;
+        }
+        ChunkCoordinate coordinate = ChunkCoordinate.from(key);
+        long started = loadStarts.computeIfAbsent(coordinate, ignored -> nanoTime.getAsLong());
+        if (!chunks.loadOneUntil(coordinate, deadlineNanos)) {
+            return false;
+        }
+        loadStarts.remove(coordinate);
+        metrics.chunkLoad(Math.max(0, nanoTime.getAsLong() - started));
+        return true;
     }
 
     private void release(io.github.lumi.domain.model.HistoryKey key) {
@@ -186,7 +222,9 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 if (required != null && !loadUntil(required, deadlineNanos)) {
                     return false;
                 }
+                long started = nanoTime.getAsLong();
                 step();
+                metrics.loadedApply(Math.max(0, nanoTime.getAsLong() - started));
             }
             return phase == Phase.COMPLETE;
         }
@@ -231,9 +269,10 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                         "Stored Restore failed for " + storedCoordinate, cause);
             }
             storedApply = null;
-            if (result == StoredChunkApplyResult.FALLBACK) {
+            if (!result.applied()) {
                 return StorageAttempt.FALLBACK;
             }
+            metrics.storedChunk(result);
             storedChunks.add(coordinate);
             do {
                 sectionIndex++;
@@ -270,6 +309,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             DecodedSection section = target.sections().get(key);
             if (phase == Phase.BLOCKS) {
                 appliedSection = world.applySection(key, section);
+                metrics.loadedSection(appliedSection);
                 List<Integer> currentBlockEntities = world.blockEntityIndexes(key);
                 removals = currentBlockEntities.stream()
                         .filter(index -> !section.blockEntities().containsKey(index))
@@ -291,10 +331,11 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 sectionIndex++;
                 if (sectionIndex == sections.size()
                         || !sameChunk(key, sections.get(sectionIndex))) {
-                    world.finishChunk(
+                    ChunkSyncResult sync = world.finishChunk(
                             new ChunkCoordinate(key.chunkX(), key.chunkZ()),
                             List.copyOf(appliedChunkSections),
                             chunkBlockEntitiesChanged);
+                    metrics.loadedChunk(sync);
                     appliedChunkSections.clear();
                     chunkBlockEntitiesChanged = false;
                     release(key);

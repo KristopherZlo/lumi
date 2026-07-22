@@ -16,7 +16,7 @@ import net.minecraft.nbt.CompoundTag;
 public interface PreparedWorldAccess {
     SectionApplyResult applySection(SectionKey key, DecodedSection section) throws IOException;
 
-    void finishChunk(
+    ChunkSyncResult finishChunk(
             ChunkCoordinate chunk,
             List<SectionApplyResult> sections,
             boolean blockEntitiesChanged) throws IOException;

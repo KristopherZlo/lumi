@@ -56,7 +56,9 @@ final class MinecraftStoredChunkAccess {
             gates.put(coordinate, gate);
         }
         phase = "stored read";
+        StorageTimings timings = new StorageTimings(System.nanoTime());
         return level.getChunkSource().chunkMap.read(position).thenCompose(stored -> {
+            timings.readNanos = System.nanoTime() - timings.startedNanos;
             if (stored.isEmpty()) {
                 return fallback(coordinate);
             }
@@ -69,16 +71,22 @@ final class MinecraftStoredChunkAccess {
                 return CompletableFuture.failedFuture(failed);
             }
             phase = "stored write";
+            timings.startedNanos = System.nanoTime();
             return level.getChunkSource().chunkMap.write(position, patched)
                     .thenCompose(ignored -> {
+                        timings.writeNanos = System.nanoTime() - timings.startedNanos;
                         phase = "storage sync";
+                        timings.startedNanos = System.nanoTime();
                         return level.getChunkSource().chunkMap.synchronize(true);
                     })
                     .thenCompose(ignored -> {
+                        timings.syncNanos = System.nanoTime() - timings.startedNanos;
                         phase = "verification";
+                        timings.startedNanos = System.nanoTime();
                         return level.getChunkSource().chunkMap.read(position);
                     })
                     .thenApply(reread -> {
+                        timings.verifyNanos = System.nanoTime() - timings.startedNanos;
                         try {
                             if (reread.isEmpty()
                                     || !matches(position, reread.orElseThrow(), target)) {
@@ -86,12 +94,26 @@ final class MinecraftStoredChunkAccess {
                                         "Stored Restore verification failed for " + position);
                             }
                             release(coordinate);
-                            return StoredChunkApplyResult.APPLIED;
+                            return StoredChunkApplyResult.applied(
+                                    timings.readNanos, timings.writeNanos,
+                                    timings.syncNanos, timings.verifyNanos);
                         } catch (IOException failed) {
                             throw new CompletionException(failed);
                         }
                     });
         });
+    }
+
+    private static final class StorageTimings {
+        private long startedNanos;
+        private long readNanos;
+        private long writeNanos;
+        private long syncNanos;
+        private long verifyNanos;
+
+        private StorageTimings(long startedNanos) {
+            this.startedNanos = startedNanos;
+        }
     }
 
     String phase() {

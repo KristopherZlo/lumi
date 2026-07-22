@@ -35,7 +35,7 @@ final class MinecraftSectionRewriter {
         PreparedSectionDelta delta = target.deltaFrom(section);
         if (delta.changedIndexes().length == 0) {
             return new SectionApplyResult(key, delta.changedCells(), 0,
-                    delta.blockEntitiesChanged());
+                    delta.blockEntitiesChanged(), false);
         }
 
         chunk.getSections()[sectionIndex] = replacementSection;
@@ -50,7 +50,7 @@ final class MinecraftSectionRewriter {
         chunk.markUnsaved();
         return new SectionApplyResult(
                 key, delta.changedCells(), delta.changedCells().length,
-                delta.blockEntitiesChanged());
+                delta.blockEntitiesChanged(), delta.lightChanged());
     }
 
     static void markLightChange(short[] updates, int x, int y, int z) {
@@ -75,22 +75,23 @@ final class MinecraftSectionRewriter {
         }
     }
 
-    void synchronize(
+    ChunkSyncResult synchronize(
             LevelChunk chunk,
             List<SectionApplyResult> sections,
             boolean blockEntitiesChanged) {
         int changedCells = sections.stream()
                 .mapToInt(SectionApplyResult::changedCount).sum();
         if (changedCells == 0 && !blockEntitiesChanged) {
-            return;
+            return ChunkSyncResult.NONE;
         }
-        Packet<ClientGamePacketListener> packet = useFullChunkPacket(
-                changedCells, blockEntitiesChanged)
+        boolean full = useFullChunkPacket(changedCells, blockEntitiesChanged);
+        Packet<ClientGamePacketListener> packet = full
                 ? new ClientboundLevelChunkWithLightPacket(
                         chunk, level.getLightEngine(), new BitSet(), new BitSet())
                 : null;
-        for (var player : level.getChunkSource().chunkMap
-                .getPlayers(chunk.getPos(), false)) {
+        var players = level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false);
+        long payloadBytes = packetPayloadBytes(packet, sections);
+        for (var player : players) {
             if (packet != null) {
                 player.connection.send(packet);
             } else {
@@ -101,6 +102,28 @@ final class MinecraftSectionRewriter {
                 }
             }
         }
+        int recipients = players.size();
+        return full
+                ? new ChunkSyncResult(recipients, 0, payloadBytes * recipients)
+                : new ChunkSyncResult(0,
+                        sections.stream().mapToInt(section -> section.changedCount() > 0
+                                ? recipients : 0).sum(), payloadBytes * recipients);
+    }
+
+    private static long packetPayloadBytes(
+            Packet<ClientGamePacketListener> packet,
+            List<SectionApplyResult> sections) {
+        if (packet instanceof ClientboundLevelChunkWithLightPacket full) {
+            long bytes = full.getChunkData().getReadBuffer().readableBytes();
+            bytes += full.getLightData().getSkyUpdates().stream()
+                    .mapToLong(update -> update.length).sum();
+            bytes += full.getLightData().getBlockUpdates().stream()
+                    .mapToLong(update -> update.length).sum();
+            return bytes;
+        }
+        return sections.stream().mapToLong(
+                section -> section.changedCount() == 0
+                        ? 0 : 16L + section.changedCount() * 10L).sum();
     }
 
     private void updatePois(
