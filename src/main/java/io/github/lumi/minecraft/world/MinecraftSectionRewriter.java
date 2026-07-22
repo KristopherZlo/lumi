@@ -27,6 +27,7 @@ final class MinecraftSectionRewriter {
             throw new IllegalArgumentException("Section is outside the loaded chunk: " + key);
         }
         LevelChunkSection section = chunk.getSection(sectionIndex);
+        LevelChunkSection replacementSection = target.replacementFor(section);
         ShortSet changedCells = new ShortOpenHashSet();
         short[] changedLightColumns = new short[16 * 16];
         boolean lightChanged = false;
@@ -43,7 +44,6 @@ final class MinecraftSectionRewriter {
             if (current.equals(replacement)) {
                 continue;
             }
-            section.setBlockState(x, y, z, replacement, false);
             position.set(
                     key.chunkX() * 16 + x,
                     key.sectionY() * 16 + y,
@@ -62,8 +62,8 @@ final class MinecraftSectionRewriter {
             return;
         }
 
-        section.recalcBlockCounts();
-        updateHeightmaps(chunk, key, section, highestChangedByColumn);
+        chunk.getSections()[sectionIndex] = replacementSection;
+        updateHeightmaps(chunk, key, replacementSection, highestChangedByColumn);
         if (lightChanged) {
             ((SectionLightBatchScheduler) level.getLightEngine())
                     .lumi$scheduleSectionChecks(
@@ -71,7 +71,7 @@ final class MinecraftSectionRewriter {
                             changedLightColumns);
         }
         chunk.markUnsaved();
-        broadcast(chunk, key, changedCells, section);
+        broadcast(chunk, key, changedCells, replacementSection);
     }
 
     static void markLightChange(short[] updates, int x, int y, int z) {

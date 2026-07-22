@@ -12,6 +12,10 @@ import java.util.Map;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.level.chunk.Strategy;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -39,6 +43,16 @@ class MinecraftBlockStateDecoderTest {
                 net.minecraft.world.level.block.RotatedPillarBlock.AXIS,
                 net.minecraft.core.Direction.Axis.X), decoded.blockStates().get(17));
         assertEquals("value", decoded.blockEntities().get(17).getStringOr("custom", ""));
+
+        var current = new LevelChunkSection(new PalettedContainer<>(
+                Blocks.AIR.defaultBlockState(),
+                Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY)), null);
+        var replacement = decoded.replacementFor(current);
+        assertEquals(Blocks.STONE.defaultBlockState(), replacement.getBlockState(0, 0, 0));
+        assertEquals(decoded.blockStates().get(17), replacement.getBlockState(1, 0, 1));
+        replacement.setBlockState(0, 0, 0, Blocks.DIRT.defaultBlockState(), false);
+        assertEquals(Blocks.STONE.defaultBlockState(),
+                decoded.replacementFor(current).getBlockState(0, 0, 0));
     }
 
     @Test
