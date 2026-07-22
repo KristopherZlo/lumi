@@ -36,10 +36,14 @@ final class PreparedSectionDelta {
         this.blockEntitiesChanged = blockEntitiesChanged;
     }
 
-    static PreparedSectionDelta between(DecodedSection before, DecodedSection target) {
-        Objects.requireNonNull(before, "before");
-        return create(before.blockStates()::get, target,
-                !before.blockEntities().equals(target.blockEntities()));
+    static PreparedSectionDelta between(
+            List<BlockState> beforeStates,
+            java.util.Map<Integer, net.minecraft.nbt.CompoundTag> beforeBlockEntities,
+            DecodedSection target) {
+        Objects.requireNonNull(beforeStates, "beforeStates");
+        Objects.requireNonNull(beforeBlockEntities, "beforeBlockEntities");
+        return create(beforeStates::get, target,
+                !beforeBlockEntities.equals(target.blockEntities()));
     }
 
     static PreparedSectionDelta inspect(

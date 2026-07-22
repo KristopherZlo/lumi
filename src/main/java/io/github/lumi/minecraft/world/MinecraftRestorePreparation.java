@@ -49,11 +49,10 @@ public final class MinecraftRestorePreparation {
             long completed = 0;
             Map<SectionKey, DecodedSection> decodedSections = new HashMap<>();
             for (var entry : source.sections().entrySet()) {
-                DecodedSection target = sections.decode(entry.getValue());
-                if (base != null) {
-                    target = target.prepareAgainst(sections.decode(
-                            base.sections().get(entry.getKey())));
-                }
+                DecodedSection target = base == null
+                        ? sections.decode(entry.getValue())
+                        : sections.decodeAgainst(entry.getValue(),
+                                base.sections().get(entry.getKey()));
                 decodedSections.put(entry.getKey(), target);
                 progress.accept(++completed);
             }

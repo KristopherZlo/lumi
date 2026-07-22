@@ -26,6 +26,19 @@ public final class MinecraftBlockStateDecoder {
     }
 
     public DecodedSection decode(SectionBlob source) throws IOException {
+        DecodedPayload decoded = decodePayload(source);
+        return new DecodedSection(decoded.states(), decoded.blockEntities());
+    }
+
+    DecodedSection decodeAgainst(SectionBlob source, SectionBlob before)
+            throws IOException {
+        DecodedPayload target = decodePayload(source);
+        DecodedPayload base = decodePayload(before);
+        return new DecodedSection(target.states(), target.blockEntities())
+                .prepareAgainst(base.states(), base.blockEntities());
+    }
+
+    private DecodedPayload decodePayload(SectionBlob source) throws IOException {
         Objects.requireNonNull(source, "source");
         var states = new ArrayList<BlockState>(SectionBlob.BLOCK_COUNT);
         for (String encoded : source.blockStates()) {
@@ -37,7 +50,7 @@ public final class MinecraftBlockStateDecoder {
             validateBlockEntityType(decoded);
             blockEntities.put(entry.getKey(), decoded);
         }
-        return new DecodedSection(states, blockEntities);
+        return new DecodedPayload(states, blockEntities);
     }
 
     /** Validates persistent types without allocating a native section container. */
@@ -78,4 +91,8 @@ public final class MinecraftBlockStateDecoder {
     int cachedStateCount() {
         return decodedStates.size();
     }
+
+    private record DecodedPayload(
+            java.util.List<BlockState> states,
+            java.util.Map<Integer, net.minecraft.nbt.CompoundTag> blockEntities) { }
 }

@@ -26,20 +26,22 @@ public final class DecodedSection {
             List<BlockState> blockStates,
             Map<Integer, CompoundTag> blockEntities) {
         this(List.copyOf(Objects.requireNonNull(blockStates, "blockStates")),
-                Map.copyOf(Objects.requireNonNull(blockEntities, "blockEntities")), null);
+                Map.copyOf(Objects.requireNonNull(blockEntities, "blockEntities")),
+                prepare(blockStates), null);
     }
 
     private DecodedSection(
             List<BlockState> blockStates,
             Map<Integer, CompoundTag> blockEntities,
+            PalettedContainer<BlockState> preparedStates,
             PreparedSectionDelta delta) {
         this.blockStates = blockStates;
         this.blockEntities = blockEntities;
+        this.preparedStates = preparedStates;
         this.delta = delta;
         if (this.blockStates.size() != SectionBlob.BLOCK_COUNT) {
             throw new IllegalArgumentException("Decoded section must contain 4096 blocks");
         }
-        preparedStates = prepare(this.blockStates);
     }
 
     public List<BlockState> blockStates() {
@@ -55,9 +57,13 @@ public final class DecodedSection {
         return new LevelChunkSection(preparedStates.copy(), current.getBiomes());
     }
 
-    DecodedSection prepareAgainst(DecodedSection before) {
+    DecodedSection prepareAgainst(
+            List<BlockState> beforeStates,
+            Map<Integer, CompoundTag> beforeBlockEntities) {
         return new DecodedSection(
-                blockStates, blockEntities, PreparedSectionDelta.between(before, this));
+                blockStates, blockEntities, preparedStates,
+                PreparedSectionDelta.between(
+                        beforeStates, beforeBlockEntities, this));
     }
 
     PreparedSectionDelta deltaFrom(LevelChunkSection current) {

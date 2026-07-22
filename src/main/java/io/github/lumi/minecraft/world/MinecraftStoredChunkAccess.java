@@ -58,10 +58,16 @@ final class MinecraftStoredChunkAccess {
                 new LinkedHashMap<>();
         targets.forEach((coordinate, target) -> preparing.put(coordinate,
                 prepare(coordinate, target, entityChunks.contains(coordinate))));
-        return CompletableFuture.allOf(
+        CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> result =
+                CompletableFuture.allOf(
                         preparing.values().toArray(CompletableFuture[]::new))
                 .thenCompose(ignored -> writeAndVerify(
                         preparing, System.nanoTime() - readStarted));
+        return result.whenComplete((ignored, failure) -> {
+            if (failure != null) {
+                targets.keySet().forEach(this::release);
+            }
+        });
     }
 
     private CompletableFuture<PreparedWrite> prepare(
@@ -366,13 +372,6 @@ final class MinecraftStoredChunkAccess {
             }
         }
         return true;
-    }
-
-    private CompletableFuture<StoredChunkApplyResult> fallback(
-            ChunkCoordinate coordinate) {
-        release(coordinate);
-        phase = "loaded apply";
-        return CompletableFuture.completedFuture(StoredChunkApplyResult.FALLBACK);
     }
 
     private void release(ChunkCoordinate coordinate) {

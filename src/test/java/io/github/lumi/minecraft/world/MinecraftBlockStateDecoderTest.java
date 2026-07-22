@@ -90,8 +90,9 @@ class MinecraftBlockStateDecoderTest {
         targetStates.set((2 << 8) | (5 << 4) | 4, "minecraft:granite");
         var decoder = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK);
 
-        DecodedSection target = decoder.decode(new SectionBlob(targetStates, Map.of()))
-                .prepareAgainst(decoder.decode(new SectionBlob(beforeStates, Map.of())));
+        DecodedSection target = decoder.decodeAgainst(
+                new SectionBlob(targetStates, Map.of()),
+                new SectionBlob(beforeStates, Map.of()));
 
         assertArrayEquals(new int[]{(10 << 8) | (2 << 4) | 1,
                         (2 << 8) | (5 << 4) | 4},
