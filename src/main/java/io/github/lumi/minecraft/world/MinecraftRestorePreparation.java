@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -44,34 +45,39 @@ public final class MinecraftRestorePreparation {
                 || !source.entities().keySet().equals(base.entities().keySet()))) {
             throw new IllegalArgumentException("Restore target and base keys must match");
         }
-        long completed = 0;
-        Map<SectionKey, DecodedSection> decodedSections = new HashMap<>();
-        for (var entry : source.sections().entrySet()) {
-            DecodedSection target = sections.decode(entry.getValue());
-            if (base != null) {
-                target = target.prepareAgainst(sections.decode(
-                        base.sections().get(entry.getKey())));
+        try {
+            long completed = 0;
+            Map<SectionKey, DecodedSection> decodedSections = new HashMap<>();
+            for (var entry : source.sections().entrySet()) {
+                DecodedSection target = sections.decode(entry.getValue());
+                if (base != null) {
+                    target = target.prepareAgainst(sections.decode(
+                            base.sections().get(entry.getKey())));
+                }
+                decodedSections.put(entry.getKey(), target);
+                progress.accept(++completed);
             }
-            decodedSections.put(entry.getKey(), target);
-            progress.accept(++completed);
+            Map<EntityChunkKey, EntityChunkBlob> normalizedEntities =
+                    entities.normalize(source.entities());
+            Map<EntityChunkKey, DecodedEntityChunk> decodedEntities = new HashMap<>();
+            for (var entry : normalizedEntities.entrySet()) {
+                decodedEntities.put(
+                        entry.getKey(), entities.decodeNormalized(entry.getValue()));
+                progress.accept(++completed);
+            }
+            var normalizedSource = new WorldStateApply.State(
+                    source.sections(), normalizedEntities, source.playerSpawns());
+            var sectionOrder = decodedSections.keySet().stream()
+                    .sorted(Comparator.comparingInt(SectionKey::chunkX)
+                            .thenComparingInt(SectionKey::chunkZ)
+                            .thenComparingInt(SectionKey::sectionY))
+                    .toList();
+            return new PreparedMinecraftState(
+                    normalizedSource, decodedSections, decodedEntities,
+                    sectionOrder, List.copyOf(decodedEntities.keySet()));
+        } catch (UncheckedIOException failed) {
+            throw failed.getCause();
         }
-        Map<EntityChunkKey, EntityChunkBlob> normalizedEntities =
-                entities.normalize(source.entities());
-        Map<EntityChunkKey, DecodedEntityChunk> decodedEntities = new HashMap<>();
-        for (var entry : normalizedEntities.entrySet()) {
-            decodedEntities.put(entry.getKey(), entities.decodeNormalized(entry.getValue()));
-            progress.accept(++completed);
-        }
-        var normalizedSource = new WorldStateApply.State(
-                source.sections(), normalizedEntities, source.playerSpawns());
-        var sectionOrder = decodedSections.keySet().stream()
-                .sorted(Comparator.comparingInt(SectionKey::chunkX)
-                        .thenComparingInt(SectionKey::chunkZ)
-                        .thenComparingInt(SectionKey::sectionY))
-                .toList();
-        return new PreparedMinecraftState(
-                normalizedSource, decodedSections, decodedEntities,
-                sectionOrder, List.copyOf(decodedEntities.keySet()));
     }
 
     public PreparedMinecraftPlanState preflight(
@@ -85,30 +91,35 @@ public final class MinecraftRestorePreparation {
                 || !source.entities().keySet().equals(base.entities().keySet())) {
             throw new IllegalArgumentException("Restore target and base keys must match");
         }
-        long completed = 0;
-        for (var entry : source.sections().entrySet()) {
-            sections.decode(entry.getValue()).prepareAgainst(
-                    sections.decode(base.sections().get(entry.getKey())));
-            progress.accept(++completed);
+        try {
+            long completed = 0;
+            for (var entry : source.sections().entrySet()) {
+                sections.decode(entry.getValue()).prepareAgainst(
+                        sections.decode(base.sections().get(entry.getKey())));
+                progress.accept(++completed);
+            }
+            Map<EntityChunkKey, EntityChunkBlob> normalizedSource =
+                    entities.normalize(source.entities());
+            Map<EntityChunkKey, EntityChunkBlob> normalizedBase =
+                    entities.normalize(base.entities());
+            Map<EntityChunkKey, DecodedEntityChunk> decodedEntities = new HashMap<>();
+            for (var entry : normalizedSource.entrySet()) {
+                decodedEntities.put(
+                        entry.getKey(), entities.decodeNormalized(entry.getValue()));
+                entities.decodeNormalized(normalizedBase.get(entry.getKey()));
+                progress.accept(++completed);
+            }
+            var normalizedTarget = new WorldStateApply.State(
+                    source.sections(), normalizedSource, source.playerSpawns());
+            var normalizedReturn = new WorldStateApply.State(
+                    base.sections(), normalizedBase, base.playerSpawns());
+            return new PreparedMinecraftPlanState(
+                    normalizedTarget, normalizedReturn, decodedEntities,
+                    orderedSections(source.sections().keySet()),
+                    List.copyOf(decodedEntities.keySet()));
+        } catch (UncheckedIOException failed) {
+            throw failed.getCause();
         }
-        Map<EntityChunkKey, EntityChunkBlob> normalizedSource =
-                entities.normalize(source.entities());
-        Map<EntityChunkKey, EntityChunkBlob> normalizedBase =
-                entities.normalize(base.entities());
-        Map<EntityChunkKey, DecodedEntityChunk> decodedEntities = new HashMap<>();
-        for (var entry : normalizedSource.entrySet()) {
-            decodedEntities.put(entry.getKey(), entities.decodeNormalized(entry.getValue()));
-            entities.decodeNormalized(normalizedBase.get(entry.getKey()));
-            progress.accept(++completed);
-        }
-        var normalizedTarget = new WorldStateApply.State(
-                source.sections(), normalizedSource, source.playerSpawns());
-        var normalizedReturn = new WorldStateApply.State(
-                base.sections(), normalizedBase, base.playerSpawns());
-        return new PreparedMinecraftPlanState(
-                normalizedTarget, normalizedReturn, decodedEntities,
-                orderedSections(source.sections().keySet()),
-                List.copyOf(decodedEntities.keySet()));
     }
 
     PreparedMinecraftState prepareBatch(

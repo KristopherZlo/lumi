@@ -21,6 +21,7 @@ import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.ArrayList;
@@ -213,10 +214,8 @@ public final class RestoreService {
         Commit targetCommitValue = commits.read(targetCommit);
         DimensionTree current = objects.readDimension(currentCommit.tree());
         DimensionTree target = objects.readDimension(targetCommitValue.tree());
-        Map<SectionKey, SectionBlob> sections = new HashMap<>();
-        Map<EntityChunkKey, EntityChunkBlob> entities = new HashMap<>();
-        Map<SectionKey, SectionBlob> returnSections = new HashMap<>();
-        Map<EntityChunkKey, EntityChunkBlob> returnEntities = new HashMap<>();
+        Map<SectionKey, SectionPlan> sections = new HashMap<>();
+        Map<EntityChunkKey, EntityPlan> entities = new HashMap<>();
         var changedRegions = union(current.regions().keySet(), target.regions().keySet())
                 .stream().filter(region -> !Objects.equals(
                         current.regions().get(region), target.regions().get(region)))
@@ -230,13 +229,21 @@ public final class RestoreService {
             RegionTree targetRegion = targetRegionId.isPresent()
                     ? objects.readRegion(targetRegionId.orElseThrow()) : new RegionTree(Map.of());
             prepareRegion(regionCoordinate, currentRegion, targetRegion,
-                    sections, entities, returnSections, returnEntities,
+                    sections, entities,
                     area, outside, includeEntities, scope,
                     regionIndex + 1, changedRegions.size(), progress);
         }
         boolean restorePlayerSpawns = area == null && scope == null;
+        var targetSections = new RestorePlanMap<>(
+                sections.keySet(), key -> sections.get(key).target(objects));
+        var returnSections = new RestorePlanMap<>(
+                sections.keySet(), key -> sections.get(key).before(objects));
+        var targetEntities = new RestorePlanMap<>(
+                entities.keySet(), key -> objects.readEntities(entities.get(key).target()));
+        var returnEntities = new RestorePlanMap<>(
+                entities.keySet(), key -> objects.readEntities(entities.get(key).before()));
         return new PreparedRestore(currentRef, targetCommit,
-                sections, entities, returnSections, returnEntities,
+                targetSections, targetEntities, returnSections, returnEntities,
                 restorePlayerSpawns ? targetCommitValue.playerSpawns() : Map.of(),
                 restorePlayerSpawns ? currentCommit.playerSpawns() : Map.of(),
                 restorePlayerSpawns);
@@ -246,10 +253,8 @@ public final class RestoreService {
             RegionCoordinate regionCoordinate,
             RegionTree currentRegion,
             RegionTree targetRegion,
-            Map<SectionKey, SectionBlob> sections,
-            Map<EntityChunkKey, EntityChunkBlob> entities,
-            Map<SectionKey, SectionBlob> returnSections,
-            Map<EntityChunkKey, EntityChunkBlob> returnEntities,
+            Map<SectionKey, SectionPlan> sections,
+            Map<EntityChunkKey, EntityPlan> entities,
             BlockBox area,
             boolean outside,
             boolean includeEntities,
@@ -274,7 +279,7 @@ public final class RestoreService {
             int chunkX = regionCoordinate.x() * REGION_SIZE + local.x();
             int chunkZ = regionCoordinate.z() * REGION_SIZE + local.z();
             prepareChunk(chunkX, chunkZ, current, target,
-                    sections, entities, returnSections, returnEntities,
+                    sections, entities,
                     area, outside, includeEntities, scope);
             progress.accept(new PreparationProgress(
                     regionIndex, regionTotal, chunkIndex + 1, changedChunks.size()));
@@ -286,10 +291,8 @@ public final class RestoreService {
             int chunkZ,
             ChunkTree current,
             ChunkTree target,
-            Map<SectionKey, SectionBlob> sections,
-            Map<EntityChunkKey, EntityChunkBlob> entities,
-            Map<SectionKey, SectionBlob> returnSections,
-            Map<EntityChunkKey, EntityChunkBlob> returnEntities,
+            Map<SectionKey, SectionPlan> sections,
+            Map<EntityChunkKey, EntityPlan> entities,
             BlockBox area,
             boolean outside,
             boolean includeEntities,
@@ -303,12 +306,21 @@ public final class RestoreService {
                 if (scope != null && !scope.includes(key)) continue;
                 ObjectId returnId = currentId.isPresent() ? currentId.orElseThrow() : origin(key);
                 ObjectId resolved = targetId.isPresent() ? targetId.orElseThrow() : origin(key);
-                SectionBlob before = objects.readSection(returnId);
-                SectionBlob after = objects.readSection(resolved);
-                SectionBlob selected = area == null ? after : select(before, after, key, area, outside);
-                if (!selected.equals(before)) {
-                    sections.put(key, selected);
-                    returnSections.put(key, before);
+                if (resolved.equals(returnId)) {
+                    continue;
+                }
+                if (area != null && !(outside
+                        ? !area.intersects(key) : area.contains(key))) {
+                    SectionBlob before = objects.readSection(returnId);
+                    SectionBlob selected = select(
+                            before, objects.readSection(resolved), key, area, outside);
+                    if (!selected.equals(before)) {
+                        sections.put(key, new SectionPlan(
+                                returnId, resolved, selected, before));
+                    }
+                } else {
+                    sections.put(key, new SectionPlan(
+                            returnId, resolved, null, null));
                 }
             }
         }
@@ -319,11 +331,12 @@ public final class RestoreService {
             ObjectId resolved = target.entities().isPresent()
                     ? target.entities().orElseThrow()
                     : origin(key);
-            entities.put(key, objects.readEntities(resolved));
             ObjectId returnId = current.entities().isPresent()
                     ? current.entities().orElseThrow()
                     : origin(key);
-            returnEntities.put(key, objects.readEntities(returnId));
+            if (!resolved.equals(returnId)) {
+                entities.put(key, new EntityPlan(returnId, resolved));
+            }
         }
     }
 
@@ -360,21 +373,25 @@ public final class RestoreService {
         return origins.read(key).orElseThrow(() -> new IOException("Missing origin for " + key));
     }
 
-    private static long changedBlockCount(PreparedRestore prepared) {
-        long changed = 0;
-        for (var entry : prepared.sections().entrySet()) {
-            SectionBlob after = entry.getValue();
-            SectionBlob before = prepared.returnSections().get(entry.getKey());
-            for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
-                if (!after.blockStates().get(index).equals(before.blockStates().get(index))
-                        || !Objects.equals(
-                                after.blockEntities().get(index),
-                                before.blockEntities().get(index))) {
-                    changed = Math.addExact(changed, 1);
+    private static long changedBlockCount(PreparedRestore prepared) throws IOException {
+        try {
+            long changed = 0;
+            for (var entry : prepared.sections().entrySet()) {
+                SectionBlob after = entry.getValue();
+                SectionBlob before = prepared.returnSections().get(entry.getKey());
+                for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+                    if (!after.blockStates().get(index).equals(before.blockStates().get(index))
+                            || !Objects.equals(
+                                    after.blockEntities().get(index),
+                                    before.blockEntities().get(index))) {
+                        changed = Math.addExact(changed, 1);
+                    }
                 }
             }
+            return changed;
+        } catch (UncheckedIOException failed) {
+            throw failed.getCause();
         }
-        return changed;
     }
 
     private static <T> Set<T> union(Set<T> first, Set<T> second) {
@@ -396,4 +413,20 @@ public final class RestoreService {
             }
         }
     }
+
+    private record SectionPlan(
+            ObjectId beforeId,
+            ObjectId targetId,
+            SectionBlob selectedTarget,
+            SectionBlob selectedBefore) {
+        private SectionBlob target(WorldObjectRepository objects) throws IOException {
+            return selectedTarget == null ? objects.readSection(targetId) : selectedTarget;
+        }
+
+        private SectionBlob before(WorldObjectRepository objects) throws IOException {
+            return selectedBefore == null ? objects.readSection(beforeId) : selectedBefore;
+        }
+    }
+
+    private record EntityPlan(ObjectId before, ObjectId target) { }
 }

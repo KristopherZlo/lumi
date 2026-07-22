@@ -1616,12 +1616,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         }
                         var full = restores.prepare(
                                 expected, saved.commitId(), expected.commit(),
-                                value -> publishRestoreDiffProgress(progress, value));
+                                value -> publishRestoreDiffProgress(progress, value)).materialize();
                         var prepared = selection.isEmpty() ? full
                                 : restores.preparePartial(
                                         expected, saved.commitId(), expected.commit(),
                                         selection.orElseThrow(), false,
-                                        value -> publishRestoreDiffProgress(progress, value));
+                                        value -> publishRestoreDiffProgress(progress, value))
+                                        .materialize();
                         liveWorld.prepareRestore(
                                 prepared.sections(), prepared.returnSections());
                         var targetEntities = liveEntityWorld.prepareRestore(
