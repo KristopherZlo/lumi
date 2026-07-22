@@ -11,6 +11,8 @@ import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.PlayerSpawn;
+import io.github.lumi.domain.service.RestorePlanMap;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -19,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.UUID;
 import net.minecraft.SharedConstants;
@@ -389,6 +392,49 @@ class PreparedWorldMutationSessionTest {
             persistence.complete = true;
             assertTrue(session.applyUntil(Long.MAX_VALUE));
             assertEquals(keys, world.startedEntityChunks);
+        }
+    }
+
+    @Test
+    void streamingDefersLazySectionReadsToTheBackgroundExecutor() throws Exception {
+        SectionKey key = new SectionKey(2, 0, 3);
+        SectionBlob section = new SectionBlob(new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
+        AtomicInteger targetReads = new AtomicInteger();
+        AtomicInteger baseReads = new AtomicInteger();
+        Map<SectionKey, SectionBlob> target = new RestorePlanMap<>(
+                Set.of(key), ignored -> {
+                    targetReads.incrementAndGet();
+                    return section;
+                });
+        Map<SectionKey, SectionBlob> base = new RestorePlanMap<>(
+                Set.of(key), ignored -> {
+                    baseReads.incrementAndGet();
+                    return section;
+                });
+        var plan = new PreparedMinecraftPlanState(
+                new WorldStateApply.State(target, Map.of()),
+                new WorldStateApply.State(base, Map.of()),
+                Map.of(), Map.of(), List.of(key), List.of());
+        ArrayDeque<Runnable> background = new ArrayDeque<>();
+
+        try (var session = new StreamingPreparedWorldMutationSession(
+                plan,
+                new MinecraftRestorePreparation(
+                        new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
+                        new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)),
+                new FakeWorld(new AtomicLong(), section), background::add,
+                () -> new ChunkLoadSession(new ImmediateChunkAccess(), () -> 0L))) {
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(0, targetReads.get());
+            assertEquals(0, baseReads.get());
+            assertEquals(1, background.size());
+
+            background.remove().run();
+
+            assertEquals(1, targetReads.get());
+            assertEquals(1, baseReads.get());
+            assertTrue(session.applyUntil(Long.MAX_VALUE));
         }
     }
 

@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -103,11 +104,15 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         }
         if (batchStart < plan.sectionKeys().size()) {
             if (preparing == null) {
-                Batch batch = nextBatch();
-                batchEnd = batch.end();
+                int start = batchStart;
+                batchEnd = batchEnd(plan.sectionKeys(), start);
+                int end = batchEnd;
                 preparing = CompletableFuture.supplyAsync(() -> {
                     try {
+                        Batch batch = loadBatch(start, end);
                         return preparation.prepareBatch(batch.target(), batch.base());
+                    } catch (UncheckedIOException failed) {
+                        throw new CompletionException(failed.getCause());
                     } catch (IOException failed) {
                         throw new CompletionException(failed);
                     }
@@ -159,19 +164,18 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         }
     }
 
-    private Batch nextBatch() {
+    private Batch loadBatch(int start, int end) {
         List<SectionKey> keys = plan.sectionKeys();
         Map<SectionKey, io.github.lumi.domain.model.SectionBlob> target = new HashMap<>();
         Map<SectionKey, io.github.lumi.domain.model.SectionBlob> base = new HashMap<>();
-        int end = batchEnd(keys, batchStart);
-        for (int index = batchStart; index < end; index++) {
+        for (int index = start; index < end; index++) {
             SectionKey key = keys.get(index);
             target.put(key, plan.source().sections().get(key));
             base.put(key, plan.base().sections().get(key));
         }
         return new Batch(
                 new WorldStateApply.State(target, Map.of()),
-                new WorldStateApply.State(base, Map.of()), end);
+                new WorldStateApply.State(base, Map.of()));
     }
 
     private PreparedMinecraftState nextEntityBatch() {
@@ -289,8 +293,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     private record Batch(
             WorldStateApply.State target,
-            WorldStateApply.State base,
-            int end) { }
+            WorldStateApply.State base) { }
 
     private enum BatchKind { SECTIONS, ENTITIES, SPAWNS }
     private enum Phase { PREPARING, APPLYING, VERIFYING, PERSISTING, REPAIRING, COMPLETE }
