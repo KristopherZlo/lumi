@@ -57,7 +57,8 @@ public interface WorldStateApply {
     record State(
             Map<SectionKey, SectionBlob> sections,
             Map<EntityChunkKey, EntityChunkBlob> entities,
-            Map<UUID, PlayerSpawn> playerSpawns) {
+            Map<UUID, PlayerSpawn> playerSpawns,
+            boolean playerSpawnsIncluded) {
         public State {
             sections = immutable(Objects.requireNonNull(sections, "sections"));
             entities = immutable(Objects.requireNonNull(entities, "entities"));
@@ -67,7 +68,14 @@ public interface WorldStateApply {
         public State(
                 Map<SectionKey, SectionBlob> sections,
                 Map<EntityChunkKey, EntityChunkBlob> entities) {
-            this(sections, entities, Map.of());
+            this(sections, entities, Map.of(), false);
+        }
+
+        public State(
+                Map<SectionKey, SectionBlob> sections,
+                Map<EntityChunkKey, EntityChunkBlob> entities,
+                Map<UUID, PlayerSpawn> playerSpawns) {
+            this(sections, entities, playerSpawns, true);
         }
 
         private static <K, V> Map<K, V> immutable(Map<K, V> values) {
@@ -79,6 +87,8 @@ public interface WorldStateApply {
         boolean applyUntil(long deadlineNanos) throws IOException;
 
         Verification verifyUntil(long deadlineNanos) throws IOException;
+
+        boolean persistUntil(long deadlineNanos) throws IOException;
 
         boolean repairUntil(long deadlineNanos) throws IOException;
 

@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.SectionBlob;
@@ -143,8 +144,39 @@ class PreparedWorldMutationSessionTest {
         assertEquals(List.of(), access.released);
         assertEquals(WorldStateApply.Verification.VERIFIED,
                 session.verifyUntil(Long.MAX_VALUE));
+        assertEquals(1, access.active);
+        assertEquals(List.of(), access.released);
+        ManualPersistence persistence = new ManualPersistence();
+        world.persistence = persistence;
+        assertFalse(session.persistUntil(Long.MAX_VALUE));
+        assertEquals(1, access.active);
+        persistence.complete = true;
+        assertTrue(session.persistUntil(Long.MAX_VALUE));
+        assertEquals(1, access.active);
+        session.close();
         assertEquals(0, access.active);
         assertEquals(List.of(new ChunkCoordinate(4, -2)), access.released);
+    }
+
+    @Test
+    void rejectsPersistenceAfterAVerificationMismatch() throws Exception {
+        EntityChunkKey key = new EntityChunkKey(4, -2);
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        var target = new PreparedMinecraftState(
+                new WorldStateApply.State(Map.of(), Map.of(key, empty)),
+                Map.of(), Map.of(key, new DecodedEntityChunk(List.of())));
+        FakeWorld world = new FakeWorld(new AtomicLong(), null);
+        world.capturedEntities = new EntityChunkBlob(List.of(new EntityState(
+                UUID.randomUUID(), "minecraft:armor_stand",
+                MinecraftNbtCodec.encode(new net.minecraft.nbt.CompoundTag()))));
+        var session = new PreparedWorldMutationSession(
+                target, world, () -> 0L, null, new RestoreApplyMetrics());
+
+        assertTrue(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(WorldStateApply.Verification.MISMATCH,
+                session.verifyUntil(Long.MAX_VALUE));
+        assertThrows(IllegalStateException.class,
+                () -> session.persistUntil(Long.MAX_VALUE));
     }
 
     @Test
@@ -217,7 +249,7 @@ class PreparedWorldMutationSessionTest {
     }
 
     @Test
-    void releasesEachFullChunkBeforeLoadingTheNextOne() throws Exception {
+    void retainsLoadedSectionChunksUntilPersistenceCompletes() throws Exception {
         SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
         DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
@@ -225,7 +257,7 @@ class PreparedWorldMutationSessionTest {
         Map<SectionKey, SectionBlob> persistentSections = new HashMap<>();
         Map<SectionKey, DecodedSection> decodedSections = new HashMap<>();
         List<SectionKey> order = new ArrayList<>();
-        for (int chunkX = 0; chunkX < 40; chunkX++) {
+        for (int chunkX = 0; chunkX < 2; chunkX++) {
             SectionKey key = new SectionKey(chunkX, 0, 0);
             persistentSections.put(key, source);
             decodedSections.put(key, decoded);
@@ -240,10 +272,18 @@ class PreparedWorldMutationSessionTest {
                 new ChunkLoadSession(access, () -> 0L));
 
         assertTrue(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(1, access.peakRetained);
-        assertEquals(40, access.released.size());
-        assertEquals(40, session.statistics().loadedChunks());
-        assertEquals(40, session.statistics().sectionSwaps());
+        assertEquals(2, access.peakRetained);
+        assertEquals(2, access.active);
+        assertEquals(List.of(), access.released);
+        assertEquals(WorldStateApply.Verification.VERIFIED,
+                session.verifyUntil(Long.MAX_VALUE));
+        assertTrue(session.persistUntil(Long.MAX_VALUE));
+        assertEquals(2, access.active);
+        session.close();
+        assertEquals(0, access.active);
+        assertEquals(2, access.released.size());
+        assertEquals(2, session.statistics().loadedChunks());
+        assertEquals(2, session.statistics().sectionSwaps());
     }
 
     @Test
@@ -307,6 +347,71 @@ class PreparedWorldMutationSessionTest {
         assertEquals(40, session.statistics().storedChunks());
     }
 
+    @Test
+    void streamingDoesNotStartTheNextBatchBeforePersistence() throws Exception {
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        Map<EntityChunkKey, EntityChunkBlob> persistent = new LinkedHashMap<>();
+        Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
+        List<EntityChunkKey> keys = new ArrayList<>();
+        for (int chunkX = 0; chunkX < 33; chunkX++) {
+            EntityChunkKey key = new EntityChunkKey(chunkX, 0);
+            keys.add(key);
+            persistent.put(key, empty);
+            decoded.put(key, new DecodedEntityChunk(List.of()));
+        }
+        var state = new WorldStateApply.State(Map.of(), persistent);
+        var plan = new PreparedMinecraftPlanState(
+                state, state, decoded, decoded, List.of(), keys);
+        var world = new FakeWorld(new AtomicLong(), null);
+        var persistence = new ManualPersistence();
+        world.persistence = persistence;
+
+        try (var session = new StreamingPreparedWorldMutationSession(
+                plan,
+                new MinecraftRestorePreparation(
+                        new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
+                        new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)),
+                world, Runnable::run, () -> null)) {
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(keys.subList(0, 32), world.startedEntityChunks);
+            assertEquals(1, world.persistenceStarts);
+
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(keys.subList(0, 32), world.startedEntityChunks);
+            assertEquals(1, world.persistenceStarts);
+
+            persistence.complete = true;
+            assertTrue(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(keys, world.startedEntityChunks);
+        }
+    }
+
+    @Test
+    void streamingOmitsPlayerPathWhenSpawnsAreNotPartOfRestore() throws Exception {
+        EntityChunkKey key = new EntityChunkKey(1, 2);
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        var state = new WorldStateApply.State(Map.of(), Map.of(key, empty));
+        var plan = new PreparedMinecraftPlanState(
+                state, state,
+                Map.of(key, new DecodedEntityChunk(List.of())),
+                Map.of(key, new DecodedEntityChunk(List.of())),
+                List.of(), List.of(key));
+        var world = new FakeWorld(new AtomicLong(), null);
+
+        try (var session = new StreamingPreparedWorldMutationSession(
+                plan,
+                new MinecraftRestorePreparation(
+                        new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
+                        new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)),
+                world, Runnable::run, () -> null)) {
+            assertTrue(session.applyUntil(Long.MAX_VALUE));
+        }
+
+        assertEquals(0, world.playerSpawnWrites);
+        assertEquals(0, world.playerSpawnMatches);
+        assertEquals(List.of(false), world.persistencePlayerSpawnFlags);
+    }
+
     private static final class FakeWorld implements PreparedWorldAccess {
         private final AtomicLong clock;
         private final SectionBlob captured;
@@ -322,7 +427,13 @@ class PreparedWorldMutationSessionTest {
         private final List<UUID> removedEntities = new ArrayList<>();
         private final List<UUID> addedEntities = new ArrayList<>();
         private final List<String> entityMutations = new ArrayList<>();
+        private final List<EntityChunkKey> startedEntityChunks = new ArrayList<>();
         private Map<UUID, PlayerSpawn> playerSpawns = Map.of();
+        private WorldPersistenceSession persistence = WorldPersistenceSession.COMPLETE;
+        private int persistenceStarts;
+        private int playerSpawnWrites;
+        private int playerSpawnMatches;
+        private final List<Boolean> persistencePlayerSpawnFlags = new ArrayList<>();
 
         private FakeWorld(AtomicLong clock, SectionBlob captured) {
             this.clock = clock;
@@ -334,6 +445,15 @@ class PreparedWorldMutationSessionTest {
             sectionWrites++;
             clock.incrementAndGet();
             return new SectionApplyResult(key, new short[] {0}, 1);
+        }
+
+        @Override public WorldPersistenceSession beginPersistence(
+                PreparedMinecraftState target,
+                Set<ChunkCoordinate> alreadyDurable,
+                boolean playerSpawnsIncluded) {
+            persistenceStarts++;
+            persistencePlayerSpawnFlags.add(playerSpawnsIncluded);
+            return persistence;
         }
         @Override public ChunkSyncResult finishChunk(
                 ChunkCoordinate chunk,
@@ -366,6 +486,7 @@ class PreparedWorldMutationSessionTest {
                 SectionKey key, int localIndex, net.minecraft.nbt.CompoundTag nbt) { }
         @Override public SectionBlob captureSection(SectionKey key) { return captured; }
         @Override public List<UUID> durableEntityIds(EntityChunkKey key) {
+            startedEntityChunks.add(key);
             return entityIdsByChunk.getOrDefault(key, entityIds);
         }
         @Override public void removeEntity(EntityChunkKey key, UUID id) {
@@ -382,11 +503,18 @@ class PreparedWorldMutationSessionTest {
             return capturedEntities;
         }
         @Override public void applyPlayerSpawns(Map<UUID, PlayerSpawn> spawns) {
+            playerSpawnWrites++;
             playerSpawns = Map.copyOf(spawns);
         }
         @Override public boolean matchesPlayerSpawns(Map<UUID, PlayerSpawn> spawns) {
+            playerSpawnMatches++;
             return playerSpawns.equals(spawns);
         }
+    }
+
+    private static final class ManualPersistence implements WorldPersistenceSession {
+        private boolean complete;
+        @Override public boolean advanceUntil(long deadlineNanos) { return complete; }
     }
 
     private static final class RecordingChunkAccess implements ChunkLoadAccess {

@@ -65,7 +65,8 @@ public final class MinecraftRestorePreparation {
                 progress.accept(++completed);
             }
             var normalizedSource = new WorldStateApply.State(
-                    source.sections(), normalizedEntities, source.playerSpawns());
+                    source.sections(), normalizedEntities, source.playerSpawns(),
+                    source.playerSpawnsIncluded());
             var sectionOrder = decodedSections.keySet().stream()
                     .sorted(Comparator.comparingInt(SectionKey::chunkX)
                             .thenComparingInt(SectionKey::chunkZ)
@@ -111,9 +112,11 @@ public final class MinecraftRestorePreparation {
                 progress.accept(++completed);
             }
             var normalizedTarget = new WorldStateApply.State(
-                    source.sections(), normalizedSource, source.playerSpawns());
+                    source.sections(), normalizedSource, source.playerSpawns(),
+                    source.playerSpawnsIncluded());
             var normalizedReturn = new WorldStateApply.State(
-                    base.sections(), normalizedBase, base.playerSpawns());
+                    base.sections(), normalizedBase, base.playerSpawns(),
+                    base.playerSpawnsIncluded());
             return new PreparedMinecraftPlanState(
                     normalizedTarget, normalizedReturn, decodedEntities,
                     decodedBaseEntities,

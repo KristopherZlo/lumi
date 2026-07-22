@@ -571,7 +571,7 @@ class RestoreOperationTest {
 
     private static final class ImmediatelyVerified implements TestWorldApply {
         @Override public ApplySession begin(PreparedState target) {
-            return new ApplySession() {
+            return new TestApplySession() {
                 @Override public boolean applyUntil(long deadlineNanos) { return true; }
                 @Override public Verification verifyUntil(long deadlineNanos) {
                     return Verification.VERIFIED;
@@ -603,7 +603,7 @@ class RestoreOperationTest {
         private int closes;
 
         @Override public ApplySession begin(PreparedState target) {
-            return new ApplySession() {
+            return new TestApplySession() {
                 @Override public boolean applyUntil(long deadlineNanos) { return true; }
                 @Override public Verification verifyUntil(long deadlineNanos) {
                     return Verification.VERIFIED;
@@ -621,7 +621,7 @@ class RestoreOperationTest {
 
         @Override public ApplySession begin(PreparedState target) {
             boolean targetSession = ++begins == 1;
-            return new ApplySession() {
+            return new TestApplySession() {
                 @Override public boolean applyUntil(long deadlineNanos) { return true; }
                 @Override public Verification verifyUntil(long deadlineNanos) {
                     return targetSession ? Verification.MISMATCH : Verification.VERIFIED;
@@ -660,7 +660,7 @@ class RestoreOperationTest {
             return session;
         }
 
-        private static final class Session implements ApplySession {
+        private static final class Session implements TestApplySession {
             private int applyCalls;
             private int verifyCalls;
 
@@ -695,7 +695,7 @@ class RestoreOperationTest {
             return session;
         }
 
-        private static final class Session implements ApplySession {
+        private static final class Session implements TestApplySession {
             private int verifyCalls;
             private int repairCalls;
 
@@ -725,14 +725,14 @@ class RestoreOperationTest {
             return beginCalls == 1 ? new AlwaysMismatch() : new ReturnSession(returnVerifies);
         }
 
-        private static final class AlwaysMismatch implements ApplySession {
+        private static final class AlwaysMismatch implements TestApplySession {
             @Override public boolean applyUntil(long deadlineNanos) { return true; }
             @Override public Verification verifyUntil(long deadlineNanos) { return Verification.MISMATCH; }
             @Override public boolean repairUntil(long deadlineNanos) { return true; }
             @Override public void restartVerification() { }
         }
 
-        private record ReturnSession(boolean verifies) implements ApplySession {
+        private record ReturnSession(boolean verifies) implements TestApplySession {
             @Override public boolean applyUntil(long deadlineNanos) { return true; }
             @Override public Verification verifyUntil(long deadlineNanos) {
                 return verifies ? Verification.VERIFIED : Verification.MISMATCH;
@@ -748,7 +748,7 @@ class RestoreOperationTest {
         @Override
         public ApplySession begin(PreparedState target) {
             boolean targetSession = ++beginCalls == 1;
-            return new ApplySession() {
+            return new TestApplySession() {
                 @Override public boolean applyUntil(long deadlineNanos) throws IOException {
                     if (targetSession) {
                         throw new IOException("Cannot add restored entity");
@@ -767,6 +767,12 @@ class RestoreOperationTest {
     private interface TestWorldApply extends WorldStateApply {
         @Override default PreparedState prepare(State target) {
             return new TestPrepared(target);
+        }
+    }
+
+    private interface TestApplySession extends WorldStateApply.ApplySession {
+        @Override default boolean persistUntil(long deadlineNanos) throws IOException {
+            return true;
         }
     }
 

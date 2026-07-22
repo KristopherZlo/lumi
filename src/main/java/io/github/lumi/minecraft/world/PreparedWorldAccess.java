@@ -51,6 +51,11 @@ public interface PreparedWorldAccess {
         return "loaded apply";
     }
 
+    WorldPersistenceSession beginPersistence(
+            PreparedMinecraftState target,
+            Set<ChunkCoordinate> alreadyDurable,
+            boolean playerSpawnsIncluded);
+
     List<Integer> blockEntityIndexes(SectionKey key) throws IOException;
 
     void removeBlockEntity(SectionKey key, int localIndex) throws IOException;

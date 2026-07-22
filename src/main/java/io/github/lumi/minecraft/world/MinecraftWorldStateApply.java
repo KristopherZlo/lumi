@@ -30,7 +30,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
                 new MinecraftBlockStateDecoder(
                         level.registryAccess().lookupOrThrow(Registries.BLOCK)),
                 new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
-        world = new MinecraftPreparedWorldAccess(level, freeze);
+        world = new MinecraftPreparedWorldAccess(level, freeze, background);
     }
 
     @Override

@@ -110,6 +110,7 @@ class MergePipelineTest {
         private static final class Session implements ApplySession {
             @Override public boolean applyUntil(long deadlineNanos) { return true; }
             @Override public Verification verifyUntil(long deadlineNanos) { return Verification.VERIFIED; }
+            @Override public boolean persistUntil(long deadlineNanos) { return true; }
             @Override public boolean repairUntil(long deadlineNanos) { return true; }
             @Override public void restartVerification() { }
         }

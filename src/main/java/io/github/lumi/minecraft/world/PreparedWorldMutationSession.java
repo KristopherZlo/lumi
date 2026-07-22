@@ -22,6 +22,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private final LongSupplier nanoTime;
     private final ChunkLoadSession chunks;
     private final RestoreApplyMetrics metrics;
+    private final boolean playerSpawnsIncluded;
     private final List<SectionKey> sections;
     private final List<EntityChunkKey> entities;
     private MutationCursor apply;
@@ -29,6 +30,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private int sectionVerificationIndex;
     private int entityVerificationIndex;
     private boolean playerSpawnsVerified;
+    private boolean verified;
+    private WorldPersistenceSession persistence;
     private final Set<ChunkCoordinate> storedChunks = new HashSet<>();
     private final Map<ChunkCoordinate, Long> loadStarts = new LinkedHashMap<>();
 
@@ -56,8 +59,10 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         this.chunks = chunks;
         this.metrics = Objects.requireNonNull(metrics, "metrics");
+        this.playerSpawnsIncluded = target.source().playerSpawnsIncluded();
         sections = target.sectionKeys();
         entities = target.entityKeys();
+        playerSpawnsVerified = !playerSpawnsIncluded;
         apply = new MutationCursor();
     }
 
@@ -69,8 +74,11 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     @Override
     public WorldStateApply.Verification verifyUntil(long deadlineNanos) throws IOException {
         long started = nanoTime.getAsLong();
+        verified = false;
         try {
-            return verifyStepUntil(deadlineNanos);
+            WorldStateApply.Verification result = verifyStepUntil(deadlineNanos);
+            verified = result == WorldStateApply.Verification.VERIFIED;
+            return result;
         } finally {
             metrics.verification(Math.max(0, nanoTime.getAsLong() - started));
         }
@@ -95,12 +103,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             sectionVerificationIndex++;
             if (!world.matchesSection(
                     key, target.source().sections().get(key), target.sections().get(key))) {
-                release(key);
                 return WorldStateApply.Verification.MISMATCH;
-            }
-            if (sectionVerificationIndex == sections.size()
-                    || !sameChunk(key, sections.get(sectionVerificationIndex))) {
-                release(key);
             }
         }
         while (sectionVerificationIndex == sections.size()
@@ -112,10 +115,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             }
             entityVerificationIndex++;
             if (!target.source().entities().get(key).equals(world.captureEntities(key))) {
-                release(key);
                 return WorldStateApply.Verification.MISMATCH;
             }
-            release(key);
         }
         if (sectionVerificationIndex == sections.size()
                 && entityVerificationIndex == entities.size()
@@ -131,6 +132,18 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     }
 
     @Override
+    public boolean persistUntil(long deadlineNanos) throws IOException {
+        if (!verified) {
+            throw new IllegalStateException("Restore batch is not verified");
+        }
+        if (persistence == null) {
+            persistence = world.beginPersistence(
+                    target, Set.copyOf(storedChunks), playerSpawnsIncluded);
+        }
+        return persistence.advanceUntil(deadlineNanos);
+    }
+
+    @Override
     public boolean repairUntil(long deadlineNanos) throws IOException {
         if (repair == null) {
             repair = new MutationCursor();
@@ -142,11 +155,15 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     public void restartVerification() {
         sectionVerificationIndex = 0;
         entityVerificationIndex = 0;
-        playerSpawnsVerified = false;
+        playerSpawnsVerified = !playerSpawnsIncluded;
+        verified = false;
     }
 
     @Override
     public void close() {
+        if (persistence != null) {
+            persistence.close();
+        }
         if (chunks != null) {
             chunks.close();
         }
@@ -155,7 +172,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     @Override
     public WorldStateApply.ApplyProgress progress() {
         return new WorldStateApply.ApplyProgress(
-                world.mutationPhase(), apply.sectionIndex, sections.size());
+                persistence == null ? world.mutationPhase() : persistence.phase(),
+                apply.sectionIndex, sections.size());
     }
 
     @Override
@@ -179,12 +197,6 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         return true;
     }
 
-    private void release(io.github.lumi.domain.model.HistoryKey key) {
-        if (chunks != null) {
-            chunks.release(ChunkCoordinate.from(key));
-        }
-    }
-
     private static boolean sameChunk(SectionKey left, SectionKey right) {
         return left.chunkX() == right.chunkX() && left.chunkZ() == right.chunkZ();
     }
@@ -201,7 +213,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         private int entityRemovalIndex;
         private int entityAddIndex;
         private boolean entitiesApplied;
-        private boolean playerSpawnsApplied;
+        private boolean playerSpawnsApplied = !playerSpawnsIncluded;
         private SectionApplyResult appliedSection;
         private final List<SectionApplyResult> appliedChunkSections = new ArrayList<>();
         private boolean chunkBlockEntitiesChanged;
@@ -375,7 +387,6 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                     metrics.loadedChunk(sync);
                     appliedChunkSections.clear();
                     chunkBlockEntitiesChanged = false;
-                    release(key);
                 }
                 removals = List.of();
                 removalIndex = 0;

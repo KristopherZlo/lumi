@@ -68,6 +68,13 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                     }
                 }
                 case VERIFYING -> verifyCurrent(deadlineNanos);
+                case PERSISTING -> {
+                    if (current.persistUntil(deadlineNanos)) {
+                        phase = Phase.PREPARING;
+                    } else {
+                        return false;
+                    }
+                }
                 case REPAIRING -> {
                     if (current.repairUntil(deadlineNanos)) {
                         current.restartVerification();
@@ -123,7 +130,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             phase = Phase.APPLYING;
             return true;
         }
-        if (!spawnsStarted) {
+        if (!spawnsStarted && plan.source().playerSpawnsIncluded()) {
             spawnsStarted = true;
             var source = new WorldStateApply.State(
                     Map.of(), Map.of(), plan.source().playerSpawns());
@@ -216,7 +223,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             return;
         }
         if (verification == WorldStateApply.Verification.VERIFIED) {
-            phase = Phase.PREPARING;
+            phase = Phase.PERSISTING;
             return;
         }
         if (repairAttempted) {
@@ -233,6 +240,11 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 : WorldStateApply.Verification.IN_PROGRESS;
     }
 
+    @Override
+    public boolean persistUntil(long deadlineNanos) {
+        return phase == Phase.COMPLETE;
+    }
+
     @Override public boolean repairUntil(long deadlineNanos) { return true; }
     @Override public void restartVerification() { }
 
@@ -242,6 +254,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             case PREPARING -> "preparing batch";
             case APPLYING -> current == null ? "loaded apply" : current.progress().phase();
             case VERIFYING -> "verification";
+            case PERSISTING -> current.progress().phase();
             case REPAIRING -> "repairing";
             case COMPLETE -> "verification";
         };
@@ -280,5 +293,5 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             int end) { }
 
     private enum BatchKind { SECTIONS, ENTITIES, SPAWNS }
-    private enum Phase { PREPARING, APPLYING, VERIFYING, REPAIRING, COMPLETE }
+    private enum Phase { PREPARING, APPLYING, VERIFYING, PERSISTING, REPAIRING, COMPLETE }
 }

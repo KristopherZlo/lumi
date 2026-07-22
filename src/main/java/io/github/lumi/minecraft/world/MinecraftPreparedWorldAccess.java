@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
@@ -34,14 +35,28 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     private final ChunkEntityLookup entityLookup;
     private final MinecraftEntityRestorer entityRestorer;
     private final MinecraftStoredChunkAccess storedChunks;
+    private final Executor background;
 
-    public MinecraftPreparedWorldAccess(ServerLevel level, DimensionFreezeState freeze) {
+    public MinecraftPreparedWorldAccess(
+            ServerLevel level, DimensionFreezeState freeze, Executor background) {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
+        this.background = Objects.requireNonNull(background, "background");
         sectionRewriter = new MinecraftSectionRewriter(level);
         entityLookup = ChunkEntityLookup.forLevel(level);
         entityRestorer = new MinecraftEntityRestorer(level, freeze, entities, entityLookup);
         storedChunks = new MinecraftStoredChunkAccess(level);
+    }
+
+    @Override
+    public WorldPersistenceSession beginPersistence(
+            PreparedMinecraftState target,
+            Set<ChunkCoordinate> alreadyDurable,
+            boolean playerSpawnsIncluded) {
+        return new MinecraftRestorePersistenceSession(
+                level, freeze, background, storedChunks, entities,
+                target, alreadyDurable,
+                playerSpawnsIncluded);
     }
 
     @Override
@@ -166,11 +181,7 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
                 }
                 continue;
             }
-            var data = LevelData.RespawnData.of(
-                    level.dimension(), new BlockPos(spawn.x(), spawn.y(), spawn.z()),
-                    spawn.yaw(), spawn.pitch());
-            player.setRespawnPosition(
-                    new ServerPlayer.RespawnConfig(data, spawn.forced()), false);
+            player.setRespawnPosition(respawnConfig(level, spawn), false);
         }
     }
 
@@ -187,6 +198,14 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
 
     static boolean matchesSpawn(PlayerSpawn expected, Optional<PlayerSpawn> actual) {
         return Optional.ofNullable(expected).equals(actual);
+    }
+
+    static ServerPlayer.RespawnConfig respawnConfig(
+            ServerLevel level, PlayerSpawn spawn) {
+        var data = LevelData.RespawnData.of(
+                level.dimension(), new BlockPos(spawn.x(), spawn.y(), spawn.z()),
+                spawn.yaw(), spawn.pitch());
+        return new ServerPlayer.RespawnConfig(data, spawn.forced());
     }
 
     static BlockPos position(SectionKey key, int localIndex) {
