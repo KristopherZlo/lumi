@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.util.Objects;
 import java.util.function.LongConsumer;
 import java.util.concurrent.Executor;
+import java.util.concurrent.CompletableFuture;
+import java.util.Comparator;
+import java.util.List;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
@@ -43,7 +46,8 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     @Override
     public PreparedState prepare(
             State target, State base, LongConsumer progress) throws IOException {
-        return preparation.preflight(target, base, progress);
+        PreparedMinecraftPlanState plan = preparation.preflight(target, base, progress);
+        return plan.withSectionKeys(prioritize(plan.sectionKeys(), playerChunks()));
     }
 
     @Override
@@ -59,5 +63,51 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         return new PreparedWorldMutationSession(
                 minecraft, world, System::nanoTime,
                 new ChunkLoadSession(new MinecraftChunkLoadAccess(level)));
+    }
+
+    private List<ChunkCoordinate> playerChunks() {
+        if (level.getServer().isSameThread()) {
+            return snapshotPlayerChunks();
+        }
+        CompletableFuture<List<ChunkCoordinate>> snapshot = new CompletableFuture<>();
+        level.getServer().execute(() -> {
+            try {
+                snapshot.complete(snapshotPlayerChunks());
+            } catch (RuntimeException failed) {
+                snapshot.completeExceptionally(failed);
+            }
+        });
+        return snapshot.join();
+    }
+
+    private List<ChunkCoordinate> snapshotPlayerChunks() {
+        return level.players().stream()
+                .map(player -> new ChunkCoordinate(
+                        player.chunkPosition().x, player.chunkPosition().z))
+                .toList();
+    }
+
+    static List<io.github.lumi.domain.model.SectionKey> prioritize(
+            List<io.github.lumi.domain.model.SectionKey> sections,
+            List<ChunkCoordinate> players) {
+        Comparator<io.github.lumi.domain.model.SectionKey> order =
+                Comparator.comparingLong(key -> distanceSquared(key, players));
+        return sections.stream().sorted(order
+                .thenComparingInt(io.github.lumi.domain.model.SectionKey::chunkX)
+                .thenComparingInt(io.github.lumi.domain.model.SectionKey::chunkZ)
+                .thenComparingInt(io.github.lumi.domain.model.SectionKey::sectionY))
+                .toList();
+    }
+
+    private static long distanceSquared(
+            io.github.lumi.domain.model.SectionKey key,
+            List<ChunkCoordinate> players) {
+        long nearest = Long.MAX_VALUE;
+        for (ChunkCoordinate player : players) {
+            long x = (long) key.chunkX() - player.x();
+            long z = (long) key.chunkZ() - player.z();
+            nearest = Math.min(nearest, x * x + z * z);
+        }
+        return nearest;
     }
 }

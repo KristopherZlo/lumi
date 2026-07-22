@@ -26,4 +26,9 @@ record PreparedMinecraftPlanState(
             throw new IllegalArgumentException("Prepared Restore plan keys must match");
         }
     }
+
+    PreparedMinecraftPlanState withSectionKeys(List<SectionKey> ordered) {
+        return new PreparedMinecraftPlanState(
+                source, base, entities, ordered, entityKeys);
+    }
 }
