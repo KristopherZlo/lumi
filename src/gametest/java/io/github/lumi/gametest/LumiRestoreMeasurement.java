@@ -8,9 +8,11 @@ record LumiRestoreMeasurement(
         long totalMillis,
         long heapBeforeBytes,
         long peakHeapBytes,
+        long maximumServerTickNanos,
         RestoreApplyStatistics apply) {
     LumiRestoreMeasurement {
-        if (totalMillis < 0 || heapBeforeBytes < 0 || peakHeapBytes < heapBeforeBytes) {
+        if (totalMillis < 0 || heapBeforeBytes < 0 || peakHeapBytes < heapBeforeBytes
+                || maximumServerTickNanos < 0) {
             throw new IllegalArgumentException("Invalid Restore measurement");
         }
     }
@@ -29,6 +31,7 @@ record LumiRestoreMeasurement(
         return "totalMs=" + totalMillis
                 + ";applicationMs=" + TimeUnit.NANOSECONDS.toMillis(applicationNanos())
                 + ";extraHeapBytes=" + extraHeapBytes()
+                + ";maximumServerTickMs=" + millis(maximumServerTickNanos)
                 + ";loadedChunks=" + apply.loadedChunks()
                 + ";storedChunks=" + apply.storedChunks()
                 + ";sectionSwaps=" + apply.sectionSwaps()

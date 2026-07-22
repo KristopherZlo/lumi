@@ -157,16 +157,21 @@ final class LumiBehaviorOperations {
         long heapBefore = usedHeap(jvm);
         long[] peakHeap = {heapBefore};
         long started = System.nanoTime();
-        awaitOperation("restore_" + name,
-                send("restore_" + name, () -> restoreFromUi(target), started),
-                failure, started,
-                () -> peakHeap[0] = Math.max(peakHeap[0], usedHeap(jvm)));
+        long maximumServerTick;
+        try (LumiServerTickProbe ticks = LumiServerTickProbe.open()) {
+            awaitOperation("restore_" + name,
+                    send("restore_" + name, () -> restoreFromUi(target), started),
+                    failure, started,
+                    () -> peakHeap[0] = Math.max(peakHeap[0], usedHeap(jvm)));
+            maximumServerTick = ticks.maximumNanos();
+        }
         RestoreApplyStatistics measured = statistics.get();
         if (measured == null) {
             throw new AssertionError("Restore metrics observer did not complete");
         }
         return new LumiRestoreMeasurement(
-                elapsedMillis(started), heapBefore, peakHeap[0], measured);
+                elapsedMillis(started), heapBefore, peakHeap[0],
+                maximumServerTick, measured);
     }
 
     OperationBoundary restore(

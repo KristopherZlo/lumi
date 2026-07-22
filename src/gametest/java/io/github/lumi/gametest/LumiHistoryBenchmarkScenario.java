@@ -63,6 +63,7 @@ final class LumiHistoryBenchmarkScenario {
         LumiRepositoryMetrics.Snapshot previous = metrics.capture(repository);
         recordStorage("initial", previous, 0);
         List<CommitId> commits = new ArrayList<>();
+        List<LumiRestoreMeasurement> restores = new ArrayList<>();
         commits.add(operations.activeCommit());
 
         editRandomVolume("benchmark_base_edit", baseArea, 0);
@@ -89,14 +90,29 @@ final class LumiHistoryBenchmarkScenario {
             String name = String.format("%02d-index-%03d", ++restoreNumber, index);
             LumiRestoreMeasurement restore =
                     operations.measureRestore(name, commits.get(index));
+            restores.add(restore);
             report.event("restore_metrics", name, "measured", 0,
                     restore.totalMillis(), restore.describe());
             previous = recordStorage(
                     "restore-" + name, repository, previous.bytes());
             recordMemory("restore-" + name);
         }
+        verifyPerformance(restores);
         report.event("benchmark", "configuration", "succeeded", 0, 0,
                 config.describe() + ";versions=" + commits.size());
+    }
+
+    private void verifyPerformance(List<LumiRestoreMeasurement> restores) {
+        try {
+            LumiRestorePerformanceGate.Result result =
+                    LumiRestorePerformanceGate.verify(config, restores);
+            report.event("performance_gate", "restore", "succeeded", 0, 0,
+                    result.describe());
+        } catch (AssertionError failed) {
+            report.event("performance_gate", "restore", "failed", 0, 0,
+                    failed.getMessage());
+            throw failed;
+        }
     }
 
     private BlockBox nextChangeArea() {
