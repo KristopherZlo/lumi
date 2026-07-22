@@ -59,12 +59,18 @@ final class LumiHistoryBenchmarkScenario {
                 config.describe() + ";previewGeneration=false;baseArea="
                         + describe(baseArea));
 
+        fixture.markBaseline("benchmark_initial_marker");
+        operations.awaitDurability("benchmark_initial_world");
+        CommitId initial = operations.save("benchmark-initial");
+        if (operations.pendingKeyCount() != 0) {
+            throw new AssertionError("Initial benchmark Save left pending history keys");
+        }
         Path repository = operations.repository();
         LumiRepositoryMetrics.Snapshot previous = metrics.capture(repository);
         recordStorage("initial", previous, 0);
         List<CommitId> commits = new ArrayList<>();
         List<LumiRestoreMeasurement> restores = new ArrayList<>();
-        commits.add(operations.activeCommit());
+        commits.add(initial);
 
         editRandomVolume("benchmark_base_edit", baseArea, 0);
         commits.add(operations.save("benchmark-base"));

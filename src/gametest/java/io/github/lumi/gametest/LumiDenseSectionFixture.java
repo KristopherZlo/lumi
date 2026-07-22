@@ -40,6 +40,23 @@ final class LumiDenseSectionFixture {
         this.report = report;
     }
 
+    void markBaseline(String name) {
+        long started = System.nanoTime();
+        server.runOnServer(minecraft -> {
+            var player = minecraft.getPlayerList().getPlayers().getFirst();
+            ServerLevel level = player.level();
+            var runtime = LumiMod.serverRuntime().find(level).orElseThrow();
+            SectionKey key = MinecraftSectionCapture.key(player.blockPosition());
+            LevelChunk chunk = level.getChunk(key.chunkX(), key.chunkZ());
+            var capture = new MinecraftSectionCapture();
+            runtime.mutations().registerSectionMutation(key,
+                    () -> captureUnchecked(capture, level, chunk, key.sectionY()));
+            runtime.mutations().markBuilderMutation(key);
+        });
+        report.event("fixture", name, "succeeded", 0,
+                elapsedMillis(started), "no-op builder baseline marker");
+    }
+
     void fill(String name, BlockBox area, int paletteOffset) {
         long started = System.nanoTime();
         try {
