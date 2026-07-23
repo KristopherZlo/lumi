@@ -45,7 +45,7 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
         sectionRewriter = new MinecraftSectionRewriter(level);
         entityLookup = ChunkEntityLookup.forLevel(level);
         entityRestorer = new MinecraftEntityRestorer(level, freeze, entities, entityLookup);
-        storedChunks = new MinecraftStoredChunkAccess(level);
+        storedChunks = new MinecraftStoredChunkAccess(level, background);
     }
 
     @Override

@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -25,14 +26,16 @@ import net.minecraft.world.level.levelgen.Heightmap;
 /** Rewrites gated, unloaded chunks through the running world's vanilla I/O worker. */
 final class MinecraftStoredChunkAccess {
     private final ServerLevel level;
+    private final Executor background;
     private final PalettedContainerFactory containers;
     private final MinecraftStoredChunkPatcher patcher;
     private final Map<ChunkCoordinate, ChunkLoadGate.Lease> gates =
             new ConcurrentHashMap<>();
     private volatile String phase = "loaded apply";
 
-    MinecraftStoredChunkAccess(ServerLevel level) {
+    MinecraftStoredChunkAccess(ServerLevel level, Executor background) {
         this.level = Objects.requireNonNull(level, "level");
+        this.background = Objects.requireNonNull(background, "background");
         containers = PalettedContainerFactory.create(level.registryAccess());
         patcher = new MinecraftStoredChunkPatcher(
                 containers.blockStatesContainerCodec(),
@@ -98,7 +101,7 @@ final class MinecraftStoredChunkAccess {
             gates.put(coordinate, gate);
         }
         phase = "stored read";
-        return level.getChunkSource().chunkMap.read(position).thenApply(stored -> {
+        return level.getChunkSource().chunkMap.read(position).thenApplyAsync(stored -> {
             if (stored.isEmpty()) {
                 release(coordinate);
                 return Preparation.fallback(StoredChunkApplyResult.Outcome.MISSING);
@@ -116,7 +119,7 @@ final class MinecraftStoredChunkAccess {
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }
-        });
+        }, background);
     }
 
     private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> writeAndVerify(
@@ -166,9 +169,9 @@ final class MinecraftStoredChunkAccess {
                 reads.put(write, level.getChunkSource().chunkMap.read(write.position()));
             }
             return CompletableFuture.allOf(reads.values().toArray(CompletableFuture[]::new))
-                    .thenApply(done -> verifiedResults(
+                    .thenApplyAsync(done -> verifiedResults(
                             reads, results, readNanos, writeNanos, syncNanos,
-                            System.nanoTime() - verifyStarted));
+                            System.nanoTime() - verifyStarted), background);
         });
     }
 
