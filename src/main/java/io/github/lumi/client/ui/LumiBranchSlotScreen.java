@@ -4,6 +4,7 @@ import io.github.lumi.client.LumiHotkeys;
 import io.github.lumi.client.state.ClientBranchSlotStore;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Objects;
+import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
@@ -17,6 +18,7 @@ public final class LumiBranchSlotScreen extends LumiModalScreen {
     private final HistorySnapshotPayload snapshot;
     private final HistorySnapshotPayload.Branch branch;
     private final ClientBranchSlotStore slots;
+    private final Consumer<String> feedback;
     private int panelX;
     private int panelY;
     private int panelWidth;
@@ -26,13 +28,15 @@ public final class LumiBranchSlotScreen extends LumiModalScreen {
             Screen parent,
             HistorySnapshotPayload snapshot,
             HistorySnapshotPayload.Branch branch,
-            ClientBranchSlotStore slots) {
+            ClientBranchSlotStore slots,
+            Consumer<String> feedback) {
         super(Component.translatable(
                 "luma.ideas.bind_title", shortName(branch.name())));
         this.parent = Objects.requireNonNull(parent, "parent");
         this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
         this.branch = Objects.requireNonNull(branch, "branch");
         this.slots = Objects.requireNonNull(slots, "slots");
+        this.feedback = Objects.requireNonNull(feedback, "feedback");
     }
 
     @Override
@@ -51,7 +55,7 @@ public final class LumiBranchSlotScreen extends LumiModalScreen {
 
     private void clear() {
         slots.clear(snapshot, branch.name());
-        feedback("luma.status.variant_switch_key_updated");
+        feedback.accept("luma.status.variant_switch_key_updated");
         onClose();
     }
 
@@ -63,19 +67,12 @@ public final class LumiBranchSlotScreen extends LumiModalScreen {
         }
         try {
             slots.assignKey(snapshot, branch.name(), event.key());
-            feedback("luma.status.variant_switch_key_updated");
+            feedback.accept("luma.status.variant_switch_key_updated");
             onClose();
         } catch (IllegalArgumentException invalid) {
-            feedback(invalid.getMessage());
+            feedback.accept(invalid.getMessage());
         }
         return true;
-    }
-
-    private void feedback(String key) {
-        if (minecraft.player != null) {
-            minecraft.player.displayClientMessage(
-                    Component.translatable(key), true);
-        }
     }
 
     @Override

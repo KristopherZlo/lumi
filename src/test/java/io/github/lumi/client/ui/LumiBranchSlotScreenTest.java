@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -16,6 +17,9 @@ class LumiBranchSlotScreenTest {
         assertTrue(source.contains("public boolean keyPressed(KeyEvent event)"));
         assertTrue(source.contains(
                 "slots.assignKey(snapshot, branch.name(), event.key())"));
+        assertTrue(source.contains("Consumer<String> feedback"));
+        assertTrue(source.contains("feedback.accept("));
+        assertFalse(source.contains("displayClientMessage("));
         assertTrue(source.contains("luma.action.clear_bind"));
     }
 

@@ -25,5 +25,11 @@ class LumiClientNotificationTest {
         assertTrue(notifications.contains("case DEGRADED -> ChatFormatting.DARK_RED"));
         assertTrue(source.contains(
                 "\"luma.status.survival_disabled\".equals(value)"));
+        assertTrue(source.contains("NOTIFICATIONS.add(styled,"));
+        assertTrue(source.contains("displayClientMessage(styled, true)"));
+        assertTrue(source.contains(
+                "HISTORY, PENDING_STATISTICS, NOTIFICATIONS"));
+        assertTrue(source.contains(
+                "workspace.hudDisplayMode() != HudDisplayMode.GUI"));
     }
 }

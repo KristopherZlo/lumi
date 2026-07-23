@@ -32,6 +32,12 @@ class LumiOperationHudTest {
         assertTrue(source.contains(
                 "workspace.hudDisplayMode() == HudDisplayMode.GUI"));
         assertTrue(source.contains("if (!usesGui()) return;"));
+        assertTrue(source.contains("ScreenEvents.AFTER_INIT"));
+        assertTrue(source.contains("ScreenEvents.afterRender(screen)"));
+        assertTrue(source.contains("client.screen == current"));
+        assertTrue(source.contains("notifications.visible()"));
+        assertTrue(source.contains("ClientPlayConnectionEvents.DISCONNECT"));
+        assertFalse(source.contains("mouseClicked("));
         assertTrue(source.contains("LumiHotkeys.actionModifierDown("));
         assertTrue(source.contains("result.workspace().total()"));
         assertTrue(source.contains("Integer.toString(snapshot.pendingKeys())"));

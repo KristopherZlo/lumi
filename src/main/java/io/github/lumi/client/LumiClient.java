@@ -3,6 +3,7 @@ package io.github.lumi.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.state.ClientHistoryStore;
+import io.github.lumi.client.state.ClientNotificationStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
 import io.github.lumi.client.state.ClientSurvivalSettingsStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
@@ -51,6 +52,7 @@ import io.github.lumi.client.ui.PackageScreenController;
 import io.github.lumi.client.ui.ZoneScreenController;
 import io.github.lumi.client.ui.ZoneHistoryActions;
 import io.github.lumi.client.ui.VersionCompareController;
+import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.CleanupResultPayload;
 import io.github.lumi.network.OperationEventPayload;
@@ -82,6 +84,8 @@ public final class LumiClient implements ClientModInitializer {
             new ClientZoneOverlayStore();
     private static final ClientPendingStatisticsStore PENDING_STATISTICS =
             new ClientPendingStatisticsStore();
+    private static final ClientNotificationStore NOTIFICATIONS =
+            new ClientNotificationStore();
     private static final ClientSurvivalSettingsStore SURVIVAL_SETTINGS =
             new ClientSurvivalSettingsStore();
     private static final ClientOnboardingStateRepository ONBOARDING =
@@ -184,7 +188,8 @@ public final class LumiClient implements ClientModInitializer {
         new LumiSelectionOverlay(SELECTION).register();
         new LumiSelectionHud(SELECTION).register();
         ZONE_OVERLAY.register();
-        new LumiOperationHud(HISTORY, PENDING_STATISTICS).register();
+        new LumiOperationHud(
+                HISTORY, PENDING_STATISTICS, NOTIFICATIONS).register();
         new LumiPendingChangeOverlay(
                 HISTORY, COMPARISONS, NETWORKING::refreshSnapshot).register();
         ONBOARDING_WORLD.register();
@@ -247,7 +252,11 @@ public final class LumiClient implements ClientModInitializer {
         }
         MutableComponent message = value.startsWith("luma.")
                 ? Component.translatable(value) : Component.literal(value);
-        player.displayClientMessage(message.withStyle(color), true);
+        MutableComponent styled = message.withStyle(color);
+        Integer rgb = color.getColor();
+        NOTIFICATIONS.add(styled,
+                0xff000000 | (rgb == null ? 0xf0f3f6 : rgb));
+        player.displayClientMessage(styled, true);
     }
 
     private static void acceptOperationEvent(OperationEventPayload event) {
@@ -357,7 +366,8 @@ public final class LumiClient implements ClientModInitializer {
                 NETWORKING::switchBranch,
                 NETWORKING::deleteBranch,
                 branch -> client.setScreen(new LumiBranchSlotScreen(
-                        client.screen, snapshot, branch, BRANCH_SLOTS)),
+                        client.screen, snapshot, branch, BRANCH_SLOTS,
+                        LumiClient::showFeedback)),
                 branch -> branchBinding(snapshot, branch)));
     }
 
@@ -620,6 +630,12 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void acceptSnapshot(HistorySnapshotPayload snapshot) {
         BRANCH_SLOTS.synchronize(snapshot);
+        if (snapshot.workspaces().stream()
+                .filter(HistorySnapshotPayload.WorkspaceView::active)
+                .anyMatch(workspace ->
+                        workspace.hudDisplayMode() != HudDisplayMode.GUI)) {
+            NOTIFICATIONS.clear();
+        }
         if (snapshot.pendingKeys() == 0) {
             PENDING_STATISTICS.clear();
         } else if (!snapshot.operationActive()

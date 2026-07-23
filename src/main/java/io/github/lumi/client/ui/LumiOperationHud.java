@@ -3,11 +3,14 @@ package io.github.lumi.client.ui;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.LumiHotkeys;
 import io.github.lumi.client.state.ClientHistoryStore;
+import io.github.lumi.client.state.ClientNotificationStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
 import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.network.OperationEventPayload;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.Identifier;
@@ -16,33 +19,59 @@ import net.minecraft.resources.Identifier;
 public final class LumiOperationHud {
     private static final Identifier ID =
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "operation_hud");
+    private static final int SCREEN_TOP = 44;
     private final ClientHistoryStore history;
     private final ClientPendingStatisticsStore pendingStatistics;
+    private final ClientNotificationStore notifications;
 
     public LumiOperationHud(
             ClientHistoryStore history,
-            ClientPendingStatisticsStore pendingStatistics) {
+            ClientPendingStatisticsStore pendingStatistics,
+            ClientNotificationStore notifications) {
         this.history = java.util.Objects.requireNonNull(history, "history");
         this.pendingStatistics = java.util.Objects.requireNonNull(
                 pendingStatistics, "pendingStatistics");
+        this.notifications = java.util.Objects.requireNonNull(
+                notifications, "notifications");
     }
 
     public void register() {
         HudElementRegistry.attachElementAfter(
                 VanillaHudElements.BOSS_BAR, ID, this::render);
+        ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
+            if (screen instanceof LumiScreen) {
+                ScreenEvents.afterRender(screen).register(
+                        (current, graphics, mouseX, mouseY, tickDelta) -> {
+                            if (client.screen == current) {
+                                renderScreenOverlay(graphics);
+                            }
+                        });
+            }
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register(
+                (handler, client) -> notifications.clear());
     }
 
     private void render(GuiGraphics graphics, net.minecraft.client.DeltaTracker ignored) {
-        if (!usesGui()) return;
+        if (!usesGui() || Minecraft.getInstance().screen instanceof LumiScreen) return;
         int y = renderWorkspace(graphics);
+        y = renderOperation(graphics, y);
+        renderNotifications(graphics, y);
+    }
+
+    private void renderScreenOverlay(GuiGraphics graphics) {
+        if (!usesGui()) return;
+        int y = renderOperation(graphics, SCREEN_TOP);
+        renderNotifications(graphics, y);
+    }
+
+    private int renderOperation(GuiGraphics graphics, int y) {
         OperationEventPayload event = history.state().activeOperation().orElse(null);
-        if (event == null) return;
-        var font = Minecraft.getInstance().font;
+        if (event == null) return y;
         String text = event.queuePosition() > 0
                 ? event.message() : event.progress().map(value -> value.phase())
                         .orElse(event.message());
-        int width = Math.min(Math.max(1, graphics.guiWidth() - 20),
-                Math.min(240, Math.max(120, font.width(text) + 20)));
+        int width = compactPanelWidth(graphics, text);
         int x = graphics.guiWidth() - width - 10;
         graphics.fill(x, y, x + width, y + 28, 0xd9111419);
         drawClipped(graphics, text, x + 8, y + 6, width - 16, 0xfff0f3f6);
@@ -62,6 +91,22 @@ public final class LumiOperationHud {
             graphics.fill(x + 8 + offset, y + 20,
                     x + 8 + offset + segmentWidth, y + 23, 0xff70d6a5);
         });
+        return nextPanelY(y, 28);
+    }
+
+    private void renderNotifications(GuiGraphics graphics, int startY) {
+        int y = startY;
+        for (ClientNotificationStore.Notification notification
+                : notifications.visible()) {
+            String text = notification.message().getString();
+            int width = compactPanelWidth(graphics, text);
+            int x = graphics.guiWidth() - width - 10;
+            graphics.fill(x, y, x + width, y + 20, 0xd9111419);
+            drawClipped(
+                    graphics, text, x + 8, y + 6, width - 16,
+                    notification.argb());
+            y = nextPanelY(y, 20);
+        }
     }
 
     private int renderWorkspace(GuiGraphics graphics) {
@@ -126,6 +171,13 @@ public final class LumiOperationHud {
         long position = Math.floorMod(millis / 20, travelWidth * 2L);
         return (int) (position <= travelWidth
                 ? position : travelWidth * 2L - position);
+    }
+
+    private static int compactPanelWidth(
+            GuiGraphics graphics, String text) {
+        return Math.min(Math.max(1, graphics.guiWidth() - 20),
+                Math.min(240, Math.max(120,
+                        Minecraft.getInstance().font.width(text) + 20)));
     }
 
     private static void drawClipped(
