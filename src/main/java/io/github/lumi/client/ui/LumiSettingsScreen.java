@@ -7,16 +7,20 @@ import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.telemetry.TelemetryService;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /** Active-workspace defaults and client-local diagnostic controls. */
 public final class LumiSettingsScreen extends LumiPageScreen {
     private static final int SETTING_COUNT = 8;
     private static final int SETTING_STRIDE = LumiSettingRow.HEIGHT + 2;
+    private static final List<HudDisplayMode> HUD_MODES = List.of(
+            HudDisplayMode.GUI, HudDisplayMode.BOSSBAR, HudDisplayMode.NONE);
     private final ClientHistoryStore history;
     private final TelemetryService telemetry;
     private final Consumer<WorkspaceSettings> updateWorkspace;
@@ -39,6 +43,7 @@ public final class LumiSettingsScreen extends LumiPageScreen {
     private int contentHeight;
     private int contentOffset;
     private int scroll;
+    private LumiDropdown<HudDisplayMode> hudModeDropdown;
     private boolean survivalRequested;
     private long survivalRevision = -1;
 
@@ -110,6 +115,7 @@ public final class LumiSettingsScreen extends LumiPageScreen {
     private void addSettings() {
         int x = contentX + 4;
         int width = contentWidth - 8;
+        hudModeDropdown = null;
         scroll = Math.min(scroll, maximumScroll());
         addToggleSetting(0, x, width,
                 "luma.settings.show_hidden_commits",
@@ -123,10 +129,6 @@ public final class LumiSettingsScreen extends LumiPageScreen {
                 "luma.settings.preview_generation",
                 "luma.settings.preview_generation_help",
                 previewGenerationEnabled, this::togglePreviewGeneration);
-        addToggleSetting(3, x, width,
-                "luma.settings.workspace_hud",
-                "luma.settings.workspace_hud_help",
-                hudDisplayMode == HudDisplayMode.GUI, this::toggleWorkspaceHud);
         var survival = survivalSettings.snapshot().orElse(
                 new ClientSurvivalSettingsStore.Snapshot(false, false));
         addToggleSetting(4, x, width,
@@ -153,6 +155,32 @@ public final class LumiSettingsScreen extends LumiPageScreen {
                     telemetry.clearLocalQueue();
                     rebuildWidgets();
                 });
+        addHudModeSetting(3, x, width);
+    }
+
+    private void addHudModeSetting(int index, int x, int width) {
+        if (index < scroll || index >= scroll + visibleSettingRows()) return;
+        int labelWidth = HUD_MODES.stream()
+                .mapToInt(mode -> font.width(hudModeLabel(mode))).max().orElse(0);
+        int controlWidth = LumiSettingRow.valueWidth(width, labelWidth + 16);
+        int rowY = settingY(index);
+        addRenderableWidget(LumiSettingRow.choice(
+                x, rowY, width,
+                Component.translatable("luma.settings.workspace_hud"),
+                Component.translatable("luma.settings.workspace_hud_help"),
+                controlWidth + 6,
+                ignored -> {
+                    if (hudModeDropdown != null) hudModeDropdown.open();
+                }));
+        int dropdownX = x + width - controlWidth - 6;
+        int dropdownY = rowY + (LumiSettingRow.HEIGHT - LumiDropdown.ROW_HEIGHT) / 2;
+        hudModeDropdown = addRenderableWidget(new LumiDropdown<>(
+                dropdownX, dropdownY, controlWidth,
+                dropdownY - (contentY + 4 + contentOffset),
+                contentY + contentHeight - 4
+                        - dropdownY - LumiDropdown.ROW_HEIGHT,
+                HUD_MODES, hudDisplayMode,
+                LumiSettingsScreen::hudModeLabel, this::selectHudMode));
     }
 
     private LumiSettingRow addToggleSetting(
@@ -245,10 +273,17 @@ public final class LumiSettingsScreen extends LumiPageScreen {
         publishWorkspaceSettings();
     }
 
-    private void toggleWorkspaceHud() {
-        hudDisplayMode = hudDisplayMode == HudDisplayMode.GUI
-                ? HudDisplayMode.BOSSBAR : HudDisplayMode.GUI;
+    private void selectHudMode(HudDisplayMode replacement) {
+        hudDisplayMode = replacement;
         publishWorkspaceSettings();
+    }
+
+    private static Component hudModeLabel(HudDisplayMode mode) {
+        return Component.translatable(switch (mode) {
+            case GUI -> "luma.settings.hud_mode.gui";
+            case BOSSBAR -> "luma.settings.hud_mode.bossbar";
+            case NONE -> "luma.settings.hud_mode.none";
+        });
     }
 
     private void toggleAutomaticVersions() {
@@ -286,11 +321,26 @@ public final class LumiSettingsScreen extends LumiPageScreen {
     }
 
     @Override
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        MouseButtonEvent virtual = virtualClick(click);
+        if (clickContextualHint(virtual)) return true;
+        if (hudModeDropdown != null && hudModeDropdown.isOpen()
+                && hudModeDropdown.mouseClicked(virtual, doubled)) {
+            return true;
+        }
+        return super.mouseClicked(click, doubled);
+    }
+
+    @Override
     public boolean mouseScrolled(
             double mouseX, double mouseY,
             double horizontalAmount, double verticalAmount) {
         double x = virtualCoordinate(mouseX);
         double y = virtualCoordinate(mouseY);
+        if (hudModeDropdown != null && hudModeDropdown.mouseScrolled(
+                x, y, horizontalAmount, verticalAmount)) {
+            return true;
+        }
         if (x >= contentX && x < contentX + contentWidth
                 && y >= contentY && y < contentY + contentHeight) {
             int replacement = Math.max(0, Math.min(maximumScroll(),

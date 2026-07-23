@@ -5,6 +5,7 @@ import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -12,45 +13,72 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
-/** Compact scrollable branch selector shared by history views. */
-final class LumiBranchDropdown extends LumiButton {
-    private static final int ROW_HEIGHT = 18;
+/** Compact bounded selector shared by branch and settings views. */
+class LumiDropdown<T> extends LumiButton {
+    static final int ROW_HEIGHT = 18;
     private static final int MAX_ROWS = 8;
     private static final long HOVER_MILLIS = 120;
     private static final Identifier CHEVRON_DOWN = icon("chevron-down");
     private static final Identifier CHEVRON_UP = icon("chevron-up");
-    private final List<HistorySnapshotPayload.Branch> branches;
-    private final String selected;
-    private final Consumer<String> select;
+    private final List<T> options;
+    private final T selected;
+    private final Function<T, Component> label;
+    private final Consumer<T> select;
     private final int visibleRows;
+    private final boolean opensAbove;
     private final float[] hover;
     private final LumiScrollbar scrollbar;
     private int scroll;
     private boolean open;
     private long lastRenderNanos = System.nanoTime();
 
-    LumiBranchDropdown(
-            int x, int y, int width, int availableHeight,
-            List<HistorySnapshotPayload.Branch> branches,
-            String selected,
-            Consumer<String> select) {
+    LumiDropdown(
+            int x, int y, int width,
+            int availableAbove, int availableBelow,
+            List<T> options, T selected,
+            Function<T, Component> label, Consumer<T> select) {
         super(x, y, width, ROW_HEIGHT,
-                Component.literal(shortName(selected)),
-                button -> ((LumiBranchDropdown) button).open ^= true,
+                selectedLabel(label, selected),
+                button -> ((LumiDropdown<?>) button).open ^= true,
                 Kind.NORMAL);
-        this.branches = List.copyOf(Objects.requireNonNull(branches, "branches"));
+        this.options = List.copyOf(Objects.requireNonNull(options, "options"));
+        if (this.options.isEmpty()) {
+            throw new IllegalArgumentException("Dropdown options cannot be empty");
+        }
         this.selected = Objects.requireNonNull(selected, "selected");
+        this.label = Objects.requireNonNull(label, "label");
         this.select = Objects.requireNonNull(select, "select");
-        visibleRows = visibleRows(availableHeight, branches.size());
-        hover = new float[branches.size()];
-        int selectedIndex = java.util.stream.IntStream.range(0, branches.size())
-                .filter(index -> branches.get(index).name().equals(selected))
+        opensAbove = opensAbove(
+                availableAbove, availableBelow, this.options.size());
+        int available = opensAbove ? availableAbove : availableBelow;
+        visibleRows = visibleRows(available, this.options.size());
+        hover = new float[this.options.size()];
+        int selectedIndex = java.util.stream.IntStream.range(0, this.options.size())
+                .filter(index -> Objects.equals(this.options.get(index), selected))
                 .findFirst().orElse(0);
         scroll = Math.max(0, Math.min(
-                selectedIndex, branches.size() - visibleRows));
+                selectedIndex, this.options.size() - visibleRows));
         scrollbar = new LumiScrollbar(
-                x, y + ROW_HEIGHT, width, visibleRows * ROW_HEIGHT, () -> { });
+                x, menuY(), width, visibleRows * ROW_HEIGHT, () -> { });
         configureScrollbar();
+    }
+
+    static LumiDropdown<String> branches(
+            int x, int y, int width, int availableHeight,
+            List<HistorySnapshotPayload.Branch> branches,
+            String selected, Consumer<String> select) {
+        return new LumiDropdown<>(
+                x, y, width, 0, availableHeight,
+                branches.stream().map(HistorySnapshotPayload.Branch::name).toList(),
+                selected, value -> Component.literal(shortName(value)), select);
+    }
+
+    void open() {
+        open = true;
+    }
+
+    boolean isOpen() {
+        return open;
     }
 
     @Override
@@ -70,14 +98,15 @@ final class LumiBranchDropdown extends LumiButton {
         for (int row = 0; row < visibleRows; row++) {
             int index = scroll + row;
             int y = menuY() + row * ROW_HEIGHT;
-            String branch = branches.get(index).name();
+            T option = options.get(index);
             boolean rowHovered = mouseX >= getX()
                     && mouseX < getX() + getWidth() - LumiScrollbar.GUTTER_WIDTH
                     && mouseY >= y && mouseY < y + ROW_HEIGHT;
             hover[index] = hoverProgress(
                     hover[index], rowHovered, elapsedMillis);
+            boolean optionSelected = Objects.equals(option, selected);
             LumiTheme.outlined(graphics, getX(), y, getWidth(), ROW_HEIGHT,
-                    LumiTheme.WINDOW, branch.equals(selected)
+                    LumiTheme.WINDOW, optionSelected
                             ? LumiTheme.ACCENT : LumiTheme.INSET_BORDER);
             int hoverAlpha = Math.round(40 * hover[index]);
             if (hoverAlpha > 0) {
@@ -87,10 +116,10 @@ final class LumiBranchDropdown extends LumiButton {
                         hoverAlpha << 24 | 0x00ffffff);
             }
             graphics.drawString(font,
-                    font.plainSubstrByWidth(shortName(branch),
+                    font.plainSubstrByWidth(label.apply(option).getString(),
                             getWidth() - 12 - LumiScrollbar.GUTTER_WIDTH),
                     getX() + 5, y + 5,
-                    branch.equals(selected) ? LumiTheme.ACCENT : LumiTheme.TEXT,
+                    optionSelected ? LumiTheme.ACCENT : LumiTheme.TEXT,
                     false);
         }
         configureScrollbar();
@@ -103,7 +132,7 @@ final class LumiBranchDropdown extends LumiButton {
         if (open && menuHovered(click.x(), click.y())) {
             int index = scroll + ((int) click.y() - menuY()) / ROW_HEIGHT;
             open = false;
-            select.accept(branches.get(index).name());
+            select.accept(options.get(index));
             return true;
         }
         if (super.mouseClicked(click, doubled)) return true;
@@ -116,7 +145,7 @@ final class LumiBranchDropdown extends LumiButton {
             double mouseX, double mouseY,
             double horizontalAmount, double verticalAmount) {
         if (!open || !menuHovered(mouseX, mouseY)) return false;
-        int maximum = Math.max(0, branches.size() - visibleRows);
+        int maximum = Math.max(0, options.size() - visibleRows);
         scroll = Math.max(0, Math.min(maximum,
                 scroll + (verticalAmount < 0 ? 1 : -1)));
         configureScrollbar();
@@ -148,12 +177,13 @@ final class LumiBranchDropdown extends LumiButton {
     }
 
     private int menuY() {
-        return getY() + getHeight();
+        return opensAbove
+                ? getY() - visibleRows * ROW_HEIGHT : getY() + getHeight();
     }
 
     private void configureScrollbar() {
         scrollbar.configure(
-                branches.size(), visibleRows, scroll, value -> scroll = value);
+                options.size(), visibleRows, scroll, value -> scroll = value);
     }
 
     static float hoverProgress(
@@ -163,14 +193,28 @@ final class LumiBranchDropdown extends LumiButton {
                 current + (hovered ? step : -step)));
     }
 
-    static int visibleRows(int availableHeight, int branchCount) {
-        return Math.min(branchCount, Math.min(MAX_ROWS,
+    static int visibleRows(int availableHeight, int optionCount) {
+        return Math.min(optionCount, Math.min(MAX_ROWS,
                 Math.max(1, availableHeight / ROW_HEIGHT)));
+    }
+
+    static boolean opensAbove(
+            int availableAbove, int availableBelow, int optionCount) {
+        int wantedHeight = Math.min(MAX_ROWS, optionCount) * ROW_HEIGHT;
+        return availableBelow < wantedHeight && availableAbove > availableBelow;
     }
 
     static String shortName(String value) {
         int slash = value.lastIndexOf('/');
         return slash < 0 ? value : value.substring(slash + 1);
+    }
+
+    private static <T> Component selectedLabel(
+            Function<T, Component> label, T selected) {
+        return Objects.requireNonNull(
+                Objects.requireNonNull(label, "label").apply(
+                        Objects.requireNonNull(selected, "selected")),
+                "selected label");
     }
 
     private static Identifier icon(String name) {

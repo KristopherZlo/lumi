@@ -394,7 +394,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private void addBranchDropdown() {
         if (branchDropdownWidth < 24 || snapshot.branches().isEmpty()) return;
         int y = historyY + HISTORY_TOOLBAR_OFFSET;
-        addRenderableWidget(new LumiBranchDropdown(
+        addRenderableWidget(LumiDropdown.branches(
                 branchDropdownX, y, branchDropdownWidth,
                 historyY + historyHeight - y - CONTROL_HEIGHT,
                 snapshot.branches(), pagedHistory.branch().value(),

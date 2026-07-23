@@ -169,7 +169,7 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
 
     private void addBranchSelector(boolean left) {
         int y = layout.y() + 66;
-        addRenderableWidget(new LumiBranchDropdown(
+        addRenderableWidget(LumiDropdown.branches(
                 left ? leftX() : rightX(), y, columnWidth(),
                 layout.y() + layout.height() - 28 - y - 18,
                 snapshot.branches(), history(left).branch().value(),

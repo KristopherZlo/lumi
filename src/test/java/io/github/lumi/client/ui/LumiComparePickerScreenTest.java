@@ -25,7 +25,7 @@ class LumiComparePickerScreenTest {
         assertTrue(source.contains("history(left).next()"));
         assertTrue(source.contains("leftSelection"));
         assertTrue(source.contains("rightSelection"));
-        assertTrue(source.contains("new LumiBranchDropdown("));
+        assertTrue(source.contains("LumiDropdown.branches("));
         assertTrue(source.contains("history(left).selectBranch(branch)"));
         assertTrue(source.contains("\"textures/gui/icons/see-changes.png\""));
         assertTrue(source.contains("\"eye-open\""));

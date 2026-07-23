@@ -203,7 +203,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         List<HistorySnapshotPayload.Branch> branches = zoneBranches();
         if (branchDropdownWidth < 24 || branches.isEmpty()) return;
         int y = geometry.historyY() + LumiDashboardScreen.HISTORY_TOOLBAR_OFFSET;
-        addRenderableWidget(new LumiBranchDropdown(
+        addRenderableWidget(LumiDropdown.branches(
                 branchDropdownX, y, branchDropdownWidth,
                 geometry.historyY() + geometry.historyHeight()
                         - y - LumiDashboardScreen.CONTROL_HEIGHT,

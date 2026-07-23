@@ -14,6 +14,7 @@ final class LumiSettingRow extends Button {
     private final Component label;
     private final Component description;
     private final Component value;
+    private final int reservedControlWidth;
     private final boolean selected;
     private final boolean destructive;
 
@@ -24,7 +25,7 @@ final class LumiSettingRow extends Button {
         return new LumiSettingRow(
                 x, y, width, label, description,
                 Component.translatable(selected ? "options.on" : "options.off"),
-                selected, false, onPress);
+                0, selected, false, onPress);
     }
 
     static LumiSettingRow action(
@@ -32,17 +33,29 @@ final class LumiSettingRow extends Button {
             Component label, Component description, OnPress onPress) {
         return new LumiSettingRow(
                 x, y, width, label, description,
-                Component.empty(), false, true, onPress);
+                Component.empty(), 0, false, true, onPress);
+    }
+
+    static LumiSettingRow choice(
+            int x, int y, int width,
+            Component label, Component description,
+            int reservedControlWidth, OnPress onPress) {
+        return new LumiSettingRow(
+                x, y, width, label, description,
+                Component.empty(), Math.max(0, reservedControlWidth),
+                false, false, onPress);
     }
 
     private LumiSettingRow(
             int x, int y, int width,
             Component label, Component description, Component value,
+            int reservedControlWidth,
             boolean selected, boolean destructive, OnPress onPress) {
         super(x, y, width, HEIGHT, label, onPress, DEFAULT_NARRATION);
         this.label = label;
         this.description = description;
         this.value = value;
+        this.reservedControlWidth = reservedControlWidth;
         this.selected = selected;
         this.destructive = destructive;
         if (!description.getString().isBlank()) {
@@ -62,7 +75,7 @@ final class LumiSettingRow extends Button {
 
         var font = Minecraft.getInstance().font;
         int valueWidth = value.getString().isEmpty()
-                ? 0 : valueWidth(getWidth(), font.width(value));
+                ? reservedControlWidth : valueWidth(getWidth(), font.width(value));
         int textWidth = Math.max(0, getWidth() - valueWidth - 22);
         int textColor = active
                 ? destructive ? LumiTheme.DANGER : LumiTheme.TEXT

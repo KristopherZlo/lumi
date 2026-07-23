@@ -27,6 +27,12 @@ class LumiSettingsScreenTest {
         assertTrue(source.contains("luma.settings.automatic_versions"));
         assertTrue(source.contains("active.previewGenerationEnabled()"));
         assertTrue(source.contains("active.hudDisplayMode()"));
+        assertTrue(source.contains("HUD_MODES"));
+        assertTrue(source.contains("new LumiDropdown<>("));
+        assertTrue(source.contains("LumiSettingRow.choice("));
+        assertTrue(source.contains("hudModeDropdown.mouseClicked("));
+        assertTrue(source.contains("this::selectHudMode"));
+        assertFalse(source.contains("toggleWorkspaceHud"));
         assertTrue(source.contains("active.automaticVersionsEnabled()"));
         assertTrue(source.contains("toggleAutomaticVersions"));
         assertTrue(source.contains("luma.settings.telemetry_enabled"));

@@ -182,7 +182,7 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("pagedHistory.next()"));
         assertFalse(source.contains("addHistoryPageButtons"));
         assertTrue(source.contains("public boolean mouseScrolled("));
-        assertTrue(source.contains("new LumiBranchDropdown("));
+        assertTrue(source.contains("LumiDropdown.branches("));
         assertTrue(source.contains("pagedHistory.selectBranch(branch)"));
         assertTrue(source.contains("latestCreated()"));
         assertTrue(source.contains(
