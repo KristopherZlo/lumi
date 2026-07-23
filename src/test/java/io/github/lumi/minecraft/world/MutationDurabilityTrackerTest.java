@@ -166,6 +166,38 @@ class MutationDurabilityTrackerTest {
     }
 
     @Test
+    void pendingRevisionTracksOnlyBuilderRelevantMutations() throws Exception {
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), command -> { });
+        SectionKey ambient = new SectionKey(0, 0, 0);
+        SectionKey builder = new SectionKey(1, 0, 0);
+
+        long ambientGeneration = tracker.registerSectionMutation(
+                ambient, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBlockMutation(
+                new BlockPosition(1, 2, 3), ambientGeneration);
+        assertEquals(0, tracker.pendingRevision());
+
+        long builderGeneration = tracker.registerSectionMutation(
+                builder, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBuilderBlockMutation(
+                new BlockPosition(17, 2, 3), builderGeneration);
+        assertEquals(1, tracker.pendingRevision());
+        WorkingIndexSnapshot captured = tracker.builderSnapshot();
+
+        long followUp = tracker.registerSectionMutation(
+                builder, MutationDurabilityTrackerTest::airSection);
+        tracker.recordBlockMutation(new BlockPosition(18, 2, 3), followUp);
+        assertEquals(2, tracker.pendingRevision());
+
+        tracker.clearAndRevision(captured);
+        assertEquals(3, tracker.pendingRevision());
+        tracker.restoreAndRevision(captured);
+        assertEquals(4, tracker.pendingRevision());
+    }
+
+    @Test
     void ambientFollowUpDoesNotHideThePlayerTouchedBlock() throws Exception {
         MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
                 new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),

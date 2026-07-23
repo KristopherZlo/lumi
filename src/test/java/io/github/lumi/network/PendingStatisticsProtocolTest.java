@@ -21,9 +21,9 @@ class PendingStatisticsProtocolTest {
         UUID zoneId = new UUID(0, 3);
         CommitId head = new CommitId(new ObjectId("1".repeat(64)));
         var request = new PendingStatisticsRequestPayload(
-                requestId, "minecraft:overworld", workspaceId, head, 4);
+                requestId, "minecraft:overworld", workspaceId, head, 4, 9);
         var result = new PendingStatisticsPayload(
-                requestId, "minecraft:overworld", workspaceId, head, 4,
+                requestId, "minecraft:overworld", workspaceId, head, 4, 9,
                 new PendingChangeStatistics(10, 2, 7),
                 Map.of(zoneId, new PendingChangeStatistics(3, 1, 2)), "");
 
@@ -39,7 +39,7 @@ class PendingStatisticsProtocolTest {
                 new PendingStatisticsPayload(
                         UUID.randomUUID(), "minecraft:overworld",
                         UUID.randomUUID(),
-                        new CommitId(new ObjectId("2".repeat(64))), 0,
+                        new CommitId(new ObjectId("2".repeat(64))), 0, 0,
                         new PendingChangeStatistics(1, 0, 0),
                         Map.of(), "failed"));
     }

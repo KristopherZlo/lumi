@@ -53,6 +53,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private final Set<HistoryKey> pendingOrigins = new HashSet<>();
     private final ArrayDeque<PendingOriginWrite> originWrites = new ArrayDeque<>();
     private long indexRevision;
+    private long builderRevision;
     private long durableIndexRevision;
     private boolean originWriterScheduled;
     private boolean indexWriterScheduled;
@@ -146,6 +147,9 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             committedGenerations.remove(key);
             requirePublicationLocked(key, generation);
             indexRevision++;
+            if (builderGenerations.containsKey(key)) {
+                builderRevision++;
+            }
             scheduleIndex = !indexWriterScheduled;
             indexWriterScheduled = true;
         }
@@ -249,7 +253,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     }
 
     public synchronized long pendingRevision() {
-        return indexRevision;
+        return builderRevision;
     }
 
     public synchronized void recordBlockMutation(
@@ -293,6 +297,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         builderGenerations.put(key, generation);
         requirePublicationLocked(key, generation);
         indexRevision++;
+        builderRevision++;
         boolean scheduleIndex = !indexWriterScheduled;
         indexWriterScheduled = true;
         return scheduleIndex;
@@ -364,7 +369,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             WorkingIndexSnapshot before = working.snapshot();
             working.clearCaptured(captured);
             WorkingIndexSnapshot after = working.snapshot();
-            builderGenerations.entrySet().removeIf(entry -> {
+            boolean builderChanged = builderGenerations.entrySet().removeIf(entry -> {
                 Long generation = captured.generations().get(entry.getKey());
                 return generation != null && generation >= entry.getValue();
             });
@@ -380,6 +385,9 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 return generation != null && entry.getValue().generation() <= generation;
             });
             indexRevision++;
+            if (builderChanged) {
+                builderRevision++;
+            }
             revision = new IndexRevision(indexRevision);
             scheduleIndex = !indexWriterScheduled;
             indexWriterScheduled = true;
@@ -396,12 +404,21 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         IndexRevision revision;
         synchronized (this) {
             working.restoreCaptured(captured);
-            captured.generations().forEach((key, generation) -> {
-                builderGenerations.merge(key, generation, Math::max);
+            boolean builderChanged = false;
+            for (var entry : captured.generations().entrySet()) {
+                HistoryKey key = entry.getKey();
+                long generation = entry.getValue();
+                long restored = Math.max(
+                        generation, builderGenerations.getOrDefault(key, 0L));
+                builderChanged |= !Objects.equals(
+                        builderGenerations.put(key, restored), restored);
                 requirePublicationLocked(
                         key, Objects.requireNonNull(working.generation(key)));
-            });
+            }
             indexRevision++;
+            if (builderChanged) {
+                builderRevision++;
+            }
             revision = new IndexRevision(indexRevision);
             scheduleIndex = !indexWriterScheduled;
             indexWriterScheduled = true;
@@ -419,15 +436,20 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         boolean scheduleIndex;
         IndexRevision revision;
         synchronized (this) {
+            boolean builderChanged = false;
             for (HistoryKey key : restoredKeys) {
                 requireTracked(key);
                 long generation = working.markDirty(
                         key, committedGenerations.getOrDefault(key, 0L));
                 committedGenerations.remove(key);
-                builderGenerations.put(key, generation);
+                builderChanged |= !Objects.equals(
+                        builderGenerations.put(key, generation), generation);
                 requirePublicationLocked(key, generation);
             }
             indexRevision++;
+            if (builderChanged) {
+                builderRevision++;
+            }
             revision = new IndexRevision(indexRevision);
             scheduleIndex = !indexWriterScheduled;
             indexWriterScheduled = true;

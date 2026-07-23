@@ -68,6 +68,7 @@ final class HistorySnapshotFactory {
         HistorySnapshotPayload snapshot = new HistorySnapshotPayload(
                 runtime.level().dimension().identifier().toString(),
                 head.commit(), head.revision(), pending.totalKeys(),
+                runtime.pendingRevision(),
                 pending.blocks().stream()
                         .map(block -> new HistorySnapshotPayload.PendingBlock(
                                 block.x(), block.y(), block.z()))

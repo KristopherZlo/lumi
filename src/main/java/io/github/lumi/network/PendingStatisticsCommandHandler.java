@@ -37,13 +37,14 @@ final class PendingStatisticsCommandHandler {
             if (!request.dimensionId().equals(dimension)
                     || !request.workspaceId().equals(workspace)
                     || !request.head().equals(active.commit())
-                    || request.revision() != active.revision()) {
+                    || request.revision() != active.revision()
+                    || request.pendingRevision() != runtime.pendingRevision()) {
                 results.send(player, PendingStatisticsPayload.failure(
                         request, "History context changed; refresh"));
                 return;
             }
             runtime.startPendingStatistics(active, operation ->
-                    complete(player, request, operation, context));
+                    complete(player, runtime, request, operation, context));
         } catch (IOException | IllegalStateException failed) {
             results.send(player, PendingStatisticsPayload.failure(
                     request, failureMessage.apply(failed)));
@@ -52,6 +53,7 @@ final class PendingStatisticsCommandHandler {
 
     private void complete(
             ServerPlayer player,
+            FabricDimensionRuntime runtime,
             PendingStatisticsRequestPayload request,
             DimensionMutation outcome,
             ServerPlayNetworking.Context context) {
@@ -66,6 +68,10 @@ final class PendingStatisticsCommandHandler {
                 .map(failureMessage)
                 .orElseGet(() -> calculated.isPresent()
                         ? "" : "Pending statistics are unavailable");
+        if (error.isEmpty()
+                && request.pendingRevision() != runtime.pendingRevision()) {
+            error = "Pending changes moved while statistics were calculated";
+        }
         if (!error.isEmpty()) {
             results.send(player, PendingStatisticsPayload.failure(
                     request, error));
@@ -75,7 +81,7 @@ final class PendingStatisticsCommandHandler {
         results.send(player, new PendingStatisticsPayload(
                 request.requestId(), request.dimensionId(),
                 request.workspaceId(), request.head(), request.revision(),
-                result.workspace(), result.zones(), ""));
+                request.pendingRevision(), result.workspace(), result.zones(), ""));
     }
 
     @FunctionalInterface

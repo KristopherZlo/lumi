@@ -72,19 +72,47 @@ class ClientPendingStatisticsStoreTest {
         assertTrue(store.needsRequest(snapshot('2', 3)));
     }
 
+    @Test
+    void replacesAnExactResultWhenTheBuilderRevisionAdvances() {
+        ClientPendingStatisticsStore store = new ClientPendingStatisticsStore();
+        HistorySnapshotPayload before = snapshot('1', 2, 4);
+        UUID first = new UUID(0, 8);
+        store.begin(first, before);
+        assertTrue(store.accept(result(first, before)));
+
+        HistorySnapshotPayload changed = snapshot('1', 2, 5);
+        assertTrue(store.result(changed).isPresent());
+        assertTrue(store.needsRequest(changed));
+
+        UUID replacement = new UUID(0, 9);
+        store.begin(replacement, changed);
+        assertTrue(store.result(changed).isPresent());
+        assertFalse(store.needsRequest(changed));
+        assertFalse(store.accept(result(first, before)));
+        assertTrue(store.accept(result(replacement, changed)));
+    }
+
     private static PendingStatisticsPayload result(
             UUID request, HistorySnapshotPayload snapshot) {
         return new PendingStatisticsPayload(
                 request, snapshot.dimensionId(), snapshot.workspaceId(),
                 snapshot.head(), snapshot.revision(),
+                snapshot.pendingRevision(),
                 new PendingChangeStatistics(3, 2, 1), Map.of(), "");
     }
 
     private static HistorySnapshotPayload snapshot(char head, long revision) {
+        return snapshot(head, revision, 0);
+    }
+
+    private static HistorySnapshotPayload snapshot(
+            char head, long revision, long pendingRevision) {
         return new HistorySnapshotPayload(
                 "minecraft:overworld",
                 new CommitId(new ObjectId(String.valueOf(head).repeat(64))),
-                revision, 1, false, false, WORKSPACE, "Build", "main",
-                List.of(), List.of(), List.of(), List.of());
+                revision, 1, pendingRevision, List.of(),
+                java.util.Optional.empty(), false, false, WORKSPACE,
+                "Build", "main", List.of(), List.of(), List.of(), List.of(),
+                List.of());
     }
 }

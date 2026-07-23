@@ -18,7 +18,7 @@ public final class ClientPendingStatisticsStore {
                 snapshot, "snapshot");
         pending = new Pending(
                 requestId, current.dimensionId(), current.workspaceId(),
-                current.head(), current.revision());
+                current.head(), current.revision(), current.pendingRevision());
     }
 
     public synchronized boolean accept(PendingStatisticsPayload payload) {
@@ -28,7 +28,8 @@ public final class ClientPendingStatisticsStore {
                 || !pending.dimensionId().equals(payload.dimensionId())
                 || !pending.workspaceId().equals(payload.workspaceId())
                 || !pending.head().equals(payload.head())
-                || pending.revision() != payload.revision()) {
+                || pending.revision() != payload.revision()
+                || pending.pendingRevision() != payload.pendingRevision()) {
             return false;
         }
         pending = null;
@@ -57,11 +58,16 @@ public final class ClientPendingStatisticsStore {
                 && pending.dimensionId().equals(current.dimensionId())
                 && pending.workspaceId().equals(current.workspaceId())
                 && pending.head().equals(current.head())
-                && pending.revision() == current.revision();
+                && pending.revision() == current.revision()
+                && pending.pendingRevision() == current.pendingRevision();
     }
 
     public synchronized boolean needsRequest(HistorySnapshotPayload snapshot) {
-        return result(snapshot).isEmpty() && !pending(snapshot);
+        Optional<PendingStatisticsPayload> accepted = result(snapshot);
+        return !pending(snapshot)
+                && (accepted.isEmpty()
+                        || accepted.orElseThrow().pendingRevision()
+                                != snapshot.pendingRevision());
     }
 
     public synchronized void clear() {
@@ -74,5 +80,6 @@ public final class ClientPendingStatisticsStore {
             String dimensionId,
             UUID workspaceId,
             io.github.lumi.domain.model.CommitId head,
-            long revision) { }
+            long revision,
+            long pendingRevision) { }
 }

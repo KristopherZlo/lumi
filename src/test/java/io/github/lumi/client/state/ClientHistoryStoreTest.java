@@ -19,7 +19,7 @@ class ClientHistoryStoreTest {
         ClientHistoryStore store = new ClientHistoryStore();
         BlockBox pendingBounds = new BlockBox(0, 16, 32, 15, 31, 47);
         store.accept(new HistorySnapshotPayload(
-                "minecraft:overworld", id('1'), 3, 2, java.util.List.of(),
+                "minecraft:overworld", id('1'), 3, 2, 0, java.util.List.of(),
                 Optional.of(pendingBounds), false, false, new UUID(0, 1),
                 "Default workspace", "workspace/default/main",
                 java.util.List.of(), java.util.List.of(), java.util.List.of(),

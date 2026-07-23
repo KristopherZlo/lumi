@@ -22,6 +22,7 @@ public record HistorySnapshotPayload(
         CommitId head,
         long revision,
         int pendingKeys,
+        long pendingRevision,
         List<PendingBlock> pendingBlocks,
         Optional<BlockBox> pendingBounds,
         boolean operationActive,
@@ -65,7 +66,7 @@ public record HistorySnapshotPayload(
         if (dimensionId.isBlank() || dimensionId.length() > MAX_DIMENSION_BYTES) {
             throw new IllegalArgumentException("Invalid dimension ID");
         }
-        if (revision < 0 || pendingKeys < 0
+        if (revision < 0 || pendingKeys < 0 || pendingRevision < 0
                 || pendingBlocks.size() > MAX_PENDING_BLOCKS) {
             throw new IllegalArgumentException("Snapshot counters cannot be negative");
         }
@@ -96,9 +97,10 @@ public record HistorySnapshotPayload(
             List<Branch> branches,
             List<ZoneView> zones,
             List<Version> deletedVersions) {
-        this(dimensionId, head, revision, pendingKeys, pendingBlocks, Optional.empty(),
-                operationActive, recoveryPending, workspaceId, workspaceName, branchName,
-                workspaces, versions, branches, zones, deletedVersions);
+        this(dimensionId, head, revision, pendingKeys, 0, pendingBlocks,
+                Optional.empty(), operationActive, recoveryPending, workspaceId,
+                workspaceName, branchName, workspaces, versions, branches,
+                zones, deletedVersions);
     }
 
     public HistorySnapshotPayload(
@@ -191,6 +193,7 @@ public record HistorySnapshotPayload(
         buffer.writeUtf(head.hex(), ObjectId.HEX_LENGTH);
         buffer.writeVarLong(revision);
         buffer.writeVarInt(pendingKeys);
+        buffer.writeVarLong(pendingRevision);
         buffer.writeVarInt(pendingBlocks.size());
         pendingBlocks.forEach(block -> block.write(buffer));
         buffer.writeBoolean(pendingBounds.isPresent());
@@ -224,6 +227,7 @@ public record HistorySnapshotPayload(
         CommitId head = new CommitId(new ObjectId(buffer.readUtf(ObjectId.HEX_LENGTH)));
         long revision = buffer.readVarLong();
         int pending = buffer.readVarInt();
+        long pendingRevision = buffer.readVarLong();
         int pendingBlockCount = buffer.readVarInt();
         if (pendingBlockCount < 0 || pendingBlockCount > MAX_PENDING_BLOCKS) {
             throw new IllegalArgumentException("Invalid pending block count");
@@ -285,9 +289,10 @@ public record HistorySnapshotPayload(
             deleted.add(Version.read(buffer));
         }
         return new HistorySnapshotPayload(
-                dimension, head, revision, pending, pendingBlocks, pendingBounds,
-                active, recovery, workspace, workspaceName, branch, workspaces,
-                versions, branches, zones, deleted);
+                dimension, head, revision, pending, pendingRevision,
+                pendingBlocks, pendingBounds, active, recovery, workspace,
+                workspaceName, branch, workspaces, versions, branches, zones,
+                deleted);
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

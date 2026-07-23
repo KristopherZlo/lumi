@@ -462,7 +462,8 @@ public final class LumiClientNetworking {
         pendingStatistics.begin(requestId, snapshot);
         ClientPlayNetworking.send(new PendingStatisticsRequestPayload(
                 requestId, snapshot.dimensionId(), snapshot.workspaceId(),
-                snapshot.head(), snapshot.revision()));
+                snapshot.head(), snapshot.revision(),
+                snapshot.pendingRevision()));
         return requestId;
     }
 

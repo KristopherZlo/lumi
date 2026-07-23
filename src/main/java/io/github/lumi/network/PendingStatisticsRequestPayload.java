@@ -16,7 +16,8 @@ public record PendingStatisticsRequestPayload(
         String dimensionId,
         UUID workspaceId,
         CommitId head,
-        long revision) implements CustomPacketPayload {
+        long revision,
+        long pendingRevision) implements CustomPacketPayload {
     private static final int MAX_DIMENSION_BYTES = 256;
     public static final Type<PendingStatisticsRequestPayload> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath(
@@ -34,7 +35,7 @@ public record PendingStatisticsRequestPayload(
         if (dimensionId.isBlank()
                 || dimensionId.getBytes(java.nio.charset.StandardCharsets.UTF_8)
                         .length > MAX_DIMENSION_BYTES
-                || revision < 0) {
+                || revision < 0 || pendingRevision < 0) {
             throw new IllegalArgumentException(
                     "Invalid pending statistics request");
         }
@@ -46,6 +47,7 @@ public record PendingStatisticsRequestPayload(
         buffer.writeUUID(workspaceId);
         buffer.writeUtf(head.hex(), ObjectId.HEX_LENGTH);
         buffer.writeVarLong(revision);
+        buffer.writeVarLong(pendingRevision);
     }
 
     private static PendingStatisticsRequestPayload read(
@@ -56,6 +58,7 @@ public record PendingStatisticsRequestPayload(
                 buffer.readUUID(),
                 new CommitId(new ObjectId(
                         buffer.readUtf(ObjectId.HEX_LENGTH))),
+                buffer.readVarLong(),
                 buffer.readVarLong());
     }
 

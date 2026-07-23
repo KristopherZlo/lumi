@@ -335,7 +335,7 @@ class LumiPayloadCodecTest {
     @Test
     void snapshotAndTerminalEventRoundTrip() {
         HistorySnapshotPayload snapshot = new HistorySnapshotPayload(
-                "minecraft:overworld", id('a'), 7, 3,
+                "minecraft:overworld", id('a'), 7, 3, 11,
                 java.util.List.of(
                         new HistorySnapshotPayload.PendingBlock(1, 2, 3),
                         new HistorySnapshotPayload.PendingBlock(-4, -5, -6)),
