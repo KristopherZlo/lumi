@@ -5,12 +5,15 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.client.LumiClient;
 import io.github.lumi.client.ui.LumiRecoveryScreen;
 import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
+import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import io.github.lumi.network.OperationEventPayload;
+import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.OperationJournalRepository;
 import io.github.lumi.storage.repository.VersionPreviewRepository;
 import java.io.IOException;
@@ -20,6 +23,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
@@ -27,11 +31,18 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.storage.LevelData;
 
-/** Reopens one exact APPLYING fixture and resumes it through the player recovery UI. */
+/** Reopens one persisted pre-publication crash copy through the player recovery UI. */
 @SuppressWarnings("UnstableApiUsage")
 public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
     private static final int TIMEOUT_TICKS = 12_000;
@@ -58,6 +69,11 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
         BranchRef interruptedState;
         List<BlockPos> positions;
         UUID armorStand;
+        BlockPos chestPosition;
+        BlockPos poiPosition;
+        BlockPos lightPosition;
+        BlockPos respawnPosition;
+        int expectedBlockLight;
 
         long createdAt = System.nanoTime();
         try (TestSingleplayerContext world = context.worldBuilder()
@@ -79,7 +95,22 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             actions.placeBlocks("recovery_fixture_place", Items.STONE, positions);
             armorStand = actions.placeArmorStands(
                     List.of(positions.get(1).above())).getFirst();
+            chestPosition = positions.get(2).above();
+            poiPosition = positions.get(3).above();
+            lightPosition = positions.get(4).above();
+            respawnPosition = positions.get(5).above();
+            actions.placeBlocks(
+                    "recovery_fixture_chest", Items.CHEST, List.of(chestPosition));
+            fillChest(world.getServer(), chestPosition);
+            actions.placeBlocks(
+                    "recovery_fixture_poi", Items.LECTERN, List.of(poiPosition));
+            actions.placeBlocks(
+                    "recovery_fixture_light", Items.GLOWSTONE, List.of(lightPosition));
+            setRespawn(world.getServer(), respawnPosition);
             context.waitTicks(2);
+            expectedBlockLight = blockLight(world.getServer(), lightPosition);
+            require(expectedBlockLight > 0,
+                    "Recovery fixture did not create block lighting");
             require(actions.hasEntity(armorStand),
                     "Recovery fixture armor stand was not created");
             baseline = saveThroughUi(
@@ -94,8 +125,11 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                     .assertBreakAndPlace(
                             "player_packets_before_recovery", positions.getFirst());
             actions.destroyBlocks("recovery_fixture_break", positions);
+            actions.destroyBlocks("recovery_fixture_break_special",
+                    List.of(chestPosition, poiPosition, lightPosition));
             actions.attackEntity(
                     "recovery_fixture_remove_entity", armorStand, Items.DIAMOND_SWORD);
+            setRespawn(world.getServer(), positions.get(6).above());
             context.waitTicks(2);
             require(!actions.hasEntity(armorStand),
                     "Recovery fixture armor stand was not removed");
@@ -111,9 +145,17 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
 
         assertCleanReopen(context, worldSave, repository, interruptedState, report,
                 "clean_exit_before_fixture");
-        OperationJournal interrupted = createApplyingFixture(
-                repository, interruptedState, baseline);
-        report.event("fixture", "interrupted_restore", "created", 0, 0,
+        OperationJournal interrupted;
+        try (LumiCrashCopy crash = LumiCrashCopy.create(
+                worldSave.getSaveDirectory())) {
+            crash.captureRefs(repository);
+            createPersistedCrashCopy(
+                    context, worldSave, baseline, crash, report);
+            crash.install(worldSave.getSaveDirectory(), repository);
+            interrupted = createWorldPersistedFixture(
+                    repository, interruptedState, baseline);
+        }
+        report.event("fixture", "world_persisted_restore", "created", 0, 0,
                 interrupted.operationId().toString());
 
         BranchRef recoveredRef;
@@ -126,7 +168,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                     "Startup recovery did not retain the dimension freeze");
             require(recoveryJournal(recovered.getServer())
                             .filter(interrupted::equals).isPresent(),
-                    "Runtime did not expose the APPLYING fixture to recovery UI");
+                    "Runtime did not expose the WORLD_PERSISTED fixture to recovery UI");
 
             LumiClientOperationAwaiter operations = new LumiClientOperationAwaiter(
                     context, recovered.getServer(), TIMEOUT_TICKS);
@@ -139,7 +181,9 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             report.event("operation", "recovery_resume", "succeeded", 0,
                     elapsedMillis(recoveryAt), terminal.message());
 
-            assertRecoveredBlocks(recovered.getServer(), positions);
+            assertRecoveredWorld(
+                    recovered.getServer(), positions, chestPosition, poiPosition,
+                    lightPosition, expectedBlockLight, respawnPosition);
             LumiBehaviorActions actions = new LumiBehaviorActions(
                     recovered.getServer(), report);
             require(actions.hasEntity(armorStand),
@@ -257,15 +301,94 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
         }
     }
 
-    private static OperationJournal createApplyingFixture(
+    private static void createPersistedCrashCopy(
+            ClientGameTestContext context,
+            TestWorldSave worldSave,
+            BranchRef baseline,
+            LumiCrashCopy crash,
+            LumiBehaviorReport report) throws IOException {
+        long started = System.nanoTime();
+        try (TestSingleplayerContext restored = worldSave.open()) {
+            awaitHistory(context);
+            AtomicReference<Throwable> copyFailure = new AtomicReference<>();
+            AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
+            restored.getServer().computeOnServer(minecraft -> {
+                FabricDimensionRuntime runtime = runtime(minecraft);
+                runtime.operations().observeNextEnqueue((ticket, ignored) ->
+                        runtime.operations().observeTerminal(ticket, completed -> {
+                            if (completed.terminalState()
+                                    != MutationTerminalState.SUCCEEDED) {
+                                copyFailure.compareAndSet(null, new AssertionError(
+                                        "Crash-copy Restore did not succeed"));
+                                return;
+                            }
+                            try {
+                                crash.captureWorld(worldSave.getSaveDirectory());
+                            } catch (IOException failed) {
+                                copyFailure.compareAndSet(null, failed);
+                            }
+                        }));
+                ServerPlayer player = minecraft.getPlayerList().getPlayers().getFirst();
+                runtime.startRestore(
+                        baseline.commit(),
+                        new CommitAuthor(player.getUUID(), "Recovery crash gate"),
+                        operation -> terminal.set(operation.terminalState()));
+                return null;
+            });
+            awaitTerminal(context, terminal, "crash_copy_restore");
+            new LumiClientOperationAwaiter(
+                    context, restored.getServer(), TIMEOUT_TICKS)
+                    .awaitReleased("crash_copy_restore");
+            throwCopyFailure(copyFailure.get());
+        }
+        report.event("fixture", "world_persisted_copy", "captured", 0,
+                elapsedMillis(started), worldSave.getSaveDirectory().toString());
+    }
+
+    private static void awaitTerminal(
+            ClientGameTestContext context,
+            AtomicReference<MutationTerminalState> terminal,
+            String name) {
+        for (int tick = 0; tick < TIMEOUT_TICKS; tick++) {
+            MutationTerminalState state = terminal.get();
+            if (state != null) {
+                require(state == MutationTerminalState.SUCCEEDED,
+                        name + " ended as " + state);
+                return;
+            }
+            context.waitTick();
+        }
+        throw new AssertionError(name + " did not settle within "
+                + TIMEOUT_TICKS + " ticks");
+    }
+
+    private static void throwCopyFailure(Throwable failure) throws IOException {
+        if (failure == null) {
+            return;
+        }
+        if (failure instanceof IOException ioFailure) {
+            throw ioFailure;
+        }
+        if (failure instanceof RuntimeException runtimeFailure) {
+            throw runtimeFailure;
+        }
+        throw new IOException("Cannot capture Restore crash copy", failure);
+    }
+
+    private static OperationJournal createWorldPersistedFixture(
             Path repository, BranchRef checkpoint, BranchRef baseline) throws IOException {
         require(checkpoint.name().equals(baseline.name()),
                 "Recovery fixture commits belong to different branches");
+        BranchRef current = new BranchRefRepository(repository)
+                .read(checkpoint.name()).orElseThrow();
+        require(current.equals(checkpoint),
+                "Crash copy did not restore the pre-publication branch ref");
         OperationTarget target = new OperationTarget(
                 checkpoint.name(), checkpoint.commit(), checkpoint.revision(),
                 Optional.of(baseline.commit()), Optional.of(checkpoint.commit()));
         OperationJournal journal = new OperationJournal(
-                UUID.randomUUID(), OperationKind.RESTORE, OperationPhase.APPLYING, target);
+                UUID.randomUUID(), OperationKind.RESTORE,
+                OperationPhase.WORLD_PERSISTED, target);
         OperationJournalRepository journals = new OperationJournalRepository(repository);
         require(journals.read().isEmpty(),
                 "Clean world exit left an operation journal before fixture creation");
@@ -305,8 +428,14 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                 elapsedMillis(started), "");
     }
 
-    private static void assertRecoveredBlocks(
-            TestServerContext server, List<BlockPos> positions) {
+    private static void assertRecoveredWorld(
+            TestServerContext server,
+            List<BlockPos> positions,
+            BlockPos chestPosition,
+            BlockPos poiPosition,
+            BlockPos lightPosition,
+            int expectedBlockLight,
+            BlockPos respawnPosition) {
         List<String> mismatches = server.computeOnServer(minecraft -> {
             var level = minecraft.getPlayerList().getPlayers().getFirst().level();
             return positions.stream()
@@ -316,6 +445,61 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
         });
         require(mismatches.isEmpty(),
                 "Recovery did not restore every fixture block: " + mismatches);
+        server.runOnServer(minecraft -> {
+            ServerPlayer player = minecraft.getPlayerList().getPlayers().getFirst();
+            var level = player.level();
+            var blockEntity = level.getBlockEntity(chestPosition);
+            require(blockEntity instanceof ChestBlockEntity chest
+                            && chest.getItem(0).is(Items.DIAMOND)
+                            && chest.getItem(0).getCount() == 7,
+                    "Recovery did not restore exact chest contents");
+            var poi = level.getChunkSource().getPoiManager().getType(poiPosition);
+            require(poi.equals(PoiTypes.forState(level.getBlockState(poiPosition)))
+                            && poi.isPresent(),
+                    "Recovery did not restore the lectern POI");
+            require(level.getBrightness(
+                            LightLayer.BLOCK, lightPosition.relative(Direction.EAST))
+                            == expectedBlockLight,
+                    "Recovery did not restore exact block lighting");
+            var respawn = player.getRespawnConfig();
+            require(respawn != null
+                            && respawn.respawnData().dimension().equals(level.dimension())
+                            && respawn.respawnData().pos().equals(respawnPosition)
+                            && respawn.respawnData().yaw() == 0
+                            && respawn.respawnData().pitch() == 0
+                            && respawn.forced(),
+                    "Recovery did not restore player respawn data");
+        });
+    }
+
+    private static int blockLight(TestServerContext server, BlockPos lightPosition) {
+        return server.computeOnServer(minecraft -> {
+            var level = minecraft.getPlayerList().getPlayers().getFirst().level();
+            return level.getBrightness(
+                    LightLayer.BLOCK, lightPosition.relative(Direction.EAST));
+        });
+    }
+
+    private static void fillChest(TestServerContext server, BlockPos position) {
+        server.runOnServer(minecraft -> {
+            var level = minecraft.getPlayerList().getPlayers().getFirst().level();
+            var blockEntity = level.getBlockEntity(position);
+            require(blockEntity instanceof ChestBlockEntity,
+                    "Recovery fixture chest has no block entity");
+            ChestBlockEntity chest = (ChestBlockEntity) blockEntity;
+            chest.setItem(0, new ItemStack(Items.DIAMOND, 7));
+            chest.setChanged();
+        });
+    }
+
+    private static void setRespawn(TestServerContext server, BlockPos position) {
+        server.runOnServer(minecraft -> {
+            ServerPlayer player = minecraft.getPlayerList().getPlayers().getFirst();
+            var data = LevelData.RespawnData.of(
+                    player.level().dimension(), position, 0, 0);
+            player.setRespawnPosition(
+                    new ServerPlayer.RespawnConfig(data, true), false);
+        });
     }
 
     private static Optional<OperationJournal> recoveryJournal(TestServerContext server) {
