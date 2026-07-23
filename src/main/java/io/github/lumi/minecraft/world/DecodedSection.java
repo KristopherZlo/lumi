@@ -58,6 +58,10 @@ public final class DecodedSection {
         return new LevelChunkSection(preparedStates.copy(), current.getBiomes());
     }
 
+    PalettedContainer<BlockState> copyBlockStates() {
+        return preparedStates.copy();
+    }
+
     DecodedSection prepareAgainst(
             SectionBlob source,
             SectionBlob before,

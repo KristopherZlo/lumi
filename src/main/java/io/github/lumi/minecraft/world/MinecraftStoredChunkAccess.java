@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,10 +15,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.Mth;
-import net.minecraft.util.SimpleBitStorage;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainerFactory;
@@ -30,6 +26,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 final class MinecraftStoredChunkAccess {
     private final ServerLevel level;
     private final PalettedContainerFactory containers;
+    private final MinecraftStoredChunkPatcher patcher;
     private final Map<ChunkCoordinate, ChunkLoadGate.Lease> gates =
             new ConcurrentHashMap<>();
     private volatile String phase = "loaded apply";
@@ -37,6 +34,9 @@ final class MinecraftStoredChunkAccess {
     MinecraftStoredChunkAccess(ServerLevel level) {
         this.level = Objects.requireNonNull(level, "level");
         containers = PalettedContainerFactory.create(level.registryAccess());
+        patcher = new MinecraftStoredChunkPatcher(
+                containers.blockStatesContainerCodec(),
+                level.getMinY(), level.getHeight());
     }
 
     CompletableFuture<StoredChunkApplyResult> apply(
@@ -104,12 +104,12 @@ final class MinecraftStoredChunkAccess {
                 return Preparation.fallback(StoredChunkApplyResult.Outcome.MISSING);
             }
             try {
-                PatchedChunk patched = patch(
+                MinecraftStoredChunkPatcher.Patch patched = patcher.patch(
                         position, stored.orElseThrow(), target);
                 return Preparation.ready(new PreparedWrite(
                         coordinate, position, target,
                         patched.tag(), patched.heightmaps()));
-            } catch (UnsupportedChunk unsupported) {
+            } catch (MinecraftStoredChunkPatcher.UnsupportedChunk unsupported) {
                 release(coordinate);
                 return Preparation.fallback(
                         StoredChunkApplyResult.Outcome.UNSUPPORTED_STORAGE);
@@ -215,10 +215,6 @@ final class MinecraftStoredChunkAccess {
             CompoundTag patched,
             Map<Heightmap.Types, long[]> heightmaps) { }
 
-    private record PatchedChunk(
-            CompoundTag tag,
-            Map<Heightmap.Types, long[]> heightmaps) { }
-
     private record Preparation(
             PreparedWrite write,
             StoredChunkApplyResult.Outcome fallback) {
@@ -233,38 +229,6 @@ final class MinecraftStoredChunkAccess {
 
     String phase() {
         return phase;
-    }
-
-    private PatchedChunk patch(
-            ChunkPos position,
-            CompoundTag source,
-            Map<SectionKey, DecodedSection> target) throws IOException, UnsupportedChunk {
-        SerializableChunkData data = SerializableChunkData.parse(level, containers, source);
-        if (!position.equals(data.chunkPos())) {
-            throw new IOException("Stored chunk position mismatch: " + data.chunkPos());
-        }
-        Map<Integer, SerializableChunkData.SectionData> sections = sectionMap(data);
-        boolean lightChanged = false;
-        for (var entry : target.entrySet()) {
-            int sectionY = entry.getKey().sectionY();
-            var stored = sections.get(sectionY);
-            if (stored == null || stored.chunkSection() == null) {
-                throw new UnsupportedChunk();
-            }
-            DecodedSection decoded = entry.getValue();
-            boolean changedLight = decoded.preparedDelta().lightChanged();
-            lightChanged |= changedLight;
-            sections.put(sectionY, new SerializableChunkData.SectionData(
-                    sectionY,
-                    decoded.replacementFor(stored.chunkSection()),
-                    changedLight ? null : stored.blockLight(),
-                    changedLight ? null : stored.skyLight()));
-        }
-        Map<Heightmap.Types, long[]> heightmaps = recalculateHeightmaps(
-                data, sections, target);
-        CompoundTag tag = copy(data, sections, heightmaps,
-                replaceBlockEntities(data.blockEntities(), target), lightChanged).write();
-        return new PatchedChunk(tag, heightmaps);
     }
 
     String mismatch(
@@ -320,110 +284,11 @@ final class MinecraftStoredChunkAccess {
         return null;
     }
 
-    private Map<Heightmap.Types, long[]> recalculateHeightmaps(
-            SerializableChunkData data,
-            Map<Integer, SerializableChunkData.SectionData> sections,
-            Map<SectionKey, DecodedSection> target) {
-        int[] highestChangedY = new int[256];
-        Arrays.fill(highestChangedY, Integer.MIN_VALUE);
-        target.forEach((key, section) -> {
-            for (int index : section.preparedDelta().heightmapIndexes()) {
-                int column = (index & 15) | (((index >>> 4) & 15) << 4);
-                int worldY = key.sectionY() * 16 + ((index >>> 8) & 15);
-                highestChangedY[column] = Math.max(highestChangedY[column], worldY);
-            }
-        });
-        int bits = Mth.ceillog2(level.getHeight() + 1);
-        Map<Heightmap.Types, SimpleBitStorage> storages = new HashMap<>();
-        data.heightmaps().forEach((type, raw) -> {
-            var storage = new SimpleBitStorage(bits, 256, raw.clone());
-            storages.put(type, storage);
-        });
-        for (int column = 0; column < highestChangedY.length; column++) {
-            int startY = highestChangedY[column];
-            if (startY == Integer.MIN_VALUE) {
-                continue;
-            }
-            List<Heightmap.Types> pending = new ArrayList<>();
-            for (var entry : storages.entrySet()) {
-                Heightmap.Types type = entry.getKey();
-                SimpleBitStorage storage = entry.getValue();
-                int currentTopY = storage.get(column) + level.getMinY() - 1;
-                if (currentTopY <= startY) {
-                    pending.add(type);
-                }
-            }
-            int x = column & 15;
-            int z = (column >>> 4) & 15;
-            for (int y = startY; y >= level.getMinY() && !pending.isEmpty(); y--) {
-                var section = sections.get(Math.floorDiv(y, 16));
-                BlockState state = section == null || section.chunkSection() == null
-                        ? Blocks.AIR.defaultBlockState()
-                        : section.chunkSection().getBlockState(
-                                x, Math.floorMod(y, 16), z);
-                var iterator = pending.iterator();
-                while (iterator.hasNext()) {
-                    Heightmap.Types type = iterator.next();
-                    if (type.isOpaque().test(state)) {
-                        storages.get(type).set(
-                                column, y - level.getMinY() + 1);
-                        iterator.remove();
-                    }
-                }
-            }
-            for (Heightmap.Types type : pending) {
-                storages.get(type).set(column, 0);
-            }
-        }
-        Map<Heightmap.Types, long[]> recalculated = new HashMap<>();
-        storages.forEach((type, storage) ->
-                recalculated.put(type, storage.getRaw()));
-        return Map.copyOf(recalculated);
-    }
-
-    private static SerializableChunkData copy(
-            SerializableChunkData data,
-            Map<Integer, SerializableChunkData.SectionData> sections,
-            Map<Heightmap.Types, long[]> heightmaps,
-            List<CompoundTag> blockEntities,
-            boolean lightChanged) {
-        return new SerializableChunkData(
-                data.containerFactory(), data.chunkPos(), data.minSectionY(),
-                data.lastUpdateTime(), data.inhabitedTime(), data.chunkStatus(),
-                data.blendingData(), data.belowZeroRetrogen(), data.upgradeData(),
-                data.carvingMask(), heightmaps, data.packedTicks(),
-                data.postProcessingSections(), data.lightCorrect() && !lightChanged,
-                List.copyOf(sections.values()), data.entities(), blockEntities,
-                data.structureData());
-    }
-
     private static Map<Integer, SerializableChunkData.SectionData> sectionMap(
             SerializableChunkData data) {
         Map<Integer, SerializableChunkData.SectionData> sections = new java.util.TreeMap<>();
         data.sectionData().forEach(section -> sections.put(section.y(), section));
         return sections;
-    }
-
-    private static List<CompoundTag> replaceBlockEntities(
-            List<CompoundTag> stored,
-            Map<SectionKey, DecodedSection> target) {
-        Set<Integer> targetSections = new HashSet<>();
-        target.keySet().forEach(key -> targetSections.add(key.sectionY()));
-        List<CompoundTag> replaced = new ArrayList<>();
-        stored.stream().filter(tag -> !targetSections.contains(
-                Math.floorDiv(tag.getIntOr("y", 0), 16)))
-                .map(CompoundTag::copy).forEach(replaced::add);
-        for (var section : target.entrySet()) {
-            SectionKey key = section.getKey();
-            section.getValue().blockEntities().forEach((index, nbt) -> {
-                CompoundTag full = nbt.copy();
-                full.putInt("x", key.chunkX() * 16 + (index & 15));
-                full.putInt("y", key.sectionY() * 16 + ((index >>> 8) & 15));
-                full.putInt("z", key.chunkZ() * 16 + ((index >>> 4) & 15));
-                replaced.add(full);
-            });
-        }
-        return List.copyOf(replaced);
     }
 
     private static Map<Integer, CompoundTag> blockEntities(
@@ -463,6 +328,4 @@ final class MinecraftStoredChunkAccess {
         }
         phase = "loaded apply";
     }
-
-    private static final class UnsupportedChunk extends Exception { }
 }
