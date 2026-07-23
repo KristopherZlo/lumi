@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.EntityChunkKey;
 import java.util.ArrayList;
@@ -12,44 +13,48 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.entity.EntityAccess;
 import net.minecraft.world.level.entity.EntityInLevelCallback;
-import net.minecraft.world.phys.AABB;
 import org.junit.jupiter.api.Test;
 
 class ChunkEntityLookupTest {
     @Test
-    void queriesOnlyTheChunkBoundsAndFiltersNeighboringChonkyEntities() {
+    void queriesAllSectionsOnlyForTheRequestedChunk() {
         FakeEntity inside = new FakeEntity(new UUID(0, 1), new BlockPos(35, 70, -29));
         FakeEntity neighbor = new FakeEntity(new UUID(0, 2), new BlockPos(48, 70, -29));
         RecordingAccess access = new RecordingAccess(List.of(inside, neighbor));
-        ChunkEntityLookup lookup = new ChunkEntityLookup(-64, 320, access);
+        ChunkEntityLookup lookup = new ChunkEntityLookup(access);
 
         List<UUID> result = lookup.inChunk(new EntityChunkKey(2, -2))
                 .map(EntityAccess::getUUID).toList();
 
         assertEquals(List.of(inside.getUUID()), result);
-        assertEquals(new AABB(32, -64, -32, 48, 320, -16), access.bounds);
+        assertEquals(new EntityChunkKey(2, -2), access.key);
         assertEquals(1, access.collectCalls);
-        assertEquals(inside, lookup.byId(inside.getUUID()).orElseThrow());
+        assertEquals(java.util.Optional.empty(), lookup.byId(inside.getUUID()));
+        assertTrue(lookup.isKnown(inside.getUUID()));
     }
 
     private static final class RecordingAccess implements ChunkEntityLookup.Access {
         private final List<EntityAccess> candidates;
         private int collectCalls;
-        private AABB bounds;
+        private EntityChunkKey key;
 
         private RecordingAccess(List<EntityAccess> candidates) {
             this.candidates = new ArrayList<>(candidates);
         }
 
-        @Override public void collect(AABB bounds, Consumer<EntityAccess> consumer) {
+        @Override public void collect(
+                EntityChunkKey key, Consumer<EntityAccess> consumer) {
             collectCalls++;
-            this.bounds = bounds;
+            this.key = key;
             candidates.forEach(consumer);
         }
 
         @Override public EntityAccess get(UUID id) {
-            return candidates.stream().filter(entity -> entity.getUUID().equals(id))
-                    .findFirst().orElse(null);
+            return null;
+        }
+
+        @Override public boolean contains(UUID id) {
+            return candidates.stream().anyMatch(entity -> entity.getUUID().equals(id));
         }
     }
 
@@ -65,7 +70,9 @@ class ChunkEntityLookupTest {
         @Override public int getId() { return id.hashCode(); }
         @Override public UUID getUUID() { return id; }
         @Override public BlockPos blockPosition() { return position; }
-        @Override public AABB getBoundingBox() { return new AABB(position); }
+        @Override public net.minecraft.world.phys.AABB getBoundingBox() {
+            return new net.minecraft.world.phys.AABB(position);
+        }
         @Override public void setLevelCallback(EntityInLevelCallback callback) { }
         @Override public Stream<? extends EntityAccess> getSelfAndPassengers() {
             return Stream.of(this);

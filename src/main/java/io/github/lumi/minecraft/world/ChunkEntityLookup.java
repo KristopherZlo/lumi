@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.mixin.PersistentEntityManagerPersistenceAccessor;
 import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
 import java.util.ArrayList;
 import java.util.Objects;
@@ -9,43 +10,47 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.entity.EntityAccess;
-import net.minecraft.world.phys.AABB;
 
-/** Uses Minecraft's entity-section index instead of scanning every entity in a level. */
+/** Queries all indexed entity sections in one chunk, including inaccessible sections. */
 public final class ChunkEntityLookup {
-    private final int minY;
-    private final int maxY;
     private final Access access;
 
-    public ChunkEntityLookup(int minY, int maxY, Access access) {
-        this.minY = minY;
-        this.maxY = maxY;
+    public ChunkEntityLookup(Access access) {
         this.access = Objects.requireNonNull(access, "access");
     }
 
+    @SuppressWarnings("unchecked")
     public static ChunkEntityLookup forLevel(ServerLevel level) {
         Objects.requireNonNull(level, "level");
-        var getter = ((ServerLevelEntityManagerAccessor) level)
-                .lumi$entityManager().getEntityGetter();
-        return new ChunkEntityLookup(level.getMinY(), level.getMaxY(), new Access() {
-            @Override public void collect(AABB bounds, Consumer<EntityAccess> consumer) {
-                getter.get(bounds, entity -> consumer.accept(entity));
+        var manager = ((ServerLevelEntityManagerAccessor) level).lumi$entityManager();
+        var sections = ((PersistentEntityManagerPersistenceAccessor<Entity>) manager)
+                .lumi$sectionStorage();
+        return new ChunkEntityLookup(new Access() {
+            @Override public void collect(
+                    EntityChunkKey key, Consumer<EntityAccess> consumer) {
+                sections.getExistingSectionsInChunk(
+                                ChunkPos.asLong(key.chunkX(), key.chunkZ()))
+                        .flatMap(section -> section.getEntities())
+                        .forEach(consumer);
             }
 
             @Override public EntityAccess get(UUID id) {
-                return getter.get(id);
+                return manager.getEntityGetter().get(id);
+            }
+
+            @Override public boolean contains(UUID id) {
+                return manager.isLoaded(id);
             }
         });
     }
 
     public Stream<EntityAccess> inChunk(EntityChunkKey key) {
         Objects.requireNonNull(key, "key");
-        int minX = key.chunkX() << 4;
-        int minZ = key.chunkZ() << 4;
         var matches = new ArrayList<EntityAccess>();
-        access.collect(new AABB(
-                minX, minY, minZ, minX + 16, maxY, minZ + 16), entity -> {
+        access.collect(key, entity -> {
                     var position = entity.blockPosition();
                     if (position.getX() >> 4 == key.chunkX()
                             && position.getZ() >> 4 == key.chunkZ()) {
@@ -59,9 +64,15 @@ public final class ChunkEntityLookup {
         return Optional.ofNullable(access.get(Objects.requireNonNull(id, "id")));
     }
 
+    public boolean isKnown(UUID id) {
+        return access.contains(Objects.requireNonNull(id, "id"));
+    }
+
     public interface Access {
-        void collect(AABB bounds, Consumer<EntityAccess> consumer);
+        void collect(EntityChunkKey key, Consumer<EntityAccess> consumer);
 
         EntityAccess get(UUID id);
+
+        boolean contains(UUID id);
     }
 }

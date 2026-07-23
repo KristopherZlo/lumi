@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.world;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import java.io.IOException;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -44,12 +45,8 @@ final class MinecraftEntityRestorer {
     }
 
     void remove(EntityChunkKey key, UUID id) throws IOException {
-        Optional<Entity> current = lookup.inChunk(Objects.requireNonNull(key, "key"))
-                .filter(Entity.class::isInstance)
-                .map(Entity.class::cast)
-                .filter(entity -> entity.getUUID().equals(id))
-                .filter(entity -> !entity.isRemoved())
-                .findFirst();
+        Optional<Entity> current = find(
+                Objects.requireNonNull(key, "key"), Objects.requireNonNull(id, "id"));
         if (current.isPresent()) {
             removeGraph(current.orElseThrow());
         }
@@ -58,13 +55,12 @@ final class MinecraftEntityRestorer {
     void restore(EntityChunkKey key, DecodedEntity decoded) throws IOException {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(decoded, "decoded");
-        Optional<Entity> existing = find(decoded.id());
+        Optional<Entity> existing = find(key, decoded.id());
         if (existing.isPresent()) {
             Entity current = existing.orElseThrow();
             if (matches(current, key, decoded.state())) {
                 return;
             }
-            removeGraph(current);
         }
 
         Entity replacement = EntityType.loadEntityRecursive(
@@ -74,6 +70,25 @@ final class MinecraftEntityRestorer {
                 || replacement.chunkPosition().x != key.chunkX()
                 || replacement.chunkPosition().z != key.chunkZ()) {
             throw new IOException("Restored entity does not match " + key + ": " + decoded.id());
+        }
+        List<Entity> replacementGraph = replacement.getSelfAndPassengers().toList();
+        var replacementIds = new LinkedHashSet<UUID>();
+        replacementGraph.forEach(entity -> replacementIds.add(entity.getUUID()));
+        if (replacementIds.size() != replacementGraph.size()) {
+            throw new IOException(
+                    "Restored entity graph contains duplicate UUIDs: " + decoded.id());
+        }
+        for (UUID id : replacementIds) {
+            Optional<Entity> current = find(key, id);
+            if (current.isPresent()) {
+                removeGraph(current.orElseThrow());
+            }
+        }
+        List<UUID> conflicts = replacementIds.stream()
+                .filter(lookup::isKnown)
+                .toList();
+        if (!conflicts.isEmpty()) {
+            throw new IOException("Cannot replace indexed entity UUIDs " + conflicts);
         }
         boolean[] added = {false};
         freeze.runAuthorized(
@@ -89,6 +104,15 @@ final class MinecraftEntityRestorer {
                 .map(Entity.class::cast)
                 .filter(entity -> !entity.isRemoved())
                 .findFirst();
+    }
+
+    private Optional<Entity> find(EntityChunkKey key, UUID id) {
+        return find(id).or(() -> lookup.inChunk(key)
+                .filter(Entity.class::isInstance)
+                .map(Entity.class::cast)
+                .filter(entity -> entity.getUUID().equals(id))
+                .filter(entity -> !entity.isRemoved())
+                .findFirst());
     }
 
     private boolean matches(
