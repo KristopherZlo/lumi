@@ -20,6 +20,9 @@ class LumiSelectionOverlayTest {
         assertTrue(source.contains("LumiSelectionTool.held(client)"));
         assertTrue(source.contains("client.screen != null"));
         assertTrue(source.contains("FILL_ALPHA = 42"));
-        assertTrue(source.contains("2.5F"));
+        assertTrue(source.contains("FRAME_ALPHA = 255"));
+        assertTrue(source.contains("FRAME_RADIUS = 0.04F"));
+        assertTrue(source.contains("renderFrame("));
+        assertTrue(!source.contains("ShapeRenderer.renderShape"));
     }
 }

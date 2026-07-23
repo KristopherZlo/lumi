@@ -14,6 +14,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import org.lwjgl.glfw.GLFW;
@@ -152,7 +153,16 @@ public final class LumiSelectionTool {
     }
 
     private static Optional<BlockPosition> target(Minecraft client) {
-        if (!(client.hitResult instanceof BlockHitResult block)
+        var eye = client.player.getEyePosition(1.0F);
+        double distance = targetDistance(
+                client.options.getEffectiveRenderDistance());
+        var hit = client.level.clip(new ClipContext(
+                eye,
+                eye.add(client.player.getViewVector(1.0F).scale(distance)),
+                ClipContext.Block.OUTLINE,
+                ClipContext.Fluid.NONE,
+                client.player));
+        if (!(hit instanceof BlockHitResult block)
                 || block.getType() != HitResult.Type.BLOCK) {
             return Optional.empty();
         }
@@ -163,6 +173,11 @@ public final class LumiSelectionTool {
         }
         return Optional.of(new BlockPosition(
                 position.getX(), position.getY(), position.getZ()));
+    }
+
+    static double targetDistance(int renderDistance) {
+        return (Math.max(1, renderDistance) + 1)
+                * 16.0 * Math.sqrt(2.0);
     }
 
     private static Optional<InteractionHand> toolHand(Minecraft client) {
