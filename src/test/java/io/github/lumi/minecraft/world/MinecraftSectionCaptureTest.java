@@ -39,12 +39,13 @@ class MinecraftSectionCaptureTest {
     }
 
     @Test
-    void canonicalBlockEntityNbtKeepsTypeButRemovesImplicitWorldPosition() throws Exception {
+    void canonicalBlockEntityNbtRemovesVanillaStorageMetadata() throws Exception {
         CompoundTag saved = new CompoundTag();
         saved.putString("id", "minecraft:chest");
         saved.putInt("x", 32);
         saved.putInt("y", 64);
         saved.putInt("z", -16);
+        saved.putBoolean("keepPacked", false);
         saved.putString("custom", "value");
 
         CompoundTag canonical = MinecraftNbtCodec.decode(
@@ -55,7 +56,9 @@ class MinecraftSectionCaptureTest {
         assertFalse(canonical.contains("x"));
         assertFalse(canonical.contains("y"));
         assertFalse(canonical.contains("z"));
+        assertFalse(canonical.contains("keepPacked"));
         assertTrue(saved.contains("x"));
+        assertTrue(saved.contains("keepPacked"));
     }
 
     @Test

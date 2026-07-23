@@ -70,11 +70,16 @@ public final class MinecraftSectionCapture {
     }
 
     static CanonicalNbt canonicalBlockEntityNbt(CompoundTag saved) throws IOException {
+        return MinecraftNbtCodec.encode(canonicalBlockEntityTag(saved));
+    }
+
+    static CompoundTag canonicalBlockEntityTag(CompoundTag saved) {
         CompoundTag canonical = saved.copy();
         canonical.remove("x");
         canonical.remove("y");
         canonical.remove("z");
-        return MinecraftNbtCodec.encode(canonical);
+        canonical.remove("keepPacked");
+        return canonical;
     }
 
     static boolean matchesStates(LevelChunkSection section, List<BlockState> expected) {

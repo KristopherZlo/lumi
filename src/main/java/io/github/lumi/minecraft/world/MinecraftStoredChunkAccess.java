@@ -366,10 +366,8 @@ final class MinecraftStoredChunkAccess {
             }
             int x = source.getIntOr("x", 0);
             int z = source.getIntOr("z", 0);
-            CompoundTag canonical = source.copy();
-            canonical.remove("x");
-            canonical.remove("y");
-            canonical.remove("z");
+            CompoundTag canonical =
+                    MinecraftSectionCapture.canonicalBlockEntityTag(source);
             result.put((Math.floorMod(y, 16) << 8)
                     | (Math.floorMod(z, 16) << 4) | Math.floorMod(x, 16), canonical);
         }
