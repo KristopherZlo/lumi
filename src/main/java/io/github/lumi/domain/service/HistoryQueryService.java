@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -139,10 +140,13 @@ public final class HistoryQueryService {
         validateLimit(limit);
         CommitId next = refs.read(branch).orElseThrow(
                 () -> new IOException("Branch does not exist: " + branch)).commit();
-        CommitId head = next;
         ArrayList<HistoryEntry> history = new ArrayList<>(Math.min(limit, 64));
+        List<CommitId> forwardRoots = forwardHistory.roots(branch, workspaceId);
+        Set<CommitId> currentLineage = new HashSet<>();
         int visited = 0;
-        while (history.size() < limit && visited++ < MAX_QUERY) {
+        while ((history.size() < limit || !forwardRoots.isEmpty())
+                && visited++ < MAX_QUERY) {
+            currentLineage.add(next);
             var commit = commits.read(next);
             if (workspaceId.isPresent()
                     && !commit.workspaceId().equals(workspaceId.orElseThrow())) {
@@ -151,7 +155,8 @@ public final class HistoryQueryService {
                 }
                 break;
             }
-            if (tombstones.read(next).isEmpty() && included.test(commit)) {
+            if (history.size() < limit
+                    && tombstones.read(next).isEmpty() && included.test(commit)) {
                 history.add(new HistoryEntry(next, commit));
             }
             if (commit.parents().isEmpty()) {
@@ -161,16 +166,16 @@ public final class HistoryQueryService {
         }
         Map<CommitId, HistoryEntry> combined = new LinkedHashMap<>();
         history.forEach(entry -> combined.put(entry.id(), entry));
-        for (CommitId root : forwardHistory.roots(branch, workspaceId)) {
+        for (CommitId root : forwardRoots) {
             if (visited >= MAX_QUERY) {
                 break;
             }
             ArrayList<HistoryEntry> forward = new ArrayList<>();
             next = root;
-            boolean reachesHead = false;
+            boolean rejoinsCurrentLineage = false;
             while (visited++ < MAX_QUERY) {
-                if (next.equals(head)) {
-                    reachesHead = true;
+                if (currentLineage.contains(next)) {
+                    rejoinsCurrentLineage = true;
                     break;
                 }
                 var commit = commits.read(next);
@@ -186,7 +191,7 @@ public final class HistoryQueryService {
                 }
                 next = commit.parents().getFirst();
             }
-            if (reachesHead) {
+            if (rejoinsCurrentLineage) {
                 forward.forEach(entry -> combined.putIfAbsent(entry.id(), entry));
             }
         }

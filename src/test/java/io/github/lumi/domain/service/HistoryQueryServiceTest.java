@@ -18,6 +18,8 @@ import io.github.lumi.storage.repository.TombstoneRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -96,6 +98,43 @@ class HistoryQueryServiceTest {
 
         assertEquals(List.of(third, second, first),
                 history.stream().map(HistoryEntry::id).toList());
+    }
+
+    @Test
+    void keepsForwardHistoryVisibleAfterSavingFromTheRestoredAncestor()
+            throws Exception {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        CommitId initial = commits.write(commit(tree, List.of(), "Initial", 1));
+        CommitId oldSecond = commits.write(commit(
+                tree, List.of(initial), "Old second", 8));
+        CommitId oldHead = commits.write(commit(
+                tree, List.of(oldSecond), "Old head", 9));
+        BranchName branch = new BranchName("main");
+        var oldRef = refs.create(branch, oldHead);
+        new ForwardHistoryService(commits, refs).retain(oldRef);
+        var currentRef = refs.compareAndSet(oldRef, initial);
+        List<CommitId> current = new ArrayList<>();
+        for (int second = 2; second <= 7; second++) {
+            CommitId saved = commits.write(commit(
+                    tree, List.of(currentRef.commit()), "Current " + second, second));
+            current.add(saved);
+            currentRef = refs.compareAndSet(currentRef, saved);
+        }
+
+        List<HistoryEntry> history = query(commits, refs)
+                .firstParent(branch, new UUID(0, 2), 10);
+        List<CommitId> expected = new ArrayList<>(List.of(oldHead, oldSecond));
+        Collections.reverse(current);
+        expected.addAll(current);
+        expected.add(initial);
+
+        assertEquals(expected, history.stream().map(HistoryEntry::id).toList());
+        assertEquals(List.of(oldHead, oldSecond), query(commits, refs)
+                .firstParent(branch, new UUID(0, 2), 2).stream()
+                .map(HistoryEntry::id).toList());
     }
 
     @Test
