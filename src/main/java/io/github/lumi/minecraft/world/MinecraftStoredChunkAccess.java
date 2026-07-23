@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.world;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -103,9 +104,11 @@ final class MinecraftStoredChunkAccess {
                 return Preparation.fallback(StoredChunkApplyResult.Outcome.MISSING);
             }
             try {
+                PatchedChunk patched = patch(
+                        position, stored.orElseThrow(), target);
                 return Preparation.ready(new PreparedWrite(
                         coordinate, position, target,
-                        patch(position, stored.orElseThrow(), target)));
+                        patched.tag(), patched.heightmaps()));
             } catch (UnsupportedChunk unsupported) {
                 release(coordinate);
                 return Preparation.fallback(
@@ -183,7 +186,8 @@ final class MinecraftStoredChunkAccess {
                 var stored = entry.getValue().join();
                 String mismatch = stored.isEmpty()
                         ? "chunk is absent"
-                        : mismatch(write.position(), stored.orElseThrow(), write.target());
+                        : mismatch(write.position(), stored.orElseThrow(),
+                                write.target(), write.heightmaps());
                 if (mismatch != null) {
                     throw new IOException(
                             "Stored Restore verification failed for "
@@ -208,7 +212,12 @@ final class MinecraftStoredChunkAccess {
             ChunkCoordinate coordinate,
             ChunkPos position,
             Map<SectionKey, DecodedSection> target,
-            CompoundTag patched) { }
+            CompoundTag patched,
+            Map<Heightmap.Types, long[]> heightmaps) { }
+
+    private record PatchedChunk(
+            CompoundTag tag,
+            Map<Heightmap.Types, long[]> heightmaps) { }
 
     private record Preparation(
             PreparedWrite write,
@@ -226,7 +235,7 @@ final class MinecraftStoredChunkAccess {
         return phase;
     }
 
-    private CompoundTag patch(
+    private PatchedChunk patch(
             ChunkPos position,
             CompoundTag source,
             Map<SectionKey, DecodedSection> target) throws IOException, UnsupportedChunk {
@@ -253,17 +262,37 @@ final class MinecraftStoredChunkAccess {
         }
         Map<Heightmap.Types, long[]> heightmaps = recalculateHeightmaps(
                 data, sections, target);
-        return copy(data, sections, heightmaps,
+        CompoundTag tag = copy(data, sections, heightmaps,
                 replaceBlockEntities(data.blockEntities(), target), lightChanged).write();
+        return new PatchedChunk(tag, heightmaps);
     }
 
     String mismatch(
             ChunkPos position,
             CompoundTag source,
             Map<SectionKey, DecodedSection> target) throws IOException {
+        return mismatch(position, source, target, null);
+    }
+
+    private String mismatch(
+            ChunkPos position,
+            CompoundTag source,
+            Map<SectionKey, DecodedSection> target,
+            Map<Heightmap.Types, long[]> expectedHeightmaps) throws IOException {
         SerializableChunkData data = SerializableChunkData.parse(level, containers, source);
         if (!position.equals(data.chunkPos())) {
             return "chunk position is " + data.chunkPos();
+        }
+        if (expectedHeightmaps != null
+                && !data.heightmaps().keySet().equals(expectedHeightmaps.keySet())) {
+            return "heightmap types differ";
+        }
+        if (expectedHeightmaps != null) {
+            for (var entry : expectedHeightmaps.entrySet()) {
+                if (!Arrays.equals(entry.getValue(), data.heightmaps().get(entry.getKey()))) {
+                    return "heightmap differs: " + entry.getKey();
+                }
+            }
         }
         Map<Integer, SerializableChunkData.SectionData> sections = sectionMap(data);
         for (var entry : target.entrySet()) {
@@ -295,41 +324,61 @@ final class MinecraftStoredChunkAccess {
             SerializableChunkData data,
             Map<Integer, SerializableChunkData.SectionData> sections,
             Map<SectionKey, DecodedSection> target) {
-        Set<Integer> changedColumns = new HashSet<>();
-        target.values().forEach(section -> {
-            for (int index : section.preparedDelta().changedIndexes()) {
-                changedColumns.add((index & 15) | (((index >>> 4) & 15) << 4));
+        int[] highestChangedY = new int[256];
+        Arrays.fill(highestChangedY, Integer.MIN_VALUE);
+        target.forEach((key, section) -> {
+            for (int index : section.preparedDelta().heightmapIndexes()) {
+                int column = (index & 15) | (((index >>> 4) & 15) << 4);
+                int worldY = key.sectionY() * 16 + ((index >>> 8) & 15);
+                highestChangedY[column] = Math.max(highestChangedY[column], worldY);
             }
         });
         int bits = Mth.ceillog2(level.getHeight() + 1);
-        Map<Heightmap.Types, long[]> recalculated = new HashMap<>();
+        Map<Heightmap.Types, SimpleBitStorage> storages = new HashMap<>();
         data.heightmaps().forEach((type, raw) -> {
             var storage = new SimpleBitStorage(bits, 256, raw.clone());
-            for (int column : changedColumns) {
-                int x = column & 15;
-                int z = (column >>> 4) & 15;
-                storage.set(column, firstAvailable(type, sections, x, z));
-            }
-            recalculated.put(type, storage.getRaw());
+            storages.put(type, storage);
         });
-        return Map.copyOf(recalculated);
-    }
-
-    private int firstAvailable(
-            Heightmap.Types type,
-            Map<Integer, SerializableChunkData.SectionData> sections,
-            int x,
-            int z) {
-        for (int y = level.getMaxY() - 1; y >= level.getMinY(); y--) {
-            var section = sections.get(Math.floorDiv(y, 16));
-            BlockState state = section == null || section.chunkSection() == null
-                    ? Blocks.AIR.defaultBlockState()
-                    : section.chunkSection().getBlockState(x, Math.floorMod(y, 16), z);
-            if (type.isOpaque().test(state)) {
-                return y - level.getMinY() + 1;
+        for (int column = 0; column < highestChangedY.length; column++) {
+            int startY = highestChangedY[column];
+            if (startY == Integer.MIN_VALUE) {
+                continue;
+            }
+            List<Heightmap.Types> pending = new ArrayList<>();
+            for (var entry : storages.entrySet()) {
+                Heightmap.Types type = entry.getKey();
+                SimpleBitStorage storage = entry.getValue();
+                int currentTopY = storage.get(column) + level.getMinY() - 1;
+                if (currentTopY <= startY) {
+                    pending.add(type);
+                }
+            }
+            int x = column & 15;
+            int z = (column >>> 4) & 15;
+            for (int y = startY; y >= level.getMinY() && !pending.isEmpty(); y--) {
+                var section = sections.get(Math.floorDiv(y, 16));
+                BlockState state = section == null || section.chunkSection() == null
+                        ? Blocks.AIR.defaultBlockState()
+                        : section.chunkSection().getBlockState(
+                                x, Math.floorMod(y, 16), z);
+                var iterator = pending.iterator();
+                while (iterator.hasNext()) {
+                    Heightmap.Types type = iterator.next();
+                    if (type.isOpaque().test(state)) {
+                        storages.get(type).set(
+                                column, y - level.getMinY() + 1);
+                        iterator.remove();
+                    }
+                }
+            }
+            for (Heightmap.Types type : pending) {
+                storages.get(type).set(column, 0);
             }
         }
-        return 0;
+        Map<Heightmap.Types, long[]> recalculated = new HashMap<>();
+        storages.forEach((type, storage) ->
+                recalculated.put(type, storage.getRaw()));
+        return Map.copyOf(recalculated);
     }
 
     private static SerializableChunkData copy(
