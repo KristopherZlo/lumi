@@ -3,6 +3,7 @@ package io.github.lumi.client.ui;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientSurvivalSettingsStore;
+import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.telemetry.TelemetryService;
@@ -26,7 +27,7 @@ public final class LumiSettingsScreen extends LumiPageScreen {
     private boolean showZoneSaves;
     private boolean includeEntitiesOnRestore;
     private boolean previewGenerationEnabled;
-    private boolean workspaceHudEnabled;
+    private HudDisplayMode hudDisplayMode;
     private boolean automaticVersionsEnabled;
     private int panelX;
     private int panelY;
@@ -125,7 +126,7 @@ public final class LumiSettingsScreen extends LumiPageScreen {
         addToggleSetting(3, x, width,
                 "luma.settings.workspace_hud",
                 "luma.settings.workspace_hud_help",
-                workspaceHudEnabled, this::toggleWorkspaceHud);
+                hudDisplayMode == HudDisplayMode.GUI, this::toggleWorkspaceHud);
         var survival = survivalSettings.snapshot().orElse(
                 new ClientSurvivalSettingsStore.Snapshot(false, false));
         addToggleSetting(4, x, width,
@@ -213,8 +214,8 @@ public final class LumiSettingsScreen extends LumiPageScreen {
         previewGenerationEnabled = active == null
                 ? defaults.previewGenerationEnabled()
                 : active.previewGenerationEnabled();
-        workspaceHudEnabled = active == null
-                ? defaults.workspaceHudEnabled() : active.workspaceHudEnabled();
+        hudDisplayMode = active == null
+                ? defaults.hudDisplayMode() : active.hudDisplayMode();
         automaticVersionsEnabled = active == null
                 ? defaults.automaticVersionsEnabled()
                 : active.automaticVersionsEnabled();
@@ -234,7 +235,7 @@ public final class LumiSettingsScreen extends LumiPageScreen {
     private void publishWorkspaceSettings() {
         updateWorkspace.accept(new WorkspaceSettings(
                 !showZoneSaves, includeEntitiesOnRestore,
-                previewGenerationEnabled, workspaceHudEnabled,
+                previewGenerationEnabled, hudDisplayMode,
                 automaticVersionsEnabled));
         rebuildWidgets();
     }
@@ -245,7 +246,8 @@ public final class LumiSettingsScreen extends LumiPageScreen {
     }
 
     private void toggleWorkspaceHud() {
-        workspaceHudEnabled = !workspaceHudEnabled;
+        hudDisplayMode = hudDisplayMode == HudDisplayMode.GUI
+                ? HudDisplayMode.BOSSBAR : HudDisplayMode.GUI;
         publishWorkspaceSettings();
     }
 

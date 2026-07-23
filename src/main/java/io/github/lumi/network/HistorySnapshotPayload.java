@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
+import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.VersionTags;
 import java.util.List;
@@ -318,7 +319,7 @@ public record HistorySnapshotPayload(
             boolean hideZoneCommits,
             boolean includeEntitiesOnRestore,
             boolean previewGenerationEnabled,
-            boolean workspaceHudEnabled,
+            HudDisplayMode hudDisplayMode,
             boolean automaticVersionsEnabled) {
         public WorkspaceView(
                 UUID id,
@@ -328,12 +329,13 @@ public record HistorySnapshotPayload(
                 boolean hideZoneCommits,
                 boolean includeEntitiesOnRestore) {
             this(id, name, active, bounded, hideZoneCommits,
-                    includeEntitiesOnRestore, true, true, false);
+                    includeEntitiesOnRestore, true, HudDisplayMode.GUI, false);
         }
 
         public WorkspaceView {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(name, "name");
+            Objects.requireNonNull(hudDisplayMode, "hudDisplayMode");
             if (name.isBlank()
                     || name.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
                     > MAX_TEXT_BYTES) {
@@ -349,7 +351,7 @@ public record HistorySnapshotPayload(
             buffer.writeBoolean(hideZoneCommits);
             buffer.writeBoolean(includeEntitiesOnRestore);
             buffer.writeBoolean(previewGenerationEnabled);
-            buffer.writeBoolean(workspaceHudEnabled);
+            buffer.writeByte(hudDisplayMode.id());
             buffer.writeBoolean(automaticVersionsEnabled);
         }
 
@@ -358,7 +360,8 @@ public record HistorySnapshotPayload(
                     buffer.readUUID(), buffer.readUtf(MAX_TEXT_BYTES),
                     buffer.readBoolean(), buffer.readBoolean(),
                     buffer.readBoolean(), buffer.readBoolean(),
-                    buffer.readBoolean(), buffer.readBoolean(),
+                    buffer.readBoolean(),
+                    HudDisplayMode.fromId(buffer.readUnsignedByte()),
                     buffer.readBoolean());
         }
     }

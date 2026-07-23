@@ -29,7 +29,8 @@ class LumiOperationHudTest {
                 "src/main/java/io/github/lumi/client/ui/LumiOperationHud.java"));
 
         assertTrue(source.contains("WorkspaceView::active"));
-        assertTrue(source.contains("WorkspaceView::workspaceHudEnabled"));
+        assertTrue(source.contains(
+                "workspace.hudDisplayMode() == HudDisplayMode.GUI"));
         assertTrue(source.contains("LumiHotkeys.actionModifierDown("));
         assertTrue(source.contains("result.workspace().total()"));
         assertTrue(source.contains("Integer.toString(snapshot.pendingKeys())"));

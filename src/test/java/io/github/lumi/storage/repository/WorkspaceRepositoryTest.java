@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.domain.model.Workspace;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import java.nio.file.Path;
@@ -27,11 +28,27 @@ class WorkspaceRepositoryTest {
         repository.create(created);
         Workspace updated = new Workspace(
                 id, "Fast redstone lab", created.bounds(),
-                new WorkspaceSettings(false, false, false, false, true));
+                new WorkspaceSettings(
+                        false, false, false, HudDisplayMode.NONE, true));
         repository.replace(created, updated);
 
         assertEquals(Optional.of(updated), repository.read(id));
         assertEquals(List.of(updated), new WorkspaceRepository(repositoryRoot).list());
+    }
+
+    @Test
+    void roundTripsEveryHudDisplayMode() throws Exception {
+        for (HudDisplayMode mode : HudDisplayMode.values()) {
+            WorkspaceRepository repository = new WorkspaceRepository(
+                    repositoryRoot.resolve(mode.name()));
+            Workspace workspace = new Workspace(
+                    UUID.randomUUID(), mode.name(), Optional.empty(),
+                    new WorkspaceSettings(true, true, true, mode, false));
+
+            repository.create(workspace);
+
+            assertEquals(Optional.of(workspace), repository.read(workspace.id()));
+        }
     }
 
     @Test

@@ -26,7 +26,7 @@ class LumiSettingsScreenTest {
         assertTrue(source.contains("luma.settings.workspace_hud"));
         assertTrue(source.contains("luma.settings.automatic_versions"));
         assertTrue(source.contains("active.previewGenerationEnabled()"));
-        assertTrue(source.contains("active.workspaceHudEnabled()"));
+        assertTrue(source.contains("active.hudDisplayMode()"));
         assertTrue(source.contains("active.automaticVersionsEnabled()"));
         assertTrue(source.contains("toggleAutomaticVersions"));
         assertTrue(source.contains("luma.settings.telemetry_enabled"));

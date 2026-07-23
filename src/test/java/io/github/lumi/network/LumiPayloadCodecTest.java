@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
+import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.model.VersionTags;
@@ -25,20 +26,31 @@ class LumiPayloadCodecTest {
     @Test
     void workspaceSettingsArgumentIsCanonicalAndStrict() {
         var argument = new WorkspaceSettingsArgument(
-                new WorkspaceSettings(false, true, false, false, true));
+                new WorkspaceSettings(
+                        false, true, false, HudDisplayMode.BOSSBAR, true));
 
         assertEquals("0,1,0,0,1", argument.encode());
         assertEquals(argument, WorkspaceSettingsArgument.parse(argument.encode()));
         assertEquals(argument.settings(),
                 WorkspaceSettingsArgument.parse(argument.encode()).settings());
-        assertEquals(new WorkspaceSettings(false, true, true, true, false),
+        assertEquals(new WorkspaceSettings(
+                        false, true, true, HudDisplayMode.GUI, false),
                 WorkspaceSettingsArgument.parse("0,1").settings());
-        assertEquals(new WorkspaceSettings(false, true, true, true, false),
+        assertEquals(new WorkspaceSettings(
+                        false, true, true, HudDisplayMode.GUI, false),
                 WorkspaceSettingsArgument.parse("0,1,1,1").settings());
+        assertEquals(HudDisplayMode.BOSSBAR,
+                WorkspaceSettingsArgument.parse("0,1,1,0").hudDisplayMode());
+        assertEquals(HudDisplayMode.NONE,
+                WorkspaceSettingsArgument.parse("0,1,1,2").hudDisplayMode());
         assertThrows(IllegalArgumentException.class,
                 () -> WorkspaceSettingsArgument.parse("false,true"));
         assertThrows(IllegalArgumentException.class,
                 () -> WorkspaceSettingsArgument.parse("1,2"));
+        assertThrows(IllegalArgumentException.class,
+                () -> WorkspaceSettingsArgument.parse("1,1,1,3"));
+        assertThrows(IllegalArgumentException.class,
+                () -> WorkspaceSettingsArgument.parse("1,1,1,1x0"));
     }
 
     @Test
@@ -345,10 +357,15 @@ class LumiPayloadCodecTest {
                 java.util.List.of(
                         new HistorySnapshotPayload.WorkspaceView(
                                 new UUID(0, 7), "Redstone lab", true,
-                                true, true, false, false, true, true),
+                                true, true, false, false,
+                                HudDisplayMode.NONE, true),
                         new HistorySnapshotPayload.WorkspaceView(
                                 new UUID(0, 9), "Whole world", false,
-                                false, false, true)),
+                                false, false, true),
+                        new HistorySnapshotPayload.WorkspaceView(
+                                new UUID(0, 10), "Bossbar", false,
+                                false, false, true, true,
+                                HudDisplayMode.BOSSBAR, false)),
                 java.util.List.of(new HistorySnapshotPayload.Version(
                         id('a'), "Clock works", "Builder", 1234,
                         CommitKind.MANUAL, VersionTags.parse("redstone, stable"),

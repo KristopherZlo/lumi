@@ -4,6 +4,7 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.client.LumiHotkeys;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
+import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.network.OperationEventPayload;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -69,7 +70,7 @@ public final class LumiOperationHud {
         boolean enabled = snapshot.workspaces().stream()
                 .filter(io.github.lumi.network.HistorySnapshotPayload.WorkspaceView::active)
                 .findFirst()
-                .map(io.github.lumi.network.HistorySnapshotPayload.WorkspaceView::workspaceHudEnabled)
+                .map(workspace -> workspace.hudDisplayMode() == HudDisplayMode.GUI)
                 .orElse(true);
         if (!enabled) return 10;
         boolean expanded = LumiHotkeys.actionModifierDown(

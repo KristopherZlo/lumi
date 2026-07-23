@@ -1,6 +1,7 @@
 package io.github.lumi.storage.repository;
 
 import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.domain.model.Workspace;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import java.io.ByteArrayInputStream;
@@ -106,7 +107,7 @@ public final class WorkspaceRepository {
             output.writeBoolean(workspace.settings().hideZoneCommits());
             output.writeBoolean(workspace.settings().includeEntitiesOnRestore());
             output.writeBoolean(workspace.settings().previewGenerationEnabled());
-            output.writeBoolean(workspace.settings().workspaceHudEnabled());
+            output.writeByte(workspace.settings().hudDisplayMode().id());
             output.writeBoolean(workspace.settings().automaticVersionsEnabled());
         }
         return bytes.toByteArray();
@@ -140,7 +141,7 @@ public final class WorkspaceRepository {
                     : new WorkspaceSettings(
                             hideZoneCommits, restoreEntities,
                             readFlag(input, "preview-generation setting") == 1,
-                            readFlag(input, "workspace-hud setting") == 1,
+                            HudDisplayMode.fromId(input.readUnsignedByte()),
                             extension == 3
                                     && readFlag(input, "automatic-versions setting") == 1);
             if (input.available() != 0) {

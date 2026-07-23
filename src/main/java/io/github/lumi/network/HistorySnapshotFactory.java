@@ -22,7 +22,7 @@ final class HistorySnapshotFactory {
                         visible.settings().hideZoneCommits(),
                         visible.settings().includeEntitiesOnRestore(),
                         visible.settings().previewGenerationEnabled(),
-                        visible.settings().workspaceHudEnabled(),
+                        visible.settings().hudDisplayMode(),
                         visible.settings().automaticVersionsEnabled()))
                 .toList();
         var versions = java.util.List.<HistorySnapshotPayload.Version>of();

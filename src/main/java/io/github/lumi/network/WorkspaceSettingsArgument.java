@@ -1,5 +1,6 @@
 package io.github.lumi.network;
 
+import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import java.util.Objects;
 
@@ -8,27 +9,31 @@ public record WorkspaceSettingsArgument(
         boolean hideZoneCommits,
         boolean includeEntitiesOnRestore,
         boolean previewGenerationEnabled,
-        boolean workspaceHudEnabled,
+        HudDisplayMode hudDisplayMode,
         boolean automaticVersionsEnabled) {
+    public WorkspaceSettingsArgument {
+        Objects.requireNonNull(hudDisplayMode, "hudDisplayMode");
+    }
+
     public WorkspaceSettingsArgument(WorkspaceSettings settings) {
         this(
                 Objects.requireNonNull(settings, "settings").hideZoneCommits(),
                 settings.includeEntitiesOnRestore(),
                 settings.previewGenerationEnabled(),
-                settings.workspaceHudEnabled(),
+                settings.hudDisplayMode(),
                 settings.automaticVersionsEnabled());
     }
 
     public String encode() {
         return flag(hideZoneCommits) + "," + flag(includeEntitiesOnRestore)
-                + "," + flag(previewGenerationEnabled) + "," + flag(workspaceHudEnabled)
+                + "," + flag(previewGenerationEnabled) + "," + hudDisplayMode.id()
                 + "," + flag(automaticVersionsEnabled);
     }
 
     public WorkspaceSettings settings() {
         return new WorkspaceSettings(
                 hideZoneCommits, includeEntitiesOnRestore,
-                previewGenerationEnabled, workspaceHudEnabled,
+                previewGenerationEnabled, hudDisplayMode,
                 automaticVersionsEnabled);
     }
 
@@ -37,16 +42,18 @@ public record WorkspaceSettingsArgument(
         if (encoded.length() == 3 && encoded.charAt(1) == ',') {
             return new WorkspaceSettingsArgument(
                     parseFlag(encoded.charAt(0)), parseFlag(encoded.charAt(2)),
-                    true, true, false);
+                    true, HudDisplayMode.GUI, false);
         }
         if ((encoded.length() != 7 && encoded.length() != 9)
                 || encoded.charAt(1) != ','
-                || encoded.charAt(3) != ',' || encoded.charAt(5) != ',') {
+                || encoded.charAt(3) != ',' || encoded.charAt(5) != ','
+                || (encoded.length() == 9 && encoded.charAt(7) != ',')) {
             throw new IllegalArgumentException("Invalid workspace settings argument");
         }
         return new WorkspaceSettingsArgument(
                 parseFlag(encoded.charAt(0)), parseFlag(encoded.charAt(2)),
-                parseFlag(encoded.charAt(4)), parseFlag(encoded.charAt(6)),
+                parseFlag(encoded.charAt(4)),
+                HudDisplayMode.fromId(encoded.charAt(6) - '0'),
                 encoded.length() == 9 && parseFlag(encoded.charAt(8)));
     }
 

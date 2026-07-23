@@ -8,6 +8,7 @@ import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
+import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.storage.repository.ActiveBranchRepository;
@@ -105,7 +106,8 @@ class DimensionHistoryViewServiceTest {
                 historyPage.entries().stream().map(entry -> entry.id()).toList());
         assertEquals(true, historyPage.hasMore());
         workspaces.updateActiveSettings(
-                new WorkspaceSettings(true, true, true, true, true));
+                new WorkspaceSettings(
+                        true, true, true, HudDisplayMode.GUI, true));
         assertEquals(List.of(automatic, manual, main.commit()),
                 view.history(10).stream().map(entry -> entry.id()).toList());
         assertEquals(List.of(manual),
