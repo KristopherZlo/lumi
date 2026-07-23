@@ -781,7 +781,17 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         requireNoRecovery();
         var operation = new LiveActionOperation(
                 liveActions, player, direction, liveWorld,
-                liveEntityWorld, this::cancelLiveAction, this::publishLiveAction);
+                liveEntityWorld, new LiveActionOperation.PendingCancellation() {
+                    @Override
+                    public boolean cancel(UUID action) {
+                        return cancelLiveAction(action);
+                    }
+
+                    @Override
+                    public boolean mayChangeBlocks(UUID action) {
+                        return causalTicks.cancellationMayChangeBlocks(action);
+                    }
+                }, this::publishLiveAction);
         operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
         return operation;
     }

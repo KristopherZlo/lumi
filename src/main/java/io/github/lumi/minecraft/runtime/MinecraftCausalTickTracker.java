@@ -136,6 +136,11 @@ public final class MinecraftCausalTickTracker {
         }
     }
 
+    public boolean cancellationMayChangeBlocks(java.util.UUID action) {
+        Objects.requireNonNull(action, "action");
+        return blockCarriers.anyMatch(root -> root.action().equals(action));
+    }
+
     public boolean cancel(java.util.UUID action, Predicate<java.util.UUID> preserveEntity) {
         Objects.requireNonNull(action, "action");
         Objects.requireNonNull(preserveEntity, "preserveEntity");

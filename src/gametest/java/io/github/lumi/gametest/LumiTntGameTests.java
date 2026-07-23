@@ -205,6 +205,82 @@ public final class LumiTntGameTests {
     }
 
     @GameTest(maxTicks = 300000)
+    public void preexistingBlastConflictDoesNotCancelNewerCarrier(
+            GameTestHelper helper) {
+        FabricDimensionRuntime runtime = runtime(helper);
+        UUID player = UUID.randomUUID();
+        UUID test = UUID.randomUUID();
+        BlockPos firstTnt = new BlockPos(3, 2, 3);
+        BlockPos secondTnt = firstTnt.east();
+        BlockPos trigger = secondTnt.east();
+        AtomicReference<PrimedTnt> firstCarrier = new AtomicReference<>();
+        AtomicReference<PrimedTnt> secondCarrier = new AtomicReference<>();
+        AtomicReference<UUID> secondAction = new AtomicReference<>();
+        AtomicReference<Integer> delayedReferences = new AtomicReference<>();
+        AtomicReference<Map<BlockPos, BlockState>> conflicted = new AtomicReference<>();
+        AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    helper.setBlock(firstTnt.below(), Blocks.OBSIDIAN);
+                    helper.setBlock(secondTnt.below(), Blocks.OBSIDIAN);
+                    helper.setBlock(firstTnt, Blocks.TNT);
+                    helper.setBlock(secondTnt, Blocks.TNT);
+                    helper.setBlock(trigger, Blocks.AIR);
+                    prime(helper, runtime, player, firstTnt, 200);
+                    firstCarrier.set(helper.findOneEntity(EntityType.TNT));
+                    try (var ignored = DirectLiveActionContext.open(
+                            runtime.liveActions(), player)) {
+                        secondAction.set(DirectLiveActionContext.current(
+                                runtime.liveActions()).orElseThrow());
+                        helper.getLevel().setBlock(helper.absolutePos(trigger),
+                                Blocks.REDSTONE_BLOCK.defaultBlockState(),
+                                Block.UPDATE_ALL);
+                    }
+                    secondCarrier.set(activeEntities(helper, EntityType.TNT).stream()
+                            .filter(carrier -> !carrier.getUUID().equals(
+                                    firstCarrier.get().getUUID()))
+                            .findFirst()
+                            .orElseThrow(() -> helper.assertionException(
+                                    "Redstone did not prime the second TNT")));
+                    secondCarrier.get().setFuse(200);
+                    firstCarrier.get().setFuse(3);
+                })
+                .thenWaitUntil(() -> {
+                    helper.assertBlockState(trigger, Blocks.AIR.defaultBlockState());
+                    helper.assertTrue(firstCarrier.get().isRemoved(),
+                            "The first TNT has not exploded");
+                    helper.assertFalse(secondCarrier.get().isRemoved(),
+                            "The newer TNT carrier disappeared");
+                })
+                .thenExecute(() -> {
+                    conflicted.set(snapshot(helper));
+                    delayedReferences.set(runtime.liveActions()
+                            .summary(secondAction.get()).delayedReferences());
+                    helper.assertTrue(delayedReferences.get() > 0,
+                            "The newer action has no active carrier ownership");
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
+                            operation -> terminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.FAILED, terminal.get(),
+                            "Pre-existing blast conflict must fail safely");
+                    helper.assertFalse(runtime.freeze().isFrozen(),
+                            "Pre-existing conflict retained the dimension freeze");
+                    assertSnapshot(helper, conflicted.get());
+                    helper.assertFalse(secondCarrier.get().isRemoved(),
+                            "Failed Undo cancelled the newer TNT carrier");
+                    helper.assertValueEqual(delayedReferences.get(), runtime.liveActions()
+                                    .summary(secondAction.get()).delayedReferences(),
+                            "Failed Undo changed carrier ownership");
+                })
+                .thenExecute(() -> LumiGameTestLease.release(test))
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
     public void completedExplosionIsExactAndConflictIsAtomic(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID firstPlayer = UUID.randomUUID();

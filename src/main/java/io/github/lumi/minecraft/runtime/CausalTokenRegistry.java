@@ -28,6 +28,11 @@ public final class CausalTokenRegistry<K, O> {
         return Optional.ofNullable(owners.remove(Objects.requireNonNull(work, "work")));
     }
 
+    public synchronized boolean anyMatch(java.util.function.Predicate<O> matches) {
+        Objects.requireNonNull(matches, "matches");
+        return owners.values().stream().anyMatch(matches);
+    }
+
     public synchronized Set<K> cancel(java.util.function.Predicate<O> matches) {
         Objects.requireNonNull(matches, "matches");
         Set<K> cancelled = new HashSet<>();

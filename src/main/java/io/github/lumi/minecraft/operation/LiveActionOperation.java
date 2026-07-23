@@ -142,6 +142,7 @@ public final class LiveActionOperation implements DimensionMutation {
     private void step() throws IOException {
         switch (phase) {
             case SELECTING -> select();
+            case PREFLIGHTING -> preflightOne();
             case CANCELLING -> cancelPending();
             case VALIDATING -> validateOne();
             case APPLYING -> applyOne();
@@ -159,7 +160,26 @@ public final class LiveActionOperation implements DimensionMutation {
             return;
         }
         plan = selected.orElseThrow();
-        phase = Phase.CANCELLING;
+        if (cancelPending.mayChangeBlocks(plan.actionId())) {
+            phase = Phase.CANCELLING;
+            return;
+        }
+        prepareChanges();
+        cursor = changes.stream().filter(BlockChange.class::isInstance).iterator();
+        phase = Phase.PREFLIGHTING;
+    }
+
+    private void preflightOne() throws IOException {
+        if (!cursor.hasNext()) {
+            phase = Phase.CANCELLING;
+            return;
+        }
+        WorldChange<?> change = cursor.next();
+        if (!change.matchesExpected()) {
+            failure = new IllegalStateException(
+                    "Visible world conflicts with live action at " + change.conflict());
+            phase = Phase.FAILED;
+        }
     }
 
     private void cancelPending() {
@@ -273,20 +293,30 @@ public final class LiveActionOperation implements DimensionMutation {
 
     private boolean beforeMutation() {
         return phase == Phase.SELECTING
+                || phase == Phase.PREFLIGHTING
                 || (phase == Phase.VALIDATING && !cancellationChangedState);
     }
 
     private static PendingCancellation adapt(Consumer<UUID> cancellation) {
         Objects.requireNonNull(cancellation, "cancelPending");
-        return action -> {
-            cancellation.accept(action);
-            return false;
+        return new PendingCancellation() {
+            @Override public boolean mayChangeBlocks(UUID action) { return true; }
+
+            @Override
+            public boolean cancel(UUID action) {
+                cancellation.accept(action);
+                return false;
+            }
         };
     }
 
     @FunctionalInterface
     public interface PendingCancellation {
         boolean cancel(UUID action);
+
+        default boolean mayChangeBlocks(UUID action) {
+            return false;
+        }
     }
 
     private abstract static class WorldChange<S> {
@@ -380,6 +410,7 @@ public final class LiveActionOperation implements DimensionMutation {
 
     private enum Phase {
         SELECTING,
+        PREFLIGHTING,
         CANCELLING,
         VALIDATING,
         APPLYING,
