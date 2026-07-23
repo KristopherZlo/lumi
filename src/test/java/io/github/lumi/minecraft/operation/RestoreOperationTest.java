@@ -128,6 +128,30 @@ class RestoreOperationTest {
     }
 
     @Test
+    void recordsCheckpointedRestoreReturnPointAndCapturedBoundary() throws IOException {
+        BranchRef source = new BranchRef(new BranchName("main"), id('1'), 3);
+        CommitId target = id('2');
+        CommitId returnPoint = id('3');
+        var captured = new WorkingIndexSnapshot(Map.of(new SectionKey(4, 5, 6), 8L));
+        var restore = new PreparedRestore(
+                source, target, Map.of(), Map.of(), Map.of(), Map.of());
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+
+        RestoreOperation operation = RestoreOperation.startCheckpointed(
+                restore, new RepairThenVerify(), ignored -> { }, journals,
+                UUID.randomUUID(), RestoreStateListener.NONE,
+                returnPoint, captured, ignored -> { });
+        operation.tick(Long.MAX_VALUE);
+
+        OperationJournal journal = journals.read().orElseThrow();
+        assertEquals(source.name(), journal.target().branch());
+        assertEquals(source.commit(), journal.target().expectedHead());
+        assertEquals(Optional.of(target), journal.target().target());
+        assertEquals(Optional.of(returnPoint), journal.target().returnPoint());
+        assertEquals(Optional.of(captured), journal.capturedGenerations());
+    }
+
+    @Test
     void appendsWorkspacePointerTargetToBranchSwitchJournal() throws IOException {
         BranchRef source = new BranchRef(new BranchName("main"), id('a'), 2);
         BranchRef target = new BranchRef(new BranchName("workspace/next/main"), id('b'), 4);

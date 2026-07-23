@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.operation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BlockPosition;
@@ -15,6 +16,7 @@ import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.storage.repository.OriginStore;
+import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.WorkingIndexRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.nio.file.Path;
@@ -67,6 +69,49 @@ class WorkingIndexClearPublicationTest {
                 new WorkingIndexRepository(repositoryRoot), Runnable::run);
         assertEquals(Map.of(ambient, ambientGeneration), reopened.snapshot().generations());
         assertFalse(reopened.hasPendingBuilderChanges());
+    }
+
+    @Test
+    void branchPublicationPreservesANewerGenerationWhileClearBecomesDurable()
+            throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker mutations = tracker(background);
+        SectionKey builder = new SectionKey(7, 0, 7);
+        long capturedGeneration = mutations.registerSectionMutation(
+                builder, WorkingIndexClearPublicationTest::airSection);
+        mutations.recordBuilderBlockMutation(
+                new BlockPosition(113, 2, 113), capturedGeneration);
+        background.drain();
+        WorkingIndexSnapshot captured = mutations.builderSnapshot();
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        BranchRef source = refs.create(new BranchName("main"), id('1'));
+        CommitId target = id('2');
+        var restore = new PreparedRestore(
+                source, target, Map.of(), Map.of(), Map.of(), Map.of());
+        var publication = new BranchRefRestorePublication(
+                refs, mutations, captured);
+
+        var stale = new BranchRef(source.name(), id('0'), source.revision());
+        var staleRestore = new PreparedRestore(
+                stale, target, Map.of(), Map.of(), Map.of(), Map.of());
+        var stalePublication = new BranchRefRestorePublication(
+                refs, mutations, captured);
+        assertThrows(java.io.IOException.class,
+                () -> stalePublication.publish(staleRestore));
+        assertEquals(captured, mutations.builderSnapshot());
+
+        publication.publish(restore);
+        long newerGeneration = mutations.registerSectionMutation(
+                builder, WorkingIndexClearPublicationTest::airSection);
+        mutations.recordBuilderBlockMutation(
+                new BlockPosition(113, 2, 113), newerGeneration);
+
+        assertEquals(target, refs.read(source.name()).orElseThrow().commit());
+        assertFalse(publication.isDurable());
+        background.drain();
+        assertTrue(publication.isDurable());
+        assertEquals(Map.of(builder, newerGeneration),
+                new WorkingIndexRepository(repositoryRoot).read().generations());
     }
 
     @Test

@@ -1,5 +1,6 @@
 package io.github.lumi.domain.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -132,6 +133,41 @@ class PublishedApplyRecoveryTest {
                 .finalizeIfPublished(journal));
         assertTrue(journals.read().isEmpty());
         assertTrue(working.read().generations().isEmpty());
+    }
+
+    @Test
+    void clearsOnlyExactCapturedGenerationsAfterPublishedRestore() throws Exception {
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        var source = refs.create(new BranchName("main"), id('a'));
+        CommitId target = id('b');
+        refs.compareAndSet(source, target);
+        SectionKey cleared = new SectionKey(2, 0, 2);
+        SectionKey newer = new SectionKey(3, 0, 3);
+        SectionKey ambient = new SectionKey(4, 0, 4);
+        var captured = new WorkingIndexSnapshot(Map.of(cleared, 4L, newer, 4L));
+        var working = new WorkingIndexRepository(repositoryRoot);
+        working.write(new WorkingIndexRepository.State(
+                new WorkingIndexSnapshot(Map.of(
+                        cleared, 4L, newer, 5L, ambient, 2L)),
+                new WorkingIndexSnapshot(Map.of(cleared, 4L, newer, 5L))));
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        OperationJournal journal = journals.create(new OperationJournal(
+                UUID.randomUUID(), OperationKind.RESTORE,
+                OperationPhase.WORLD_PERSISTED,
+                new OperationTarget(
+                        source.name(), source.commit(), source.revision(),
+                        Optional.of(target), Optional.of(id('c'))),
+                Optional.of(captured)));
+
+        assertTrue(new PublishedApplyRecovery(
+                refs, new ActiveBranchRepository(repositoryRoot), null,
+                working, journals).finalizeIfPublished(journal));
+
+        WorkingIndexRepository.State persisted = working.readState();
+        assertEquals(Map.of(newer, 5L, ambient, 2L),
+                persisted.working().generations());
+        assertEquals(Map.of(newer, 5L), persisted.builder().generations());
+        assertTrue(journals.read().isEmpty());
     }
 
     private static CommitId id(char digit) {

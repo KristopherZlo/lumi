@@ -578,7 +578,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             return new WorkingIndexRecoveryPublication(
                     mutations, journal.capturedGenerations(), action);
         }
-        return new BranchRefRestorePublication(refs);
+        return journal.capturedGenerations()
+                .<RestorePublication>map(captured ->
+                        new BranchRefRestorePublication(refs, mutations, captured))
+                .orElseGet(() -> new BranchRefRestorePublication(refs));
     }
 
     public void chunkLoaded(LevelChunk chunk) throws IOException {

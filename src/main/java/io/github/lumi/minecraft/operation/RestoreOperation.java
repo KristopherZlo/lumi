@@ -371,6 +371,27 @@ public final class RestoreOperation implements DimensionMutation {
                 target, Optional.empty(), progress);
     }
 
+    public static RestoreOperation startCheckpointed(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            CommitId returnPoint,
+            WorkingIndexSnapshot capturedGenerations,
+            Consumer<OperationProgress> progress) throws IOException {
+        Objects.requireNonNull(returnPoint, "returnPoint");
+        Objects.requireNonNull(capturedGenerations, "capturedGenerations");
+        OperationTarget target = new OperationTarget(
+                restore.expectedRef().name(), restore.expectedRef().commit(),
+                restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
+                Optional.of(returnPoint));
+        return start(restore, world, publication, journals, operationId,
+                stateListener, OperationKind.RESTORE, target,
+                Optional.of(capturedGenerations), progress);
+    }
+
     public static RestoreOperation startQuickRollback(
             PreparedRestore restore,
             WorldStateApply world,
