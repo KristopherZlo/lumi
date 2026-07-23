@@ -60,13 +60,13 @@ import io.github.lumi.domain.service.MergeService;
 import io.github.lumi.domain.service.PreparedMerge;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.domain.service.BranchService;
+import io.github.lumi.domain.service.BlockOnlyRestoreService;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.domain.service.SavePublisher;
 import io.github.lumi.domain.service.SaveService;
 import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.domain.service.RecoveryChoice;
 import io.github.lumi.domain.service.RecoveryService;
-import io.github.lumi.domain.service.RetentionService;
 import io.github.lumi.domain.service.SaveJournalRecovery;
 import io.github.lumi.domain.service.PublishedApplyRecovery;
 import io.github.lumi.domain.service.PendingChangeStatisticsService;
@@ -206,6 +206,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             MutationDurabilityTracker mutations,
             SaveService saves,
             RestoreService restores,
+            BlockOnlyRestoreService blockOnlyRestores,
             MinecraftWorldStateApply worldApply,
             OperationJournalRepository journals,
             Executor background,
@@ -269,9 +270,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         restoreStateListener = new RestoreBaselineReconciler(
                 entityDurability, blockEntityBaselines);
         returnPointRestores = new ReturnPointRestorePreparation(
-                restores, worldApply, refs, journals,
+                restores, blockOnlyRestores, worldApply, refs, journals,
                 new ForwardHistoryService(commits, refs),
-                new RetentionService(commits, refs),
                 restoreStateListener, background);
         packages = new DimensionPackageService(
                 level.dimension().identifier().toString(), repository,
@@ -344,6 +344,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var branches = new BranchService(commits, refs, active, working);
         var trees = new MerkleTreeEditor(objects);
         var restoreService = new RestoreService(objects, commits, origins);
+        var blockOnlyRestoreService = new BlockOnlyRestoreService(
+                objects, commits, origins);
         FabricDimensionRuntime runtime = new FabricDimensionRuntime(
                 level, repository, freeze, new DimensionOperationCoordinator(
                         freeze,
@@ -353,7 +355,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 mutations,
                 new SaveService(objects, trees, commits, refs, journals,
                         new VersionTagRepository(repository)),
-                restoreService,
+                restoreService, blockOnlyRestoreService,
                 new MinecraftWorldStateApply(level, freeze, background), journals,
                 background, refs, branches,
                 new MergeService(objects, commits, origins, trees), workspaceService,
@@ -754,23 +756,22 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 expected, author, "Return point before Restore", Instant.now(),
                 workspaceId, Optional.empty(), CommitKind.HIDDEN_RETURN);
         BranchName hiddenRef = new BranchName("hidden/return/" + operationId);
-        if (!includeEntities) {
-            return new ReturnPointRestoreOperation(
-                    createSave(returnPoint), (saved, progress) ->
-                            returnPointRestores.prepare(
-                                    saved, target, hiddenRef, operationId,
-                                    false, progress));
-        }
         SaveCaptureOperation checkpoint = createChunkReadySave(
                 returnPoint, scopedSavePreparation(returnPoint),
                 (request, captured) -> saves.checkpoint(
                         request, captured, hiddenRef), ignored -> { });
-        return new ReturnPointRestoreOperation(checkpoint, (saved, progress) ->
-                returnPointRestores.prepareCheckpoint(
-                        expected, saved, target, operationId,
-                        new BranchRefRestorePublication(
-                                refs, mutations, saved.capturedGenerations()),
-                        progress));
+        return new ReturnPointRestoreOperation(checkpoint, (saved, progress) -> {
+            var publication = new BranchRefRestorePublication(
+                    refs, mutations, saved.capturedGenerations());
+            return includeEntities
+                    ? returnPointRestores.prepareCheckpoint(
+                            expected, saved, target, operationId,
+                            publication, progress)
+                    : returnPointRestores.prepareBlockOnlyCheckpoint(
+                            expected, saved, target, author,
+                            returnPoint.timestamp(), operationId,
+                            publication, progress);
+        });
     }
 
     public synchronized LiveActionOperation startLiveAction(

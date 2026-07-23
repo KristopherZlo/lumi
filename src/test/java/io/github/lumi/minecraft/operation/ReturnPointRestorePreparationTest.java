@@ -12,9 +12,9 @@ import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
+import io.github.lumi.domain.service.BlockOnlyRestoreService;
 import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.domain.service.ForwardHistoryService;
-import io.github.lumi.domain.service.RetentionService;
 import io.github.lumi.domain.service.SaveResult;
 import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.storage.repository.BranchRefRepository;
@@ -24,6 +24,7 @@ import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,47 +36,6 @@ import org.junit.jupiter.api.io.TempDir;
 class ReturnPointRestorePreparationTest {
     @TempDir
     Path repositoryRoot;
-
-    @Test
-    void createsReachableHiddenRefBeforePreparedRestoreJournal() throws Exception {
-        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
-        CommitRepository commits = new CommitRepository(repositoryRoot);
-        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
-        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
-        var tree = objects.write(new DimensionTree(Map.of()));
-        var target = commits.write(commit(tree, List.of(), CommitKind.MANUAL));
-        var main = refs.create(new BranchName("main"), target);
-        var returnCommit = commits.write(commit(tree, List.of(target), CommitKind.HIDDEN_RETURN));
-        var returnRef = refs.compareAndSet(main, returnCommit);
-        var saved = new SaveResult(returnCommit, returnRef, new WorkingIndexSnapshot(Map.of()));
-        BranchName hidden = new BranchName("hidden/return/test");
-        ReturnPointRestorePreparation preparation = new ReturnPointRestorePreparation(
-                new RestoreService(objects, commits, new OriginStore(repositoryRoot)),
-                new NoOpWorldApply(), refs, journals,
-                new ForwardHistoryService(commits, refs),
-                new RetentionService(commits, refs), Runnable::run);
-        var progress = new java.util.ArrayList<OperationProgress>();
-
-        RestoreOperation operation = preparation.prepare(
-                saved, target, hidden,
-                UUID.fromString("10000000-0000-0000-0000-000000000001"), false,
-                progress::add).join();
-
-        assertEquals(returnCommit, refs.read(hidden).orElseThrow().commit());
-        assertEquals(List.of(target), new ForwardHistoryService(commits, refs)
-                .roots(new BranchName("main"), Optional.of(new UUID(1, 1))));
-        assertTrue(journals.read().isEmpty());
-
-        operation.tick(Long.MAX_VALUE);
-
-        assertTrue(journals.read().isPresent());
-        assertTrue(journals.read().orElseThrow().target().excludeEntities());
-        assertEquals(RestoreStatus.APPLYING, operation.status());
-        assertTrue(progress.stream().anyMatch(value ->
-                value.phase().equals("Restore: preflight target")));
-        assertTrue(progress.stream().anyMatch(value ->
-                value.phase().equals("Restore: preflight return point")));
-    }
 
     @Test
     void keepsSourceRefUntilCheckpointedRestorePublishes() throws Exception {
@@ -93,20 +53,27 @@ class ReturnPointRestorePreparationTest {
         var hiddenRef = refs.create(hidden, checkpoint);
         var captured = new WorkingIndexSnapshot(Map.of(new SectionKey(1, 2, 3), 7L));
         var saved = new SaveResult(checkpoint, hiddenRef, captured);
+        OriginStore origins = new OriginStore(repositoryRoot);
         ReturnPointRestorePreparation preparation = new ReturnPointRestorePreparation(
-                new RestoreService(objects, commits, new OriginStore(repositoryRoot)),
+                new RestoreService(objects, commits, origins),
+                new BlockOnlyRestoreService(objects, commits, origins),
                 new NoOpWorldApply(), refs, journals,
-                new ForwardHistoryService(commits, refs),
-                new RetentionService(commits, refs), Runnable::run);
+                new ForwardHistoryService(commits, refs), Runnable::run);
+        var progress = new ArrayList<OperationProgress>();
 
-        RestoreOperation operation = preparation.prepareCheckpoint(
-                main, saved, target, UUID.randomUUID(),
-                new BranchRefRestorePublication(refs), ignored -> { }).join();
+        RestoreOperation operation = preparation.prepareBlockOnlyCheckpoint(
+                main, saved, target, new CommitAuthor(new UUID(0, 2), "Builder"),
+                Instant.EPOCH, UUID.randomUUID(),
+                new BranchRefRestorePublication(refs), progress::add).join();
 
         assertEquals(main, refs.read(main.name()).orElseThrow());
         assertEquals(checkpoint, refs.read(hidden).orElseThrow().commit());
         assertEquals(List.of(current), new ForwardHistoryService(commits, refs)
                 .roots(new BranchName("main"), Optional.of(new UUID(1, 1))));
+        assertTrue(progress.stream().anyMatch(value ->
+                value.phase().equals("Restore: preflight target")));
+        assertTrue(progress.stream().anyMatch(value ->
+                value.phase().equals("Restore: preflight return point")));
         operation.tick(Long.MAX_VALUE);
 
         var journal = journals.read().orElseThrow();

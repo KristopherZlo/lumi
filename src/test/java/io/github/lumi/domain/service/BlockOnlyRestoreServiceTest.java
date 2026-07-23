@@ -2,7 +2,10 @@ package io.github.lumi.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.ChunkInRegion;
 import io.github.lumi.domain.model.ChunkTree;
@@ -60,6 +63,12 @@ class BlockOnlyRestoreServiceTest {
                 objects.readSection(chunk.sections().get(0)).blockStates().get(0));
         assertArrayEquals(new byte[] {2}, objects.readEntities(
                 chunk.entities().orElseThrow()).entities().getFirst().nbt().bytes());
+        PreparedRestore prepared = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot)).prepare(
+                        new BranchRef(new BranchName("main"), checkpoint, 1),
+                        checkpoint, result);
+        assertEquals(1, prepared.sections().size());
+        assertTrue(prepared.entities().isEmpty());
         CommitId matchingEntities = commits.write(commit(
                 objects, "minecraft:dirt", 1, targetSpawn, workspace));
         assertEquals(target, service.compose(
