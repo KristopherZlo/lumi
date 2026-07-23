@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.operation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BranchName;
@@ -9,6 +10,7 @@ import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
+import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.domain.service.ForwardHistoryService;
@@ -26,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -75,7 +78,7 @@ class ReturnPointRestorePreparationTest {
     }
 
     @Test
-    void acceptsCurrentHeadAsCleanReturnPoint() throws Exception {
+    void keepsSourceRefUntilCheckpointedRestorePublishes() throws Exception {
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
         CommitRepository commits = new CommitRepository(repositoryRoot);
         BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
@@ -84,27 +87,47 @@ class ReturnPointRestorePreparationTest {
         var target = commits.write(commit(tree, List.of(), CommitKind.MANUAL));
         var current = commits.write(commit(tree, List.of(target), CommitKind.MANUAL));
         var main = refs.create(new BranchName("main"), current);
-        var saved = new SaveResult(current, main, WorkingIndexSnapshot.empty());
         BranchName hidden = new BranchName("hidden/return/zz-current");
-        for (int index = 0; index < 16; index++) {
-            refs.create(new BranchName("hidden/return/existing-" + index), current);
-        }
+        var checkpoint = commits.write(
+                commit(tree, List.of(current), CommitKind.HIDDEN_RETURN));
+        var hiddenRef = refs.create(hidden, checkpoint);
+        var captured = new WorkingIndexSnapshot(Map.of(new SectionKey(1, 2, 3), 7L));
+        var saved = new SaveResult(checkpoint, hiddenRef, captured);
         ReturnPointRestorePreparation preparation = new ReturnPointRestorePreparation(
                 new RestoreService(objects, commits, new OriginStore(repositoryRoot)),
                 new NoOpWorldApply(), refs, journals,
                 new ForwardHistoryService(commits, refs),
                 new RetentionService(commits, refs), Runnable::run);
 
-        RestoreOperation operation = preparation.prepare(
-                saved, target, hidden, UUID.randomUUID(), false).join();
+        RestoreOperation operation = preparation.prepareCheckpoint(
+                main, saved, target, UUID.randomUUID(),
+                new BranchRefRestorePublication(refs), ignored -> { }).join();
 
-        assertEquals(current, refs.read(hidden).orElseThrow().commit());
-        assertEquals(16, refs.list().stream().filter(ref ->
-                ref.name().value().startsWith("hidden/return/")).count());
+        assertEquals(main, refs.read(main.name()).orElseThrow());
+        assertEquals(checkpoint, refs.read(hidden).orElseThrow().commit());
         assertEquals(List.of(current), new ForwardHistoryService(commits, refs)
                 .roots(new BranchName("main"), Optional.of(new UUID(1, 1))));
         operation.tick(Long.MAX_VALUE);
-        assertTrue(journals.read().isPresent());
+
+        var journal = journals.read().orElseThrow();
+        assertEquals(current, journal.target().expectedHead());
+        assertEquals(Optional.of(checkpoint), journal.target().returnPoint());
+        assertEquals(Optional.of(captured), journal.capturedGenerations());
+        assertEquals(main, refs.read(main.name()).orElseThrow());
+
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+
+        assertEquals(RestoreStatus.COMPLETE, operation.status());
+        assertEquals(target, refs.read(main.name()).orElseThrow().commit());
+        assertEquals(checkpoint, refs.read(hidden).orElseThrow().commit());
+        assertTrue(journals.read().isEmpty());
+
+        CompletionException stale = assertThrows(CompletionException.class, () ->
+                preparation.prepareCheckpoint(
+                        main, saved, target, UUID.randomUUID(),
+                        new BranchRefRestorePublication(refs), ignored -> { }).join());
+        assertTrue(stale.getCause() instanceof java.io.IOException);
     }
 
     private static Commit commit(

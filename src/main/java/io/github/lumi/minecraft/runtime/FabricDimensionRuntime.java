@@ -754,10 +754,23 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 expected, author, "Return point before Restore", Instant.now(),
                 workspaceId, Optional.empty(), CommitKind.HIDDEN_RETURN);
         BranchName hiddenRef = new BranchName("hidden/return/" + operationId);
-        var operation = new ReturnPointRestoreOperation(
-                createSave(returnPoint), (saved, progress) -> returnPointRestores.prepare(
-                        saved, target, hiddenRef, operationId, includeEntities, progress));
-        return operation;
+        if (!includeEntities) {
+            return new ReturnPointRestoreOperation(
+                    createSave(returnPoint), (saved, progress) ->
+                            returnPointRestores.prepare(
+                                    saved, target, hiddenRef, operationId,
+                                    false, progress));
+        }
+        SaveCaptureOperation checkpoint = createChunkReadySave(
+                returnPoint, scopedSavePreparation(returnPoint),
+                (request, captured) -> saves.checkpoint(
+                        request, captured, hiddenRef), ignored -> { });
+        return new ReturnPointRestoreOperation(checkpoint, (saved, progress) ->
+                returnPointRestores.prepareCheckpoint(
+                        expected, saved, target, operationId,
+                        new BranchRefRestorePublication(
+                                refs, mutations, saved.capturedGenerations()),
+                        progress));
     }
 
     public synchronized LiveActionOperation startLiveAction(
