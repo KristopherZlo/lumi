@@ -8,7 +8,8 @@ public enum CommitKind {
     HIDDEN_SAFETY(4),
     HIDDEN_RETURN(5),
     MERGE(6),
-    IMPORT(7);
+    IMPORT(7),
+    RESTORE(8);
 
     private final int code;
 
