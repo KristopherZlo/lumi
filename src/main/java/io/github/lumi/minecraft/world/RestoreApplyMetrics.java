@@ -1,11 +1,15 @@
 package io.github.lumi.minecraft.world;
 
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.concurrent.atomic.LongAdder;
 
 /** Thread-safe measurements shared by all bounded batches of one apply session. */
 final class RestoreApplyMetrics {
     private final LongAdder loadedChunks = new LongAdder();
     private final LongAdder storedChunks = new LongAdder();
+    private final Map<StoredChunkApplyResult.Outcome, LongAdder> storedFallbacks =
+            new EnumMap<>(StoredChunkApplyResult.Outcome.class);
     private final LongAdder sectionSwaps = new LongAdder();
     private final LongAdder changedBlocks = new LongAdder();
     private final LongAdder lightSections = new LongAdder();
@@ -18,6 +22,15 @@ final class RestoreApplyMetrics {
     private final LongAdder storageWriteNanos = new LongAdder();
     private final LongAdder storageSyncNanos = new LongAdder();
     private final LongAdder verificationNanos = new LongAdder();
+
+    RestoreApplyMetrics() {
+        for (StoredChunkApplyResult.Outcome outcome
+                : StoredChunkApplyResult.Outcome.values()) {
+            if (outcome != StoredChunkApplyResult.Outcome.APPLIED) {
+                storedFallbacks.put(outcome, new LongAdder());
+            }
+        }
+    }
 
     void loadedSection(SectionApplyResult result) {
         if (result.changedCount() == 0) {
@@ -38,6 +51,10 @@ final class RestoreApplyMetrics {
     }
 
     void storedChunk(StoredChunkApplyResult result) {
+        if (!result.applied()) {
+            storedFallbacks.get(result.outcome()).increment();
+            return;
+        }
         storedChunks.increment();
         storageReadNanos.add(result.readNanos());
         storageWriteNanos.add(result.writeNanos());
@@ -57,7 +74,11 @@ final class RestoreApplyMetrics {
 
     RestoreApplyStatistics snapshot() {
         return new RestoreApplyStatistics(
-                loadedChunks.sum(), storedChunks.sum(), sectionSwaps.sum(),
+                loadedChunks.sum(), storedChunks.sum(), storedFallbacks.entrySet().stream()
+                        .filter(entry -> entry.getValue().sum() != 0)
+                        .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                                Map.Entry::getKey, entry -> entry.getValue().sum())),
+                sectionSwaps.sum(),
                 changedBlocks.sum(), lightSections.sum(), fullChunkPackets.sum(),
                 sectionPackets.sum(), packetPayloadBytes.sum(), chunkLoadNanos.sum(),
                 loadedApplyNanos.sum(), storageReadNanos.sum(), storageWriteNanos.sum(),

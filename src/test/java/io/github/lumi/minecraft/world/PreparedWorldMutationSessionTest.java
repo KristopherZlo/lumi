@@ -49,6 +49,8 @@ class PreparedWorldMutationSessionTest {
                 Map.of(key, decoded), Map.of());
         AtomicLong clock = new AtomicLong();
         FakeWorld world = new FakeWorld(clock, source);
+        world.storedResult = StoredChunkApplyResult.fallback(
+                StoredChunkApplyResult.Outcome.RESIDENT);
         PreparedWorldMutationSession session =
                 new PreparedWorldMutationSession(target, world, clock::get);
 
@@ -56,6 +58,8 @@ class PreparedWorldMutationSessionTest {
         assertEquals(1, world.sectionWrites);
         assertTrue(session.applyUntil(Long.MAX_VALUE));
         assertEquals(1, world.sectionWrites);
+        assertEquals(Map.of(StoredChunkApplyResult.Outcome.RESIDENT, 1L),
+                session.statistics().storedFallbacks());
         assertEquals(WorldStateApply.Verification.VERIFIED,
                 session.verifyUntil(Long.MAX_VALUE));
     }

@@ -57,6 +57,7 @@ record LumiRestoreMeasurement(
                 + ";chunkPath=" + chunkPath()
                 + ";loadedChunks=" + apply.loadedChunks()
                 + ";storedChunks=" + apply.storedChunks()
+                + ";storedFallbacks=" + apply.storedFallbacks()
                 + ";sectionSwaps=" + apply.sectionSwaps()
                 + ";changedBlocks=" + apply.changedBlocks()
                 + ";fullChunkPackets=" + apply.fullChunkPackets()

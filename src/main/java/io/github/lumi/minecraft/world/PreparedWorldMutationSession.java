@@ -297,9 +297,9 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             }
             storedApply = null;
             storedResults.forEach((chunk, result) -> {
+                metrics.storedChunk(result);
                 if (result.applied()) {
                     storedChunks.add(chunk);
-                    metrics.storedChunk(result);
                 }
             });
             return tryStoredChunk();

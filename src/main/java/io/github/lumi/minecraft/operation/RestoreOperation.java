@@ -769,11 +769,13 @@ public final class RestoreOperation implements DimensionMutation {
             String endpoint, RestoreApplyStatistics statistics) {
         LumiMod.LOGGER.info(
                 "Lumi Restore {} metrics: loadedChunks={}, storedChunks={}, "
+                        + "storedFallbacks={}, "
                         + "sectionSwaps={}, changedBlocks={}, lightSections={}, "
                         + "fullChunkPackets={}, sectionPackets={}, packetPayloadBytes={}, "
                         + "chunkLoadMs={}, loadedApplyMs={}, storageReadMs={}, "
                         + "storageWriteMs={}, storageSyncMs={}, verificationMs={}",
                 endpoint, statistics.loadedChunks(), statistics.storedChunks(),
+                statistics.storedFallbacks(),
                 statistics.sectionSwaps(), statistics.changedBlocks(),
                 statistics.lightSections(), statistics.fullChunkPackets(),
                 statistics.sectionPackets(), statistics.packetPayloadBytes(),

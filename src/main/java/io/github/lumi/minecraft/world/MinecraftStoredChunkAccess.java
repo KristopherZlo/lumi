@@ -54,7 +54,7 @@ final class MinecraftStoredChunkAccess {
         Objects.requireNonNull(targets, "targets");
         Objects.requireNonNull(entityChunks, "entityChunks");
         long readStarted = System.nanoTime();
-        Map<ChunkCoordinate, CompletableFuture<PreparedWrite>> preparing =
+        Map<ChunkCoordinate, CompletableFuture<Preparation>> preparing =
                 new LinkedHashMap<>();
         targets.forEach((coordinate, target) -> preparing.put(coordinate,
                 prepare(coordinate, target, entityChunks.contains(coordinate))));
@@ -70,23 +70,29 @@ final class MinecraftStoredChunkAccess {
         });
     }
 
-    private CompletableFuture<PreparedWrite> prepare(
+    private CompletableFuture<Preparation> prepare(
             ChunkCoordinate coordinate,
             Map<SectionKey, DecodedSection> target,
             boolean entitiesChanged) {
         Objects.requireNonNull(coordinate, "coordinate");
         Objects.requireNonNull(target, "target");
-        if (entitiesChanged || target.isEmpty() || target.values().stream()
+        if (entitiesChanged) {
+            return CompletableFuture.completedFuture(
+                    Preparation.fallback(StoredChunkApplyResult.Outcome.ENTITY_CHANGES));
+        }
+        if (target.isEmpty() || target.values().stream()
                 .anyMatch(section -> !section.hasPreparedDelta()
                         || section.preparedDelta().poiIndexes().length != 0)) {
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(
+                    Preparation.fallback(StoredChunkApplyResult.Outcome.UNSUPPORTED_DELTA));
         }
         ChunkPos position = new ChunkPos(coordinate.x(), coordinate.z());
         ChunkLoadGate.Lease gate = gates.get(coordinate);
         if (gate == null) {
             gate = ChunkLoadGate.tryAcquire(level, position);
             if (gate == null) {
-                return CompletableFuture.completedFuture(null);
+                return CompletableFuture.completedFuture(
+                        Preparation.fallback(StoredChunkApplyResult.Outcome.RESIDENT));
             }
             gates.put(coordinate, gate);
         }
@@ -94,14 +100,16 @@ final class MinecraftStoredChunkAccess {
         return level.getChunkSource().chunkMap.read(position).thenApply(stored -> {
             if (stored.isEmpty()) {
                 release(coordinate);
-                return null;
+                return Preparation.fallback(StoredChunkApplyResult.Outcome.MISSING);
             }
             try {
-                return new PreparedWrite(coordinate, position, target,
-                        patch(position, stored.orElseThrow(), target));
+                return Preparation.ready(new PreparedWrite(
+                        coordinate, position, target,
+                        patch(position, stored.orElseThrow(), target)));
             } catch (UnsupportedChunk unsupported) {
                 release(coordinate);
-                return null;
+                return Preparation.fallback(
+                        StoredChunkApplyResult.Outcome.UNSUPPORTED_STORAGE);
             } catch (IOException failed) {
                 throw new CompletionException(failed);
             }
@@ -109,16 +117,17 @@ final class MinecraftStoredChunkAccess {
     }
 
     private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> writeAndVerify(
-            Map<ChunkCoordinate, CompletableFuture<PreparedWrite>> preparing,
+            Map<ChunkCoordinate, CompletableFuture<Preparation>> preparing,
             long readNanos) {
         Map<ChunkCoordinate, StoredChunkApplyResult> results = new LinkedHashMap<>();
         List<PreparedWrite> writes = new ArrayList<>();
         preparing.forEach((coordinate, pending) -> {
-            PreparedWrite write = pending.join();
-            if (write == null) {
-                results.put(coordinate, StoredChunkApplyResult.FALLBACK);
+            Preparation preparation = pending.join();
+            if (preparation.write() == null) {
+                results.put(coordinate, StoredChunkApplyResult.fallback(
+                        preparation.fallback()));
             } else {
-                writes.add(write);
+                writes.add(preparation.write());
             }
         });
         if (writes.isEmpty()) {
@@ -200,6 +209,18 @@ final class MinecraftStoredChunkAccess {
             ChunkPos position,
             Map<SectionKey, DecodedSection> target,
             CompoundTag patched) { }
+
+    private record Preparation(
+            PreparedWrite write,
+            StoredChunkApplyResult.Outcome fallback) {
+        private static Preparation ready(PreparedWrite write) {
+            return new Preparation(Objects.requireNonNull(write, "write"), null);
+        }
+
+        private static Preparation fallback(StoredChunkApplyResult.Outcome outcome) {
+            return new Preparation(null, Objects.requireNonNull(outcome, "outcome"));
+        }
+    }
 
     String phase() {
         return phase;
