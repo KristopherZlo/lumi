@@ -73,10 +73,15 @@ final class MinecraftPersistedBatchVerifier {
             })
                     .thenApplyAsync(stored -> {
                         try {
-                            if (stored.isEmpty() || !storedChunks.matches(
-                                    position, stored.orElseThrow(), chunkTargets.get(chunk))) {
+                            String mismatch = stored.isEmpty()
+                                    ? "chunk is absent"
+                                    : storedChunks.mismatch(
+                                            position, stored.orElseThrow(),
+                                            chunkTargets.get(chunk));
+                            if (mismatch != null) {
                                 throw new IOException(
-                                        "Persisted Restore chunk mismatch: " + chunk);
+                                        "Persisted Restore chunk mismatch: "
+                                                + chunk + ": " + mismatch);
                             }
                             return (Void) null;
                         } catch (IOException failed) {

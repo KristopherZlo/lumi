@@ -172,10 +172,13 @@ final class MinecraftStoredChunkAccess {
             PreparedWrite write = entry.getKey();
             try {
                 var stored = entry.getValue().join();
-                if (stored.isEmpty() || !matches(
-                        write.position(), stored.orElseThrow(), write.target())) {
+                String mismatch = stored.isEmpty()
+                        ? "chunk is absent"
+                        : mismatch(write.position(), stored.orElseThrow(), write.target());
+                if (mismatch != null) {
                     throw new IOException(
-                            "Stored Restore verification failed for " + write.position());
+                            "Stored Restore verification failed for "
+                                    + write.position() + ": " + mismatch);
                 }
             } catch (IOException failed) {
                 throw new CompletionException(failed);
@@ -233,27 +236,38 @@ final class MinecraftStoredChunkAccess {
                 replaceBlockEntities(data.blockEntities(), target), lightChanged).write();
     }
 
-    boolean matches(
+    String mismatch(
             ChunkPos position,
             CompoundTag source,
             Map<SectionKey, DecodedSection> target) throws IOException {
         SerializableChunkData data = SerializableChunkData.parse(level, containers, source);
         if (!position.equals(data.chunkPos())) {
-            return false;
+            return "chunk position is " + data.chunkPos();
         }
         Map<Integer, SerializableChunkData.SectionData> sections = sectionMap(data);
         for (var entry : target.entrySet()) {
             var stored = sections.get(entry.getKey().sectionY());
-            if (stored == null || stored.chunkSection() == null
-                    || !matchesStates(stored.chunkSection(), entry.getValue())) {
-                return false;
+            if (stored == null || stored.chunkSection() == null) {
+                return "section is absent: " + entry.getKey();
             }
-            if (!blockEntities(data.blockEntities(), entry.getKey().sectionY())
-                    .equals(entry.getValue().blockEntities())) {
-                return false;
+            int block = firstMismatchedState(stored.chunkSection(), entry.getValue());
+            if (block >= 0) {
+                BlockState actual = stored.chunkSection().getBlockState(
+                        block & 15, (block >>> 8) & 15, (block >>> 4) & 15);
+                return "block " + MinecraftPreparedWorldAccess.position(
+                        entry.getKey(), block) + " expected "
+                        + entry.getValue().blockStates().get(block)
+                        + " but was " + actual;
+            }
+            Map<Integer, CompoundTag> actualBlockEntities =
+                    blockEntities(data.blockEntities(), entry.getKey().sectionY());
+            if (!actualBlockEntities.equals(entry.getValue().blockEntities())) {
+                return "block entities differ in " + entry.getKey()
+                        + ": expectedIndexes=" + entry.getValue().blockEntities().keySet()
+                        + ", actualIndexes=" + actualBlockEntities.keySet();
             }
         }
-        return true;
+        return null;
     }
 
     private Map<Heightmap.Types, long[]> recalculateHeightmaps(
@@ -362,16 +376,16 @@ final class MinecraftStoredChunkAccess {
         return Map.copyOf(result);
     }
 
-    private static boolean matchesStates(
+    private static int firstMismatchedState(
             LevelChunkSection stored, DecodedSection target) {
         for (int index = 0; index < target.blockStates().size(); index++) {
             if (!stored.getBlockState(
                     index & 15, (index >>> 8) & 15, (index >>> 4) & 15)
                     .equals(target.blockStates().get(index))) {
-                return false;
+                return index;
             }
         }
-        return true;
+        return -1;
     }
 
     private void release(ChunkCoordinate coordinate) {
