@@ -15,6 +15,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.components.Button;
@@ -124,19 +125,32 @@ final class LumiUiTestDriver {
     }
 
     void disablePreviewGeneration() {
-        if (!previewGenerationEnabled()) return;
+        disableSetting(
+                "luma.settings.preview_generation",
+                HistorySnapshotPayload.WorkspaceView::previewGenerationEnabled);
+    }
+
+    void disableEntityRestore() {
+        disableSetting(
+                "luma.settings.restore_entities",
+                HistorySnapshotPayload.WorkspaceView::includeEntitiesOnRestore);
+    }
+
+    private void disableSetting(
+            String translationKey,
+            Predicate<HistorySnapshotPayload.WorkspaceView> enabled) {
+        if (!enabled.test(activeWorkspace())) return;
         openTab("luma.action.settings", LumiSettingsScreen.class);
-        pressUniqueButton(
-                LumiSettingsScreen.class, "luma.settings.preview_generation");
+        pressUniqueButton(LumiSettingsScreen.class, translationKey);
         for (int tick = 0; tick < 1_200; tick++) {
-            if (!previewGenerationEnabled()) {
+            if (!enabled.test(activeWorkspace())) {
                 closeScreen(LumiSettingsScreen.class, LumiDashboardScreen.class);
                 closeScreen(LumiDashboardScreen.class, null);
                 return;
             }
             context.waitTick();
         }
-        throw new AssertionError("Preview generation remained enabled");
+        throw new AssertionError(translationKey + " remained enabled");
     }
 
     void awaitZone(String name, boolean active) {
@@ -334,11 +348,11 @@ final class LumiUiTestDriver {
         closeScreen(LumiDashboardScreen.class, null);
     }
 
-    private boolean previewGenerationEnabled() {
+    private HistorySnapshotPayload.WorkspaceView activeWorkspace() {
         return context.computeOnClient(client -> LumiClient.history().state()
                 .snapshot().orElseThrow().workspaces().stream()
                 .filter(HistorySnapshotPayload.WorkspaceView::active)
-                .findFirst().orElseThrow().previewGenerationEnabled());
+                .findFirst().orElseThrow());
     }
 
     void closeScreen(

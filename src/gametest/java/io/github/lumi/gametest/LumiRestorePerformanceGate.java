@@ -34,6 +34,14 @@ final class LumiRestorePerformanceGate {
         if (loadedChunks == 0 && storedChunks == 0) {
             throw new AssertionError("Restore benchmark exercised no chunk apply path");
         }
+        if (config.chunkPath().requiresUnloadedFixture()) {
+            long coldStoredChunks = measurements.getFirst().apply().storedChunks();
+            if (coldStoredChunks < config.fixtureChunks()) {
+                throw new AssertionError("Cold Restore benchmark applied "
+                        + coldStoredChunks + " stored chunks; expected at least "
+                        + config.fixtureChunks() + " fixture chunks");
+            }
+        }
         requireAtMost("additional Restore heap", maximumExtraHeap, MAX_EXTRA_HEAP);
         if (maximumTick == 0) {
             throw new AssertionError("Restore benchmark observed no complete server tick");

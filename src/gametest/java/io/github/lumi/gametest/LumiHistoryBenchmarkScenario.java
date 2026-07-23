@@ -15,6 +15,7 @@ import net.minecraft.core.BlockPos;
 /** Creates dense random history and measures real UI Save and Restore workflows. */
 final class LumiHistoryBenchmarkScenario {
     private static final int EDIT_TILE_SIZE = 256;
+    private static final int STORED_FIXTURE_OFFSET = 2_048;
     private static final int TILES_PER_DURABILITY_BARRIER = 4;
     private final LumiHistoryBenchmarkConfig config;
     private final LumiBehaviorReport report;
@@ -33,7 +34,8 @@ final class LumiHistoryBenchmarkScenario {
         this.report = report;
         operations = new LumiBehaviorOperations(
                 context, singleplayer.getServer(), report);
-        fixture = new LumiDenseSectionFixture(singleplayer.getServer(), report);
+        fixture = new LumiDenseSectionFixture(
+                context, singleplayer.getServer(), report);
         random = new Random(config.seed());
         baseArea = singleplayer.getServer().computeOnServer(server -> {
             var player = server.getPlayerList().getPlayers().getFirst();
@@ -41,8 +43,14 @@ final class LumiHistoryBenchmarkScenario {
             int maximumStartY = player.level().getMaxY() - config.layers();
             int y = Math.min(maximumStartY,
                     Math.max(origin.getY() + 48, 192));
-            int minX = origin.getX() - config.baseSize() / 2;
-            int minZ = origin.getZ() - config.baseSize() / 2;
+            int offset = config.chunkPath().requiresUnloadedFixture()
+                    ? STORED_FIXTURE_OFFSET : 0;
+            int minX = origin.getX() + offset - config.baseSize() / 2;
+            int minZ = origin.getZ() + offset - config.baseSize() / 2;
+            if (config.chunkPath().requiresUnloadedFixture()) {
+                minX = Math.floorDiv(minX, 16) * 16;
+                minZ = Math.floorDiv(minZ, 16) * 16;
+            }
             return new BlockBox(
                     minX, y, minZ,
                     minX + config.baseSize() - 1,
@@ -55,6 +63,9 @@ final class LumiHistoryBenchmarkScenario {
         ui.completeOnboardingIfShown();
         ui.awaitHistory();
         ui.disablePreviewGeneration();
+        if (config.chunkPath().requiresUnloadedFixture()) {
+            ui.disableEntityRestore();
+        }
         report.event("benchmark", "configuration", "started", 0, 0,
                 config.describe() + ";previewGeneration=false;baseArea="
                         + describe(baseArea));
@@ -93,8 +104,16 @@ final class LumiHistoryBenchmarkScenario {
             }
         }
 
+        List<Integer> restoreOrder;
+        if (config.chunkPath().requiresUnloadedFixture()) {
+            fixture.awaitUnloaded("stored_chunks_ready", baseArea);
+            restoreOrder = List.of(0);
+        } else {
+            restoreOrder = restoreIndices(
+                    commits.size(), config.restoreSamples());
+        }
         int restoreNumber = 0;
-        for (int index : restoreIndices(commits.size(), config.restoreSamples())) {
+        for (int index : restoreOrder) {
             String name = String.format("%02d-index-%03d", ++restoreNumber, index);
             LumiRestoreMeasurement restore =
                     operations.measureRestore(name, commits.get(index));
