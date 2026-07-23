@@ -234,10 +234,12 @@ public final class RestoreService {
                     regionIndex + 1, changedRegions.size(), progress);
         }
         boolean restorePlayerSpawns = area == null && scope == null;
+        var targetSectionReader = new RestoreSectionReader(objects);
+        var returnSectionReader = new RestoreSectionReader(objects);
         var targetSections = new RestorePlanMap<>(
-                sections.keySet(), key -> sections.get(key).target(objects));
+                sections.keySet(), key -> sections.get(key).target(targetSectionReader));
         var returnSections = new RestorePlanMap<>(
-                sections.keySet(), key -> sections.get(key).before(objects));
+                sections.keySet(), key -> sections.get(key).before(returnSectionReader));
         var targetEntities = new RestorePlanMap<>(
                 entities.keySet(), key -> objects.readEntities(entities.get(key).target()));
         var returnEntities = new RestorePlanMap<>(
@@ -419,12 +421,12 @@ public final class RestoreService {
             ObjectId targetId,
             SectionBlob selectedTarget,
             SectionBlob selectedBefore) {
-        private SectionBlob target(WorldObjectRepository objects) throws IOException {
-            return selectedTarget == null ? objects.readSection(targetId) : selectedTarget;
+        private SectionBlob target(RestoreSectionReader sections) throws IOException {
+            return selectedTarget == null ? sections.read(targetId) : selectedTarget;
         }
 
-        private SectionBlob before(WorldObjectRepository objects) throws IOException {
-            return selectedBefore == null ? objects.readSection(beforeId) : selectedBefore;
+        private SectionBlob before(RestoreSectionReader sections) throws IOException {
+            return selectedBefore == null ? sections.read(beforeId) : selectedBefore;
         }
     }
 
