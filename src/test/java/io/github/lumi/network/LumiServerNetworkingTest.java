@@ -4,11 +4,29 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.lumi.domain.model.HudDisplayMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class LumiServerNetworkingTest {
+    @Test
+    void createsNativeBossBarsOnlyForBossbarMode() {
+        assertFalse(LumiServerNetworking.usesBossBar(HudDisplayMode.GUI));
+        assertTrue(LumiServerNetworking.usesBossBar(HudDisplayMode.BOSSBAR));
+        assertFalse(LumiServerNetworking.usesBossBar(HudDisplayMode.NONE));
+    }
+
+    @Test
+    void resolvesHudModeBeforeStartingTrackedWork() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));
+        int start = source.indexOf("start(player, runtime, actual, payload)");
+        int mode = source.lastIndexOf("HudDisplayMode hudDisplayMode", start);
+
+        assertTrue(mode >= 0 && mode < start);
+    }
+
     @Test
     void keepsJoinSnapshotBoundedOnTheServerThread() throws Exception {
         String networking = Files.readString(Path.of(

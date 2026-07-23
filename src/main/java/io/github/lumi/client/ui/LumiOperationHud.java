@@ -33,6 +33,7 @@ public final class LumiOperationHud {
     }
 
     private void render(GuiGraphics graphics, net.minecraft.client.DeltaTracker ignored) {
+        if (!usesGui()) return;
         int y = renderWorkspace(graphics);
         OperationEventPayload event = history.state().activeOperation().orElse(null);
         if (event == null) return;
@@ -67,12 +68,6 @@ public final class LumiOperationHud {
         var snapshot = history.state().snapshot().orElse(null);
         var client = Minecraft.getInstance();
         if (snapshot == null || client.player == null) return 10;
-        boolean enabled = snapshot.workspaces().stream()
-                .filter(io.github.lumi.network.HistorySnapshotPayload.WorkspaceView::active)
-                .findFirst()
-                .map(workspace -> workspace.hudDisplayMode() == HudDisplayMode.GUI)
-                .orElse(true);
-        if (!enabled) return 10;
         boolean expanded = LumiHotkeys.actionModifierDown(
                 client.options.keyMappings);
         String branch = snapshot.branchName();
@@ -112,6 +107,15 @@ public final class LumiOperationHud {
                     x + 6, 61, width - 12, 0xff8f9aa8);
         }
         return nextPanelY(10, height);
+    }
+
+    private boolean usesGui() {
+        return history.state().snapshot().stream()
+                .flatMap(snapshot -> snapshot.workspaces().stream())
+                .filter(io.github.lumi.network.HistorySnapshotPayload.WorkspaceView::active)
+                .findFirst()
+                .map(workspace -> workspace.hudDisplayMode() == HudDisplayMode.GUI)
+                .orElse(true);
     }
 
     static int nextPanelY(int top, int height) {

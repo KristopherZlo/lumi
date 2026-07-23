@@ -7,6 +7,7 @@ import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.service.SaveRequest;
@@ -302,7 +303,10 @@ public final class LumiServerNetworking {
                 merge(player, runtime, payload, context);
                 return;
             }
-            track(player, runtime, payload, start(player, runtime, actual, payload));
+            HudDisplayMode hudDisplayMode =
+                    runtime.activeWorkspace().settings().hudDisplayMode();
+            track(player, runtime, payload,
+                    start(player, runtime, actual, payload), hudDisplayMode);
         } catch (IOException | IllegalArgumentException | IllegalStateException failed) {
             reject(player, payload, runtime, failed.getMessage());
         }
@@ -465,13 +469,16 @@ public final class LumiServerNetworking {
                         return;
                     }
                     try {
+                        HudDisplayMode hudDisplayMode =
+                                runtime.activeWorkspace().settings().hudDisplayMode();
                         DimensionMutation operation = runtime.startMerge(
                                 plan, completed ->
                                         terminal(player, runtime, payload, completed));
                         OperationTicket ticket = runtime.operations().ticketOf(operation)
                                 .orElseThrow(() -> new IllegalStateException(
                                         "Accepted merge has no queue ticket"));
-                        track(player, runtime, payload, new Started(ticket));
+                        track(player, runtime, payload,
+                                new Started(ticket), hudDisplayMode);
                     } catch (IOException | IllegalArgumentException | IllegalStateException failed) {
                         reject(player, payload, runtime, failed.getMessage());
                     }
@@ -482,7 +489,8 @@ public final class LumiServerNetworking {
             ServerPlayer player,
             FabricDimensionRuntime runtime,
             HistoryCommandPayload payload,
-            Started started) {
+            Started started,
+            HudDisplayMode hudDisplayMode) {
         TICKET_OWNERS.put(started.ticket().id(),
                 new TicketOwner(player.getUUID(), payload.requestId()));
         LumiMod.LOGGER.info(
@@ -496,7 +504,10 @@ public final class LumiServerNetworking {
             LumiMod.LOGGER.info(
                     "Lumi request {} ticket {} queue position {}",
                     payload.requestId(), started.ticket().id(), position);
-            bossBar(player, started.ticket(), position).setVisible(position == 0);
+            if (usesBossBar(hudDisplayMode)) {
+                bossBar(player, started.ticket(), position)
+                        .setVisible(position == 0);
+            }
         });
         AtomicReference<String> loggedPhase = new AtomicReference<>("");
         runtime.operations().observeProgress(started.ticket(), progress -> {
@@ -508,7 +519,7 @@ public final class LumiServerNetworking {
             }
             runtime.operations().queuePosition(started.ticket()).ifPresent(position ->
                         sendProgress(player, payload, runtime, started.ticket(),
-                                position, progress));
+                                hudDisplayMode, position, progress));
         });
         broadcastSnapshot(runtime);
     }
@@ -998,6 +1009,7 @@ public final class LumiServerNetworking {
             HistoryCommandPayload request,
             FabricDimensionRuntime runtime,
             OperationTicket ticket,
+            HudDisplayMode hudDisplayMode,
             int queuePosition,
             OperationProgress progress) {
         try {
@@ -1007,13 +1019,19 @@ public final class LumiServerNetworking {
                     OperationEventPayload.State.PROGRESS, progress.phase(),
                     head.commit(), head.revision(), Optional.of(ticket.id()),
                     queuePosition, Optional.of(progress)));
-            ServerBossEvent boss = bossBar(player, ticket, queuePosition);
-            boss.setName(Component.literal(progress.phase()));
-            boss.setProgress((float) progress.fraction().orElse(0.0));
-            boss.setVisible(queuePosition == 0);
+            if (usesBossBar(hudDisplayMode)) {
+                ServerBossEvent boss = bossBar(player, ticket, queuePosition);
+                boss.setName(Component.literal(progress.phase()));
+                boss.setProgress((float) progress.fraction().orElse(0.0));
+                boss.setVisible(queuePosition == 0);
+            }
         } catch (IOException failed) {
             LumiMod.LOGGER.error("Cannot publish Lumi operation progress", failed);
         }
+    }
+
+    static boolean usesBossBar(HudDisplayMode hudDisplayMode) {
+        return hudDisplayMode == HudDisplayMode.BOSSBAR;
     }
 
     private static ServerBossEvent bossBar(

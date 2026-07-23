@@ -31,6 +31,7 @@ class LumiOperationHudTest {
         assertTrue(source.contains("WorkspaceView::active"));
         assertTrue(source.contains(
                 "workspace.hudDisplayMode() == HudDisplayMode.GUI"));
+        assertTrue(source.contains("if (!usesGui()) return;"));
         assertTrue(source.contains("LumiHotkeys.actionModifierDown("));
         assertTrue(source.contains("result.workspace().total()"));
         assertTrue(source.contains("Integer.toString(snapshot.pendingKeys())"));
