@@ -15,7 +15,7 @@ public final class LumiMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        return !mixinClassName.endsWith("AxiomSetBufferMixin")
+        return !mixinClassName.contains(".Axiom")
                 || FabricLoader.getInstance().isModLoaded("axiom");
     }
 

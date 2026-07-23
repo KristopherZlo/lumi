@@ -1,6 +1,9 @@
 package io.github.lumi.gametest;
 
+import com.moulberry.axiom.AxiomServer;
 import com.moulberry.axiom.packets.AxiomServerboundSetBuffer;
+import com.moulberry.axiom.packets.AxiomServerboundSetBlock;
+import com.moulberry.axiom.restrictions.AxiomPermission;
 import com.moulberry.axiom.world_modification.BlockBuffer;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.service.LiveActionJournal;
@@ -8,19 +11,88 @@ import io.github.lumi.minecraft.operation.LiveActionOperation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 
-/** Real Axiom SetBuffer gate for low-level bulk section writes. */
+/** Real Axiom packet gates for low-level bulk and fast-place writes. */
 public final class LumiAxiomGameTests {
     private static final BlockPos FIRST = new BlockPos(2, 2, 2);
     private static final BlockPos SECOND = new BlockPos(3, 2, 2);
+
+    @GameTest(maxTicks = 300000)
+    public void axiomInfiniteReachIsUndoable(GameTestHelper helper) {
+        FabricDimensionRuntime runtime = runtime(helper);
+        AtomicReference<ServerPlayer> player = new AtomicReference<>();
+        AtomicReference<LiveActionOperation> undo = new AtomicReference<>();
+        AtomicReference<LiveActionOperation> redo = new AtomicReference<>();
+        UUID test = UUID.randomUUID();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    player.set(helper.makeMockServerPlayerInLevel());
+                    helper.setBlock(FIRST, Blocks.STONE);
+                    helper.getLevel().getServer().getPlayerList()
+                            .op(player.get().nameAndId(),
+                                    Optional.of(LevelBasedPermissionSet.OWNER),
+                                    Optional.empty());
+                    player.get().setItemInHand(
+                            InteractionHand.MAIN_HAND,
+                            Blocks.GOLD_BLOCK.asItem().getDefaultInstance());
+                    AxiomServer.onAxiomActive(player.get());
+                    helper.assertTrue(AxiomServer.canUseAxiom(
+                                    player.get(), AxiomPermission.BUILD_PLACE),
+                            "Mock player lacks Axiom build permission");
+                    helper.assertTrue(runtime.freeze().isMutationAllowed(),
+                            "Lumi unexpectedly froze Axiom test mutations");
+                    applyInfiniteReach(helper, player.get());
+                    helper.assertBlockState(FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
+                    helper.assertTrue(runtime.liveActions()
+                                    .prepareUndo(player.get().getUUID()).isPresent(),
+                            "Axiom Infinite Reach did not create a live action");
+                    undo.set(runtime.startLiveAction(player.get().getUUID(),
+                            LiveActionJournal.Direction.UNDO, ignored -> { }));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    if (undo.get() == null) {
+                        return;
+                    }
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                            undo.get().terminalState(),
+                            "Axiom Infinite Reach Undo must succeed");
+                    helper.assertBlockState(FIRST, Blocks.STONE.defaultBlockState());
+                    redo.set(runtime.startLiveAction(player.get().getUUID(),
+                            LiveActionJournal.Direction.REDO, ignored -> { }));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    if (redo.get() != null) {
+                        helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                                redo.get().terminalState(),
+                                "Axiom Infinite Reach Redo must succeed");
+                        helper.assertBlockState(FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
+                    }
+                    AxiomServer.activeAxiomPlayers.remove(player.get().getUUID());
+                    helper.getLevel().getServer().getPlayerList()
+                            .deop(player.get().nameAndId());
+                    releasePlayer(helper, player.get(), test);
+                })
+                .thenSucceed();
+    }
 
     @GameTest(maxTicks = 300000)
     public void axiomBufferIsExactAndConflictIsAtomic(GameTestHelper helper) {
@@ -100,6 +172,20 @@ public final class LumiAxiomGameTests {
                 helper.getLevel().getBlockState(second));
         AxiomServerboundSetBuffer.applyBlockBufferServer(
                 buffer, helper.getLevel(), null, player);
+    }
+
+    private static void applyInfiniteReach(GameTestHelper helper, ServerPlayer player) {
+        BlockPos position = helper.absolutePos(FIRST);
+        new AxiomServerboundSetBlock(
+                Map.of(position, Blocks.GOLD_BLOCK.defaultBlockState()),
+                true,
+                AxiomServerboundSetBlock.REASON_INFINITEREACH,
+                false,
+                new BlockHitResult(
+                        Vec3.atCenterOf(position), Direction.UP, position, false),
+                InteractionHand.MAIN_HAND,
+                -1)
+                .handle(helper.getLevel().getServer(), player);
     }
 
     private static void releasePlayer(

@@ -4,6 +4,7 @@
   "plugin": "io.github.lumi.mixin.LumiMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "AxiomSetBlockMixin",
     "AxiomSetBufferMixin",
     "BlockEntityMixin",
     "ChunkMapPersistenceAccessor",
