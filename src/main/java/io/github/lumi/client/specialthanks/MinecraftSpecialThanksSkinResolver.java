@@ -1,12 +1,10 @@
 package io.github.lumi.client.specialthanks;
 
-import com.mojang.authlib.GameProfile;
 import io.github.lumi.LumiMod;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -17,11 +15,13 @@ import net.minecraft.client.renderer.texture.SkinTextureDownloader;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.core.ClientAsset;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.Util;
 import net.minecraft.world.entity.player.PlayerSkin;
+import net.minecraft.world.item.component.ResolvableProfile;
 
 /** Lazily resolves the two bundled credits without blocking the render thread. */
 public final class MinecraftSpecialThanksSkinResolver {
+    private static final Supplier<PlayerSkin> DEFAULT_SKIN =
+            DefaultPlayerSkin::getDefaultSkin;
     private final Minecraft client;
     private final SkinTextureDownloader downloader;
     private final Map<SpecialThanksEntry, CompletableFuture<Supplier<PlayerSkin>>> skins =
@@ -39,30 +39,30 @@ public final class MinecraftSpecialThanksSkinResolver {
         if (entry == null) {
             return DefaultPlayerSkin.getDefaultSkin();
         }
-        return skins.computeIfAbsent(entry, this::load)
-                .getNow(DefaultPlayerSkin::getDefaultSkin).get();
+        Supplier<PlayerSkin> skin = skins.computeIfAbsent(entry, this::load)
+                .getNow(DEFAULT_SKIN);
+        try {
+            return skin.get();
+        } catch (RuntimeException failed) {
+            return fallback(entry, failed).get();
+        }
     }
 
     private CompletableFuture<Supplier<PlayerSkin>> load(SpecialThanksEntry entry) {
-        CompletableFuture<Supplier<PlayerSkin>> base =
-                entry.profileSkinName().isBlank()
-                ? CompletableFuture.completedFuture(
-                        DefaultPlayerSkin::getDefaultSkin)
-                : CompletableFuture.supplyAsync(
-                        () -> loadProfileSkin(entry.profileSkinName()),
-                        Util.backgroundExecutor())
-                        .exceptionally(failed -> fallback(entry, failed));
+        Supplier<PlayerSkin> base = entry.profileSkinName().isBlank()
+                ? DEFAULT_SKIN : loadProfileSkin(entry.profileSkinName());
         ClientAsset.Texture bundled = bundledTexture(entry.skinAsset());
         if (bundled != null) {
-            return base.thenApply(skin -> () -> withBody(skin.get(), bundled));
+            return CompletableFuture.completedFuture(
+                    () -> withBody(base.get(), bundled));
         }
         if (entry.skinUrl().isBlank()) {
-            return base;
+            return CompletableFuture.completedFuture(base);
         }
-        return base.thenCompose(skin -> download(entry.skinUrl())
+        return download(entry.skinUrl())
                 .thenApply(texture -> (Supplier<PlayerSkin>)
-                        () -> withBody(skin.get(), texture))
-                .exceptionally(failed -> fallback(entry, skin, failed)));
+                        () -> withBody(base.get(), texture))
+                .exceptionally(failed -> fallback(entry, base, failed));
     }
 
     private static PlayerSkin withBody(PlayerSkin base, ClientAsset.Texture body) {
@@ -104,11 +104,9 @@ public final class MinecraftSpecialThanksSkinResolver {
     }
 
     private Supplier<PlayerSkin> loadProfileSkin(String name) {
-        Optional<GameProfile> profile = client.services().profileResolver().fetchByName(name);
-        if (profile.isEmpty()) {
-            return DefaultPlayerSkin::getDefaultSkin;
-        }
-        return client.getSkinManager().createLookup(profile.orElseThrow(), true);
+        var lookup = client.playerSkinRenderCache().createLookup(
+                ResolvableProfile.createUnresolved(name));
+        return () -> lookup.get().playerSkin();
     }
 
     private Supplier<PlayerSkin> fallback(
