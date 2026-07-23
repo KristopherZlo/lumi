@@ -4,18 +4,35 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.github.lumi.domain.model.SectionKey;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class MinecraftWorldStateApplyTest {
     @Test
     void ordersVisibleChunksFirstWithoutSplittingTheirSections() {
-        SectionKey far = new SectionKey(20, 0, 20);
+        SectionKey storedClosest = new SectionKey(1, 0, 1);
+        SectionKey visibleFar = new SectionKey(20, 0, 20);
         SectionKey nearHigh = new SectionKey(2, 1, 1);
         SectionKey nearLow = new SectionKey(2, 0, 1);
 
-        assertEquals(List.of(nearLow, nearHigh, far),
+        assertEquals(List.of(nearLow, nearHigh, visibleFar, storedClosest),
                 MinecraftWorldStateApply.prioritize(
-                        List.of(far, nearHigh, nearLow),
-                        List.of(new ChunkCoordinate(0, 0))));
+                        List.of(storedClosest, visibleFar, nearHigh, nearLow),
+                        List.of(new ChunkCoordinate(0, 0)),
+                        Set.of(
+                                new ChunkCoordinate(2, 1),
+                                new ChunkCoordinate(20, 20))));
+    }
+
+    @Test
+    void groupsStoredChunksByRegionAndRegionFileIndex() {
+        SectionKey nextRegion = new SectionKey(32, 0, 0);
+        SectionKey lateRow = new SectionKey(0, 0, 31);
+        SectionKey earlyRow = new SectionKey(31, 0, 0);
+
+        assertEquals(List.of(earlyRow, lateRow, nextRegion),
+                MinecraftWorldStateApply.prioritize(
+                        List.of(nextRegion, lateRow, earlyRow),
+                        List.of(new ChunkCoordinate(0, 0)), Set.of()));
     }
 }

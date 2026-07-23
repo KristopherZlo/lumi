@@ -6,10 +6,13 @@ import java.util.function.LongConsumer;
 import java.util.concurrent.Executor;
 import java.util.concurrent.CompletableFuture;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 
 /** Complete Minecraft WorldStateApply adapter: off-thread decode plus bounded mutation. */
 public final class MinecraftWorldStateApply implements WorldStateApply {
@@ -47,7 +50,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     public PreparedState prepare(
             State target, State base, LongConsumer progress) throws IOException {
         PreparedMinecraftPlanState plan = preparation.preflight(target, base, progress);
-        return plan.withSectionKeys(prioritize(plan.sectionKeys(), playerChunks()));
+        return prioritize(plan);
     }
 
     @Override
@@ -59,7 +62,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         targetProgress.accept(0);
         PreparedMinecraftPlanState plan = preparation.preflight(
                 target, returnPoint, targetProgress);
-        plan = plan.withSectionKeys(prioritize(plan.sectionKeys(), playerChunks()));
+        plan = prioritize(plan);
         returnProgress.accept(0);
         returnProgress.accept((long) returnPoint.sections().size()
                 + returnPoint.entities().size());
@@ -81,14 +84,21 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
                 new ChunkLoadSession(new MinecraftChunkLoadAccess(level)));
     }
 
-    private List<ChunkCoordinate> playerChunks() {
+    private PreparedMinecraftPlanState prioritize(PreparedMinecraftPlanState plan) {
+        PrioritySnapshot priority = prioritySnapshot(plan.sectionKeys());
+        return plan.withSectionKeys(prioritize(
+                plan.sectionKeys(), priority.players(), priority.resident()));
+    }
+
+    private PrioritySnapshot prioritySnapshot(
+            List<io.github.lumi.domain.model.SectionKey> sections) {
         if (level.getServer().isSameThread()) {
-            return snapshotPlayerChunks();
+            return snapshotPriority(sections);
         }
-        CompletableFuture<List<ChunkCoordinate>> snapshot = new CompletableFuture<>();
+        CompletableFuture<PrioritySnapshot> snapshot = new CompletableFuture<>();
         level.getServer().execute(() -> {
             try {
-                snapshot.complete(snapshotPlayerChunks());
+                snapshot.complete(snapshotPriority(sections));
             } catch (RuntimeException failed) {
                 snapshot.completeExceptionally(failed);
             }
@@ -96,22 +106,57 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         return snapshot.join();
     }
 
-    private List<ChunkCoordinate> snapshotPlayerChunks() {
-        return level.players().stream()
+    private PrioritySnapshot snapshotPriority(
+            List<io.github.lumi.domain.model.SectionKey> sections) {
+        List<ChunkCoordinate> players = level.players().stream()
                 .map(player -> new ChunkCoordinate(
                         player.chunkPosition().x, player.chunkPosition().z))
                 .toList();
+        Set<ChunkCoordinate> checked = new HashSet<>();
+        Set<ChunkCoordinate> resident = new HashSet<>();
+        for (var key : sections) {
+            ChunkCoordinate chunk = ChunkCoordinate.from(key);
+            if (!checked.add(chunk)) {
+                continue;
+            }
+            if (level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) != null
+                    || level.getChunkSource().chunkMap.getUpdatingChunkIfPresent(
+                            ChunkPos.asLong(chunk.x(), chunk.z())) != null) {
+                resident.add(chunk);
+            }
+        }
+        return new PrioritySnapshot(players, Set.copyOf(resident));
     }
 
     static List<io.github.lumi.domain.model.SectionKey> prioritize(
             List<io.github.lumi.domain.model.SectionKey> sections,
-            List<ChunkCoordinate> players) {
-        Comparator<io.github.lumi.domain.model.SectionKey> order =
+            List<ChunkCoordinate> players,
+            Set<ChunkCoordinate> resident) {
+        Comparator<io.github.lumi.domain.model.SectionKey> visibleOrder =
                 Comparator.comparingLong(key -> distanceSquared(key, players));
-        return sections.stream().sorted(order
+        visibleOrder = visibleOrder
                 .thenComparingInt(io.github.lumi.domain.model.SectionKey::chunkX)
                 .thenComparingInt(io.github.lumi.domain.model.SectionKey::chunkZ)
-                .thenComparingInt(io.github.lumi.domain.model.SectionKey::sectionY))
+                .thenComparingInt(io.github.lumi.domain.model.SectionKey::sectionY);
+        Comparator<io.github.lumi.domain.model.SectionKey> storedOrder =
+                Comparator.comparingLong(key -> regionDistanceSquared(key, players));
+        storedOrder = storedOrder
+                .thenComparingInt(key -> Math.floorDiv(
+                        key.chunkZ(), ChunkPos.REGION_SIZE))
+                .thenComparingInt(key -> Math.floorDiv(
+                        key.chunkX(), ChunkPos.REGION_SIZE))
+                .thenComparingInt(key -> Math.floorMod(
+                        key.chunkZ(), ChunkPos.REGION_SIZE))
+                .thenComparingInt(key -> Math.floorMod(
+                        key.chunkX(), ChunkPos.REGION_SIZE))
+                .thenComparingInt(io.github.lumi.domain.model.SectionKey::sectionY);
+        return java.util.stream.Stream.concat(
+                sections.stream()
+                        .filter(key -> resident.contains(ChunkCoordinate.from(key)))
+                        .sorted(visibleOrder),
+                sections.stream()
+                        .filter(key -> !resident.contains(ChunkCoordinate.from(key)))
+                        .sorted(storedOrder))
                 .toList();
     }
 
@@ -126,4 +171,24 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         }
         return nearest;
     }
+
+    private static long regionDistanceSquared(
+            io.github.lumi.domain.model.SectionKey key,
+            List<ChunkCoordinate> players) {
+        int regionX = Math.floorDiv(key.chunkX(), ChunkPos.REGION_SIZE);
+        int regionZ = Math.floorDiv(key.chunkZ(), ChunkPos.REGION_SIZE);
+        long nearest = Long.MAX_VALUE;
+        for (ChunkCoordinate player : players) {
+            long x = (long) regionX
+                    - Math.floorDiv(player.x(), ChunkPos.REGION_SIZE);
+            long z = (long) regionZ
+                    - Math.floorDiv(player.z(), ChunkPos.REGION_SIZE);
+            nearest = Math.min(nearest, x * x + z * z);
+        }
+        return nearest;
+    }
+
+    private record PrioritySnapshot(
+            List<ChunkCoordinate> players,
+            Set<ChunkCoordinate> resident) { }
 }
