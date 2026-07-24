@@ -3,13 +3,11 @@ package io.github.lumi.gametest;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitKind;
-import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.SaveRequest;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
-import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -73,7 +71,7 @@ public final class LumiProjectileGameTests {
     }
 
     @GameTest(maxTicks = 300000)
-    public void ownedEntityRemovalAfterSaveStillTriggersQuickRollback(
+    public void fullQuickRestoreRestoresAmbientAndIsUndoable(
             GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
@@ -83,9 +81,8 @@ public final class LumiProjectileGameTests {
         AtomicReference<UUID> action = new AtomicReference<>();
         AtomicReference<MutationTerminalState> saveTerminal = new AtomicReference<>();
         AtomicReference<MutationTerminalState> rollbackTerminal = new AtomicReference<>();
-        AtomicReference<MutationTerminalState> secondRollbackTerminal = new AtomicReference<>();
-        AtomicReference<String> secondRollbackMessage = new AtomicReference<>();
-        AtomicReference<SectionKey> ambientKey = new AtomicReference<>();
+        AtomicReference<MutationTerminalState> undoTerminal = new AtomicReference<>();
+        AtomicReference<BlockState> ambientBaseline = new AtomicReference<>();
 
         helper.startSequence()
                 .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
@@ -111,8 +108,8 @@ public final class LumiProjectileGameTests {
                             saveTerminal.get(), "Arrow baseline Save must succeed");
                     helper.assertFalse(runtime.mutations().hasPendingBuilderChanges(),
                             "Save did not clear the captured builder draft");
+                    ambientBaseline.set(helper.getBlockState(AMBIENT));
                     helper.setBlock(AMBIENT, Blocks.DIAMOND_BLOCK);
-                    ambientKey.set(MinecraftSectionCapture.key(helper.absolutePos(AMBIENT)));
                     try (var ignored = DirectLiveActionContext.resume(
                             runtime.liveActions(), action.get())) {
                         arrow.get().discard();
@@ -128,47 +125,31 @@ public final class LumiProjectileGameTests {
                                         operation.terminalState()));
                     } catch (IOException failed) {
                         throw helper.assertionException(
-                                "Cannot start Quick Rollback: %s", failed.getMessage());
+                                "Cannot start Quick Restore: %s", failed.getMessage());
                     }
                 })
                 .thenWaitUntil(() -> requireIdle(helper, runtime))
                 .thenExecute(() -> {
                     helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
-                            rollbackTerminal.get(), "Quick Rollback must succeed");
+                            rollbackTerminal.get(), "Quick Restore must succeed");
                     helper.assertTrue(helper.getLevel().getEntityInAnyDimension(
                                     arrow.get().getUUID()) instanceof Arrow,
-                            "Quick Rollback did not restore the saved arrow");
-                    helper.assertBlockState(
-                            AMBIENT, Blocks.DIAMOND_BLOCK.defaultBlockState());
-                    helper.assertTrue(runtime.mutations().snapshot().generations()
-                                    .containsKey(ambientKey.get()),
-                            "Quick Rollback cleared ambient-only pending work");
-                    helper.assertTrue(runtime.mutations().builderSnapshot()
-                                    .generations().isEmpty(),
-                            "Authorized entity Restore recreated a builder marker");
-                    try {
-                        runtime.startQuickRollback(author, operation -> {
-                            secondRollbackTerminal.set(operation.terminalState());
-                            secondRollbackMessage.set(
-                                    operation.completionMessage().orElse(""));
-                        });
-                    } catch (IOException failed) {
-                        throw helper.assertionException(
-                                "Cannot start second Quick Rollback: %s",
-                                failed.getMessage());
-                    }
+                            "Quick Restore did not restore the saved arrow");
+                    helper.assertBlockState(AMBIENT, ambientBaseline.get());
+                    helper.assertTrue(runtime.mutations().snapshot().generations().isEmpty(),
+                            "Quick Restore did not clear its full pending boundary");
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
+                            operation -> undoTerminal.set(operation.terminalState()));
                 })
                 .thenWaitUntil(() -> requireIdle(helper, runtime))
                 .thenExecute(() -> {
                     helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
-                            secondRollbackTerminal.get(),
-                            "Second Quick Rollback must be a successful no-op");
-                    helper.assertValueEqual("luma.status.nothing_to_restore",
-                            secondRollbackMessage.get(),
-                            "Second Quick Rollback did not report a clean builder draft");
-                    helper.assertTrue(runtime.mutations().snapshot().generations()
-                                    .containsKey(ambientKey.get()),
-                            "No-op Quick Rollback cleared ambient-only pending work");
+                            undoTerminal.get(), "Quick Restore Undo must succeed");
+                    helper.assertTrue(helper.getLevel().getEntityInAnyDimension(
+                                    arrow.get().getUUID()) == null,
+                            "Undo did not remove the arrow restored by Quick Restore");
+                    helper.assertBlockState(
+                            AMBIENT, Blocks.DIAMOND_BLOCK.defaultBlockState());
                 })
                 .thenExecute(() -> LumiGameTestLease.release(test))
                 .thenSucceed();

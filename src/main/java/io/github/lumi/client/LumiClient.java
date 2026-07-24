@@ -174,7 +174,7 @@ public final class LumiClient implements ClientModInitializer {
                                 .orElse("luma.status.compare_failed");
                     }
                     @Override public void quickRollback() {
-                        NETWORKING.quickRollback(SELECTION.bounds());
+                        NETWORKING.quickRollback();
                     }
                     @Override public void switchBranch(int keyCode) {
                         var snapshot = HISTORY.state().snapshot().orElseThrow(
@@ -233,7 +233,7 @@ public final class LumiClient implements ClientModInitializer {
                     showFeedback("luma.hotkeys.pending_preview_help");
                     client.setScreen(null);
                 },
-                () -> NETWORKING.quickRollback(SELECTION.bounds()),
+                NETWORKING::quickRollback,
                 version -> openVersionDetails(client.screen, version),
                 version -> openRestore(client.screen, version),
                 version -> openBranchAt(client.screen, version),

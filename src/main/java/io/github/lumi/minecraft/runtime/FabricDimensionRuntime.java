@@ -1553,7 +1553,25 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public synchronized DimensionMutation startQuickRollback(
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
-        return startQuickRollback(Optional.empty(), author, terminalObserver);
+        requireNoRecovery();
+        Objects.requireNonNull(author, "author");
+        var operation = new DeferredDimensionMutation(true, () -> {
+            var workspace = activeWorkspace();
+            Map<HistoryKey, Long> generations = new HashMap<>();
+            mutations.snapshot().generations().forEach((key, generation) -> {
+                if (workspace.includes(key)) {
+                    generations.put(key, generation);
+                }
+            });
+            WorkingIndexSnapshot pending = new WorkingIndexSnapshot(generations);
+            return pending.generations().isEmpty()
+                    ? new NoChangeMutation("luma.status.nothing_to_restore")
+                    : new LiveRecordedMutation(
+                            liveActions, author.id(), action ->
+                            createQuickRollback(author, pending, action));
+        });
+        operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
+        return operation;
     }
 
     public io.github.lumi.domain.model.Zone editActiveZone(
@@ -1574,27 +1592,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             throws IOException {
         requireZoneMetadataMutable();
         zones.delete(activeWorkspaceId(), zoneId, expectedRevision);
-    }
-
-    public synchronized DimensionMutation startQuickRollback(
-            Optional<BlockBox> selection,
-            CommitAuthor author,
-            Consumer<DimensionMutation> terminalObserver) throws IOException {
-        requireNoRecovery();
-        Objects.requireNonNull(selection, "selection");
-        Objects.requireNonNull(author, "author");
-        var operation = new DeferredDimensionMutation(true, () -> {
-            var workspace = activeWorkspace();
-            WorkingIndexSnapshot builder = mutations.builderSnapshot(key ->
-                    workspace.includes(key) && inside(selection, key));
-            return builder.generations().isEmpty()
-                    ? new NoChangeMutation("luma.status.nothing_to_restore")
-                    : new LiveRecordedMutation(
-                            liveActions, author.id(), action ->
-                            createQuickRollback(author, builder, selection, action));
-        });
-        operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
-        return operation;
     }
 
     public synchronized DimensionMutation startPlannedPartialRestore(
@@ -1638,8 +1635,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private ReturnPointRestoreOperation createQuickRollback(
-            CommitAuthor author, WorkingIndexSnapshot builder,
-            Optional<BlockBox> selection, UUID liveAction)
+            CommitAuthor author, WorkingIndexSnapshot pending, UUID liveAction)
             throws IOException {
         BranchRef expected = activeRef();
         UUID operationId = UUID.randomUUID();
@@ -1650,7 +1646,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
         SaveCaptureOperation checkpoint = createChunkReadySave(
                 checkpointRequest,
-                scopedSavePreparation(builder.generations()::containsKey),
+                scopedSavePreparation(pending.generations()::containsKey),
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
                 ignored -> { });
         var operation = new ReturnPointRestoreOperation(checkpoint, (saved, progress) ->
@@ -1659,15 +1655,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         if (!activeRef().equals(expected)) {
                             throw new IOException("Active branch changed during Quick Rollback");
                         }
-                        var full = restores.prepare(
+                        var prepared = restores.prepare(
                                 expected, saved.commitId(), expected.commit(),
                                 value -> publishRestoreDiffProgress(progress, value)).materialize();
-                        var prepared = selection.isEmpty() ? full
-                                : restores.preparePartial(
-                                        expected, saved.commitId(), expected.commit(),
-                                        selection.orElseThrow(), false,
-                                        value -> publishRestoreDiffProgress(progress, value))
-                                        .materialize();
                         liveWorld.prepareRestore(
                                 prepared.sections(), prepared.returnSections());
                         var targetEntities = liveEntityWorld.prepareRestore(
@@ -1682,9 +1672,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                 prepared.restorePlayerSpawns()));
                         return RestoreOperation.startQuickRollback(
                                 prepared, worldApply, new WorkingIndexClearPublication(
-                                        mutations, clearableQuickRollbackKeys(
-                                                saved.capturedGenerations(),
-                                                full, selection)),
+                                        mutations, saved.capturedGenerations()),
                                 journals, operationId, restoreStateListener,
                                 saved.commitId(), saved.capturedGenerations(), progress);
                     } catch (IOException failed) {
@@ -1701,55 +1689,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 "Restore: comparing region " + progress.regionIndex()
                         + "/" + progress.regionTotal(),
                 progress.chunkCompleted(), progress.chunkTotal()));
-    }
-
-    static boolean inside(Optional<BlockBox> selection, HistoryKey key) {
-        if (selection.isEmpty()) {
-            return true;
-        }
-        BlockBox area = selection.orElseThrow();
-        return key instanceof SectionKey section && area.intersects(section);
-    }
-
-    private static WorkingIndexSnapshot clearableQuickRollbackKeys(
-            WorkingIndexSnapshot captured,
-            PreparedRestore full,
-            Optional<BlockBox> selection) {
-        if (selection.isEmpty()) {
-            return captured;
-        }
-        Map<HistoryKey, Long> clearable = new HashMap<>();
-        captured.generations().forEach((key, generation) -> {
-            if (!(key instanceof SectionKey section)) {
-                return;
-            }
-            SectionBlob before = full.returnSections().get(section);
-            SectionBlob after = full.sections().get(section);
-            if (before == null || after == null
-                    || changesOnlyInside(selection.orElseThrow(), section, before, after)) {
-                clearable.put(key, generation);
-            }
-        });
-        return new WorkingIndexSnapshot(clearable);
-    }
-
-    static boolean changesOnlyInside(
-            BlockBox area, SectionKey section,
-            SectionBlob before, SectionBlob after) {
-        for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
-            if (before.blockStates().get(index).equals(after.blockStates().get(index))
-                    && Objects.equals(before.blockEntities().get(index),
-                            after.blockEntities().get(index))) {
-                continue;
-            }
-            int x = section.chunkX() * 16 + (index & 15);
-            int z = section.chunkZ() * 16 + (index >>> 4 & 15);
-            int y = section.sectionY() * 16 + (index >>> 8 & 15);
-            if (!area.contains(x, y, z)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     public ServerLevel level() { return level; }

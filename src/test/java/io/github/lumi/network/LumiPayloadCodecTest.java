@@ -219,9 +219,7 @@ class LumiPayloadCodecTest {
         }
         HistoryCommandPayload rollback = new HistoryCommandPayload(
                 UUID.randomUUID(), HistoryCommandPayload.Kind.QUICK_ROLLBACK,
-                new QuickRollbackArgument(java.util.Optional.of(
-                        new io.github.lumi.domain.model.BlockBox(
-                                -2, 3, 4, 5, 6, 7))).encode(),
+                new QuickRollbackArgument().encode(),
                 id('2'), 43);
         assertEquals(rollback, roundTrip(HistoryCommandPayload.CODEC, rollback));
         HistoryCommandPayload switchBranch = new HistoryCommandPayload(

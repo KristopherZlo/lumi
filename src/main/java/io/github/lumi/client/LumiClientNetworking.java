@@ -195,12 +195,8 @@ public final class LumiClientNetworking {
     }
 
     public UUID quickRollback() {
-        return quickRollback(Optional.empty());
-    }
-
-    public UUID quickRollback(Optional<BlockBox> selection) {
         return send(HistoryCommandPayload.Kind.QUICK_ROLLBACK,
-                new QuickRollbackArgument(selection).encode());
+                new QuickRollbackArgument().encode());
     }
 
     public UUID undo() {

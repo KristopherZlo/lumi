@@ -707,9 +707,7 @@ public final class LumiServerNetworking {
             }
             case RESTORE_AREA_APPLY -> runtime.startPlannedPartialRestore(
                     UUID.fromString(payload.argument()), author, terminal);
-            case QUICK_ROLLBACK -> runtime.startQuickRollback(
-                    QuickRollbackArgument.parse(payload.argument()).selection(),
-                    author, terminal);
+            case QUICK_ROLLBACK -> runtime.startQuickRollback(author, terminal);
             case UNDO -> runtime.startLiveAction(
                     player.getUUID(), LiveActionJournal.Direction.UNDO, terminal);
             case REDO -> runtime.startLiveAction(
