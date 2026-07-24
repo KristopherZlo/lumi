@@ -7,7 +7,7 @@ import com.sk89q.worldedit.regions.selector.limit.SelectorLimits;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
-import io.github.lumi.minecraft.operation.LiveActionOperation;
+import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import java.util.Optional;
@@ -37,7 +37,7 @@ public final class LumiWorldEditGameTests {
     public void worldEditCommandUndoRedoIsExact(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         AtomicReference<ServerPlayer> player = new AtomicReference<>();
-        AtomicReference<LiveActionOperation> redo = new AtomicReference<>();
+        AtomicReference<DimensionMutation> redo = new AtomicReference<>();
         UUID test = UUID.randomUUID();
 
         helper.startSequence()
@@ -78,7 +78,7 @@ public final class LumiWorldEditGameTests {
         AtomicReference<ServerPlayer> player = new AtomicReference<>();
         UUID secondPlayer = UUID.randomUUID();
         UUID test = UUID.randomUUID();
-        AtomicReference<LiveActionOperation> conflicted = new AtomicReference<>();
+        AtomicReference<DimensionMutation> conflicted = new AtomicReference<>();
 
         helper.startSequence()
                 .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))

@@ -11,6 +11,7 @@ import io.github.lumi.minecraft.operation.BackgroundPreparedMutation;
 import io.github.lumi.minecraft.operation.BranchSwitchRestorePublication;
 import io.github.lumi.minecraft.operation.BranchRefRestorePublication;
 import io.github.lumi.minecraft.operation.CapturedGenerationCompletion;
+import io.github.lumi.minecraft.operation.CheckpointActionOperation;
 import io.github.lumi.minecraft.operation.PendingRestorePublication;
 import io.github.lumi.minecraft.operation.PendingStatisticsOperation;
 import io.github.lumi.minecraft.operation.OperationPriority;
@@ -535,7 +536,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private RestorePublication recoveryPublication(
             OperationJournal journal, RecoveryChoice choice) throws IOException {
         if (choice == RecoveryChoice.RETURN_CHECKPOINT
-                && journal.kind() != OperationKind.QUICK_ROLLBACK) {
+                && journal.kind() != OperationKind.QUICK_ROLLBACK
+                && journal.kind() != OperationKind.CHECKPOINT_UNDO) {
             return ignored -> { };
         }
         if (journal.kind() == OperationKind.BRANCH_SWITCH) {
@@ -573,10 +575,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 || journal.target().zoneRestore().isPresent()) {
             return new PendingRestorePublication(mutations);
         }
-        if (journal.kind() == OperationKind.QUICK_ROLLBACK) {
-            var action = choice == RecoveryChoice.RESUME_TARGET
-                    ? WorkingIndexRecoveryPublication.TargetAction.CLEAR
-                    : WorkingIndexRecoveryPublication.TargetAction.RESTORE;
+        if (journal.kind() == OperationKind.QUICK_ROLLBACK
+                || journal.kind() == OperationKind.CHECKPOINT_UNDO) {
+            boolean restoreTarget = journal.kind() == OperationKind.CHECKPOINT_UNDO;
+            boolean resumeTarget = choice == RecoveryChoice.RESUME_TARGET;
+            var action = restoreTarget == resumeTarget
+                    ? WorkingIndexRecoveryPublication.TargetAction.RESTORE
+                    : WorkingIndexRecoveryPublication.TargetAction.CLEAR;
             return new WorkingIndexRecoveryPublication(
                     mutations, journal.capturedGenerations(), action);
         }
@@ -774,12 +779,28 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         });
     }
 
-    public synchronized LiveActionOperation startLiveAction(
+    public synchronized DimensionMutation startLiveAction(
             UUID player,
             LiveActionJournal.Direction direction,
             Consumer<DimensionMutation> terminalObserver) {
         requireNoRecovery();
-        var operation = new LiveActionOperation(
+        var operation = new DeferredDimensionMutation(
+                true, () -> createSessionAction(player, direction));
+        operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
+        return operation;
+    }
+
+    private DimensionMutation createSessionAction(
+            UUID player,
+            LiveActionJournal.Direction direction) throws IOException {
+        Optional<LiveActionJournal.Plan> selected =
+                direction == LiveActionJournal.Direction.UNDO
+                        ? liveActions.prepareUndo(player)
+                        : liveActions.prepareRedo(player);
+        if (selected.flatMap(LiveActionJournal.Plan::checkpoint).isPresent()) {
+            return createCheckpointAction(selected.orElseThrow());
+        }
+        return new LiveActionOperation(
                 liveActions, player, direction, liveWorld,
                 liveEntityWorld, new LiveActionOperation.PendingCancellation() {
                     @Override
@@ -792,8 +813,60 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         return causalTicks.cancellationMayChangeBlocks(action);
                     }
                 }, this::publishLiveAction);
-        operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
-        return operation;
+    }
+
+    private CheckpointActionOperation createCheckpointAction(
+            LiveActionJournal.Plan plan) throws IOException {
+        LiveActionJournal.Checkpoint checkpoint = plan.checkpoint().orElseThrow();
+        if (!activeRef().equals(checkpoint.expectedRef())) {
+            throw new IOException(
+                    "Quick Restore Undo is unavailable after HEAD changed");
+        }
+        boolean undo = plan.direction() == LiveActionJournal.Direction.UNDO;
+        CommitId source = undo
+                ? checkpoint.expectedRef().commit() : checkpoint.dirtyCommit();
+        CommitId target = undo
+                ? checkpoint.dirtyCommit() : checkpoint.expectedRef().commit();
+        OperationKind kind = undo
+                ? OperationKind.CHECKPOINT_UNDO : OperationKind.QUICK_ROLLBACK;
+        var action = undo
+                ? WorkingIndexRecoveryPublication.TargetAction.RESTORE
+                : WorkingIndexRecoveryPublication.TargetAction.CLEAR;
+        var progress = new AtomicReference<>(OperationProgress.indeterminate(
+                "Restore: reading checkpoint"));
+        CompletableFuture<RestoreOperation> preparation = CompletableFuture.supplyAsync(() -> {
+            try {
+                PreparedRestore prepared = restores.prepare(
+                        checkpoint.expectedRef(), source, target,
+                        value -> publishRestoreDiffProgress(progress::set, value));
+                return RestoreOperation.startCheckpointAction(
+                        prepared, worldApply,
+                        new WorkingIndexRecoveryPublication(
+                                mutations, Optional.empty(), action),
+                        journals, UUID.randomUUID(), restoreStateListener,
+                        kind, source, progress::set);
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+        var restore = new BackgroundPreparedMutation<>(
+                preparation,
+                () -> {
+                    if (!activeRef().equals(checkpoint.expectedRef())
+                            || !selectedPlan(plan.player(), plan.direction()).equals(
+                                    Optional.of(plan))) {
+                        throw new IOException(
+                                "Quick Restore session action changed during preparation");
+                    }
+                },
+                ignored -> { }, true, false, progress::get);
+        return new CheckpointActionOperation(liveActions, plan, restore);
+    }
+
+    private Optional<LiveActionJournal.Plan> selectedPlan(
+            UUID player, LiveActionJournal.Direction direction) {
+        return direction == LiveActionJournal.Direction.UNDO
+                ? liveActions.prepareUndo(player) : liveActions.prepareRedo(player);
     }
 
     public LiveActionJournal liveActions() { return liveActions; }
@@ -1547,6 +1620,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         Objects.requireNonNull(author, "author");
+        var context = new AtomicReference<QuickRollbackContext>();
         var operation = new DeferredDimensionMutation(true, () -> {
             var workspace = activeWorkspace();
             Map<HistoryKey, Long> generations = new HashMap<>();
@@ -1556,13 +1630,32 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 }
             });
             WorkingIndexSnapshot pending = new WorkingIndexSnapshot(generations);
-            return pending.generations().isEmpty()
-                    ? new NoChangeMutation("luma.status.nothing_to_restore")
-                    : new LiveRecordedMutation(
-                            liveActions, author.id(), action ->
-                            createQuickRollback(author, pending, action));
+            if (pending.generations().isEmpty()) {
+                return new NoChangeMutation("luma.status.nothing_to_restore");
+            }
+            BranchRef expected = activeRef();
+            ReturnPointRestoreOperation rollback =
+                    createQuickRollback(author, pending, expected);
+            context.set(new QuickRollbackContext(expected, rollback));
+            return rollback;
         });
-        operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
+        operations.enqueue(operation, OperationPriority.URGENT, completed -> {
+            try {
+                if (completed.terminalState()
+                        == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
+                    QuickRollbackContext value = context.get();
+                    if (value != null) {
+                        var saved = value.operation().returnPoint().orElseThrow();
+                        liveActions.pushCheckpoint(
+                                author.id(), new LiveActionJournal.Checkpoint(
+                                        value.expectedRef(), saved.commitId(),
+                                        saved.branchRef().name()));
+                    }
+                }
+            } finally {
+                terminalObserver.accept(completed);
+            }
+        });
         return operation;
     }
 
@@ -1627,9 +1720,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private ReturnPointRestoreOperation createQuickRollback(
-            CommitAuthor author, WorkingIndexSnapshot pending, UUID liveAction)
+            CommitAuthor author,
+            WorkingIndexSnapshot pending,
+            BranchRef expected)
             throws IOException {
-        BranchRef expected = activeRef();
         UUID operationId = UUID.randomUUID();
         BranchName hidden = new BranchName("hidden/rollback/" + operationId);
         SaveRequest checkpointRequest = new SaveRequest(
@@ -1649,19 +1743,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         }
                         var prepared = restores.prepare(
                                 expected, saved.commitId(), expected.commit(),
-                                value -> publishRestoreDiffProgress(progress, value)).materialize();
-                        liveWorld.prepareRestore(
-                                prepared.sections(), prepared.returnSections());
-                        var targetEntities = liveEntityWorld.prepareRestore(
-                                prepared.entities());
-                        var returnEntities = liveEntityWorld.prepareRestore(
-                                prepared.returnEntities());
-                        liveActions.recordRestore(liveAction, new PreparedRestore(
-                                prepared.expectedRef(), prepared.targetCommit(),
-                                prepared.sections(), targetEntities,
-                                prepared.returnSections(), returnEntities,
-                                prepared.playerSpawns(), prepared.returnPlayerSpawns(),
-                                prepared.restorePlayerSpawns()));
+                                value -> publishRestoreDiffProgress(progress, value));
                         return RestoreOperation.startQuickRollback(
                                 prepared, worldApply, new WorkingIndexClearPublication(
                                         mutations, saved.capturedGenerations()),
@@ -1673,6 +1755,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 }, background));
         return operation;
     }
+
+    private record QuickRollbackContext(
+            BranchRef expectedRef,
+            ReturnPointRestoreOperation operation) { }
 
     private static void publishRestoreDiffProgress(
             Consumer<OperationProgress> target,

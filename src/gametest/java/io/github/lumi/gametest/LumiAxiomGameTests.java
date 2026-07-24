@@ -7,7 +7,7 @@ import com.moulberry.axiom.restrictions.AxiomPermission;
 import com.moulberry.axiom.world_modification.BlockBuffer;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.service.LiveActionJournal;
-import io.github.lumi.minecraft.operation.LiveActionOperation;
+import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
@@ -36,8 +36,8 @@ public final class LumiAxiomGameTests {
     public void axiomInfiniteReachIsUndoable(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         AtomicReference<ServerPlayer> player = new AtomicReference<>();
-        AtomicReference<LiveActionOperation> undo = new AtomicReference<>();
-        AtomicReference<LiveActionOperation> redo = new AtomicReference<>();
+        AtomicReference<DimensionMutation> undo = new AtomicReference<>();
+        AtomicReference<DimensionMutation> redo = new AtomicReference<>();
         UUID test = UUID.randomUUID();
 
         helper.startSequence()
@@ -98,7 +98,7 @@ public final class LumiAxiomGameTests {
     public void axiomBufferIsExactAndConflictIsAtomic(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         AtomicReference<ServerPlayer> player = new AtomicReference<>();
-        AtomicReference<LiveActionOperation> conflicted = new AtomicReference<>();
+        AtomicReference<DimensionMutation> conflicted = new AtomicReference<>();
         UUID secondPlayer = UUID.randomUUID();
         UUID test = UUID.randomUUID();
 
