@@ -23,3 +23,9 @@ replay_pid*
 *.iml
 Thumbs.db
 Desktop.ini
+
+# Local design notes and generated references
+/.lumi-*.md
+/idea.md
+/lumi-player-training-uiux.md
+/docs/*_REFERENCE_*.md

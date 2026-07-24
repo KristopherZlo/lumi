@@ -1,102 +1,153 @@
-# Lumi V2
+# Lumi
 
-Lumi is a Fabric mod for Minecraft 1.21.11 that gives builders fast, durable
-world history without copying whole save folders.
+<p align="center">
+  <img alt="Lumi banner" src="lumi-banner.png" />
+</p>
 
-V2 is a clean implementation. It does not read legacy patch v9 or snapshot v8
-projects. The old world remains ordinary Minecraft data; new history lives in
-`<world>/lumi/history-v2/<dimension>/`.
+<p align="center">
+  <strong>Save the build. Try the idea. Undo the mistake.</strong>
+</p>
 
-## Product contract
+<p align="center">
+  <img alt="Minecraft 1.21.11" src="https://img.shields.io/badge/Minecraft-1.21.11-5E7C16?style=for-the-badge" />
+  <img alt="Fabric" src="https://img.shields.io/badge/Loader-Fabric-DBD0B4?style=for-the-badge" />
+  <img alt="Java 21" src="https://img.shields.io/badge/Java-21-1F6FEB?style=for-the-badge" />
+  <img alt="GPL 3.0" src="https://img.shields.io/badge/License-GPL%203.0-2EA043?style=for-the-badge" />
+</p>
 
-- Save reflects visible blocks, block entities, durable non-player entities,
-  and saved player spawn positions.
-- Published commits and refs survive crashes.
-- Every initialized dimension exposes one protected Initial save as the first
-  history entry, so builders can always restore the world starting point.
-- Restore verifies the applied result before publishing a ref.
-- Restore is one confirmation flow. With both an active wooden-sword selection
-  and the sword held, it offers whole-save, selected-area, and outside-selection
-  modes; both partial modes require an exact server preview before Apply.
-- Singleplayer and multiplayer use the same server-authoritative path.
-- Idle play performs no history work when nothing is dirty.
-- Automatic versions are opt-in per workspace. When enabled, dirty work
-  receives a ref-neutral version every five minutes and the latest 64 per
-  branch appear in normal history; they are neither created nor shown by
-  default.
-- Alt+Z/Y is session-only and separate from durable commits.
-- Alt+S opens the Save form, using the same focused modal with a Save zone
-  action while a zone is active; R rolls back only pending builder-root work
-  inside the active workspace and reports when the current saved version has
-  nothing to restore.
-- The same form can replace the latest version with a crash-safe Amend.
-- Another branch can be merged through the same verified apply pipeline;
-  overlapping conflicts explicitly use the source branch.
-- The remappable `Open Lumi` control defaults to U and opens paged Cards/Graph
-  history with branch and full-window server
-  tag/text filtering. Its workspace header reports exact added, removed and
-  changed pending block totals.
-  Cards expose preview, Open, Restore and Create branch; the branch browser
-  supports Create, Switch, Merge, protected Delete and persistent explicit
-  Action+1..0 assignments. Restoring an older version keeps its still-restorable
-  forward versions visible.
-- Successful integrated Save and Amend operations with builder changes capture
-  a bounded transparent isometric render for their new history entry; ambient
-  random ticks, the player framebuffer and open menus are excluded. The
-  successful operation carries the exact builder-section bounds, so an
-  asynchronous Save-form refresh cannot drop or misframe the preview. Preview
-  files load asynchronously behind the bundled loader; fully transparent PNGs
-  use the normal missing-image icon.
-- The Save modal refreshes its state automatically and has no manual preview
-  refresh control.
-- Work zones support empty color-assigned creation, exclusive Enter/Leave,
-  sword cell editing, merged Focused/All/Hidden world shells, overlap counts,
-  metadata-only Delete, and paged Cards/Graph commit management using the same
-  Build, Latest save, History and full-window search layout with exact
-  zone-scoped pending totals.
-- First-run onboarding opens once per client installation and remains replayable
-  from More. Its ten-step hands-on loop asks for three edits, a 1.5-second
-  Action-key preview, real Undo/Redo and Save operations, ten experimental
-  edits, Dashboard opening, See changes and Restore. Operation steps advance
-  only after the matching server request succeeds; after Redo, a second
-  1.5-second progress bar leaves the restored blocks visible. Start and Finish
-  are the only manual forward buttons; Back remains available, while the
-  top-right close action exits without completing. Spotlight targets remain
-  undimmed and clickable with a pointer cursor, and Finish shows the live
-  Action+Info bindings.
-  Each completed step plays the XP-orb cue; completing the tour plays Level Up.
-  Contextual tips show one
-  card at a time in groups of at most three, with a counter, previous/next
-  arrows and a final close action. A single-card tip shows only close; Alt+I
-  opens the separate hotkey guide.
-- Settings persists workspace history, Restore, preview, HUD and automatic
-  version defaults through descriptive rows with compact On/Off controls;
-  diagnostic telemetry remains client-local. More groups its secondary actions
-  into vertical History, Guides and Maintenance sections and does not duplicate
-  Settings, support or credits.
-- Check updates immediately performs a bounded lookup against Lumi's fixed
-  GitHub-hosted release manifest and shows progress/result in a compact modal.
-- Every project page owns the same bordered sidebar/header shell; switching tabs
-  replaces the content pane without retaining Dashboard as an input or rendering
-  proxy. Fullscreen changes use Minecraft's live logical viewport instead of
-  forcing the menu back to a framebuffer-derived compact profile.
-- The project sidebar keeps More with the navigation and a bottom Support Lumi
-  block with full-width icon-and-text actions for Buy me a coffee, PayPal and
-  GitHub bug reports; the container keeps bottom padding before the author
-  credit and mod version below it.
-- A one-time native Minecraft world backup can be requested before first V2
-  history creation with `-Dlumi.preModBackup.maxMiB=<limit>`; it is off by default.
+Lumi is durable world history for Minecraft builders.
 
-The implementation grows only through tested vertical slices. See
-[`modules.md`](modules.md) for code ownership and `docs/architecture.md` for
-the fixed boundaries. The evidence-backed legacy workflow audit and ordered V2
-parity work are tracked in
-[`docs/legacy-user-parity-plan.md`](docs/legacy-user-parity-plan.md).
+Save a good moment, explore another idea on a branch, compare the result, and
+return safely without copying the whole world folder or learning Git.
 
-## Build
+> [!WARNING]
+> Lumi is in alpha. Keep normal backups of worlds you care about.
 
-Use JDK 21:
+## What Lumi Does
+
+- Saves named versions of visible blocks, block entities, durable non-player
+  entities, and player respawn positions.
+- Creates branches for experiments without duplicating stored world data.
+- Compares any two saved versions and highlights added, removed, and changed
+  blocks in the world.
+- Restores a whole version, a wooden-sword selection, or everything outside the
+  selection.
+- Keeps workspaces and colored work zones as lightweight views over one shared
+  dimension history.
+- Provides session Undo/Redo and Quick Restore for unsaved builder changes.
+- Supports safe Amend, branch merge, soft-deleted history, tags, renaming,
+  search, and isometric save previews.
+- Imports and exports portable Lumi packages after inspection and confirmation.
+- Recovers interrupted operations without sacrificing previously valid history.
+- Integrates with normal Minecraft edits and supported WorldEdit and Axiom
+  builder workflows.
+
+Lumi is singleplayer-first. Integrated and dedicated servers use the same
+server-authoritative operation path, revision checks, progress reporting, and
+final verification.
+
+## Quick Start
+
+1. Install Lumi and Fabric API for Minecraft `1.21.11`.
+2. Enter a world and follow the first-run builder tour.
+3. Make a few changes and press `Alt+S` to save them.
+4. Press `U` to open Lumi and browse the new version.
+5. Create a branch before trying a risky idea, then compare or restore when you
+   are ready.
+
+Every initialized dimension starts with one protected **Initial** version, so
+the original state remains available from the beginning of its Lumi history.
+
+## Default Controls
+
+| Key | Action |
+| --- | --- |
+| `U` | Open Lumi |
+| `Alt+S` | Save the active workspace or zone |
+| `Alt+Z` / `Alt+Y` | Undo / Redo the latest session action |
+| `R` | Quick Restore unsaved changes to the active version |
+| `H` | Show or hide the compare highlight |
+| `Alt+I` | Open the hotkey guide |
+| `Alt+1` … `Alt+0` | Switch to an assigned branch |
+| Hold `Alt` | Preview pending work and enable Lumi action shortcuts |
+| Wooden sword | Select restore bounds and edit active-zone cells |
+
+All key bindings are remappable in Minecraft controls.
+
+## Install
+
+Download an alpha build from
+[GitHub Releases](https://github.com/KristopherZlo/lumi/releases) and place it
+in the `mods` folder together with Fabric API.
+
+| Requirement | Version |
+| --- | --- |
+| Minecraft | `1.21.11` |
+| Fabric Loader | `0.19.2` or newer compatible release |
+| Fabric API | `0.141.3+1.21.11` or newer compatible release |
+| Java | `21` |
+
+For a dedicated server, install Lumi on the server and on clients that use its
+screens and overlays. Server actions require operator permission; Survival-mode
+access must also be enabled in Lumi settings.
+
+WorldEdit and Axiom are optional. Lumi does not require either mod for ordinary
+play.
+
+## Reliability
+
+Lumi stores only the state needed for exact recovery. Save captures the visible
+world boundary; Restore prepares heavy work away from the server tick, applies
+bounded batches, persists them through Minecraft storage, and reads the result
+back before reporting success.
+
+Published history uses immutable content-addressed objects, sparse Merkle trees,
+hash-verified LZ4 packs, atomic refs, and operation journals. A failed or
+interrupted operation keeps the last valid history intact and offers a safe
+recovery path.
+
+Lumi data is separate from vanilla chunk data:
+
+```text
+<world>/lumi/history-v2/<dimension>/
+```
+
+Removing Lumi leaves a normal playable Minecraft world. V2 starts a new history
+and does not import legacy patch-v9 or snapshot-v8 projects.
+
+When there is no useful work, Lumi does no history processing. Long operations
+remain incremental and observable, while their working memory is bounded by the
+current batch instead of the entire world.
+
+## For Developers
+
+Use JDK 21.
 
 ```powershell
 .\gradlew.bat build --no-daemon
+.\gradlew.bat test --no-daemon
+.\gradlew.bat runClient --no-daemon
 ```
+
+The code is split by responsibility:
+
+| Layer | Responsibility |
+| --- | --- |
+| `domain/model` | Value objects, persisted records, summaries, runtime state |
+| `domain/service` | Save, Restore, Compare, branch, workspace, and zone rules |
+| `minecraft/*` | Capture hooks, Minecraft adapters, tick-time application |
+| `storage/*` | Object storage, serialization, refs, journals, and packages |
+| `network` | Revision-checked client/server commands and immutable payloads |
+| `client/ui/*` | Rendering, thin controllers, and immutable view state |
+
+Development references:
+
+- [Module map](modules.md)
+- [Architecture](docs/architecture.md)
+- [Storage format](docs/storage-format.md)
+- [Development and verification](docs/development.md)
+- [Maintenance guide](docs/maintenance-guide.md)
+
+## License
+
+GPL-3.0-only. See [LICENSE](LICENSE).
