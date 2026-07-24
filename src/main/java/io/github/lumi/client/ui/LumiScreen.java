@@ -41,6 +41,7 @@ abstract class LumiScreen extends Screen {
     private int animationWidth;
     private int animationHeight;
     private List<ClientContextualHelpHint> contextualHints = List.of();
+    private List<ClientContextualHelpHint> previousContextualHints = List.of();
     private ClientContextualHelpHint contextualHint;
     private int contextualHintIndex;
     private int hintX;
@@ -171,11 +172,17 @@ abstract class LumiScreen extends Screen {
         if (contextualHintsClosed) {
             return false;
         }
-        contextualHints = Objects.requireNonNull(hints, "hints").stream()
+        List<ClientContextualHelpHint> visible =
+                Objects.requireNonNull(hints, "hints").stream()
                 .filter(contextualHelp::shouldShowHint)
                 .limit(MAX_HINTS_PER_GROUP)
                 .toList();
-        if (contextualHints.isEmpty()) return false;
+        if (visible.isEmpty()) return false;
+        if (!visible.equals(previousContextualHints)) {
+            contextualHintIndex = 0;
+        }
+        contextualHints = visible;
+        previousContextualHints = visible;
         contextualHintIndex = Math.min(
                 contextualHintIndex, contextualHints.size() - 1);
         contextualHint = contextualHints.get(contextualHintIndex);
@@ -244,6 +251,7 @@ abstract class LumiScreen extends Screen {
         contextualHelp.resetHints();
         contextualHintsClosed = false;
         contextualHintIndex = 0;
+        previousContextualHints = List.of();
         rebuildWidgets();
     }
 

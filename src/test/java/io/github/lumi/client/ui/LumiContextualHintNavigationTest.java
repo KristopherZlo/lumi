@@ -18,5 +18,6 @@ class LumiContextualHintNavigationTest {
         assertTrue(source.contains("+ \"/\" + contextualHints.size()"));
         assertTrue(source.contains(".max().orElse(1) * 10"));
         assertTrue(source.contains("MAX_HINTS_PER_GROUP = 3"));
+        assertTrue(source.contains("!visible.equals(previousContextualHints)"));
     }
 }
