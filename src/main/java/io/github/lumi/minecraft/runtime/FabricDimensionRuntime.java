@@ -69,6 +69,7 @@ import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.domain.service.RecoveryChoice;
 import io.github.lumi.domain.service.RecoveryService;
 import io.github.lumi.domain.service.SaveJournalRecovery;
+import io.github.lumi.domain.service.SessionCheckpointRefService;
 import io.github.lumi.domain.service.PublishedApplyRecovery;
 import io.github.lumi.domain.service.PendingChangeStatisticsService;
 import io.github.lumi.domain.service.WorkspaceService;
@@ -179,8 +180,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final GarbageCollectionScheduler garbageCollection;
     private final Executor background;
     private final BranchRefRepository refs;
+    private final SessionCheckpointRefService sessionCheckpoints;
     private final UUID defaultWorkspaceId;
-    private final LiveActionJournal liveActions = new LiveActionJournal();
+    private final LiveActionJournal liveActions;
     private final MinecraftLiveBlockWorldAccess liveWorld;
     private final MinecraftLiveEntityWorldAccess liveEntityWorld;
     private final MinecraftLiveEntityTracker liveEntities;
@@ -212,6 +214,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             OperationJournalRepository journals,
             Executor background,
             BranchRefRepository refs,
+            SessionCheckpointRefService sessionCheckpoints,
             BranchService branches,
             MergeService merges,
             WorkspaceService workspaces,
@@ -257,6 +260,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         recoveries = new RecoveryService(restores, zones);
         this.background = background;
         this.refs = refs;
+        this.sessionCheckpoints = Objects.requireNonNull(
+                sessionCheckpoints, "sessionCheckpoints");
+        liveActions = new LiveActionJournal(
+                checkpoint -> releaseSessionCheckpoint(checkpoint.hiddenRef()));
         this.defaultWorkspaceId = defaultWorkspaceId;
         this.pendingRecovery = pendingRecovery;
         this.recoveryLease = recoveryLease;
@@ -338,6 +345,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             interrupted = Optional.empty();
         }
         UUID activeWorkspaceId = workspaceService.active().id();
+        var sessionCheckpoints = new SessionCheckpointRefService(refs);
         var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
                 objects, origins, working, durabilityBackground,
@@ -358,17 +366,31 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         new VersionTagRepository(repository)),
                 restoreService, blockOnlyRestoreService,
                 new MinecraftWorldStateApply(level, freeze, background), journals,
-                background, refs, branches,
+                background, refs, sessionCheckpoints, branches,
                 new MergeService(objects, commits, origins, trees), workspaceService,
                 new ZoneService(new ZoneRepository(repository)),
                 defaultWorkspaceId, activeWorkspaceId,
                 interrupted.orElse(null), recoveryLease);
+        runtime.pruneSessionCheckpointRefs(
+                retainedSessionCheckpointCommits(interrupted.orElse(null)));
         LumiMod.LOGGER.info(
                 "Lumi opened dimension {} in {} ms",
                 level.dimension().identifier(),
                 java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
                         System.nanoTime() - started));
         return runtime;
+    }
+
+    private static Set<CommitId> retainedSessionCheckpointCommits(
+            OperationJournal recovery) {
+        if (recovery == null || (recovery.kind() != OperationKind.QUICK_ROLLBACK
+                && recovery.kind() != OperationKind.CHECKPOINT_UNDO)) {
+            return Set.of();
+        }
+        var retained = new java.util.LinkedHashSet<CommitId>();
+        recovery.target().target().ifPresent(retained::add);
+        recovery.target().returnPoint().ifPresent(retained::add);
+        return Set.copyOf(retained);
     }
 
     private static void logTerminal(ServerLevel level, DimensionMutation operation) {
@@ -522,11 +544,15 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var lease = recoveryLease;
         recoveryLease = null;
         operations.startWithLease(operation, lease, completed -> {
+            boolean finished = completed.terminalState()
+                    != io.github.lumi.minecraft.operation.MutationTerminalState.DEGRADED;
             synchronized (FabricDimensionRuntime.this) {
-                if (completed.terminalState()
-                        != io.github.lumi.minecraft.operation.MutationTerminalState.DEGRADED) {
+                if (finished) {
                     pendingRecovery = null;
                 }
+            }
+            if (finished) {
+                pruneSessionCheckpointRefs(Set.of());
             }
             terminalObserver.accept(completed);
         });
@@ -1725,7 +1751,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             BranchRef expected)
             throws IOException {
         UUID operationId = UUID.randomUUID();
-        BranchName hidden = new BranchName("hidden/rollback/" + operationId);
+        BranchName hidden = sessionCheckpoints.name(operationId);
         SaveRequest checkpointRequest = new SaveRequest(
                 expected, author,
                 "Checkpoint before Quick Rollback", Instant.now(), activeWorkspaceId(),
@@ -1754,6 +1780,31 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     }
                 }, background));
         return operation;
+    }
+
+    private void releaseSessionCheckpoint(BranchRef checkpoint) {
+        try {
+            sessionCheckpoints.release(checkpoint);
+        } catch (IOException failed) {
+            LumiMod.LOGGER.warn(
+                    "Cannot release Lumi session checkpoint {}",
+                    checkpoint.name(), failed);
+        }
+    }
+
+    private void pruneSessionCheckpointRefs(Set<CommitId> retained) {
+        try {
+            int deleted = sessionCheckpoints.pruneOrphans(retained);
+            if (deleted > 0) {
+                LumiMod.LOGGER.info(
+                        "Lumi removed {} orphaned session checkpoints from {}",
+                        deleted, level.dimension().identifier());
+            }
+        } catch (IOException failed) {
+            LumiMod.LOGGER.warn(
+                    "Cannot prune Lumi session checkpoints for {}",
+                    level.dimension().identifier(), failed);
+        }
     }
 
     private record QuickRollbackContext(
@@ -1798,7 +1849,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 recoveryLease.release();
                 recoveryLease = null;
             }
-            causalTicks.close();
+            try {
+                causalTicks.close();
+                liveEntities.clear();
+            } finally {
+                liveActions.clear();
+            }
         }
         // Repository state has no open handles; background work is owned by the server session.
     }
