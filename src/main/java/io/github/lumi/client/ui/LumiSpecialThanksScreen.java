@@ -5,6 +5,7 @@ import io.github.lumi.client.specialthanks.SpecialThanksCatalogSource;
 import io.github.lumi.client.specialthanks.SpecialThanksEntry;
 import java.util.List;
 import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.model.player.PlayerCapeModel;
 import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -34,6 +35,7 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
     private int scroll;
     private PlayerModel wideModel;
     private PlayerModel slimModel;
+    private PlayerCapeModel capeModel;
 
     public LumiSpecialThanksScreen(Screen parent) {
         super(Component.translatable("luma.screen.special_thanks.title"));
@@ -53,6 +55,8 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
         var models = minecraft.getEntityModels();
         wideModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER), false);
         slimModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER_SLIM), true);
+        capeModel = new PlayerCapeModel(
+                models.bakeLayer(ModelLayers.PLAYER_CAPE));
     }
 
     @Override
@@ -122,17 +126,33 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
         PlayerSkin skin = skins.skinFor(entry);
         PlayerModel model = skin.model() == PlayerModelType.SLIM
                 ? slimModel : wideModel;
-        poseWalking(model, now);
         float uiScale = LumiUiScale.current().renderScale(
                 minecraft.getWindow().getGuiScale());
         float scale = FIT_SCALE * height / MODEL_HEIGHT;
+        float rotationY = 25.0F
+                + (float) (Math.floorMod(now, ORBIT_CYCLE_MILLIS)
+                        / (double) ORBIT_CYCLE_MILLIS * 360.0D);
+        if (skin.cape() != null) {
+            poseCape(capeModel, now);
+            graphics.submitSkinRenderState(
+                    capeModel,
+                    skin.cape().texturePath(),
+                    scale * uiScale,
+                    -5.0F,
+                    rotationY,
+                    PIVOT_Y,
+                    scaled(x, uiScale),
+                    scaled(y, uiScale),
+                    scaled(x + width, uiScale),
+                    scaled(y + height, uiScale));
+        }
+        poseWalking(model, now);
         graphics.submitSkinRenderState(
                 model,
                 skin.body().texturePath(),
                 scale * uiScale,
                 -5.0F,
-                25.0F + (float) (Math.floorMod(now, ORBIT_CYCLE_MILLIS)
-                        / (double) ORBIT_CYCLE_MILLIS * 360.0D),
+                rotationY,
                 PIVOT_Y,
                 scaled(x, uiScale),
                 scaled(y, uiScale),
@@ -143,8 +163,7 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
     private static void poseWalking(PlayerModel model, long now) {
         model.resetPose();
         model.setAllVisible(true);
-        float swing = (float) (Math.floorMod(now, WALK_CYCLE_MILLIS)
-                / (double) WALK_CYCLE_MILLIS * Math.PI * 2.0D);
+        float swing = walkPhase(now);
         float leg = (float) Math.sin(swing) * 0.55F;
         float arm = leg * 0.75F;
         model.rightLeg.xRot = leg;
@@ -154,6 +173,20 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
         model.rightArm.zRot = 0.04F;
         model.leftArm.zRot = -0.04F;
         model.head.xRot = 0.06F;
+    }
+
+    private static void poseCape(PlayerCapeModel model, long now) {
+        model.resetPose();
+        model.body.getChild("cape").xRot = capeRotation(now);
+    }
+
+    static float capeRotation(long now) {
+        return 0.26F + (float) Math.sin(walkPhase(now)) * 0.10F;
+    }
+
+    private static float walkPhase(long now) {
+        return (float) (Math.floorMod(now, WALK_CYCLE_MILLIS)
+                / (double) WALK_CYCLE_MILLIS * Math.PI * 2.0D);
     }
 
     private static int scaled(int coordinate, float scale) {

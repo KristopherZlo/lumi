@@ -76,6 +76,11 @@ final class OnboardingSpotlightLayout {
             return x + width / 2;
         }
 
+        boolean contains(double pointX, double pointY) {
+            return pointX >= x && pointX < right()
+                    && pointY >= y && pointY < bottom();
+        }
+
         Rect expand(int padding, int maxWidth, int maxHeight) {
             int left = clamp(x - padding, 0, maxWidth);
             int top = clamp(y - padding, 0, maxHeight);

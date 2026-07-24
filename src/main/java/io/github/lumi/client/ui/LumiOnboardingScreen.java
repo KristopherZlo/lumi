@@ -155,8 +155,7 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
         double x = virtualCoordinate(click.x());
         double y = virtualCoordinate(click.y());
         var hole = spotlight.hole();
-        if (x < hole.x() || x >= hole.right()
-                || y < hole.y() || y >= hole.bottom()) return false;
+        if (!hole.contains(x, y)) return false;
         boolean activated = background != null
                 && background.mouseClicked(click, doubled);
         if (activated && controller.current().kind()
@@ -169,6 +168,15 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
             }
         }
         return activated;
+    }
+
+    @Override
+    protected boolean pointerHovered(int mouseX, int mouseY) {
+        if (super.pointerHovered(mouseX, mouseY)) return true;
+        return spotlight != null
+                && spotlight.hole().contains(mouseX, mouseY)
+                && background instanceof LumiScreen screen
+                && screen.pointerHovered(mouseX, mouseY);
     }
 
     @Override

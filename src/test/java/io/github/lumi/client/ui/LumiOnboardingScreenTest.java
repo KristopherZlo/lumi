@@ -34,6 +34,8 @@ class LumiOnboardingScreenTest {
         assertTrue(source.contains("minecraft.setScreen(returnScreen)"));
         assertTrue(source.contains(
                 "return !controller.current().spotlight()"));
+        assertTrue(source.contains(
+                "screen.pointerHovered(mouseX, mouseY)"));
     }
 
     @Test

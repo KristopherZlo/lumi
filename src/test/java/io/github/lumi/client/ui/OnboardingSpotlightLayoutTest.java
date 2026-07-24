@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.client.onboarding.OnboardingTour;
@@ -20,6 +21,8 @@ class OnboardingSpotlightLayoutTest {
         assertEquals(36, changes.width());
         assertEquals(36, restore.width());
         assertTrue(restore.y() > changes.y());
+        assertTrue(changes.contains(changes.centerX(), changes.y()));
+        assertFalse(changes.contains(changes.x() - 1, changes.y()));
     }
 
     @Test

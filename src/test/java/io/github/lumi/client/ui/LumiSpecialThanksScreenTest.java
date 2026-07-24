@@ -18,7 +18,11 @@ class LumiSpecialThanksScreenTest {
         assertTrue(source.contains("MinecraftSpecialThanksSkinResolver"));
         assertTrue(source.contains("ModelLayers.PLAYER"));
         assertTrue(source.contains("ModelLayers.PLAYER_SLIM"));
+        assertTrue(source.contains("ModelLayers.PLAYER_CAPE"));
         assertTrue(source.contains("PlayerModelType.SLIM"));
+        assertTrue(source.contains("skin.cape() != null"));
+        assertTrue(source.indexOf("skin.cape().texturePath()")
+                < source.indexOf("skin.body().texturePath()"));
         assertTrue(source.contains("model.resetPose()"));
         assertTrue(source.contains("model.setAllVisible(true)"));
         assertTrue(source.contains("Math.sin"));
@@ -28,8 +32,16 @@ class LumiSpecialThanksScreenTest {
         assertTrue(source.contains("scale * uiScale"));
         assertTrue(source.contains("scaled(x + width, uiScale)"));
         assertFalse(source.contains("owo"));
-        assertFalse(source.contains("Cape"));
         assertTrue(source.contains("public boolean mouseScrolled("));
+    }
+
+    @Test
+    void capeWavesBehindTheWalkingPlayer() {
+        float resting = LumiSpecialThanksScreen.capeRotation(0);
+        float trailing = LumiSpecialThanksScreen.capeRotation(237);
+
+        assertTrue(resting > 0.0F);
+        assertTrue(trailing > resting);
     }
 
     @Test
