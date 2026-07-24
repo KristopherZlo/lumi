@@ -70,11 +70,12 @@ public final class LumiTntGameTests {
     }
 
     @GameTest(maxTicks = 300000)
-    public void activeTntOutlivesHistoryCountEviction(GameTestHelper helper) {
+    public void activeTntGroupExceedsMemberCountAndUndoes(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
         UUID test = UUID.randomUUID();
         BlockPos tnt = new BlockPos(3, 2, 3);
+        AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
 
         helper.startSequence()
                 .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
@@ -85,9 +86,17 @@ public final class LumiTntGameTests {
                         prime(helper, runtime, player, tnt);
                     }
                     helper.assertEntitiesPresent(EntityType.TNT, 65);
-                    helper.getEntities(EntityType.TNT).forEach(carrier -> carrier.setFuse(5));
+                    helper.getEntities(EntityType.TNT).forEach(carrier -> carrier.setFuse(200));
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
+                            operation -> terminal.set(operation.terminalState()));
                 })
-                .thenWaitUntil(() -> helper.assertEntityNotPresent(EntityType.TNT))
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED, terminal.get(),
+                            "Undo must retain and cancel all 65 grouped TNT actions");
+                    helper.assertBlockState(tnt, Blocks.TNT.defaultBlockState());
+                    assertNoActiveEntities(helper, EntityType.TNT);
+                })
                 .thenExecute(() -> LumiGameTestLease.release(test))
                 .thenSucceed();
     }

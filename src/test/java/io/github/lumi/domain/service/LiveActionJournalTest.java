@@ -284,20 +284,39 @@ class LiveActionJournalTest {
     }
 
     @Test
-    void evictedGroupMemberMakesTheRemainingGroupUnsafe() {
+    void actionLimitCountsAndEvictsWholeGroups() {
         LiveActionJournal journal = new LiveActionJournal(
                 new LiveActionJournal.Limits(2, 1_000, 4_000, 8_000));
         UUID first = add(journal, 1);
         UUID second = add(journal, 2);
         journal.mergeGroups(first, second);
-        UUID newest = add(journal, 3);
+        UUID third = add(journal, 3);
+        UUID fourth = add(journal, 4);
 
         journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+        assertEquals(third,
+                journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
 
-        assertEquals(newest,
+        assertTrue(journal.prepareUndo(PLAYER_A).isEmpty());
+        var redo = journal.prepareRedo(PLAYER_A).orElseThrow();
+        assertEquals(third, redo.actionId());
+        journal.complete(redo);
+        assertEquals(fourth,
                 journal.prepareRedo(PLAYER_A).orElseThrow().actionId());
-        assertThrows(IllegalStateException.class,
-                () -> journal.prepareUndo(PLAYER_A));
+    }
+
+    @Test
+    void causalGroupMayExceedTheMemberCountLimit() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID first = add(journal, 0);
+
+        for (int index = 1; index <= 65; index++) {
+            journal.mergeGroups(first, add(journal, index));
+        }
+
+        assertEquals(66,
+                journal.prepareUndo(PLAYER_A).orElseThrow().actionIds().size());
     }
 
     @Test
@@ -369,6 +388,7 @@ class LiveActionJournalTest {
         assertTrue(!journal.close(action));
         assertTrue(journal.lastUnavailableReason(PLAYER_A).orElseThrow().contains("limit"));
         assertEquals(Optional.empty(), journal.prepareUndo(PLAYER_A));
+        assertEquals(Optional.empty(), journal.owner(action));
     }
 
     @Test
@@ -400,11 +420,12 @@ class LiveActionJournalTest {
     }
 
     @Test
-    void retainedEvictedActionAcceptsLateLifecycleUntilReleased() {
+    void retainedActionSurvivesCountPressureUntilReleased() {
         LiveActionJournal journal = new LiveActionJournal(
                 new LiveActionJournal.Limits(1, 1_000, 4_000, 8_000));
         UUID first = journal.begin(PLAYER_A);
         journal.recordEntity(first, ENTITY, Optional.empty(), Optional.of(entity(1)));
+        journal.retain(first);
         journal.retain(first);
         journal.close(first);
 
@@ -413,6 +434,9 @@ class LiveActionJournalTest {
         assertEquals(second, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
         assertEquals(Optional.of(PLAYER_A), journal.owner(first));
         journal.recordEntity(first, ENTITY, Optional.of(entity(1)), Optional.empty());
+        journal.release(first);
+        assertEquals(Optional.of(PLAYER_A), journal.owner(first));
+        assertEquals(Optional.of(PLAYER_A), journal.owner(second));
         journal.release(first);
         assertEquals(Optional.empty(), journal.owner(first));
     }

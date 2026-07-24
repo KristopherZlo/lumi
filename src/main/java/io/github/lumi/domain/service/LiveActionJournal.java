@@ -31,7 +31,6 @@ public final class LiveActionJournal {
     private final OwnershipIndex<UUID> entityOwners = new OwnershipIndex<>();
     private final Map<UUID, Long> playerBytes = new HashMap<>();
     private final Map<UUID, String> unavailableReasons = new HashMap<>();
-    private final Set<UUID> unsafeGroups = new HashSet<>();
     private final Limits limits;
     private final Consumer<Checkpoint> checkpointRelease;
     private long nextSequence;
@@ -168,9 +167,7 @@ public final class LiveActionJournal {
         }
         UUID source = second.groupId;
         if (!first.groupId.equals(source)) {
-            if (unsafeGroups.remove(source)) {
-                unsafeGroups.add(first.groupId);
-            }
+            stacks(first.player).mergeGroups(first.groupId, source);
             actions.values().stream()
                     .filter(action -> action.groupId.equals(source))
                     .forEach(action -> action.groupId = first.groupId);
@@ -224,13 +221,13 @@ public final class LiveActionJournal {
             return false;
         }
         if (isEmpty(action) && action.causalReferences == 0) {
-            evict(action, false);
+            evictOne(action);
             return false;
         }
-        stacks(action.player).undo.addLast(action.id);
-        while (stackSize(action.player) > limits.maxActionsPerPlayer) {
-            evict(oldestClosed(action.player, action.id).orElseThrow());
-        }
+        PlayerStacks stacks = stacks(action.player);
+        stacks.undo.addLast(action.id);
+        stacks.add(action.groupId);
+        trimToActionLimit(action.player, action.groupId);
         return true;
     }
 
@@ -249,8 +246,9 @@ public final class LiveActionJournal {
         action.causalReferences--;
         if (action.closed && action.causalReferences == 0
                 && (!action.available || isEmpty(action))) {
-            evict(action, false);
+            evictOne(action);
         }
+        trimToActionLimit(action.player, null);
     }
 
     public synchronized Optional<Plan> prepareUndo(UUID player) {
@@ -300,7 +298,6 @@ public final class LiveActionJournal {
         entityOwners.clear();
         playerBytes.clear();
         unavailableReasons.clear();
-        unsafeGroups.clear();
         retainedBytes = 0;
         unsafeBeforeSequence = 0;
         checkpoints.forEach(checkpointRelease);
@@ -376,10 +373,6 @@ public final class LiveActionJournal {
             return Optional.empty();
         }
         MutableAction selected = requireAction(actionId);
-        if (unsafeGroups.contains(selected.groupId)) {
-            throw new IllegalStateException(
-                    "An evicted member makes this live action group unsafe");
-        }
         List<MutableAction> group = stack.stream()
                 .map(this::requireAction)
                 .filter(action -> action.groupId.equals(selected.groupId))
@@ -536,7 +529,7 @@ public final class LiveActionJournal {
         for (UUID id : java.util.List.copyOf(stacks(player).redo)) {
             MutableAction action = actions.get(id);
             if (action != null) {
-                evict(action, false);
+                evictOne(action);
             }
         }
     }
@@ -544,17 +537,15 @@ public final class LiveActionJournal {
     private boolean makeRoom(MutableAction current, long addedBytes) {
         while (playerBytes.getOrDefault(current.player, 0L) + addedBytes
                 > limits.maxPlayerBytes) {
-            Optional<MutableAction> oldest = oldestClosed(current.player, current.id);
+            Optional<MutableAction> oldest = oldestClosed(
+                    current.player, current.groupId);
             if (oldest.isEmpty()) {
                 return false;
             }
             evict(oldest.orElseThrow());
         }
         while (retainedBytes + addedBytes > limits.maxDimensionBytes) {
-            Optional<MutableAction> oldest = actions.values().stream()
-                    .filter(action -> action.closed && action.available
-                            && !action.id.equals(current.id))
-                    .min(java.util.Comparator.comparingLong(action -> action.sequence));
+            Optional<MutableAction> oldest = oldestClosed(current.groupId);
             if (oldest.isEmpty()) {
                 return false;
             }
@@ -563,46 +554,86 @@ public final class LiveActionJournal {
         return true;
     }
 
-    private Optional<MutableAction> oldestClosed(UUID player, UUID excluded) {
+    private Optional<MutableAction> oldestClosed(
+            UUID player,
+            UUID excludedGroup) {
+        Set<UUID> activeGroups = activeGroups();
         return actions.values().stream()
                 .filter(action -> action.player.equals(player) && action.closed
-                        && action.available && !action.id.equals(excluded))
-                .min(java.util.Comparator.comparingLong(action -> action.sequence));
+                        && action.available
+                        && !action.groupId.equals(excludedGroup))
+                .min(java.util.Comparator.comparingLong(action -> action.sequence))
+                .filter(action -> !activeGroups.contains(action.groupId));
+    }
+
+    private Optional<MutableAction> oldestClosed(UUID excludedGroup) {
+        Set<UUID> activeGroups = activeGroups();
+        return actions.values().stream()
+                .filter(action -> action.closed && action.available
+                        && !action.groupId.equals(excludedGroup))
+                .min(java.util.Comparator.comparingLong(action -> action.sequence))
+                .filter(action -> !activeGroups.contains(action.groupId));
+    }
+
+    private Set<UUID> activeGroups() {
+        Set<UUID> groups = new HashSet<>();
+        actions.values().stream()
+                .filter(action -> !action.closed || action.causalReferences > 0)
+                .forEach(action -> groups.add(action.groupId));
+        return groups;
+    }
+
+    private void trimToActionLimit(UUID player, UUID excludedGroup) {
+        while (stackSize(player) > limits.maxActionsPerPlayer) {
+            Optional<MutableAction> oldest = oldestClosed(player, excludedGroup);
+            if (oldest.isEmpty()) {
+                return;
+            }
+            evict(oldest.orElseThrow());
+        }
     }
 
     private int stackSize(UUID player) {
-        PlayerStacks stacks = stacks(player);
-        return stacks.undo.size() + stacks.redo.size();
+        return stacks(player).groupCount();
     }
 
     private void makeUnavailable(MutableAction action, String reason) {
-        action.available = false;
         unavailableReasons.put(action.player, reason);
+        evict(action);
+    }
+
+    private void evict(MutableAction action) {
+        if (!action.available) {
+            evictOne(action);
+            return;
+        }
+        List<MutableAction> group = actions.values().stream()
+                .filter(candidate -> candidate.available
+                        && candidate.groupId.equals(action.groupId))
+                .toList();
+        long barrier = group.stream()
+                .mapToLong(candidate -> candidate.sequence)
+                .max().orElse(action.sequence);
+        group.forEach(this::evictOne);
+        unsafeBeforeSequence = Math.max(unsafeBeforeSequence, barrier);
+    }
+
+    private void evictOne(MutableAction action) {
+        if (!action.available) {
+            if (action.closed && action.causalReferences == 0) {
+                actions.remove(action.id);
+            }
+            return;
+        }
         evictState(action);
+        action.available = false;
         if (action.closed && action.causalReferences == 0) {
             actions.remove(action.id);
         }
         releaseCheckpoint(action);
     }
 
-    private void evict(MutableAction action) {
-        evict(action, true);
-    }
-
-    private void evict(MutableAction action, boolean createsSequenceBarrier) {
-        evictState(action, createsSequenceBarrier);
-        action.available = false;
-        if (action.causalReferences == 0) {
-            actions.remove(action.id);
-        }
-        releaseCheckpoint(action);
-    }
-
     private void evictState(MutableAction action) {
-        evictState(action, true);
-    }
-
-    private void evictState(MutableAction action, boolean createsSequenceBarrier) {
         adjustBytes(action.player, -action.bytes);
         action.bytes = 0;
         action.changes.keySet().forEach(position -> blockOwners.set(position, action, false));
@@ -610,11 +641,8 @@ public final class LiveActionJournal {
         action.changes.clear();
         action.entities.clear();
         PlayerStacks stacks = stacks(action.player);
-        stacks.undo.remove(action.id);
-        stacks.redo.remove(action.id);
-        if (createsSequenceBarrier) {
-            unsafeBeforeSequence = Math.max(unsafeBeforeSequence, action.sequence);
-            unsafeGroups.add(action.groupId);
+        if (stacks.undo.remove(action.id) || stacks.redo.remove(action.id)) {
+            stacks.remove(action.groupId);
         }
     }
 
@@ -797,5 +825,26 @@ public final class LiveActionJournal {
     private static final class PlayerStacks {
         private final Deque<UUID> undo = new ArrayDeque<>();
         private final Deque<UUID> redo = new ArrayDeque<>();
+        private final Map<UUID, Integer> groupMembers = new HashMap<>();
+
+        private void add(UUID group) {
+            groupMembers.merge(group, 1, Integer::sum);
+        }
+
+        private void remove(UUID group) {
+            groupMembers.computeIfPresent(
+                    group, (ignored, members) -> members == 1 ? null : members - 1);
+        }
+
+        private void mergeGroups(UUID target, UUID source) {
+            Integer members = groupMembers.remove(source);
+            if (members != null) {
+                groupMembers.merge(target, members, Integer::sum);
+            }
+        }
+
+        private int groupCount() {
+            return groupMembers.size();
+        }
     }
 }
