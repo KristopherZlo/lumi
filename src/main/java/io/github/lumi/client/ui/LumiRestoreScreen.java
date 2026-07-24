@@ -21,9 +21,10 @@ public final class LumiRestoreScreen extends LumiModalScreen {
     private static final int PARTIAL_PANEL_HEIGHT = 184;
     private final Screen parent;
     private final CommitId target;
-    private final Consumer<CommitId> fullRestore;
+    private final Function<CommitId, UUID> fullRestore;
     private final BiFunction<CommitId, BlockAreaTarget, UUID> previewRestore;
     private final Function<UUID, UUID> applyRestore;
+    private final Consumer<UUID> accepted;
     private final PartialRestoreFormState form;
     private final boolean selectionAvailable;
     private RestoreMode mode = RestoreMode.WHOLE;
@@ -39,10 +40,11 @@ public final class LumiRestoreScreen extends LumiModalScreen {
             Screen parent,
             CommitId target,
             String message,
-            Consumer<CommitId> fullRestore,
+            Function<CommitId, UUID> fullRestore,
             Optional<BlockBox> selection,
             BiFunction<CommitId, BlockAreaTarget, UUID> previewRestore,
-            Function<UUID, UUID> applyRestore) {
+            Function<UUID, UUID> applyRestore,
+            Consumer<UUID> accepted) {
         super(Component.translatable("luma.restore.confirm_title", message));
         this.parent = parent;
         this.target = Objects.requireNonNull(target, "target");
@@ -50,6 +52,7 @@ public final class LumiRestoreScreen extends LumiModalScreen {
         this.fullRestore = Objects.requireNonNull(fullRestore, "fullRestore");
         this.previewRestore = Objects.requireNonNull(previewRestore, "previewRestore");
         this.applyRestore = Objects.requireNonNull(applyRestore, "applyRestore");
+        this.accepted = Objects.requireNonNull(accepted, "accepted");
         Optional<BlockBox> bounds = Objects.requireNonNull(selection, "selection");
         selectionAvailable = bounds.isPresent();
         form = new PartialRestoreFormState(target, bounds);
@@ -140,11 +143,10 @@ public final class LumiRestoreScreen extends LumiModalScreen {
 
     private void submit() {
         try {
-            if (mode == RestoreMode.WHOLE) {
-                fullRestore.accept(target);
-            } else {
-                applyRestore.apply(form.previewToken().orElseThrow());
-            }
+            UUID requestId = mode == RestoreMode.WHOLE
+                    ? fullRestore.apply(target)
+                    : applyRestore.apply(form.previewToken().orElseThrow());
+            accepted.accept(requestId);
             minecraft.setScreen(parent);
         } catch (RuntimeException failed) {
             localError = message(failed, "Lumi Restore could not start");

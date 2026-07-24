@@ -63,6 +63,8 @@ import io.github.lumi.update.UpdateChecker;
 import io.github.lumi.update.ClientUpdatePreferenceRepository;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Consumer;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -154,8 +156,16 @@ public final class LumiClient implements ClientModInitializer {
                         return LumiSelectionTool.held(Minecraft.getInstance())
                                 && SELECTION.redo();
                     }
-                    @Override public void undo() { NETWORKING.undo(); }
-                    @Override public void redo() { NETWORKING.redo(); }
+                    @Override public void undo() {
+                        trackOnboardingOperation(
+                                OnboardingEvent.OperationKind.UNDO,
+                                NETWORKING.undo());
+                    }
+                    @Override public void redo() {
+                        trackOnboardingOperation(
+                                OnboardingEvent.OperationKind.REDO,
+                                NETWORKING.redo());
+                    }
                     @Override public String toggleCompareOverlay() {
                         return COMPARISONS.toggleVisibility()
                                 .map(visible -> visible
@@ -268,6 +278,9 @@ public final class LumiClient implements ClientModInitializer {
         }
         if (event.state() != OperationEventPayload.State.ACCEPTED
                 && event.state() != OperationEventPayload.State.PROGRESS) {
+            acceptOnboardingEvent(new OnboardingEvent.OperationCompleted(
+                    event.requestId(),
+                    event.state() == OperationEventPayload.State.SUCCEEDED));
             showFeedback(event.message(), eventColor(event.state()));
         }
     }
@@ -408,14 +421,14 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void openSave(
             Screen parent, SaveScreenController.Intent intent, String initialMessage) {
-        openSave(parent, intent, initialMessage, () -> { });
+        openSave(parent, intent, initialMessage, ignored -> { });
     }
 
     private static void openSave(
             Screen parent,
             SaveScreenController.Intent intent,
             String initialMessage,
-            Runnable accepted) {
+            Consumer<UUID> accepted) {
         Minecraft.getInstance().setScreen(new LumiSaveScreen(
                 parent, HISTORY,
                 new SaveScreenController(NETWORKING::save, NETWORKING::amend),
@@ -440,7 +453,7 @@ public final class LumiClient implements ClientModInitializer {
                 NETWORKING::refreshSnapshot, intent, initialMessage,
                 requestId -> PREVIEW_CAPTURE.request(
                         requestId, HISTORY.state().snapshot().orElseThrow()),
-                () -> { }, LumiSaveScreen.Scope.ZONE));
+                ignored -> { }, LumiSaveScreen.Scope.ZONE));
     }
 
     private static void openVersionDetails(
@@ -505,7 +518,9 @@ public final class LumiClient implements ClientModInitializer {
                 LumiSelectionTool.held(Minecraft.getInstance())
                         ? SELECTION.bounds() : Optional.empty(),
                 NETWORKING::previewRestoreArea,
-                NETWORKING::applyRestoreArea));
+                NETWORKING::applyRestoreArea,
+                requestId -> trackOnboardingOperation(
+                        OnboardingEvent.OperationKind.RESTORE, requestId)));
     }
 
     private static void openDelete(
@@ -705,6 +720,16 @@ public final class LumiClient implements ClientModInitializer {
         if (ONBOARDING_WORLD.accept(event)) return;
         if (Minecraft.getInstance().screen instanceof LumiOnboardingScreen screen) {
             screen.accept(event);
+        }
+    }
+
+    private static void trackOnboardingOperation(
+            OnboardingEvent.OperationKind operation, UUID requestId) {
+        OnboardingEvent event = new OnboardingEvent.OperationStarted(
+                operation, requestId);
+        if (ONBOARDING_WORLD.accept(event)) return;
+        if (activeOnboarding != null && !activeOnboarding.completed()) {
+            activeOnboarding.handle(event);
         }
     }
 

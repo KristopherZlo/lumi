@@ -46,9 +46,6 @@ public sealed interface OnboardingEvent {
         }
     }
 
-    record SaveCompleted() implements OnboardingEvent {
-    }
-
     enum Direction { NEXT, BACK, SKIP }
 
     enum ShortcutKind { SAVE, DASHBOARD }

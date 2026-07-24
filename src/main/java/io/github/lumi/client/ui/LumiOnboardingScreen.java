@@ -128,7 +128,8 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
                 minecraft.setScreen(null);
             }
             case OPEN_SAVE -> actions.save().open(
-                    this, () -> accept(new OnboardingEvent.SaveCompleted()));
+                    this, requestId -> accept(new OnboardingEvent.OperationStarted(
+                            OnboardingEvent.OperationKind.SAVE, requestId)));
             case OPEN_DASHBOARD -> openDashboard();
             case COMPLETE -> {
                 complete();
@@ -154,7 +155,8 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
                 || y < hole.y() || y >= hole.bottom()) return false;
         boolean activated = background != null
                 && background.mouseClicked(click, doubled);
-        if (activated) {
+        if (activated && controller.current().kind()
+                == OnboardingTour.Kind.SPOTLIGHT_COMPARE) {
             accept(new OnboardingEvent.SpotlightActivated(
                     controller.current().kind()));
             if (minecraft.screen == null) {
@@ -237,6 +239,6 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
 
     @FunctionalInterface
     public interface SaveOpener {
-        void open(Screen parent, Runnable saved);
+        void open(Screen parent, Consumer<java.util.UUID> accepted);
     }
 }

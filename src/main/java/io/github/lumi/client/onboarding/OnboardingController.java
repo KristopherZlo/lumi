@@ -41,9 +41,6 @@ public final class OnboardingController {
                     operationStarted(operation);
             case OnboardingEvent.OperationCompleted operation ->
                     operationCompleted(operation);
-            case OnboardingEvent.SaveCompleted ignored ->
-                    current().kind() == OnboardingTour.Kind.SHORTCUT_SAVE
-                            ? advance(Effect.ENTER_WORLD) : Effect.NONE;
         };
     }
 

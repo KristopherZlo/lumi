@@ -24,7 +24,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
     private final SaveScreenController.Intent preferredIntent;
     private final String initialMessage;
     private final Consumer<UUID> previewCapture;
-    private final Runnable accepted;
+    private final Consumer<UUID> accepted;
     private final Scope scope;
     private LumiModalLayout layout;
     private EditBox message;
@@ -40,7 +40,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
             SaveScreenController controller,
             Runnable refresh) {
         this(parent, history, controller, refresh,
-                SaveScreenController.Intent.SAVE, "", ignored -> { }, () -> { });
+                SaveScreenController.Intent.SAVE, "", ignored -> { }, ignored -> { });
     }
 
     public LumiSaveScreen(
@@ -51,7 +51,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
             SaveScreenController.Intent preferredIntent,
             String initialMessage) {
         this(parent, history, controller, refresh,
-                preferredIntent, initialMessage, ignored -> { }, () -> { });
+                preferredIntent, initialMessage, ignored -> { }, ignored -> { });
     }
 
     public LumiSaveScreen(
@@ -63,7 +63,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
             String initialMessage,
             Consumer<UUID> previewCapture) {
         this(parent, history, controller, refresh, preferredIntent,
-                initialMessage, previewCapture, () -> { });
+                initialMessage, previewCapture, ignored -> { });
     }
 
     public LumiSaveScreen(
@@ -74,7 +74,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
             SaveScreenController.Intent preferredIntent,
             String initialMessage,
             Consumer<UUID> previewCapture,
-            Runnable accepted) {
+            Consumer<UUID> accepted) {
         this(parent, history, controller, refresh, preferredIntent,
                 initialMessage, previewCapture, accepted, Scope.BUILD);
     }
@@ -87,7 +87,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
             SaveScreenController.Intent preferredIntent,
             String initialMessage,
             Consumer<UUID> previewCapture,
-            Runnable accepted,
+            Consumer<UUID> accepted,
             Scope scope) {
         super(parent, scope.title());
         this.parent = parent;
@@ -186,8 +186,9 @@ public final class LumiSaveScreen extends LumiModalScreen {
                 controller.submit(message.getValue(), tags.getValue(), intent);
         error = submission.error();
         if (submission.accepted()) {
-            submission.requestId().ifPresent(previewCapture);
-            accepted.run();
+            UUID requestId = submission.requestId().orElseThrow();
+            previewCapture.accept(requestId);
+            accepted.accept(requestId);
             minecraft.setScreen(parent);
         }
     }

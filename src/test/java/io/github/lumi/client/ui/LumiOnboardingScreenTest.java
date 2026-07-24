@@ -17,6 +17,7 @@ class LumiOnboardingScreenTest {
                 "background instanceof LumiDashboardScreen dashboard"));
         assertTrue(source.contains("dashboard.tick()"));
         assertTrue(source.contains("actions.save().open("));
+        assertTrue(source.contains("OnboardingEvent.OperationStarted"));
         assertTrue(source.contains("actions.worldStep().accept(controller)"));
         assertTrue(source.contains("controller.handle(event)"));
         assertTrue(source.contains("OnboardingEvent.Direction.SKIP"));

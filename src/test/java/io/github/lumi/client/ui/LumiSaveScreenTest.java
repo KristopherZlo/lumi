@@ -17,8 +17,8 @@ class LumiSaveScreenTest {
         assertTrue(source.contains("preferredIntent == SaveScreenController.Intent.AMEND"));
         assertTrue(source.contains("submit(preferredIntent)"));
         assertFalse(source.contains("luma.action.refresh_preview"));
-        assertTrue(source.contains("submission.requestId().ifPresent(previewCapture)"));
-        assertTrue(source.contains("accepted.run()"));
+        assertTrue(source.contains("submission.requestId().orElseThrow()"));
+        assertTrue(source.contains("accepted.accept(requestId)"));
         assertTrue(source.contains("luma.history.tags_input"));
         assertTrue(source.contains("tags.getValue()"));
         assertTrue(source.contains("luma.zones.save_button"));

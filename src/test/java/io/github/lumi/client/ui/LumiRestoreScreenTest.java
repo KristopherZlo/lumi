@@ -21,6 +21,7 @@ class LumiRestoreScreenTest {
         assertTrue(restore.contains("RestoreMode.SELECTED"));
         assertTrue(restore.contains("RestoreMode.OUTSIDE"));
         assertTrue(restore.contains("accept(PartialRestorePlanPayload"));
+        assertTrue(restore.contains("accepted.accept(requestId)"));
         assertTrue(client.contains("LumiSelectionTool.held(Minecraft.getInstance())"));
         assertTrue(client.contains("? SELECTION.bounds() : Optional.empty()"));
         assertFalse(client.contains("LumiPartialRestoreScreen"));
