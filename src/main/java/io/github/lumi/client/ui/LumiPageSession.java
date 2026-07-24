@@ -17,6 +17,7 @@ final class LumiPageSession {
             new EnumMap<>(ProjectTab.class);
     private Screen historyPage;
     private boolean initialOpening = true;
+    private boolean pageEntryPending;
 
     LumiPageSession(ClientHistoryStore history) {
         this.history = Objects.requireNonNull(history, "history");
@@ -34,11 +35,15 @@ final class LumiPageSession {
     void open(ProjectTab tab) {
         if (historyPage == null) return;
         if (tab == ProjectTab.HISTORY) {
+            pageEntryPending = true;
             Minecraft.getInstance().setScreen(historyPage);
             return;
         }
         Consumer<Screen> destination = routes.get(tab);
-        if (destination != null) destination.accept(historyPage);
+        if (destination != null) {
+            pageEntryPending = true;
+            destination.accept(historyPage);
+        }
     }
 
     Optional<HistorySnapshotPayload> snapshot() {
@@ -49,5 +54,11 @@ final class LumiPageSession {
         boolean initial = initialOpening;
         initialOpening = false;
         return initial;
+    }
+
+    boolean consumePageEntry() {
+        boolean pending = pageEntryPending;
+        pageEntryPending = false;
+        return pending;
     }
 }

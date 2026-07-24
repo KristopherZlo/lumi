@@ -76,8 +76,8 @@ public class LumiButton extends Button {
             graphics.fill(
                     getX(), getY(), getX() + getWidth(), getY() + getHeight(),
                     accentColor);
-            fill = (isHoveredOrFocused() ? 0xbb000000 : 0x88000000)
-                    | (accentColor & 0x00ffffff);
+            fill = LumiTheme.withAlpha(
+                    accentColor, isHoveredOrFocused() ? 0xbb : 0x88);
             graphics.fill(
                     getX() + 1, getY() + 1,
                     getX() + getWidth() - 1, getY() + getHeight() - 1, fill);

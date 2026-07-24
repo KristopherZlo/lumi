@@ -77,7 +77,8 @@ class LumiNavigationTest {
         assertTrue(session.contains("destination.accept(historyPage)"));
         assertTrue(page.contains("extends LumiScreen"));
         assertTrue(page.contains("addSidebarButtons()"));
-        assertTrue(page.contains("pageSession.open(destination)"));
+        assertTrue(page.contains("transition.exit(destination)"));
+        assertTrue(session.contains("pageEntryPending = true"));
         assertFalse(page.contains("dashboardParent"));
         assertFalse(page.contains("dashboard.mouseClicked"));
         assertFalse(page.contains("dashboard.pointerHovered"));

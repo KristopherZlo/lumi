@@ -113,7 +113,7 @@ class LumiDropdown<T> extends LumiButton {
                 graphics.fill(getX() + 1, y + 1,
                         getX() + getWidth() - LumiScrollbar.GUTTER_WIDTH,
                         y + ROW_HEIGHT - 1,
-                        hoverAlpha << 24 | 0x00ffffff);
+                        LumiTheme.withAlpha(0xffffffff, hoverAlpha));
             }
             graphics.drawString(font,
                     font.plainSubstrByWidth(label.apply(option).getString(),

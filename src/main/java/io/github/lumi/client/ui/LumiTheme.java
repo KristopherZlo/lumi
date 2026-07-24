@@ -32,4 +32,12 @@ final class LumiTheme {
         graphics.fill(x, y, x + width, y + height, border);
         graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, fill);
     }
+
+    static int withOpacity(int color, float opacity) {
+        return withAlpha(color, Math.round(opacity * 255.0F));
+    }
+
+    static int withAlpha(int color, int alpha) {
+        return alpha << 24 | color & 0x00ffffff;
+    }
 }

@@ -2,6 +2,8 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.network.HistorySnapshotPayload;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphics;
@@ -25,7 +27,12 @@ abstract class LumiPageScreen extends LumiScreen {
     private final LumiPageSession pageSession;
     private final ProjectTab tab;
     private final String modVersion;
+    private final List<LumiButton> fixedButtons = new ArrayList<>();
+    private final LumiPageTransition transition = new LumiPageTransition();
     private LumiPageLayout shellLayout;
+    private LumiPageTransition.Frame transitionFrame;
+    private boolean contentMotionApplied;
+    private boolean contentScissorEnabled;
 
     protected LumiPageScreen(
             Screen parent, Component title, ProjectTab tab) {
@@ -51,6 +58,7 @@ abstract class LumiPageScreen extends LumiScreen {
 
     @Override
     protected void afterScreenInit() {
+        fixedButtons.clear();
         shellLayout = pageLayout();
         addSidebarButtons();
         addSupportButtons();
@@ -69,6 +77,47 @@ abstract class LumiPageScreen extends LumiScreen {
                 shellLayout.windowX(), shellLayout.windowY(),
                 shellLayout.windowWidth(), shellLayout.windowHeight());
         drawShell(graphics);
+    }
+
+    @Override
+    protected void beginScaledContent(GuiGraphics graphics) {
+        if (!transition.active() && pageSession.consumePageEntry()) {
+            transition.enter();
+        }
+        boolean active = transition.active();
+        transitionFrame = transition.frame();
+        contentMotionApplied = active
+                || transitionFrame.completedDestination().isPresent();
+        if (contentMotionApplied) {
+            graphics.enableScissor(
+                    shellLayout.contentX(), shellLayout.windowY(),
+                    shellLayout.windowX() + shellLayout.windowWidth(),
+                    shellLayout.windowY() + shellLayout.windowHeight());
+            contentScissorEnabled = true;
+            graphics.pose().pushMatrix();
+            graphics.pose().translate(0.0F, transitionFrame.offsetY());
+        }
+        pageSession.snapshot().ifPresent(snapshot -> drawProject(graphics, snapshot));
+    }
+
+    @Override
+    protected void endScaledContent(GuiGraphics graphics) {
+        if (!contentMotionApplied) return;
+        if (contentScissorEnabled) {
+            graphics.disableScissor();
+            contentScissorEnabled = false;
+        }
+        graphics.pose().popMatrix();
+        float coverOpacity = 1.0F - transitionFrame.opacity();
+        if (coverOpacity > 0.0F) {
+            graphics.fill(
+                    shellLayout.contentX(), shellLayout.windowY(),
+                    shellLayout.windowX() + shellLayout.windowWidth(),
+                    shellLayout.windowY() + shellLayout.windowHeight(),
+                    LumiTheme.withOpacity(LumiTheme.WINDOW, coverOpacity));
+        }
+        contentMotionApplied = false;
+        transitionFrame.completedDestination().ifPresent(pageSession::open);
     }
 
     @Override
@@ -101,9 +150,9 @@ abstract class LumiPageScreen extends LumiScreen {
     private void addPageButton(
             int x, int y, int width, String translation,
             ProjectTab destination, Integer accent) {
-        addRenderableWidget(new LumiButton(
+        addFixedButton(new LumiButton(
                 x, y, width, 20, Component.translatable(translation),
-                ignored -> pageSession.open(destination), tabKind(destination),
+                ignored -> navigate(destination), tabKind(destination),
                 null, accent));
     }
 
@@ -126,12 +175,12 @@ abstract class LumiPageScreen extends LumiScreen {
     private void addCompactSidebarButton(
             int index, String icon, String translation,
             ProjectTab destination, Integer accent) {
-        addRenderableWidget(new LumiButton(
+        addFixedButton(new LumiButton(
                 compactSidebarActionX(shellLayout, index),
                 compactSidebarActionY(shellLayout, index),
                 compactSidebarActionWidth(shellLayout), 20,
                 Component.translatable(translation),
-                ignored -> pageSession.open(destination), tabKind(destination),
+                ignored -> navigate(destination), tabKind(destination),
                 icon, accent));
     }
 
@@ -150,10 +199,20 @@ abstract class LumiPageScreen extends LumiScreen {
     private void addSupportButton(
             int x, int y, int width, String icon,
             String translation, java.net.URI uri) {
-        addRenderableWidget(new LumiButton(
+        addFixedButton(new LumiButton(
                 x, y, width, 20, Component.translatable(translation),
                 ignored -> Util.getPlatform().openUri(uri),
                 LumiButton.Kind.NORMAL, icon));
+    }
+
+    private void addFixedButton(LumiButton button) {
+        fixedButtons.add(addRenderableWidget(button));
+    }
+
+    private void navigate(ProjectTab destination) {
+        if (destination != tab) {
+            transition.exit(destination);
+        }
     }
 
     private void drawShell(GuiGraphics graphics) {
@@ -200,7 +259,6 @@ abstract class LumiPageScreen extends LumiScreen {
                                 "luma.window.mod_version", modVersion).getString(),
                         footerWidth),
                 x + 16, creditY + 11, LumiTheme.MUTED, false);
-        pageSession.snapshot().ifPresent(snapshot -> drawProject(graphics, snapshot));
     }
 
     private void drawProject(
@@ -293,6 +351,26 @@ abstract class LumiPageScreen extends LumiScreen {
 
     protected final LumiPageSession pageSession() {
         return pageSession;
+    }
+
+    @Override
+    public void render(
+            GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        if (!contentMotionApplied) return;
+        graphics.disableScissor();
+        contentScissorEnabled = false;
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(0.0F, -transitionFrame.offsetY());
+        fixedButtons.forEach(button ->
+                button.render(graphics, mouseX, mouseY, partialTick));
+        graphics.pose().popMatrix();
+    }
+
+    @Override
+    protected boolean interactionBlocked() {
+        return super.interactionBlocked()
+                || transition.active() || contentMotionApplied;
     }
 
     @Override

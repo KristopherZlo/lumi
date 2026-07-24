@@ -337,7 +337,8 @@ abstract class LumiScreen extends Screen {
     }
 
     private void updateCursor(int mouseX, int mouseY) {
-        boolean hovered = pointerHovered(mouseX, mouseY);
+        boolean hovered = !interactionBlocked()
+                && pointerHovered(mouseX, mouseY);
         if (hovered == handCursorActive) return;
         handCursorActive = hovered;
         if (hovered && handCursor == 0L) {
@@ -360,7 +361,7 @@ abstract class LumiScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
-        if (openingAnimationRunning()) return true;
+        if (interactionBlocked()) return true;
         MouseButtonEvent virtual = virtualClick(click);
         if (clickContextualHint(virtual)) return true;
         return super.mouseClicked(virtual, doubled);
@@ -386,6 +387,7 @@ abstract class LumiScreen extends Screen {
             graphics.pose().translate(-width / 2.0F, -height / 2.0F);
         }
         renderScaledUnderlay(graphics);
+        beginScaledContent(graphics);
         return new ScaledRenderContext(
                 virtualCoordinate(mouseX), virtualCoordinate(mouseY));
     }
@@ -396,15 +398,22 @@ abstract class LumiScreen extends Screen {
     protected void renderScaledUnderlay(GuiGraphics graphics) {
     }
 
+    protected void beginScaledContent(GuiGraphics graphics) {
+    }
+
     protected final void endScaledRender(GuiGraphics graphics) {
+        endScaledContent(graphics);
         if (openingValue < 1.0F && animationWidth > 0) {
-            int alpha = Math.round((1.0F - openingValue) * 255.0F);
             graphics.fill(
                     animationX, animationY,
                     animationX + animationWidth, animationY + animationHeight,
-                    alpha << 24 | LumiTheme.BACKDROP & 0x00ffffff);
+                    LumiTheme.withOpacity(
+                            LumiTheme.BACKDROP, 1.0F - openingValue));
         }
         graphics.pose().popMatrix();
+    }
+
+    protected void endScaledContent(GuiGraphics graphics) {
     }
 
     protected final void animationFrame(
@@ -419,9 +428,13 @@ abstract class LumiScreen extends Screen {
         return centeredOpening && opening.running();
     }
 
+    protected boolean interactionBlocked() {
+        return openingAnimationRunning();
+    }
+
     @Override
     public boolean mouseReleased(MouseButtonEvent click) {
-        if (openingAnimationRunning()) return true;
+        if (interactionBlocked()) return true;
         return super.mouseReleased(virtualClick(click));
     }
 
@@ -429,7 +442,7 @@ abstract class LumiScreen extends Screen {
     public boolean mouseScrolled(
             double mouseX, double mouseY,
             double horizontalAmount, double verticalAmount) {
-        if (openingAnimationRunning()) return true;
+        if (interactionBlocked()) return true;
         return super.mouseScrolled(
                 virtualCoordinate(mouseX), virtualCoordinate(mouseY),
                 horizontalAmount, verticalAmount);
@@ -438,7 +451,7 @@ abstract class LumiScreen extends Screen {
     @Override
     public boolean mouseDragged(
             MouseButtonEvent click, double deltaX, double deltaY) {
-        if (openingAnimationRunning()) return true;
+        if (interactionBlocked()) return true;
         float scale = renderScale();
         return super.mouseDragged(
                 virtualClick(click), deltaX / scale, deltaY / scale);
