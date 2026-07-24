@@ -12,6 +12,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -422,15 +423,25 @@ public final class LiveActionJournal {
                     (previous, latest) ->
                             new EntityChange(previous.before, latest.after)));
         }
+        List<MutableAction> applicationOrder = direction == Direction.UNDO
+                ? group.reversed() : group;
+        Set<BlockPosition> blockOrder = new LinkedHashSet<>();
+        Set<UUID> entityOrder = new LinkedHashSet<>();
+        for (MutableAction action : applicationOrder) {
+            blockOrder.addAll(action.changes.keySet());
+            entityOrder.addAll(action.entities.keySet());
+        }
         Map<BlockPosition, BlockSnapshot> expected = new LinkedHashMap<>();
         Map<BlockPosition, BlockSnapshot> replacement = new LinkedHashMap<>();
         Map<UUID, Optional<EntityState>> expectedEntities = new LinkedHashMap<>();
         Map<UUID, Optional<EntityState>> replacementEntities = new LinkedHashMap<>();
-        blocks.forEach((position, change) -> {
+        blockOrder.forEach(position -> {
+            Change change = blocks.get(position);
             expected.put(position, direction == Direction.UNDO ? change.after : change.before);
             replacement.put(position, direction == Direction.UNDO ? change.before : change.after);
         });
-        entities.forEach((id, change) -> {
+        entityOrder.forEach(id -> {
+            EntityChange change = entities.get(id);
             expectedEntities.put(id, direction == Direction.UNDO ? change.after : change.before);
             replacementEntities.put(id, direction == Direction.UNDO ? change.before : change.after);
         });

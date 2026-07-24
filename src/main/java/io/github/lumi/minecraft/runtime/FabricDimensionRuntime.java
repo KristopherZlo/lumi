@@ -183,6 +183,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final SessionCheckpointRefService sessionCheckpoints;
     private final UUID defaultWorkspaceId;
     private final LiveActionJournal liveActions;
+    private final AxiomSetBlockActionGrouper axiomSetBlockActions;
     private final MinecraftLiveBlockWorldAccess liveWorld;
     private final MinecraftLiveEntityWorldAccess liveEntityWorld;
     private final MinecraftLiveEntityTracker liveEntities;
@@ -264,6 +265,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 sessionCheckpoints, "sessionCheckpoints");
         liveActions = new LiveActionJournal(
                 checkpoint -> releaseSessionCheckpoint(checkpoint.hiddenRef()));
+        axiomSetBlockActions = new AxiomSetBlockActionGrouper(liveActions);
         this.defaultWorkspaceId = defaultWorkspaceId;
         this.pendingRecovery = pendingRecovery;
         this.recoveryLease = recoveryLease;
@@ -927,6 +929,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public LiveActionJournal liveActions() { return liveActions; }
+    public AxiomSetBlockActionGrouper axiomSetBlockActions() {
+        return axiomSetBlockActions;
+    }
     public MinecraftLiveBlockWorldAccess liveWorld() { return liveWorld; }
     public MinecraftLiveEntityTracker liveEntities() { return liveEntities; }
     public MinecraftCausalTickTracker causalTicks() { return causalTicks; }
@@ -936,6 +941,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return operation -> {
             if (operation.terminalState() == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
                 liveEntities.clear();
+                axiomSetBlockActions.clear();
                 liveActions.clear();
                 liveWorld.clear();
                 liveEntityWorld.clear();
@@ -1884,6 +1890,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 causalTicks.close();
                 liveEntities.clear();
             } finally {
+                axiomSetBlockActions.clear();
                 liveActions.clear();
             }
         }

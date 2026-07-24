@@ -135,6 +135,29 @@ class LiveActionJournalTest {
         assertEquals(List.of(POSITION, nested), List.copyOf(plan.expected().keySet()));
         assertThrows(UnsupportedOperationException.class,
                 () -> plan.expected().put(POSITION, block("diamond_block")));
+        journal.complete(plan);
+        assertEquals(List.of(POSITION, nested), List.copyOf(
+                journal.prepareRedo(PLAYER_A).orElseThrow().expected().keySet()));
+    }
+
+    @Test
+    void undoAppliesGroupedActionsNewestFirst() {
+        BlockPosition olderPosition = new BlockPosition(1, 0, 0);
+        BlockPosition newerPosition = new BlockPosition(6, 7, 8);
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID older = add(journal, 1);
+        UUID newer = journal.begin(PLAYER_A);
+        journal.record(newer, newerPosition, block("air"), block("redstone_block"));
+        journal.close(newer);
+        journal.mergeGroups(older, newer);
+
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+
+        assertEquals(List.of(newerPosition, olderPosition),
+                List.copyOf(undo.expected().keySet()));
+        journal.complete(undo);
+        assertEquals(List.of(olderPosition, newerPosition), List.copyOf(
+                journal.prepareRedo(PLAYER_A).orElseThrow().expected().keySet()));
     }
 
     @Test

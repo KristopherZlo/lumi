@@ -11,8 +11,11 @@ import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -22,8 +25,11 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.LevelBasedPermissionSet;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -86,6 +92,91 @@ public final class LumiAxiomGameTests {
                                 "Axiom Infinite Reach Redo must succeed");
                         helper.assertBlockState(FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
                     }
+                    AxiomServer.activeAxiomPlayers.remove(player.get().getUUID());
+                    helper.getLevel().getServer().getPlayerList()
+                            .deop(player.get().nameAndId());
+                    releasePlayer(helper, player.get(), test);
+                })
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void axiomFastPlaceTntBurstUndoesAsOneAction(GameTestHelper helper) {
+        FabricDimensionRuntime runtime = runtime(helper);
+        AtomicReference<ServerPlayer> player = new AtomicReference<>();
+        AtomicReference<DimensionMutation> undo = new AtomicReference<>();
+        AtomicReference<Set<UUID>> originalCarriers = new AtomicReference<>();
+        UUID test = UUID.randomUUID();
+        List<BlockPos> tnt = tntBurstPositions();
+        List<BlockPos> ignition = tnt.stream().map(BlockPos::below).toList();
+        List<BlockPos> inactivePower = tnt.stream()
+                .filter(position -> position.getZ() == 2)
+                .map(BlockPos::north)
+                .toList();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    player.set(helper.makeMockServerPlayerInLevel());
+                    helper.getLevel().getServer().getPlayerList()
+                            .op(player.get().nameAndId(),
+                                    Optional.of(LevelBasedPermissionSet.OWNER),
+                                    Optional.empty());
+                    player.get().setItemInHand(
+                            InteractionHand.MAIN_HAND,
+                            Blocks.REDSTONE_BLOCK.asItem().getDefaultInstance());
+                    AxiomServer.onAxiomActive(player.get());
+                    tnt.forEach(position -> helper.setBlock(position, Blocks.TNT));
+                    ignition.forEach(position -> applyInfiniteReach(
+                            helper, player.get(), position,
+                            Blocks.REDSTONE_BLOCK.defaultBlockState()));
+                    helper.assertEntitiesPresent(EntityType.TNT, tnt.size());
+                    originalCarriers.set(helper.getEntities(EntityType.TNT).stream()
+                            .map(entity -> entity.getUUID())
+                            .collect(java.util.stream.Collectors.toUnmodifiableSet()));
+                    inactivePower.forEach(position -> applyInfiniteReach(
+                            helper, player.get(), position,
+                            Blocks.REDSTONE_BLOCK.defaultBlockState()));
+                    List<PrimedTnt> carriers = helper.getEntities(EntityType.TNT);
+                    for (int index = 0; index < carriers.size(); index++) {
+                        carriers.get(index).setFuse(index < 10 ? 2 : 200);
+                    }
+                })
+                .thenWaitUntil(() -> {
+                    long active = helper.getEntities(EntityType.TNT).stream()
+                            .filter(entity -> !entity.isRemoved())
+                            .count();
+                    helper.assertTrue(active > 0 && active < tnt.size(),
+                            "The 40-carrier burst has not entered its explosion phase");
+                })
+                .thenExecute(() -> {
+                    undo.set(runtime.startLiveAction(player.get().getUUID(),
+                            LiveActionJournal.Direction.UNDO, ignored -> { }));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenIdle(5)
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                            undo.get().terminalState(),
+                            "Fast Place TNT burst Undo must succeed");
+                    tnt.forEach(position -> helper.assertBlockState(
+                            position, Blocks.TNT.defaultBlockState()));
+                    ignition.forEach(position -> helper.assertBlockState(
+                            position, Blocks.AIR.defaultBlockState()));
+                    inactivePower.forEach(position -> helper.assertBlockState(
+                            position, Blocks.AIR.defaultBlockState()));
+                    var active = helper.getEntities(EntityType.TNT).stream()
+                            .filter(entity -> !entity.isRemoved())
+                            .toList();
+                    helper.assertTrue(active.isEmpty(),
+                            "Fast Place TNT burst left active carriers: "
+                                    + active.stream().map(entity ->
+                                            entity.getUUID() + " original="
+                                                    + originalCarriers.get().contains(
+                                                            entity.getUUID())
+                                                    + " fuse=" + entity.getFuse()
+                                                    + " pos=" + entity.position())
+                                            .toList());
                     AxiomServer.activeAxiomPlayers.remove(player.get().getUUID());
                     helper.getLevel().getServer().getPlayerList()
                             .deop(player.get().nameAndId());
@@ -175,9 +266,18 @@ public final class LumiAxiomGameTests {
     }
 
     private static void applyInfiniteReach(GameTestHelper helper, ServerPlayer player) {
-        BlockPos position = helper.absolutePos(FIRST);
+        applyInfiniteReach(
+                helper, player, FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
+    }
+
+    private static void applyInfiniteReach(
+            GameTestHelper helper,
+            ServerPlayer player,
+            BlockPos relative,
+            BlockState state) {
+        BlockPos position = helper.absolutePos(relative);
         new AxiomServerboundSetBlock(
-                Map.of(position, Blocks.GOLD_BLOCK.defaultBlockState()),
+                Map.of(position, state),
                 true,
                 AxiomServerboundSetBlock.REASON_INFINITEREACH,
                 false,
@@ -186,6 +286,18 @@ public final class LumiAxiomGameTests {
                 InteractionHand.MAIN_HAND,
                 -1)
                 .handle(helper.getLevel().getServer(), player);
+    }
+
+    private static List<BlockPos> tntBurstPositions() {
+        List<BlockPos> positions = new ArrayList<>(40);
+        for (int y : List.of(2, 4)) {
+            for (int x = 1; x <= 5; x++) {
+                for (int z = 2; z <= 5; z++) {
+                    positions.add(new BlockPos(x, y, z));
+                }
+            }
+        }
+        return List.copyOf(positions);
     }
 
     private static void releasePlayer(
