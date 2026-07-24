@@ -81,6 +81,8 @@ public final class OnboardingController {
         if (current().kind() != kind) return Effect.NONE;
         return switch (kind) {
             case WORLD_EDIT, WORLD_PREVIEW -> advance(Effect.NONE);
+            case WORLD_UNDO_REDO -> undoRedoPhase == UndoRedoPhase.OBSERVE
+                    ? advance(Effect.REOPEN) : Effect.NONE;
             case WORLD_EXPERIMENT -> advance(Effect.REOPEN);
             default -> Effect.NONE;
         };
@@ -105,7 +107,10 @@ public final class OnboardingController {
                 undoRedoPhase = UndoRedoPhase.REDO;
                 yield Effect.NONE;
             }
-            case REDO -> advance(Effect.REOPEN);
+            case REDO -> {
+                undoRedoPhase = UndoRedoPhase.OBSERVE;
+                yield Effect.NONE;
+            }
             case SAVE -> advance(Effect.ENTER_WORLD);
             case RESTORE -> advance(Effect.REFRESH);
         };
@@ -146,5 +151,5 @@ public final class OnboardingController {
         OPEN_DASHBOARD, COMPLETE
     }
 
-    public enum UndoRedoPhase { UNDO, REDO }
+    public enum UndoRedoPhase { UNDO, REDO, OBSERVE }
 }

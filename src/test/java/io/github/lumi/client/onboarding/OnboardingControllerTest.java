@@ -33,8 +33,13 @@ class OnboardingControllerTest {
         completeOperation(controller, OnboardingEvent.OperationKind.UNDO);
         assertEquals(OnboardingController.UndoRedoPhase.REDO,
                 controller.undoRedoPhase());
-        assertEquals(OnboardingController.Effect.REOPEN,
+        assertEquals(OnboardingController.Effect.NONE,
                 completeOperation(controller, OnboardingEvent.OperationKind.REDO));
+        assertEquals(OnboardingController.UndoRedoPhase.OBSERVE,
+                controller.undoRedoPhase());
+        assertEquals(OnboardingController.Effect.REOPEN, controller.handle(
+                new OnboardingEvent.WorldCompleted(
+                        OnboardingTour.Kind.WORLD_UNDO_REDO)));
         assertEquals(OnboardingController.Effect.OPEN_SAVE, controller.handle(
                 new OnboardingEvent.Shortcut(
                         OnboardingEvent.ShortcutKind.SAVE, true)));

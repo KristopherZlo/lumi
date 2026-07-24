@@ -35,6 +35,8 @@ public final class ClientOnboardingWorldStep {
     private int refreshCooldown;
     private long previewHoldStarted;
     private boolean previewObserved;
+    private long redoObservationStarted;
+    private boolean redoObservationObserved;
 
     public ClientOnboardingWorldStep(
             ClientHistoryStore history,
@@ -65,6 +67,7 @@ public final class ClientOnboardingWorldStep {
         edits = 0;
         refreshCooldown = 0;
         resetPreviewHold();
+        resetRedoObservation();
         refresh.run();
     }
 
@@ -75,6 +78,11 @@ public final class ClientOnboardingWorldStep {
     public boolean accept(OnboardingEvent event) {
         if (controller == null) return false;
         OnboardingController.Effect effect = controller.handle(event);
+        if (controller.undoRedoPhase()
+                == OnboardingController.UndoRedoPhase.OBSERVE
+                && redoObservationStarted == 0L) {
+            redoObservationStarted = System.nanoTime();
+        }
         if (effect == OnboardingController.Effect.REOPEN) finishStep();
         return true;
     }
@@ -89,7 +97,10 @@ public final class ClientOnboardingWorldStep {
             tickPreview(client);
             return;
         }
-        if (kind == OnboardingTour.Kind.WORLD_UNDO_REDO) return;
+        if (kind == OnboardingTour.Kind.WORLD_UNDO_REDO) {
+            tickUndoRedo();
+            return;
+        }
         if (kind != OnboardingTour.Kind.WORLD_EDIT
                 && kind != OnboardingTour.Kind.WORLD_EXPERIMENT) {
             clear();
@@ -142,6 +153,22 @@ public final class ClientOnboardingWorldStep {
         }
     }
 
+    private void tickUndoRedo() {
+        if (controller.undoRedoPhase()
+                != OnboardingController.UndoRedoPhase.OBSERVE) {
+            return;
+        }
+        if (redoObservationStarted == 0L) {
+            redoObservationStarted = System.nanoTime();
+        }
+        if (redoObservationObserved) {
+            OnboardingController.Effect effect = controller.handle(
+                    new OnboardingEvent.WorldCompleted(
+                            OnboardingTour.Kind.WORLD_UNDO_REDO));
+            if (effect == OnboardingController.Effect.REOPEN) finishStep();
+        }
+    }
+
     private void render(
             GuiGraphics graphics, net.minecraft.client.DeltaTracker ignored) {
         Minecraft client = Minecraft.getInstance();
@@ -163,8 +190,12 @@ public final class ClientOnboardingWorldStep {
                 Component.translatable(page.titleKey()),
                 x + 10, y + 23, 0xff70d6a5, false);
         int cursorY = y + 39;
+        boolean observingRedo = page.kind() == OnboardingTour.Kind.WORLD_UNDO_REDO
+                && controller.undoRedoPhase()
+                == OnboardingController.UndoRedoPhase.OBSERVE;
         if (page.kind() == OnboardingTour.Kind.WORLD_PREVIEW
-                || page.kind() == OnboardingTour.Kind.WORLD_UNDO_REDO) {
+                || page.kind() == OnboardingTour.Kind.WORLD_UNDO_REDO
+                && !observingRedo) {
             String key = worldBinding(client, page.kind());
             graphics.drawString(client.font,
                     Component.translatable(
@@ -188,8 +219,10 @@ public final class ClientOnboardingWorldStep {
                             "luma.onboarding.world_edit_counter",
                             Math.min(required, edits), required),
                     x + 10, y + panelHeight - 15, 0xff8f9aa8, false);
-        } else if (page.kind() == OnboardingTour.Kind.WORLD_PREVIEW) {
-            float progress = previewProgress();
+        } else if (page.kind() == OnboardingTour.Kind.WORLD_PREVIEW
+                || observingRedo) {
+            float progress = observingRedo
+                    ? redoObservationProgress() : previewProgress();
             int barX = x + 10;
             int barY = y + panelHeight - 15;
             int barWidth = panelWidth - 20;
@@ -198,7 +231,10 @@ public final class ClientOnboardingWorldStep {
                     barX, barY,
                     barX + Math.round(barWidth * progress), barY + 5,
                     0xff70d6a5);
-            if (progress >= 1.0F) previewObserved = true;
+            if (progress >= 1.0F) {
+                if (observingRedo) redoObservationObserved = true;
+                else previewObserved = true;
+            }
         }
     }
 
@@ -206,10 +242,12 @@ public final class ClientOnboardingWorldStep {
         if (page.kind() != OnboardingTour.Kind.WORLD_UNDO_REDO) {
             return Component.translatable(page.helpKey());
         }
-        return Component.translatable(controller.undoRedoPhase()
-                == OnboardingController.UndoRedoPhase.UNDO
-                ? "luma.onboarding.undo_redo_undo_help"
-                : "luma.onboarding.undo_redo_redo_help");
+        String key = switch (controller.undoRedoPhase()) {
+            case UNDO -> "luma.onboarding.undo_redo_undo_help";
+            case REDO -> "luma.onboarding.undo_redo_redo_help";
+            case OBSERVE -> "luma.onboarding.undo_redo_observe_help";
+        };
+        return Component.translatable(key);
     }
 
     private String worldBinding(Minecraft client, OnboardingTour.Kind kind) {
@@ -235,6 +273,11 @@ public final class ClientOnboardingWorldStep {
     private float previewProgress() {
         return previewHoldStarted == 0L ? 0.0F
                 : holdProgress(System.nanoTime() - previewHoldStarted);
+    }
+
+    private float redoObservationProgress() {
+        return redoObservationStarted == 0L ? 0.0F
+                : holdProgress(System.nanoTime() - redoObservationStarted);
     }
 
     static float holdProgress(long heldNanos) {
@@ -282,10 +325,16 @@ public final class ClientOnboardingWorldStep {
         edits = 0;
         refreshCooldown = 0;
         resetPreviewHold();
+        resetRedoObservation();
     }
 
     private void resetPreviewHold() {
         previewHoldStarted = 0L;
         previewObserved = false;
+    }
+
+    private void resetRedoObservation() {
+        redoObservationStarted = 0L;
+        redoObservationObserved = false;
     }
 }
