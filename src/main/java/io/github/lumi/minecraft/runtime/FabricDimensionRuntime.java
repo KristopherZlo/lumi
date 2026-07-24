@@ -662,7 +662,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             SaveRequest request, Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         SaveCaptureOperation operation = createSave(request);
-        operations.enqueue(operation, OperationPriority.NORMAL, terminalObserver);
+        operations.enqueue(operation, OperationPriority.NORMAL, completed -> {
+            if (completed.terminalState()
+                    == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
+                operation.result().ifPresent(result ->
+                        liveActions.discardStaleCheckpoints(result.branchRef()));
+            }
+            terminalObserver.accept(completed);
+        });
         return operation;
     }
 

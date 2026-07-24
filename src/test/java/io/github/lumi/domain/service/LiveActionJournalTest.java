@@ -80,6 +80,48 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void newHeadDropsOnlyHistoryThroughTheStaleCheckpoint() {
+        var released = new java.util.ArrayList<LiveActionJournal.Checkpoint>();
+        LiveActionJournal journal = new LiveActionJournal(released::add);
+        add(journal, 1);
+        var checkpoint = checkpoint('1');
+        journal.pushCheckpoint(PLAYER_A, checkpoint);
+        UUID newer = add(journal, 2);
+
+        assertEquals(2, journal.discardStaleCheckpoints(
+                new BranchRef(new BranchName("main"), commit('9'), 2)));
+        assertEquals(List.of(checkpoint), released);
+        var remaining = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(newer, remaining.actionId());
+        journal.complete(remaining);
+        assertTrue(journal.prepareUndo(PLAYER_A).isEmpty());
+    }
+
+    @Test
+    void unchangedHeadKeepsCheckpointHistory() {
+        LiveActionJournal journal = new LiveActionJournal();
+        var checkpoint = checkpoint('1');
+        journal.pushCheckpoint(PLAYER_A, checkpoint);
+
+        assertEquals(0, journal.discardStaleCheckpoints(checkpoint.expectedRef()));
+        assertEquals(Optional.of(checkpoint),
+                journal.prepareUndo(PLAYER_A).orElseThrow().checkpoint());
+    }
+
+    @Test
+    void staleCheckpointDiscardIncludesAGroupCrossingItsBoundary() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID older = add(journal, 1);
+        journal.pushCheckpoint(PLAYER_A, checkpoint('1'));
+        UUID newer = add(journal, 2);
+        journal.mergeGroups(older, newer);
+
+        assertEquals(3, journal.discardStaleCheckpoints(
+                new BranchRef(new BranchName("main"), commit('9'), 2)));
+        assertTrue(journal.prepareUndo(PLAYER_A).isEmpty());
+    }
+
+    @Test
     void planPreservesMutationOrderAndCannotBeModified() {
         BlockPosition nested = new BlockPosition(6, 7, 8);
         LiveActionJournal journal = new LiveActionJournal();

@@ -306,6 +306,42 @@ public final class LiveActionJournal {
         checkpoints.forEach(checkpointRelease);
     }
 
+    /**
+     * Drops history that can no longer cross a durable checkpoint safely.
+     * Actions newer than the last stale checkpoint remain available.
+     */
+    public synchronized int discardStaleCheckpoints(BranchRef currentRef) {
+        Objects.requireNonNull(currentRef, "currentRef");
+        long cutoff = actions.values().stream()
+                .filter(action -> action.checkpoint != null
+                        && !action.checkpoint.expectedRef().equals(currentRef))
+                .mapToLong(action -> action.sequence)
+                .max().orElse(0);
+        if (cutoff == 0) {
+            return 0;
+        }
+        long previous;
+        do {
+            previous = cutoff;
+            long boundary = cutoff;
+            Set<UUID> groups = actions.values().stream()
+                    .filter(action -> action.sequence <= boundary)
+                    .map(action -> action.groupId)
+                    .collect(java.util.stream.Collectors.toSet());
+            cutoff = Math.max(cutoff, actions.values().stream()
+                    .filter(action -> groups.contains(action.groupId))
+                    .mapToLong(action -> action.sequence)
+                    .max().orElse(boundary));
+        } while (cutoff > previous);
+        long boundary = cutoff;
+        List<MutableAction> discarded = actions.values().stream()
+                .filter(action -> action.sequence <= boundary)
+                .sorted(java.util.Comparator.comparingLong(action -> action.sequence))
+                .toList();
+        discarded.forEach(this::evict);
+        return discarded.size();
+    }
+
     public synchronized Optional<String> lastUnavailableReason(UUID player) {
         return Optional.ofNullable(unavailableReasons.get(Objects.requireNonNull(player, "player")));
     }

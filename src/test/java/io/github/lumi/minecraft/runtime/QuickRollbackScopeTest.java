@@ -17,6 +17,7 @@ class QuickRollbackScopeTest {
         assertTrue(source.contains("mutations.snapshot().generations()"));
         assertTrue(!source.contains("clearableQuickRollbackKeys("));
         assertTrue(source.contains("liveActions.pushCheckpoint("));
+        assertTrue(source.contains("liveActions.discardStaleCheckpoints("));
         assertTrue(source.contains("sessionCheckpoints.name(operationId)"));
         assertTrue(!source.contains("\"hidden/rollback/\" + operationId"));
         assertTrue(!source.contains("liveActions.recordRestore("));
