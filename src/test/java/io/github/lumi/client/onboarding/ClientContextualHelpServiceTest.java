@@ -23,4 +23,17 @@ class ClientContextualHelpServiceTest {
         service.resetHints();
         assertTrue(service.shouldShowHint(ClientContextualHelpHint.MORE));
     }
+
+    @Test
+    void dismissesAVisibleGroupTogether() {
+        ClientContextualHelpService service = new ClientContextualHelpService(
+                new ClientOnboardingStateRepository(tempDir.resolve("group")));
+
+        service.dismissHints(java.util.List.of(
+                ClientContextualHelpHint.HISTORY,
+                ClientContextualHelpHint.SAVE));
+
+        assertFalse(service.shouldShowHint(ClientContextualHelpHint.HISTORY));
+        assertFalse(service.shouldShowHint(ClientContextualHelpHint.SAVE));
+    }
 }

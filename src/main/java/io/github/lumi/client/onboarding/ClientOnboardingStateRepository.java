@@ -7,6 +7,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import net.fabricmc.loader.api.FabricLoader;
@@ -37,13 +38,17 @@ public final class ClientOnboardingStateRepository {
     }
 
     public void dismissHint(String hintId) {
-        String normalized = normalizeHint(hintId);
-        if (normalized == null) {
-            return;
-        }
+        if (hintId == null) return;
+        dismissHints(java.util.List.of(hintId));
+    }
+
+    public void dismissHints(Collection<String> hintIds) {
         State current = load();
         LinkedHashSet<String> dismissed = new LinkedHashSet<>(current.dismissedHintIds());
-        dismissed.add(normalized);
+        hintIds.stream()
+                .map(ClientOnboardingStateRepository::normalizeHint)
+                .filter(java.util.Objects::nonNull)
+                .forEach(dismissed::add);
         save(new State(current.completed(), dismissed));
     }
 

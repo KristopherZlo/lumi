@@ -322,23 +322,16 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private boolean addDashboardHint(int y) {
         int x = layout.bodyX() + PANEL_PADDING;
         int width = Math.max(1, layout.bodyWidth() - PANEL_PADDING * 2);
-        if (addContextualHint(ClientContextualHelpHint.HISTORY, x, y, width)
-                || addContextualHint(
-                        ClientContextualHelpHint.SHORTCUTS, x, y, width)) {
-            return true;
-        }
-        if (snapshot == null) {
-            return false;
-        }
-        if (snapshot.pendingKeys() == 0) {
-            return addContextualHint(
-                    ClientContextualHelpHint.CLEAN_STATE, x, y, width);
-        }
-        if (addContextualHint(ClientContextualHelpHint.SAVE, x, y, width)) {
-            return true;
-        }
-        return addContextualHint(
-                ClientContextualHelpHint.QUICK_ROLLBACK, x, y, width);
+        List<ClientContextualHelpHint> hints = snapshot != null
+                && snapshot.pendingKeys() > 0
+                ? List.of(
+                        ClientContextualHelpHint.HISTORY,
+                        ClientContextualHelpHint.SAVE,
+                        ClientContextualHelpHint.QUICK_ROLLBACK)
+                : List.of(
+                        ClientContextualHelpHint.HISTORY,
+                        ClientContextualHelpHint.SHORTCUTS);
+        return addContextualHints(hints, x, y, width);
     }
 
     OnboardingSpotlightLayout.Rect onboardingTarget(

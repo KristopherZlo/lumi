@@ -1,11 +1,11 @@
 package io.github.lumi.client.ui;
 
 import com.mojang.blaze3d.platform.Window;
-import io.github.lumi.LumiMod;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
 import io.github.lumi.client.onboarding.ClientContextualHelpService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.IntConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -13,9 +13,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 /** Neutral V2 screen mechanics shared by pages and modal workflows. */
@@ -27,8 +25,8 @@ abstract class LumiScreen extends Screen {
     private static final int FRAME_CONTROL_INSET = 8;
     private static final int ICON_BUTTON_WIDTH = 26;
     private static final int HEADER_CONTROL_GAP = 8;
-    private static final Identifier HINT_CLOSE_ICON = Identifier.fromNamespaceAndPath(
-            LumiMod.MOD_ID, "textures/gui/icons/close.png");
+    private static final int HINT_CONTROL_GAP = 2;
+    private static final int MAX_HINTS_PER_GROUP = 3;
     private final List<LumiScrollbar> scrollbars = new ArrayList<>();
     private final ClientContextualHelpService contextualHelp =
             new ClientContextualHelpService();
@@ -42,11 +40,16 @@ abstract class LumiScreen extends Screen {
     private int animationY;
     private int animationWidth;
     private int animationHeight;
+    private List<ClientContextualHelpHint> contextualHints = List.of();
     private ClientContextualHelpHint contextualHint;
+    private int contextualHintIndex;
     private int hintX;
     private int hintY;
     private int hintWidth;
     private int hintHeight;
+    private boolean contextualHintsClosed;
+    private LumiButton hintPreviousButton;
+    private LumiButton hintNextButton;
     private boolean handCursorActive;
     private LumiButton navigationButton;
     private static long handCursor;
@@ -119,7 +122,10 @@ abstract class LumiScreen extends Screen {
     protected final void initializeScreenScale() {
         screenInitialized = true;
         scrollbars.clear();
+        contextualHints = List.of();
         contextualHint = null;
+        hintPreviousButton = null;
+        hintNextButton = null;
         Window window = Minecraft.getInstance().getWindow();
         int currentGuiScale = currentGuiScale();
         uiScale = LumiUiScale.current();
@@ -157,17 +163,64 @@ abstract class LumiScreen extends Screen {
 
     protected final boolean addContextualHint(
             ClientContextualHelpHint hint, int x, int y, int width) {
-        if (!contextualHelp.shouldShowHint(hint)) {
+        return addContextualHints(List.of(hint), x, y, width);
+    }
+
+    protected final boolean addContextualHints(
+            List<ClientContextualHelpHint> hints, int x, int y, int width) {
+        if (contextualHintsClosed) {
             return false;
         }
-        contextualHint = hint;
+        contextualHints = Objects.requireNonNull(hints, "hints").stream()
+                .filter(contextualHelp::shouldShowHint)
+                .limit(MAX_HINTS_PER_GROUP)
+                .toList();
+        if (contextualHints.isEmpty()) return false;
+        contextualHintIndex = Math.min(
+                contextualHintIndex, contextualHints.size() - 1);
+        contextualHint = contextualHints.get(contextualHintIndex);
         hintX = x;
         hintY = y;
         hintWidth = width;
-        hintHeight = 30 + font.split(
-                Component.translatable(hint.bodyKey()),
-                Math.max(1, width - 14)).size() * 10;
+        hintHeight = 32 + contextualHints.stream()
+                .mapToInt(value -> font.split(
+                        Component.translatable(value.bodyKey()),
+                        Math.max(1, width - 14)).size())
+                .max().orElse(1) * 10;
+        addHintControls();
         return true;
+    }
+
+    private void addHintControls() {
+        int nextX = hintX + hintWidth - ICON_BUTTON_WIDTH - 6;
+        int previousX = nextX - ICON_BUTTON_WIDTH - HINT_CONTROL_GAP;
+        hintPreviousButton = addIconButton(
+                previousX, hintY + 5, "chevron-left",
+                Component.translatable("luma.action.back"),
+                () -> showContextualHint(contextualHintIndex - 1),
+                LumiButton.Kind.NORMAL);
+        hintPreviousButton.active = contextualHintIndex > 0;
+        boolean last = contextualHintIndex == contextualHints.size() - 1;
+        hintNextButton = addIconButton(
+                nextX, hintY + 5, last ? "close" : "chevron-right",
+                Component.translatable(last
+                        ? "luma.action.close" : "luma.action.next"),
+                last ? this::dismissContextualHints
+                        : () -> showContextualHint(contextualHintIndex + 1),
+                LumiButton.Kind.NORMAL);
+    }
+
+    private void showContextualHint(int index) {
+        contextualHintIndex = Math.max(
+                0, Math.min(index, contextualHints.size() - 1));
+        rebuildWidgets();
+    }
+
+    private void dismissContextualHints() {
+        contextualHelp.dismissHints(contextualHints);
+        contextualHintsClosed = true;
+        contextualHintIndex = 0;
+        rebuildWidgets();
     }
 
     protected final int contextualHintOffset(int gap) {
@@ -176,13 +229,21 @@ abstract class LumiScreen extends Screen {
 
     protected final void moveContextualHint(int x, int y) {
         if (contextualHint != null) {
+            int deltaX = x - hintX;
+            int deltaY = y - hintY;
             hintX = x;
             hintY = y;
+            hintPreviousButton.setX(hintPreviousButton.getX() + deltaX);
+            hintPreviousButton.setY(hintPreviousButton.getY() + deltaY);
+            hintNextButton.setX(hintNextButton.getX() + deltaX);
+            hintNextButton.setY(hintNextButton.getY() + deltaY);
         }
     }
 
     protected final void resetContextualHints() {
         contextualHelp.resetHints();
+        contextualHintsClosed = false;
+        contextualHintIndex = 0;
         rebuildWidgets();
     }
 
@@ -194,10 +255,16 @@ abstract class LumiScreen extends Screen {
                 LumiTheme.STATUS, LumiTheme.STATUS_BORDER);
         String title = font.plainSubstrByWidth(
                 Component.translatable(contextualHint.titleKey()).getString(),
-                Math.max(1, hintWidth - 44));
+                hintTitleWidth());
         graphics.drawString(font, title, hintX + 8, hintY + 8,
                 LumiTheme.ACCENT, false);
-        int lineY = hintY + 23;
+        String counter = (contextualHintIndex + 1)
+                + "/" + contextualHints.size();
+        int counterRight = hintPreviousButton.getX() - 6;
+        graphics.drawString(
+                font, counter, counterRight - font.width(counter),
+                hintY + 10, LumiTheme.MUTED, false);
+        int lineY = hintY + 27;
         for (var line : font.split(
                 Component.translatable(contextualHint.bodyKey()),
                 Math.max(1, hintWidth - 14))) {
@@ -205,17 +272,13 @@ abstract class LumiScreen extends Screen {
                     LumiTheme.TEXT, false);
             lineY += 10;
         }
-        int closeX = hintX + hintWidth - 26;
-        boolean hovered = mouseX >= closeX && mouseX < closeX + 18
-                && mouseY >= hintY + 6 && mouseY < hintY + 24;
-        LumiTheme.outlined(
-                graphics, closeX, hintY + 6, 18, 18,
-                hovered ? LumiTheme.CHIP : LumiTheme.INSET,
-                LumiTheme.STATUS_BORDER);
-        graphics.blit(
-                RenderPipelines.GUI_TEXTURED, HINT_CLOSE_ICON,
-                closeX + 3, hintY + 9, 0, 0, 12, 12,
-                24, 24, 24, 24);
+    }
+
+    private int hintTitleWidth() {
+        String counter = (contextualHintIndex + 1)
+                + "/" + contextualHints.size();
+        return Math.max(1, hintPreviousButton.getX() - 12
+                - font.width(counter) - (hintX + 8));
     }
 
     protected final boolean clickContextualHint(MouseButtonEvent click) {
@@ -224,20 +287,7 @@ abstract class LumiScreen extends Screen {
                 || click.y() < hintY || click.y() >= hintY + hintHeight) {
             return false;
         }
-        int closeX = hintX + hintWidth - 26;
-        if (click.x() >= closeX && click.x() < closeX + 18
-                && click.y() >= hintY + 6 && click.y() < hintY + 24) {
-            contextualHelp.dismissHint(contextualHint);
-            rebuildWidgets();
-        }
         return true;
-    }
-
-    protected final boolean contextualPointerHovered(int mouseX, int mouseY) {
-        return contextualHint != null
-                && mouseX >= hintX + hintWidth - 26
-                && mouseX < hintX + hintWidth - 8
-                && mouseY >= hintY + 6 && mouseY < hintY + 24;
     }
 
     protected final void renderWindow(
@@ -322,8 +372,8 @@ abstract class LumiScreen extends Screen {
     @Override
     public void render(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
         renderContextualHint(graphics, mouseX, mouseY);
+        super.render(graphics, mouseX, mouseY, partialTick);
         if (minecraft.screen == this) {
             updateCursor(mouseX, mouseY);
         }
@@ -332,8 +382,7 @@ abstract class LumiScreen extends Screen {
     protected boolean pointerHovered(int mouseX, int mouseY) {
         return children().stream().anyMatch(child ->
                 child instanceof Button button
-                        && button.isMouseOver(mouseX, mouseY))
-                || contextualPointerHovered(mouseX, mouseY);
+                        && button.isMouseOver(mouseX, mouseY));
     }
 
     private void updateCursor(int mouseX, int mouseY) {
@@ -363,8 +412,8 @@ abstract class LumiScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (interactionBlocked()) return true;
         MouseButtonEvent virtual = virtualClick(click);
-        if (clickContextualHint(virtual)) return true;
-        return super.mouseClicked(virtual, doubled);
+        if (super.mouseClicked(virtual, doubled)) return true;
+        return clickContextualHint(virtual);
     }
 
     final boolean screenInitialized() {

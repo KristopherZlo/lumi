@@ -34,8 +34,7 @@ class ClientOnboardingStateRepositoryTest {
                 new ClientOnboardingStateRepository(file);
 
         repository.markCompleted();
-        repository.dismissHint("history");
-        repository.dismissHint("branches");
+        repository.dismissHints(java.util.List.of("history", "branches"));
 
         ClientOnboardingStateRepository reopened =
                 new ClientOnboardingStateRepository(file);
