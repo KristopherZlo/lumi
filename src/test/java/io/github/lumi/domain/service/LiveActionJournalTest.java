@@ -46,7 +46,8 @@ class LiveActionJournalTest {
         LiveActionJournal journal = new LiveActionJournal();
         var checkpoint = new LiveActionJournal.Checkpoint(
                 new BranchRef(new BranchName("main"), commit('1'), 4),
-                commit('2'), new BranchName("hidden/session-undo/checkpoint"));
+                commit('2'), new BranchRef(
+                        new BranchName("hidden/session-undo/checkpoint"), commit('2'), 0));
 
         UUID action = journal.pushCheckpoint(PLAYER_A, checkpoint);
 
@@ -58,6 +59,24 @@ class LiveActionJournalTest {
         journal.complete(undo);
         assertEquals(Optional.of(checkpoint),
                 journal.prepareRedo(PLAYER_A).orElseThrow().checkpoint());
+    }
+
+    @Test
+    void releasesCheckpointOnlyWhenItLeavesTheSessionHistory() {
+        var released = new java.util.ArrayList<LiveActionJournal.Checkpoint>();
+        LiveActionJournal journal = new LiveActionJournal(released::add);
+        var first = checkpoint('1');
+        var second = checkpoint('2');
+        journal.pushCheckpoint(PLAYER_A, first);
+
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        journal.complete(undo);
+        assertTrue(released.isEmpty());
+
+        journal.pushCheckpoint(PLAYER_A, second);
+        assertEquals(List.of(first), released);
+        journal.clear();
+        assertEquals(List.of(first, second), released);
     }
 
     @Test
@@ -433,6 +452,14 @@ class LiveActionJournalTest {
         journal.record(action, new BlockPosition(x, 0, 0), block("air"), block("stone"));
         journal.close(action);
         return action;
+    }
+
+    private static LiveActionJournal.Checkpoint checkpoint(char value) {
+        CommitId dirty = commit(value);
+        return new LiveActionJournal.Checkpoint(
+                new BranchRef(new BranchName("main"), commit('0'), 1),
+                dirty, new BranchRef(
+                        new BranchName("hidden/session-undo/" + value), dirty, 0));
     }
 
     private static BlockSnapshot block(String id) {

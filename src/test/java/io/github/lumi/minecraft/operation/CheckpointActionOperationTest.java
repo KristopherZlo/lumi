@@ -47,7 +47,8 @@ class CheckpointActionOperationTest {
         LiveActionJournal journal = new LiveActionJournal();
         journal.pushCheckpoint(PLAYER, new LiveActionJournal.Checkpoint(
                 new BranchRef(new BranchName("main"), id('1'), 1),
-                id('2'), new BranchName("hidden/session-undo/test")));
+                id('2'), new BranchRef(
+                        new BranchName("hidden/session-undo/test"), id('2'), 0)));
         return journal;
     }
 

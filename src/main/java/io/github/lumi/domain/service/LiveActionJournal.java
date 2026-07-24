@@ -2,7 +2,6 @@ package io.github.lumi.domain.service;
 
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
-import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.EntityState;
@@ -21,6 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /** Session-only action history for one dimension. */
 public final class LiveActionJournal {
@@ -33,16 +33,29 @@ public final class LiveActionJournal {
     private final Map<UUID, String> unavailableReasons = new HashMap<>();
     private final Set<UUID> unsafeGroups = new HashSet<>();
     private final Limits limits;
+    private final Consumer<Checkpoint> checkpointRelease;
     private long nextSequence;
     private long retainedBytes;
     private long unsafeBeforeSequence;
 
     public LiveActionJournal() {
-        this(Limits.DEFAULT);
+        this(Limits.DEFAULT, ignored -> { });
     }
 
     public LiveActionJournal(Limits limits) {
+        this(limits, ignored -> { });
+    }
+
+    public LiveActionJournal(Consumer<Checkpoint> checkpointRelease) {
+        this(Limits.DEFAULT, checkpointRelease);
+    }
+
+    public LiveActionJournal(
+            Limits limits,
+            Consumer<Checkpoint> checkpointRelease) {
         this.limits = Objects.requireNonNull(limits, "limits");
+        this.checkpointRelease = Objects.requireNonNull(
+                checkpointRelease, "checkpointRelease");
     }
 
     public synchronized UUID begin(UUID player) {
@@ -276,6 +289,10 @@ public final class LiveActionJournal {
     }
 
     public synchronized void clear() {
+        List<Checkpoint> checkpoints = actions.values().stream()
+                .map(action -> action.checkpoint)
+                .filter(Objects::nonNull)
+                .toList();
         actions.clear();
         openActions.clear();
         playerStacks.clear();
@@ -286,6 +303,7 @@ public final class LiveActionJournal {
         unsafeGroups.clear();
         retainedBytes = 0;
         unsafeBeforeSequence = 0;
+        checkpoints.forEach(checkpointRelease);
     }
 
     public synchronized Optional<String> lastUnavailableReason(UUID player) {
@@ -528,6 +546,7 @@ public final class LiveActionJournal {
         if (action.closed && action.causalReferences == 0) {
             actions.remove(action.id);
         }
+        releaseCheckpoint(action);
     }
 
     private void evict(MutableAction action) {
@@ -540,6 +559,7 @@ public final class LiveActionJournal {
         if (action.causalReferences == 0) {
             actions.remove(action.id);
         }
+        releaseCheckpoint(action);
     }
 
     private void evictState(MutableAction action) {
@@ -649,6 +669,14 @@ public final class LiveActionJournal {
         }
     }
 
+    private void releaseCheckpoint(MutableAction action) {
+        Checkpoint checkpoint = action.checkpoint;
+        action.checkpoint = null;
+        if (checkpoint != null) {
+            checkpointRelease.accept(checkpoint);
+        }
+    }
+
     public record ActionSummary(
             UUID actionId,
             UUID player,
@@ -660,7 +688,7 @@ public final class LiveActionJournal {
     public record Checkpoint(
             BranchRef expectedRef,
             CommitId dirtyCommit,
-            BranchName hiddenRef) {
+            BranchRef hiddenRef) {
         public Checkpoint {
             Objects.requireNonNull(expectedRef, "expectedRef");
             Objects.requireNonNull(dirtyCommit, "dirtyCommit");

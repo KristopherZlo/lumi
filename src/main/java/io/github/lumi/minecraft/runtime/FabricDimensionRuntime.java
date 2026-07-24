@@ -1649,7 +1649,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         liveActions.pushCheckpoint(
                                 author.id(), new LiveActionJournal.Checkpoint(
                                         value.expectedRef(), saved.commitId(),
-                                        saved.branchRef().name()));
+                                        saved.branchRef()));
                     }
                 }
             } finally {
