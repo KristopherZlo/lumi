@@ -78,6 +78,25 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void checkpointMovesAsOneConstantSizeStackEntry() {
+        LiveActionJournal journal = new LiveActionJournal();
+        var checkpoint = new LiveActionJournal.Checkpoint(
+                new BranchRef(new BranchName("main"), commit('1'), 4),
+                commit('2'), new BranchName("hidden/session-undo/checkpoint"));
+
+        UUID action = journal.pushCheckpoint(PLAYER_A, checkpoint);
+
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(action, undo.actionId());
+        assertEquals(Optional.of(checkpoint), undo.checkpoint());
+        assertTrue(undo.expected().isEmpty());
+        assertTrue(undo.expectedEntities().isEmpty());
+        journal.complete(undo);
+        assertEquals(Optional.of(checkpoint),
+                journal.prepareRedo(PLAYER_A).orElseThrow().checkpoint());
+    }
+
+    @Test
     void planPreservesMutationOrderAndCannotBeModified() {
         BlockPosition nested = new BlockPosition(6, 7, 8);
         LiveActionJournal journal = new LiveActionJournal();

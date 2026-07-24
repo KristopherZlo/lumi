@@ -266,6 +266,28 @@ class RestoreOperationTest {
     }
 
     @Test
+    void createsDirectionSpecificCheckpointJournalWithoutGenerationPayload()
+            throws IOException {
+        BranchRef source = new BranchRef(new BranchName("main"), id('1'), 2);
+        CommitId checkpoint = id('2');
+        var restore = new PreparedRestore(
+                source, checkpoint, Map.of(), Map.of(), Map.of(), Map.of());
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+
+        RestoreOperation operation = RestoreOperation.startCheckpointAction(
+                restore, new RepairThenVerify(), ignored -> { }, journals,
+                UUID.randomUUID(), RestoreStateListener.NONE,
+                OperationKind.CHECKPOINT_UNDO, source.commit(), ignored -> { });
+        operation.tick(Long.MAX_VALUE);
+
+        var journal = journals.read().orElseThrow();
+        assertEquals(OperationKind.CHECKPOINT_UNDO, journal.kind());
+        assertEquals(Optional.of(checkpoint), journal.target().target());
+        assertEquals(Optional.of(source.commit()), journal.target().returnPoint());
+        assertEquals(Optional.empty(), journal.capturedGenerations());
+    }
+
+    @Test
     void publishesRefOnlyAfterIncrementalApplyAndVerification() throws IOException {
         CommitId current = id('1');
         CommitId target = id('2');

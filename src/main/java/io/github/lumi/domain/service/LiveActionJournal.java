@@ -2,6 +2,9 @@ package io.github.lumi.domain.service;
 
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
+import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.BranchRef;
+import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
@@ -125,10 +128,24 @@ public final class LiveActionJournal {
         return action.id;
     }
 
+    /** Adds one constant-size durable Restore pair to the session stack. */
+    public synchronized UUID pushCheckpoint(UUID player, Checkpoint checkpoint) {
+        UUID actionId = begin(player);
+        MutableAction action = requireAction(actionId);
+        startRecording(action);
+        action.checkpoint = Objects.requireNonNull(checkpoint, "checkpoint");
+        close(actionId);
+        return actionId;
+    }
+
     /** Joins causally inseparable actions into one session Undo/Redo entry. */
     public synchronized void mergeGroups(UUID firstAction, UUID secondAction) {
         MutableAction first = requireAction(firstAction);
         MutableAction second = requireAction(secondAction);
+        if (first.checkpoint != null || second.checkpoint != null) {
+            throw new IllegalArgumentException(
+                    "Checkpoint actions cannot join causal groups");
+        }
         if (!first.player.equals(second.player)) {
             throw new IllegalArgumentException(
                     "Live action groups cannot cross players");
@@ -350,6 +367,16 @@ public final class LiveActionJournal {
                 .map(this::requireAction)
                 .filter(action -> action.groupId.equals(selected.groupId))
                 .toList();
+        if (selected.checkpoint != null) {
+            if (group.size() != 1) {
+                throw new IllegalStateException(
+                        "Checkpoint action cannot have group members");
+            }
+            return Optional.of(new Plan(
+                    player, List.of(selected.id), direction,
+                    Map.of(), Map.of(), Map.of(), Map.of(),
+                    Optional.of(selected.checkpoint)));
+        }
         if (group.stream().anyMatch(action ->
                 action.sequence <= unsafeBeforeSequence)) {
             throw new IllegalStateException("A newer evicted action makes this live action unsafe");
@@ -400,7 +427,7 @@ public final class LiveActionJournal {
         return Optional.of(new Plan(
                 player, group.stream().map(action -> action.id).toList(),
                 direction, expected, replacement,
-                expectedEntities, replacementEntities));
+                expectedEntities, replacementEntities, Optional.empty()));
     }
 
     private MutableAction requireAction(UUID id) {
@@ -480,7 +507,8 @@ public final class LiveActionJournal {
     }
 
     private static boolean isEmpty(MutableAction action) {
-        return action.changes.isEmpty() && action.entities.isEmpty();
+        return action.changes.isEmpty() && action.entities.isEmpty()
+                && action.checkpoint == null;
     }
 
     private PlayerStacks stacks(UUID player) {
@@ -627,7 +655,8 @@ public final class LiveActionJournal {
             Map<BlockPosition, BlockSnapshot> expected,
             Map<BlockPosition, BlockSnapshot> replacement,
             Map<UUID, Optional<EntityState>> expectedEntities,
-            Map<UUID, Optional<EntityState>> replacementEntities) {
+            Map<UUID, Optional<EntityState>> replacementEntities,
+            Optional<Checkpoint> checkpoint) {
         public Plan {
             Objects.requireNonNull(player, "player");
             actionIds = List.copyOf(Objects.requireNonNull(
@@ -641,6 +670,7 @@ public final class LiveActionJournal {
             replacement = immutableOrderedCopy(replacement);
             expectedEntities = immutableOrderedCopy(expectedEntities);
             replacementEntities = immutableOrderedCopy(replacementEntities);
+            checkpoint = Objects.requireNonNull(checkpoint, "checkpoint");
         }
 
         public UUID actionId() {
@@ -684,6 +714,17 @@ public final class LiveActionJournal {
             long bytes,
             int delayedReferences) { }
 
+    public record Checkpoint(
+            BranchRef expectedRef,
+            CommitId dirtyCommit,
+            BranchName hiddenRef) {
+        public Checkpoint {
+            Objects.requireNonNull(expectedRef, "expectedRef");
+            Objects.requireNonNull(dirtyCommit, "dirtyCommit");
+            Objects.requireNonNull(hiddenRef, "hiddenRef");
+        }
+    }
+
     private static final class MutableAction {
         private final UUID id;
         private final UUID player;
@@ -695,6 +736,7 @@ public final class LiveActionJournal {
         private boolean started;
         private boolean available = true;
         private boolean applied = true;
+        private Checkpoint checkpoint;
         private long bytes;
         private int causalReferences;
 

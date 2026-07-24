@@ -430,6 +430,29 @@ public final class RestoreOperation implements DimensionMutation {
                 Optional.of(capturedGenerations), progress);
     }
 
+    public static RestoreOperation startCheckpointAction(
+            PreparedRestore restore,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            OperationKind kind,
+            CommitId returnPoint,
+            Consumer<OperationProgress> progress) throws IOException {
+        if (kind != OperationKind.CHECKPOINT_UNDO
+                && kind != OperationKind.QUICK_ROLLBACK) {
+            throw new IllegalArgumentException(
+                    "Checkpoint action requires a checkpoint operation kind");
+        }
+        OperationTarget target = new OperationTarget(
+                restore.expectedRef().name(), restore.expectedRef().commit(),
+                restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
+                Optional.of(Objects.requireNonNull(returnPoint, "returnPoint")));
+        return start(restore, world, publication, journals, operationId,
+                stateListener, kind, target, Optional.empty(), progress);
+    }
+
     public static RestoreOperation start(
             PreparedRestore restore,
             WorldStateApply world,
