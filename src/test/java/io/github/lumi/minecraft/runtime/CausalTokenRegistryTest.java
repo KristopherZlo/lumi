@@ -30,6 +30,7 @@ class CausalTokenRegistryTest {
         }
 
         assertEquals(2, journal.prepareUndo(player).orElseThrow().expected().size());
+        assertEquals(true, tokens.anyKey("piston-event"::equals));
         assertEquals(true, tokens.anyMatch(action::equals));
         assertEquals(Set.of("piston-event"), tokens.cancel(action::equals));
         assertEquals(false, tokens.anyMatch(action::equals));

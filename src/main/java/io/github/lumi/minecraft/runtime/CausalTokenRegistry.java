@@ -33,6 +33,11 @@ public final class CausalTokenRegistry<K, O> {
         return owners.values().stream().anyMatch(matches);
     }
 
+    public synchronized boolean anyKey(java.util.function.Predicate<K> matches) {
+        Objects.requireNonNull(matches, "matches");
+        return owners.keySet().stream().anyMatch(matches);
+    }
+
     public synchronized Set<K> cancel(java.util.function.Predicate<O> matches) {
         Objects.requireNonNull(matches, "matches");
         Set<K> cancelled = new HashSet<>();

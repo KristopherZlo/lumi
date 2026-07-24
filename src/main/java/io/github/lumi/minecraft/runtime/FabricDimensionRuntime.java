@@ -791,6 +791,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     public boolean mayChangeBlocks(UUID action) {
                         return causalTicks.cancellationMayChangeBlocks(action);
                     }
+
+                    @Override
+                    public Set<UUID> tntWaveActions(UUID actor) {
+                        return causalTicks.tntWaveActions().stream()
+                                .filter(action -> liveActions.owner(action)
+                                        .filter(actor::equals).isPresent())
+                                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                    }
                 }, this::publishLiveAction);
         operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);
         return operation;

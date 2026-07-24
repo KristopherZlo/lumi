@@ -33,6 +33,43 @@ import net.minecraft.world.level.block.state.BlockState;
 /** Exact active-carrier and completed-result gates for TNT actions. */
 public final class LumiTntGameTests {
     @GameTest(maxTicks = 300000)
+    public void oneUndoCancelsAllActiveTntActions(GameTestHelper helper) {
+        FabricDimensionRuntime runtime = runtime(helper);
+        UUID player = UUID.randomUUID();
+        UUID test = UUID.randomUUID();
+        List<BlockPos> positions = List.of(
+                new BlockPos(2, 2, 3),
+                new BlockPos(3, 2, 3),
+                new BlockPos(4, 2, 3),
+                new BlockPos(5, 2, 3));
+        AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    positions.forEach(position -> {
+                        helper.setBlock(position.below(), Blocks.OBSIDIAN);
+                        helper.setBlock(position, Blocks.TNT);
+                        prime(helper, runtime, player, position);
+                    });
+                    helper.assertEntitiesPresent(EntityType.TNT, positions.size());
+                    helper.getEntities(EntityType.TNT).forEach(carrier -> carrier.setFuse(200));
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
+                            operation -> terminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED, terminal.get(),
+                            "One Undo must cancel the complete active TNT wave");
+                    positions.forEach(position -> helper.assertBlockState(
+                            position, Blocks.TNT.defaultBlockState()));
+                    assertNoActiveEntities(helper, EntityType.TNT);
+                })
+                .thenExecute(() -> LumiGameTestLease.release(test))
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
     public void activeTntOutlivesHistoryCountEviction(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();

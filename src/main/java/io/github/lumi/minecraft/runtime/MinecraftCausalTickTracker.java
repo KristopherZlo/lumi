@@ -45,6 +45,7 @@ public final class MinecraftCausalTickTracker {
     private final CausalTokenRegistry<Entity, DirectLiveActionContext.CausalRoot> entityCarriers =
             new CausalTokenRegistry<>();
     private final Set<java.util.UUID> depthLimitLogged = new HashSet<>();
+    private final Set<java.util.UUID> tntWaveActions = new HashSet<>();
 
     public MinecraftCausalTickTracker(
             LiveActionJournal journal,
@@ -112,7 +113,16 @@ public final class MinecraftCausalTickTracker {
 
     public void rememberCarrier(Entity carrier) {
         if (carrier instanceof FallingBlockEntity || carrier instanceof PrimedTnt || carrier instanceof AbstractArrow) {
-            rememberCurrent(entityCarriers, carrier);
+            boolean startsTntWave = carrier instanceof PrimedTnt
+                    && !entityCarriers.anyKey(entity -> entity instanceof PrimedTnt);
+            Optional<DirectLiveActionContext.CausalRoot> root =
+                    rememberCurrent(entityCarriers, carrier);
+            if (carrier instanceof PrimedTnt && root.isPresent()) {
+                if (startsTntWave) {
+                    tntWaveActions.clear();
+                }
+                tntWaveActions.add(root.orElseThrow().action());
+            }
         }
     }
 
@@ -131,9 +141,19 @@ public final class MinecraftCausalTickTracker {
         Objects.requireNonNull(action, "action");
         Objects.requireNonNull(carrier, "carrier");
         if (isTransientCarrier(carrier) && !carrier.isRemoved()) {
+            if (carrier instanceof PrimedTnt) {
+                if (!entityCarriers.anyKey(entity -> entity instanceof PrimedTnt)) {
+                    tntWaveActions.clear();
+                }
+                tntWaveActions.add(action);
+            }
             remember(entityCarriers, carrier,
                     new DirectLiveActionContext.CausalRoot(action, 1));
         }
+    }
+
+    public Set<java.util.UUID> tntWaveActions() {
+        return Set.copyOf(tntWaveActions);
     }
 
     public boolean cancellationMayChangeBlocks(java.util.UUID action) {
@@ -190,6 +210,7 @@ public final class MinecraftCausalTickTracker {
         blockCarriers.clear();
         entityCarriers.clear();
         depthLimitLogged.clear();
+        tntWaveActions.clear();
     }
 
     public void close() {
@@ -202,18 +223,26 @@ public final class MinecraftCausalTickTracker {
         blockCarriers.clear();
         entityCarriers.clear();
         depthLimitLogged.clear();
+        tntWaveActions.clear();
     }
 
     private Optional<CausalExecution> resume(TickKey key) {
         return consume(tokens, key);
     }
 
-    private <K> void rememberCurrent(
+    private <K> Optional<DirectLiveActionContext.CausalRoot> rememberCurrent(
             CausalTokenRegistry<K, DirectLiveActionContext.CausalRoot> registry, K key) {
-        DirectLiveActionContext.currentRoot(journal).ifPresent(root ->
-                root.child(MAX_CAUSAL_DEPTH).ifPresentOrElse(
-                        child -> remember(registry, key, child),
-                        () -> logDepthLimit(root.action())));
+        Optional<DirectLiveActionContext.CausalRoot> current =
+                DirectLiveActionContext.currentRoot(journal);
+        if (current.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<DirectLiveActionContext.CausalRoot> child =
+                current.orElseThrow().child(MAX_CAUSAL_DEPTH);
+        child.ifPresentOrElse(
+                root -> remember(registry, key, root),
+                () -> logDepthLimit(current.orElseThrow().action()));
+        return child;
     }
 
     private <K> void remember(

@@ -39,6 +39,33 @@ class LiveActionOperationTest {
     }
 
     @Test
+    void undoesOneTntWaveUnderOneOperation() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID first = journal.begin(PLAYER);
+        journal.record(first, POSITION, block("stone"), block("dirt"));
+        journal.close(first);
+        UUID second = journal.begin(PLAYER);
+        journal.record(second, POSITION, block("dirt"), block("gold_block"));
+        journal.close(second);
+        FakeWorld world = new FakeWorld(block("gold_block"));
+        LiveActionOperation operation = new LiveActionOperation(
+                journal, PLAYER, LiveActionJournal.Direction.UNDO,
+                world, LiveEntityWorldAccess.UNSUPPORTED,
+                new LiveActionOperation.PendingCancellation() {
+                    @Override public boolean cancel(UUID action) { return false; }
+                    @Override public java.util.Set<UUID> tntWaveActions(UUID player) {
+                        return java.util.Set.of(first, second);
+                    }
+                }, ignored -> { });
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(block("stone"), world.states.get(POSITION));
+        assertEquals(2, world.writes);
+        assertEquals(MutationTerminalState.SUCCEEDED, operation.terminalState());
+    }
+
+    @Test
     void refusesAtomicallyWhenVisibleStateConflicts() throws IOException {
         LiveActionJournal journal = action(block("stone"), block("gold_block"));
         FakeWorld world = new FakeWorld(block("diamond_block"));
