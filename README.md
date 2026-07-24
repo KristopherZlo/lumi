@@ -63,6 +63,7 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   are the only manual forward buttons; Back remains available, while the
   top-right close action exits without completing. Spotlight targets remain
   undimmed and clickable, and Finish shows the live Action+Info bindings.
+  Each completed step plays the XP-orb cue; completing the tour plays Level Up.
   Contextual tips show one
   card at a time in groups of at most three, with a counter, previous/next
   arrows and a final close action. A single-card tip shows only close; Alt+I

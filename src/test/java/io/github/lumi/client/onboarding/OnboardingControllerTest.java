@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class OnboardingControllerTest {
@@ -30,7 +31,10 @@ class OnboardingControllerTest {
 
     @Test
     void targetEventsAdvanceTheHandsOnFlow() {
-        OnboardingController controller = new OnboardingController();
+        AtomicInteger steps = new AtomicInteger();
+        AtomicInteger completions = new AtomicInteger();
+        OnboardingController controller = new OnboardingController(
+                steps::incrementAndGet, completions::incrementAndGet);
         assertEquals(OnboardingController.Effect.ENTER_WORLD,
                 controller.handle(navigate(OnboardingEvent.Direction.NEXT)));
         assertEquals(OnboardingController.Effect.NONE, controller.handle(
@@ -66,6 +70,8 @@ class OnboardingControllerTest {
         assertEquals(OnboardingController.Effect.COMPLETE,
                 controller.handle(navigate(OnboardingEvent.Direction.NEXT)));
         assertTrue(controller.completed());
+        assertEquals(9, steps.get());
+        assertEquals(1, completions.get());
     }
 
     @Test

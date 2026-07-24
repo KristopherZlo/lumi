@@ -23,6 +23,16 @@ class LumiHotkeysTest {
     }
 
     @Test
+    void onboardingUsesXpAndLevelUpCompletionSounds() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/LumiClient.java"));
+
+        assertTrue(source.contains("SoundEvents.EXPERIENCE_ORB_PICKUP"));
+        assertTrue(source.contains("SoundEvents.PLAYER_LEVELUP"));
+        assertTrue(source.contains("SimpleSoundInstance.forUI(sound, 1.0F)"));
+    }
+
+    @Test
     void quickRollbackDoesNotRequireTheAltChord() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiHotkeys.java"));

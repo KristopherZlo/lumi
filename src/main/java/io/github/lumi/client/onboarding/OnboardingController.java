@@ -6,17 +6,35 @@ import java.util.UUID;
 /** Sole owner of onboarding transitions and their requested UI effects. */
 public final class OnboardingController {
     private final OnboardingTour tour;
+    private final Runnable stepCompleted;
+    private final Runnable onboardingCompleted;
     private UndoRedoPhase undoRedoPhase = UndoRedoPhase.UNDO;
     private OnboardingEvent.OperationKind pendingOperation;
     private UUID pendingRequestId;
     private boolean completed;
 
     public OnboardingController() {
-        this(new OnboardingTour());
+        this(new OnboardingTour(), () -> { }, () -> { });
+    }
+
+    public OnboardingController(
+            Runnable stepCompleted, Runnable onboardingCompleted) {
+        this(new OnboardingTour(), stepCompleted, onboardingCompleted);
     }
 
     OnboardingController(OnboardingTour tour) {
+        this(tour, () -> { }, () -> { });
+    }
+
+    private OnboardingController(
+            OnboardingTour tour,
+            Runnable stepCompleted,
+            Runnable onboardingCompleted) {
         this.tour = Objects.requireNonNull(tour, "tour");
+        this.stepCompleted = Objects.requireNonNull(
+                stepCompleted, "stepCompleted");
+        this.onboardingCompleted = Objects.requireNonNull(
+                onboardingCompleted, "onboardingCompleted");
     }
 
     public OnboardingTour.Page current() { return tour.current(); }
@@ -137,11 +155,13 @@ public final class OnboardingController {
 
     private Effect advance(Effect effect) {
         tour.moveNext();
+        stepCompleted.run();
         return effect;
     }
 
     private Effect complete(Effect effect) {
         completed = true;
+        onboardingCompleted.run();
         return effect;
     }
 

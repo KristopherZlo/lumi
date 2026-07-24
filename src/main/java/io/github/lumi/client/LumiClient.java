@@ -69,8 +69,11 @@ import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.level.GameType;
 
 /** Client entrypoint; retained UI controllers consume this single networking facade. */
@@ -691,9 +694,17 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void openOnboarding(Screen returnScreen) {
         if (activeOnboarding == null || activeOnboarding.completed()) {
-            activeOnboarding = new OnboardingController();
+            activeOnboarding = new OnboardingController(
+                    () -> playOnboardingSound(
+                            SoundEvents.EXPERIENCE_ORB_PICKUP),
+                    () -> playOnboardingSound(SoundEvents.PLAYER_LEVELUP));
         }
         showOnboarding(returnScreen, returnScreen, activeOnboarding);
+    }
+
+    private static void playOnboardingSound(SoundEvent sound) {
+        Minecraft.getInstance().getSoundManager().play(
+                SimpleSoundInstance.forUI(sound, 1.0F));
     }
 
     private static void showOnboarding(
