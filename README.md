@@ -58,11 +58,13 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   from More. Its ten-step hands-on loop asks for three edits, a 1.5-second
   Action-key preview, real Undo/Redo and Save operations, ten experimental
   edits, Dashboard opening, See changes and Restore. Operation steps advance
-  only after the matching server request succeeds. Start and Finish are the only
-  manual forward buttons; Back and Skip remain available, while Escape closes
-  without completing. Contextual tips show one card at a time in groups of at
-  most three, with a counter, previous/next arrows and a final close action;
-  Alt+I opens the separate hotkey guide.
+  only after the matching server request succeeds; after Redo, a second
+  1.5-second progress bar leaves the restored blocks visible. Start and Finish
+  are the only manual forward buttons; Back remains available, while the
+  top-right close action exits without completing. Contextual tips show one
+  card at a time in groups of at most three, with a counter, previous/next
+  arrows and a final close action. A single-card tip shows only close; Alt+I
+  opens the separate hotkey guide.
 - Settings persists workspace history, Restore, preview, HUD and automatic
   version defaults through descriptive rows with compact On/Off controls;
   diagnostic telemetry remains client-local. More groups its secondary actions

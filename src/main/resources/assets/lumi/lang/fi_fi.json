@@ -979,6 +979,7 @@
   "luma.onboarding.undo_redo_undo_help": "Kumoa viimeisin muutos.",
   "luma.onboarding.undo_redo_redo": "Tee uudelleen",
   "luma.onboarding.undo_redo_redo_help": "Palauta muutos.",
+  "luma.onboarding.undo_redo_observe_help": "Katso palautettuja lohkoja.",
   "luma.onboarding.preview_changes_press": "Paina",
   "luma.onboarding.preview_changes_suffix": "maailmassa näyttääksesi tallentamattomat muutokset peittokuvan.",
   "luma.onboarding.topic_undo_world": "Kumoa se",

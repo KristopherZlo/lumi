@@ -1107,6 +1107,7 @@
   "luma.onboarding.undo_redo_undo_help": "Undo the latest change.",
   "luma.onboarding.undo_redo_redo": "Redo",
   "luma.onboarding.undo_redo_redo_help": "Bring the change back.",
+  "luma.onboarding.undo_redo_observe_help": "Look at the restored blocks.",
   "luma.onboarding.topic_save_shortcut": "Save the build",
   "luma.onboarding.save_shortcut_help": "Press the shortcut and name the save.",
   "luma.onboarding.topic_experiment": "Try another idea",

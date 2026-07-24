@@ -25,7 +25,8 @@ class OnboardingLocalizationTest {
             "luma.onboarding.undo_redo_undo",
             "luma.onboarding.undo_redo_undo_help",
             "luma.onboarding.undo_redo_redo",
-            "luma.onboarding.undo_redo_redo_help");
+            "luma.onboarding.undo_redo_redo_help",
+            "luma.onboarding.undo_redo_observe_help");
 
     @Test
     void everyLocaleCoversTheActiveTour() throws IOException {

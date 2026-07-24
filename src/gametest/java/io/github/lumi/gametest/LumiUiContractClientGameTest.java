@@ -145,8 +145,9 @@ public final class LumiUiContractClientGameTest implements FabricClientGameTest 
                 LumiMoreScreen.class, "luma.more.onboarding_title");
         ui.requireScreen(LumiOnboardingScreen.class);
         ui.assertButton(LumiOnboardingScreen.class, "luma.action.back", false);
-        ui.assertButton(LumiOnboardingScreen.class, "luma.action.skip", true);
-        ui.assertButton(LumiOnboardingScreen.class, "luma.action.next", true);
+        ui.assertButtonCount(LumiOnboardingScreen.class, "luma.action.skip", 0);
+        ui.assertButton(LumiOnboardingScreen.class, "luma.action.start", true);
+        ui.assertButton(LumiOnboardingScreen.class, "luma.action.close", true);
         ui.closeScreen(LumiOnboardingScreen.class, LumiMoreScreen.class);
 
         openAndClose(ui, "luma.hotkeys.title",

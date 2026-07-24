@@ -979,6 +979,7 @@
   "luma.onboarding.undo_redo_undo_help": "Annulez le dernier changement.",
   "luma.onboarding.undo_redo_redo": "Refaire",
   "luma.onboarding.undo_redo_redo_help": "Rétablissez le changement.",
+  "luma.onboarding.undo_redo_observe_help": "Regardez les blocs restaurés.",
   "luma.onboarding.preview_changes_press": "Appuyez",
   "luma.onboarding.preview_changes_suffix": "dans le monde pour afficher la superposition des modifications non enregistrées.",
   "luma.onboarding.topic_undo_world": "Annulez-le",

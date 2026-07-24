@@ -103,8 +103,7 @@ final class LumiUiTestDriver {
         if (!isScreen(LumiOnboardingScreen.class)) {
             return;
         }
-        pressUniqueButton(LumiOnboardingScreen.class, "luma.action.skip");
-        context.waitForScreen(null);
+        closeScreen(LumiOnboardingScreen.class, null);
     }
 
     void openDashboard() {

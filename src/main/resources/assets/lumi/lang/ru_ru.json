@@ -762,6 +762,7 @@
   "luma.onboarding.undo_redo_undo_help": "Отмените последнее изменение.",
   "luma.onboarding.undo_redo_redo": "Повторить",
   "luma.onboarding.undo_redo_redo_help": "Верните изменение.",
+  "luma.onboarding.undo_redo_observe_help": "Посмотрите на восстановленные блоки.",
   "luma.onboarding.topic_save_shortcut": "Сохраните постройку",
   "luma.onboarding.save_shortcut_help": "Нажмите сочетание и назовите сохранение.",
   "luma.onboarding.topic_experiment": "Попробуйте другую идею",

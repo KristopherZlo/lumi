@@ -979,6 +979,7 @@
   "luma.onboarding.undo_redo_undo_help": "Deshaz el último cambio.",
   "luma.onboarding.undo_redo_redo": "Rehacer",
   "luma.onboarding.undo_redo_redo_help": "Recupera el cambio.",
+  "luma.onboarding.undo_redo_observe_help": "Mira los bloques restaurados.",
   "luma.onboarding.preview_changes_press": "Pulsa",
   "luma.onboarding.preview_changes_suffix": "en el mundo para mostrar los cambios no guardados superpuestos.",
   "luma.onboarding.topic_undo_world": "Deshacerlo",

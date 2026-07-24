@@ -979,6 +979,7 @@
   "luma.onboarding.undo_redo_undo_help": "Mache die letzte Änderung rückgängig.",
   "luma.onboarding.undo_redo_redo": "Wiederholen",
   "luma.onboarding.undo_redo_redo_help": "Stelle die Änderung wieder her.",
+  "luma.onboarding.undo_redo_observe_help": "Sieh dir die wiederhergestellten Blöcke an.",
   "luma.onboarding.preview_changes_press": "Drücken Sie",
   "luma.onboarding.preview_changes_suffix": "in der Welt, um die nicht gespeicherten Änderungen anzuzeigen.",
   "luma.onboarding.topic_undo_world": "Machen Sie es rückgängig",

@@ -200,13 +200,15 @@ abstract class LumiScreen extends Screen {
 
     private void addHintControls() {
         int nextX = hintX + hintWidth - ICON_BUTTON_WIDTH - 6;
-        int previousX = nextX - ICON_BUTTON_WIDTH - HINT_CONTROL_GAP;
-        hintPreviousButton = addIconButton(
-                previousX, hintY + 5, "chevron-left",
-                Component.translatable("luma.action.back"),
-                () -> showContextualHint(contextualHintIndex - 1),
-                LumiButton.Kind.NORMAL);
-        hintPreviousButton.active = contextualHintIndex > 0;
+        if (contextualHints.size() > 1) {
+            int previousX = nextX - ICON_BUTTON_WIDTH - HINT_CONTROL_GAP;
+            hintPreviousButton = addIconButton(
+                    previousX, hintY + 5, "chevron-left",
+                    Component.translatable("luma.action.back"),
+                    () -> showContextualHint(contextualHintIndex - 1),
+                    LumiButton.Kind.NORMAL);
+            hintPreviousButton.active = contextualHintIndex > 0;
+        }
         boolean last = contextualHintIndex == contextualHints.size() - 1;
         hintNextButton = addIconButton(
                 nextX, hintY + 5, last ? "close" : "chevron-right",
@@ -240,8 +242,10 @@ abstract class LumiScreen extends Screen {
             int deltaY = y - hintY;
             hintX = x;
             hintY = y;
-            hintPreviousButton.setX(hintPreviousButton.getX() + deltaX);
-            hintPreviousButton.setY(hintPreviousButton.getY() + deltaY);
+            if (hintPreviousButton != null) {
+                hintPreviousButton.setX(hintPreviousButton.getX() + deltaX);
+                hintPreviousButton.setY(hintPreviousButton.getY() + deltaY);
+            }
             hintNextButton.setX(hintNextButton.getX() + deltaX);
             hintNextButton.setY(hintNextButton.getY() + deltaY);
         }
@@ -266,12 +270,14 @@ abstract class LumiScreen extends Screen {
                 hintTitleWidth());
         graphics.drawString(font, title, hintX + 8, hintY + 8,
                 LumiTheme.ACCENT, false);
-        String counter = (contextualHintIndex + 1)
-                + "/" + contextualHints.size();
-        int counterRight = hintPreviousButton.getX() - 6;
-        graphics.drawString(
-                font, counter, counterRight - font.width(counter),
-                hintY + 10, LumiTheme.MUTED, false);
+        if (contextualHints.size() > 1) {
+            String counter = (contextualHintIndex + 1)
+                    + "/" + contextualHints.size();
+            int counterRight = hintPreviousButton.getX() - 6;
+            graphics.drawString(
+                    font, counter, counterRight - font.width(counter),
+                    hintY + 10, LumiTheme.MUTED, false);
+        }
         int lineY = hintY + 27;
         for (var line : font.split(
                 Component.translatable(contextualHint.bodyKey()),
@@ -283,6 +289,9 @@ abstract class LumiScreen extends Screen {
     }
 
     private int hintTitleWidth() {
+        if (contextualHints.size() == 1) {
+            return Math.max(1, hintNextButton.getX() - 12 - (hintX + 8));
+        }
         String counter = (contextualHintIndex + 1)
                 + "/" + contextualHints.size();
         return Math.max(1, hintPreviousButton.getX() - 12
