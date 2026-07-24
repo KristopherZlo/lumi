@@ -147,12 +147,16 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
         state.showCape = skin.cape() != null;
         state.lightCoords = LightTexture.FULL_BRIGHT;
         state.bodyRot = 180.0F + orbit;
-        state.yRot = orbit;
+        state.yRot = 0.0F;
         state.xRot = 3.5F;
         state.walkAnimationPos = walkPhase(now) / WALK_ANIMATION_SCALE;
         state.walkAnimationSpeed = 0.4F;
-        state.capeFlap = capeAngleDegrees(now) - CAPE_BASE_DEGREES;
+        state.capeFlap = capeFlapDegrees(now);
         return state;
+    }
+
+    static float capeFlapDegrees(long now) {
+        return capeAngleDegrees(now) - CAPE_BASE_DEGREES;
     }
 
     static float capeAngleDegrees(long now) {

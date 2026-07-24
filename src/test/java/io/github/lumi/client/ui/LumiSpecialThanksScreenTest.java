@@ -19,6 +19,7 @@ class LumiSpecialThanksScreenTest {
         assertTrue(source.contains("AvatarRenderState"));
         assertTrue(source.contains("state.skin = skin"));
         assertTrue(source.contains("state.showCape = skin.cape() != null"));
+        assertTrue(source.contains("state.yRot = 0.0F"));
         assertTrue(source.contains("CAPE_CYCLE_MILLIS = 1_700L"));
         assertTrue(source.contains("Math.sin"));
         assertTrue(source.contains("ORBIT_CYCLE_MILLIS"));
@@ -41,6 +42,8 @@ class LumiSpecialThanksScreenTest {
         assertTrue(trailing < resting);
         assertEquals(-15.0F, resting);
         assertEquals(-21.0F, trailing);
+        assertEquals(-21.0F, LumiSpecialThanksScreen.capeFlapDegrees(0));
+        assertEquals(-27.0F, LumiSpecialThanksScreen.capeFlapDegrees(425));
     }
 
     @Test
