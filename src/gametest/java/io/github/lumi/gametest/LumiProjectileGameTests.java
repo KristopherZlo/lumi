@@ -71,7 +71,7 @@ public final class LumiProjectileGameTests {
     }
 
     @GameTest(maxTicks = 300000)
-    public void fullQuickRestoreRestoresAmbientAndIsUndoable(
+    public void fullQuickRestoreRestoresAmbientAndIsUndoableAndRedoable(
             GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
@@ -82,6 +82,7 @@ public final class LumiProjectileGameTests {
         AtomicReference<MutationTerminalState> saveTerminal = new AtomicReference<>();
         AtomicReference<MutationTerminalState> rollbackTerminal = new AtomicReference<>();
         AtomicReference<MutationTerminalState> undoTerminal = new AtomicReference<>();
+        AtomicReference<MutationTerminalState> redoTerminal = new AtomicReference<>();
         AtomicReference<BlockState> ambientBaseline = new AtomicReference<>();
 
         helper.startSequence()
@@ -150,6 +151,21 @@ public final class LumiProjectileGameTests {
                             "Undo did not remove the arrow restored by Quick Restore");
                     helper.assertBlockState(
                             AMBIENT, Blocks.DIAMOND_BLOCK.defaultBlockState());
+                    helper.assertTrue(runtime.mutations().hasPendingBuilderChanges(),
+                            "Quick Restore Undo did not restore the dirty boundary");
+                    runtime.startLiveAction(player, LiveActionJournal.Direction.REDO,
+                            operation -> redoTerminal.set(operation.terminalState()));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                            redoTerminal.get(), "Quick Restore Redo must succeed");
+                    helper.assertTrue(helper.getLevel().getEntityInAnyDimension(
+                                    arrow.get().getUUID()) instanceof Arrow,
+                            "Redo did not restore the saved arrow");
+                    helper.assertBlockState(AMBIENT, ambientBaseline.get());
+                    helper.assertTrue(runtime.mutations().snapshot().generations().isEmpty(),
+                            "Quick Restore Redo did not clear the dirty boundary");
                 })
                 .thenExecute(() -> LumiGameTestLease.release(test))
                 .thenSucceed();
