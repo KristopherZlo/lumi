@@ -154,6 +154,70 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void foldsLateEntityOverlapIntoNewerVisibleAction() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID older = journal.begin(PLAYER_A);
+        journal.recordEntity(
+                older, ENTITY, Optional.empty(), Optional.of(entity(1)));
+        journal.retain(older);
+        journal.close(older);
+        UUID newer = journal.begin(PLAYER_A);
+        journal.recordEntity(
+                newer, ENTITY, Optional.of(entity(1)), Optional.of(entity(2)));
+        journal.close(newer);
+
+        UUID effective = journal.recordEntity(
+                older, ENTITY, Optional.of(entity(2)), Optional.empty());
+        journal.release(older);
+
+        assertEquals(newer, effective);
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(Optional.empty(), undo.expectedEntities().get(ENTITY));
+        assertEquals(Optional.of(entity(1)),
+                undo.replacementEntities().get(ENTITY));
+    }
+
+    @Test
+    void groupedActionsPrepareAndCompleteAsOneStackEntry() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID first = add(journal, 1);
+        UUID unrelated = add(journal, 2);
+        UUID second = add(journal, 3);
+
+        journal.mergeGroups(first, second);
+
+        var undo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(List.of(first, second), undo.actionIds());
+        assertEquals(2, undo.expected().size());
+        journal.complete(undo);
+        var redo = journal.prepareRedo(PLAYER_A).orElseThrow();
+        assertEquals(List.of(first, second), redo.actionIds());
+        journal.complete(redo);
+        assertEquals(List.of(first, second),
+                journal.prepareUndo(PLAYER_A).orElseThrow().actionIds());
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+        assertEquals(unrelated,
+                journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+    }
+
+    @Test
+    void evictedGroupMemberMakesTheRemainingGroupUnsafe() {
+        LiveActionJournal journal = new LiveActionJournal(
+                new LiveActionJournal.Limits(2, 1_000, 4_000, 8_000));
+        UUID first = add(journal, 1);
+        UUID second = add(journal, 2);
+        journal.mergeGroups(first, second);
+        UUID newest = add(journal, 3);
+
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+
+        assertEquals(newest,
+                journal.prepareRedo(PLAYER_A).orElseThrow().actionId());
+        assertThrows(IllegalStateException.class,
+                () -> journal.prepareUndo(PLAYER_A));
+    }
+
+    @Test
     void undoRedoTraversesOverlappingAppliedActions() {
         LiveActionJournal journal = new LiveActionJournal();
         UUID placement = journal.begin(PLAYER_A);

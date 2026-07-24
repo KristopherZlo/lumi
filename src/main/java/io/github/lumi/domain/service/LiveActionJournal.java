@@ -12,11 +12,14 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 
@@ -29,6 +32,7 @@ public final class LiveActionJournal {
     private final OwnershipIndex<UUID> entityOwners = new OwnershipIndex<>();
     private final Map<UUID, Long> playerBytes = new HashMap<>();
     private final Map<UUID, String> unavailableReasons = new HashMap<>();
+    private final Set<UUID> unsafeGroups = new HashSet<>();
     private final Limits limits;
     private long nextSequence;
     private long retainedBytes;
@@ -55,24 +59,20 @@ public final class LiveActionJournal {
         return id;
     }
 
-    public synchronized void record(
+    public synchronized UUID record(
             UUID actionId,
             BlockPosition position,
             BlockSnapshot before,
             BlockSnapshot after) {
         MutableAction causalAction = requireAction(actionId);
         if (!causalAction.available) {
-            return;
+            return causalAction.id;
         }
         Objects.requireNonNull(position, "position");
         Objects.requireNonNull(before, "before");
         Objects.requireNonNull(after, "after");
-        MutableAction action = causalAction.closed
-                ? blockOwners.latest(position)
-                        .filter(owner -> owner.sequence > causalAction.sequence)
-                        .map(owner -> requireAction(owner.actionId))
-                        .orElse(causalAction)
-                : causalAction;
+        MutableAction action = effectiveAction(
+                causalAction, position, blockOwners);
         startRecording(action);
         Change previous = action.changes.get(position);
         Change updated = new Change(previous == null ? before : previous.before, after);
@@ -80,7 +80,7 @@ public final class LiveActionJournal {
         long updatedBytes = updated.before.equals(updated.after) ? 0 : estimatedBytes(updated);
         long delta = updatedBytes - previousBytes;
         if (!resize(action, delta)) {
-            return;
+            return action.id;
         }
         if (updatedBytes == 0) {
             action.changes.remove(position);
@@ -88,28 +88,32 @@ public final class LiveActionJournal {
             action.changes.put(position, updated);
         }
         blockOwners.set(position, action, updatedBytes != 0 && action.applied);
+        touchClosedGroup(action);
+        return action.id;
     }
 
-    public synchronized void recordEntity(
+    public synchronized UUID recordEntity(
             UUID actionId,
             UUID entityId,
             Optional<EntityState> before,
             Optional<EntityState> after) {
-        MutableAction action = requireAction(actionId);
-        if (!action.available) {
-            return;
+        MutableAction causalAction = requireAction(actionId);
+        if (!causalAction.available) {
+            return causalAction.id;
         }
-        startRecording(action);
         Objects.requireNonNull(entityId, "entityId");
         validateEntityId(entityId, before);
         validateEntityId(entityId, after);
+        MutableAction action = effectiveAction(
+                causalAction, entityId, entityOwners);
+        startRecording(action);
         EntityChange previous = action.entities.get(entityId);
         EntityChange updated = new EntityChange(
                 previous == null ? before : previous.before, after);
         long previousBytes = previous == null ? 0 : estimatedBytes(previous);
         long updatedBytes = updated.before.equals(updated.after) ? 0 : estimatedBytes(updated);
         if (!resize(action, updatedBytes - previousBytes)) {
-            return;
+            return action.id;
         }
         if (updatedBytes == 0) {
             action.entities.remove(entityId);
@@ -117,6 +121,35 @@ public final class LiveActionJournal {
             action.entities.put(entityId, updated);
         }
         entityOwners.set(entityId, action, updatedBytes != 0 && action.applied);
+        touchClosedGroup(action);
+        return action.id;
+    }
+
+    /** Joins causally inseparable actions into one session Undo/Redo entry. */
+    public synchronized void mergeGroups(UUID firstAction, UUID secondAction) {
+        MutableAction first = requireAction(firstAction);
+        MutableAction second = requireAction(secondAction);
+        if (!first.player.equals(second.player)) {
+            throw new IllegalArgumentException(
+                    "Live action groups cannot cross players");
+        }
+        if (first.applied != second.applied) {
+            throw new IllegalStateException(
+                    "Live action groups must share their applied state");
+        }
+        if (!first.available || !second.available) {
+            return;
+        }
+        UUID source = second.groupId;
+        if (!first.groupId.equals(source)) {
+            if (unsafeGroups.remove(source)) {
+                unsafeGroups.add(first.groupId);
+            }
+            actions.values().stream()
+                    .filter(action -> action.groupId.equals(source))
+                    .forEach(action -> action.groupId = first.groupId);
+        }
+        touchClosedGroup(first);
     }
 
     /** Records one already-prepared Restore as a reversible live action off-thread. */
@@ -237,17 +270,26 @@ public final class LiveActionJournal {
         PlayerStacks stacks = stacks(plan.player);
         Deque<UUID> source = plan.direction == Direction.UNDO ? stacks.undo : stacks.redo;
         Deque<UUID> target = plan.direction == Direction.UNDO ? stacks.redo : stacks.undo;
-        if (!plan.actionId.equals(source.peekLast())) {
+        if (source.size() < plan.actionIds.size()) {
             throw new IllegalStateException("Live action stack changed during apply");
         }
-        MutableAction action = requireAction(plan.actionId);
-        action.applied = plan.direction == Direction.REDO;
-        action.changes.keySet().forEach(position ->
-                blockOwners.set(position, action, action.applied));
-        action.entities.keySet().forEach(entity ->
-                entityOwners.set(entity, action, action.applied));
-        source.removeLast();
-        target.addLast(plan.actionId);
+        List<UUID> suffix = source.stream()
+                .skip(source.size() - plan.actionIds.size()).toList();
+        if (!suffix.equals(plan.actionIds)) {
+            throw new IllegalStateException("Live action stack changed during apply");
+        }
+        for (UUID actionId : plan.actionIds) {
+            MutableAction action = requireAction(actionId);
+            action.applied = plan.direction == Direction.REDO;
+            action.changes.keySet().forEach(position ->
+                    blockOwners.set(position, action, action.applied));
+            action.entities.keySet().forEach(entity ->
+                    entityOwners.set(entity, action, action.applied));
+        }
+        for (int index = 0; index < plan.actionIds.size(); index++) {
+            source.removeLast();
+        }
+        plan.actionIds.forEach(target::addLast);
     }
 
     public synchronized void clear() {
@@ -258,6 +300,7 @@ public final class LiveActionJournal {
         entityOwners.clear();
         playerBytes.clear();
         unavailableReasons.clear();
+        unsafeGroups.clear();
         retainedBytes = 0;
         unsafeBeforeSequence = 0;
     }
@@ -295,34 +338,65 @@ public final class LiveActionJournal {
         if (actionId == null) {
             return Optional.empty();
         }
-        MutableAction action = requireAction(actionId);
-        if (action.sequence <= unsafeBeforeSequence) {
+        MutableAction selected = requireAction(actionId);
+        if (unsafeGroups.contains(selected.groupId)) {
+            throw new IllegalStateException(
+                    "An evicted member makes this live action group unsafe");
+        }
+        List<MutableAction> group = stack.stream()
+                .map(this::requireAction)
+                .filter(action -> action.groupId.equals(selected.groupId))
+                .toList();
+        if (group.stream().anyMatch(action ->
+                action.sequence <= unsafeBeforeSequence)) {
             throw new IllegalStateException("A newer evicted action makes this live action unsafe");
         }
-        for (BlockPosition position : action.changes.keySet()) {
-            if (overlaps(action, direction, blockOwners.latest(position))) {
-                throw new IllegalStateException("A newer action overlaps the selected live action");
+        Set<UUID> groupIds = group.stream()
+                .map(action -> action.id)
+                .collect(java.util.stream.Collectors.toSet());
+        for (MutableAction action : group) {
+            for (BlockPosition position : action.changes.keySet()) {
+                if (overlaps(
+                        action, direction, blockOwners.latest(position), groupIds)) {
+                    throw new IllegalStateException(
+                            "A newer action overlaps the selected live action");
+                }
+            }
+            for (UUID entity : action.entities.keySet()) {
+                if (overlaps(
+                        action, direction, entityOwners.latest(entity), groupIds)) {
+                    throw new IllegalStateException(
+                            "A newer action overlaps the selected live action");
+                }
             }
         }
-        for (UUID entity : action.entities.keySet()) {
-            if (overlaps(action, direction, entityOwners.latest(entity))) {
-                throw new IllegalStateException("A newer action overlaps the selected live action");
-            }
+        Map<BlockPosition, Change> blocks = new LinkedHashMap<>();
+        Map<UUID, EntityChange> entities = new LinkedHashMap<>();
+        for (MutableAction action : group) {
+            action.changes.forEach((position, change) -> blocks.merge(
+                    position, change,
+                    (previous, latest) ->
+                            new Change(previous.before, latest.after)));
+            action.entities.forEach((entity, change) -> entities.merge(
+                    entity, change,
+                    (previous, latest) ->
+                            new EntityChange(previous.before, latest.after)));
         }
         Map<BlockPosition, BlockSnapshot> expected = new LinkedHashMap<>();
         Map<BlockPosition, BlockSnapshot> replacement = new LinkedHashMap<>();
         Map<UUID, Optional<EntityState>> expectedEntities = new LinkedHashMap<>();
         Map<UUID, Optional<EntityState>> replacementEntities = new LinkedHashMap<>();
-        action.changes.forEach((position, change) -> {
+        blocks.forEach((position, change) -> {
             expected.put(position, direction == Direction.UNDO ? change.after : change.before);
             replacement.put(position, direction == Direction.UNDO ? change.before : change.after);
         });
-        action.entities.forEach((id, change) -> {
+        entities.forEach((id, change) -> {
             expectedEntities.put(id, direction == Direction.UNDO ? change.after : change.before);
             replacementEntities.put(id, direction == Direction.UNDO ? change.before : change.after);
         });
         return Optional.of(new Plan(
-                player, actionId, direction, expected, replacement,
+                player, group.stream().map(action -> action.id).toList(),
+                direction, expected, replacement,
                 expectedEntities, replacementEntities));
     }
 
@@ -334,12 +408,45 @@ public final class LiveActionJournal {
         return action;
     }
 
-    private static boolean overlaps(
-            MutableAction action, Direction direction, Optional<Ownership> latest) {
-        if (direction == Direction.UNDO) {
-            return latest.isEmpty() || !latest.orElseThrow().actionId.equals(action.id);
+    private <K> MutableAction effectiveAction(
+            MutableAction causalAction, K key, OwnershipIndex<K> owners) {
+        if (!causalAction.closed) {
+            return causalAction;
         }
-        return latest.filter(owner -> owner.sequence > action.sequence).isPresent();
+        return owners.latest(key)
+                .filter(owner -> owner.sequence > causalAction.sequence)
+                .map(owner -> requireAction(owner.actionId))
+                .orElse(causalAction);
+    }
+
+    private void touchClosedGroup(MutableAction action) {
+        if (!action.closed || !action.applied) {
+            return;
+        }
+        PlayerStacks stacks = stacks(action.player);
+        List<UUID> members = actions.values().stream()
+                .filter(candidate -> candidate.available && candidate.closed
+                        && candidate.applied
+                        && candidate.groupId.equals(action.groupId))
+                .sorted(java.util.Comparator.comparingLong(
+                        candidate -> candidate.sequence))
+                .map(candidate -> candidate.id)
+                .toList();
+        stacks.undo.removeAll(members);
+        members.forEach(stacks.undo::addLast);
+    }
+
+    private static boolean overlaps(
+            MutableAction action,
+            Direction direction,
+            Optional<Ownership> latest,
+            Set<UUID> group) {
+        if (direction == Direction.UNDO) {
+            return latest.isEmpty()
+                    || !group.contains(latest.orElseThrow().actionId);
+        }
+        return latest.filter(owner -> !group.contains(owner.actionId)
+                && owner.sequence > action.sequence).isPresent();
     }
 
     private void startRecording(MutableAction action) {
@@ -456,6 +563,7 @@ public final class LiveActionJournal {
         stacks.redo.remove(action.id);
         if (createsSequenceBarrier) {
             unsafeBeforeSequence = Math.max(unsafeBeforeSequence, action.sequence);
+            unsafeGroups.add(action.groupId);
         }
     }
 
@@ -510,7 +618,7 @@ public final class LiveActionJournal {
 
     public record Plan(
             UUID player,
-            UUID actionId,
+            List<UUID> actionIds,
             Direction direction,
             Map<BlockPosition, BlockSnapshot> expected,
             Map<BlockPosition, BlockSnapshot> replacement,
@@ -518,12 +626,21 @@ public final class LiveActionJournal {
             Map<UUID, Optional<EntityState>> replacementEntities) {
         public Plan {
             Objects.requireNonNull(player, "player");
-            Objects.requireNonNull(actionId, "actionId");
+            actionIds = List.copyOf(Objects.requireNonNull(
+                    actionIds, "actionIds"));
+            if (actionIds.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Live action plan cannot be empty");
+            }
             Objects.requireNonNull(direction, "direction");
             expected = immutableOrderedCopy(expected);
             replacement = immutableOrderedCopy(replacement);
             expectedEntities = immutableOrderedCopy(expectedEntities);
             replacementEntities = immutableOrderedCopy(replacementEntities);
+        }
+
+        public UUID actionId() {
+            return actionIds.getLast();
         }
 
         private static <K, V> Map<K, V> immutableOrderedCopy(Map<K, V> source) {
@@ -567,6 +684,7 @@ public final class LiveActionJournal {
         private final UUID id;
         private final UUID player;
         private final long sequence;
+        private UUID groupId;
         private final Map<BlockPosition, Change> changes = new LinkedHashMap<>();
         private final Map<UUID, EntityChange> entities = new LinkedHashMap<>();
         private boolean closed;
@@ -580,6 +698,7 @@ public final class LiveActionJournal {
             this.id = id;
             this.player = player;
             this.sequence = sequence;
+            groupId = id;
         }
     }
 
