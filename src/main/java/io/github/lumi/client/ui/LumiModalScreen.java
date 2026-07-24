@@ -19,12 +19,20 @@ abstract class LumiModalScreen extends LumiScreen {
     }
 
     @Override
+    protected boolean animateCenteredOpening() {
+        return true;
+    }
+
+    @Override
     protected void renderUnderlay(GuiGraphics graphics) {
         if (background != null && background != this
                 && (!(background instanceof LumiScreen screen)
                         || screen.screenInitialized())) {
             background.render(graphics, -1, -1, 0.0F);
         }
+        graphics.fill(
+                0, 0, graphics.guiWidth(), graphics.guiHeight(),
+                LumiTheme.BACKDROP);
     }
 
 }

@@ -16,6 +16,7 @@ final class LumiPageSession {
     private final Map<ProjectTab, Consumer<Screen>> routes =
             new EnumMap<>(ProjectTab.class);
     private Screen historyPage;
+    private boolean initialOpening = true;
 
     LumiPageSession(ClientHistoryStore history) {
         this.history = Objects.requireNonNull(history, "history");
@@ -42,5 +43,11 @@ final class LumiPageSession {
 
     Optional<HistorySnapshotPayload> snapshot() {
         return history.state().snapshot();
+    }
+
+    boolean consumeInitialOpening() {
+        boolean initial = initialOpening;
+        initialOpening = false;
+        return initial;
     }
 }

@@ -166,6 +166,11 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
     }
 
     @Override
+    protected boolean animateCenteredOpening() {
+        return false;
+    }
+
+    @Override
     public void render(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);

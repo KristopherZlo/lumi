@@ -57,9 +57,23 @@ abstract class LumiPageScreen extends LumiScreen {
     }
 
     @Override
+    protected void renderUnderlay(GuiGraphics graphics) {
+        graphics.fill(
+                0, 0, graphics.guiWidth(), graphics.guiHeight(),
+                LumiTheme.BACKDROP);
+    }
+
+    @Override
     protected void renderScaledUnderlay(GuiGraphics graphics) {
-        graphics.fill(0, 0, width, height, LumiTheme.BACKDROP);
+        animationFrame(
+                shellLayout.windowX(), shellLayout.windowY(),
+                shellLayout.windowWidth(), shellLayout.windowHeight());
         drawShell(graphics);
+    }
+
+    @Override
+    protected boolean animateCenteredOpening() {
+        return pageSession.consumeInitialOpening();
     }
 
     private void addSidebarButtons() {

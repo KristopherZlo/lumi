@@ -20,6 +20,8 @@ import org.lwjgl.glfw.GLFW;
 
 /** Neutral V2 screen mechanics shared by pages and modal workflows. */
 abstract class LumiScreen extends Screen {
+    private static final int OPEN_MILLIS = 160;
+    private static final float OPEN_SCALE = 0.94F;
     protected static final int INPUT_HEIGHT = 14;
     protected static final int INPUT_FRAME_HEIGHT = 18;
     private static final int FRAME_CONTROL_INSET = 8;
@@ -32,6 +34,14 @@ abstract class LumiScreen extends Screen {
             new ClientContextualHelpService();
     private LumiUiScale uiScale = new LumiUiScale(2);
     private boolean screenInitialized;
+    private final LumiMotion opening = new LumiMotion();
+    private boolean openingStarted;
+    private boolean centeredOpening;
+    private float openingValue = 1.0F;
+    private int animationX;
+    private int animationY;
+    private int animationWidth;
+    private int animationHeight;
     private ClientContextualHelpHint contextualHint;
     private int hintX;
     private int hintY;
@@ -119,6 +129,13 @@ abstract class LumiScreen extends Screen {
 
     protected final void beginScreenInit() {
         initializeScreenScale();
+        if (!openingStarted) {
+            openingStarted = true;
+            centeredOpening = animateCenteredOpening();
+            if (centeredOpening) {
+                opening.start(OPEN_MILLIS);
+            }
+        }
         if (!(this instanceof LumiRecoveryScreen)) {
             boolean page = this instanceof LumiPageScreen;
             navigationButton = addIconButton(
@@ -132,6 +149,10 @@ abstract class LumiScreen extends Screen {
     }
 
     protected void afterScreenInit() {
+    }
+
+    protected boolean animateCenteredOpening() {
+        return false;
     }
 
     protected final boolean addContextualHint(
@@ -221,8 +242,8 @@ abstract class LumiScreen extends Screen {
 
     protected final void renderWindow(
             GuiGraphics graphics, int x, int y, int width, int height) {
+        animationFrame(x, y, width, height);
         alignNavigation(x, y, width);
-        graphics.fill(0, 0, this.width, this.height, LumiTheme.BACKDROP);
         LumiTheme.outlined(
                 graphics, x, y, width, height,
                 LumiTheme.WINDOW, LumiTheme.WINDOW_BORDER);
@@ -339,6 +360,7 @@ abstract class LumiScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        if (openingAnimationRunning()) return true;
         MouseButtonEvent virtual = virtualClick(click);
         if (clickContextualHint(virtual)) return true;
         return super.mouseClicked(virtual, doubled);
@@ -354,6 +376,15 @@ abstract class LumiScreen extends Screen {
         float scale = renderScale();
         graphics.pose().pushMatrix();
         graphics.pose().scale(scale, scale);
+        animationWidth = 0;
+        openingValue = centeredOpening ? opening.value() : 1.0F;
+        if (openingValue < 1.0F) {
+            float openingScale = OPEN_SCALE
+                    + (1.0F - OPEN_SCALE) * openingValue;
+            graphics.pose().translate(width / 2.0F, height / 2.0F);
+            graphics.pose().scale(openingScale, openingScale);
+            graphics.pose().translate(-width / 2.0F, -height / 2.0F);
+        }
         renderScaledUnderlay(graphics);
         return new ScaledRenderContext(
                 virtualCoordinate(mouseX), virtualCoordinate(mouseY));
@@ -366,11 +397,31 @@ abstract class LumiScreen extends Screen {
     }
 
     protected final void endScaledRender(GuiGraphics graphics) {
+        if (openingValue < 1.0F && animationWidth > 0) {
+            int alpha = Math.round((1.0F - openingValue) * 255.0F);
+            graphics.fill(
+                    animationX, animationY,
+                    animationX + animationWidth, animationY + animationHeight,
+                    alpha << 24 | LumiTheme.BACKDROP & 0x00ffffff);
+        }
         graphics.pose().popMatrix();
+    }
+
+    protected final void animationFrame(
+            int x, int y, int width, int height) {
+        animationX = x;
+        animationY = y;
+        animationWidth = width;
+        animationHeight = height;
+    }
+
+    protected final boolean openingAnimationRunning() {
+        return centeredOpening && opening.running();
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent click) {
+        if (openingAnimationRunning()) return true;
         return super.mouseReleased(virtualClick(click));
     }
 
@@ -378,6 +429,7 @@ abstract class LumiScreen extends Screen {
     public boolean mouseScrolled(
             double mouseX, double mouseY,
             double horizontalAmount, double verticalAmount) {
+        if (openingAnimationRunning()) return true;
         return super.mouseScrolled(
                 virtualCoordinate(mouseX), virtualCoordinate(mouseY),
                 horizontalAmount, verticalAmount);
@@ -386,6 +438,7 @@ abstract class LumiScreen extends Screen {
     @Override
     public boolean mouseDragged(
             MouseButtonEvent click, double deltaX, double deltaY) {
+        if (openingAnimationRunning()) return true;
         float scale = renderScale();
         return super.mouseDragged(
                 virtualClick(click), deltaX / scale, deltaY / scale);
