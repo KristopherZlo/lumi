@@ -21,8 +21,7 @@ class LumiSpecialThanksScreenTest {
         assertTrue(source.contains("ModelLayers.PLAYER_CAPE"));
         assertTrue(source.contains("PlayerModelType.SLIM"));
         assertTrue(source.contains("skin.cape() != null"));
-        assertTrue(source.indexOf("skin.cape().texturePath()")
-                > source.indexOf("skin.body().texturePath()"));
+        assertTrue(source.contains("capeFacesCamera(rotationY)"));
         assertTrue(source.contains("CAPE_CYCLE_MILLIS = 1_700L"));
         assertTrue(source.contains("model.resetPose()"));
         assertTrue(source.contains("model.setAllVisible(true)"));
@@ -37,12 +36,18 @@ class LumiSpecialThanksScreenTest {
     }
 
     @Test
-    void capeWavesMoreSlowlyThanTheWalkingPlayer() {
+    void capeUsesReversedSlowerWave() {
         float resting = LumiSpecialThanksScreen.capeRotation(0);
         float trailing = LumiSpecialThanksScreen.capeRotation(425);
 
-        assertTrue(resting > 0.0F);
-        assertTrue(trailing > resting);
+        assertTrue(resting < 0.0F);
+        assertTrue(trailing < resting);
+    }
+
+    @Test
+    void capeLayerOrderTracksThePlayerOrbit() {
+        assertFalse(LumiSpecialThanksScreen.capeFacesCamera(25.0F));
+        assertTrue(LumiSpecialThanksScreen.capeFacesCamera(205.0F));
     }
 
     @Test

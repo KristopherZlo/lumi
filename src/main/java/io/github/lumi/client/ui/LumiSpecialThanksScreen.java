@@ -133,6 +133,15 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
         float rotationY = 25.0F
                 + (float) (Math.floorMod(now, ORBIT_CYCLE_MILLIS)
                         / (double) ORBIT_CYCLE_MILLIS * 360.0D);
+        boolean hasCape = skin.cape() != null;
+        boolean capeInFront = hasCape && capeFacesCamera(rotationY);
+        if (hasCape) {
+            poseCape(capeModel, now);
+        }
+        if (hasCape && !capeInFront) {
+            submitCape(graphics, skin, scale, uiScale, rotationY,
+                    x, y, width, height);
+        }
         poseWalking(model, now);
         graphics.submitSkinRenderState(
                 model,
@@ -145,20 +154,33 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
                 scaled(y, uiScale),
                 scaled(x + width, uiScale),
                 scaled(y + height, uiScale));
-        if (skin.cape() != null) {
-            poseCape(capeModel, now);
-            graphics.submitSkinRenderState(
-                    capeModel,
-                    skin.cape().texturePath(),
-                    scale * uiScale,
-                    -5.0F,
-                    rotationY,
-                    PIVOT_Y,
-                    scaled(x, uiScale),
-                    scaled(y, uiScale),
-                    scaled(x + width, uiScale),
-                    scaled(y + height, uiScale));
+        if (capeInFront) {
+            submitCape(graphics, skin, scale, uiScale, rotationY,
+                    x, y, width, height);
         }
+    }
+
+    private void submitCape(
+            GuiGraphics graphics,
+            PlayerSkin skin,
+            float scale,
+            float uiScale,
+            float rotationY,
+            int x,
+            int y,
+            int width,
+            int height) {
+        graphics.submitSkinRenderState(
+                capeModel,
+                skin.cape().texturePath(),
+                scale * uiScale,
+                -5.0F,
+                rotationY,
+                PIVOT_Y,
+                scaled(x, uiScale),
+                scaled(y, uiScale),
+                scaled(x + width, uiScale),
+                scaled(y + height, uiScale));
     }
 
     private static void poseWalking(PlayerModel model, long now) {
@@ -182,7 +204,12 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
     }
 
     static float capeRotation(long now) {
-        return 0.26F + (float) Math.sin(cyclePhase(now, CAPE_CYCLE_MILLIS)) * 0.10F;
+        return -(0.26F
+                + (float) Math.sin(cyclePhase(now, CAPE_CYCLE_MILLIS)) * 0.10F);
+    }
+
+    static boolean capeFacesCamera(float rotationY) {
+        return Math.cos(Math.toRadians(rotationY)) < 0.0D;
     }
 
     private static float walkPhase(long now) {
