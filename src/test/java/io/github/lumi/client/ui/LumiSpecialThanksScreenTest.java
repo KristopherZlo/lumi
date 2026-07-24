@@ -16,18 +16,15 @@ class LumiSpecialThanksScreenTest {
 
         assertTrue(source.contains("new SpecialThanksCatalogSource().loadBundled()"));
         assertTrue(source.contains("MinecraftSpecialThanksSkinResolver"));
-        assertTrue(source.contains("ModelLayers.PLAYER"));
-        assertTrue(source.contains("ModelLayers.PLAYER_SLIM"));
-        assertTrue(source.contains("ModelLayers.PLAYER_CAPE"));
-        assertTrue(source.contains("PlayerModelType.SLIM"));
-        assertTrue(source.contains("skin.cape() != null"));
-        assertTrue(source.contains("capeFacesCamera(rotationY)"));
+        assertTrue(source.contains("AvatarRenderState"));
+        assertTrue(source.contains("state.skin = skin"));
+        assertTrue(source.contains("state.showCape = skin.cape() != null"));
         assertTrue(source.contains("CAPE_CYCLE_MILLIS = 1_700L"));
-        assertTrue(source.contains("model.resetPose()"));
-        assertTrue(source.contains("model.setAllVisible(true)"));
         assertTrue(source.contains("Math.sin"));
         assertTrue(source.contains("ORBIT_CYCLE_MILLIS"));
-        assertTrue(source.contains("graphics.submitSkinRenderState("));
+        assertTrue(source.contains("graphics.submitEntityRenderState("));
+        assertFalse(source.contains("graphics.submitSkinRenderState("));
+        assertFalse(source.contains("PlayerCapeModel"));
         assertTrue(source.contains("LumiUiScale.current().renderScale("));
         assertTrue(source.contains("scale * uiScale"));
         assertTrue(source.contains("scaled(x + width, uiScale)"));
@@ -37,17 +34,13 @@ class LumiSpecialThanksScreenTest {
 
     @Test
     void capeUsesReversedSlowerWave() {
-        float resting = LumiSpecialThanksScreen.capeRotation(0);
-        float trailing = LumiSpecialThanksScreen.capeRotation(425);
+        float resting = LumiSpecialThanksScreen.capeAngleDegrees(0);
+        float trailing = LumiSpecialThanksScreen.capeAngleDegrees(425);
 
         assertTrue(resting < 0.0F);
         assertTrue(trailing < resting);
-    }
-
-    @Test
-    void capeLayerOrderTracksThePlayerOrbit() {
-        assertFalse(LumiSpecialThanksScreen.capeFacesCamera(25.0F));
-        assertTrue(LumiSpecialThanksScreen.capeFacesCamera(205.0F));
+        assertEquals(-15.0F, resting);
+        assertEquals(-21.0F, trailing);
     }
 
     @Test

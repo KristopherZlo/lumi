@@ -4,14 +4,14 @@ import io.github.lumi.client.specialthanks.MinecraftSpecialThanksSkinResolver;
 import io.github.lumi.client.specialthanks.SpecialThanksCatalogSource;
 import io.github.lumi.client.specialthanks.SpecialThanksEntry;
 import java.util.List;
-import net.minecraft.client.model.geom.ModelLayers;
-import net.minecraft.client.model.player.PlayerCapeModel;
-import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.player.PlayerModelType;
 import net.minecraft.world.entity.player.PlayerSkin;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 /** Bundled credits with lazily resolved, non-blocking player skin previews. */
 public final class LumiSpecialThanksScreen extends LumiModalScreen {
@@ -21,7 +21,8 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
     private static final int BOTTOM_PADDING = 12;
     private static final float MODEL_HEIGHT = 2.125F;
     private static final float FIT_SCALE = 0.97F;
-    private static final float PIVOT_Y = -1.0625F;
+    private static final float WALK_ANIMATION_SCALE = 0.6662F;
+    private static final float CAPE_BASE_DEGREES = 6.0F;
     private static final long WALK_CYCLE_MILLIS = 950L;
     private static final long CAPE_CYCLE_MILLIS = 1_700L;
     private static final long ORBIT_CYCLE_MILLIS = 18_000L;
@@ -34,9 +35,6 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
     private int panelWidth;
     private int panelHeight;
     private int scroll;
-    private PlayerModel wideModel;
-    private PlayerModel slimModel;
-    private PlayerCapeModel capeModel;
 
     public LumiSpecialThanksScreen(Screen parent) {
         super(Component.translatable("luma.screen.special_thanks.title"));
@@ -53,11 +51,6 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
         panelX = (width - panelWidth) / 2;
         panelY = Math.max(12, (height - panelHeight) / 2);
         scroll = Math.min(scroll, Math.max(0, entries.size() - visibleRows()));
-        var models = minecraft.getEntityModels();
-        wideModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER), false);
-        slimModel = new PlayerModel(models.bakeLayer(ModelLayers.PLAYER_SLIM), true);
-        capeModel = new PlayerCapeModel(
-                models.bakeLayer(ModelLayers.PLAYER_CAPE));
     }
 
     @Override
@@ -125,91 +118,46 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
             int height,
             long now) {
         PlayerSkin skin = skins.skinFor(entry);
-        PlayerModel model = skin.model() == PlayerModelType.SLIM
-                ? slimModel : wideModel;
         float uiScale = LumiUiScale.current().renderScale(
                 minecraft.getWindow().getGuiScale());
         float scale = FIT_SCALE * height / MODEL_HEIGHT;
-        float rotationY = 25.0F
-                + (float) (Math.floorMod(now, ORBIT_CYCLE_MILLIS)
-                        / (double) ORBIT_CYCLE_MILLIS * 360.0D);
-        boolean hasCape = skin.cape() != null;
-        boolean capeInFront = hasCape && capeFacesCamera(rotationY);
-        if (hasCape) {
-            poseCape(capeModel, now);
-        }
-        if (hasCape && !capeInFront) {
-            submitCape(graphics, skin, scale, uiScale, rotationY,
-                    x, y, width, height);
-        }
-        poseWalking(model, now);
-        graphics.submitSkinRenderState(
-                model,
-                skin.body().texturePath(),
+        AvatarRenderState state = playerRenderState(skin, now);
+        Quaternionf cameraRotation = new Quaternionf()
+                .rotateX((float) Math.toRadians(-5.0F));
+        Quaternionf modelRotation = new Quaternionf()
+                .rotateZ((float) Math.PI)
+                .mul(cameraRotation);
+        graphics.submitEntityRenderState(
+                state,
                 scale * uiScale,
-                -5.0F,
-                rotationY,
-                PIVOT_Y,
-                scaled(x, uiScale),
-                scaled(y, uiScale),
-                scaled(x + width, uiScale),
-                scaled(y + height, uiScale));
-        if (capeInFront) {
-            submitCape(graphics, skin, scale, uiScale, rotationY,
-                    x, y, width, height);
-        }
-    }
-
-    private void submitCape(
-            GuiGraphics graphics,
-            PlayerSkin skin,
-            float scale,
-            float uiScale,
-            float rotationY,
-            int x,
-            int y,
-            int width,
-            int height) {
-        graphics.submitSkinRenderState(
-                capeModel,
-                skin.cape().texturePath(),
-                scale * uiScale,
-                -5.0F,
-                rotationY,
-                PIVOT_Y,
+                new Vector3f(0.0F, MODEL_HEIGHT / 2.0F, 0.0F),
+                modelRotation,
+                cameraRotation,
                 scaled(x, uiScale),
                 scaled(y, uiScale),
                 scaled(x + width, uiScale),
                 scaled(y + height, uiScale));
     }
 
-    private static void poseWalking(PlayerModel model, long now) {
-        model.resetPose();
-        model.setAllVisible(true);
-        float swing = walkPhase(now);
-        float leg = (float) Math.sin(swing) * 0.55F;
-        float arm = leg * 0.75F;
-        model.rightLeg.xRot = leg;
-        model.leftLeg.xRot = -leg;
-        model.rightArm.xRot = -arm;
-        model.leftArm.xRot = arm;
-        model.rightArm.zRot = 0.04F;
-        model.leftArm.zRot = -0.04F;
-        model.head.xRot = 0.06F;
+    private static AvatarRenderState playerRenderState(PlayerSkin skin, long now) {
+        float orbit = 25.0F
+                + cyclePhase(now, ORBIT_CYCLE_MILLIS) * (float) (180.0D / Math.PI);
+        AvatarRenderState state = new AvatarRenderState();
+        state.skin = skin;
+        state.showCape = skin.cape() != null;
+        state.lightCoords = LightTexture.FULL_BRIGHT;
+        state.bodyRot = 180.0F + orbit;
+        state.yRot = orbit;
+        state.xRot = 3.5F;
+        state.walkAnimationPos = walkPhase(now) / WALK_ANIMATION_SCALE;
+        state.walkAnimationSpeed = 0.4F;
+        state.capeFlap = capeAngleDegrees(now) - CAPE_BASE_DEGREES;
+        return state;
     }
 
-    private static void poseCape(PlayerCapeModel model, long now) {
-        model.resetPose();
-        model.body.getChild("cape").xRot = capeRotation(now);
-    }
-
-    static float capeRotation(long now) {
-        return -(0.26F
-                + (float) Math.sin(cyclePhase(now, CAPE_CYCLE_MILLIS)) * 0.10F);
-    }
-
-    static boolean capeFacesCamera(float rotationY) {
-        return Math.cos(Math.toRadians(rotationY)) < 0.0D;
+    static float capeAngleDegrees(long now) {
+        return -(15.0F
+                + (float) Math.sin(cyclePhase(now, CAPE_CYCLE_MILLIS)) * 6.0F);
     }
 
     private static float walkPhase(long now) {
