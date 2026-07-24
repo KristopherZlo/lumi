@@ -60,14 +60,20 @@ public final class LiveActionJournal {
             BlockPosition position,
             BlockSnapshot before,
             BlockSnapshot after) {
-        MutableAction action = requireAction(actionId);
-        if (!action.available) {
+        MutableAction causalAction = requireAction(actionId);
+        if (!causalAction.available) {
             return;
         }
-        startRecording(action);
         Objects.requireNonNull(position, "position");
         Objects.requireNonNull(before, "before");
         Objects.requireNonNull(after, "after");
+        MutableAction action = causalAction.closed
+                ? blockOwners.latest(position)
+                        .filter(owner -> owner.sequence > causalAction.sequence)
+                        .map(owner -> requireAction(owner.actionId))
+                        .orElse(causalAction)
+                : causalAction;
+        startRecording(action);
         Change previous = action.changes.get(position);
         Change updated = new Change(previous == null ? before : previous.before, after);
         long previousBytes = previous == null ? 0 : estimatedBytes(previous);

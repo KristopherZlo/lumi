@@ -132,6 +132,28 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void foldsLateOverlapIntoNewerVisibleAction() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID older = journal.begin(PLAYER_A);
+        journal.record(older, POSITION, block("stone"), block("dirt"));
+        journal.retain(older);
+        journal.close(older);
+        UUID newer = journal.begin(PLAYER_A);
+        journal.record(newer, POSITION, block("dirt"), block("redstone_block"));
+        journal.close(newer);
+
+        journal.record(older, POSITION, block("redstone_block"), block("air"));
+        journal.release(older);
+
+        var newerUndo = journal.prepareUndo(PLAYER_A).orElseThrow();
+        assertEquals(newer, newerUndo.actionId());
+        assertEquals(block("air"), newerUndo.expected().get(POSITION));
+        assertEquals(block("dirt"), newerUndo.replacement().get(POSITION));
+        journal.complete(newerUndo);
+        assertEquals(older, journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+    }
+
+    @Test
     void undoRedoTraversesOverlappingAppliedActions() {
         LiveActionJournal journal = new LiveActionJournal();
         UUID placement = journal.begin(PLAYER_A);

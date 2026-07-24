@@ -205,7 +205,7 @@ public final class LumiTntGameTests {
     }
 
     @GameTest(maxTicks = 300000)
-    public void preexistingBlastConflictDoesNotCancelNewerCarrier(
+    public void olderBlastJoinsNewerActionAndUndoCancelsItsCarrier(
             GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
@@ -216,8 +216,7 @@ public final class LumiTntGameTests {
         AtomicReference<PrimedTnt> firstCarrier = new AtomicReference<>();
         AtomicReference<PrimedTnt> secondCarrier = new AtomicReference<>();
         AtomicReference<UUID> secondAction = new AtomicReference<>();
-        AtomicReference<Integer> delayedReferences = new AtomicReference<>();
-        AtomicReference<Map<BlockPos, BlockState>> conflicted = new AtomicReference<>();
+        AtomicReference<Map<BlockPos, BlockState>> expectedAfterUndo = new AtomicReference<>();
         AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
 
         helper.startSequence()
@@ -255,26 +254,26 @@ public final class LumiTntGameTests {
                             "The newer TNT carrier disappeared");
                 })
                 .thenExecute(() -> {
-                    conflicted.set(snapshot(helper));
-                    delayedReferences.set(runtime.liveActions()
-                            .summary(secondAction.get()).delayedReferences());
-                    helper.assertTrue(delayedReferences.get() > 0,
+                    helper.assertTrue(runtime.liveActions()
+                                    .summary(secondAction.get()).delayedReferences() > 0,
                             "The newer action has no active carrier ownership");
+                    Map<BlockPos, BlockState> expected = new LinkedHashMap<>(
+                            snapshot(helper));
+                    expected.put(secondTnt, Blocks.TNT.defaultBlockState());
+                    expectedAfterUndo.set(Map.copyOf(expected));
                     runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
                             operation -> terminal.set(operation.terminalState()));
                 })
                 .thenWaitUntil(() -> requireIdle(helper, runtime))
                 .thenExecute(() -> {
-                    helper.assertValueEqual(MutationTerminalState.FAILED, terminal.get(),
-                            "Pre-existing blast conflict must fail safely");
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED, terminal.get(),
+                            "The newer action must include the older blast endpoint");
                     helper.assertFalse(runtime.freeze().isFrozen(),
-                            "Pre-existing conflict retained the dimension freeze");
-                    assertSnapshot(helper, conflicted.get());
-                    helper.assertFalse(secondCarrier.get().isRemoved(),
-                            "Failed Undo cancelled the newer TNT carrier");
-                    helper.assertValueEqual(delayedReferences.get(), runtime.liveActions()
-                                    .summary(secondAction.get()).delayedReferences(),
-                            "Failed Undo changed carrier ownership");
+                            "Successful Undo retained the dimension freeze");
+                    assertSnapshot(helper, expectedAfterUndo.get());
+                    helper.assertTrue(secondCarrier.get().isRemoved(),
+                            "Undo did not cancel the newer TNT carrier");
+                    assertNoActiveEntities(helper, EntityType.TNT);
                 })
                 .thenExecute(() -> LumiGameTestLease.release(test))
                 .thenSucceed();
