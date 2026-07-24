@@ -156,12 +156,13 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
     }
 
     static float capeFlapDegrees(long now) {
+        // PlayerCapeModel is Y-rotated 180°, so positive X trails visually backward.
         return capeAngleDegrees(now) - CAPE_BASE_DEGREES;
     }
 
     static float capeAngleDegrees(long now) {
-        return -(15.0F
-                + (float) Math.sin(cyclePhase(now, CAPE_CYCLE_MILLIS)) * 6.0F);
+        return 15.0F
+                + (float) Math.sin(cyclePhase(now, CAPE_CYCLE_MILLIS)) * 6.0F;
     }
 
     private static float walkPhase(long now) {

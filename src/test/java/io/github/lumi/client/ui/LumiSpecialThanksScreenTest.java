@@ -25,7 +25,8 @@ class LumiSpecialThanksScreenTest {
         assertTrue(source.contains("ORBIT_CYCLE_MILLIS"));
         assertTrue(source.contains("graphics.submitEntityRenderState("));
         assertFalse(source.contains("graphics.submitSkinRenderState("));
-        assertFalse(source.contains("PlayerCapeModel"));
+        assertFalse(source.contains(
+                "import net.minecraft.client.model.player.PlayerCapeModel"));
         assertTrue(source.contains("LumiUiScale.current().renderScale("));
         assertTrue(source.contains("scale * uiScale"));
         assertTrue(source.contains("scaled(x + width, uiScale)"));
@@ -38,12 +39,12 @@ class LumiSpecialThanksScreenTest {
         float resting = LumiSpecialThanksScreen.capeAngleDegrees(0);
         float trailing = LumiSpecialThanksScreen.capeAngleDegrees(425);
 
-        assertTrue(resting < 0.0F);
-        assertTrue(trailing < resting);
-        assertEquals(-15.0F, resting);
-        assertEquals(-21.0F, trailing);
-        assertEquals(-21.0F, LumiSpecialThanksScreen.capeFlapDegrees(0));
-        assertEquals(-27.0F, LumiSpecialThanksScreen.capeFlapDegrees(425));
+        assertTrue(resting > 0.0F);
+        assertTrue(trailing > resting);
+        assertEquals(15.0F, resting);
+        assertEquals(21.0F, trailing);
+        assertEquals(9.0F, LumiSpecialThanksScreen.capeFlapDegrees(0));
+        assertEquals(15.0F, LumiSpecialThanksScreen.capeFlapDegrees(425));
     }
 
     @Test
