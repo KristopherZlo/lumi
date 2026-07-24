@@ -846,6 +846,10 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         if (selected.flatMap(LiveActionJournal.Plan::checkpoint).isPresent()) {
             return createCheckpointAction(selected.orElseThrow());
         }
+        if (direction == LiveActionJournal.Direction.UNDO && selected.isPresent()) {
+            causalTicks.joinActiveTntRoots(
+                    selected.orElseThrow().actionIds());
+        }
         return new LiveActionOperation(
                 liveActions, player, direction, liveWorld,
                 liveEntityWorld, new LiveActionOperation.PendingCancellation() {

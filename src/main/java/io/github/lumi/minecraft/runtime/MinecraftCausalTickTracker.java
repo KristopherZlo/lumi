@@ -5,8 +5,9 @@ import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.world.OwnedTickAccess;
 import io.github.lumi.minecraft.world.OwnedBlockEventAccess;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
-import java.util.Map;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -141,6 +142,18 @@ public final class MinecraftCausalTickTracker {
             remember(entityCarriers, carrier,
                     new DirectLiveActionContext.CausalRoot(action, 1));
         }
+    }
+
+    /** Rejoins any still-active TNT roots selected by a frozen Undo. */
+    public void joinActiveTntRoots(List<java.util.UUID> selectedActions) {
+        Set<DirectLiveActionContext.CausalRoot> active =
+                entityCarriers.owners(entity -> entity instanceof PrimedTnt);
+        Set<java.util.UUID> selected = Set.copyOf(Objects.requireNonNull(
+                selectedActions, "selectedActions"));
+        active.stream().map(DirectLiveActionContext.CausalRoot::action)
+                .filter(selected::contains)
+                .findFirst()
+                .ifPresent(action -> joinTntWave(action, active));
     }
 
     public boolean cancellationMayChangeBlocks(java.util.UUID action) {
