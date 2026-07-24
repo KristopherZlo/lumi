@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -20,9 +21,11 @@ class LumiOnboardingScreenTest {
         assertTrue(source.contains("OnboardingEvent.OperationStarted"));
         assertTrue(source.contains("actions.worldStep().accept(controller)"));
         assertTrue(source.contains("controller.handle(event)"));
-        assertTrue(source.contains("OnboardingEvent.Direction.SKIP"));
+        assertFalse(source.contains("OnboardingEvent.Direction.SKIP"));
         assertTrue(source.contains("OnboardingEvent.Direction.BACK"));
         assertTrue(source.contains("OnboardingEvent.Direction.NEXT"));
+        assertTrue(source.contains("LumiHotkeys.bindingMatches("));
+        assertTrue(source.contains("\"key.lumi.quick_save\""));
         assertTrue(source.contains("event.key() == GLFW.GLFW_KEY_ESCAPE"));
         assertTrue(source.contains("minecraft.setScreen(returnScreen)"));
     }

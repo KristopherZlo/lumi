@@ -54,7 +54,6 @@ public final class OnboardingController {
                 }
                 yield current().worldStep() ? Effect.ENTER_WORLD : Effect.REFRESH;
             }
-            case SKIP -> complete(Effect.COMPLETE);
             case NEXT -> next();
         };
     }

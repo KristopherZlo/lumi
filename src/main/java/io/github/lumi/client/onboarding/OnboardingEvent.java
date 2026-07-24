@@ -46,7 +46,7 @@ public sealed interface OnboardingEvent {
         }
     }
 
-    enum Direction { NEXT, BACK, SKIP }
+    enum Direction { NEXT, BACK }
 
     enum ShortcutKind { SAVE, DASHBOARD }
 

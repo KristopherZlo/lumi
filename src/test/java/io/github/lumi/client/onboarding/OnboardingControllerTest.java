@@ -62,15 +62,13 @@ class OnboardingControllerTest {
     }
 
     @Test
-    void skipCompletesFromAnyStepAndReleaseDoesNotAdvance() {
+    void shortcutReleaseDoesNotAdvance() {
         OnboardingController controller = new OnboardingController();
         controller.handle(navigate(OnboardingEvent.Direction.NEXT));
         assertEquals(OnboardingController.Effect.NONE, controller.handle(
                 new OnboardingEvent.Shortcut(
                         OnboardingEvent.ShortcutKind.DASHBOARD, false)));
-        assertEquals(OnboardingController.Effect.COMPLETE,
-                controller.handle(navigate(OnboardingEvent.Direction.SKIP)));
-        assertTrue(controller.completed());
+        assertFalse(controller.completed());
     }
 
     private static OnboardingEvent navigate(OnboardingEvent.Direction direction) {

@@ -14,6 +14,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.resources.Identifier;
 
 /** Registers the standalone dashboard key plus Lumi action chords. */
@@ -202,6 +203,11 @@ public final class LumiHotkeys {
 
     public static boolean bindingDown(KeyMapping[] mappings, String name) {
         return mapping(mappings, name).isDown();
+    }
+
+    public static boolean bindingMatches(
+            KeyMapping[] mappings, String name, KeyEvent event) {
+        return mapping(mappings, name).matches(event);
     }
 
     public static boolean bindingUnbound(KeyMapping[] mappings, String name) {

@@ -1,5 +1,6 @@
 package io.github.lumi.client.ui;
 
+import io.github.lumi.client.LumiHotkeys;
 import io.github.lumi.client.onboarding.OnboardingController;
 import io.github.lumi.client.onboarding.OnboardingEvent;
 import io.github.lumi.client.onboarding.OnboardingTour;
@@ -30,6 +31,7 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
     private int panelWidth;
     private int panelHeight;
     private OnboardingSpotlightLayout.Placement spotlight;
+    private boolean actionDown;
     private boolean completionSent;
 
     public LumiOnboardingScreen(Screen parent) {
@@ -56,6 +58,7 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
 
     @Override
     protected void init() {
+        actionDown = false;
         beginScreenInit();
         if (controller.current().spotlight()) initSpotlight();
         else initPanel();
@@ -92,14 +95,6 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
         boolean manualStep = controller.current().kind() == OnboardingTour.Kind.INFO
                 || controller.current().kind()
                 == OnboardingTour.Kind.INFO_MORE;
-        int skipX = manualStep
-                ? right - NAVIGATION_WIDTH * 2 - 8
-                : right - NAVIGATION_WIDTH;
-        addButton(skipX, y, NAVIGATION_WIDTH,
-                Component.translatable("luma.action.skip"),
-                () -> accept(new OnboardingEvent.Navigation(
-                        OnboardingEvent.Direction.SKIP)),
-                LumiButton.Kind.NORMAL);
         if (manualStep) {
             String actionKey = controller.current().kind()
                     == OnboardingTour.Kind.INFO
@@ -203,7 +198,41 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
             minecraft.setScreen(returnScreen);
             return true;
         }
+        var mappings = minecraft.options.keyMappings;
+        if (LumiHotkeys.bindingMatches(
+                mappings, "key.lumi.action_modifier", event)) {
+            actionDown = true;
+            return true;
+        }
+        if (controller.current().kind() == OnboardingTour.Kind.SHORTCUT_SAVE
+                && (actionDown || LumiHotkeys.bindingDown(
+                        mappings, "key.lumi.action_modifier"))
+                && LumiHotkeys.bindingMatches(
+                        mappings, "key.lumi.quick_save", event)) {
+            actionDown = false;
+            accept(new OnboardingEvent.Shortcut(
+                    OnboardingEvent.ShortcutKind.SAVE, true));
+            return true;
+        }
+        if (controller.current().kind() == OnboardingTour.Kind.SHORTCUT_DASHBOARD
+                && LumiHotkeys.bindingMatches(
+                        mappings, "key.lumi.open_dashboard", event)) {
+            accept(new OnboardingEvent.Shortcut(
+                    OnboardingEvent.ShortcutKind.DASHBOARD, true));
+            return true;
+        }
         return super.keyPressed(event);
+    }
+
+    @Override
+    public boolean keyReleased(KeyEvent event) {
+        if (LumiHotkeys.bindingMatches(
+                minecraft.options.keyMappings,
+                "key.lumi.action_modifier", event)) {
+            actionDown = false;
+            return true;
+        }
+        return super.keyReleased(event);
     }
 
     @Override public boolean isPauseScreen() { return false; }
