@@ -67,6 +67,7 @@ class LumiNavigationTest {
         assertTrue(page.contains("LumiTheme.PANEL_BORDER"));
         assertTrue(page.contains("if (tab == ProjectTab.HISTORY && rendersProjectHeader())"));
         assertTrue(page.contains("renderPageHeader("));
+        assertTrue(page.contains("shellLayout.windowY() + 62"));
         assertFalse(dashboard.contains("drawFrame("));
         String onboarding = Files.readString(ui.resolve("LumiOnboardingScreen.java"));
         assertTrue(onboarding.contains(

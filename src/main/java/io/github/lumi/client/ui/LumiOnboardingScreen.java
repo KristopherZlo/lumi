@@ -74,11 +74,17 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
     }
 
     private void initSpotlight() {
-        spotlight = background instanceof LumiDashboardScreen dashboard
-                ? spotlights.place(
-                        dashboard.onboardingTarget(controller.current().kind()),
-                        width, height)
-                : spotlights.place(controller.current().kind(), width, height);
+        if (background instanceof LumiDashboardScreen dashboard) {
+            if (!dashboard.screenInitialized()) {
+                dashboard.init(width, height);
+            }
+            spotlight = spotlights.place(
+                    dashboard.onboardingTarget(controller.current().kind()),
+                    width, height);
+        } else {
+            spotlight = spotlights.place(
+                    controller.current().kind(), width, height);
+        }
         var prompt = spotlight.prompt();
         addNavigation(prompt.x() + 10, prompt.right() - 10,
                 prompt.bottom() - 28);

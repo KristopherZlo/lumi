@@ -132,7 +132,7 @@ abstract class LumiPageScreen extends LumiScreen {
         }
         int x = shellLayout.windowX() + 12;
         int width = shellLayout.sidebarWidth() - 24;
-        int y = shellLayout.windowY() + 102;
+        int y = shellLayout.windowY() + 62;
         Integer zoneColor = activeZoneColor().orElse(null);
         addPageButton(x, y, width, "luma.tab.history", ProjectTab.HISTORY, null);
         addPageButton(x, y + SIDEBAR_BUTTON_STRIDE, width,

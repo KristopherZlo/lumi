@@ -16,6 +16,10 @@ class LumiOnboardingScreenTest {
 
         assertTrue(source.contains(
                 "background instanceof LumiDashboardScreen dashboard"));
+        int dashboardInit = source.indexOf("dashboard.init(width, height)");
+        assertTrue(dashboardInit >= 0);
+        assertTrue(dashboardInit
+                < source.indexOf("dashboard.onboardingTarget("));
         assertTrue(source.contains("dashboard.tick()"));
         assertTrue(source.contains("actions.save().open("));
         assertTrue(source.contains("OnboardingEvent.OperationStarted"));
