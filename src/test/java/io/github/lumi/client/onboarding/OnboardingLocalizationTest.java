@@ -20,6 +20,7 @@ class OnboardingLocalizationTest {
             "luma.onboarding.key_unbound",
             "luma.onboarding.press_open",
             "luma.onboarding.press_quick_save",
+            "luma.onboarding.press_info",
             "luma.onboarding.world_edit_counter",
             "luma.onboarding.preview_changes_hold",
             "luma.onboarding.undo_redo_undo",

@@ -77,6 +77,7 @@ class SpecialThanksSupportTest {
         assertTrue(resolver.contains("lookup.get().playerSkin()"));
         assertFalse(resolver.contains("profileResolver().fetchByName("));
         assertFalse(resolver.contains("getSkinManager()"));
+        assertTrue(resolver.contains("if (asset.isBlank()) return null"));
         assertTrue(resolver.contains("loggedFailures.add(entry)"));
         assertTrue(resolver.contains("new ClientAsset.ResourceTexture(id, id)"));
         assertTrue(resolver.contains("getNow(DEFAULT_SKIN)"));

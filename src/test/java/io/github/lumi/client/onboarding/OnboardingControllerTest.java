@@ -19,6 +19,13 @@ class OnboardingControllerTest {
                 "welcome", "break_block", "preview_changes", "undo_redo",
                 "save_shortcut", "experiment", "open", "changes_spotlight",
                 "commit_navigation", "finish"), OnboardingTour.pageIds());
+        OnboardingTour tour = new OnboardingTour();
+        for (int index = 1; index < OnboardingTour.pageCount(); index++) {
+            tour.moveNext();
+        }
+        assertEquals(List.of(
+                "key.lumi.action_modifier", "key.lumi.hotkey_info"),
+                tour.current().bindings());
     }
 
     @Test

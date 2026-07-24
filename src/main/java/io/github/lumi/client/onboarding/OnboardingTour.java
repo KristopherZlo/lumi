@@ -17,7 +17,8 @@ public final class OnboardingTour {
                     "key.lumi.open_dashboard"),
             page("changes_spotlight", Kind.SPOTLIGHT_COMPARE),
             page("commit_navigation", Kind.SPOTLIGHT_RESTORE),
-            page("finish", Kind.INFO_MORE));
+            page("finish", Kind.INFO_MORE,
+                    "key.lumi.action_modifier", "key.lumi.hotkey_info"));
     private int index;
 
     public static int pageCount() {

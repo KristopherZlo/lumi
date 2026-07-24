@@ -125,6 +125,7 @@ final class OnboardingScreenRenderer {
         return switch (kind) {
             case SHORTCUT_SAVE -> "luma.onboarding.press_quick_save";
             case SHORTCUT_DASHBOARD -> "luma.onboarding.press_open";
+            case INFO_MORE -> "luma.onboarding.press_info";
             default -> throw new IllegalArgumentException("Not a hold page");
         };
     }

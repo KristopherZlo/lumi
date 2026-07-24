@@ -30,9 +30,14 @@ abstract class LumiModalScreen extends LumiScreen {
                         || screen.screenInitialized())) {
             background.render(graphics, -1, -1, 0.0F);
         }
-        graphics.fill(
-                0, 0, graphics.guiWidth(), graphics.guiHeight(),
-                LumiTheme.BACKDROP);
+        if (dimBackground()) {
+            graphics.fill(
+                    0, 0, graphics.guiWidth(), graphics.guiHeight(),
+                    LumiTheme.BACKDROP);
+        }
     }
 
+    protected boolean dimBackground() {
+        return true;
+    }
 }

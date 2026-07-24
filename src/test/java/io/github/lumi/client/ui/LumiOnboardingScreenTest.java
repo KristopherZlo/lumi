@@ -32,6 +32,8 @@ class LumiOnboardingScreenTest {
         assertTrue(source.contains("\"key.lumi.quick_save\""));
         assertTrue(source.contains("event.key() == GLFW.GLFW_KEY_ESCAPE"));
         assertTrue(source.contains("minecraft.setScreen(returnScreen)"));
+        assertTrue(source.contains(
+                "return !controller.current().spotlight()"));
     }
 
     @Test

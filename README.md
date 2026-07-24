@@ -61,7 +61,9 @@ projects. The old world remains ordinary Minecraft data; new history lives in
   only after the matching server request succeeds; after Redo, a second
   1.5-second progress bar leaves the restored blocks visible. Start and Finish
   are the only manual forward buttons; Back remains available, while the
-  top-right close action exits without completing. Contextual tips show one
+  top-right close action exits without completing. Spotlight targets remain
+  undimmed and clickable, and Finish shows the live Action+Info bindings.
+  Contextual tips show one
   card at a time in groups of at most three, with a counter, previous/next
   arrows and a final close action. A single-card tip shows only close; Alt+I
   opens the separate hotkey guide.

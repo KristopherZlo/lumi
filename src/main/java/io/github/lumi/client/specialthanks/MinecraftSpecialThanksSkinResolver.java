@@ -71,6 +71,7 @@ public final class MinecraftSpecialThanksSkinResolver {
     }
 
     private ClientAsset.Texture bundledTexture(String asset) {
+        if (asset.isBlank()) return null;
         Identifier id = Identifier.tryParse(asset);
         return id == null || client.getResourceManager().getResource(id).isEmpty()
                 ? null : new ClientAsset.ResourceTexture(id, id);

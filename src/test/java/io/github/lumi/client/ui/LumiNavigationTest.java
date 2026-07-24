@@ -48,6 +48,7 @@ class LumiNavigationTest {
         String modal = Files.readString(ui.resolve("LumiModalScreen.java"));
         String neutral = Files.readString(ui.resolve("LumiScreen.java"));
         assertTrue(modal.contains("background.render("));
+        assertTrue(modal.contains("if (dimBackground())"));
         assertTrue(neutral.contains("GLFW_HAND_CURSOR"));
         assertTrue(neutral.contains("child instanceof Button button"));
         assertTrue(neutral.contains("minecraft.screen == this"));
