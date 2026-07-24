@@ -77,6 +77,28 @@ class PublishedApplyRecoveryTest {
     }
 
     @Test
+    void checkpointActionsRemainRefNeutralRecoveryWork() throws Exception {
+        for (OperationKind kind : java.util.List.of(
+                OperationKind.QUICK_ROLLBACK, OperationKind.CHECKPOINT_UNDO)) {
+            Path root = repositoryRoot.resolve(kind.name());
+            BranchRefRepository refs = new BranchRefRepository(root);
+            var expected = refs.create(new BranchName("main"), id('3'));
+            OperationJournalRepository journals = new OperationJournalRepository(root);
+            OperationJournal journal = journals.create(new OperationJournal(
+                    UUID.randomUUID(), kind, OperationPhase.WORLD_PERSISTED,
+                    new OperationTarget(
+                            expected.name(), expected.commit(), expected.revision(),
+                            Optional.of(id('4')), Optional.of(id('5')))));
+
+            assertFalse(new PublishedApplyRecovery(
+                    refs, new ActiveBranchRepository(root), journals)
+                    .finalizeIfPublished(journal));
+            assertEquals(journal, journals.read().orElseThrow());
+            assertEquals(expected, refs.read(expected.name()).orElseThrow());
+        }
+    }
+
+    @Test
     void clearsWorkspaceJournalOnlyAfterBothPointersPublish() throws Exception {
         BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
         var source = refs.create(new BranchName("main"), id('5'));

@@ -603,18 +603,31 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
         if (journal.kind() == OperationKind.QUICK_ROLLBACK
                 || journal.kind() == OperationKind.CHECKPOINT_UNDO) {
-            boolean restoreTarget = journal.kind() == OperationKind.CHECKPOINT_UNDO;
-            boolean resumeTarget = choice == RecoveryChoice.RESUME_TARGET;
-            var action = restoreTarget == resumeTarget
-                    ? WorkingIndexRecoveryPublication.TargetAction.RESTORE
-                    : WorkingIndexRecoveryPublication.TargetAction.CLEAR;
             return new WorkingIndexRecoveryPublication(
-                    mutations, journal.capturedGenerations(), action);
+                    mutations, journal.capturedGenerations(),
+                    checkpointRecoveryAction(journal.kind(), choice));
         }
         return journal.capturedGenerations()
                 .<RestorePublication>map(captured ->
                         new BranchRefRestorePublication(refs, mutations, captured))
                 .orElseGet(() -> new BranchRefRestorePublication(refs));
+    }
+
+    static WorkingIndexRecoveryPublication.TargetAction checkpointRecoveryAction(
+            OperationKind kind,
+            RecoveryChoice choice) {
+        Objects.requireNonNull(kind, "kind");
+        Objects.requireNonNull(choice, "choice");
+        if (kind != OperationKind.QUICK_ROLLBACK
+                && kind != OperationKind.CHECKPOINT_UNDO) {
+            throw new IllegalArgumentException(
+                    "Operation is not a checkpoint action: " + kind);
+        }
+        boolean restoreTarget = kind == OperationKind.CHECKPOINT_UNDO;
+        boolean resumeTarget = choice == RecoveryChoice.RESUME_TARGET;
+        return restoreTarget == resumeTarget
+                ? WorkingIndexRecoveryPublication.TargetAction.RESTORE
+                : WorkingIndexRecoveryPublication.TargetAction.CLEAR;
     }
 
     public void chunkLoaded(LevelChunk chunk) throws IOException {
