@@ -101,8 +101,11 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
                         OnboardingEvent.Direction.SKIP)),
                 LumiButton.Kind.NORMAL);
         if (manualStep) {
+            String actionKey = controller.current().kind()
+                    == OnboardingTour.Kind.INFO
+                    ? "luma.action.start" : "luma.action.finish";
             addButton(right - NAVIGATION_WIDTH, y, NAVIGATION_WIDTH,
-                    Component.translatable("luma.action.next"),
+                    Component.translatable(actionKey),
                     () -> accept(new OnboardingEvent.Navigation(
                             OnboardingEvent.Direction.NEXT)),
                     LumiButton.Kind.PRIMARY);
