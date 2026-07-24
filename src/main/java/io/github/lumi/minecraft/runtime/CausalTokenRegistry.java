@@ -38,6 +38,14 @@ public final class CausalTokenRegistry<K, O> {
         return owners.keySet().stream().anyMatch(matches);
     }
 
+    public synchronized Set<O> owners(java.util.function.Predicate<K> matches) {
+        Objects.requireNonNull(matches, "matches");
+        return owners.entrySet().stream()
+                .filter(entry -> matches.test(entry.getKey()))
+                .map(Map.Entry::getValue)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
     public synchronized Set<K> cancel(java.util.function.Predicate<O> matches) {
         Objects.requireNonNull(matches, "matches");
         Set<K> cancelled = new HashSet<>();

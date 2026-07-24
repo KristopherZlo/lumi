@@ -264,6 +264,7 @@ public final class LumiTntGameTests {
                     helper.setBlock(firstTnt, Blocks.TNT);
                     helper.setBlock(secondTnt, Blocks.TNT);
                     helper.setBlock(trigger, Blocks.AIR);
+                    expectedAfterUndo.set(snapshot(helper));
                     prime(helper, runtime, player, firstTnt, 200);
                     firstCarrier.set(helper.findOneEntity(EntityType.TNT));
                     try (var ignored = DirectLiveActionContext.open(
@@ -294,17 +295,13 @@ public final class LumiTntGameTests {
                     helper.assertTrue(runtime.liveActions()
                                     .summary(secondAction.get()).delayedReferences() > 0,
                             "The newer action has no active carrier ownership");
-                    Map<BlockPos, BlockState> expected = new LinkedHashMap<>(
-                            snapshot(helper));
-                    expected.put(secondTnt, Blocks.TNT.defaultBlockState());
-                    expectedAfterUndo.set(Map.copyOf(expected));
                     runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
                             operation -> terminal.set(operation.terminalState()));
                 })
                 .thenWaitUntil(() -> requireIdle(helper, runtime))
                 .thenExecute(() -> {
                     helper.assertValueEqual(MutationTerminalState.SUCCEEDED, terminal.get(),
-                            "The newer action must include the older blast endpoint");
+                            "The joined wave Undo must restore its complete baseline");
                     helper.assertFalse(runtime.freeze().isFrozen(),
                             "Successful Undo retained the dimension freeze");
                     assertSnapshot(helper, expectedAfterUndo.get());

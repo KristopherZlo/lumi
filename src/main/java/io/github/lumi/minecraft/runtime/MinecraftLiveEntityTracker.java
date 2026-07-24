@@ -35,9 +35,9 @@ public final class MinecraftLiveEntityTracker {
         }
         Optional<EntityState> after = world.capture(entity);
         if (after.isPresent()) {
-            journal.recordEntity(
+            UUID effective = recordEntity(
                     action.orElseThrow(), entity.getUUID(), Optional.empty(), after);
-            own(action.orElseThrow(), entity.getUUID(), Optional.empty());
+            own(effective, entity.getUUID(), Optional.empty());
             builderMutations.changed(Optional.empty(), after);
         }
     }
@@ -67,16 +67,19 @@ public final class MinecraftLiveEntityTracker {
     public void finish(Pending pending) throws IOException {
         Objects.requireNonNull(pending, "pending");
         Optional<EntityState> after = world.read(pending.entity());
-        journal.recordEntity(
+        UUID effective = recordEntity(
                 pending.action(), pending.entity(), pending.before(),
                 after);
         if (!pending.observedBefore().equals(after)) {
             builderMutations.changed(pending.observedBefore(), after);
         }
-        if (after.isPresent()) {
-            own(pending.action(), pending.entity(), pending.before());
-        } else {
+        if (!effective.equals(pending.action())) {
             disown(pending.action(), pending.entity());
+        }
+        if (after.isPresent()) {
+            own(effective, pending.entity(), pending.before());
+        } else {
+            disown(effective, pending.entity());
         }
     }
 
@@ -91,7 +94,7 @@ public final class MinecraftLiveEntityTracker {
                 if (entry.getValue().endpoint() == Endpoint.BEFORE) {
                     journal.refreshEntityBefore(action, entry.getKey(), current);
                 } else {
-                    journal.recordEntity(
+                    recordEntity(
                             action, entry.getKey(), entry.getValue().before(), current);
                 }
             }
@@ -154,6 +157,18 @@ public final class MinecraftLiveEntityTracker {
         }
         owned.remove(action);
         journal.release(action);
+    }
+
+    private UUID recordEntity(
+            UUID action,
+            UUID entity,
+            Optional<EntityState> before,
+            Optional<EntityState> after) {
+        UUID effective = journal.recordEntity(action, entity, before, after);
+        if (!effective.equals(action)) {
+            journal.mergeGroups(action, effective);
+        }
+        return effective;
     }
 
     public record Pending(

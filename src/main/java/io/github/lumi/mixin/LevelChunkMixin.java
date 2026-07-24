@@ -212,8 +212,11 @@ abstract class LevelChunkMixin {
         try {
             BlockSnapshot after = runtime.liveWorld().read(pending.position);
             if (!pending.before.equals(after)) {
-                runtime.liveActions().record(
+                UUID effective = runtime.liveActions().record(
                         pending.action, pending.position, pending.before, after);
+                if (!effective.equals(pending.action)) {
+                    runtime.liveActions().mergeGroups(pending.action, effective);
+                }
                 runtime.recordCausalZoneGrowth(pending.action, pending.position);
             }
         } catch (IOException | IllegalArgumentException failed) {

@@ -8,8 +8,8 @@ import io.github.lumi.minecraft.world.LiveBlockWorldAccess;
 import io.github.lumi.minecraft.world.LiveEntityWorldAccess;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -38,11 +38,10 @@ public final class LiveActionOperation implements DimensionMutation {
     private LiveActionJournal.Plan plan;
     private Iterator<WorldChange<?>> cursor;
     private Throwable failure;
-    private UUID retainedAction;
+    private final Set<UUID> retainedActions = new LinkedHashSet<>();
+    private final Set<UUID> cancelledActions = new LinkedHashSet<>();
+    private Iterator<UUID> cancellationCursor = List.<UUID>of().iterator();
     private boolean cancellationChangedState;
-    private final Set<UUID> tntWaveActions = new HashSet<>();
-    private boolean tntBatch;
-    private boolean tntWaveSelected;
 
     public LiveActionOperation(
             LiveActionJournal journal,
@@ -138,8 +137,8 @@ public final class LiveActionOperation implements DimensionMutation {
                 phase = beforeMutation() ? Phase.FAILED : Phase.DEGRADED;
             }
         }
-        if (isTerminal() && retainedAction != null) {
-            releaseRetainedAction();
+        if (isTerminal() && !retainedActions.isEmpty()) {
+            releaseRetainedActions();
         }
     }
 
@@ -158,27 +157,19 @@ public final class LiveActionOperation implements DimensionMutation {
     }
 
     private void select() {
-        if (!tntWaveSelected) {
-            tntWaveSelected = true;
-            if (direction == LiveActionJournal.Direction.UNDO) {
-                tntWaveActions.addAll(cancelPending.tntWaveActions(player));
-            }
-        }
         Optional<LiveActionJournal.Plan> selected = selectPlan();
         if (selected.isEmpty()) {
             phase = Phase.FAILED;
             return;
         }
-        tntBatch = direction == LiveActionJournal.Direction.UNDO
-                && tntWaveActions.contains(selected.orElseThrow().actionId());
         begin(selected.orElseThrow());
     }
 
     private void begin(LiveActionJournal.Plan selected) {
         plan = selected;
         cancellationChangedState = false;
-        if (cancelPending.mayChangeBlocks(plan.actionId())) {
-            phase = Phase.CANCELLING;
+        if (plan.actionIds().stream().anyMatch(cancelPending::mayChangeBlocks)) {
+            beginCancellation();
             return;
         }
         prepareChanges();
@@ -188,7 +179,7 @@ public final class LiveActionOperation implements DimensionMutation {
 
     private void preflightOne() throws IOException {
         if (!cursor.hasNext()) {
-            phase = Phase.CANCELLING;
+            beginCancellation();
             return;
         }
         WorldChange<?> change = cursor.next();
@@ -200,14 +191,37 @@ public final class LiveActionOperation implements DimensionMutation {
     }
 
     private void cancelPending() {
-        retainedAction = plan.actionId();
-        journal.retain(retainedAction);
-        cancellationChangedState = cancelPending.cancel(plan.actionId());
-        plan = selectPlan().orElseThrow(
+        if (cancellationCursor.hasNext()) {
+            UUID action = cancellationCursor.next();
+            cancellationChangedState |= cancelPending.cancel(action);
+            cancelledActions.add(action);
+            return;
+        }
+        LiveActionJournal.Plan settled = selectPlan().orElseThrow(
                 () -> new IllegalStateException("Live action disappeared during finalization"));
+        if (!settled.actionIds().containsAll(cancelledActions)) {
+            throw new IllegalStateException(
+                    "Live action group changed during finalization");
+        }
+        List<UUID> pending = settled.actionIds().stream()
+                .filter(action -> !cancelledActions.contains(action))
+                .toList();
+        if (!pending.isEmpty()) {
+            retain(pending);
+            plan = settled;
+            cancellationCursor = pending.iterator();
+            return;
+        }
+        plan = settled;
         prepareChanges();
         cursor = changes.iterator();
         phase = Phase.VALIDATING;
+    }
+
+    private void beginCancellation() {
+        retain(plan.actionIds());
+        cancellationCursor = plan.actionIds().iterator();
+        phase = Phase.CANCELLING;
     }
 
     private void prepareChanges() {
@@ -255,10 +269,8 @@ public final class LiveActionOperation implements DimensionMutation {
             if (mismatches.isEmpty()) {
                 publication.accept(plan);
                 journal.complete(plan);
-                releaseRetainedAction();
-                if (!continueTntBatch()) {
-                    phase = Phase.SUCCEEDED;
-                }
+                releaseRetainedActions();
+                phase = Phase.SUCCEEDED;
             } else if (finalPass) {
                 failure = new IllegalStateException(
                         "Live action did not verify after one repair pass at "
@@ -311,25 +323,13 @@ public final class LiveActionOperation implements DimensionMutation {
         return Optional.ofNullable(failure);
     }
 
-    private boolean continueTntBatch() {
-        if (!tntBatch) {
-            return false;
-        }
-        tntWaveActions.remove(plan.actionId());
-        Optional<LiveActionJournal.Plan> next = selectPlan();
-        if (next.isEmpty()
-                || !tntWaveActions.contains(next.orElseThrow().actionId())) {
-            return false;
-        }
-        begin(next.orElseThrow());
-        return true;
+    private void retain(List<UUID> actions) {
+        actions.stream().filter(retainedActions::add).forEach(journal::retain);
     }
 
-    private void releaseRetainedAction() {
-        if (retainedAction != null) {
-            journal.release(retainedAction);
-            retainedAction = null;
-        }
+    private void releaseRetainedActions() {
+        retainedActions.forEach(journal::release);
+        retainedActions.clear();
     }
 
     private boolean beforeMutation() {
@@ -357,10 +357,6 @@ public final class LiveActionOperation implements DimensionMutation {
 
         default boolean mayChangeBlocks(UUID action) {
             return false;
-        }
-
-        default Set<UUID> tntWaveActions(UUID player) {
-            return Set.of();
         }
     }
 

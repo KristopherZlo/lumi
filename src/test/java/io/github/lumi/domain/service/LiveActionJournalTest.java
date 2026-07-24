@@ -178,6 +178,26 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void keepsCrossPlayerLateEffectsInTheirCausalAction() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID older = journal.begin(PLAYER_A);
+        journal.record(older, POSITION, block("stone"), block("dirt"));
+        journal.retain(older);
+        journal.close(older);
+        UUID newer = journal.begin(PLAYER_B);
+        journal.record(newer, POSITION, block("dirt"), block("gold_block"));
+        journal.close(newer);
+
+        UUID effective = journal.record(
+                older, POSITION, block("gold_block"), block("air"));
+        journal.release(older);
+
+        assertEquals(older, effective);
+        assertThrows(IllegalStateException.class,
+                () -> journal.prepareUndo(PLAYER_A));
+    }
+
+    @Test
     void groupedActionsPrepareAndCompleteAsOneStackEntry() {
         LiveActionJournal journal = new LiveActionJournal();
         UUID first = add(journal, 1);
@@ -198,6 +218,25 @@ class LiveActionJournalTest {
         journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
         assertEquals(unrelated,
                 journal.prepareUndo(PLAYER_A).orElseThrow().actionId());
+    }
+
+    @Test
+    void refreshesVisibleEntityEndpointThroughGroupRepresentative() {
+        LiveActionJournal journal = new LiveActionJournal();
+        UUID entityAction = journal.begin(PLAYER_A);
+        journal.recordEntity(
+                entityAction, ENTITY, Optional.empty(), Optional.of(entity(1)));
+        journal.close(entityAction);
+        UUID representative = add(journal, 2);
+        journal.mergeGroups(entityAction, representative);
+        journal.complete(journal.prepareUndo(PLAYER_A).orElseThrow());
+
+        journal.refreshEntityBefore(
+                representative, ENTITY, Optional.of(entity(2)));
+
+        assertEquals(Optional.of(entity(2)),
+                journal.prepareRedo(PLAYER_A).orElseThrow()
+                        .expectedEntities().get(ENTITY));
     }
 
     @Test

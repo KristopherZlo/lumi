@@ -189,7 +189,13 @@ public final class LiveActionJournal {
             UUID actionId,
             UUID entityId,
             Optional<EntityState> before) {
-        MutableAction action = requireAction(actionId);
+        MutableAction selected = requireAction(actionId);
+        MutableAction action = actions.values().stream()
+                .filter(candidate -> candidate.groupId.equals(selected.groupId)
+                        && candidate.entities.containsKey(entityId))
+                .min(java.util.Comparator.comparingLong(candidate -> candidate.sequence))
+                .orElseThrow(() -> new IllegalStateException(
+                        "Entity is not part of the live action group: " + entityId));
         if (!action.available) {
             return;
         }
@@ -199,9 +205,6 @@ public final class LiveActionJournal {
         Objects.requireNonNull(entityId, "entityId");
         validateEntityId(entityId, before);
         EntityChange previous = action.entities.get(entityId);
-        if (previous == null) {
-            throw new IllegalStateException("Entity is not part of the live action: " + entityId);
-        }
         EntityChange updated = new EntityChange(before, previous.after);
         long previousBytes = estimatedBytes(previous);
         long updatedBytes = updated.before.equals(updated.after) ? 0 : estimatedBytes(updated);
@@ -416,6 +419,7 @@ public final class LiveActionJournal {
         return owners.latest(key)
                 .filter(owner -> owner.sequence > causalAction.sequence)
                 .map(owner -> requireAction(owner.actionId))
+                .filter(owner -> owner.player.equals(causalAction.player))
                 .orElse(causalAction);
     }
 

@@ -39,7 +39,7 @@ class LiveActionOperationTest {
     }
 
     @Test
-    void undoesOneTntWaveUnderOneOperation() {
+    void undoAndRedoOneGroupUnderOneOperationEach() {
         LiveActionJournal journal = new LiveActionJournal();
         UUID first = journal.begin(PLAYER);
         journal.record(first, POSITION, block("stone"), block("dirt"));
@@ -47,22 +47,40 @@ class LiveActionOperationTest {
         UUID second = journal.begin(PLAYER);
         journal.record(second, POSITION, block("dirt"), block("gold_block"));
         journal.close(second);
+        journal.mergeGroups(first, second);
         FakeWorld world = new FakeWorld(block("gold_block"));
+        var cancelled = new ArrayList<UUID>();
         LiveActionOperation operation = new LiveActionOperation(
                 journal, PLAYER, LiveActionJournal.Direction.UNDO,
                 world, LiveEntityWorldAccess.UNSUPPORTED,
                 new LiveActionOperation.PendingCancellation() {
-                    @Override public boolean cancel(UUID action) { return false; }
-                    @Override public java.util.Set<UUID> tntWaveActions(UUID player) {
-                        return java.util.Set.of(first, second);
+                    @Override public boolean cancel(UUID action) {
+                        cancelled.add(action);
+                        return false;
                     }
                 }, ignored -> { });
 
         operation.advance(Long.MAX_VALUE);
 
         assertEquals(block("stone"), world.states.get(POSITION));
-        assertEquals(2, world.writes);
+        assertEquals(1, world.writes);
+        assertEquals(java.util.List.of(first, second), cancelled);
         assertEquals(MutationTerminalState.SUCCEEDED, operation.terminalState());
+
+        cancelled.clear();
+        LiveActionOperation redo = new LiveActionOperation(
+                journal, PLAYER, LiveActionJournal.Direction.REDO,
+                world, LiveEntityWorldAccess.UNSUPPORTED,
+                action -> {
+                    cancelled.add(action);
+                    return false;
+                }, ignored -> { });
+        redo.advance(Long.MAX_VALUE);
+
+        assertEquals(block("gold_block"), world.states.get(POSITION));
+        assertEquals(2, world.writes);
+        assertEquals(java.util.List.of(first, second), cancelled);
+        assertEquals(MutationTerminalState.SUCCEEDED, redo.terminalState());
     }
 
     @Test
