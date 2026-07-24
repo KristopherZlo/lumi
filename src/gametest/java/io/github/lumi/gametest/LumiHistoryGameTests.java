@@ -7,6 +7,7 @@ import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.minecraft.operation.DimensionMutation;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
+import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
@@ -82,8 +83,12 @@ public final class LumiHistoryGameTests {
                         helper, runtime, lease, zoneId,
                         helper.absolutePos(new BlockPos(2, 2, 2))))
                 .thenExecute(() -> {
-                    MinecartChest cart = helper.spawn(
-                            EntityType.CHEST_MINECART, new BlockPos(2, 2, 2));
+                    MinecartChest cart;
+                    try (var ignored = DirectLiveActionContext.open(
+                            runtime.liveActions(), AUTHOR.id())) {
+                        cart = helper.spawn(
+                                EntityType.CHEST_MINECART, new BlockPos(2, 2, 2));
+                    }
                     cart.setNoGravity(true);
                     cart.setItem(0, new ItemStack(Items.DIAMOND, 7));
                     entity.set(cart);
@@ -95,8 +100,9 @@ public final class LumiHistoryGameTests {
                 .thenExecute(() -> {
                     requireSucceeded(helper, terminal.get(), "Save with entity");
                     withEntity.set(activeCommit(helper, runtime));
-                    ((MinecartChest) entity.get()).setItem(
-                            0, new ItemStack(Items.EMERALD, 3));
+                    changeEntity(helper, runtime, entity.get(), () ->
+                            ((MinecartChest) entity.get()).setItem(
+                                    0, new ItemStack(Items.EMERALD, 3)));
                     startSave(
                             helper, runtime, zoneId.get(), "Changed entity",
                             terminal, current);
@@ -129,8 +135,11 @@ public final class LumiHistoryGameTests {
                             helper, entity.get().getUUID(),
                             new ItemStack(Items.EMERALD, 3));
                     helper.assertEntityNotPresent(EntityType.ITEM);
-                    cart.clearContent();
-                    cart.discard();
+                    changeEntity(helper, runtime, cart, cart::clearContent);
+                    try (var ignored = DirectLiveActionContext.open(
+                            runtime.liveActions(), AUTHOR.id())) {
+                        cart.discard();
+                    }
                     startSave(
                             helper, runtime, zoneId.get(), "Without entity",
                             terminal, current);
@@ -165,6 +174,24 @@ public final class LumiHistoryGameTests {
                 })
                 .thenExecute(() -> LumiGameTestLease.release(lease))
                 .thenSucceed();
+    }
+
+    private static void changeEntity(
+            GameTestHelper helper,
+            FabricDimensionRuntime runtime,
+            Entity entity,
+            Runnable change) {
+        try (var ignored = DirectLiveActionContext.open(
+                runtime.liveActions(), AUTHOR.id())) {
+            var pending = runtime.liveEntities().begin(entity).orElseThrow(
+                    () -> helper.assertionException(
+                            "Cannot capture durable entity mutation"));
+            change.run();
+            runtime.liveEntities().finish(pending);
+        } catch (IOException failed) {
+            throw helper.assertionException(
+                    "Cannot record durable entity mutation: %s", failed.getMessage());
+        }
     }
 
     private static MinecartChest assertMinecart(
