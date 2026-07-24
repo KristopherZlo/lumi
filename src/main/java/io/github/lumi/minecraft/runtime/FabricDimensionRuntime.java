@@ -381,7 +381,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return runtime;
     }
 
-    private static Set<CommitId> retainedSessionCheckpointCommits(
+    static Set<CommitId> retainedSessionCheckpointCommits(
             OperationJournal recovery) {
         if (recovery == null || (recovery.kind() != OperationKind.QUICK_ROLLBACK
                 && recovery.kind() != OperationKind.CHECKPOINT_UNDO)) {
