@@ -344,9 +344,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     OnboardingSpotlightLayout.Rect onboardingTarget(
             OnboardingTour.Kind kind) {
         return switch (kind) {
-            case SPOTLIGHT_SAVE -> new OnboardingSpotlightLayout.Rect(
-                    saveActionX, actionY, actionButtonWidth, CONTROL_HEIGHT);
-            case SPOTLIGHT_CHANGES -> new OnboardingSpotlightLayout.Rect(
+            case SPOTLIGHT_COMPARE -> new OnboardingSpotlightLayout.Rect(
                     changesActionX, actionY, ICON_BUTTON_WIDTH, CONTROL_HEIGHT);
             case SPOTLIGHT_RESTORE -> new OnboardingSpotlightLayout.Rect(
                     historyActionX(layout.bodyX(), layout.bodyWidth(), 0),

@@ -696,10 +696,6 @@ public final class LumiClient implements ClientModInitializer {
                                 parent, SaveScreenController.Intent.SAVE,
                                 "", saved),
                         LumiClient::dashboard,
-                        parent -> client.setScreen(new LumiHotkeyScreen(
-                                parent,
-                                LumiHotkeys.shortcuts(
-                                        client.options.keyMappings))),
                         LumiClient::completeOnboarding);
         client.setScreen(new LumiOnboardingScreen(
                 returnScreen, background, controller, actions));

@@ -92,13 +92,10 @@ public final class LumiHotkeys {
     }
 
     private void publishOnboardingEdges(boolean modifierDown) {
-        publishEdge(OnboardingEvent.ShortcutKind.PREVIEW, modifierDown);
         publishEdge(OnboardingEvent.ShortcutKind.SAVE,
                 modifierDown && save.isDown());
         publishEdge(OnboardingEvent.ShortcutKind.DASHBOARD,
                 dashboard.isDown());
-        publishEdge(OnboardingEvent.ShortcutKind.HOTKEYS,
-                modifierDown && info.isDown());
     }
 
     private void publishEdge(

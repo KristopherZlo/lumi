@@ -21,7 +21,9 @@ import net.minecraft.resources.Identifier;
 public final class ClientOnboardingWorldStep {
     private static final Identifier HUD_ID = Identifier.fromNamespaceAndPath(
             LumiMod.MOD_ID, "onboarding_world_prompt");
-    private static final int REQUIRED_EDITS = 5;
+    private static final int INITIAL_EDITS = 3;
+    private static final int EXPERIMENT_EDITS = 10;
+    private static final long PREVIEW_HOLD_NANOS = 1_500_000_000L;
     private static final int REFRESH_INTERVAL_TICKS = 10;
     private final ClientHistoryStore history;
     private final Runnable refresh;
@@ -31,6 +33,8 @@ public final class ClientOnboardingWorldStep {
     private boolean baselineReady;
     private int edits;
     private int refreshCooldown;
+    private long previewHoldStarted;
+    private boolean previewObserved;
 
     public ClientOnboardingWorldStep(
             ClientHistoryStore history,
@@ -60,6 +64,7 @@ public final class ClientOnboardingWorldStep {
         baselineReady = initial.isPresent();
         edits = 0;
         refreshCooldown = 0;
+        resetPreviewHold();
         refresh.run();
     }
 
@@ -68,16 +73,8 @@ public final class ClientOnboardingWorldStep {
     }
 
     public boolean accept(OnboardingEvent event) {
-        if (controller == null
-                || !(event instanceof OnboardingEvent.Shortcut shortcut)
-                || shortcut.shortcut() != OnboardingEvent.ShortcutKind.PREVIEW
-                || !shortcut.pressed()
-                || controller.current().kind() != OnboardingTour.Kind.WORLD_PREVIEW
-                || pendingBlocks().map(List::isEmpty).orElse(true)) {
-            return false;
-        }
-        OnboardingController.Effect effect = controller.handle(
-                new OnboardingEvent.WorldCompleted(OnboardingTour.Kind.WORLD_PREVIEW));
+        if (controller == null) return false;
+        OnboardingController.Effect effect = controller.handle(event);
         if (effect == OnboardingController.Effect.REOPEN) finishStep();
         return true;
     }
@@ -87,11 +84,21 @@ public final class ClientOnboardingWorldStep {
                 || client.player == null || client.level == null) {
             return;
         }
-        if (controller.current().kind() == OnboardingTour.Kind.WORLD_PREVIEW) return;
-        if (controller.current().kind() != OnboardingTour.Kind.WORLD_EDIT) {
+        OnboardingTour.Kind kind = controller.current().kind();
+        if (kind == OnboardingTour.Kind.WORLD_PREVIEW) {
+            tickPreview(client);
+            return;
+        }
+        if (kind == OnboardingTour.Kind.WORLD_UNDO_REDO) return;
+        if (kind != OnboardingTour.Kind.WORLD_EDIT
+                && kind != OnboardingTour.Kind.WORLD_EXPERIMENT) {
             clear();
             return;
         }
+        tickEdits(kind);
+    }
+
+    private void tickEdits(OnboardingTour.Kind kind) {
         if (refreshCooldown-- <= 0) {
             refreshCooldown = REFRESH_INTERVAL_TICKS;
             refresh.run();
@@ -106,10 +113,32 @@ public final class ClientOnboardingWorldStep {
             return;
         }
         edits = trackedEdits(baselinePending, current.orElseThrow());
-        if (edits >= REQUIRED_EDITS) {
+        if (edits >= requiredEdits(kind)) {
             OnboardingController.Effect effect = controller.handle(
-                    new OnboardingEvent.WorldCompleted(OnboardingTour.Kind.WORLD_EDIT));
+                    new OnboardingEvent.WorldCompleted(kind));
             if (effect == OnboardingController.Effect.REOPEN) finishStep();
+        }
+    }
+
+    private void tickPreview(Minecraft client) {
+        if (refreshCooldown-- <= 0) {
+            refreshCooldown = REFRESH_INTERVAL_TICKS;
+            refresh.run();
+        }
+        boolean eligible = LumiHotkeys.actionModifierDown(
+                client.options.keyMappings)
+                && pendingBlocks().map(blocks -> !blocks.isEmpty()).orElse(false);
+        if (!eligible) {
+            resetPreviewHold();
+            return;
+        }
+        if (previewHoldStarted == 0L) {
+            previewHoldStarted = System.nanoTime();
+        }
+        if (previewObserved) {
+            controller.handle(new OnboardingEvent.WorldCompleted(
+                    OnboardingTour.Kind.WORLD_PREVIEW));
+            resetPreviewHold();
         }
     }
 
@@ -121,7 +150,7 @@ public final class ClientOnboardingWorldStep {
         }
         OnboardingTour.Page page = controller.current();
         int panelWidth = Math.min(330, graphics.guiWidth() - 16);
-        int panelHeight = page.kind() == OnboardingTour.Kind.WORLD_EDIT ? 72 : 86;
+        int panelHeight = panelHeight(page.kind());
         int x = (graphics.guiWidth() - panelWidth) / 2;
         int y = Math.max(8, graphics.guiHeight() - panelHeight - 30);
         graphics.fill(x, y, x + panelWidth, y + panelHeight, 0xe6111419);
@@ -134,30 +163,96 @@ public final class ClientOnboardingWorldStep {
                 Component.translatable(page.titleKey()),
                 x + 10, y + 23, 0xff70d6a5, false);
         int cursorY = y + 39;
-        if (page.kind() == OnboardingTour.Kind.WORLD_PREVIEW) {
-            String key = LumiHotkeys.bindingLabel(
-                    client.options.keyMappings, "key.lumi.action_modifier");
+        if (page.kind() == OnboardingTour.Kind.WORLD_PREVIEW
+                || page.kind() == OnboardingTour.Kind.WORLD_UNDO_REDO) {
+            String key = worldBinding(client, page.kind());
             graphics.drawString(client.font,
                     Component.translatable(
-                            "luma.onboarding.preview_changes_press")
+                            instructionKey(page.kind()))
                             .append(" [" + key + "]"),
                     x + 10, cursorY, 0xfff0f3f6, false);
             cursorY += 14;
         }
         for (var line : client.font.split(
-                Component.translatable(page.helpKey()), panelWidth - 20)) {
+                worldHelp(page), panelWidth - 20)) {
             graphics.drawString(
                     client.font, line, x + 10, cursorY, 0xffc0c7d1, false);
             cursorY += 11;
             if (cursorY > y + panelHeight - 12) break;
         }
-        if (page.kind() == OnboardingTour.Kind.WORLD_EDIT) {
+        if (page.kind() == OnboardingTour.Kind.WORLD_EDIT
+                || page.kind() == OnboardingTour.Kind.WORLD_EXPERIMENT) {
+            int required = requiredEdits(page.kind());
             graphics.drawString(client.font,
                     Component.translatable(
                             "luma.onboarding.world_edit_counter",
-                            Math.min(REQUIRED_EDITS, edits), REQUIRED_EDITS),
+                            Math.min(required, edits), required),
                     x + 10, y + panelHeight - 15, 0xff8f9aa8, false);
+        } else if (page.kind() == OnboardingTour.Kind.WORLD_PREVIEW) {
+            float progress = previewProgress();
+            int barX = x + 10;
+            int barY = y + panelHeight - 15;
+            int barWidth = panelWidth - 20;
+            graphics.fill(barX, barY, barX + barWidth, barY + 5, 0xff30343a);
+            graphics.fill(
+                    barX, barY,
+                    barX + Math.round(barWidth * progress), barY + 5,
+                    0xff70d6a5);
+            if (progress >= 1.0F) previewObserved = true;
         }
+    }
+
+    private Component worldHelp(OnboardingTour.Page page) {
+        if (page.kind() != OnboardingTour.Kind.WORLD_UNDO_REDO) {
+            return Component.translatable(page.helpKey());
+        }
+        return Component.translatable(controller.undoRedoPhase()
+                == OnboardingController.UndoRedoPhase.UNDO
+                ? "luma.onboarding.undo_redo_undo_help"
+                : "luma.onboarding.undo_redo_redo_help");
+    }
+
+    private String worldBinding(Minecraft client, OnboardingTour.Kind kind) {
+        String action = LumiHotkeys.bindingLabel(
+                client.options.keyMappings, "key.lumi.action_modifier");
+        if (kind == OnboardingTour.Kind.WORLD_PREVIEW) return action;
+        String operation = LumiHotkeys.bindingLabel(
+                client.options.keyMappings,
+                controller.undoRedoPhase() == OnboardingController.UndoRedoPhase.UNDO
+                        ? "key.lumi.undo" : "key.lumi.redo");
+        return action + "] + [" + operation;
+    }
+
+    private String instructionKey(OnboardingTour.Kind kind) {
+        if (kind == OnboardingTour.Kind.WORLD_PREVIEW) {
+            return "luma.onboarding.preview_changes_hold";
+        }
+        return controller.undoRedoPhase() == OnboardingController.UndoRedoPhase.UNDO
+                ? "luma.onboarding.undo_redo_undo"
+                : "luma.onboarding.undo_redo_redo";
+    }
+
+    private float previewProgress() {
+        return previewHoldStarted == 0L ? 0.0F
+                : holdProgress(System.nanoTime() - previewHoldStarted);
+    }
+
+    static float holdProgress(long heldNanos) {
+        return Math.max(0.0F, Math.min(1.0F,
+                (float) heldNanos / PREVIEW_HOLD_NANOS));
+    }
+
+    private static int requiredEdits(OnboardingTour.Kind kind) {
+        return kind == OnboardingTour.Kind.WORLD_EXPERIMENT
+                ? EXPERIMENT_EDITS : INITIAL_EDITS;
+    }
+
+    private static int panelHeight(OnboardingTour.Kind kind) {
+        return switch (kind) {
+            case WORLD_PREVIEW -> 92;
+            case WORLD_UNDO_REDO -> 86;
+            default -> 72;
+        };
     }
 
     private Optional<List<HistorySnapshotPayload.PendingBlock>> pendingBlocks() {
@@ -186,5 +281,11 @@ public final class ClientOnboardingWorldStep {
         baselineReady = false;
         edits = 0;
         refreshCooldown = 0;
+        resetPreviewHold();
+    }
+
+    private void resetPreviewHold() {
+        previewHoldStarted = 0L;
+        previewObserved = false;
     }
 }

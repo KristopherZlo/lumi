@@ -20,4 +20,15 @@ class ClientOnboardingWorldStepTest {
         assertEquals(1, ClientOnboardingWorldStep.trackedEdits(
                 Set.of(old), List.of(added)));
     }
+
+    @Test
+    void clampsTheRequiredPreviewHoldProgress() {
+        assertEquals(0.0F, ClientOnboardingWorldStep.holdProgress(-1L));
+        assertEquals(0.5F,
+                ClientOnboardingWorldStep.holdProgress(750_000_000L));
+        assertEquals(1.0F,
+                ClientOnboardingWorldStep.holdProgress(1_500_000_000L));
+        assertEquals(1.0F,
+                ClientOnboardingWorldStep.holdProgress(2_000_000_000L));
+    }
 }

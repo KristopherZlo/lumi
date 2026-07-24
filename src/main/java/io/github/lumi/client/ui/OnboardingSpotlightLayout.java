@@ -13,8 +13,7 @@ final class OnboardingSpotlightLayout {
         LumiPageLayout dashboard =
                 LumiPageLayout.fit(screenWidth, screenHeight);
         Rect target = switch (kind) {
-            case SPOTLIGHT_SAVE -> saveTarget(dashboard);
-            case SPOTLIGHT_CHANGES -> changesTarget(dashboard);
+            case SPOTLIGHT_COMPARE -> changesTarget(dashboard);
             case SPOTLIGHT_RESTORE -> restoreTarget(dashboard);
             default -> throw new IllegalArgumentException(
                     "Page does not have a Dashboard spotlight");
@@ -37,14 +36,6 @@ final class OnboardingSpotlightLayout {
                 Math.max(EDGE_GAP, screenHeight - PANEL_HEIGHT - EDGE_GAP));
         return new Placement(
                 hole, new Rect(panelX, panelY, panelWidth, PANEL_HEIGHT));
-    }
-
-    private static Rect saveTarget(LumiPageLayout layout) {
-        int available = Math.max(0, layout.bodyWidth() - 28);
-        int buttonWidth = Math.max(0, (available - 70) / 2);
-        return new Rect(
-                layout.bodyX() + 14, layout.bodyY() + 56,
-                buttonWidth, 20);
     }
 
     private static Rect changesTarget(LumiPageLayout layout) {

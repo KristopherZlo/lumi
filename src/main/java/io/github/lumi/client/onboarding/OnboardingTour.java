@@ -3,21 +3,21 @@ package io.github.lumi.client.onboarding;
 import java.util.List;
 import java.util.Objects;
 
-/** Page catalog and cursor for the retained nine-step hands-on onboarding. */
+/** Page catalog and cursor for the short hands-on onboarding. */
 public final class OnboardingTour {
     private static final List<Page> PAGES = List.of(
             page("welcome", Kind.INFO),
             page("break_block", Kind.WORLD_EDIT),
             page("preview_changes", Kind.WORLD_PREVIEW),
+            page("undo_redo", Kind.WORLD_UNDO_REDO),
             page("save_shortcut", Kind.SHORTCUT_SAVE,
                     "key.lumi.action_modifier", "key.lumi.quick_save"),
+            page("experiment", Kind.WORLD_EXPERIMENT),
             page("open", Kind.SHORTCUT_DASHBOARD,
-                    "key.lumi.action_modifier", "key.lumi.open_dashboard"),
-            page("save_spotlight", Kind.SPOTLIGHT_SAVE),
-            page("changes_spotlight", Kind.SPOTLIGHT_CHANGES),
+                    "key.lumi.open_dashboard"),
+            page("changes_spotlight", Kind.SPOTLIGHT_COMPARE),
             page("commit_navigation", Kind.SPOTLIGHT_RESTORE),
-            page("finish", Kind.SHORTCUT_HOTKEYS,
-                    "key.lumi.action_modifier", "key.lumi.hotkey_info"));
+            page("finish", Kind.INFO_MORE));
     private int index;
 
     public static int pageCount() {
@@ -61,12 +61,13 @@ public final class OnboardingTour {
         INFO,
         WORLD_EDIT,
         WORLD_PREVIEW,
+        WORLD_UNDO_REDO,
         SHORTCUT_SAVE,
+        WORLD_EXPERIMENT,
         SHORTCUT_DASHBOARD,
-        SPOTLIGHT_SAVE,
-        SPOTLIGHT_CHANGES,
+        SPOTLIGHT_COMPARE,
         SPOTLIGHT_RESTORE,
-        SHORTCUT_HOTKEYS
+        INFO_MORE
     }
 
     public record Page(
@@ -84,12 +85,14 @@ public final class OnboardingTour {
         }
 
         public boolean worldStep() {
-            return kind == Kind.WORLD_EDIT || kind == Kind.WORLD_PREVIEW;
+            return kind == Kind.WORLD_EDIT
+                    || kind == Kind.WORLD_PREVIEW
+                    || kind == Kind.WORLD_UNDO_REDO
+                    || kind == Kind.WORLD_EXPERIMENT;
         }
 
         public boolean spotlight() {
-            return kind == Kind.SPOTLIGHT_SAVE
-                    || kind == Kind.SPOTLIGHT_CHANGES
+            return kind == Kind.SPOTLIGHT_COMPARE
                     || kind == Kind.SPOTLIGHT_RESTORE;
         }
 

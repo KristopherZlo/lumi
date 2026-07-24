@@ -2,6 +2,7 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.client.onboarding.OnboardingController;
 import io.github.lumi.client.onboarding.OnboardingEvent;
+import io.github.lumi.client.onboarding.OnboardingTour;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -12,7 +13,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
-/** Replayable nine-step hands-on introduction driven by explicit events. */
+/** Replayable hands-on introduction driven by explicit events. */
 public final class LumiOnboardingScreen extends LumiModalScreen {
     private static final int PANEL_HEIGHT = 224;
     private static final int NAVIGATION_WIDTH = 64;
@@ -38,7 +39,7 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
     public LumiOnboardingScreen(Screen parent, Runnable completed) {
         this(parent, parent, new OnboardingController(), new Actions(
                 ignored -> { }, (screen, saved) -> { },
-                ignored -> parent, ignored -> { }, completed));
+                ignored -> parent, completed));
     }
 
     public LumiOnboardingScreen(
@@ -88,16 +89,24 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
                         OnboardingEvent.Direction.BACK)),
                 LumiButton.Kind.NORMAL);
         back.active = controller.canGoBack();
-        addButton(right - NAVIGATION_WIDTH * 2 - 8, y, NAVIGATION_WIDTH,
+        boolean manualStep = controller.current().kind() == OnboardingTour.Kind.INFO
+                || controller.current().kind()
+                == OnboardingTour.Kind.INFO_MORE;
+        int skipX = manualStep
+                ? right - NAVIGATION_WIDTH * 2 - 8
+                : right - NAVIGATION_WIDTH;
+        addButton(skipX, y, NAVIGATION_WIDTH,
                 Component.translatable("luma.action.skip"),
                 () -> accept(new OnboardingEvent.Navigation(
                         OnboardingEvent.Direction.SKIP)),
                 LumiButton.Kind.NORMAL);
-        addButton(right - NAVIGATION_WIDTH, y, NAVIGATION_WIDTH,
-                Component.translatable("luma.action.next"),
-                () -> accept(new OnboardingEvent.Navigation(
-                        OnboardingEvent.Direction.NEXT)),
-                LumiButton.Kind.PRIMARY);
+        if (manualStep) {
+            addButton(right - NAVIGATION_WIDTH, y, NAVIGATION_WIDTH,
+                    Component.translatable("luma.action.next"),
+                    () -> accept(new OnboardingEvent.Navigation(
+                            OnboardingEvent.Direction.NEXT)),
+                    LumiButton.Kind.PRIMARY);
+        }
     }
 
     @Override
@@ -121,10 +130,6 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
             case OPEN_SAVE -> actions.save().open(
                     this, () -> accept(new OnboardingEvent.SaveCompleted()));
             case OPEN_DASHBOARD -> openDashboard();
-            case OPEN_HOTKEYS -> {
-                complete();
-                actions.hotkeys().accept(workspaceBackground());
-            }
             case COMPLETE -> {
                 complete();
                 minecraft.setScreen(returnScreen);
@@ -136,11 +141,6 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
         Screen dashboard = actions.dashboard().apply(returnScreen);
         minecraft.setScreen(new LumiOnboardingScreen(
                 returnScreen, dashboard, controller, actions));
-    }
-
-    private Screen workspaceBackground() {
-        return background instanceof LumiDashboardScreen
-                ? background : returnScreen;
     }
 
     @Override
@@ -226,13 +226,11 @@ public final class LumiOnboardingScreen extends LumiModalScreen {
             Consumer<OnboardingController> worldStep,
             SaveOpener save,
             Function<Screen, Screen> dashboard,
-            Consumer<Screen> hotkeys,
             Runnable completed) {
         public Actions {
             Objects.requireNonNull(worldStep, "worldStep");
             Objects.requireNonNull(save, "save");
             Objects.requireNonNull(dashboard, "dashboard");
-            Objects.requireNonNull(hotkeys, "hotkeys");
             Objects.requireNonNull(completed, "completed");
         }
     }

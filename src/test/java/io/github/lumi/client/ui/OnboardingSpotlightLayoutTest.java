@@ -11,24 +11,21 @@ class OnboardingSpotlightLayoutTest {
             new OnboardingSpotlightLayout();
 
     @Test
-    void targetsTheThreeDashboardActions() {
-        var save = layout.place(
-                OnboardingTour.Kind.SPOTLIGHT_SAVE, 1280, 720).hole();
+    void targetsTheDashboardActions() {
         var changes = layout.place(
-                OnboardingTour.Kind.SPOTLIGHT_CHANGES, 1280, 720).hole();
+                OnboardingTour.Kind.SPOTLIGHT_COMPARE, 1280, 720).hole();
         var restore = layout.place(
                 OnboardingTour.Kind.SPOTLIGHT_RESTORE, 1280, 720).hole();
 
-        assertTrue(save.width() > changes.width());
         assertEquals(36, changes.width());
         assertEquals(36, restore.width());
-        assertTrue(restore.y() > save.y());
+        assertTrue(restore.y() > changes.y());
     }
 
     @Test
     void promptStaysInsideSmallScreens() {
         var prompt = layout.place(
-                OnboardingTour.Kind.SPOTLIGHT_SAVE, 360, 240).prompt();
+                OnboardingTour.Kind.SPOTLIGHT_COMPARE, 360, 240).prompt();
 
         assertTrue(prompt.x() >= 0);
         assertTrue(prompt.y() >= 0);
