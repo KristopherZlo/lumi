@@ -23,6 +23,7 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
     private static final float FIT_SCALE = 0.97F;
     private static final float PIVOT_Y = -1.0625F;
     private static final long WALK_CYCLE_MILLIS = 950L;
+    private static final long CAPE_CYCLE_MILLIS = 1_700L;
     private static final long ORBIT_CYCLE_MILLIS = 18_000L;
     private final Screen parent;
     private final List<SpecialThanksEntry> entries =
@@ -132,6 +133,18 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
         float rotationY = 25.0F
                 + (float) (Math.floorMod(now, ORBIT_CYCLE_MILLIS)
                         / (double) ORBIT_CYCLE_MILLIS * 360.0D);
+        poseWalking(model, now);
+        graphics.submitSkinRenderState(
+                model,
+                skin.body().texturePath(),
+                scale * uiScale,
+                -5.0F,
+                rotationY,
+                PIVOT_Y,
+                scaled(x, uiScale),
+                scaled(y, uiScale),
+                scaled(x + width, uiScale),
+                scaled(y + height, uiScale));
         if (skin.cape() != null) {
             poseCape(capeModel, now);
             graphics.submitSkinRenderState(
@@ -146,18 +159,6 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
                     scaled(x + width, uiScale),
                     scaled(y + height, uiScale));
         }
-        poseWalking(model, now);
-        graphics.submitSkinRenderState(
-                model,
-                skin.body().texturePath(),
-                scale * uiScale,
-                -5.0F,
-                rotationY,
-                PIVOT_Y,
-                scaled(x, uiScale),
-                scaled(y, uiScale),
-                scaled(x + width, uiScale),
-                scaled(y + height, uiScale));
     }
 
     private static void poseWalking(PlayerModel model, long now) {
@@ -181,12 +182,16 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
     }
 
     static float capeRotation(long now) {
-        return 0.26F + (float) Math.sin(walkPhase(now)) * 0.10F;
+        return 0.26F + (float) Math.sin(cyclePhase(now, CAPE_CYCLE_MILLIS)) * 0.10F;
     }
 
     private static float walkPhase(long now) {
-        return (float) (Math.floorMod(now, WALK_CYCLE_MILLIS)
-                / (double) WALK_CYCLE_MILLIS * Math.PI * 2.0D);
+        return cyclePhase(now, WALK_CYCLE_MILLIS);
+    }
+
+    private static float cyclePhase(long now, long cycleMillis) {
+        return (float) (Math.floorMod(now, cycleMillis)
+                / (double) cycleMillis * Math.PI * 2.0D);
     }
 
     private static int scaled(int coordinate, float scale) {

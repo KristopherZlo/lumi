@@ -22,7 +22,8 @@ class LumiSpecialThanksScreenTest {
         assertTrue(source.contains("PlayerModelType.SLIM"));
         assertTrue(source.contains("skin.cape() != null"));
         assertTrue(source.indexOf("skin.cape().texturePath()")
-                < source.indexOf("skin.body().texturePath()"));
+                > source.indexOf("skin.body().texturePath()"));
+        assertTrue(source.contains("CAPE_CYCLE_MILLIS = 1_700L"));
         assertTrue(source.contains("model.resetPose()"));
         assertTrue(source.contains("model.setAllVisible(true)"));
         assertTrue(source.contains("Math.sin"));
@@ -36,9 +37,9 @@ class LumiSpecialThanksScreenTest {
     }
 
     @Test
-    void capeWavesBehindTheWalkingPlayer() {
+    void capeWavesMoreSlowlyThanTheWalkingPlayer() {
         float resting = LumiSpecialThanksScreen.capeRotation(0);
-        float trailing = LumiSpecialThanksScreen.capeRotation(237);
+        float trailing = LumiSpecialThanksScreen.capeRotation(425);
 
         assertTrue(resting > 0.0F);
         assertTrue(trailing > resting);
