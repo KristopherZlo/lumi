@@ -18,7 +18,7 @@ import net.minecraft.world.level.storage.LevelResource;
 /** Optional one-time vanilla backup before Lumi creates history for a world. */
 public final class PreModBackupService {
     public static final String MAX_MIB_PROPERTY = "lumi.preModBackup.maxMiB";
-    private static final Path HISTORY = Path.of("lumi", "history-v2");
+    private static final Path HISTORY = Path.of("lumi", "history");
     private static final Path MARKER = Path.of("lumi", "pre-mod-backup.complete");
 
     private PreModBackupService() {

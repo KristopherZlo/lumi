@@ -109,7 +109,7 @@ recovery path.
 Lumi data is separate from vanilla chunk data:
 
 ```text
-<world>/lumi/history-v2/<dimension>/
+<world>/lumi/history/<dimension>/
 ```
 
 Removing Lumi leaves a normal playable Minecraft world. V2 starts a new history

@@ -18,9 +18,9 @@ class DimensionRepositoryLayoutTest {
         Path custom = layout.resolve("builder:zones/redstone");
         Path hostile = layout.resolve("builder:../../outside");
 
-        assertTrue(overworld.startsWith(world.resolve("lumi/history-v2")));
-        assertEquals(1, world.resolve("lumi/history-v2").relativize(overworld).getNameCount());
-        assertEquals(1, world.resolve("lumi/history-v2").relativize(hostile).getNameCount());
+        assertTrue(overworld.startsWith(world.resolve("lumi/history")));
+        assertEquals(1, world.resolve("lumi/history").relativize(overworld).getNameCount());
+        assertEquals(1, world.resolve("lumi/history").relativize(hostile).getNameCount());
         assertNotEquals(overworld, custom);
         assertNotEquals(custom, hostile);
         assertEquals("builder:zones/redstone", layout.dimensionId(custom));

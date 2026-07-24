@@ -12,7 +12,7 @@ public final class DimensionRepositoryLayout {
 
     public DimensionRepositoryLayout(Path worldRoot) {
         historyRoot = Objects.requireNonNull(worldRoot, "worldRoot")
-                .toAbsolutePath().normalize().resolve("lumi").resolve("history-v2");
+                .toAbsolutePath().normalize().resolve("lumi").resolve("history");
     }
 
     public Path resolve(String dimensionId) {

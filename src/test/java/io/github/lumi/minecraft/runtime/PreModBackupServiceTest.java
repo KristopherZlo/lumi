@@ -44,7 +44,7 @@ class PreModBackupServiceTest {
 
     @Test
     void existingLumiHistoryIsNeverBackedUpAsPreMod() throws Exception {
-        Files.createDirectories(world.resolve("lumi/history-v2"));
+        Files.createDirectories(world.resolve("lumi/history"));
         AtomicInteger calls = new AtomicInteger();
 
         assertFalse(PreModBackupService.run(world, "1", () -> calls.incrementAndGet()));

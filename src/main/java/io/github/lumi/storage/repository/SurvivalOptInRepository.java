@@ -21,7 +21,7 @@ public final class SurvivalOptInRepository implements SurvivalOptInStore {
 
     public SurvivalOptInRepository(Path worldRoot) {
         file = worldRoot.toAbsolutePath().normalize()
-                .resolve("lumi").resolve("history-v2").resolve("server")
+                .resolve("lumi").resolve("history").resolve("server")
                 .resolve("survival-opt-in.bin");
     }
 
