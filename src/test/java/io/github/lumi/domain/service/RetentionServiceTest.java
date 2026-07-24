@@ -46,6 +46,7 @@ class RetentionServiceTest {
         refs.create(new BranchName("hidden/auto/main/version"), visible);
         refs.create(new BranchName("hidden/forward/main/version"), visible);
         refs.create(new BranchName("hidden/deleted/version/main"), visible);
+        refs.create(new BranchName("hidden/session-undo/action"), visible);
 
         int deleted = new RetentionService(commits, refs)
                 .pruneAfterPublication(16, protectedRef);
@@ -60,6 +61,7 @@ class RetentionServiceTest {
         assertTrue(refs.read(new BranchName("hidden/auto/main/version")).isPresent());
         assertTrue(refs.read(new BranchName("hidden/forward/main/version")).isPresent());
         assertTrue(refs.read(new BranchName("hidden/deleted/version/main")).isPresent());
+        assertTrue(refs.read(new BranchName("hidden/session-undo/action")).isPresent());
     }
 
     @Test
