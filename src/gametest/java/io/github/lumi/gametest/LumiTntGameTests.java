@@ -74,16 +74,27 @@ public final class LumiTntGameTests {
         FabricDimensionRuntime runtime = runtime(helper);
         UUID player = UUID.randomUUID();
         UUID test = UUID.randomUUID();
-        BlockPos first = new BlockPos(2, 2, 3);
-        BlockPos second = new BlockPos(5, 2, 3);
+        BlockPos tnt = new BlockPos(3, 2, 3);
+        AtomicReference<PrimedTnt> newest = new AtomicReference<>();
         AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
 
         helper.startSequence()
                 .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
                 .thenExecute(() -> {
-                    attachCarrierAction(helper, runtime, player, first);
-                    attachCarrierAction(helper, runtime, player, second);
-                    helper.assertEntitiesPresent(EntityType.TNT, 2);
+                    cage(helper, tnt);
+                    for (int index = 0; index < 20; index++) {
+                        newest.set(attachCarrierAction(
+                                helper, runtime, player, tnt));
+                    }
+                    helper.assertEntitiesPresent(EntityType.TNT, 20);
+                    newest.get().setFuse(1);
+                })
+                .thenWaitUntil(() -> {
+                    helper.assertTrue(newest.get().isRemoved(),
+                            "Newest TNT root has not completed");
+                    helper.assertEntitiesPresent(EntityType.TNT, 19);
+                })
+                .thenExecute(() -> {
                     runtime.startLiveAction(player, LiveActionJournal.Direction.UNDO,
                             operation -> terminal.set(operation.terminalState()));
                 })
@@ -91,9 +102,8 @@ public final class LumiTntGameTests {
                 .thenExecute(() -> {
                     helper.assertValueEqual(MutationTerminalState.SUCCEEDED, terminal.get(),
                             "Undo must join every active TNT root before cancellation");
-                    helper.assertBlockState(first, Blocks.TNT.defaultBlockState());
-                    helper.assertBlockState(second, Blocks.TNT.defaultBlockState());
                     assertNoActiveEntities(helper, EntityType.TNT);
+                    helper.assertBlockState(tnt, Blocks.TNT.defaultBlockState());
                 })
                 .thenExecute(() -> LumiGameTestLease.release(test))
                 .thenSucceed();
@@ -563,7 +573,7 @@ public final class LumiTntGameTests {
         }
     }
 
-    private static void attachCarrierAction(
+    private static PrimedTnt attachCarrierAction(
             GameTestHelper helper,
             FabricDimensionRuntime runtime,
             UUID player,
@@ -584,7 +594,15 @@ public final class LumiTntGameTests {
         if (!helper.getLevel().addFreshEntity(carrier)) {
             throw helper.assertionException("Detached TNT carrier was rejected");
         }
+        try (var ignored = DirectLiveActionContext.resume(
+                runtime.liveActions(), action)) {
+            runtime.liveEntities().added(carrier);
+        } catch (IOException failed) {
+            throw helper.assertionException(
+                    "Detached TNT carrier could not be captured: " + failed);
+        }
         runtime.causalTicks().rememberAppliedCarrier(action, carrier);
+        return carrier;
     }
 
     private static void cage(GameTestHelper helper, BlockPos center) {

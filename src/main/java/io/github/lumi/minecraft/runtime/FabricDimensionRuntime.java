@@ -847,8 +847,15 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             return createCheckpointAction(selected.orElseThrow());
         }
         if (direction == LiveActionJournal.Direction.UNDO && selected.isPresent()) {
-            causalTicks.joinActiveTntRoots(
-                    selected.orElseThrow().actionIds());
+            int activeTntRoots = causalTicks.joinActiveTntRoots(
+                    selected.orElseThrow().actionId());
+            if (activeTntRoots > 0) {
+                int joinedActions = liveActions.prepareUndo(player)
+                        .map(plan -> plan.actionIds().size()).orElse(0);
+                LumiMod.LOGGER.info(
+                        "Lumi frozen Undo joined {} active TNT roots into {} actions",
+                        activeTntRoots, joinedActions);
+            }
         }
         return new LiveActionOperation(
                 liveActions, player, direction, liveWorld,

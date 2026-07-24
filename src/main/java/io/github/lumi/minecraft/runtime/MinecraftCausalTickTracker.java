@@ -6,7 +6,6 @@ import io.github.lumi.minecraft.world.OwnedTickAccess;
 import io.github.lumi.minecraft.world.OwnedBlockEventAccess;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -144,16 +143,12 @@ public final class MinecraftCausalTickTracker {
         }
     }
 
-    /** Rejoins any still-active TNT roots selected by a frozen Undo. */
-    public void joinActiveTntRoots(List<java.util.UUID> selectedActions) {
+    /** Joins a frozen Undo selection to all still-active TNT roots. */
+    public int joinActiveTntRoots(java.util.UUID selectedAction) {
         Set<DirectLiveActionContext.CausalRoot> active =
                 entityCarriers.owners(entity -> entity instanceof PrimedTnt);
-        Set<java.util.UUID> selected = Set.copyOf(Objects.requireNonNull(
-                selectedActions, "selectedActions"));
-        active.stream().map(DirectLiveActionContext.CausalRoot::action)
-                .filter(selected::contains)
-                .findFirst()
-                .ifPresent(action -> joinTntWave(action, active));
+        return joinTntWave(Objects.requireNonNull(
+                selectedAction, "selectedAction"), active);
     }
 
     public boolean cancellationMayChangeBlocks(java.util.UUID action) {
@@ -224,16 +219,19 @@ public final class MinecraftCausalTickTracker {
         depthLimitLogged.clear();
     }
 
-    private void joinTntWave(
+    private int joinTntWave(
             java.util.UUID action,
             Set<DirectLiveActionContext.CausalRoot> active) {
         Optional<java.util.UUID> actor = journal.owner(action);
         if (actor.isEmpty()) {
-            return;
+            return 0;
         }
-        active.stream().map(DirectLiveActionContext.CausalRoot::action).distinct()
+        Set<java.util.UUID> matching = active.stream()
+                .map(DirectLiveActionContext.CausalRoot::action)
                 .filter(other -> journal.owner(other).equals(actor))
-                .forEach(other -> journal.mergeGroups(other, action));
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        matching.forEach(other -> journal.mergeGroups(other, action));
+        return matching.size();
     }
 
     private Optional<CausalExecution> resume(TickKey key) {
