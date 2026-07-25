@@ -21,10 +21,14 @@ class DirectActionMixinScopeTest {
     }
 
     @Test
-    void entityInteractionAlwaysFinishesCaptureAndScope() throws Exception {
+    void entityInteractionWaitsForServerThreadAndAlwaysFinishesCaptureAndScope()
+            throws Exception {
         String source = source("ServerGamePacketListenerImplMixin.java");
 
         assertTrue(source.contains("@WrapMethod(method = \"handleInteract\")"));
+        assertTrue(source.contains("if (!player.level().getServer().isSameThread())"));
+        assertTrue(source.indexOf("isSameThread()")
+                < source.indexOf("DirectLiveActionContext.open("));
         assertTrue(source.contains("try (var ignored = DirectLiveActionContext.open("));
         assertTrue(source.contains("finally {"));
         assertTrue(source.contains("lumi$finishCapture("));

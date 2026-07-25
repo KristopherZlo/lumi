@@ -22,6 +22,10 @@ abstract class ServerGamePacketListenerImplMixin {
     @WrapMethod(method = "handleInteract")
     private void lumi$trackEntityInteraction(
             ServerboundInteractPacket packet, Operation<Void> original) {
+        if (!player.level().getServer().isSameThread()) {
+            original.call(packet);
+            return;
+        }
         var runtime = LumiMod.serverRuntime().find(player.level()).orElse(null);
         if (runtime == null) {
             original.call(packet);
