@@ -19,14 +19,13 @@ import net.minecraft.util.FormattedCharSequence;
 final class LumiStarWarsCrawl {
     private static final long INTRO_MILLIS = 3_200L;
     private static final float PIXELS_PER_MILLI = 0.025F;
-    private static final float PERSPECTIVE = 0.9F;
-    private static final float MIN_SCALE = 0.22F;
-    private static final int LINE_STRIDE = 14;
     private static final DateTimeFormatter DATE =
             DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
                     .withLocale(Locale.getDefault())
                     .withZone(ZoneId.systemDefault());
     private final List<Star> stars = stars();
+    private final LumiPerspectiveTextLayer textLayer =
+            new LumiPerspectiveTextLayer();
     private List<HistorySnapshotPayload.Version> source = List.of();
     private List<FormattedCharSequence> lines = List.of();
     private String worldName = "";
@@ -111,40 +110,21 @@ final class LumiStarWarsCrawl {
     private void renderCrawl(
             GuiGraphics graphics, Font font,
             int x, int y, int width, int height, long elapsed) {
-        float bottom = y + height + 18.0F;
-        float firstY = bottom - elapsed * PIXELS_PER_MILLI;
-        float maximumDistance = height * (1.0F / MIN_SCALE - 1.0F)
-                / PERSPECTIVE;
-        int first = Math.max(0, (int) Math.ceil(
-                (bottom - firstY - maximumDistance) / LINE_STRIDE));
-        int last = Math.min(lines.size(), (int) Math.floor(
-                (bottom - firstY) / LINE_STRIDE) + 1);
-        for (int index = first; index < last; index++) {
-            float distance = bottom - (firstY + index * LINE_STRIDE);
-            float scale = projectionScale(distance, height);
-            float lineY = bottom - distance * scale;
-            int brightness = 90 + Math.round(scale * 165.0F);
-            int color = 0xff000000 | brightness << 16
-                    | Math.round(brightness * 0.84F) << 8;
-            graphics.pose().pushMatrix();
-            graphics.pose().translate(x + width / 2.0F, lineY);
-            graphics.pose().scale(scale, scale);
-            graphics.drawCenteredString(font, lines.get(index), 0, 0, color);
-            graphics.pose().popMatrix();
-        }
-    }
-
-    static float projectionScale(float distance, int height) {
-        float plane = Math.max(1, height);
-        return plane / (plane + Math.max(0.0F, distance) * PERSPECTIVE);
+        textLayer.render(
+                graphics, font, lines, x, y, width, height,
+                elapsed * PIXELS_PER_MILLI);
+        graphics.nextStratum();
+        graphics.fillGradient(
+                x, y, x + width, y + Math.min(44, height),
+                0xff000000, 0x00000000);
     }
 
     private void renderStars(
             GuiGraphics graphics,
             int x, int y, int width, int height, long nowMillis) {
         for (Star star : stars) {
-            int brightness = 120 + Math.round(
-                    (float) Math.sin(nowMillis / 500.0F + star.phase) * 45.0F);
+            float pulse = starPulse(nowMillis, star.phase, star.speed);
+            int brightness = 70 + Math.round(pulse * pulse * 185.0F);
             int color = 0xff000000
                     | brightness << 16 | brightness << 8 | brightness;
             int starX = x + Math.round(star.x * Math.max(0, width - 1));
@@ -152,7 +132,18 @@ final class LumiStarWarsCrawl {
             graphics.fill(
                     starX, starY,
                     starX + star.size, starY + star.size, color);
+            if (star.size == 2 && pulse > 0.88F) {
+                int ray = brightness * 3 / 5;
+                int rayColor = 0xff000000 | ray << 16 | ray << 8 | ray;
+                graphics.fill(starX - 1, starY, starX + 3, starY + 1, rayColor);
+                graphics.fill(starX, starY - 1, starX + 1, starY + 3, rayColor);
+            }
         }
+    }
+
+    static float starPulse(long nowMillis, float phase, float speed) {
+        return 0.5F + 0.5F * (float) Math.sin(
+                nowMillis * speed + phase);
     }
 
     private void append(
@@ -178,10 +169,12 @@ final class LumiStarWarsCrawl {
             result.add(new Star(
                     random.nextFloat(), random.nextFloat(),
                     random.nextFloat() * (float) Math.PI * 2.0F,
+                    0.0012F + random.nextFloat() * 0.0031F,
                     index % 13 == 0 ? 2 : 1));
         }
         return List.copyOf(result);
     }
 
-    private record Star(float x, float y, float phase, int size) { }
+    private record Star(
+            float x, float y, float phase, float speed, int size) { }
 }

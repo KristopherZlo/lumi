@@ -31,6 +31,7 @@
     "TransientCarrierEntityMixin"
   ],
   "client": [
+    "client.GuiGraphicsAccessor",
     "client.MouseHandlerMixin"
   ],
   "injectors": {

@@ -29,15 +29,25 @@ class LumiStarWarsCrawlTest {
     }
 
     @Test
-    void crawlCompressesLineSpacingTowardTheHorizon() {
-        float nearGap = 14.0F
-                * LumiStarWarsCrawl.projectionScale(14.0F, 180);
-        float farGap = 154.0F
-                * LumiStarWarsCrawl.projectionScale(154.0F, 180)
-                - 140.0F
-                * LumiStarWarsCrawl.projectionScale(140.0F, 180);
+    void crawlWarpsGlyphCornersAsOnePerspectivePlane() {
+        var nearLeft = LumiPerspectiveTextLayer.project(
+                20.0F, 170.0F, 100.0F, 180.0F, 180);
+        var farLeft = LumiPerspectiveTextLayer.project(
+                20.0F, 40.0F, 100.0F, 180.0F, 180);
+        var farRight = LumiPerspectiveTextLayer.project(
+                180.0F, 40.0F, 100.0F, 180.0F, 180);
 
-        assertTrue(nearGap > farGap);
+        assertTrue(farLeft.x() > nearLeft.x());
+        assertEquals(100.0F, (farLeft.x() + farRight.x()) / 2.0F);
+        assertTrue(farLeft.y() < nearLeft.y());
+    }
+
+    @Test
+    void starsTwinkleAtIndependentTimes() {
+        float first = LumiStarWarsCrawl.starPulse(0L, 0.0F, 0.002F);
+        float later = LumiStarWarsCrawl.starPulse(300L, 0.0F, 0.002F);
+
+        assertTrue(first != later);
     }
 
     @Test
