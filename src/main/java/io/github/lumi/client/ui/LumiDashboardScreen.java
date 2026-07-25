@@ -23,6 +23,7 @@ import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /** Project-window presentation backed by the immutable V2 history snapshot. */
@@ -62,6 +63,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private final HistoryViewController historyView =
             new HistoryViewController(new HistoryScope.Workspace());
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
+    private final LumiSnowfall snowfall = new LumiSnowfall();
     private HistorySnapshotPayload snapshot;
     private LumiPageLayout layout;
     private EditBox search;
@@ -462,6 +464,14 @@ public final class LumiDashboardScreen extends LumiPageScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        boolean upsideDown = upsideDownSearch(searchQuery);
+        graphics.pose().pushMatrix();
+        if (upsideDown) {
+            graphics.pose().translate(0.0F, graphics.guiHeight());
+            graphics.pose().scale(1.0F, -1.0F);
+            mouseY = graphics.guiHeight() - mouseY;
+        }
+        try {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
         if (snapshot == null) {
@@ -480,9 +490,63 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         if (graphView != null) {
             graphView.renderHover(graphics, font, render.mouseX(), render.mouseY());
         }
+        snowfall.render(
+                graphics, lumiSaveHovered(render.mouseX(), render.mouseY()),
+                width, height, System.currentTimeMillis());
         } finally {
             endScaledRender(graphics);
         }
+        } finally {
+            graphics.pose().popMatrix();
+        }
+    }
+
+    private boolean lumiSaveHovered(int mouseX, int mouseY) {
+        if (snapshot == null) return false;
+        if (graphView != null) {
+            return graphView.nodeAt(mouseX, mouseY)
+                    .map(HistoryGraphLayout.Node::version)
+                    .map(VersionText::name)
+                    .filter("Lumi"::equals)
+                    .isPresent();
+        }
+        if (dashboardGeometry.latestVisible()) {
+            var latest = latestCreated().orElse(null);
+            if (latest != null && "Lumi".equals(VersionText.name(latest))
+                    && contains(
+                            versionCardLayout(
+                                    layout.bodyX(), layout.bodyWidth(),
+                                    latestCardY(dashboardGeometry)),
+                            mouseX, mouseY)) {
+                return true;
+            }
+        }
+        List<HistorySnapshotPayload.Version> versions = visibleVersions();
+        int rows = visibleHistoryRows(
+                historyHeight, versions.size(), layout.bodyWidth());
+        List<HistorySnapshotPayload.Version> visible = versions.stream()
+                .skip(historyScroll).limit(rows).toList();
+        for (int index = 0; index < visible.size(); index++) {
+            if ("Lumi".equals(VersionText.name(visible.get(index)))
+                    && contains(versionCardLayout(
+                            layout.bodyX(), layout.bodyWidth(),
+                            historyY + HISTORY_FIRST_ROW_OFFSET
+                                    + index * historyRowStride(layout.bodyWidth())),
+                            mouseX, mouseY)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean contains(
+            LumiCommitCard.Layout card, int mouseX, int mouseY) {
+        return mouseX >= card.x() && mouseX < card.right()
+                && mouseY >= card.y() && mouseY < card.bottom();
+    }
+
+    static boolean upsideDownSearch(String query) {
+        return "Dinnerbone".equals(query) || "Grumm".equals(query);
     }
 
     private void drawWorkspace(GuiGraphics graphics) {
@@ -580,6 +644,9 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     public boolean mouseScrolled(
             double mouseX, double mouseY,
             double horizontalAmount, double verticalAmount) {
+        if (upsideDownSearch(searchQuery)) {
+            mouseY = minecraft.getWindow().getGuiScaledHeight() - mouseY;
+        }
         double x = virtualCoordinate(mouseX);
         double y = virtualCoordinate(mouseY);
         if (layout != null && snapshot != null
@@ -602,6 +669,36 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         }
         return super.mouseScrolled(
                 mouseX, mouseY, horizontalAmount, verticalAmount);
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+        return super.mouseClicked(flipIfUpsideDown(click), doubled);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent click) {
+        return super.mouseReleased(flipIfUpsideDown(click));
+    }
+
+    @Override
+    public boolean mouseDragged(
+            MouseButtonEvent click, double deltaX, double deltaY) {
+        boolean upsideDown = upsideDownSearch(searchQuery);
+        return super.mouseDragged(
+                upsideDown ? flip(click) : click,
+                deltaX, upsideDown ? -deltaY : deltaY);
+    }
+
+    private MouseButtonEvent flipIfUpsideDown(MouseButtonEvent click) {
+        return upsideDownSearch(searchQuery) ? flip(click) : click;
+    }
+
+    private MouseButtonEvent flip(MouseButtonEvent click) {
+        return new MouseButtonEvent(
+                click.x(),
+                minecraft.getWindow().getGuiScaledHeight() - click.y(),
+                click.buttonInfo());
     }
 
     private static void drawPanel(GuiGraphics graphics, int x, int y, int width, int height) {
