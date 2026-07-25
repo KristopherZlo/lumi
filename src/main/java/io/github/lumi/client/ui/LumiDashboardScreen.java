@@ -64,6 +64,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             new HistoryViewController(new HistoryScope.Workspace());
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
     private final LumiSnowfall snowfall = new LumiSnowfall();
+    private final LumiStarWarsCrawl starWars = new LumiStarWarsCrawl();
     private HistorySnapshotPayload snapshot;
     private LumiPageLayout layout;
     private EditBox search;
@@ -155,6 +156,9 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     @Override
     public void tick() {
         super.tick();
+        if (starWarsSearch(searchQuery) && pagedHistory != null) {
+            pagedHistory.loadNextPage();
+        }
         HistorySnapshotPayload latest = history.state().snapshot().orElse(null);
         HistoryPagePayload latestPage = pagedHistory == null
                 ? null : pagedHistory.page().orElse(null);
@@ -230,7 +234,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                     snapshot, historyPages, requestPage);
         }
         pagedHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS);
-        pagedHistory.search(searchQuery);
+        pagedHistory.search(starWarsSearch(searchQuery) ? "" : searchQuery);
         renderedPage = pagedHistory.page().orElse(null);
         if (dashboardGeometry.latestVisible()) {
             latestCreated().ifPresent(version -> addVersionActions(
@@ -271,6 +275,11 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             search.setFocused(true);
             search.moveCursorToEnd(false);
             refocusSearch = false;
+        }
+        if (starWarsSearch(searchQuery)) {
+            starWars.startIfNeeded(System.currentTimeMillis());
+            graphView = null;
+            return;
         }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
         int capacity = visibleHistoryRows(
@@ -378,10 +387,17 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         if (searchQuery.equals(value)) {
             return;
         }
+        boolean wasStarWars = starWarsSearch(searchQuery);
         searchQuery = value;
-        if (pagedHistory != null) {
-            pagedHistory.search(value);
+        boolean isStarWars = starWarsSearch(value);
+        if (isStarWars && !wasStarWars) {
+            starWars.start(System.currentTimeMillis());
         }
+        if (pagedHistory != null) {
+            pagedHistory.search(isStarWars ? "" : value);
+            if (isStarWars) pagedHistory.loadNextPage();
+        }
+        if (wasStarWars != isStarWars) refreshSearchEasterEgg();
     }
 
     private void addBranchDropdown() {
@@ -392,6 +408,10 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 historyY + historyHeight - y - CONTROL_HEIGHT,
                 snapshot.branches(), pagedHistory.branch().value(),
                 this::selectHistoryBranch));
+    }
+
+    private void refreshSearchEasterEgg() {
+        rebuildWidgets();
     }
 
     private void selectHistoryBranch(String branch) {
@@ -549,6 +569,18 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         return "Dinnerbone".equals(query) || "Grumm".equals(query);
     }
 
+    static boolean starWarsSearch(String query) {
+        return "star wars".equalsIgnoreCase(query)
+                || "starwars".equalsIgnoreCase(query);
+    }
+
+    private String worldName() {
+        var server = minecraft.getSingleplayerServer();
+        return server == null
+                ? snapshot.workspaceName()
+                : server.getWorldData().getLevelName();
+    }
+
     private void drawWorkspace(GuiGraphics graphics) {
         int x = layout.bodyX();
         int width = layout.bodyWidth();
@@ -596,6 +628,22 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         }
         if (search != null) {
             renderTextField(graphics, search);
+        }
+        if (starWarsSearch(searchQuery)) {
+            List<HistorySnapshotPayload.Version> storyVersions =
+                    pagedHistory == null ? snapshot.versions() : pagedHistory.versions();
+            starWars.update(
+                    font, worldName(),
+                    minecraft.player == null
+                            ? "Builder" : minecraft.player.getName().getString(),
+                    storyVersions, width);
+            starWars.render(
+                    graphics, font,
+                    x + 1, historyY + HISTORY_FIRST_ROW_OFFSET - 5,
+                    width - 2,
+                    Math.max(0, historyHeight - HISTORY_FIRST_ROW_OFFSET + 4),
+                    System.currentTimeMillis());
+            return;
         }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
         if (graphView != null) {

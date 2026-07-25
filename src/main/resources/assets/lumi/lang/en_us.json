@@ -1132,5 +1132,11 @@
   "luma.recovery.delete_confirm_help": "This cannot be restored later.",
   "luma.recovery.delete_confirm_warning": "Recovered work will be permanently removed.",
   "luma.recovery.details_title": "More",
-  "luma.recovery.details_help": "Technical recovery details stay here."
+  "luma.recovery.details_help": "Technical recovery details stay here.",
+  "luma.easter.star_wars.intro": "A long time ago in a galaxy far, far away....",
+  "luma.easter.star_wars.opening": "Everything began with the creation of the world \"%1$s\", where the bold, tireless, endlessly curious builder %2$s discovered the quiet Initial save that marked the beginning of a vast, mysterious, and remarkably eventful chronicle.",
+  "luma.easter.star_wars.save.0": "Then, on %2$s, the steadfast, inspired, and unusually farsighted builder %3$s created the celebrated Save \"%1$s\", carefully preserving another fragile and irreplaceable moment of the ever-expanding world.",
+  "luma.easter.star_wars.save.1": "After many daring, intricate, and almost certainly exhausting adventures, %3$s reached %2$s and entrusted the ambitious, memorable, and magnificently named Save \"%1$s\" to Lumi's patient memory.",
+  "luma.easter.star_wars.save.2": "Yet history refused to stand still. On %2$s, the resourceful, determined, and gloriously persistent %3$s forged the formidable Save \"%1$s\", ensuring that its countless blocks would not be lost to the relentless passage of time.",
+  "luma.easter.star_wars.save.3": "And so, amid increasingly dramatic, astonishing, and unnecessarily adjective-filled circumstances, %3$s recorded \"%1$s\" on %2$s, adding another luminous chapter to a history already overflowing with improbable construction."
 }
