@@ -21,6 +21,7 @@ class ClientZoneOverlayStoreTest {
         ClientZoneOverlayStore store = new ClientZoneOverlayStore();
         store.begin(REQUEST, "minecraft:overworld", WORKSPACE);
 
+        assertTrue(store.loading("minecraft:overworld", WORKSPACE));
         assertTrue(store.accept(payload(0, false, List.of(face(0)))));
         assertTrue(store.snapshot().isEmpty());
         assertTrue(store.accept(payload(1, true, List.of(face(16)))));
@@ -28,6 +29,58 @@ class ClientZoneOverlayStoreTest {
         var snapshot = store.snapshot().orElseThrow();
         assertEquals(2, snapshot.zones().getFirst().faces().size());
         assertEquals("", snapshot.error());
+        assertFalse(store.loading("minecraft:overworld", WORKSPACE));
+    }
+
+    @Test
+    void retainsTheReadyShellWhileItsReplacementLoads() {
+        ClientZoneOverlayStore store = new ClientZoneOverlayStore();
+        store.begin(REQUEST, "minecraft:overworld", WORKSPACE);
+        assertTrue(store.accept(payload(0, true, List.of(face(0)))));
+        var ready = store.snapshot().orElseThrow();
+
+        UUID replacement = new UUID(0, 4);
+        store.begin(replacement, "minecraft:overworld", WORKSPACE);
+
+        assertEquals(ready, store.snapshot().orElseThrow());
+        assertTrue(store.loading("minecraft:overworld", WORKSPACE));
+        assertTrue(store.accept(payload(
+                replacement, 0, true, List.of(face(16)))));
+        assertEquals(
+                16,
+                store.snapshot().orElseThrow()
+                        .zones().getFirst().faces().getFirst().plane());
+    }
+
+    @Test
+    void clearsAReadyShellWhenTheRequestScopeChanges() {
+        ClientZoneOverlayStore store = new ClientZoneOverlayStore();
+        store.begin(REQUEST, "minecraft:overworld", WORKSPACE);
+        assertTrue(store.accept(payload(0, true, List.of(face(0)))));
+
+        UUID otherWorkspace = new UUID(0, 5);
+        store.begin(
+                new UUID(0, 6), "minecraft:the_nether", otherWorkspace);
+
+        assertTrue(store.snapshot().isEmpty());
+        assertFalse(store.loading("minecraft:overworld", WORKSPACE));
+    }
+
+    @Test
+    void keepsTheReadyShellWhenARefreshFails() {
+        ClientZoneOverlayStore store = new ClientZoneOverlayStore();
+        store.begin(REQUEST, "minecraft:overworld", WORKSPACE);
+        assertTrue(store.accept(payload(0, true, List.of(face(0)))));
+        var ready = store.snapshot().orElseThrow();
+
+        UUID replacement = new UUID(0, 7);
+        store.begin(replacement, "minecraft:overworld", WORKSPACE);
+        assertTrue(store.accept(new ZoneOverlayPayload(
+                replacement, "minecraft:overworld", WORKSPACE,
+                0, true, Optional.empty(), "failed")));
+
+        assertEquals(ready, store.snapshot().orElseThrow());
+        assertFalse(store.loading("minecraft:overworld", WORKSPACE));
     }
 
     @Test
@@ -44,8 +97,16 @@ class ClientZoneOverlayStoreTest {
 
     private static ZoneOverlayPayload payload(
             int index, boolean complete, List<ZoneShellFace> faces) {
+        return payload(REQUEST, index, complete, faces);
+    }
+
+    private static ZoneOverlayPayload payload(
+            UUID request,
+            int index,
+            boolean complete,
+            List<ZoneShellFace> faces) {
         return new ZoneOverlayPayload(
-                REQUEST, "minecraft:overworld", WORKSPACE,
+                request, "minecraft:overworld", WORKSPACE,
                 index, complete,
                 Optional.of(new ZoneOverlayPayload.ZoneBatch(
                         ZONE, "Gate", 0xff336699, 4, true, false, faces)),

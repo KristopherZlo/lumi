@@ -17,6 +17,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /** Requests and renders bounded zone shells in the world. */
 public final class LumiZoneOverlay {
@@ -27,6 +28,8 @@ public final class LumiZoneOverlay {
     private Mode mode = Mode.FOCUSED;
     private RequestKey lastRequest;
     private UUID lastEntered;
+    private ClientZoneOverlayStore.Snapshot renderedSnapshot;
+    private List<RenderZone> renderedZones = List.of();
 
     public LumiZoneOverlay(
             ClientZoneOverlayStore overlays,
@@ -81,7 +84,9 @@ public final class LumiZoneOverlay {
                         .map(zone -> new ZoneRevision(
                                 zone.id(), zone.revision()))
                         .toList());
-        if (!key.equals(lastRequest)) {
+        if (!key.equals(lastRequest)
+                && !overlays.loading(
+                        snapshot.dimensionId(), snapshot.workspaceId())) {
             request.accept(mode == Mode.ALL
                     ? ZoneOverlayArgument.Mode.ALL
                     : ZoneOverlayArgument.Mode.FOCUSED);
@@ -115,45 +120,77 @@ public final class LumiZoneOverlay {
         if (snapshot == null || !snapshot.error().isEmpty()) {
             return;
         }
+        List<RenderZone> zones = renderZones(snapshot);
         var camera = context.worldState().cameraRenderState.pos;
         var fills = context.consumers().getBuffer(
                 LumiCompareRenderTypes.fill(false));
-        for (var zone : snapshot.zones()) {
+        for (var zone : zones) {
             int color = renderColor(
-                    zone.color(), mode, zone.active(), zone.entered());
-            int alpha = mode == Mode.FOCUSED || zone.active()
-                    ? 38 : zone.entered() ? 30 : 18;
-            for (ZoneShellFace face : zone.faces()) {
-                AABB box = box(face).move(
-                        -camera.x, -camera.y, -camera.z);
+                    zone.source().color(), mode,
+                    zone.source().active(), zone.source().entered());
+            int alpha = mode == Mode.FOCUSED || zone.source().active()
+                    ? 38 : zone.source().entered() ? 30 : 18;
+            for (RenderFace face : zone.faces()) {
+                AABB box = face.bounds();
                 LumiCompareOverlayRenderer.renderFace(
                         context.matrices(), fills,
-                        (float) box.minX, (float) box.minY, (float) box.minZ,
-                        (float) box.maxX, (float) box.maxY, (float) box.maxZ,
-                        Direction.valueOf(face.side().name()),
+                        (float) (box.minX - camera.x),
+                        (float) (box.minY - camera.y),
+                        (float) (box.minZ - camera.z),
+                        (float) (box.maxX - camera.x),
+                        (float) (box.maxY - camera.y),
+                        (float) (box.maxZ - camera.z),
+                        face.side(),
                         color >> 16 & 255, color >> 8 & 255, color & 255,
                         alpha);
             }
         }
         var lines = context.consumers().getBuffer(
                 LumiCompareRenderTypes.outline(false));
-        for (var zone : snapshot.zones()) {
+        for (var zone : zones) {
             int color = renderColor(
-                    zone.color(), mode, zone.active(), zone.entered());
+                    zone.source().color(), mode,
+                    zone.source().active(), zone.source().entered());
             float width = mode == Mode.FOCUSED
-                    ? 3.0F : zone.active() ? 2.75F
-                    : zone.entered() ? 2.25F : 1.25F;
-            for (ZoneShellFace face : zone.faces()) {
-                AABB box = box(face).move(
-                        -camera.x, -camera.y, -camera.z);
+                    ? 3.0F : zone.source().active() ? 2.75F
+                    : zone.source().entered() ? 2.25F : 1.25F;
+            for (RenderFace face : zone.faces()) {
+                AABB box = face.bounds();
                 ShapeRenderer.renderShape(
                         context.matrices(), lines,
-                        Shapes.create(new AABB(
-                                0, 0, 0,
-                                box.getXsize(), box.getYsize(), box.getZsize())),
-                        box.minX, box.minY, box.minZ, color, width);
+                        face.outline(),
+                        box.minX - camera.x,
+                        box.minY - camera.y,
+                        box.minZ - camera.z,
+                        color, width);
             }
         }
+    }
+
+    private List<RenderZone> renderZones(
+            ClientZoneOverlayStore.Snapshot snapshot) {
+        if (renderedSnapshot != snapshot) {
+            renderedSnapshot = snapshot;
+            renderedZones = snapshot.zones().stream()
+                    .map(zone -> new RenderZone(
+                            zone, zone.faces().stream()
+                                    .map(LumiZoneOverlay::renderFace)
+                                    .toList()))
+                    .toList();
+        }
+        return renderedZones;
+    }
+
+    private static RenderFace renderFace(ZoneShellFace face) {
+        AABB bounds = box(face);
+        return new RenderFace(
+                Direction.valueOf(face.side().name()),
+                bounds,
+                Shapes.create(new AABB(
+                        0, 0, 0,
+                        bounds.getXsize(),
+                        bounds.getYsize(),
+                        bounds.getZsize())));
     }
 
     static AABB box(ZoneShellFace face) {
@@ -203,6 +240,13 @@ public final class LumiZoneOverlay {
     }
 
     private record ZoneRevision(UUID id, long revision) { }
+
+    private record RenderZone(
+            ClientZoneOverlayStore.ZoneView source,
+            List<RenderFace> faces) { }
+
+    private record RenderFace(
+            Direction side, AABB bounds, VoxelShape outline) { }
 
     private record RequestKey(
             String dimension,

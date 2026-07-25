@@ -21,8 +21,20 @@ public final class ClientZoneOverlayStore {
             UUID requestId, String dimensionId, UUID workspaceId) {
         pending = new Pending(requestId, dimensionId, workspaceId);
         assembling.clear();
-        published = null;
+        if (published != null
+                && (!published.dimensionId().equals(dimensionId)
+                || !published.workspaceId().equals(workspaceId))) {
+            published = null;
+        }
         nextBatch = 0;
+    }
+
+    public synchronized boolean loading(
+            String dimensionId, UUID workspaceId) {
+        Objects.requireNonNull(dimensionId, "dimensionId");
+        Objects.requireNonNull(workspaceId, "workspaceId");
+        return pending != null
+                && pending.matches(dimensionId, workspaceId);
     }
 
     public synchronized boolean accept(ZoneOverlayPayload payload) {
@@ -34,13 +46,19 @@ public final class ClientZoneOverlayStore {
         nextBatch++;
         payload.zone().ifPresent(this::append);
         if (payload.complete()) {
-            List<ZoneView> zones = payload.error().isEmpty()
-                    ? assembling.values().stream()
-                            .map(MutableZone::freeze).toList()
-                    : List.of();
-            published = new Snapshot(
-                    payload.dimensionId(), payload.workspaceId(),
-                    zones, payload.error());
+            if (payload.error().isEmpty()) {
+                published = new Snapshot(
+                        payload.dimensionId(), payload.workspaceId(),
+                        assembling.values().stream()
+                                .map(MutableZone::freeze).toList(),
+                        "");
+            } else if (published == null) {
+                published = new Snapshot(
+                        payload.dimensionId(), payload.workspaceId(),
+                        List.of(), payload.error());
+            }
+            pending = null;
+            assembling.clear();
         }
         return true;
     }
@@ -90,10 +108,15 @@ public final class ClientZoneOverlayStore {
 
     private record Pending(
             UUID requestId, String dimensionId, UUID workspaceId) {
+        private boolean matches(String dimensionId, UUID workspaceId) {
+            return this.dimensionId.equals(dimensionId)
+                    && this.workspaceId.equals(workspaceId);
+        }
+
         private boolean matches(ZoneOverlayPayload payload) {
             return requestId.equals(payload.requestId())
-                    && dimensionId.equals(payload.dimensionId())
-                    && workspaceId.equals(payload.workspaceId());
+                    && matches(
+                            payload.dimensionId(), payload.workspaceId());
         }
     }
 
