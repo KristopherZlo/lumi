@@ -150,4 +150,5 @@ Development references:
 
 ## License
 
-GPL-3.0-only. See [LICENSE](LICENSE).
+GPL-3.0-only. See [LICENSE](LICENSE). Bundled third-party assets retain their
+own terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -26,6 +26,7 @@ final class LumiStarWarsCrawl {
     private final List<Star> stars = stars();
     private final LumiPerspectiveTextLayer textLayer =
             new LumiPerspectiveTextLayer();
+    private final LumiNbsPlayer music = new LumiNbsPlayer();
     private List<HistorySnapshotPayload.Version> source = List.of();
     private List<FormattedCharSequence> lines = List.of();
     private String worldName = "";
@@ -35,6 +36,7 @@ final class LumiStarWarsCrawl {
 
     void start(long nowMillis) {
         startedAt = nowMillis;
+        music.reset();
     }
 
     void startIfNeeded(long nowMillis) {
@@ -110,6 +112,7 @@ final class LumiStarWarsCrawl {
     private void renderCrawl(
             GuiGraphics graphics, Font font,
             int x, int y, int width, int height, long elapsed) {
+        music.advance(net.minecraft.client.Minecraft.getInstance(), elapsed);
         textLayer.render(
                 graphics, font, lines, x, y, width, height,
                 elapsed * PIXELS_PER_MILLI);
