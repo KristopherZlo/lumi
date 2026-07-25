@@ -18,6 +18,7 @@ import io.github.lumi.client.onboarding.ClientOnboardingStateRepository;
 import io.github.lumi.client.onboarding.OnboardingController;
 import io.github.lumi.client.onboarding.OnboardingEvent;
 import io.github.lumi.client.ui.LumiSaveScreen;
+import io.github.lumi.client.ui.LumiFallingPlayerOverlay;
 import io.github.lumi.client.ui.LumiSettingsScreen;
 import io.github.lumi.client.ui.LumiUpdateScreen;
 import io.github.lumi.client.ui.LumiOperationHud;
@@ -103,6 +104,8 @@ public final class LumiClient implements ClientModInitializer {
             new ClientVersionPreviewStore();
     private static final ClientVersionPreviewCapture PREVIEW_CAPTURE =
             new ClientVersionPreviewCapture(PREVIEW_STORE);
+    private static final LumiFallingPlayerOverlay FALLING_PLAYER =
+            new LumiFallingPlayerOverlay();
     private static boolean onboardingShown;
     private static OnboardingController activeOnboarding;
     private static final LumiClientNetworking NETWORKING =
@@ -126,6 +129,7 @@ public final class LumiClient implements ClientModInitializer {
     public void onInitializeClient() {
         NETWORKING.register();
         PREVIEW_CAPTURE.register();
+        FALLING_PLAYER.register();
         LumiHotkeys hotkeys = new LumiHotkeys(new HotkeyActionDispatcher(
                 new HotkeyActionDispatcher.Actions() {
                     @Override public void openDashboard() {
@@ -438,7 +442,8 @@ public final class LumiClient implements ClientModInitializer {
                 NETWORKING::refreshSnapshot, intent, initialMessage,
                 requestId -> PREVIEW_CAPTURE.request(
                         requestId, HISTORY.state().snapshot().orElseThrow()),
-                accepted));
+                accepted, LumiSaveScreen.Scope.BUILD,
+                FALLING_PLAYER::triggerIfPlayerName));
     }
 
     private static void openZoneSave(
@@ -456,7 +461,8 @@ public final class LumiClient implements ClientModInitializer {
                 NETWORKING::refreshSnapshot, intent, initialMessage,
                 requestId -> PREVIEW_CAPTURE.request(
                         requestId, HISTORY.state().snapshot().orElseThrow()),
-                ignored -> { }, LumiSaveScreen.Scope.ZONE));
+                ignored -> { }, LumiSaveScreen.Scope.ZONE,
+                FALLING_PLAYER::triggerIfPlayerName));
     }
 
     private static void openVersionDetails(

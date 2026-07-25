@@ -25,6 +25,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
     private final String initialMessage;
     private final Consumer<UUID> previewCapture;
     private final Consumer<UUID> accepted;
+    private final Consumer<String> savedName;
     private final Scope scope;
     private LumiModalLayout layout;
     private EditBox message;
@@ -76,7 +77,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
             Consumer<UUID> previewCapture,
             Consumer<UUID> accepted) {
         this(parent, history, controller, refresh, preferredIntent,
-                initialMessage, previewCapture, accepted, Scope.BUILD);
+                initialMessage, previewCapture, accepted, Scope.BUILD, ignored -> { });
     }
 
     public LumiSaveScreen(
@@ -89,6 +90,21 @@ public final class LumiSaveScreen extends LumiModalScreen {
             Consumer<UUID> previewCapture,
             Consumer<UUID> accepted,
             Scope scope) {
+        this(parent, history, controller, refresh, preferredIntent,
+                initialMessage, previewCapture, accepted, scope, ignored -> { });
+    }
+
+    public LumiSaveScreen(
+            Screen parent,
+            ClientHistoryStore history,
+            SaveScreenController controller,
+            Runnable refresh,
+            SaveScreenController.Intent preferredIntent,
+            String initialMessage,
+            Consumer<UUID> previewCapture,
+            Consumer<UUID> accepted,
+            Scope scope,
+            Consumer<String> savedName) {
         super(parent, scope.title());
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
@@ -99,6 +115,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
         this.previewCapture = Objects.requireNonNull(previewCapture, "previewCapture");
         this.accepted = Objects.requireNonNull(accepted, "accepted");
         this.scope = Objects.requireNonNull(scope, "scope");
+        this.savedName = Objects.requireNonNull(savedName, "savedName");
     }
 
     @Override
@@ -189,6 +206,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
             UUID requestId = submission.requestId().orElseThrow();
             previewCapture.accept(requestId);
             accepted.accept(requestId);
+            savedName.accept(message.getValue());
             minecraft.setScreen(parent);
         }
     }
@@ -211,8 +229,25 @@ public final class LumiSaveScreen extends LumiModalScreen {
                 graphics, layout.x(), layout.y(), layout.width(), layout.height());
         drawDialog(graphics);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        renderAnswerTooltip(graphics, render.mouseX(), render.mouseY());
         } finally {
             endScaledRender(graphics);
+        }
+    }
+
+    private void renderAnswerTooltip(
+            GuiGraphics graphics, int mouseX, int mouseY) {
+        if (pendingChanges() != 42) return;
+        String text = font.plainSubstrByWidth(
+                status().getString(), layout.width() - 132);
+        int answer = text.indexOf("42");
+        if (answer < 0) return;
+        int x = layout.x() + 12 + font.width(text.substring(0, answer));
+        int y = layout.y() + 43;
+        if (mouseX >= x && mouseX < x + font.width("42")
+                && mouseY >= y && mouseY < y + font.lineHeight) {
+            graphics.setTooltipForNextFrame(
+                    Component.literal("H2G2"), mouseX, mouseY);
         }
     }
 
@@ -280,11 +315,15 @@ public final class LumiSaveScreen extends LumiModalScreen {
             return error.startsWith("luma.")
                     ? Component.translatable(error) : Component.literal(error);
         }
-        int pending = history.state().snapshot()
-                .map(snapshot -> snapshot.pendingKeys()).orElse(0);
+        int pending = pendingChanges();
         return pending == 0
                 ? Component.translatable("luma.dashboard.pending_clean")
                 : Component.translatable("luma.dashboard.workspace_pending", pending);
+    }
+
+    private int pendingChanges() {
+        return history.state().snapshot()
+                .map(snapshot -> snapshot.pendingKeys()).orElse(0);
     }
 
     public enum Scope {
