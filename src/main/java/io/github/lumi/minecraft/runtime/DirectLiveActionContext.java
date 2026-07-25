@@ -19,6 +19,7 @@ public final class DirectLiveActionContext {
         Objects.requireNonNull(player, "player");
         Active active = CURRENT.get();
         if (active == null) {
+            recoverOrphanedAction(journal, player);
             active = new Active(journal, player, journal.begin(player), 0, true);
             CURRENT.set(active);
         } else if (active.journal != journal || active.player == null
@@ -26,6 +27,19 @@ public final class DirectLiveActionContext {
             throw new IllegalStateException("Cannot nest different live action roots on one thread");
         }
         return addScope(active);
+    }
+
+    public static void recoverOrphanedAction(
+            LiveActionJournal journal, UUID player) {
+        Objects.requireNonNull(journal, "journal");
+        Objects.requireNonNull(player, "player");
+        var recovered = journal.recoverOpen(player);
+        recovered.ifPresent(summary -> LumiMod.LOGGER.error(
+                "Lumi recovered orphaned live action {} for player {} before "
+                        + "starting another action: {} blocks, {} entities, {} bytes, "
+                        + "{} delayed references",
+                summary.actionId(), summary.player(), summary.blocks(), summary.entities(),
+                summary.bytes(), summary.delayedReferences()));
     }
 
     public static Scope resume(LiveActionJournal journal, UUID action) {

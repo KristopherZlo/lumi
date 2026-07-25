@@ -1,10 +1,10 @@
 package io.github.lumi.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Optional;
+import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,67 +18,40 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ServerPlayerGameMode.class)
 abstract class ServerPlayerGameModeMixin {
     @Shadow protected ServerLevel level;
     @Shadow @Final protected ServerPlayer player;
-    @Unique private final Deque<Optional<DirectLiveActionContext.Scope>> lumi$scopes =
-            new ArrayDeque<>();
 
-    @Inject(method = "destroyBlock", at = @At("HEAD"))
-    private void lumi$beginDestroy(BlockPos position, CallbackInfoReturnable<Boolean> callback) {
-        lumi$begin();
+    @WrapMethod(method = "destroyBlock")
+    private boolean lumi$trackDestroy(BlockPos position, Operation<Boolean> original) {
+        return lumi$track(() -> original.call(position));
     }
 
-    @Inject(method = "destroyBlock", at = @At("RETURN"))
-    private void lumi$endDestroy(BlockPos position, CallbackInfoReturnable<Boolean> callback) {
-        lumi$end();
-    }
-
-    @Inject(method = "useItem", at = @At("HEAD"))
-    private void lumi$beginUse(
+    @WrapMethod(method = "useItem")
+    private InteractionResult lumi$trackUse(
             ServerPlayer actor, Level world, ItemStack stack, InteractionHand hand,
-            CallbackInfoReturnable<InteractionResult> callback) {
-        lumi$begin();
+            Operation<InteractionResult> original) {
+        return lumi$track(() -> original.call(actor, world, stack, hand));
     }
 
-    @Inject(method = "useItem", at = @At("RETURN"))
-    private void lumi$endUse(
+    @WrapMethod(method = "useItemOn")
+    private InteractionResult lumi$trackUseOn(
             ServerPlayer actor, Level world, ItemStack stack, InteractionHand hand,
-            CallbackInfoReturnable<InteractionResult> callback) {
-        lumi$end();
-    }
-
-    @Inject(method = "useItemOn", at = @At("HEAD"))
-    private void lumi$beginUseOn(
-            ServerPlayer actor, Level world, ItemStack stack, InteractionHand hand,
-            BlockHitResult hit, CallbackInfoReturnable<InteractionResult> callback) {
-        lumi$begin();
-    }
-
-    @Inject(method = "useItemOn", at = @At("RETURN"))
-    private void lumi$endUseOn(
-            ServerPlayer actor, Level world, ItemStack stack, InteractionHand hand,
-            BlockHitResult hit, CallbackInfoReturnable<InteractionResult> callback) {
-        lumi$end();
+            BlockHitResult hit, Operation<InteractionResult> original) {
+        return lumi$track(() -> original.call(actor, world, stack, hand, hit));
     }
 
     @Unique
-    private void lumi$begin() {
-        var runtime = LumiMod.serverRuntime().find(level);
-        lumi$scopes.addLast(runtime.map(value ->
-                DirectLiveActionContext.open(value.liveActions(), player.getUUID())));
-    }
-
-    @Unique
-    private void lumi$end() {
-        if (lumi$scopes.isEmpty()) {
-            throw new IllegalStateException("Missing Lumi direct action scope");
+    private <T> T lumi$track(Supplier<T> original) {
+        var runtime = LumiMod.serverRuntime().find(level).orElse(null);
+        if (runtime == null) {
+            return original.get();
         }
-        lumi$scopes.removeLast().ifPresent(DirectLiveActionContext.Scope::close);
+        try (var ignored = DirectLiveActionContext.open(
+                runtime.liveActions(), player.getUUID())) {
+            return original.get();
+        }
     }
 }

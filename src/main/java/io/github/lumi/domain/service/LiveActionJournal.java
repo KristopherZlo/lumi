@@ -71,6 +71,17 @@ public final class LiveActionJournal {
         return id;
     }
 
+    /** Closes an unfinished root while preserving any recorded changes for Undo. */
+    public synchronized Optional<ActionSummary> recoverOpen(UUID player) {
+        UUID actionId = openActions.get(Objects.requireNonNull(player, "player"));
+        if (actionId == null) {
+            return Optional.empty();
+        }
+        ActionSummary summary = summary(actionId);
+        close(actionId);
+        return Optional.of(summary);
+    }
+
     public synchronized UUID record(
             UUID actionId,
             BlockPosition position,
@@ -139,12 +150,16 @@ public final class LiveActionJournal {
 
     /** Adds one constant-size durable Restore pair to the session stack. */
     public synchronized UUID pushCheckpoint(UUID player, Checkpoint checkpoint) {
+        Objects.requireNonNull(checkpoint, "checkpoint");
         UUID actionId = begin(player);
-        MutableAction action = requireAction(actionId);
-        startRecording(action);
-        action.checkpoint = Objects.requireNonNull(checkpoint, "checkpoint");
-        close(actionId);
-        return actionId;
+        try {
+            MutableAction action = requireAction(actionId);
+            startRecording(action);
+            action.checkpoint = checkpoint;
+            return actionId;
+        } finally {
+            close(actionId);
+        }
     }
 
     /** Joins causally inseparable actions into one session Undo/Redo entry. */

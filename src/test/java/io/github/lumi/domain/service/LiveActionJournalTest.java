@@ -62,6 +62,17 @@ class LiveActionJournalTest {
     }
 
     @Test
+    void invalidCheckpointCannotLeaveAnOpenAction() {
+        LiveActionJournal journal = new LiveActionJournal();
+
+        assertThrows(NullPointerException.class,
+                () -> journal.pushCheckpoint(PLAYER_A, null));
+
+        UUID action = journal.begin(PLAYER_A);
+        assertTrue(!journal.close(action));
+    }
+
+    @Test
     void releasesCheckpointOnlyWhenItLeavesTheSessionHistory() {
         var released = new java.util.ArrayList<LiveActionJournal.Checkpoint>();
         LiveActionJournal journal = new LiveActionJournal(released::add);

@@ -1709,6 +1709,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     QuickRollbackContext value = context.get();
                     if (value != null) {
                         var saved = value.operation().returnPoint().orElseThrow();
+                        DirectLiveActionContext.recoverOrphanedAction(
+                                liveActions, author.id());
                         liveActions.pushCheckpoint(
                                 author.id(), new LiveActionJournal.Checkpoint(
                                         value.expectedRef(), saved.commitId(),
