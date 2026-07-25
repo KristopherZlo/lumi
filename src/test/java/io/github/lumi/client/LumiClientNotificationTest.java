@@ -17,7 +17,12 @@ class LumiClientNotificationTest {
         String notifications = source.substring(start, end);
 
         assertFalse(notifications.contains("message().startsWith(\"luma.\")"));
-        assertTrue(notifications.contains("showFeedback(event.message(), eventColor("));
+        assertTrue(notifications.contains(
+                "showFeedback(event.message(), eventColor(event.state(), event.message()))"));
+        assertTrue(notifications.contains(
+                "\"luma.status.world_operation_busy\".equals(message)"));
+        assertTrue(notifications.contains(
+                "? ChatFormatting.GOLD : eventColor(state)"));
         assertTrue(notifications.contains("case SUCCEEDED -> ChatFormatting.GREEN"));
         assertTrue(notifications.contains("case FAILED -> ChatFormatting.RED"));
         assertTrue(notifications.contains("case CANCELLED -> ChatFormatting.YELLOW"));

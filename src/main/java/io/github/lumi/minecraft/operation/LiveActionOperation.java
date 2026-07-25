@@ -159,6 +159,9 @@ public final class LiveActionOperation implements DimensionMutation {
     private void select() {
         Optional<LiveActionJournal.Plan> selected = selectPlan();
         if (selected.isEmpty()) {
+            failure = new IllegalStateException(direction == LiveActionJournal.Direction.UNDO
+                    ? "luma.status.undo_unavailable"
+                    : "luma.status.redo_unavailable");
             phase = Phase.FAILED;
             return;
         }

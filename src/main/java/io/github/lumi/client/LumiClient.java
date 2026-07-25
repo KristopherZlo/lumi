@@ -288,8 +288,15 @@ public final class LumiClient implements ClientModInitializer {
             acceptOnboardingEvent(new OnboardingEvent.OperationCompleted(
                     event.requestId(),
                     event.state() == OperationEventPayload.State.SUCCEEDED));
-            showFeedback(event.message(), eventColor(event.state()));
+            showFeedback(event.message(), eventColor(event.state(), event.message()));
         }
+    }
+
+    static ChatFormatting eventColor(
+            OperationEventPayload.State state, String message) {
+        return state == OperationEventPayload.State.FAILED
+                && "luma.status.world_operation_busy".equals(message)
+                ? ChatFormatting.GOLD : eventColor(state);
     }
 
     static ChatFormatting eventColor(OperationEventPayload.State state) {

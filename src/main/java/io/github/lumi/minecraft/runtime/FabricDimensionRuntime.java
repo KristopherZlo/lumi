@@ -835,6 +835,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             LiveActionJournal.Direction direction,
             Consumer<DimensionMutation> terminalObserver) {
         requireNoRecovery();
+        if (operations.hasActiveOperation() || operations.queuedCount() > 0) {
+            throw new IllegalStateException("luma.status.world_operation_busy");
+        }
         var operation = new DeferredDimensionMutation(
                 true, () -> createSessionAction(player, direction));
         operations.enqueue(operation, OperationPriority.URGENT, terminalObserver);

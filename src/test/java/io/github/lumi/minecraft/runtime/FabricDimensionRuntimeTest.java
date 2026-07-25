@@ -33,4 +33,19 @@ class FabricDimensionRuntimeTest {
         assertTrue(source.contains("\"TECHNOBLADE NEVER DIES!\""));
         assertTrue(source.contains("ChatFormatting.BOLD"));
     }
+
+    @Test
+    void refusesLiveActionsWhileAnotherWorldOperationIsRunning() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/minecraft/runtime/FabricDimensionRuntime.java"));
+        int start = source.indexOf("public synchronized DimensionMutation startLiveAction(");
+        int end = source.indexOf("private DimensionMutation createSessionAction(", start);
+        String liveAction = source.substring(start, end);
+
+        assertTrue(liveAction.contains("operations.hasActiveOperation()"));
+        assertTrue(liveAction.contains("operations.queuedCount() > 0"));
+        assertTrue(liveAction.contains("\"luma.status.world_operation_busy\""));
+        assertTrue(liveAction.indexOf("world_operation_busy")
+                < liveAction.indexOf("operations.enqueue("));
+    }
 }

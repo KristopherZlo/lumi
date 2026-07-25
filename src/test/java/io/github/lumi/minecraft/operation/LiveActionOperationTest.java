@@ -24,6 +24,23 @@ class LiveActionOperationTest {
     private static final BlockPosition POSITION = new BlockPosition(1, 2, 3);
 
     @Test
+    void explainsWhenUndoOrRedoHasNoAvailableAction() {
+        for (LiveActionJournal.Direction direction : LiveActionJournal.Direction.values()) {
+            LiveActionOperation operation = new LiveActionOperation(
+                    new LiveActionJournal(), PLAYER, direction,
+                    new FakeWorld(block("air")), () -> 0L);
+
+            operation.advance(Long.MAX_VALUE);
+
+            assertEquals(MutationTerminalState.FAILED, operation.terminalState());
+            assertEquals(direction == LiveActionJournal.Direction.UNDO
+                            ? "luma.status.undo_unavailable"
+                            : "luma.status.redo_unavailable",
+                    operation.failure().orElseThrow().getMessage());
+        }
+    }
+
+    @Test
     void validatesEverythingBeforeMutationAndCompletesUndo() throws IOException {
         LiveActionJournal journal = action(block("stone"), block("gold_block"));
         FakeWorld world = new FakeWorld(block("gold_block"));
