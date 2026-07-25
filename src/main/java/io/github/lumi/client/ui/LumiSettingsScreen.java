@@ -323,7 +323,6 @@ public final class LumiSettingsScreen extends LumiPageScreen {
     @Override
     public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         MouseButtonEvent virtual = virtualClick(click);
-        if (clickContextualHint(virtual)) return true;
         if (hudModeDropdown != null && hudModeDropdown.isOpen()
                 && hudModeDropdown.mouseClicked(virtual, doubled)) {
             return true;

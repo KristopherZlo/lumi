@@ -82,6 +82,16 @@ class LumiDropdown<T> extends LumiButton {
     }
 
     @Override
+    protected int labelAvailable(int available) {
+        return Math.max(0, available - 14);
+    }
+
+    @Override
+    protected boolean leftAlignedLabel() {
+        return true;
+    }
+
+    @Override
     protected void renderContents(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.renderContents(graphics, mouseX, mouseY, partialTick);

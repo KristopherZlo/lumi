@@ -101,7 +101,8 @@ public class LumiButton extends Button {
         }
         var font = Minecraft.getInstance().font;
         int textX = getX() + (icon == null ? 4 : 20);
-        int available = Math.max(0, getX() + getWidth() - 4 - textX);
+        int available = labelAvailable(
+                Math.max(0, getX() + getWidth() - 4 - textX));
         String label = getMessage().getString();
         if (font.width(label) > available) {
             String suffix = available >= font.width("…") ? "…" : "";
@@ -112,12 +113,25 @@ public class LumiButton extends Button {
         graphics.enableScissor(
                 textX, getY() + 1,
                 getX() + getWidth() - 2, getY() + getHeight() - 1);
-        graphics.drawCenteredString(
-                font, label,
-                textX + available / 2,
-                getY() + (getHeight() - 8) / 2,
-                active ? TEXT : TEXT_DISABLED);
+        int color = active ? TEXT : TEXT_DISABLED;
+        if (leftAlignedLabel()) {
+            graphics.drawString(
+                    font, label, textX + 1,
+                    getY() + (getHeight() - 8) / 2, color, false);
+        } else {
+            graphics.drawCenteredString(
+                    font, label, textX + available / 2,
+                    getY() + (getHeight() - 8) / 2, color);
+        }
         graphics.disableScissor();
+    }
+
+    protected int labelAvailable(int available) {
+        return available;
+    }
+
+    protected boolean leftAlignedLabel() {
+        return false;
     }
 
     public enum Kind {

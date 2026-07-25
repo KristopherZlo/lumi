@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+import net.minecraft.network.chat.Component;
 import org.junit.jupiter.api.Test;
 
 class LumiDropdownTest {
@@ -23,5 +25,15 @@ class LumiDropdownTest {
         assertEquals(0.25F,
                 LumiDropdown.hoverProgress(0.75F, false, 60));
         assertTrue(LumiDropdown.hoverProgress(0.9F, true, 60) <= 1F);
+    }
+
+    @Test
+    void alignsTheClosedSelectionWithRowsAndReservesTheChevron() {
+        LumiDropdown<String> dropdown = new LumiDropdown<>(
+                0, 0, 80, 0, 40,
+                List.of("GUI"), "GUI", Component::literal, ignored -> { });
+
+        assertEquals(36, dropdown.labelAvailable(50));
+        assertTrue(dropdown.leftAlignedLabel());
     }
 }

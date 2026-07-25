@@ -41,5 +41,9 @@ class LumiButtonTest {
         assertEquals(42, LumiButton.fittedWidth(100, 30));
         assertEquals(32, LumiButton.fittedWidth(32, 100));
         assertEquals(0, LumiButton.fittedWidth(0, 100));
+        LumiButton button = new LumiButton(
+                0, 0, 80, 18, net.minecraft.network.chat.Component.empty(),
+                ignored -> { }, LumiButton.Kind.NORMAL);
+        assertFalse(button.leftAlignedLabel());
     }
 }

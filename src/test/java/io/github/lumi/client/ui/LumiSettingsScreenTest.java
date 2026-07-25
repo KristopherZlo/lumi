@@ -31,6 +31,8 @@ class LumiSettingsScreenTest {
         assertTrue(source.contains("new LumiDropdown<>("));
         assertTrue(source.contains("LumiSettingRow.choice("));
         assertTrue(source.contains("hudModeDropdown.mouseClicked("));
+        assertFalse(source.contains(
+                "if (clickContextualHint(virtual)) return true;"));
         assertTrue(source.contains("this::selectHudMode"));
         assertFalse(source.contains("toggleWorkspaceHud"));
         assertTrue(source.contains("active.automaticVersionsEnabled()"));
