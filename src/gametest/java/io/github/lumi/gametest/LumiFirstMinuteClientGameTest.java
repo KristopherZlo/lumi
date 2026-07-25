@@ -82,12 +82,17 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
 
         operations.awaitDurability("first_minute_actions");
         CommitId save = operations.save("first-minute");
+        ui.completeOnboardingIfShown();
         operations.undo("first_minute_entity");
         waitFor(context, () -> entityPresent(server, pig),
                 "Undo did not restore the attacked pig");
+        waitForStableIdle(context, server,
+                "Undo did not release the world operation slot");
         operations.redo("first_minute_entity");
         waitFor(context, () -> !entityPresent(server, pig),
                 "Redo did not remove the attacked pig");
+        waitForStableIdle(context, server,
+                "Redo did not release the world operation slot");
         operations.awaitDurability("first_minute_final");
         requireConnected(context, server);
         report.assertNoRuntimeFailures();
@@ -164,6 +169,31 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
 
     private static boolean entityPresent(Entity entity) {
         return entity != null && !entity.isRemoved();
+    }
+
+    private static boolean operationsIdle(TestServerContext server) {
+        return server.computeOnServer(minecraft -> {
+            var player = minecraft.getPlayerList().getPlayers().getFirst();
+            var operations = LumiMod.serverRuntime().find(player.level())
+                    .orElseThrow().operations();
+            return !operations.hasActiveOperation() && operations.queuedCount() == 0;
+        });
+    }
+
+    private static void waitForStableIdle(
+            ClientGameTestContext context,
+            TestServerContext server,
+            String failure) {
+        int idleTicks = 0;
+        for (int tick = 0; tick < TIMEOUT_TICKS; tick++) {
+            if (!operationsIdle(server)) {
+                idleTicks = 0;
+            } else if (++idleTicks == 3) {
+                return;
+            }
+            context.waitTick();
+        }
+        throw new AssertionError(failure + " within " + TIMEOUT_TICKS + " ticks");
     }
 
     private static void requireConnected(

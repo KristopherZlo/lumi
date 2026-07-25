@@ -124,7 +124,8 @@ final class LumiBehaviorReport implements AutoCloseable {
             var failures = appended.lines()
                     .filter(line -> line.contains("/ERROR] (lumi)")
                             || line.contains("Uncaught exception in thread \"Lumi-")
-                            || line.contains("lost connection: Internal Exception"))
+                            || line.contains("lost connection: Internal Exception")
+                            || line.contains("at knot//io.github.lumi"))
                     .limit(8)
                     .toList();
             if (!failures.isEmpty()) {

@@ -76,6 +76,7 @@ tasks.named('runClientGameTest') {
     System.properties.findAll { name, ignored ->
         name.toString().startsWith('lumi.benchmark.')
                 || name == 'lumi.gametest.operationTimeoutTicks'
+                || name == 'lumi.gametest.firstMinuteOnly'
     }.each { name, value -> systemProperty name.toString(), value }
     def benchmarkHeap = System.getProperty('lumi.benchmark.heap')
     if (benchmarkHeap != null && !benchmarkHeap.isBlank()) {

@@ -9,7 +9,8 @@ public final class LumiHistoryBenchmarkClientGameTest
         implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
-        if (!LumiHistoryBenchmarkConfig.enabled()) {
+        if (LumiClientBehaviorWorld.firstMinuteOnly()
+                || !LumiHistoryBenchmarkConfig.enabled()) {
             return;
         }
         LumiHistoryBenchmarkConfig config = LumiHistoryBenchmarkConfig.load();
