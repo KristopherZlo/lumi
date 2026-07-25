@@ -53,4 +53,17 @@ class LumiZoneOverlayTest {
         assertTrue(fillBuffer < fill);
         assertTrue(fill < outlineBuffer);
     }
+
+    @Test
+    void jebZoneCyclesWithoutChangingOrdinaryZoneColors() {
+        LumiZoneColor colors = new LumiZoneColor();
+        int persisted = 0xff336699;
+
+        assertEquals(persisted, colors.resolve("builder", persisted, 1_000));
+        assertNotEquals(
+                colors.resolve("jeb_", persisted, 0),
+                colors.resolve("jeb_", persisted, 1_000));
+        assertEquals(0xff000000,
+                colors.resolve("jeb_", persisted, 2_000) & 0xff000000);
+    }
 }

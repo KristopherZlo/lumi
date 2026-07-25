@@ -25,6 +25,7 @@ public final class LumiZoneOverlay {
     private final ClientZoneOverlayStore overlays;
     private final ClientHistoryStore history;
     private final Consumer<ZoneOverlayArgument.Mode> request;
+    private final LumiZoneColor zoneColors = new LumiZoneColor();
     private Mode mode = Mode.FOCUSED;
     private RequestKey lastRequest;
     private UUID lastEntered;
@@ -122,11 +123,14 @@ public final class LumiZoneOverlay {
         }
         List<RenderZone> zones = renderZones(snapshot);
         var camera = context.worldState().cameraRenderState.pos;
+        long now = System.currentTimeMillis();
         var fills = context.consumers().getBuffer(
                 LumiCompareRenderTypes.fill(false));
         for (var zone : zones) {
             int color = renderColor(
-                    zone.source().color(), mode,
+                    zoneColors.resolve(
+                            zone.source().name(), zone.source().color(), now),
+                    mode,
                     zone.source().active(), zone.source().entered());
             int alpha = mode == Mode.FOCUSED || zone.source().active()
                     ? 38 : zone.source().entered() ? 30 : 18;
@@ -149,7 +153,9 @@ public final class LumiZoneOverlay {
                 LumiCompareRenderTypes.outline(false));
         for (var zone : zones) {
             int color = renderColor(
-                    zone.source().color(), mode,
+                    zoneColors.resolve(
+                            zone.source().name(), zone.source().color(), now),
+                    mode,
                     zone.source().active(), zone.source().entered());
             float width = mode == Mode.FOCUSED
                     ? 3.0F : zone.source().active() ? 2.75F

@@ -135,8 +135,11 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.entity.ChunkEntities;
@@ -983,6 +986,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         liveEntities.trackApplied(
                 plan.actionId(), plan.direction(),
                 plan.expectedEntities(), plan.replacementEntities());
+        showTechnobladeTribute(plan);
         if (plan.direction() == LiveActionJournal.Direction.REDO) {
             plan.replacementEntities().forEach((id, state) -> state.ifPresent(ignored -> {
                 Entity carrier = level.getEntity(id);
@@ -990,6 +994,25 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     causalTicks.rememberAppliedCarrier(plan.actionId(), carrier);
                 }
             }));
+        }
+    }
+
+    private void showTechnobladeTribute(LiveActionJournal.Plan plan) {
+        if (plan.direction() != LiveActionJournal.Direction.UNDO) return;
+        boolean revived = plan.replacementEntities().entrySet().stream()
+                .filter(entry -> entry.getValue().isPresent())
+                .filter(entry -> plan.expectedEntities()
+                        .getOrDefault(entry.getKey(), Optional.empty()).isEmpty())
+                .map(entry -> level.getEntity(entry.getKey()))
+                .anyMatch(entity -> entity instanceof Pig
+                        && entity.hasCustomName()
+                        && "Technoblade".equals(entity.getCustomName().getString()));
+        var player = revived ? level.getPlayerByUUID(plan.player()) : null;
+        if (player != null) {
+            player.displayClientMessage(
+                    Component.literal("TECHNOBLADE NEVER DIES!")
+                            .withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD),
+                    false);
         }
     }
 

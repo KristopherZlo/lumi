@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import io.github.lumi.client.LumiZoneColor;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Objects;
@@ -25,6 +26,7 @@ public final class LumiZonesScreen extends LumiPageScreen {
     private final Runnable cycleOverlay;
     private final Consumer<UUID> enter;
     private final Consumer<UUID> leave;
+    private final LumiZoneColor zoneColors = new LumiZoneColor();
     private HistorySnapshotPayload snapshot;
     private EditBox name;
     private LumiButton create;
@@ -288,7 +290,9 @@ public final class LumiZonesScreen extends LumiPageScreen {
                     rowWidth, rowHeight);
             graphics.fill(
                     rowX + 7, rowY + 6,
-                    rowX + 12, rowY + 11, zone.color());
+                    rowX + 12, rowY + 11,
+                    zoneColors.resolve(
+                            zone.name(), zone.color(), System.currentTimeMillis()));
             int textX = rowX + 18;
             int textWidth = Math.max(0,
                     rowWidth - (compact ? 26 : 120));
