@@ -74,7 +74,8 @@ final class LumiSettingRow extends Button {
                         ? LumiTheme.ACCENT : LumiTheme.INSET_BORDER);
 
         var font = Minecraft.getInstance().font;
-        int valueWidth = value.getString().isEmpty()
+        String valueText = value.getString();
+        int valueWidth = valueText.isEmpty()
                 ? reservedControlWidth : valueWidth(getWidth(), font.width(value));
         int textWidth = Math.max(0, getWidth() - valueWidth - 22);
         int textColor = active
@@ -91,7 +92,7 @@ final class LumiSettingRow extends Button {
                     getX() + 8, getY() + 18,
                     LumiTheme.MUTED, false);
         }
-        if (valueWidth == 0) {
+        if (valueWidth == 0 || valueText.isEmpty()) {
             return;
         }
 
@@ -104,7 +105,7 @@ final class LumiSettingRow extends Button {
                         ? LumiTheme.STATUS_BORDER : LumiTheme.CHIP_BORDER);
         graphics.drawCenteredString(
                 font,
-                font.plainSubstrByWidth(value.getString(), valueWidth - 8),
+                font.plainSubstrByWidth(valueText, valueWidth - 8),
                 valueX + valueWidth / 2, valueY + 5,
                 selected ? LumiTheme.ACCENT : LumiTheme.MUTED);
     }
