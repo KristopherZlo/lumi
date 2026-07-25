@@ -18,6 +18,7 @@ class ClientVersionPreviewCaptureTest {
         assertTrue(source.contains("coordinator.request(requestId, snapshot)"));
         assertTrue(source.contains("coordinator.accept(event)"));
         assertTrue(source.contains("coordinator.tick()"));
+        assertTrue(source.contains("client.execute(coordinator::clear)"));
         assertFalse(source.contains("Screenshot"));
         assertFalse(source.contains("getMainRenderTarget"));
     }

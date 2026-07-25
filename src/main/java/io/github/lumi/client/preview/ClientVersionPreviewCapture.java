@@ -19,7 +19,7 @@ public final class ClientVersionPreviewCapture {
     public void register() {
         WorldRenderEvents.END_MAIN.register(context -> coordinator.tick());
         ClientPlayConnectionEvents.DISCONNECT.register(
-                (handler, client) -> coordinator.clear());
+                (handler, client) -> client.execute(coordinator::clear));
     }
 
     public void request(UUID requestId, HistorySnapshotPayload snapshot) {
