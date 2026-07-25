@@ -22,10 +22,11 @@ class LumiSnowfallTest {
     }
 
     @Test
-    void upsideDownNamesRequireAnExactSearch() {
+    void upsideDownNamesRequireAnExactCaseInsensitiveSearch() {
         assertTrue(LumiDashboardScreen.upsideDownSearch("Dinnerbone"));
         assertTrue(LumiDashboardScreen.upsideDownSearch("Grumm"));
+        assertTrue(LumiDashboardScreen.upsideDownSearch("dinnerbone"));
         assertFalse(LumiDashboardScreen.upsideDownSearch("Dinnerbone "));
-        assertFalse(LumiDashboardScreen.upsideDownSearch("dinnerbone"));
+        assertFalse(LumiDashboardScreen.upsideDownSearch("dinnerbon"));
     }
 }
