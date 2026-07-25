@@ -40,7 +40,10 @@ final class LumiSnowfall {
         lastMillis = nowMillis;
         if (emitting) {
             spawnBudget += seconds * FLAKES_PER_SECOND;
-            while (spawnBudget >= 1.0F && flakes.size() < MAX_FLAKES) {
+            while (spawnBudget >= 1.0F) {
+                if (flakes.size() >= MAX_FLAKES) {
+                    flakes.remove(0);
+                }
                 flakes.add(new Flake(
                         random.nextFloat() * Math.max(1, width),
                         -2.0F,

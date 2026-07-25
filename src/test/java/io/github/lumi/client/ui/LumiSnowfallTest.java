@@ -23,6 +23,21 @@ class LumiSnowfallTest {
     }
 
     @Test
+    void keepsFreshFlakesWhileHoverRemainsActive() {
+        LumiSnowfall snow = new LumiSnowfall();
+        snow.advance(true, 100, 360, 0);
+        for (long now = 100; now <= 6_000; now += 100) {
+            snow.advance(true, 100, 360, now);
+        }
+
+        int remaining = 0;
+        for (long now = 6_100; now <= 23_000; now += 100) {
+            remaining = snow.advance(false, 100, 360, now);
+        }
+        assertTrue(remaining > 0);
+    }
+
+    @Test
     void upsideDownCardsAreSelectedByExactNormalizedTags() {
         assertTrue(LumiDashboardScreen.upsideDownTag(
                 VersionTags.parse("Dinnerbone")));
