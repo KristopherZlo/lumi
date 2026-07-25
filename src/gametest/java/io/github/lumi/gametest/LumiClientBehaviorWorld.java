@@ -3,6 +3,7 @@ package io.github.lumi.gametest;
 import java.io.IOException;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.world.level.gamerules.GameRules;
@@ -15,24 +16,54 @@ final class LumiClientBehaviorWorld {
             ClientGameTestContext context,
             String scenarioName,
             Scenario scenario) {
+        run(context, scenarioName, scenario, null);
+    }
+
+    static void runWithReopen(
+            ClientGameTestContext context,
+            String scenarioName,
+            Scenario scenario,
+            Scenario reopenedScenario) {
+        run(context, scenarioName, scenario, reopenedScenario);
+    }
+
+    private static void run(
+            ClientGameTestContext context,
+            String scenarioName,
+            Scenario scenario,
+            Scenario reopenedScenario) {
         try (LumiBehaviorReport report = LumiBehaviorReport.create(
                 FabricLoader.getInstance().getGameDir(), scenarioName)) {
             long started = System.nanoTime();
+            TestWorldSave worldSave;
             try (TestSingleplayerContext singleplayer = context.worldBuilder()
                     .setUseConsistentSettings(false)
                     .adjustSettings(LumiClientBehaviorWorld::configureWorld)
                     .create()) {
-                context.setScreen(() -> null);
-                context.waitForScreen(null);
-                singleplayer.getClientWorld().waitForChunksRender();
+                worldSave = singleplayer.getWorldSave();
+                prepareClient(context, singleplayer);
                 report.event("stage", "world_create", "succeeded", 0,
                         elapsedMillis(started), "seed=710 mode=creative");
                 context.takeScreenshot("lumi-" + scenarioName + "-world-created");
                 scenario.run(context, singleplayer, report);
             }
+            if (reopenedScenario != null) {
+                started = System.nanoTime();
+                try (TestSingleplayerContext reopened = worldSave.open()) {
+                    prepareClient(context, reopened);
+                    report.event("stage", "world_reopen", "succeeded", 0,
+                            elapsedMillis(started), "");
+                    reopenedScenario.run(context, reopened, report);
+                }
+                report.assertNoRuntimeFailures();
+            }
         } catch (IOException failed) {
             throw new IllegalStateException("Cannot write Lumi behavior report", failed);
         }
+    }
+
+    static boolean firstMinuteOnly() {
+        return Boolean.getBoolean("lumi.gametest.firstMinuteOnly");
     }
 
     static void configureWorld(WorldCreationUiState settings) {
@@ -45,6 +76,14 @@ final class LumiClientBehaviorWorld {
         settings.getGameRules().set(GameRules.ADVANCE_WEATHER, false, null);
         settings.getGameRules().set(GameRules.RANDOM_TICK_SPEED, 0, null);
         settings.getGameRules().set(GameRules.RESPAWN_RADIUS, 0, null);
+    }
+
+    private static void prepareClient(
+            ClientGameTestContext context,
+            TestSingleplayerContext singleplayer) {
+        context.setScreen(() -> null);
+        context.waitForScreen(null);
+        singleplayer.getClientWorld().waitForChunksRender();
     }
 
     private static long elapsedMillis(long started) {

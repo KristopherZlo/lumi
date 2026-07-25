@@ -23,6 +23,7 @@ final class LumiBehaviorReport implements AutoCloseable {
     private final Path directory;
     private final Path snapshots;
     private final Path runtimeLog;
+    private final long runtimeLogStart;
     private final BufferedWriter events;
     private final String scenario;
     private int snapshotNumber;
@@ -30,11 +31,13 @@ final class LumiBehaviorReport implements AutoCloseable {
     private LumiBehaviorReport(
             Path directory,
             Path runtimeLog,
+            long runtimeLogStart,
             BufferedWriter events,
             String scenario) throws IOException {
         this.directory = directory;
         snapshots = Files.createDirectories(directory.resolve("snapshots"));
         this.runtimeLog = runtimeLog;
+        this.runtimeLogStart = runtimeLogStart;
         this.events = events;
         this.scenario = scenario;
         event("test", scenario, "started", 0, 0, "");
@@ -51,8 +54,10 @@ final class LumiBehaviorReport implements AutoCloseable {
         BufferedWriter events = Files.newBufferedWriter(
                 directory.resolve("events.jsonl"), StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        Path runtimeLog = gameDirectory.resolve("logs/latest.log");
+        long runtimeLogStart = Files.exists(runtimeLog) ? Files.size(runtimeLog) : 0;
         return new LumiBehaviorReport(
-                directory, gameDirectory.resolve("logs/latest.log"), events, scenario);
+                directory, runtimeLog, runtimeLogStart, events, scenario);
     }
 
     Path directory() {
@@ -105,6 +110,33 @@ final class LumiBehaviorReport implements AutoCloseable {
         }
         event("snapshot", name, "captured", 0, captureMillis,
                 digest + " sections=" + sections + " entities=" + entities);
+    }
+
+    void assertNoRuntimeFailures() {
+        try {
+            long offset = Files.size(runtimeLog) < runtimeLogStart
+                    ? 0 : runtimeLogStart;
+            String appended;
+            try (var input = Files.newInputStream(runtimeLog)) {
+                input.skipNBytes(offset);
+                appended = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            var failures = appended.lines()
+                    .filter(line -> line.contains("/ERROR] (lumi)")
+                            || line.contains("Uncaught exception in thread \"Lumi-")
+                            || line.contains("lost connection: Internal Exception"))
+                    .limit(8)
+                    .toList();
+            if (!failures.isEmpty()) {
+                event("gate", "runtime_health", "failed", 0, 0,
+                        String.join(" | ", failures));
+                throw new AssertionError(
+                        "Lumi runtime failures: " + String.join(" | ", failures));
+            }
+            event("gate", "runtime_health", "succeeded", 0, 0, "");
+        } catch (IOException failed) {
+            throw new IllegalStateException("Cannot inspect Lumi runtime log", failed);
+        }
     }
 
     private synchronized void writeLine(String line) {
