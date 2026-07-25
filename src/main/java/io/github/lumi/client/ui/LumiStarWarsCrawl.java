@@ -19,6 +19,8 @@ import net.minecraft.util.FormattedCharSequence;
 final class LumiStarWarsCrawl {
     private static final long INTRO_MILLIS = 3_200L;
     private static final float PIXELS_PER_MILLI = 0.025F;
+    private static final float PERSPECTIVE = 0.9F;
+    private static final float MIN_SCALE = 0.22F;
     private static final int LINE_STRIDE = 14;
     private static final DateTimeFormatter DATE =
             DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
@@ -109,17 +111,19 @@ final class LumiStarWarsCrawl {
     private void renderCrawl(
             GuiGraphics graphics, Font font,
             int x, int y, int width, int height, long elapsed) {
-        float firstY = y + height + 18.0F - elapsed * PIXELS_PER_MILLI;
-        int first = Math.max(0,
-                (int) Math.floor((y - firstY) / LINE_STRIDE) - 1);
-        int last = Math.min(lines.size(),
-                (int) Math.ceil((y + height - firstY) / LINE_STRIDE) + 2);
+        float bottom = y + height + 18.0F;
+        float firstY = bottom - elapsed * PIXELS_PER_MILLI;
+        float maximumDistance = height * (1.0F / MIN_SCALE - 1.0F)
+                / PERSPECTIVE;
+        int first = Math.max(0, (int) Math.ceil(
+                (bottom - firstY - maximumDistance) / LINE_STRIDE));
+        int last = Math.min(lines.size(), (int) Math.floor(
+                (bottom - firstY) / LINE_STRIDE) + 1);
         for (int index = first; index < last; index++) {
-            float lineY = firstY + index * LINE_STRIDE;
-            float depth = Math.max(0.0F, Math.min(
-                    1.0F, (lineY - y) / Math.max(1.0F, height)));
-            float scale = 0.36F + depth * 0.64F;
-            int brightness = 130 + Math.round(depth * 125.0F);
+            float distance = bottom - (firstY + index * LINE_STRIDE);
+            float scale = projectionScale(distance, height);
+            float lineY = bottom - distance * scale;
+            int brightness = 90 + Math.round(scale * 165.0F);
             int color = 0xff000000 | brightness << 16
                     | Math.round(brightness * 0.84F) << 8;
             graphics.pose().pushMatrix();
@@ -128,6 +132,11 @@ final class LumiStarWarsCrawl {
             graphics.drawCenteredString(font, lines.get(index), 0, 0, color);
             graphics.pose().popMatrix();
         }
+    }
+
+    static float projectionScale(float distance, int height) {
+        float plane = Math.max(1, height);
+        return plane / (plane + Math.max(0.0F, distance) * PERSPECTIVE);
     }
 
     private void renderStars(

@@ -20,6 +20,27 @@ class LumiStarWarsCrawlTest {
     }
 
     @Test
+    void upsideDownSpellsBypassHistoryFilteringRegardlessOfCase() {
+        assertTrue(LumiDashboardScreen.upsideDownSearch("dinnerbone"));
+        assertTrue(LumiDashboardScreen.upsideDownSearch("GRUMM"));
+        assertEquals("", LumiDashboardScreen.historySearch("grumm"));
+        assertEquals("", LumiDashboardScreen.historySearch("starwars"));
+        assertEquals("grumm ", LumiDashboardScreen.historySearch("grumm "));
+    }
+
+    @Test
+    void crawlCompressesLineSpacingTowardTheHorizon() {
+        float nearGap = 14.0F
+                * LumiStarWarsCrawl.projectionScale(14.0F, 180);
+        float farGap = 154.0F
+                * LumiStarWarsCrawl.projectionScale(154.0F, 180)
+                - 140.0F
+                * LumiStarWarsCrawl.projectionScale(140.0F, 180);
+
+        assertTrue(nearGap > farGap);
+    }
+
+    @Test
     void crawlKeepsEverySaveInChronologicalOrder() {
         var newest = version('b', "Second", 20);
         var oldest = version('a', "Initial", 10);

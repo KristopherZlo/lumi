@@ -23,7 +23,6 @@ import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /** Project-window presentation backed by the immutable V2 history snapshot. */
@@ -234,7 +233,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                     snapshot, historyPages, requestPage);
         }
         pagedHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS);
-        pagedHistory.search(starWarsSearch(searchQuery) ? "" : searchQuery);
+        pagedHistory.search(historySearch(searchQuery));
         renderedPage = pagedHistory.page().orElse(null);
         if (dashboardGeometry.latestVisible()) {
             latestCreated().ifPresent(version -> addVersionActions(
@@ -279,6 +278,11 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         if (starWarsSearch(searchQuery)) {
             starWars.startIfNeeded(System.currentTimeMillis());
             graphView = null;
+            return;
+        }
+        if (upsideDownSearch(searchQuery)) {
+            graphView = null;
+            addBranchDropdown();
             return;
         }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
@@ -388,16 +392,20 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             return;
         }
         boolean wasStarWars = starWarsSearch(searchQuery);
+        boolean wasUpsideDown = upsideDownSearch(searchQuery);
         searchQuery = value;
         boolean isStarWars = starWarsSearch(value);
+        boolean isUpsideDown = upsideDownSearch(value);
         if (isStarWars && !wasStarWars) {
             starWars.start(System.currentTimeMillis());
         }
         if (pagedHistory != null) {
-            pagedHistory.search(isStarWars ? "" : value);
+            pagedHistory.search(historySearch(value));
             if (isStarWars) pagedHistory.loadNextPage();
         }
-        if (wasStarWars != isStarWars) refreshSearchEasterEgg();
+        if (wasStarWars != isStarWars || wasUpsideDown != isUpsideDown) {
+            refreshSearchEasterEgg();
+        }
     }
 
     private void addBranchDropdown() {
@@ -445,7 +453,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private List<HistorySnapshotPayload.Version> visibleVersions() {
         return snapshot == null || pagedHistory == null
                 ? List.of()
-                : historyView.filtered(pagedHistory.versions(), searchQuery);
+                : historyView.filtered(
+                        pagedHistory.versions(), historySearch(searchQuery));
     }
 
     private void showHistoryMode(HistoryViewController.Mode mode) {
@@ -484,14 +493,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        boolean upsideDown = upsideDownSearch(searchQuery);
-        graphics.pose().pushMatrix();
-        if (upsideDown) {
-            graphics.pose().translate(0.0F, graphics.guiHeight());
-            graphics.pose().scale(1.0F, -1.0F);
-            mouseY = graphics.guiHeight() - mouseY;
-        }
-        try {
         ScaledRenderContext render = beginScaledRender(graphics, mouseX, mouseY);
         try {
         if (snapshot == null) {
@@ -516,13 +517,10 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         } finally {
             endScaledRender(graphics);
         }
-        } finally {
-            graphics.pose().popMatrix();
-        }
     }
 
     private boolean lumiSaveHovered(int mouseX, int mouseY) {
-        if (snapshot == null) return false;
+        if (snapshot == null || upsideDownSearch(searchQuery)) return false;
         if (graphView != null) {
             return graphView.nodeAt(mouseX, mouseY)
                     .map(HistoryGraphLayout.Node::version)
@@ -566,12 +564,17 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     }
 
     static boolean upsideDownSearch(String query) {
-        return "Dinnerbone".equals(query) || "Grumm".equals(query);
+        return "Dinnerbone".equalsIgnoreCase(query)
+                || "Grumm".equalsIgnoreCase(query);
     }
 
     static boolean starWarsSearch(String query) {
         return "star wars".equalsIgnoreCase(query)
                 || "starwars".equalsIgnoreCase(query);
+    }
+
+    static String historySearch(String query) {
+        return upsideDownSearch(query) || starWarsSearch(query) ? "" : query;
     }
 
     private String worldName() {
@@ -645,34 +648,57 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                     System.currentTimeMillis());
             return;
         }
-        List<HistorySnapshotPayload.Version> versions = visibleVersions();
-        if (graphView != null) {
-            graphView.renderConnections(graphics);
+        boolean upsideDown = upsideDownSearch(searchQuery);
+        int historyContentY = historyY + HISTORY_FIRST_ROW_OFFSET - 5;
+        if (upsideDown) {
+            graphics.enableScissor(
+                    x + 1, historyContentY,
+                    x + width - 1, historyY + historyHeight - 1);
+            graphics.pose().pushMatrix();
+            graphics.pose().translate(
+                    0.0F, historyContentY + historyY + historyHeight - 1.0F);
+            graphics.pose().scale(1.0F, -1.0F);
         }
-        int rows = visibleHistoryRows(
-                historyHeight, versions.size(), layout.bodyWidth());
-        List<HistorySnapshotPayload.Version> visible = versions.stream()
-                .skip(historyScroll).limit(rows).toList();
-        for (int index = 0; graphView == null && index < visible.size(); index++) {
-            HistorySnapshotPayload.Version version = visible.get(index);
-            int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
-                    + index * historyRowStride(width);
-            renderVersionCard(graphics, version, rowY, false);
-        }
-        renderScrollbar(
-                graphics, x,
-                historyY + HISTORY_FIRST_ROW_OFFSET,
-                width - 3,
-                Math.max(0, historyHeight - HISTORY_FIRST_ROW_OFFSET - 5),
-                versions.size(), rows, historyScroll,
-                value -> historyScroll = value);
-        if (versions.isEmpty()) {
-            graphics.drawCenteredString(font,
-                    Component.translatable(searchQuery.isBlank()
-                            ? "luma.history.empty"
-                            : "luma.project.history_search_help"),
-                    x + width / 2, emptyHistoryY(historyY, historyHeight),
-                    LumiTheme.MUTED);
+        try {
+            List<HistorySnapshotPayload.Version> versions = visibleVersions();
+            if (graphView != null) {
+                graphView.renderConnections(graphics);
+            }
+            int rows = visibleHistoryRows(
+                    historyHeight, versions.size(), layout.bodyWidth());
+            List<HistorySnapshotPayload.Version> visible = versions.stream()
+                    .skip(historyScroll).limit(rows).toList();
+            for (int index = 0;
+                    graphView == null && index < visible.size(); index++) {
+                HistorySnapshotPayload.Version version = visible.get(index);
+                int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
+                        + index * historyRowStride(width);
+                renderVersionCard(graphics, version, rowY, false);
+            }
+            if (!upsideDown) {
+                renderScrollbar(
+                        graphics, x,
+                        historyY + HISTORY_FIRST_ROW_OFFSET,
+                        width - 3,
+                        Math.max(0, historyHeight
+                                - HISTORY_FIRST_ROW_OFFSET - 5),
+                        versions.size(), rows, historyScroll,
+                        value -> historyScroll = value);
+            }
+            if (versions.isEmpty()) {
+                graphics.drawCenteredString(font,
+                        Component.translatable(searchQuery.isBlank()
+                                ? "luma.history.empty"
+                                : "luma.project.history_search_help"),
+                        x + width / 2,
+                        emptyHistoryY(historyY, historyHeight),
+                        LumiTheme.MUTED);
+            }
+        } finally {
+            if (upsideDown) {
+                graphics.pose().popMatrix();
+                graphics.disableScissor();
+            }
         }
     }
 
@@ -692,9 +718,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     public boolean mouseScrolled(
             double mouseX, double mouseY,
             double horizontalAmount, double verticalAmount) {
-        if (upsideDownSearch(searchQuery)) {
-            mouseY = minecraft.getWindow().getGuiScaledHeight() - mouseY;
-        }
         double x = virtualCoordinate(mouseX);
         double y = virtualCoordinate(mouseY);
         if (layout != null && snapshot != null
@@ -717,36 +740,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         }
         return super.mouseScrolled(
                 mouseX, mouseY, horizontalAmount, verticalAmount);
-    }
-
-    @Override
-    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
-        return super.mouseClicked(flipIfUpsideDown(click), doubled);
-    }
-
-    @Override
-    public boolean mouseReleased(MouseButtonEvent click) {
-        return super.mouseReleased(flipIfUpsideDown(click));
-    }
-
-    @Override
-    public boolean mouseDragged(
-            MouseButtonEvent click, double deltaX, double deltaY) {
-        boolean upsideDown = upsideDownSearch(searchQuery);
-        return super.mouseDragged(
-                upsideDown ? flip(click) : click,
-                deltaX, upsideDown ? -deltaY : deltaY);
-    }
-
-    private MouseButtonEvent flipIfUpsideDown(MouseButtonEvent click) {
-        return upsideDownSearch(searchQuery) ? flip(click) : click;
-    }
-
-    private MouseButtonEvent flip(MouseButtonEvent click) {
-        return new MouseButtonEvent(
-                click.x(),
-                minecraft.getWindow().getGuiScaledHeight() - click.y(),
-                click.buttonInfo());
     }
 
     private static void drawPanel(GuiGraphics graphics, int x, int y, int width, int height) {

@@ -3,8 +3,10 @@ package io.github.lumi.client.ui;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.state.ClientHistoryStore;
 import java.util.Objects;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -26,6 +28,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
     private final Consumer<UUID> previewCapture;
     private final Consumer<UUID> accepted;
     private final Consumer<String> savedName;
+    private final Supplier<OptionalLong> pendingBlocks;
     private final Scope scope;
     private LumiModalLayout layout;
     private EditBox message;
@@ -105,6 +108,23 @@ public final class LumiSaveScreen extends LumiModalScreen {
             Consumer<UUID> accepted,
             Scope scope,
             Consumer<String> savedName) {
+        this(parent, history, controller, refresh, preferredIntent,
+                initialMessage, previewCapture, accepted, scope, savedName,
+                OptionalLong::empty);
+    }
+
+    public LumiSaveScreen(
+            Screen parent,
+            ClientHistoryStore history,
+            SaveScreenController controller,
+            Runnable refresh,
+            SaveScreenController.Intent preferredIntent,
+            String initialMessage,
+            Consumer<UUID> previewCapture,
+            Consumer<UUID> accepted,
+            Scope scope,
+            Consumer<String> savedName,
+            Supplier<OptionalLong> pendingBlocks) {
         super(parent, scope.title());
         this.parent = parent;
         this.history = Objects.requireNonNull(history, "history");
@@ -116,6 +136,8 @@ public final class LumiSaveScreen extends LumiModalScreen {
         this.accepted = Objects.requireNonNull(accepted, "accepted");
         this.scope = Objects.requireNonNull(scope, "scope");
         this.savedName = Objects.requireNonNull(savedName, "savedName");
+        this.pendingBlocks = Objects.requireNonNull(
+                pendingBlocks, "pendingBlocks");
     }
 
     @Override
@@ -237,7 +259,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
 
     private void renderAnswerTooltip(
             GuiGraphics graphics, int mouseX, int mouseY) {
-        if (pendingChanges() != 42) return;
+        if (pendingChanges().orElse(-1L) != 42L) return;
         String text = font.plainSubstrByWidth(
                 status().getString(), layout.width() - 132);
         int answer = text.indexOf("42");
@@ -315,13 +337,25 @@ public final class LumiSaveScreen extends LumiModalScreen {
             return error.startsWith("luma.")
                     ? Component.translatable(error) : Component.literal(error);
         }
-        int pending = pendingChanges();
-        return pending == 0
+        OptionalLong pending = pendingChanges();
+        if (pending.isEmpty()) {
+            return pendingKeys() == 0
+                    ? Component.translatable("luma.dashboard.pending_clean")
+                    : Component.translatable(
+                            "luma.dashboard.pending_calculating");
+        }
+        long total = pending.orElseThrow();
+        return total == 0
                 ? Component.translatable("luma.dashboard.pending_clean")
-                : Component.translatable("luma.dashboard.workspace_pending", pending);
+                : Component.translatable(
+                        "luma.dashboard.workspace_pending", total);
     }
 
-    private int pendingChanges() {
+    private OptionalLong pendingChanges() {
+        return pendingBlocks.get();
+    }
+
+    private int pendingKeys() {
         return history.state().snapshot()
                 .map(snapshot -> snapshot.pendingKeys()).orElse(0);
     }

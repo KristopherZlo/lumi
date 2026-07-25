@@ -233,6 +233,7 @@
   "luma.dashboard.current_dimension": "Dimension: %s",
   "luma.dashboard.active_branch": "Current branch: %s",
   "luma.dashboard.pending_clean": "No unsaved world changes.",
+  "luma.dashboard.pending_calculating": "Counting unsaved block changes...",
   "luma.dashboard.latest_badge": "Latest save",
   "luma.dashboard.pending_added": "Added",
   "luma.dashboard.pending_removed": "Removed",

@@ -54,18 +54,22 @@ import io.github.lumi.client.ui.ZoneScreenController;
 import io.github.lumi.client.ui.ZoneHistoryActions;
 import io.github.lumi.client.ui.VersionCompareController;
 import io.github.lumi.domain.model.HudDisplayMode;
+import io.github.lumi.domain.model.PendingChangeStatistics;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.CleanupResultPayload;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.network.PackageInspectionPayload;
 import io.github.lumi.network.PartialRestorePlanPayload;
+import io.github.lumi.network.PendingStatisticsPayload;
 import io.github.lumi.telemetry.TelemetryService;
 import io.github.lumi.update.UpdateChecker;
 import io.github.lumi.update.ClientUpdatePreferenceRepository;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -450,7 +454,8 @@ public final class LumiClient implements ClientModInitializer {
                 requestId -> PREVIEW_CAPTURE.request(
                         requestId, HISTORY.state().snapshot().orElseThrow()),
                 accepted, LumiSaveScreen.Scope.BUILD,
-                FALLING_PLAYER::triggerIfPlayerName));
+                FALLING_PLAYER::triggerIfPlayerName,
+                () -> pendingBlocks(PendingStatisticsPayload::workspace)));
     }
 
     private static void openZoneSave(
@@ -469,7 +474,22 @@ public final class LumiClient implements ClientModInitializer {
                 requestId -> PREVIEW_CAPTURE.request(
                         requestId, HISTORY.state().snapshot().orElseThrow()),
                 ignored -> { }, LumiSaveScreen.Scope.ZONE,
-                FALLING_PLAYER::triggerIfPlayerName));
+                FALLING_PLAYER::triggerIfPlayerName,
+                () -> pendingBlocks(result -> result.zones().get(zone.id()))));
+    }
+
+    private static OptionalLong pendingBlocks(
+            Function<PendingStatisticsPayload, PendingChangeStatistics> select) {
+        var snapshot = HISTORY.state().snapshot().orElse(null);
+        if (snapshot == null) return OptionalLong.empty();
+        if (snapshot.pendingKeys() == 0) return OptionalLong.of(0L);
+        var result = PENDING_STATISTICS.result(snapshot)
+                .filter(value -> value.error().isEmpty()
+                        && value.pendingRevision() == snapshot.pendingRevision())
+                .orElse(null);
+        if (result == null) return OptionalLong.empty();
+        PendingChangeStatistics statistics = select.apply(result);
+        return OptionalLong.of(statistics == null ? 0L : statistics.total());
     }
 
     private static void openVersionDetails(

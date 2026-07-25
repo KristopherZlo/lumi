@@ -27,5 +27,14 @@ class LumiSaveScreenTest {
         assertFalse(source.contains("pending != observedPending && rebuildWidgets()"));
         assertTrue(source.contains("Component.literal(\"H2G2\")"));
         assertTrue(source.contains("savedName.accept(message.getValue())"));
+        assertTrue(source.contains("Supplier<OptionalLong> pendingBlocks"));
+        assertTrue(source.contains("pendingChanges().orElse(-1L) != 42L"));
+
+        String client = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/LumiClient.java"));
+        assertTrue(client.contains("PendingStatisticsPayload::workspace"));
+        assertTrue(client.contains(
+                "value.pendingRevision() == snapshot.pendingRevision()"));
+        assertTrue(client.contains("statistics.total()"));
     }
 }

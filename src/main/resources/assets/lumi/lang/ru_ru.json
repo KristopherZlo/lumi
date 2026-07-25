@@ -228,6 +228,7 @@
   "luma.dashboard.current_dimension": "Измерение: %s",
   "luma.dashboard.active_branch": "Текущая ветка: %s",
   "luma.dashboard.pending_clean": "Несохранённых изменений мира нет.",
+  "luma.dashboard.pending_calculating": "Подсчёт несохранённых изменений блоков...",
   "luma.dashboard.latest_badge": "Последнее сохранение",
   "luma.dashboard.pending_added": "Добавлено",
   "luma.dashboard.pending_removed": "Удалено",
