@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.lumi.domain.model.VersionTags;
 import org.junit.jupiter.api.Test;
 
 class LumiSnowfallTest {
@@ -22,11 +23,12 @@ class LumiSnowfallTest {
     }
 
     @Test
-    void upsideDownNamesRequireAnExactCaseInsensitiveSearch() {
-        assertTrue(LumiDashboardScreen.upsideDownSearch("Dinnerbone"));
-        assertTrue(LumiDashboardScreen.upsideDownSearch("Grumm"));
-        assertTrue(LumiDashboardScreen.upsideDownSearch("dinnerbone"));
-        assertFalse(LumiDashboardScreen.upsideDownSearch("Dinnerbone "));
-        assertFalse(LumiDashboardScreen.upsideDownSearch("dinnerbon"));
+    void upsideDownCardsAreSelectedByExactNormalizedTags() {
+        assertTrue(LumiDashboardScreen.upsideDownTag(
+                VersionTags.parse("Dinnerbone")));
+        assertTrue(LumiDashboardScreen.upsideDownTag(
+                VersionTags.parse("roof, Grumm")));
+        assertFalse(LumiDashboardScreen.upsideDownTag(
+                VersionTags.parse("dinnerbon")));
     }
 }

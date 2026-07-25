@@ -20,10 +20,8 @@ class LumiStarWarsCrawlTest {
     }
 
     @Test
-    void upsideDownSpellsBypassHistoryFilteringRegardlessOfCase() {
-        assertTrue(LumiDashboardScreen.upsideDownSearch("dinnerbone"));
-        assertTrue(LumiDashboardScreen.upsideDownSearch("GRUMM"));
-        assertEquals("", LumiDashboardScreen.historySearch("grumm"));
+    void onlyStarWarsBypassesHistoryFiltering() {
+        assertEquals("grumm", LumiDashboardScreen.historySearch("grumm"));
         assertEquals("", LumiDashboardScreen.historySearch("starwars"));
         assertEquals("grumm ", LumiDashboardScreen.historySearch("grumm "));
     }

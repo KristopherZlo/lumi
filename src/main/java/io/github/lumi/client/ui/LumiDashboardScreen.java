@@ -280,11 +280,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             graphView = null;
             return;
         }
-        if (upsideDownSearch(searchQuery)) {
-            graphView = null;
-            addBranchDropdown();
-            return;
-        }
         List<HistorySnapshotPayload.Version> versions = visibleVersions();
         int capacity = visibleHistoryRows(
                 historyHeight, Integer.MAX_VALUE, layout.bodyWidth());
@@ -392,10 +387,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             return;
         }
         boolean wasStarWars = starWarsSearch(searchQuery);
-        boolean wasUpsideDown = upsideDownSearch(searchQuery);
         searchQuery = value;
         boolean isStarWars = starWarsSearch(value);
-        boolean isUpsideDown = upsideDownSearch(value);
         if (isStarWars && !wasStarWars) {
             starWars.start(System.currentTimeMillis());
         }
@@ -403,7 +396,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             pagedHistory.search(historySearch(value));
             if (isStarWars) pagedHistory.loadNextPage();
         }
-        if (wasStarWars != isStarWars || wasUpsideDown != isUpsideDown) {
+        if (wasStarWars != isStarWars) {
             refreshSearchEasterEgg();
         }
     }
@@ -520,7 +513,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     }
 
     private boolean lumiSaveHovered(int mouseX, int mouseY) {
-        if (snapshot == null || upsideDownSearch(searchQuery)) return false;
+        if (snapshot == null) return false;
         if (graphView != null) {
             return graphView.nodeAt(mouseX, mouseY)
                     .map(HistoryGraphLayout.Node::version)
@@ -563,18 +556,13 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 && mouseY >= card.y() && mouseY < card.bottom();
     }
 
-    static boolean upsideDownSearch(String query) {
-        return "Dinnerbone".equalsIgnoreCase(query)
-                || "Grumm".equalsIgnoreCase(query);
-    }
-
     static boolean starWarsSearch(String query) {
         return "star wars".equalsIgnoreCase(query)
                 || "starwars".equalsIgnoreCase(query);
     }
 
     static String historySearch(String query) {
-        return upsideDownSearch(query) || starWarsSearch(query) ? "" : query;
+        return starWarsSearch(query) ? "" : query;
     }
 
     private String worldName() {
@@ -648,57 +636,37 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                     System.currentTimeMillis());
             return;
         }
-        boolean upsideDown = upsideDownSearch(searchQuery);
-        int historyContentY = historyY + HISTORY_FIRST_ROW_OFFSET - 5;
-        if (upsideDown) {
-            graphics.enableScissor(
-                    x + 1, historyContentY,
-                    x + width - 1, historyY + historyHeight - 1);
-            graphics.pose().pushMatrix();
-            graphics.pose().translate(
-                    0.0F, historyContentY + historyY + historyHeight - 1.0F);
-            graphics.pose().scale(1.0F, -1.0F);
+        List<HistorySnapshotPayload.Version> versions = visibleVersions();
+        if (graphView != null) {
+            graphView.renderConnections(graphics);
         }
-        try {
-            List<HistorySnapshotPayload.Version> versions = visibleVersions();
-            if (graphView != null) {
-                graphView.renderConnections(graphics);
-            }
-            int rows = visibleHistoryRows(
-                    historyHeight, versions.size(), layout.bodyWidth());
-            List<HistorySnapshotPayload.Version> visible = versions.stream()
-                    .skip(historyScroll).limit(rows).toList();
-            for (int index = 0;
-                    graphView == null && index < visible.size(); index++) {
-                HistorySnapshotPayload.Version version = visible.get(index);
-                int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
-                        + index * historyRowStride(width);
-                renderVersionCard(graphics, version, rowY, false);
-            }
-            if (!upsideDown) {
-                renderScrollbar(
-                        graphics, x,
-                        historyY + HISTORY_FIRST_ROW_OFFSET,
-                        width - 3,
-                        Math.max(0, historyHeight
-                                - HISTORY_FIRST_ROW_OFFSET - 5),
-                        versions.size(), rows, historyScroll,
-                        value -> historyScroll = value);
-            }
-            if (versions.isEmpty()) {
-                graphics.drawCenteredString(font,
-                        Component.translatable(searchQuery.isBlank()
-                                ? "luma.history.empty"
-                                : "luma.project.history_search_help"),
-                        x + width / 2,
-                        emptyHistoryY(historyY, historyHeight),
-                        LumiTheme.MUTED);
-            }
-        } finally {
-            if (upsideDown) {
-                graphics.pose().popMatrix();
-                graphics.disableScissor();
-            }
+        int rows = visibleHistoryRows(
+                historyHeight, versions.size(), layout.bodyWidth());
+        List<HistorySnapshotPayload.Version> visible = versions.stream()
+                .skip(historyScroll).limit(rows).toList();
+        for (int index = 0;
+                graphView == null && index < visible.size(); index++) {
+            HistorySnapshotPayload.Version version = visible.get(index);
+            int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
+                    + index * historyRowStride(width);
+            renderVersionCard(graphics, version, rowY, false);
+        }
+        renderScrollbar(
+                graphics, x,
+                historyY + HISTORY_FIRST_ROW_OFFSET,
+                width - 3,
+                Math.max(0, historyHeight
+                        - HISTORY_FIRST_ROW_OFFSET - 5),
+                versions.size(), rows, historyScroll,
+                value -> historyScroll = value);
+        if (versions.isEmpty()) {
+            graphics.drawCenteredString(font,
+                    Component.translatable(searchQuery.isBlank()
+                            ? "luma.history.empty"
+                            : "luma.project.history_search_help"),
+                    x + width / 2,
+                    emptyHistoryY(historyY, historyHeight),
+                    LumiTheme.MUTED);
         }
     }
 
@@ -707,11 +675,27 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             HistorySnapshotPayload.Version version,
             int rowY,
             boolean featured) {
-        commitCards.render(
-                graphics, version, displayedTags(version),
-                versionCardLayout(layout.bodyX(), layout.bodyWidth(), rowY),
-                LumiTheme.ACCENT,
-                snapshot.head().equals(version.id()), featured);
+        VersionTags tags = displayedTags(version);
+        LumiCommitCard.Layout card = versionCardLayout(
+                layout.bodyX(), layout.bodyWidth(), rowY);
+        boolean upsideDown = upsideDownTag(tags);
+        if (upsideDown) {
+            graphics.pose().pushMatrix();
+            graphics.pose().translate(0.0F, card.y() + card.bottom());
+            graphics.pose().scale(1.0F, -1.0F);
+        }
+        try {
+            commitCards.render(
+                    graphics, version, tags, card, LumiTheme.ACCENT,
+                    snapshot.head().equals(version.id()), featured);
+        } finally {
+            if (upsideDown) graphics.pose().popMatrix();
+        }
+    }
+
+    static boolean upsideDownTag(VersionTags tags) {
+        return tags.values().stream().anyMatch(
+                tag -> "dinnerbone".equals(tag) || "grumm".equals(tag));
     }
 
     @Override
