@@ -119,6 +119,20 @@ final class WorkspaceHistoryController {
         }
     }
 
+    boolean loadNextPage() {
+        Optional<HistoryPagePayload> current = page();
+        if (current.isEmpty() || current.orElseThrow().offset() != offset) {
+            return false;
+        }
+        versions();
+        if (!current.orElseThrow().hasMore()) {
+            return false;
+        }
+        offset += pageSize;
+        request();
+        return true;
+    }
+
     void nextBranch(List<HistorySnapshotPayload.Branch> branches) {
         if (branches.isEmpty()) {
             return;

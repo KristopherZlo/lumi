@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.client.state.ClientHistoryPageStore;
@@ -119,6 +120,37 @@ class WorkspaceHistoryControllerTest {
         controller.selectBranch("idea");
         assertTrue(controller.versions().isEmpty());
         assertEquals("idea", controller.branch().value());
+    }
+
+    @Test
+    void loadsEachReadyPageOnceForContinuousPresentations() {
+        HistorySnapshotPayload snapshot = snapshot();
+        ClientHistoryPageStore pages = new ClientHistoryPageStore();
+        AtomicInteger sequence = new AtomicInteger();
+        AtomicReference<UUID> request = new AtomicReference<>();
+        WorkspaceHistoryController controller = new WorkspaceHistoryController(
+                snapshot, pages, (branch, zone, offset, limit, query) -> {
+                    UUID id = new UUID(0, sequence.incrementAndGet());
+                    request.set(id);
+                    pages.begin(id, snapshot.dimensionId(),
+                            snapshot.workspaceId(), branch, zone, offset);
+                    return id;
+                });
+        controller.ensurePageSize(2);
+        assertTrue(pages.accept(new HistoryPagePayload(
+                request.get(), snapshot.dimensionId(), snapshot.workspaceId(),
+                new BranchName("main"), Optional.empty(), 0, true,
+                List.of(version('1'), version('2')), "")));
+
+        assertTrue(controller.loadNextPage());
+        assertEquals(2, controller.pageNumber());
+        assertFalse(controller.loadNextPage());
+        assertTrue(pages.accept(new HistoryPagePayload(
+                request.get(), snapshot.dimensionId(), snapshot.workspaceId(),
+                new BranchName("main"), Optional.empty(), 2, false,
+                List.of(version('3')), "")));
+        assertFalse(controller.loadNextPage());
+        assertEquals(3, controller.versions().size());
     }
 
     private static HistorySnapshotPayload snapshot() {
