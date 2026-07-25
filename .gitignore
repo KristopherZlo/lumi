@@ -8,7 +8,7 @@ out/
 .tmp/
 .worktrees/
 structures/
-.superpowers/
+/.superpowers/
 
 *.log
 *.tmp
@@ -24,8 +24,26 @@ replay_pid*
 Thumbs.db
 Desktop.ini
 
-# Local design notes and generated references
-/.lumi-*.md
-/idea.md
-/lumi-player-training-uiux.md
-/docs/*_REFERENCE_*.md
+# Local AI working material
+/docs/
+/*.md
+!/README.md
+/.lumi-*
+
+# Local credentials and secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.kdbx
+*.ovpn
+id_rsa*
+id_ed25519*
+credentials*.json
+secrets*.json
+local.properties
+gradle-local.properties

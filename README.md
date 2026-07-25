@@ -140,14 +140,6 @@ The code is split by responsibility:
 | `network` | Revision-checked client/server commands and immutable payloads |
 | `client/ui/*` | Rendering, thin controllers, and immutable view state |
 
-Development references:
-
-- [Module map](modules.md)
-- [Architecture](docs/architecture.md)
-- [Storage format](docs/storage-format.md)
-- [Development and verification](docs/development.md)
-- [Maintenance guide](docs/maintenance-guide.md)
-
 ## License
 
 GPL-3.0-only. See [LICENSE](LICENSE).
