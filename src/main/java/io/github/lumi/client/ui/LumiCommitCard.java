@@ -152,6 +152,14 @@ final class LumiCommitCard {
         int metaY() { return y + 17; }
         int right() { return x + width; }
         int bottom() { return y + height; }
+        float centerX() { return (x + right()) / 2.0F; }
+        float centerY() { return (y + bottom()) / 2.0F; }
+        int rotatedX(int childX, int childWidth) {
+            return x + right() - childX - childWidth;
+        }
+        int rotatedY(int childY, int childHeight) {
+            return y + bottom() - childY - childHeight;
+        }
         int actionsRight() { return actionX(ACTION_COUNT - 1) + ACTION_WIDTH; }
         int actionsBottom() { return actionY + ACTION_HEIGHT; }
     }

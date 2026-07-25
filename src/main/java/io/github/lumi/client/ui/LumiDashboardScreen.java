@@ -314,19 +314,26 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             HistorySnapshotPayload.Version version, int rowY) {
         LumiCommitCard.Layout card = versionCardLayout(
                 layout.bodyX(), layout.bodyWidth(), rowY);
-        addIconButton(card.actionX(0), card.actionY(),
+        LumiButton restore = addIconButton(card.actionX(0), card.actionY(),
                 "rollback", "luma.action.restore",
                 () -> openRestore.accept(version), LumiButton.Kind.PRIMARY);
-        addIconButton(card.actionX(1), card.actionY(),
+        LumiButton details = addIconButton(card.actionX(1), card.actionY(),
                 "folder", "luma.action.open_details",
                 () -> openDetails.accept(version), LumiButton.Kind.NORMAL);
-        addIconButton(card.actionX(2), card.actionY(),
+        LumiButton branch = addIconButton(card.actionX(2), card.actionY(),
                 "branch", "luma.action.create_idea",
                 () -> createBranch.accept(version), LumiButton.Kind.NORMAL);
         LumiButton tags = addIconButton(card.actionX(3), card.actionY(),
                 "tags", "luma.action.edit_tags",
                 () -> editTags(version), LumiButton.Kind.NORMAL);
         tags.active = !VersionText.immutable(version);
+        if (upsideDownTag(displayedTags(version))) {
+            for (LumiButton action : List.of(restore, details, branch, tags)) {
+                action.setX(card.rotatedX(action.getX(), action.getWidth()));
+                action.setY(card.rotatedY(action.getY(), action.getHeight()));
+                action.rotateContents180();
+            }
+        }
     }
 
     private boolean addDashboardHint(int y) {
@@ -681,8 +688,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         boolean upsideDown = upsideDownTag(tags);
         if (upsideDown) {
             graphics.pose().pushMatrix();
-            graphics.pose().translate(0.0F, card.y() + card.bottom());
-            graphics.pose().scale(1.0F, -1.0F);
+            graphics.pose().rotateAbout(
+                    (float) Math.PI, card.centerX(), card.centerY());
         }
         try {
             commitCards.render(

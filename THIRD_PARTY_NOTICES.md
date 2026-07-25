@@ -3,15 +3,13 @@
 ## Star Wars NBS arrangement
 
 `src/main/resources/assets/lumi/music/star_wars.nbs` contains
-“The Imperial March (Darth Vader's Theme)”, arranged and uploaded by
-CarelessCrasher:
+“Star Wars March Theme”, arranged and uploaded by meidcom123454:
 
-https://noteblock.world/song/JpdE0GEBRu
+https://noteblock.world/song/fN2rg34XDF
 
-The arrangement is provided under Creative Commons
-Attribution-ShareAlike 4.0:
-
-https://creativecommons.org/licenses/by-sa/4.0/
+The source page marks the arrangement with the Note Block World Standard
+License. Obtain the uploader's permission before distributing a build that
+contains this file.
 
 The original composition is credited to John Williams. This notice does not
 grant rights beyond those provided by the arrangement's stated license and the

@@ -20,6 +20,7 @@ public class LumiButton extends Button {
     private final Identifier icon;
     private final Identifier disabledIcon;
     private final Integer accentColor;
+    private boolean upsideDown;
 
     public LumiButton(
             int x, int y, int width, int height,
@@ -68,9 +69,30 @@ public class LumiButton extends Button {
                 Math.max(CONTROL_HEIGHT, Math.max(0, textWidth) + 12));
     }
 
+    void rotateContents180() {
+        upsideDown = true;
+    }
+
     @Override
     protected void renderContents(
             GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        if (!upsideDown) {
+            renderFlatContents(graphics);
+            return;
+        }
+        graphics.pose().pushMatrix();
+        graphics.pose().rotateAbout(
+                (float) Math.PI,
+                getX() + getWidth() / 2.0F,
+                getY() + getHeight() / 2.0F);
+        try {
+            renderFlatContents(graphics);
+        } finally {
+            graphics.pose().popMatrix();
+        }
+    }
+
+    private void renderFlatContents(GuiGraphics graphics) {
         int fill = active ? kind.fill(isHoveredOrFocused()) : 0xff18191b;
         if (active && accentColor != null) {
             graphics.fill(

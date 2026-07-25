@@ -76,6 +76,21 @@ class LumiDashboardScreenTest {
     }
 
     @Test
+    void rotatesCardActionsAroundTheCardCenter() {
+        LumiCommitCard.Layout card = LumiDashboardScreen.versionCardLayout(
+                40, 300, 100);
+        int actionX = card.actionX(0);
+        int actionY = card.actionY();
+        int rotatedX = card.rotatedX(actionX, 26);
+        int rotatedY = card.rotatedY(actionY, 18);
+
+        assertEquals(card.x() + card.right(), actionX + 26 + rotatedX);
+        assertEquals(card.y() + card.bottom(), actionY + 18 + rotatedY);
+        assertEquals(actionX, card.rotatedX(rotatedX, 26));
+        assertEquals(actionY, card.rotatedY(rotatedY, 18));
+    }
+
+    @Test
     void compactNavigationStaysAboveTheSupportPanel() {
         LumiPageLayout tiny = LumiPageLayout.fit(320, 180);
         int supportTop = LumiPageScreen.supportTop(tiny);

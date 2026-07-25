@@ -15,8 +15,8 @@ class LumiNbsSongTest {
             assertNotNull(input);
             LumiNbsSong song = LumiNbsSong.read(input);
 
-            assertEquals(15.0F, song.ticksPerSecond());
-            assertEquals(2_715, song.notes().size());
+            assertEquals(7.25F, song.ticksPerSecond());
+            assertEquals(581, song.notes().size());
             assertTrue(song.notes().stream().allMatch(
                     note -> note.instrument() >= 0
                             && note.instrument() < 16));

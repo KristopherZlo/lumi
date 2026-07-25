@@ -18,7 +18,7 @@ import net.minecraft.util.FormattedCharSequence;
 /** Bounded perspective crawl built from the player's loaded Save metadata. */
 final class LumiStarWarsCrawl {
     private static final long INTRO_MILLIS = 3_200L;
-    private static final float PIXELS_PER_MILLI = 0.025F;
+    private static final float PIXELS_PER_MILLI = 0.015F;
     private static final DateTimeFormatter DATE =
             DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM)
                     .withLocale(Locale.getDefault())
