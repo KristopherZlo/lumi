@@ -21,7 +21,7 @@ Save a good moment, explore another idea on a branch, compare the result, and
 return safely without copying the whole world folder or learning Git.
 
 > [!WARNING]
-> Lumi is in alpha. Keep normal backups of worlds you care about.
+> Lumi 0.2.0 is a release candidate. Keep normal backups of worlds you care about.
 
 ## What Lumi Does
 
@@ -76,7 +76,7 @@ All key bindings are remappable in Minecraft controls.
 
 ## Install
 
-Download an alpha build from
+Download a release-candidate build from
 [GitHub Releases](https://github.com/KristopherZlo/lumi/releases) and place it
 in the `mods` folder together with Fabric API.
 
