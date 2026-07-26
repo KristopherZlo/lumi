@@ -24,6 +24,9 @@ class LumiButtonTest {
         assertTrue(source.contains("private static final int ICON_BUTTON_WIDTH = 26;"));
         assertTrue(source.contains("Integer accentColor"));
         assertTrue(source.contains("LumiTheme.withAlpha"));
+        assertTrue(source.contains(
+                "\"textures/gui/left-iconed-buttons/\" + iconName + \".png\""));
+        assertTrue(source.contains("|| \"bug\".equals(iconName)"));
         assertTrue(source.contains("\"textures/gui/icons/\" + iconName + \".png\""));
         assertTrue(source.contains("\"textures/gui/icons/\" + iconName + \"_disabled.png\""));
         assertTrue(source.contains("active ? icon : disabledIcon"));

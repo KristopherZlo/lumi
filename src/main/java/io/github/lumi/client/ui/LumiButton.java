@@ -44,13 +44,14 @@ public class LumiButton extends Button {
                 message, onPress, DEFAULT_NARRATION);
         this.kind = kind;
         this.accentColor = accentColor;
-        boolean support = "buymeacoffee".equals(iconName)
-                || "paypal".equals(iconName);
+        boolean leftIconed = "buymeacoffee".equals(iconName)
+                || "paypal".equals(iconName)
+                || "bug".equals(iconName);
         this.icon = iconName == null ? null : Identifier.fromNamespaceAndPath(
-                LumiMod.MOD_ID, support
-                        ? "textures/gui/" + iconName + ".png"
+                LumiMod.MOD_ID, leftIconed
+                        ? "textures/gui/left-iconed-buttons/" + iconName + ".png"
                         : "textures/gui/icons/" + iconName + ".png");
-        this.disabledIcon = support || "sliders".equals(iconName)
+        this.disabledIcon = leftIconed || "sliders".equals(iconName)
                 ? icon : iconName == null ? null
                 : Identifier.fromNamespaceAndPath(
                         LumiMod.MOD_ID,
