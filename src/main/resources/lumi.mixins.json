@@ -16,6 +16,7 @@
     "EntityStorageMixin",
     "LevelChunkMixin",
     "LevelTicksMixin",
+    "LivingEntityMixin",
     "MinecraftServerAccessor",
     "PersistentEntitySectionManagerMixin",
     "PersistentEntityManagerPersistenceAccessor",

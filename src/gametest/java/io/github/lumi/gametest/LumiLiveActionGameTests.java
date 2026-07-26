@@ -5,12 +5,17 @@ import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -23,6 +28,51 @@ import net.minecraft.world.level.gamerules.GameRules;
 
 /** Integrated gates for exact session-only world actions. */
 public final class LumiLiveActionGameTests {
+    @GameTest(maxTicks = 300000)
+    public void oneDamageRootRestoresEveryKilledMob(GameTestHelper helper) {
+        FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
+                .orElseThrow(() -> helper.assertionException("Lumi runtime is not loaded"));
+        UUID player = UUID.randomUUID();
+        UUID test = UUID.randomUUID();
+        List<Pig> pigs = new ArrayList<>();
+        AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
+
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    for (int index = 0; index < 3; index++) {
+                        Pig pig = EntityType.PIG.create(
+                                helper.getLevel(), EntitySpawnReason.COMMAND);
+                        helper.assertTrue(pig != null, "Control pig could not be created");
+                        BlockPos position = helper.absolutePos(
+                                new BlockPos(index + 1, 2, 2));
+                        pig.setPos(position.getX() + 0.5, position.getY(),
+                                position.getZ() + 0.5);
+                        pig.setHealth(1.0F);
+                        helper.assertTrue(helper.getLevel().addFreshEntity(pig),
+                                "Control pig could not be spawned");
+                        pigs.add(pig);
+                    }
+                    killTogether(runtime, player, pigs);
+                })
+                .thenWaitUntil(() -> helper.assertTrue(
+                        pigs.stream().allMatch(Pig::isRemoved),
+                        "Killed pigs have not finished their death animation"))
+                .thenExecute(() -> runtime.startLiveAction(
+                        player, LiveActionJournal.Direction.UNDO,
+                        operation -> terminal.set(operation.terminalState())))
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> helper.assertValueEqual(
+                        MutationTerminalState.SUCCEEDED, terminal.get(),
+                        "Multi-kill Undo must succeed"))
+                .thenExecute(() -> helper.assertTrue(
+                        pigs.stream().allMatch(pig ->
+                                helper.getLevel().getEntity(pig.getUUID()) instanceof Pig),
+                        "Undo did not restore every mob killed by one damage root"))
+                .thenExecute(() -> LumiGameTestLease.release(test))
+                .thenSucceed();
+    }
+
     @GameTest(maxTicks = 300000)
     public void redoneDynamicEntityRemainsUndoableAfterTicking(GameTestHelper helper) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
@@ -330,6 +380,25 @@ public final class LumiLiveActionGameTests {
         helper.getLevel().getGameRules().set(
                 GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER, -1,
                 helper.getLevel().getServer());
+    }
+
+    private static void killTogether(
+            FabricDimensionRuntime runtime, UUID player, List<Pig> pigs) {
+        try (var ignored = DirectLiveActionContext.open(
+                runtime.liveActions(), player)) {
+            var primary = runtime.liveEntities().begin(pigs.getFirst());
+            try {
+                pigs.forEach(pig -> pig.hurtServer(
+                        runtime.level(), runtime.level().damageSources().genericKill(),
+                        Float.MAX_VALUE));
+            } finally {
+                if (primary.isPresent()) {
+                    runtime.liveEntities().finish(primary.orElseThrow());
+                }
+            }
+        } catch (IOException failed) {
+            throw new AssertionError("Could not capture the multi-kill action", failed);
+        }
     }
 
     private static void requireIdle(GameTestHelper helper, FabricDimensionRuntime runtime) {
