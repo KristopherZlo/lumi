@@ -22,6 +22,7 @@ import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.animal.chicken.Chicken;
@@ -282,6 +283,19 @@ final class LumiBehaviorActions {
         timed(name, () -> server.runOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
             attack(player, entity(player.level(), id, Entity.class), weapon, name);
+        }));
+    }
+
+    void woundEntity(String name, UUID id, Item weapon) {
+        timed(name, () -> server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            LivingEntity target = entity(player.level(), id, LivingEntity.class);
+            float health = target.getHealth();
+            prepareAttack(player, target, weapon);
+            player.connection.handleInteract(
+                    ServerboundInteractPacket.createAttackPacket(target, false));
+            require(target.isAlive() && target.getHealth() < health,
+                    "Entity was not wounded by " + name + ": " + id);
         }));
     }
 

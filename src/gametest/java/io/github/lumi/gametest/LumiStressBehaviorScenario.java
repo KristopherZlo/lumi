@@ -285,11 +285,15 @@ final class LumiStressBehaviorScenario {
         BlockPos chickenPosition = actions.surfacePosition(
                 origin.getX() + 24, origin.getZ() + 8);
         UUID chicken = actions.spawnChicken(chickenPosition);
-        actions.holdItem("equip_chicken_sword", Items.DIAMOND_SWORD);
-        checks.waitTicks("charge_chicken_sword", 20);
+        actions.holdItem("empty_chicken_hand", Items.AIR);
+        for (int hit = 1; hit <= 3; hit++) {
+            checks.waitTicks("charge_chicken_hit_" + hit, 20);
+            actions.woundEntity("wound_chicken_" + hit, chicken, Items.AIR);
+        }
+        checks.waitTicks("charge_final_chicken_hit", 20);
         checks.snapshot("live_chicken", area);
         LumiWorldSnapshot liveChicken = actions.snapshotAndAttackEntity(
-                "kill_chicken", chicken, Items.DIAMOND_SWORD, area);
+                "kill_chicken", chicken, Items.AIR, area);
         checks.waitTicks("dead_chicken_settle_1s", 20);
         checks.waitUntil("chicken_removed_after_1s", 0,
                 () -> !actions.hasEntity(chicken));

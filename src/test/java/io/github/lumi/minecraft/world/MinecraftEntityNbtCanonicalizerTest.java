@@ -88,6 +88,19 @@ class MinecraftEntityNbtCanonicalizerTest {
         assertFalse(normalized.contains("attributes"));
     }
 
+    @Test
+    void makesWoundedEntityStableAcrossVanillaReload() throws Exception {
+        CompoundTag wounded = woundedEntity(93, 7);
+        CompoundTag reloaded = woundedEntity(7, -7);
+
+        CompoundTag normalized = canonicalizer.normalize(wounded);
+
+        assertEquals(MinecraftNbtCodec.encode(normalized),
+                MinecraftNbtCodec.encode(canonicalizer.normalize(reloaded)));
+        assertFalse(normalized.contains("HurtByTimestamp"));
+        assertEquals(-7, normalized.getIntOr("ticks_since_last_hurt_by_mob", 0));
+    }
+
     private static CompoundTag entity(
             float yaw, float pitch, String firstAttribute, String secondAttribute) {
         CompoundTag entity = new CompoundTag();
@@ -99,6 +112,14 @@ class MinecraftEntityNbtCanonicalizerTest {
         attributes.add(attribute(firstAttribute));
         attributes.add(attribute(secondAttribute));
         entity.put("attributes", attributes);
+        return entity;
+    }
+
+    private static CompoundTag woundedEntity(int timestamp, int ticksSince) {
+        CompoundTag entity = new CompoundTag();
+        entity.putInt("HurtByTimestamp", timestamp);
+        entity.put("last_hurt_by_mob", new CompoundTag());
+        entity.putInt("ticks_since_last_hurt_by_mob", ticksSince);
         return entity;
     }
 

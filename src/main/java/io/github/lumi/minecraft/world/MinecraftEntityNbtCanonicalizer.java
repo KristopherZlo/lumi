@@ -32,6 +32,7 @@ final class MinecraftEntityNbtCanonicalizer {
 
     private void normalizeEntity(CompoundTag entity, EntityType<?> type) {
         normalizeRotation(entity.getListOrEmpty("Rotation"));
+        normalizeLastHurtByMob(entity);
         normalizeAttributes(entity, type);
         ListTag passengers = entity.getListOrEmpty("Passengers");
         for (int index = 0; index < passengers.size(); index++) {
@@ -51,6 +52,15 @@ final class MinecraftEntityNbtCanonicalizer {
         rotation.set(0, FloatTag.valueOf(yaw.value() % FULL_ROTATION));
         rotation.set(1, FloatTag.valueOf(Math.clamp(
                 pitch.value() % FULL_ROTATION, -90.0F, 90.0F)));
+    }
+
+    private static void normalizeLastHurtByMob(CompoundTag entity) {
+        if (!entity.contains("last_hurt_by_mob")) {
+            return;
+        }
+        entity.remove("HurtByTimestamp");
+        entity.getInt("ticks_since_last_hurt_by_mob").ifPresent(ticks ->
+                entity.putInt("ticks_since_last_hurt_by_mob", -Math.abs(ticks)));
     }
 
     private static void normalizeAttributes(CompoundTag entity, EntityType<?> type) {
