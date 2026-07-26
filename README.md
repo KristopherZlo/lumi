@@ -129,6 +129,8 @@ Use JDK 21.
 .\gradlew.bat runClient --no-daemon
 ```
 
+`build` compiles the mod and runs its unit and server GameTest suites.
+
 The code is split by responsibility:
 
 | Layer | Responsibility |
