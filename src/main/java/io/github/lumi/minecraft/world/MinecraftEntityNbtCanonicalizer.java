@@ -55,10 +55,10 @@ final class MinecraftEntityNbtCanonicalizer {
     }
 
     private static void normalizeLastHurtByMob(CompoundTag entity) {
+        entity.remove("HurtByTimestamp");
         if (!entity.contains("last_hurt_by_mob")) {
             return;
         }
-        entity.remove("HurtByTimestamp");
         entity.getInt("ticks_since_last_hurt_by_mob").ifPresent(ticks ->
                 entity.putInt("ticks_since_last_hurt_by_mob", -Math.abs(ticks)));
     }

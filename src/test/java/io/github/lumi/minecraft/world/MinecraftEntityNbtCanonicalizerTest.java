@@ -101,6 +101,20 @@ class MinecraftEntityNbtCanonicalizerTest {
         assertEquals(-7, normalized.getIntOr("ticks_since_last_hurt_by_mob", 0));
     }
 
+    @Test
+    void omitsAbsoluteHurtTimestampWithoutAttackerReference() throws Exception {
+        CompoundTag attacked = new CompoundTag();
+        attacked.putInt("HurtByTimestamp", 1_939);
+        CompoundTag reloaded = new CompoundTag();
+        reloaded.putInt("HurtByTimestamp", 0);
+
+        CompoundTag normalized = canonicalizer.normalize(attacked);
+
+        assertEquals(MinecraftNbtCodec.encode(normalized),
+                MinecraftNbtCodec.encode(canonicalizer.normalize(reloaded)));
+        assertFalse(normalized.contains("HurtByTimestamp"));
+    }
+
     private static CompoundTag entity(
             float yaw, float pitch, String firstAttribute, String secondAttribute) {
         CompoundTag entity = new CompoundTag();
