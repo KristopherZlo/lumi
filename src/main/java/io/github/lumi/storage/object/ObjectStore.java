@@ -42,8 +42,7 @@ public final class ObjectStore {
 
         ObjectId id = ObjectId.hash(canonicalPayload);
         Path target = pathFor(id);
-        if (Files.exists(target) || packedObject(id) != null) {
-            verifyExisting(id, canonicalPayload);
+        if (verifyExistingIfPresent(id, canonicalPayload)) {
             return id;
         }
 
@@ -219,6 +218,20 @@ public final class ObjectStore {
         }
     }
 
+    private boolean verifyExistingIfPresent(ObjectId id, byte[] expected)
+            throws IOException {
+        if (!Files.exists(pathFor(id)) && packedObject(id) == null) {
+            return false;
+        }
+        try {
+            verifyExisting(id, expected);
+            return true;
+        } catch (java.nio.file.NoSuchFileException removedPack) {
+            refreshPackedObjects();
+            return false;
+        }
+    }
+
     private void writeDurably(Path path, int rawLength, byte[] compressed) throws IOException {
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.WRITE,
                 StandardOpenOption.TRUNCATE_EXISTING)) {
@@ -307,8 +320,7 @@ public final class ObjectStore {
         public ObjectId write(byte[] canonicalPayload) throws IOException {
             Objects.requireNonNull(canonicalPayload, "canonicalPayload");
             ObjectId id = ObjectId.hash(canonicalPayload);
-            if (Files.exists(pathFor(id)) || packedObject(id) != null) {
-                verifyExisting(id, canonicalPayload);
+            if (verifyExistingIfPresent(id, canonicalPayload)) {
                 return id;
             }
             return writer.write(canonicalPayload);

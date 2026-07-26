@@ -108,6 +108,27 @@ class ObjectStoreTest {
     }
 
     @Test
+    void recreatesPackedPayloadDeletedByAnotherRepositoryInstance()
+            throws IOException {
+        byte[] payload = "reused world state".getBytes(StandardCharsets.UTF_8);
+        ObjectStore active = new ObjectStore(tempDir);
+        ObjectId id;
+        try (ObjectStore.WriteBatch batch = active.beginBatch()) {
+            id = batch.write(payload);
+            batch.publish();
+        }
+        assertArrayEquals(payload, active.read(id));
+
+        assertEquals(1, new ObjectStore(tempDir).deleteAll(Set.of(id)));
+        try (ObjectStore.WriteBatch batch = active.beginBatch()) {
+            assertEquals(id, batch.write(payload));
+            batch.publish();
+        }
+
+        assertArrayEquals(payload, active.read(id));
+    }
+
+    @Test
     void publishesARealisticDirtySectionBatchAsOnePack() throws IOException {
         ObjectStore store = new ObjectStore(tempDir);
         Map<ObjectId, byte[]> expected = new LinkedHashMap<>();
