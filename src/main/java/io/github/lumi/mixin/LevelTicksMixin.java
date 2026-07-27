@@ -6,6 +6,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.ticks.LevelChunkTicks;
 import net.minecraft.world.ticks.LevelTicks;
@@ -35,9 +36,19 @@ abstract class LevelTicksMixin<T> implements OwnedTickAccess<T> {
         // update LevelTicks internals only if profiling shows that scan matters.
         java.util.function.Predicate<ScheduledTick<T>> matches =
                 tick -> tick.pos().equals(position) && tick.type() == type;
+        lumi$removeTicks(matches);
+    }
+
+    @Override
+    public void lumi$removeWhere(Predicate<BlockPos> positions) {
+        lumi$removeTicks(tick -> positions.test(tick.pos()));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void lumi$removeTicks(Predicate<ScheduledTick<T>> matches) {
         allContainers.values().forEach(container -> container.removeIf(matches));
         toRunThisTick.removeIf(matches);
         alreadyRunThisTick.removeIf(matches);
-        toRunThisTickSet.removeIf(tick -> tick.pos().equals(position) && tick.type() == type);
+        toRunThisTickSet.removeIf(tick -> matches.test((ScheduledTick<T>) tick));
     }
 }

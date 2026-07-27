@@ -189,6 +189,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final AxiomSetBlockActionGrouper axiomSetBlockActions;
     private final MinecraftLiveBlockWorldAccess liveWorld;
     private final MinecraftLiveEntityWorldAccess liveEntityWorld;
+    private final MinecraftLiveBlockEntityTracker liveBlockEntities;
     private final MinecraftLiveEntityTracker liveEntities;
     private final MinecraftCausalTickTracker causalTicks;
     private final io.github.lumi.minecraft.operation.RestoreStateListener restoreStateListener;
@@ -276,12 +277,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         entityDurability = new EntityChunkDurabilityGate(mutations);
         liveWorld = new MinecraftLiveBlockWorldAccess(level, freeze);
         liveEntityWorld = new MinecraftLiveEntityWorldAccess(level, freeze);
+        liveBlockEntities = new MinecraftLiveBlockEntityTracker(
+                liveActions, liveWorld, this::recordCausalZoneGrowth);
         liveEntities = new MinecraftLiveEntityTracker(
                 liveActions, liveEntityWorld, this::publishBuilderEntityMutation);
         causalTicks = new MinecraftCausalTickTracker(
                 liveActions, level, freeze, level.getBlockTicks(), level.getFluidTicks());
         restoreStateListener = new RestoreBaselineReconciler(
-                entityDurability, blockEntityBaselines);
+                entityDurability, blockEntityBaselines, causalTicks::cancelSections);
         returnPointRestores = new ReturnPointRestorePreparation(
                 restores, blockOnlyRestores, worldApply, refs, journals,
                 new ForwardHistoryService(commits, refs),
@@ -638,11 +641,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public void chunkLoaded(LevelChunk chunk) throws IOException {
         loadedChunks.loaded(chunk.getPos().x, chunk.getPos().z);
         baselineCapture.remember(level, chunk, mutations, blockEntityBaselines);
+        liveBlockEntities.remember(chunk);
     }
 
     public void chunkUnloaded(LevelChunk chunk) {
         loadedChunks.unloaded(chunk.getPos().x, chunk.getPos().z);
         blockEntityBaselines.discardChunk(chunk.getPos().x, chunk.getPos().z);
+        liveBlockEntities.discardChunk(chunk.getPos().x, chunk.getPos().z);
     }
 
     public boolean isChunkMutationTrackable(int chunkX, int chunkZ) {
@@ -670,6 +675,49 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public void entityChunkUnloaded(ChunkPos position) {
         entityDurability.discard(MinecraftEntityChunkCapture.key(position));
+    }
+
+    public void entityAdded(Entity entity) throws IOException {
+        registerEntityLifecycleMutation(entity, true);
+    }
+
+    public void entityRemoving(Entity entity) throws IOException {
+        registerEntityLifecycleMutation(entity, false);
+    }
+
+    public void entityMoving(Entity entity, ChunkPos source) throws IOException {
+        if (freeze.isAuthorizedMutation()
+                || !MinecraftEntityChunkCapture.isDurableRoot(entity)) {
+            return;
+        }
+        EntityChunkKey before = MinecraftEntityChunkCapture.key(source);
+        entityDurability.registerMutation(before);
+        EntityChunkKey after = MinecraftEntityChunkCapture.key(entity.chunkPosition());
+        if (!after.equals(before) && !entityDurability.registerMutation(after)) {
+            entityDurability.rememberLoaded(after, worldReader.read(after));
+            entityDurability.registerMutation(after);
+        }
+    }
+
+    private void registerEntityLifecycleMutation(
+            Entity entity, boolean added) throws IOException {
+        if (freeze.isAuthorizedMutation()
+                || !MinecraftEntityChunkCapture.isDurableRoot(entity)) {
+            return;
+        }
+        EntityChunkKey key = MinecraftEntityChunkCapture.key(entity.chunkPosition());
+        if (entityDurability.registerMutation(key)) {
+            return;
+        }
+        var baseline = worldReader.read(key);
+        if (added) {
+            baseline = new io.github.lumi.domain.model.EntityChunkBlob(
+                    baseline.entities().stream()
+                            .filter(state -> !state.id().equals(entity.getUUID()))
+                            .toList());
+        }
+        entityDurability.rememberLoaded(key, baseline);
+        entityDurability.registerMutation(key);
     }
 
     public synchronized SaveCaptureOperation startSave(SaveRequest request) throws IOException {
@@ -939,6 +987,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return axiomSetBlockActions;
     }
     public MinecraftLiveBlockWorldAccess liveWorld() { return liveWorld; }
+    public MinecraftLiveBlockEntityTracker liveBlockEntities() {
+        return liveBlockEntities;
+    }
     public MinecraftLiveEntityTracker liveEntities() { return liveEntities; }
     public MinecraftCausalTickTracker causalTicks() { return causalTicks; }
 
@@ -979,6 +1030,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     section, mutations::markTrackedSection);
             mutations.recordBuilderBlockMutation(position, generation);
         });
+        if (generations.isEmpty()) {
+            causalTicks.cancelAuthorizedWork();
+        } else {
+            causalTicks.cancelSections(generations.keySet());
+        }
         Stream.concat(
                         plan.expectedEntities().values().stream(),
                         plan.replacementEntities().values().stream())

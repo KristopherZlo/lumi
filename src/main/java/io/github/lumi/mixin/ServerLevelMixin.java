@@ -3,20 +3,21 @@ package io.github.lumi.mixin;
 import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.runtime.MinecraftCausalTickTracker;
 import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
-import java.io.IOException;
 import io.github.lumi.minecraft.world.OwnedBlockEventAccess;
 import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Optional;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.BlockEventData;
-import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.BlockEventData;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.material.Fluid;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Shadow;
@@ -52,6 +53,7 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
 
     @Inject(method = "tickBlock", at = @At("RETURN"))
     private void lumi$endBlockTick(BlockPos position, Block block, CallbackInfo callback) {
+        lumi$finishLiveBlockEntity(position);
         lumi$endCausalTick();
     }
 
@@ -89,6 +91,7 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
     private void lumi$endBlockEvent(
             BlockEventData event,
             org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Boolean> callback) {
+        lumi$finishLiveBlockEntity(event.pos());
         lumi$endCausalTick();
     }
 
@@ -100,6 +103,12 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
             ServerLevel level = (ServerLevel) (Object) this;
             LumiMod.serverRuntime().find(level).ifPresent(runtime -> {
                 runtime.causalTicks().rememberCarrier(entity);
+                try {
+                    runtime.entityAdded(entity);
+                } catch (IOException failed) {
+                    LumiMod.LOGGER.warn("Cannot register added durable entity {}",
+                            entity.getUUID(), failed);
+                }
                 try {
                     runtime.liveEntities().added(entity);
                 } catch (IOException failed) {
@@ -133,8 +142,33 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
         blockEventsToReschedule.remove(event);
     }
 
+    @Override
+    public void lumi$removeBlockEventsWhere(Predicate<BlockPos> matches) {
+        blockEvents.removeIf(event -> matches.test(event.pos()));
+        blockEventsToReschedule.removeIf(event -> matches.test(event.pos()));
+    }
+
     @Unique
     private void lumi$endCausalTick() {
         lumi$causalTicks.removeLast().ifPresent(MinecraftCausalTickTracker.CausalExecution::close);
+    }
+
+    @Unique
+    private void lumi$finishLiveBlockEntity(BlockPos position) {
+        ServerLevel level = (ServerLevel) (Object) this;
+        var blockEntity = level.getBlockEntity(position);
+        if (blockEntity == null) {
+            return;
+        }
+        LumiMod.serverRuntime().find(level).ifPresent(runtime -> {
+            try {
+                if (runtime.liveBlockEntities().changed(blockEntity)) {
+                    runtime.causalTicks().rememberCarrier(blockEntity);
+                }
+            } catch (IOException failed) {
+                LumiMod.LOGGER.warn("Cannot finish causal block entity {}",
+                        position, failed);
+            }
+        });
     }
 }

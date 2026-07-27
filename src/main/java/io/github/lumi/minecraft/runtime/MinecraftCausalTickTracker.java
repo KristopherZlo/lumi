@@ -1,10 +1,11 @@
 package io.github.lumi.minecraft.runtime;
 
 import io.github.lumi.LumiMod;
+import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.service.LiveActionJournal;
-import io.github.lumi.minecraft.world.OwnedTickAccess;
-import io.github.lumi.minecraft.world.OwnedBlockEventAccess;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
+import io.github.lumi.minecraft.world.OwnedBlockEventAccess;
+import io.github.lumi.minecraft.world.OwnedTickAccess;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -13,22 +14,23 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.BlockEventData;
-import net.minecraft.world.level.material.Fluid;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
-import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.BlockEventData;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
+import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.ticks.LevelTicks;
 import net.minecraft.world.ticks.ScheduledTick;
 
 /** Associates accepted vanilla block/fluid ticks with their live root action. */
 public final class MinecraftCausalTickTracker {
-    static final int MAX_CAUSAL_DEPTH = 32;
+    static final int MAX_CAUSAL_DEPTH = 512;
     private static final Map<LevelTicks<?>, Binding> BINDINGS = new WeakHashMap<>();
 
     private final LiveActionJournal journal;
@@ -36,11 +38,16 @@ public final class MinecraftCausalTickTracker {
     private final LevelTicks<Fluid> fluidTicks;
     private final CausalTokenRegistry<TickKey, DirectLiveActionContext.CausalRoot> tokens =
             new CausalTokenRegistry<>();
+    private final Set<TickKey> authorizedTicks = new HashSet<>();
     private final CausalTokenRegistry<BlockEventData, DirectLiveActionContext.CausalRoot>
             blockEvents = new CausalTokenRegistry<>();
+    private final Set<BlockEventData> authorizedBlockEvents = new HashSet<>();
     private final OwnedBlockEventAccess eventAccess;
+    private final ServerLevel level;
     private final CausalTokenRegistry<BlockEntity, DirectLiveActionContext.CausalRoot>
             blockCarriers = new CausalTokenRegistry<>();
+    private final Set<BlockEntity> changedBlockCarriers = new HashSet<>();
+    private final Set<BlockEntity> authorizedBlockCarriers = new HashSet<>();
     private final DimensionFreezeState freeze;
     private final CausalTokenRegistry<Entity, DirectLiveActionContext.CausalRoot> entityCarriers =
             new CausalTokenRegistry<>();
@@ -53,7 +60,8 @@ public final class MinecraftCausalTickTracker {
             LevelTicks<Block> blockTicks,
             LevelTicks<Fluid> fluidTicks) {
         this.journal = Objects.requireNonNull(journal, "journal");
-        eventAccess = (OwnedBlockEventAccess) Objects.requireNonNull(level, "level");
+        this.level = Objects.requireNonNull(level, "level");
+        eventAccess = (OwnedBlockEventAccess) level;
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         this.blockTicks = Objects.requireNonNull(blockTicks, "blockTicks");
         this.fluidTicks = Objects.requireNonNull(fluidTicks, "fluidTicks");
@@ -71,6 +79,7 @@ public final class MinecraftCausalTickTracker {
         if (binding != null) {
             binding.tracker.rememberCurrent(
                     binding.tracker.tokens,
+                    binding.tracker.authorizedTicks,
                     new TickKey(binding.kind, tick.pos(), tick.type()));
         }
     }
@@ -85,7 +94,7 @@ public final class MinecraftCausalTickTracker {
 
     public void scheduledBlockEvent(BlockEventData event) {
         if (!eventAccess.lumi$hasBlockEvent(event)) {
-            rememberCurrent(blockEvents, event);
+            rememberCurrent(blockEvents, authorizedBlockEvents, event);
         }
     }
 
@@ -94,24 +103,51 @@ public final class MinecraftCausalTickTracker {
     }
 
     public void rememberCarrier(BlockEntity carrier) {
-        if (carrier instanceof PistonMovingBlockEntity) {
-            rememberCurrent(blockCarriers, carrier);
+        Optional<DirectLiveActionContext.CausalRoot> current =
+                DirectLiveActionContext.currentRoot(journal);
+        if (current.isPresent() && blockCarriers.owner(carrier)
+                .filter(owner -> owner.action().equals(
+                        current.orElseThrow().action()))
+                .isPresent()) {
+            changedBlockCarriers.add(carrier);
+            return;
+        }
+        Optional<DirectLiveActionContext.CausalRoot> root =
+                rememberCurrent(blockCarriers, carrier);
+        if (root.isPresent()) {
+            changedBlockCarriers.add(carrier);
+        } else if (carrier instanceof PistonMovingBlockEntity
+                && freeze.isAuthorizedMutation()) {
+            authorizedBlockCarriers.add(carrier);
         }
     }
 
     public Optional<CausalExecution> resumeCarrier(BlockEntity carrier) {
+        if (!(carrier instanceof PistonMovingBlockEntity)) {
+            changedBlockCarriers.remove(carrier);
+        }
+        return resumeBlockCarrier(carrier);
+    }
+
+    public Optional<CausalExecution> resumeCarrierMutation(BlockEntity carrier) {
+        return resumeBlockCarrier(carrier);
+    }
+
+    private Optional<CausalExecution> resumeBlockCarrier(BlockEntity carrier) {
         return blockCarriers.owner(carrier).map(root -> new CausalExecution(
                 DirectLiveActionContext.resume(journal, root.action(), root.depth()), () -> { }));
     }
 
     public void finishedCarrier(BlockEntity carrier) {
-        if (carrier.isRemoved()) {
+        boolean unchanged = !(carrier instanceof PistonMovingBlockEntity)
+                && !changedBlockCarriers.remove(carrier);
+        if (carrier.isRemoved() || unchanged) {
             blockCarriers.forget(carrier).ifPresent(root -> journal.release(root.action()));
         }
     }
 
     public void rememberCarrier(Entity carrier) {
-        if (carrier instanceof FallingBlockEntity || carrier instanceof PrimedTnt || carrier instanceof AbstractArrow) {
+        if (isTransientCarrier(carrier)) {
             Set<DirectLiveActionContext.CausalRoot> activeTnt = carrier instanceof PrimedTnt
                     ? entityCarriers.owners(entity -> entity instanceof PrimedTnt)
                     : Set.of();
@@ -153,7 +189,9 @@ public final class MinecraftCausalTickTracker {
 
     public boolean cancellationMayChangeBlocks(java.util.UUID action) {
         Objects.requireNonNull(action, "action");
-        return blockCarriers.anyMatch(root -> root.action().equals(action));
+        return blockCarriers.owners(
+                        carrier -> carrier instanceof PistonMovingBlockEntity)
+                .stream().anyMatch(root -> root.action().equals(action));
     }
 
     public boolean cancel(java.util.UUID action, Predicate<java.util.UUID> preserveEntity) {
@@ -161,17 +199,20 @@ public final class MinecraftCausalTickTracker {
         Objects.requireNonNull(preserveEntity, "preserveEntity");
         Set<BlockEntity> cancelledBlockCarriers =
                 blockCarriers.cancel(root -> root.action().equals(action));
+        boolean finalizedPiston = cancelledBlockCarriers.stream()
+                .anyMatch(PistonMovingBlockEntity.class::isInstance);
         cancelledBlockCarriers.forEach(carrier -> {
-            if (carrier instanceof PistonMovingBlockEntity piston) {
-                try {
+            try {
+                if (carrier instanceof PistonMovingBlockEntity piston) {
                     try (var ignored = DirectLiveActionContext.resume(journal, action)) {
                         freeze.runAuthorized(piston::finalTick);
                     }
-                } finally {
-                    journal.release(action);
                 }
+            } finally {
+                journal.release(action);
             }
         });
+        changedBlockCarriers.removeAll(cancelledBlockCarriers);
         Set<TickKey> cancelledTicks = tokens.cancel(root -> root.action().equals(action));
         cancelledTicks.forEach(key -> {
             remove(key);
@@ -195,14 +236,17 @@ public final class MinecraftCausalTickTracker {
             }
         });
         depthLimitLogged.remove(action);
-        return !cancelledBlockCarriers.isEmpty() || !cancelledTicks.isEmpty()
+        return finalizedPiston || !cancelledTicks.isEmpty()
                 || !cancelledEvents.isEmpty() || !cancelledEntityCarriers.isEmpty();
     }
 
     public void cancelAll() {
         tokens.drain().forEach(this::remove);
         blockEvents.drain().forEach(eventAccess::lumi$removeBlockEvent);
+        cancelAuthorizedWork();
         blockCarriers.clear();
+        changedBlockCarriers.clear();
+        authorizedBlockCarriers.clear();
         entityCarriers.clear();
         depthLimitLogged.clear();
     }
@@ -213,10 +257,61 @@ public final class MinecraftCausalTickTracker {
             BINDINGS.remove(fluidTicks);
         }
         tokens.clear();
+        authorizedTicks.clear();
         blockEvents.clear();
+        authorizedBlockEvents.clear();
         blockCarriers.clear();
+        changedBlockCarriers.clear();
+        authorizedBlockCarriers.clear();
         entityCarriers.clear();
         depthLimitLogged.clear();
+    }
+
+    /** Removes delayed player work whose restored sections replaced its state. */
+    public void cancelSections(Set<SectionKey> sections) {
+        Set<SectionKey> restored = Set.copyOf(
+                Objects.requireNonNull(sections, "sections"));
+        java.util.function.Predicate<BlockPos> matches =
+                position -> restored.contains(section(position));
+        ((OwnedTickAccess<?>) blockTicks).lumi$removeWhere(matches);
+        ((OwnedTickAccess<?>) fluidTicks).lumi$removeWhere(matches);
+        eventAccess.lumi$removeBlockEventsWhere(matches);
+        var cancelledTicks = tokens.cancelKeys(
+                key -> matches.test(key.position()));
+        cancelledTicks.forEach((key, root) -> {
+            journal.release(root.action());
+        });
+        var cancelledEvents = blockEvents.cancelKeys(
+                event -> matches.test(event.pos()));
+        cancelledEvents.forEach((event, root) -> {
+            journal.release(root.action());
+        });
+        var cancelledBlockCarriers = blockCarriers.cancelKeys(
+                carrier -> restored.contains(section(carrier.getBlockPos())));
+        cancelledBlockCarriers.values().forEach(root ->
+                journal.release(root.action()));
+        changedBlockCarriers.removeAll(cancelledBlockCarriers.keySet());
+        entityCarriers.cancelKeys(
+                carrier -> restored.contains(section(carrier.blockPosition())))
+                .values().forEach(root -> journal.release(root.action()));
+        cancelAuthorizedWork();
+    }
+
+    /** Drops vanilla work created as a side effect of verified frozen apply. */
+    public void cancelAuthorizedWork() {
+        Set.copyOf(authorizedBlockCarriers).forEach(carrier -> {
+            freeze.runAuthorized(() -> {
+                carrier.setRemoved();
+                if (level.getBlockEntity(carrier.getBlockPos()) == carrier) {
+                    level.removeBlockEntity(carrier.getBlockPos());
+                }
+            });
+        });
+        authorizedBlockCarriers.clear();
+        Set.copyOf(authorizedTicks).forEach(this::remove);
+        authorizedTicks.clear();
+        Set.copyOf(authorizedBlockEvents).forEach(eventAccess::lumi$removeBlockEvent);
+        authorizedBlockEvents.clear();
     }
 
     private int joinTntWave(
@@ -240,9 +335,19 @@ public final class MinecraftCausalTickTracker {
 
     private <K> Optional<DirectLiveActionContext.CausalRoot> rememberCurrent(
             CausalTokenRegistry<K, DirectLiveActionContext.CausalRoot> registry, K key) {
+        return rememberCurrent(registry, null, key);
+    }
+
+    private <K> Optional<DirectLiveActionContext.CausalRoot> rememberCurrent(
+            CausalTokenRegistry<K, DirectLiveActionContext.CausalRoot> registry,
+            Set<K> authorized,
+            K key) {
         Optional<DirectLiveActionContext.CausalRoot> current =
                 DirectLiveActionContext.currentRoot(journal);
         if (current.isEmpty()) {
+            if (authorized != null && freeze.isAuthorizedMutation()) {
+                authorized.add(key);
+            }
             return Optional.empty();
         }
         Optional<DirectLiveActionContext.CausalRoot> child =
@@ -282,8 +387,16 @@ public final class MinecraftCausalTickTracker {
 
     private static boolean isTransientCarrier(Entity carrier) {
         return carrier instanceof FallingBlockEntity
+                || carrier instanceof ItemEntity
                 || carrier instanceof PrimedTnt
                 || carrier instanceof AbstractArrow;
+    }
+
+    private static SectionKey section(BlockPos position) {
+        return new SectionKey(
+                Math.floorDiv(position.getX(), 16),
+                Math.floorDiv(position.getY(), 16),
+                Math.floorDiv(position.getZ(), 16));
     }
 
     @SuppressWarnings("unchecked")
