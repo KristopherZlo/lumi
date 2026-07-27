@@ -54,7 +54,7 @@ public final class MinecraftLiveBlockTracker {
 
     public boolean changed(BlockEntity blockEntity) throws IOException {
         BlockPosition position = position(blockEntity.getBlockPos());
-        BlockSnapshot after = world.read(position);
+        BlockSnapshot after = world.read(blockEntity);
         BlockSnapshot before = baselines.put(position, after);
         if (before != null) {
             recordCurrent(position, before, after);

@@ -80,10 +80,19 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
                 minecraft(Objects.requireNonNull(position, "position")));
     }
 
+    public BlockSnapshot read(BlockEntity blockEntity) throws IOException {
+        Objects.requireNonNull(blockEntity, "blockEntity");
+        return snapshot(blockEntity.getBlockState(), blockEntity);
+    }
+
     private BlockSnapshot read(
             LevelChunk chunk, BlockPos blockPos) throws IOException {
-        BlockState state = chunk.getBlockState(blockPos);
-        BlockEntity blockEntity = chunk.getBlockEntity(blockPos);
+        return snapshot(
+                chunk.getBlockState(blockPos), chunk.getBlockEntity(blockPos));
+    }
+
+    private BlockSnapshot snapshot(
+            BlockState state, BlockEntity blockEntity) throws IOException {
         Optional<CompoundTag> nbt = blockEntity == null
                 || !blockEntity.getType().isValid(state)
                 ? Optional.empty() : Optional.of(canonicalTag(blockEntity));
