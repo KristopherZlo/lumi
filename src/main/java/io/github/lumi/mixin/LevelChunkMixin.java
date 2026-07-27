@@ -123,9 +123,33 @@ abstract class LevelChunkMixin {
         }
     }
 
+    @Inject(method = "setBlockEntity", at = @At("RETURN"))
+    private void lumi$finishBlockEntityAdd(BlockEntity blockEntity, CallbackInfo callback) {
+        if (level instanceof ServerLevel serverLevel
+                && ((LevelChunk) (Object) this).getBlockEntity(
+                        blockEntity.getBlockPos()) == blockEntity) {
+            LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime -> {
+                try {
+                    runtime.liveBlockEntities().added(blockEntity);
+                } catch (IOException failed) {
+                    LumiMod.LOGGER.warn("Cannot capture added live block entity {}",
+                            blockEntity.getBlockPos(), failed);
+                }
+            });
+        }
+    }
+
     @Inject(method = "removeBlockEntity", at = @At("HEAD"), cancellable = true)
     private void lumi$trackBlockEntityRemoval(BlockPos position, CallbackInfo callback) {
         if (level instanceof ServerLevel serverLevel) {
+            LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime -> {
+                try {
+                    runtime.liveBlockEntities().removing(position);
+                } catch (IOException failed) {
+                    LumiMod.LOGGER.warn("Cannot capture removed live block entity {}",
+                            position, failed);
+                }
+            });
             long generation = lumi$trackSectionBeforeMutation(serverLevel, position);
             if (generation == LUMI_MUTATION_DENIED) {
                 callback.cancel();
@@ -140,6 +164,15 @@ abstract class LevelChunkMixin {
                     }
                 });
             }
+        }
+    }
+
+    @Inject(method = "removeBlockEntity", at = @At("RETURN"))
+    private void lumi$finishBlockEntityRemoval(BlockPos position, CallbackInfo callback) {
+        if (level instanceof ServerLevel serverLevel
+                && ((LevelChunk) (Object) this).getBlockEntity(position) == null) {
+            LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime ->
+                    runtime.liveBlockEntities().removed(position));
         }
     }
 
@@ -185,15 +218,17 @@ abstract class LevelChunkMixin {
         }
         try {
             BlockPosition key = blockPosition(position);
-            Optional<BlockSnapshot> outerBefore = LUMI_LIVE_BLOCKS.get().stream()
+            boolean nested = LUMI_LIVE_BLOCKS.get().stream()
                     .flatMap(Optional::stream)
                     .flatMap(pending -> pending.live().stream())
                     .filter(pending -> pending.action().equals(action.orElseThrow())
                             && pending.position().equals(key))
-                    .findFirst()
-                    .map(PendingLiveBlock::before);
-            BlockSnapshot before = outerBefore.isPresent()
-                    ? outerBefore.orElseThrow() : runtime.liveWorld().read(key);
+                    .findFirst().isPresent();
+            if (nested) {
+                return Optional.empty();
+            }
+            BlockSnapshot before = runtime.liveBlockEntities().beforeMutation(
+                    key, runtime.liveWorld().read(key));
             return Optional.of(new PendingLiveBlock(
                     action.orElseThrow(), key, before));
         } catch (IOException failed) {
@@ -211,7 +246,13 @@ abstract class LevelChunkMixin {
         }
         try {
             BlockSnapshot after = runtime.liveWorld().read(pending.position);
+            runtime.liveBlockEntities().completedBlockMutation(
+                    pending.position, after);
             if (!pending.before.equals(after)) {
+                BlockEntity carrier = serverLevel.getBlockEntity(position);
+                if (carrier != null) {
+                    runtime.causalTicks().rememberCarrier(carrier);
+                }
                 UUID effective = runtime.liveActions().record(
                         pending.action, pending.position, pending.before, after);
                 if (!effective.equals(pending.action)) {

@@ -3,9 +3,11 @@ package io.github.lumi.mixin;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
+import io.github.lumi.minecraft.runtime.MinecraftCausalTickTracker;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Optional;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -25,6 +27,20 @@ abstract class BlockEntityMixin {
             return;
         }
         LumiMod.serverRuntime().find(level).ifPresent(runtime -> {
+            Optional<MinecraftCausalTickTracker.CausalExecution> inherited =
+                    DirectLiveActionContext.current(runtime.liveActions()).isEmpty()
+                    ? runtime.causalTicks().resumeCarrierMutation(blockEntity)
+                    : Optional.empty();
+            try {
+                if (runtime.liveBlockEntities().changed(blockEntity)) {
+                    runtime.causalTicks().rememberCarrier(blockEntity);
+                }
+            } catch (IOException failed) {
+                LumiMod.LOGGER.warn("Cannot capture live block entity {}",
+                        blockEntity.getBlockPos(), failed);
+            } finally {
+                inherited.ifPresent(MinecraftCausalTickTracker.CausalExecution::close);
+            }
             if (runtime.freeze().isAuthorizedMutation()) {
                 return;
             }

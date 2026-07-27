@@ -33,6 +33,12 @@ abstract class EntityMixin {
                     return;
                 }
                 try {
+                    runtime.entityRemoving(entity);
+                } catch (IOException failed) {
+                    LumiMod.LOGGER.warn("Cannot register removed durable entity {}",
+                            entity.getUUID(), failed);
+                }
+                try {
                     removal = runtime.liveEntities().begin(entity)
                             .map(pending -> new PendingRemoval(runtime.liveEntities(), pending));
                 } catch (IOException failed) {

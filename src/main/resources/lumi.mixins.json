@@ -6,6 +6,7 @@
   "mixins": [
     "AxiomSetBlockMixin",
     "AxiomSetBufferMixin",
+    "BoundTickingBlockEntityMixin",
     "BlockEntityMixin",
     "ChunkMapPersistenceAccessor",
     "ChunkMapMixin",
@@ -18,6 +19,7 @@
     "LevelTicksMixin",
     "LivingEntityMixin",
     "MinecraftServerAccessor",
+    "PersistentEntitySectionManagerCallbackMixin",
     "PersistentEntitySectionManagerMixin",
     "PersistentEntityManagerPersistenceAccessor",
     "PistonMovingBlockEntityMixin",
