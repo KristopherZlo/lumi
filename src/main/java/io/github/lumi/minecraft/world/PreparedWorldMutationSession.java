@@ -1,5 +1,6 @@
 package io.github.lumi.minecraft.world;
 
+import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
@@ -31,6 +32,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private int entityVerificationIndex;
     private boolean playerSpawnsVerified;
     private boolean verified;
+    private String mismatch = "unknown target";
     private WorldPersistenceSession persistence;
     private boolean persistenceMeasured;
     private final Set<ChunkCoordinate> storedChunks = new HashSet<>();
@@ -104,6 +106,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             sectionVerificationIndex++;
             if (!world.matchesSection(
                     key, target.source().sections().get(key), target.sections().get(key))) {
+                mismatch = "section " + key;
                 return WorldStateApply.Verification.MISMATCH;
             }
         }
@@ -115,7 +118,12 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 return WorldStateApply.Verification.IN_PROGRESS;
             }
             entityVerificationIndex++;
-            if (!target.source().entities().get(key).equals(world.captureEntities(key))) {
+            EntityChunkBlob expected = target.source().entities().get(key);
+            EntityChunkBlob actual = world.captureEntities(key);
+            if (!expected.equals(actual)) {
+                mismatch = "entity chunk " + key + " (expected "
+                        + entityIdentities(expected) + ", actual "
+                        + entityIdentities(actual) + ")";
                 return WorldStateApply.Verification.MISMATCH;
             }
         }
@@ -124,6 +132,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 && !playerSpawnsVerified
                 && nanoTime.getAsLong() < deadlineNanos) {
             if (!world.matchesPlayerSpawns(target.source().playerSpawns())) {
+                mismatch = "player spawns";
                 return WorldStateApply.Verification.MISMATCH;
             }
             playerSpawnsVerified = true;
@@ -163,6 +172,16 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         entityVerificationIndex = 0;
         playerSpawnsVerified = !playerSpawnsIncluded;
         verified = false;
+    }
+
+    String mismatch() {
+        return mismatch;
+    }
+
+    private static List<String> entityIdentities(EntityChunkBlob entities) {
+        return entities.entities().stream()
+                .map(entity -> entity.type() + "[" + entity.id() + "]")
+                .toList();
     }
 
     @Override

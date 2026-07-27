@@ -43,9 +43,8 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private int nextChunk;
     private int nextEntityChunk;
     private int nextPlayer;
-    private CompletableFuture<Void> lighting;
     private CompletableFuture<Void> synchronization;
-    private Phase phase = Phase.LIGHTING;
+    private Phase phase = Phase.CHUNKS;
     private long phaseStartedNanos;
     private long writeNanos;
     private long syncNanos;
@@ -115,7 +114,6 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         try {
             while (phase != Phase.COMPLETE && System.nanoTime() < deadlineNanos) {
                 boolean advanced = switch (phase) {
-                    case LIGHTING -> awaitLighting();
                     case CHUNKS -> saveChunk();
                     case ENTITIES -> saveEntityChunk();
                     case PLAYERS -> savePlayer();
@@ -131,21 +129,6 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         } catch (RuntimeException failed) {
             throw new IOException("Restore persistence failed during " + phase(), failed);
         }
-    }
-
-    private boolean awaitLighting() throws IOException {
-        if (lighting == null) {
-            lighting = CompletableFuture.allOf(relightChunks.stream()
-                    .map(chunk -> level.getChunkSource().getLightEngine()
-                            .waitForPendingTasks(chunk.x(), chunk.z()))
-                    .toArray(CompletableFuture[]::new));
-        }
-        if (!lighting.isDone()) {
-            return false;
-        }
-        MinecraftPersistenceFuture.join(lighting, "Restore lighting");
-        transitionTo(Phase.CHUNKS);
-        return true;
     }
 
     private boolean saveChunk() throws IOException {
@@ -272,7 +255,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         long now = System.nanoTime();
         long elapsed = Math.max(0, now - phaseStartedNanos);
         switch (phase) {
-            case LIGHTING, SYNCHRONIZING -> syncNanos += elapsed;
+            case SYNCHRONIZING -> syncNanos += elapsed;
             case CHUNKS, ENTITIES, PLAYERS -> writeNanos += elapsed;
             case VERIFYING -> verificationNanos += elapsed;
             case COMPLETE -> { }
@@ -290,7 +273,6 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     @Override
     public String phase() {
         return switch (phase) {
-            case LIGHTING -> "waiting for lighting";
             case CHUNKS -> "persisting loaded chunks";
             case ENTITIES -> "persisting entities";
             case PLAYERS -> "persisting players";
@@ -305,6 +287,6 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         return new Timings(writeNanos, syncNanos, verificationNanos);
     }
 
-    private enum Phase { LIGHTING, CHUNKS, ENTITIES, PLAYERS, SYNCHRONIZING, VERIFYING, COMPLETE }
+    private enum Phase { CHUNKS, ENTITIES, PLAYERS, SYNCHRONIZING, VERIFYING, COMPLETE }
     private record PlayerTarget(ServerPlayer player, ServerPlayer.RespawnConfig expected) { }
 }

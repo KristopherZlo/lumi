@@ -84,6 +84,13 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                         return false;
                     }
                 }
+                case LIGHTING -> {
+                    if (world.finishLighting()) {
+                        phase = Phase.COMPLETE;
+                    } else {
+                        return false;
+                    }
+                }
                 case COMPLETE -> { }
             }
         }
@@ -146,7 +153,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             phase = Phase.APPLYING;
             return true;
         }
-        phase = Phase.COMPLETE;
+        phase = Phase.LIGHTING;
         return true;
     }
 
@@ -231,7 +238,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             return;
         }
         if (repairAttempted) {
-            throw new IOException("Restore batch still mismatched after repair");
+            throw new IOException("Restore batch still mismatched after repair: "
+                    + current.mismatch());
         }
         repairAttempted = true;
         phase = Phase.REPAIRING;
@@ -260,6 +268,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             case VERIFYING -> "verification";
             case PERSISTING -> current.progress().phase();
             case REPAIRING -> "repairing";
+            case LIGHTING -> "waiting for lighting";
             case COMPLETE -> "verification";
         };
         long completed = batchStart;
@@ -296,5 +305,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             WorldStateApply.State base) { }
 
     private enum BatchKind { SECTIONS, ENTITIES, SPAWNS }
-    private enum Phase { PREPARING, APPLYING, VERIFYING, PERSISTING, REPAIRING, COMPLETE }
+    private enum Phase {
+        PREPARING, APPLYING, VERIFYING, PERSISTING, REPAIRING, LIGHTING, COMPLETE
+    }
 }

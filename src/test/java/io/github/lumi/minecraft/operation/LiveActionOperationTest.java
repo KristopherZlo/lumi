@@ -15,7 +15,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
 class LiveActionOperationTest {
@@ -51,6 +53,28 @@ class LiveActionOperationTest {
 
         assertEquals(block("stone"), world.states.get(POSITION));
         assertEquals(1, world.writes);
+        assertEquals(MutationTerminalState.SUCCEEDED, operation.terminalState());
+        assertTrue(journal.prepareRedo(PLAYER).isPresent());
+    }
+
+    @Test
+    void publishesUndoOnlyAfterFinalLightingCompletes() throws IOException {
+        LiveActionJournal journal = action(block("stone"), block("gold_block"));
+        FakeWorld world = new FakeWorld(block("gold_block"));
+        world.lighting = new CompletableFuture<>();
+        LiveActionOperation operation = new LiveActionOperation(
+                journal, PLAYER, LiveActionJournal.Direction.UNDO, world, () -> 0L);
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertTrue(!operation.isTerminal());
+        assertEquals("Live action: lighting", operation.progress().phase());
+        assertEquals(Set.of(POSITION), world.lightingPositions);
+        assertTrue(journal.prepareUndo(PLAYER).isPresent());
+
+        world.lighting.complete(null);
+        operation.advance(Long.MAX_VALUE);
+
         assertEquals(MutationTerminalState.SUCCEEDED, operation.terminalState());
         assertTrue(journal.prepareRedo(PLAYER).isPresent());
     }
@@ -341,6 +365,8 @@ class LiveActionOperationTest {
         private int ignoredWrites;
         private int writes;
         private final java.util.List<BlockPosition> writeOrder = new ArrayList<>();
+        private CompletableFuture<Void> lighting = CompletableFuture.completedFuture(null);
+        private Set<BlockPosition> lightingPositions = Set.of();
 
         private FakeWorld(BlockSnapshot state) {
             states.put(POSITION, state);
@@ -363,6 +389,12 @@ class LiveActionOperationTest {
             } else {
                 states.put(position, state);
             }
+        }
+
+        @Override
+        public CompletableFuture<Void> finishLighting(Set<BlockPosition> positions) {
+            lightingPositions = Set.copyOf(positions);
+            return lighting;
         }
     }
 

@@ -10,6 +10,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -103,6 +105,19 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
             level.setBlock(blockPos, target.state, UPDATE_FLAGS);
             applyBlockEntity(chunk, blockPos, target.nbt);
         });
+    }
+
+    @Override
+    public CompletableFuture<Void> finishLighting(Set<BlockPosition> positions) {
+        return CompletableFuture.allOf(positions.stream()
+                .mapToLong(position -> net.minecraft.world.level.ChunkPos.asLong(
+                        position.x() >> 4, position.z() >> 4))
+                .distinct()
+                .mapToObj(chunk -> level.getChunkSource().getLightEngine()
+                        .waitForPendingTasks(
+                                net.minecraft.world.level.ChunkPos.getX(chunk),
+                                net.minecraft.world.level.ChunkPos.getZ(chunk)))
+                .toArray(CompletableFuture[]::new));
     }
 
     public void clear() {

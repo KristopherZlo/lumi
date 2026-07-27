@@ -36,6 +36,8 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     private final MinecraftEntityRestorer entityRestorer;
     private final MinecraftStoredChunkAccess storedChunks;
     private final Executor background;
+    private final Set<ChunkCoordinate> relightChunks = new java.util.HashSet<>();
+    private CompletableFuture<Void> lighting;
 
     public MinecraftPreparedWorldAccess(
             ServerLevel level, DimensionFreezeState freeze, Executor background) {
@@ -65,7 +67,31 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
         LevelChunk chunk = requireChunk(key.chunkX(), key.chunkZ());
         SectionApplyResult[] result = new SectionApplyResult[1];
         freeze.runAuthorized(() -> result[0] = sectionRewriter.apply(chunk, key, section));
+        if (result[0].lightChanged()) {
+            relightChunks.add(ChunkCoordinate.from(key));
+        }
         return result[0];
+    }
+
+    @Override
+    public boolean finishLighting() throws IOException {
+        if (lighting == null) {
+            if (relightChunks.isEmpty()) {
+                return true;
+            }
+            lighting = CompletableFuture.allOf(relightChunks.stream()
+                    .map(chunk -> level.getChunkSource().getLightEngine()
+                            .waitForPendingTasks(chunk.x(), chunk.z()))
+                    .toArray(CompletableFuture[]::new));
+        }
+        if (!lighting.isDone()) {
+            return false;
+        }
+        CompletableFuture<Void> completed = lighting;
+        lighting = null;
+        relightChunks.clear();
+        MinecraftPersistenceFuture.join(completed, "Restore lighting");
+        return true;
     }
 
     @Override

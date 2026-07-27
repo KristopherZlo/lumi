@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
@@ -38,6 +39,7 @@ public final class LiveActionOperation implements DimensionMutation {
     private LiveActionJournal.Plan plan;
     private Iterator<WorldChange<?>> cursor;
     private Throwable failure;
+    private CompletableFuture<Void> lighting;
     private final Set<UUID> retainedActions = new LinkedHashSet<>();
     private final Set<UUID> cancelledActions = new LinkedHashSet<>();
     private Iterator<UUID> cancellationCursor = List.<UUID>of().iterator();
@@ -130,6 +132,9 @@ public final class LiveActionOperation implements DimensionMutation {
         boolean first = true;
         while (!isTerminal() && (first || nanoTime.getAsLong() < deadlineNanos)) {
             first = false;
+            if (phase == Phase.LIGHTING && !lighting.isDone()) {
+                return;
+            }
             try {
                 step();
             } catch (IOException | RuntimeException exception) {
@@ -152,6 +157,7 @@ public final class LiveActionOperation implements DimensionMutation {
             case VERIFYING -> verifyOne(false);
             case REPAIRING -> repairOne();
             case REVERIFYING -> verifyOne(true);
+            case LIGHTING -> finishLighting();
             case SUCCEEDED, FAILED, DEGRADED -> { }
         }
     }
@@ -270,10 +276,8 @@ public final class LiveActionOperation implements DimensionMutation {
     private void verifyOne(boolean finalPass) throws IOException {
         if (!cursor.hasNext()) {
             if (mismatches.isEmpty()) {
-                publication.accept(plan);
-                journal.complete(plan);
-                releaseRetainedActions();
-                phase = Phase.SUCCEEDED;
+                lighting = world.finishLighting(plan.expected().keySet());
+                phase = Phase.LIGHTING;
             } else if (finalPass) {
                 failure = new IllegalStateException(
                         "Live action did not verify after one repair pass at "
@@ -361,6 +365,17 @@ public final class LiveActionOperation implements DimensionMutation {
         default boolean mayChangeBlocks(UUID action) {
             return false;
         }
+    }
+
+    private void finishLighting() {
+        if (!lighting.isDone()) {
+            return;
+        }
+        lighting.join();
+        publication.accept(plan);
+        journal.complete(plan);
+        releaseRetainedActions();
+        phase = Phase.SUCCEEDED;
     }
 
     private abstract static class WorldChange<S> {
@@ -461,6 +476,7 @@ public final class LiveActionOperation implements DimensionMutation {
         VERIFYING,
         REPAIRING,
         REVERIFYING,
+        LIGHTING,
         SUCCEEDED,
         FAILED,
         DEGRADED

@@ -99,7 +99,8 @@ play.
 Lumi stores only the state needed for exact recovery. Save captures the visible
 world boundary; Restore prepares heavy work away from the server tick, applies
 bounded batches, persists them through Minecraft storage, and reads the result
-back before reporting success.
+back before reporting success. Restore and live Undo/Redo drain lighting for all
+affected loaded chunks as their final world-application stage.
 Verified Restore and direct Axiom edits also rebase session block-entity
 baselines before later Undo/Redo can use them.
 

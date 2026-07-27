@@ -51,6 +51,10 @@ public interface PreparedWorldAccess {
         return "loaded apply";
     }
 
+    default boolean finishLighting() throws IOException {
+        return true;
+    }
+
     WorldPersistenceSession beginPersistence(
             PreparedMinecraftState target,
             Set<ChunkCoordinate> alreadyDurable,

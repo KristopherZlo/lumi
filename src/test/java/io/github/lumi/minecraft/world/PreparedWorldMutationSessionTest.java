@@ -188,6 +188,7 @@ class PreparedWorldMutationSessionTest {
         assertTrue(session.applyUntil(Long.MAX_VALUE));
         assertEquals(WorldStateApply.Verification.MISMATCH,
                 session.verifyUntil(Long.MAX_VALUE));
+        assertTrue(session.mismatch().startsWith("entity chunk " + key));
         assertThrows(IllegalStateException.class,
                 () -> session.persistUntil(Long.MAX_VALUE));
     }
@@ -378,6 +379,7 @@ class PreparedWorldMutationSessionTest {
         var world = new FakeWorld(new AtomicLong(), null);
         var persistence = new ManualPersistence();
         world.persistence = persistence;
+        world.lightingComplete = false;
 
         try (var session = new StreamingPreparedWorldMutationSession(
                 plan,
@@ -394,8 +396,13 @@ class PreparedWorldMutationSessionTest {
             assertEquals(1, world.persistenceStarts);
 
             persistence.complete = true;
-            assertTrue(session.applyUntil(Long.MAX_VALUE));
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(keys, world.startedEntityChunks);
+            assertEquals(1, world.lightingChecks);
+
+            world.lightingComplete = true;
+            assertTrue(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(2, world.lightingChecks);
         }
     }
 
@@ -489,6 +496,8 @@ class PreparedWorldMutationSessionTest {
         private int persistenceStarts;
         private int playerSpawnWrites;
         private int playerSpawnMatches;
+        private boolean lightingComplete = true;
+        private int lightingChecks;
         private final List<Boolean> persistencePlayerSpawnFlags = new ArrayList<>();
 
         private FakeWorld(AtomicLong clock, SectionBlob captured) {
@@ -510,6 +519,10 @@ class PreparedWorldMutationSessionTest {
             persistenceStarts++;
             persistencePlayerSpawnFlags.add(playerSpawnsIncluded);
             return persistence;
+        }
+        @Override public boolean finishLighting() {
+            lightingChecks++;
+            return lightingComplete;
         }
         @Override public ChunkSyncResult finishChunk(
                 ChunkCoordinate chunk,
