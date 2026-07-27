@@ -84,6 +84,25 @@ class EntityChunkDurabilityGateTest {
     }
 
     @Test
+    void lifecycleMutationIsDirtyBeforeVanillaStoresTheEntityChunk() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        EntityChunkDurabilityGate gate = new EntityChunkDurabilityGate(mutations);
+        EntityChunkKey key = new EntityChunkKey(4, 5);
+        gate.rememberLoaded(key, entities(1));
+
+        assertTrue(gate.registerMutation(key));
+
+        assertEquals(1L, mutations.snapshot().generations().get(key));
+        assertFalse(mutations.isDurable(mutations.snapshot()));
+        background.runNext();
+        background.runNext();
+        assertTrue(mutations.isDurable(mutations.snapshot()));
+    }
+
+    @Test
     void rebasesOnlyChunksThatAreStillResident() throws Exception {
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
                 new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),

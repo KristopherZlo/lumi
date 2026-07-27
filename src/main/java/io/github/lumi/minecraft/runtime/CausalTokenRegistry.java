@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /** Session-only ownership of delayed Minecraft work by a live root action. */
 public final class CausalTokenRegistry<K, O> {
@@ -57,6 +58,19 @@ public final class CausalTokenRegistry<K, O> {
             return false;
         });
         return Set.copyOf(cancelled);
+    }
+
+    public synchronized Map<K, O> cancelKeys(Predicate<K> matches) {
+        Objects.requireNonNull(matches, "matches");
+        Map<K, O> cancelled = new HashMap<>();
+        owners.entrySet().removeIf(entry -> {
+            if (matches.test(entry.getKey())) {
+                cancelled.put(entry.getKey(), entry.getValue());
+                return true;
+            }
+            return false;
+        });
+        return Map.copyOf(cancelled);
     }
 
     public synchronized void clear() {

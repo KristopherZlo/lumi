@@ -98,7 +98,7 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
         prepared.clear();
     }
 
-    private void prepare(BlockSnapshot snapshot) throws IOException {
+    public void prepare(BlockSnapshot snapshot) throws IOException {
         if (prepared.containsKey(snapshot)) {
             return;
         }

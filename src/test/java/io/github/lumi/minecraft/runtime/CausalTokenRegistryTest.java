@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.service.LiveActionJournal;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -35,6 +36,21 @@ class CausalTokenRegistryTest {
         assertEquals(Set.of(action), tokens.owners("piston-event"::equals));
         assertEquals(Set.of("piston-event"), tokens.cancel(action::equals));
         assertEquals(false, tokens.anyMatch(action::equals));
+    }
+
+    @Test
+    void cancelsOnlyMatchingWorkKeysAndReturnsTheirOwners() {
+        CausalTokenRegistry<String, UUID> tokens = new CausalTokenRegistry<>();
+        UUID inside = UUID.randomUUID();
+        UUID outside = UUID.randomUUID();
+        tokens.remember("inside:redstone", inside);
+        tokens.remember("outside:redstone", outside);
+
+        assertEquals(
+                Map.of("inside:redstone", inside),
+                tokens.cancelKeys(key -> key.startsWith("inside:")));
+        assertEquals(false, tokens.anyMatch(inside::equals));
+        assertEquals(true, tokens.anyMatch(outside::equals));
     }
 
     private static BlockSnapshot block(String id) {

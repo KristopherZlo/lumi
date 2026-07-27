@@ -58,6 +58,17 @@ public final class EntityChunkDurabilityGate {
         }
     }
 
+    /** Registers a live lifecycle change without waiting for vanilla entity storage. */
+    public synchronized boolean registerMutation(EntityChunkKey key) {
+        Objects.requireNonNull(key, "key");
+        EntityChunkBlob baseline = baselines.get(key);
+        if (baseline == null) {
+            return false;
+        }
+        mutations.registerEntityMutation(key, () -> baseline);
+        return true;
+    }
+
     public synchronized Set<EntityChunkKey> trackedKeys() {
         return Set.copyOf(baselines.keySet());
     }
