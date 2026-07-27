@@ -1,12 +1,14 @@
 package io.github.lumi.minecraft.world;
 
+import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -20,6 +22,9 @@ import net.minecraft.world.entity.EntityType;
 
 /** Resolves durable entity types and canonical NBT before tick-time apply. */
 public final class MinecraftEntityStateDecoder {
+    private static final Comparator<EntityChunkKey> CHUNK_ORDER =
+            Comparator.comparingInt(EntityChunkKey::chunkX)
+                    .thenComparingInt(EntityChunkKey::chunkZ);
     private final Registry<EntityType<?>> types;
     private final MinecraftEntityNbtCanonicalizer canonicalizer;
 
@@ -51,12 +56,39 @@ public final class MinecraftEntityStateDecoder {
             Map<EntityChunkKey, EntityChunkBlob> source) throws IOException {
         Objects.requireNonNull(source, "source");
         Set<UUID> passengerIds = new HashSet<>();
-        Map<EntityChunkKey, EntityChunkBlob> normalized = new HashMap<>();
-        for (var entry : source.entrySet()) {
+        Map<EntityChunkKey, EntityChunkBlob> normalized = new LinkedHashMap<>();
+        for (var entry : source.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(CHUNK_ORDER)).toList()) {
             normalized.put(entry.getKey(), normalizePayloads(entry.getValue(), passengerIds));
         }
         normalized.replaceAll((key, chunk) -> withoutTopLevelPassengers(chunk, passengerIds));
+        int duplicates = removeDuplicateRoots(normalized);
+        if (duplicates != 0) {
+            LumiMod.LOGGER.warn(
+                    "Lumi removed {} duplicate entity UUID records across saved chunks",
+                    duplicates);
+        }
         return Map.copyOf(normalized);
+    }
+
+    private static int removeDuplicateRoots(
+            Map<EntityChunkKey, EntityChunkBlob> chunks) {
+        Set<UUID> seen = new HashSet<>();
+        int duplicates = 0;
+        for (var entry : chunks.entrySet()) {
+            var unique = new ArrayList<EntityState>(entry.getValue().entities().size());
+            for (EntityState entity : entry.getValue().entities()) {
+                if (seen.add(entity.id())) {
+                    unique.add(entity);
+                } else {
+                    duplicates++;
+                }
+            }
+            if (unique.size() != entry.getValue().entities().size()) {
+                entry.setValue(new EntityChunkBlob(unique));
+            }
+        }
+        return duplicates;
     }
 
     private EntityChunkBlob normalizePayloads(

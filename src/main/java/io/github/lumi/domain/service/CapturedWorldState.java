@@ -30,6 +30,13 @@ public record CapturedWorldState(
         if (!capturedKeys.equals(generations.generations().keySet())) {
             throw new IllegalArgumentException("Captured payloads and dirty generations must have identical keys");
         }
+        var entityIds = new HashSet<UUID>();
+        if (entities.values().stream()
+                .flatMap(chunk -> chunk.entities().stream())
+                .anyMatch(entity -> !entityIds.add(entity.id()))) {
+            throw new IllegalArgumentException(
+                    "Entity UUIDs must be unique across captured chunks");
+        }
     }
 
     public CapturedWorldState(

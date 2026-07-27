@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.CanonicalNbt;
@@ -114,6 +115,28 @@ class BatchedWorldStateCaptureTest {
         session.close();
 
         assertEquals(1, releases[0]);
+    }
+
+    @Test
+    void rejectsDuplicateEntityUuidAcrossCapturedChunks() throws Exception {
+        EntityChunkKey first = new EntityChunkKey(0, 0);
+        EntityChunkKey second = new EntityChunkKey(1, 0);
+        WorkingIndex working = new WorkingIndex();
+        working.markDirty(first);
+        working.markDirty(second);
+        WorldStateCapture.CaptureSession session = new BatchedWorldStateCapture(
+                new WorldStateReader() {
+                    @Override public SectionBlob read(SectionKey key) {
+                        return airSection();
+                    }
+
+                    @Override public EntityChunkBlob read(EntityChunkKey key) {
+                        return entities();
+                    }
+                }).begin(working.snapshot());
+
+        assertTrue(session.captureUntil(Long.MAX_VALUE));
+        assertThrows(IllegalArgumentException.class, session::finish);
     }
 
     private static SectionBlob airSection() {

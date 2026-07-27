@@ -110,6 +110,26 @@ class MinecraftEntityStateDecoderTest {
     }
 
     @Test
+    void removesLegacyEntityUuidDuplicatedAcrossChunks() throws Exception {
+        UUID entityId = UUID.fromString("30000000-0000-0000-0000-000000000003");
+        EntityState entity = new EntityState(
+                entityId, "minecraft:rabbit",
+                MinecraftNbtCodec.encode(new CompoundTag()));
+        EntityChunkKey first = new EntityChunkKey(0, 0);
+        EntityChunkKey second = new EntityChunkKey(1, 0);
+
+        Map<EntityChunkKey, EntityChunkBlob> normalized =
+                new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)
+                        .normalize(Map.of(
+                                second, new EntityChunkBlob(List.of(entity)),
+                                first, new EntityChunkBlob(List.of(entity))));
+
+        assertEquals(List.of(entityId), normalized.get(first).entities().stream()
+                .map(EntityState::id).toList());
+        assertEquals(List.of(), normalized.get(second).entities());
+    }
+
+    @Test
     void normalizesLegacyEntityPayloadBeforeRestorePreparation() throws Exception {
         UUID entityId = UUID.fromString("30000000-0000-0000-0000-000000000003");
         CompoundTag legacy = entityPayload(488.9948F, -1285.8915F,

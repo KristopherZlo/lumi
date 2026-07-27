@@ -103,6 +103,8 @@ back before reporting success. Restore and live Undo/Redo drain lighting for all
 affected loaded chunks as their final world-application stage.
 Verified Restore and direct Axiom edits also rebase session block-entity
 baselines before later Undo/Redo can use them.
+Restore deterministically repairs legacy entity UUIDs duplicated across saved
+chunks, while new frozen Save captures reject that impossible state.
 
 Published history uses immutable content-addressed objects, sparse Merkle trees,
 hash-verified LZ4 packs, atomic refs, and operation journals. A failed or
