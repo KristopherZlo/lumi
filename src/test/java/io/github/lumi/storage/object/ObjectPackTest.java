@@ -32,9 +32,11 @@ class ObjectPackTest {
 
         assertEquals(expected.keySet(), published.entries().keySet());
         assertEquals(expected.keySet(), ObjectPack.load(tempDir).keySet());
-        for (var entry : expected.entrySet()) {
-            assertArrayEquals(entry.getValue(),
-                    ObjectPack.read(published.entries().get(entry.getKey())));
+        try (var reader = new ObjectPack.Reader()) {
+            for (var entry : expected.entrySet()) {
+                assertArrayEquals(entry.getValue(),
+                        reader.read(published.entries().get(entry.getKey())));
+            }
         }
         try (var files = Files.list(tempDir)) {
             assertEquals(2, files.filter(Files::isRegularFile).count());

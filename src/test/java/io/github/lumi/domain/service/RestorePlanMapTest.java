@@ -13,10 +13,14 @@ class RestorePlanMapTest {
     @Test
     void resolvesOnlyValuesThatAreRead() throws Exception {
         AtomicInteger reads = new AtomicInteger();
-        var plan = new RestorePlanMap<>(Set.of("a", "b"), key -> {
-            reads.incrementAndGet();
-            return key.toUpperCase();
-        });
+        AtomicInteger closes = new AtomicInteger();
+        var plan = new RestorePlanMap<>(
+                Set.of("a", "b"),
+                key -> {
+                    reads.incrementAndGet();
+                    return key.toUpperCase();
+                },
+                closes::incrementAndGet);
 
         assertEquals(2, plan.size());
         assertEquals(0, reads.get());
@@ -24,6 +28,8 @@ class RestorePlanMapTest {
         assertEquals(1, reads.get());
         assertEquals(2, plan.materialize().size());
         assertEquals(3, reads.get());
+        plan.close();
+        assertEquals(1, closes.get());
     }
 
     @Test

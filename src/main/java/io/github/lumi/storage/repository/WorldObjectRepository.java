@@ -13,6 +13,7 @@ import io.github.lumi.storage.object.EntityChunkBlobCodec;
 import io.github.lumi.storage.object.MerkleNodeCodec;
 import io.github.lumi.storage.object.ObjectStore;
 import io.github.lumi.storage.object.SectionBlobCodec;
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -102,6 +103,10 @@ public final class WorldObjectRepository {
         return new WriteBatch(store.beginBatch());
     }
 
+    public ReadSession beginReadSession() {
+        return new ReadSession(store.beginReadSession());
+    }
+
     public final class WriteBatch implements AutoCloseable {
         private final ObjectStore.WriteBatch batch;
 
@@ -161,6 +166,23 @@ public final class WorldObjectRepository {
         @Override
         public void close() throws IOException {
             batch.close();
+        }
+    }
+
+    public final class ReadSession implements Closeable {
+        private final ObjectStore.ReadSession objects;
+
+        private ReadSession(ObjectStore.ReadSession objects) {
+            this.objects = objects;
+        }
+
+        public SectionBlob readSection(ObjectId id) throws IOException {
+            return sectionCodec.decode(objects.read(id));
+        }
+
+        @Override
+        public void close() throws IOException {
+            objects.close();
         }
     }
 }

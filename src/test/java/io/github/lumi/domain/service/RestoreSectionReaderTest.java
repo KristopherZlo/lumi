@@ -23,12 +23,12 @@ class RestoreSectionReaderTest {
     void reusesDecodedPayloadByObjectId() throws IOException {
         var objects = new WorldObjectRepository(repository);
         ObjectId id = objects.write(section(0));
-        var reader = new RestoreSectionReader(objects);
+        try (var reader = new RestoreSectionReader(objects)) {
+            SectionBlob first = reader.read(id);
 
-        SectionBlob first = reader.read(id);
-
-        assertSame(first, reader.read(id));
-        assertEquals(1, reader.cachedSectionCount());
+            assertSame(first, reader.read(id));
+            assertEquals(1, reader.cachedSectionCount());
+        }
     }
 
     @Test
@@ -38,18 +38,19 @@ class RestoreSectionReaderTest {
         for (int index = 0; index <= RestoreSectionReader.MAX_CACHED_SECTIONS; index++) {
             ids.add(objects.write(section(index)));
         }
-        var reader = new RestoreSectionReader(objects);
-        List<SectionBlob> decoded = new ArrayList<>();
-        for (ObjectId id : ids.subList(0, RestoreSectionReader.MAX_CACHED_SECTIONS)) {
-            decoded.add(reader.read(id));
-        }
-        reader.read(ids.getFirst());
-        reader.read(ids.getLast());
+        try (var reader = new RestoreSectionReader(objects)) {
+            List<SectionBlob> decoded = new ArrayList<>();
+            for (ObjectId id : ids.subList(0, RestoreSectionReader.MAX_CACHED_SECTIONS)) {
+                decoded.add(reader.read(id));
+            }
+            reader.read(ids.getFirst());
+            reader.read(ids.getLast());
 
-        assertSame(decoded.getFirst(), reader.read(ids.getFirst()));
-        assertNotSame(decoded.get(1), reader.read(ids.get(1)));
-        assertEquals(RestoreSectionReader.MAX_CACHED_SECTIONS,
-                reader.cachedSectionCount());
+            assertSame(decoded.getFirst(), reader.read(ids.getFirst()));
+            assertNotSame(decoded.get(1), reader.read(ids.get(1)));
+            assertEquals(RestoreSectionReader.MAX_CACHED_SECTIONS,
+                    reader.cachedSectionCount());
+        }
     }
 
     private static SectionBlob section(int marker) {

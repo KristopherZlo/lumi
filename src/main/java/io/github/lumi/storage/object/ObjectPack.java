@@ -1,6 +1,7 @@
 package io.github.lumi.storage.object;
 
 import io.github.lumi.domain.model.ObjectId;
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -37,10 +38,6 @@ final class ObjectPack {
 
     static Map<ObjectId, PackedObject> load(Path directory) throws IOException {
         return ObjectPackIndex.load(directory);
-    }
-
-    static byte[] read(PackedObject entry) throws IOException {
-        return read(entry, true);
     }
 
     private static byte[] read(PackedObject entry, boolean requirePublished) throws IOException {
@@ -98,6 +95,31 @@ final class ObjectPack {
     record Published(Map<ObjectId, PackedObject> entries) {
         Published {
             entries = Map.copyOf(Objects.requireNonNull(entries, "entries"));
+        }
+    }
+
+    /** Reuses one channel while consecutive immutable objects come from the same pack. */
+    static final class Reader implements Closeable {
+        private Path pack;
+        private FileChannel channel;
+
+        byte[] read(PackedObject entry) throws IOException {
+            Objects.requireNonNull(entry, "entry");
+            if (!entry.pack().equals(pack)) {
+                close();
+                pack = entry.pack();
+                channel = FileChannel.open(pack, StandardOpenOption.READ);
+            }
+            return ObjectPack.read(channel, entry, true);
+        }
+
+        @Override
+        public void close() throws IOException {
+            if (channel != null) {
+                channel.close();
+                channel = null;
+                pack = null;
+            }
         }
     }
 

@@ -10,6 +10,7 @@ import io.github.lumi.domain.model.PlayerSpawn;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.io.Closeable;
 import java.io.IOException;
 
 public record PreparedRestore(
@@ -21,7 +22,7 @@ public record PreparedRestore(
         Map<EntityChunkKey, EntityChunkBlob> returnEntities,
         Map<UUID, PlayerSpawn> playerSpawns,
         Map<UUID, PlayerSpawn> returnPlayerSpawns,
-        boolean restorePlayerSpawns) {
+        boolean restorePlayerSpawns) implements Closeable {
     public PreparedRestore {
         Objects.requireNonNull(expectedRef, "expectedRef");
         Objects.requireNonNull(targetCommit, "targetCommit");
@@ -76,5 +77,17 @@ public record PreparedRestore(
             return typed.materialize();
         }
         return values;
+    }
+
+    @Override
+    public void close() throws IOException {
+        try (Closeable target = closeable(sections);
+                Closeable checkpoint = closeable(returnSections)) {
+            // try-with-resources preserves both close failures.
+        }
+    }
+
+    private static Closeable closeable(Map<?, ?> values) {
+        return values instanceof Closeable closeable ? closeable : () -> { };
     }
 }

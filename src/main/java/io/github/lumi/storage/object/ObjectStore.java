@@ -1,6 +1,7 @@
 package io.github.lumi.storage.object;
 
 import io.github.lumi.domain.model.ObjectId;
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -66,16 +67,13 @@ public final class ObjectStore {
     }
 
     public byte[] read(ObjectId id) throws IOException {
-        Objects.requireNonNull(id, "id");
-        Path path = pathFor(id);
-        if (!Files.exists(path)) {
-            PackedObject packed = refreshedPackedObject(id);
-            if (packed == null) {
-                throw new java.nio.file.NoSuchFileException(path.toString());
-            }
-            return ObjectPack.read(packed);
+        try (ReadSession session = beginReadSession()) {
+            return session.read(id);
         }
-        return readLoose(id, path);
+    }
+
+    public ReadSession beginReadSession() {
+        return new ReadSession();
     }
 
     private byte[] readLoose(ObjectId id, Path path) throws IOException {
@@ -338,6 +336,28 @@ public final class ObjectStore {
         @Override
         public void close() throws IOException {
             writer.close();
+        }
+    }
+
+    public final class ReadSession implements Closeable {
+        private final ObjectPack.Reader packs = new ObjectPack.Reader();
+
+        public byte[] read(ObjectId id) throws IOException {
+            Objects.requireNonNull(id, "id");
+            Path path = pathFor(id);
+            if (Files.exists(path)) {
+                return readLoose(id, path);
+            }
+            PackedObject packed = refreshedPackedObject(id);
+            if (packed == null) {
+                throw new java.nio.file.NoSuchFileException(path.toString());
+            }
+            return packs.read(packed);
+        }
+
+        @Override
+        public void close() throws IOException {
+            packs.close();
         }
     }
 }

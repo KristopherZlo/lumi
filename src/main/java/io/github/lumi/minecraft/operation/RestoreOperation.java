@@ -545,7 +545,7 @@ public final class RestoreOperation implements DimensionMutation {
         WorldStateApply.State targetState = targetState(restore);
         WorldStateApply.State returnState = returnState(restore);
         WorldStateApply.PreparedStates prepared = prepareWorldStates(
-                world, targetState, returnState, progress);
+                restore, world, targetState, returnState, progress);
         OperationJournal journal = new OperationJournal(
                 Objects.requireNonNull(operationId, "operationId"),
                 Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
@@ -571,13 +571,14 @@ public final class RestoreOperation implements DimensionMutation {
         WorldStateApply.State targetState = targetState(restore);
         WorldStateApply.State returnState = returnState(restore);
         WorldStateApply.PreparedStates prepared = prepareWorldStates(
-                world, targetState, returnState, progress);
+                restore, world, targetState, returnState, progress);
         return new RestoreOperation(
                 restore, world, publication, journals, journal, true,
                 prepared.target(), prepared.returnPoint(), stateListener);
     }
 
     private static WorldStateApply.PreparedStates prepareWorldStates(
+            PreparedRestore restore,
             WorldStateApply world,
             WorldStateApply.State target,
             WorldStateApply.State returnPoint,
@@ -585,11 +586,20 @@ public final class RestoreOperation implements DimensionMutation {
         long targetTotal = (long) target.sections().size() + target.entities().size();
         long returnTotal = (long) returnPoint.sections().size()
                 + returnPoint.entities().size();
-        return world.prepareBoth(target, returnPoint,
-                completed -> progress.accept(new OperationProgress(
-                        "Restore: preflight target", completed, targetTotal)),
-                completed -> progress.accept(new OperationProgress(
-                        "Restore: preflight return point", completed, returnTotal)));
+        try {
+            return world.prepareBoth(target, returnPoint,
+                    completed -> progress.accept(new OperationProgress(
+                            "Restore: preflight target", completed, targetTotal)),
+                    completed -> progress.accept(new OperationProgress(
+                            "Restore: preflight return point", completed, returnTotal)));
+        } catch (IOException | RuntimeException failed) {
+            try {
+                restore.close();
+            } catch (IOException closeFailure) {
+                failed.addSuppressed(closeFailure);
+            }
+            throw failed;
+        }
     }
 
     private static WorldStateApply.State targetState(PreparedRestore restore) {
@@ -866,14 +876,16 @@ public final class RestoreOperation implements DimensionMutation {
 
     @Override
     public void close() throws IOException {
-        if (status == RestoreStatus.APPLYING
-                && journal.phase() == OperationPhase.PREPARED) {
-            cancelBeforeApply();
-        } else {
-            targetSession.close();
-        }
-        if (returnSession != null) {
-            returnSession.close();
+        try (PreparedRestore ignored = restore) {
+            if (status == RestoreStatus.APPLYING
+                    && journal.phase() == OperationPhase.PREPARED) {
+                cancelBeforeApply();
+            } else {
+                targetSession.close();
+            }
+            if (returnSession != null) {
+                returnSession.close();
+            }
         }
     }
 

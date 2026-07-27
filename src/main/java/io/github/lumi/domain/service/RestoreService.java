@@ -237,9 +237,11 @@ public final class RestoreService {
         var targetSectionReader = new RestoreSectionReader(objects);
         var returnSectionReader = new RestoreSectionReader(objects);
         var targetSections = new RestorePlanMap<>(
-                sections.keySet(), key -> sections.get(key).target(targetSectionReader));
+                sections.keySet(), key -> sections.get(key).target(targetSectionReader),
+                targetSectionReader);
         var returnSections = new RestorePlanMap<>(
-                sections.keySet(), key -> sections.get(key).before(returnSectionReader));
+                sections.keySet(), key -> sections.get(key).before(returnSectionReader),
+                returnSectionReader);
         var targetEntities = new RestorePlanMap<>(
                 entities.keySet(), key -> objects.readEntities(entities.get(key).target()));
         var returnEntities = new RestorePlanMap<>(
