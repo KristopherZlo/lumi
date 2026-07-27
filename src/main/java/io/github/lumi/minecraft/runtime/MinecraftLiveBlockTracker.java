@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.runtime;
 
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
+import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.world.MinecraftLiveBlockWorldAccess;
 import java.io.IOException;
@@ -75,8 +76,10 @@ public final class MinecraftLiveBlockTracker {
         BlockSnapshot baseline = baselines.getOrDefault(
                 Objects.requireNonNull(position, "position"),
                 Objects.requireNonNull(visible, "visible"));
-        BlockSnapshot before = new BlockSnapshot(
-                visible.blockState(), baseline.blockEntity());
+        Optional<CanonicalNbt> blockEntity =
+                baseline.blockState().equals(visible.blockState())
+                        ? baseline.blockEntity() : visible.blockEntity();
+        BlockSnapshot before = new BlockSnapshot(visible.blockState(), blockEntity);
         world.prepare(before);
         return before;
     }

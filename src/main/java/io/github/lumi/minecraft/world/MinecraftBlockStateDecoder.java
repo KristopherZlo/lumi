@@ -11,8 +11,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 
 /** Converts persistent strings and canonical NBT into Minecraft-native apply data. */
@@ -44,15 +46,15 @@ public final class MinecraftBlockStateDecoder {
         for (String encoded : source.blockStates()) {
             states.add(decodeState(encoded));
         }
-        return new DecodedPayload(states, decodeBlockEntities(source));
+        return new DecodedPayload(states, decodeBlockEntities(source, states));
     }
 
-    private static HashMap<Integer, net.minecraft.nbt.CompoundTag> decodeBlockEntities(
-            SectionBlob source) throws IOException {
-        var blockEntities = new HashMap<Integer, net.minecraft.nbt.CompoundTag>();
+    private HashMap<Integer, CompoundTag> decodeBlockEntities(
+            SectionBlob source, java.util.List<BlockState> states) throws IOException {
+        var blockEntities = new HashMap<Integer, CompoundTag>();
         for (var entry : source.blockEntities().entrySet()) {
             var decoded = MinecraftNbtCodec.decode(entry.getValue());
-            validateBlockEntityType(decoded);
+            validateBlockEntityState(states.get(entry.getKey()), decoded);
             blockEntities.put(entry.getKey(), decoded);
         }
         return blockEntities;
@@ -67,19 +69,34 @@ public final class MinecraftBlockStateDecoder {
         validateBlockEntities(source);
     }
 
-    private static void validateBlockEntities(SectionBlob source) throws IOException {
-        for (var encoded : source.blockEntities().values()) {
-            validateBlockEntityType(MinecraftNbtCodec.decode(encoded));
+    private void validateBlockEntities(SectionBlob source) throws IOException {
+        for (var entry : source.blockEntities().entrySet()) {
+            validateBlockEntityState(
+                    decodeState(source.blockStates().get(entry.getKey())),
+                    MinecraftNbtCodec.decode(entry.getValue()));
         }
     }
 
-    private static void validateBlockEntityType(
-            net.minecraft.nbt.CompoundTag blockEntity) throws IOException {
+    void validateBlockEntityState(
+            BlockState state, CompoundTag blockEntity) throws IOException {
+        BlockEntityType<?> type = blockEntityType(blockEntity);
+        if (!type.isValid(Objects.requireNonNull(state, "state"))) {
+            throw new IOException("Persistent block entity "
+                    + blockEntity.getStringOr("id", "")
+                    + " is incompatible with " + state);
+        }
+    }
+
+    private static BlockEntityType<?> blockEntityType(
+            CompoundTag blockEntity) throws IOException {
         String encoded = blockEntity.getStringOr("id", "");
         Identifier id = Identifier.tryParse(encoded);
-        if (id == null || !BuiltInRegistries.BLOCK_ENTITY_TYPE.containsKey(id)) {
+        BlockEntityType<?> type = id == null ? null
+                : BuiltInRegistries.BLOCK_ENTITY_TYPE.getOptional(id).orElse(null);
+        if (type == null) {
             throw new IOException("Unknown persistent block entity type: " + encoded);
         }
+        return type;
     }
 
     BlockState decodeState(String encoded) throws IOException {

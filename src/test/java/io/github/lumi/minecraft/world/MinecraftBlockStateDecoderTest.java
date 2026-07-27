@@ -32,7 +32,7 @@ class MinecraftBlockStateDecoderTest {
     void decodesEveryBlockAndBlockEntityNbtBeforeApply() throws Exception {
         var states = new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));
-        states.set(17, "minecraft:oak_log[axis=x]");
+        states.set(17, "minecraft:chest");
         var source = new SectionBlob(states, Map.of(
                 17, MinecraftNbtCodec.encode(blockEntityTag(
                         "minecraft:chest", "custom", "value"))));
@@ -41,9 +41,7 @@ class MinecraftBlockStateDecoderTest {
                 .decode(source);
 
         assertEquals(Blocks.STONE.defaultBlockState(), decoded.blockStates().getFirst());
-        assertEquals(Blocks.OAK_LOG.defaultBlockState().setValue(
-                net.minecraft.world.level.block.RotatedPillarBlock.AXIS,
-                net.minecraft.core.Direction.Axis.X), decoded.blockStates().get(17));
+        assertEquals(Blocks.CHEST.defaultBlockState(), decoded.blockStates().get(17));
         assertEquals("value", decoded.blockEntities().get(17).getStringOr("custom", ""));
 
         var current = new LevelChunkSection(new PalettedContainer<>(
@@ -75,6 +73,20 @@ class MinecraftBlockStateDecoderTest {
         var source = new SectionBlob(states, Map.of(
                 0, MinecraftNbtCodec.encode(blockEntityTag(
                         "missing:not_a_block_entity", "custom", "value"))));
+
+        assertThrows(IOException.class, () ->
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK).validate(source));
+    }
+
+    @Test
+    void rejectsBlockEntityIncompatibleWithBlockStateDuringPreflight()
+            throws Exception {
+        var states = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone"));
+        states.set(0, "minecraft:air");
+        var source = new SectionBlob(states, Map.of(
+                0, MinecraftNbtCodec.encode(blockEntityTag(
+                        "minecraft:command_block", "Command", "say invalid"))));
 
         assertThrows(IOException.class, () ->
                 new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK).validate(source));

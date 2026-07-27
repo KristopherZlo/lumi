@@ -1,6 +1,5 @@
 package io.github.lumi.minecraft.world;
 
-import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.model.CanonicalNbt;
@@ -13,7 +12,6 @@ import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -31,13 +29,14 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
 
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
-    private final HolderLookup<Block> blocks;
+    private final MinecraftBlockStateDecoder blockDecoder;
     private final Map<BlockSnapshot, PreparedBlock> prepared = new HashMap<>();
 
     public MinecraftLiveBlockWorldAccess(ServerLevel level, DimensionFreezeState freeze) {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
-        blocks = level.registryAccess().lookupOrThrow(Registries.BLOCK);
+        blockDecoder = new MinecraftBlockStateDecoder(
+                level.registryAccess().lookupOrThrow(Registries.BLOCK));
     }
 
     /** Decodes only changed Restore endpoints before a later live Undo/Redo. */
@@ -84,6 +83,7 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
         BlockState state = chunk.getBlockState(blockPos);
         BlockEntity blockEntity = chunk.getBlockEntity(blockPos);
         Optional<CompoundTag> nbt = blockEntity == null
+                || !blockEntity.getType().isValid(state)
                 ? Optional.empty() : Optional.of(canonicalTag(blockEntity));
         Optional<CanonicalNbt> canonicalNbt = nbt.isEmpty()
                 ? Optional.empty() : Optional.of(MinecraftNbtCodec.encode(nbt.orElseThrow()));
@@ -113,18 +113,14 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
         if (prepared.containsKey(snapshot)) {
             return;
         }
-        final BlockState state;
-        try {
-            state = BlockStateParser.parseForBlock(
-                    blocks, snapshot.blockState(), false).blockState();
-        } catch (CommandSyntaxException invalid) {
-            throw new IOException(
-                    "Invalid persistent block state: " + snapshot.blockState(), invalid);
-        }
+        BlockState state = blockDecoder.decodeState(snapshot.blockState());
         Optional<CompoundTag> nbt = snapshot.blockEntity().isEmpty()
                 ? Optional.empty()
                 : Optional.of(MinecraftNbtCodec.decode(
                         snapshot.blockEntity().orElseThrow()));
+        if (nbt.isPresent()) {
+            blockDecoder.validateBlockEntityState(state, nbt.orElseThrow());
+        }
         prepared.put(snapshot, new PreparedBlock(state, nbt));
     }
 
