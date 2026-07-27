@@ -49,7 +49,7 @@ final class LumiCrashCopy implements AutoCloseable {
             throw new IOException("Crash copy is incomplete");
         }
         deleteTree(liveWorld);
-        Files.move(worldSnapshot, liveWorld);
+        copyTree(worldSnapshot, liveWorld, false);
         Path heads = repository.resolve("refs").resolve("heads");
         deleteTree(heads);
         copyTree(refsSnapshot, heads, false);

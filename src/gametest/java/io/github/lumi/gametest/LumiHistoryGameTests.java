@@ -41,29 +41,35 @@ public final class LumiHistoryGameTests {
     private static final TicketType TEST_CHUNK_TICKET =
             new TicketType(Long.MAX_VALUE, TicketType.FLAG_LOADING);
 
-    @GameTest
+    @GameTest(maxTicks = 300000)
     public void freezeRejectsOrdinaryEntityLifecycle(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
-        Entity existing = helper.spawn(EntityType.ARMOR_STAND, new BlockPos(2, 2, 2));
-        var lease = runtime.freeze().acquire();
-        try {
-            Entity added = EntityType.ARMOR_STAND.create(
-                    helper.getLevel(), EntitySpawnReason.COMMAND);
-            helper.assertFalse(added == null, "Cannot create test entity");
-            helper.assertFalse(helper.getLevel().addFreshEntity(added),
-                    "Frozen dimension accepted an ordinary entity");
-            existing.discard();
-            helper.assertFalse(existing.isRemoved(),
-                    "Frozen dimension removed an ordinary entity");
-            ((ServerLevelEntityManagerAccessor) helper.getLevel())
-                    .lumi$entityManager().saveAll();
-            helper.assertFalse(existing.isRemoved(),
-                    "Frozen forced save changed entity lifecycle state");
-        } finally {
-            lease.release();
-        }
-        existing.discard();
-        helper.succeed();
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertFalse(
+                        runtime.freeze().isFrozen(), "Dimension is still frozen"))
+                .thenExecute(() -> {
+                    Entity existing = helper.spawn(
+                            EntityType.ARMOR_STAND, new BlockPos(2, 2, 2));
+                    var lease = runtime.freeze().acquire();
+                    try {
+                        Entity added = EntityType.ARMOR_STAND.create(
+                                helper.getLevel(), EntitySpawnReason.COMMAND);
+                        helper.assertFalse(added == null, "Cannot create test entity");
+                        helper.assertFalse(helper.getLevel().addFreshEntity(added),
+                                "Frozen dimension accepted an ordinary entity");
+                        existing.discard();
+                        helper.assertFalse(existing.isRemoved(),
+                                "Frozen dimension removed an ordinary entity");
+                        ((ServerLevelEntityManagerAccessor) helper.getLevel())
+                                .lumi$entityManager().saveAll();
+                        helper.assertFalse(existing.isRemoved(),
+                                "Frozen forced save changed entity lifecycle state");
+                    } finally {
+                        lease.release();
+                    }
+                    existing.discard();
+                })
+                .thenSucceed();
     }
 
     @GameTest(maxTicks = 300000)

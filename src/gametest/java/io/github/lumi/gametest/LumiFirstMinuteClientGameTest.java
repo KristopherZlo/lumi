@@ -68,6 +68,8 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         ui.openTab("luma.tab.zones", LumiZonesScreen.class);
         ui.pressUniqueButton(LumiZonesScreen.class, "luma.zones.render_focused");
         context.waitTicks(2);
+        ui.pressUniqueButton(LumiZonesScreen.class, "luma.zones.render_all");
+        ui.pressUniqueButton(LumiZonesScreen.class, "luma.zones.render_hidden");
         ui.closeScreen(LumiZonesScreen.class, LumiDashboardScreen.class);
         ui.closeScreen(LumiDashboardScreen.class, null);
 
