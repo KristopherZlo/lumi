@@ -4,6 +4,7 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.world.DimensionFreezeState;
+import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import io.github.lumi.minecraft.world.OwnedBlockEventAccess;
 import io.github.lumi.minecraft.world.OwnedTickAccess;
 import java.util.HashSet;
@@ -272,7 +273,7 @@ public final class MinecraftCausalTickTracker {
         Set<SectionKey> restored = Set.copyOf(
                 Objects.requireNonNull(sections, "sections"));
         java.util.function.Predicate<BlockPos> matches =
-                position -> restored.contains(section(position));
+                position -> restored.contains(MinecraftSectionCapture.key(position));
         ((OwnedTickAccess<?>) blockTicks).lumi$removeWhere(matches);
         ((OwnedTickAccess<?>) fluidTicks).lumi$removeWhere(matches);
         eventAccess.lumi$removeBlockEventsWhere(matches);
@@ -287,12 +288,14 @@ public final class MinecraftCausalTickTracker {
             journal.release(root.action());
         });
         var cancelledBlockCarriers = blockCarriers.cancelKeys(
-                carrier -> restored.contains(section(carrier.getBlockPos())));
+                carrier -> restored.contains(MinecraftSectionCapture.key(
+                        carrier.getBlockPos())));
         cancelledBlockCarriers.values().forEach(root ->
                 journal.release(root.action()));
         changedBlockCarriers.removeAll(cancelledBlockCarriers.keySet());
         entityCarriers.cancelKeys(
-                carrier -> restored.contains(section(carrier.blockPosition())))
+                carrier -> restored.contains(MinecraftSectionCapture.key(
+                        carrier.blockPosition())))
                 .values().forEach(root -> journal.release(root.action()));
         cancelAuthorizedWork();
     }
@@ -390,13 +393,6 @@ public final class MinecraftCausalTickTracker {
                 || carrier instanceof ItemEntity
                 || carrier instanceof PrimedTnt
                 || carrier instanceof AbstractArrow;
-    }
-
-    private static SectionKey section(BlockPos position) {
-        return new SectionKey(
-                Math.floorDiv(position.getX(), 16),
-                Math.floorDiv(position.getY(), 16),
-                Math.floorDiv(position.getZ(), 16));
     }
 
     @SuppressWarnings("unchecked")

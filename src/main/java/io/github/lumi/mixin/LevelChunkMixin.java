@@ -130,7 +130,7 @@ abstract class LevelChunkMixin {
                         blockEntity.getBlockPos()) == blockEntity) {
             LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime -> {
                 try {
-                    runtime.liveBlockEntities().added(blockEntity);
+                    runtime.liveBlocks().added(blockEntity);
                 } catch (IOException failed) {
                     LumiMod.LOGGER.warn("Cannot capture added live block entity {}",
                             blockEntity.getBlockPos(), failed);
@@ -144,7 +144,7 @@ abstract class LevelChunkMixin {
         if (level instanceof ServerLevel serverLevel) {
             LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime -> {
                 try {
-                    runtime.liveBlockEntities().removing(position);
+                    runtime.liveBlocks().removing(position);
                 } catch (IOException failed) {
                     LumiMod.LOGGER.warn("Cannot capture removed live block entity {}",
                             position, failed);
@@ -172,7 +172,7 @@ abstract class LevelChunkMixin {
         if (level instanceof ServerLevel serverLevel
                 && ((LevelChunk) (Object) this).getBlockEntity(position) == null) {
             LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime ->
-                    runtime.liveBlockEntities().removed(position));
+                    runtime.liveBlocks().removed(position));
         }
     }
 
@@ -221,13 +221,12 @@ abstract class LevelChunkMixin {
             boolean nested = LUMI_LIVE_BLOCKS.get().stream()
                     .flatMap(Optional::stream)
                     .flatMap(pending -> pending.live().stream())
-                    .filter(pending -> pending.action().equals(action.orElseThrow())
-                            && pending.position().equals(key))
-                    .findFirst().isPresent();
+                    .anyMatch(pending -> pending.action().equals(action.orElseThrow())
+                            && pending.position().equals(key));
             if (nested) {
                 return Optional.empty();
             }
-            BlockSnapshot before = runtime.liveBlockEntities().beforeMutation(
+            BlockSnapshot before = runtime.liveBlocks().beforeMutation(
                     key, runtime.liveWorld().read(key));
             return Optional.of(new PendingLiveBlock(
                     action.orElseThrow(), key, before));
@@ -246,19 +245,15 @@ abstract class LevelChunkMixin {
         }
         try {
             BlockSnapshot after = runtime.liveWorld().read(pending.position);
-            runtime.liveBlockEntities().completedBlockMutation(
+            runtime.liveBlocks().completedBlockMutation(
                     pending.position, after);
             if (!pending.before.equals(after)) {
                 BlockEntity carrier = serverLevel.getBlockEntity(position);
                 if (carrier != null) {
                     runtime.causalTicks().rememberCarrier(carrier);
                 }
-                UUID effective = runtime.liveActions().record(
+                runtime.liveBlocks().record(
                         pending.action, pending.position, pending.before, after);
-                if (!effective.equals(pending.action)) {
-                    runtime.liveActions().mergeGroups(pending.action, effective);
-                }
-                runtime.recordCausalZoneGrowth(pending.action, pending.position);
             }
         } catch (IOException | IllegalArgumentException failed) {
             LumiMod.LOGGER.warn("Cannot finish live block mutation at {}", position, failed);

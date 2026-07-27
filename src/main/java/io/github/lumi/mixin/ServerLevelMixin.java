@@ -162,9 +162,7 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
         }
         LumiMod.serverRuntime().find(level).ifPresent(runtime -> {
             try {
-                if (runtime.liveBlockEntities().changed(blockEntity)) {
-                    runtime.causalTicks().rememberCarrier(blockEntity);
-                }
+                runtime.blockEntityChanged(blockEntity);
             } catch (IOException failed) {
                 LumiMod.LOGGER.warn("Cannot finish causal block entity {}",
                         position, failed);

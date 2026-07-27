@@ -15,14 +15,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 
-/** Keeps exact block-entity endpoints for live Undo/Redo. */
-public final class MinecraftLiveBlockEntityTracker {
+/** Keeps exact block endpoints and block-entity baselines for live Undo/Redo. */
+public final class MinecraftLiveBlockTracker {
     private final LiveActionJournal journal;
     private final MinecraftLiveBlockWorldAccess world;
     private final BiConsumer<UUID, BlockPosition> mutationObserver;
     private final Map<BlockPosition, BlockSnapshot> baselines = new HashMap<>();
 
-    public MinecraftLiveBlockEntityTracker(
+    public MinecraftLiveBlockTracker(
             LiveActionJournal journal,
             MinecraftLiveBlockWorldAccess world,
             BiConsumer<UUID, BlockPosition> mutationObserver) {
@@ -45,7 +45,7 @@ public final class MinecraftLiveBlockEntityTracker {
         if (before == null) {
             before = new BlockSnapshot(after.blockState(), Optional.empty());
         }
-        record(position, before, after);
+        recordCurrent(position, before, after);
     }
 
     public boolean changed(BlockEntity blockEntity) throws IOException {
@@ -53,7 +53,7 @@ public final class MinecraftLiveBlockEntityTracker {
         BlockSnapshot after = world.read(position);
         BlockSnapshot before = baselines.put(position, after);
         if (before != null) {
-            record(position, before, after);
+            recordCurrent(position, before, after);
         }
         return before != null && !before.equals(after);
     }
@@ -85,7 +85,7 @@ public final class MinecraftLiveBlockEntityTracker {
         BlockSnapshot before = world.read(position);
         baselines.put(position, new BlockSnapshot(
                 before.blockState(), Optional.empty()));
-        record(position, before, baselines.get(position));
+        recordCurrent(position, before, baselines.get(position));
     }
 
     public void removed(BlockPos position) {
@@ -103,22 +103,37 @@ public final class MinecraftLiveBlockEntityTracker {
         baselines.put(position, world.read(position));
     }
 
-    private void record(
+    public void record(
+            UUID action,
             BlockPosition position,
             BlockSnapshot before,
             BlockSnapshot after) throws IOException {
-        Optional<UUID> root = DirectLiveActionContext.current(journal);
-        if (root.isEmpty() || before.equals(after)) {
+        Objects.requireNonNull(action, "action");
+        Objects.requireNonNull(position, "position");
+        Objects.requireNonNull(before, "before");
+        Objects.requireNonNull(after, "after");
+        if (before.equals(after)) {
             return;
         }
         world.prepare(before);
         world.prepare(after);
-        UUID action = root.orElseThrow();
         UUID effective = journal.record(action, position, before, after);
         if (!effective.equals(action)) {
             journal.mergeGroups(action, effective);
         }
         mutationObserver.accept(action, position);
+    }
+
+    private void recordCurrent(
+            BlockPosition position,
+            BlockSnapshot before,
+            BlockSnapshot after) throws IOException {
+        Optional<UUID> root = DirectLiveActionContext.current(journal);
+        if (root.isEmpty()) {
+            return;
+        }
+        UUID action = root.orElseThrow();
+        record(action, position, before, after);
     }
 
     private static BlockPosition position(BlockPos position) {

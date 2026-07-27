@@ -141,6 +141,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.entity.ChunkEntities;
 import net.minecraft.world.level.entity.EntityAccess;
@@ -189,7 +190,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final AxiomSetBlockActionGrouper axiomSetBlockActions;
     private final MinecraftLiveBlockWorldAccess liveWorld;
     private final MinecraftLiveEntityWorldAccess liveEntityWorld;
-    private final MinecraftLiveBlockEntityTracker liveBlockEntities;
+    private final MinecraftLiveBlockTracker liveBlocks;
     private final MinecraftLiveEntityTracker liveEntities;
     private final MinecraftCausalTickTracker causalTicks;
     private final io.github.lumi.minecraft.operation.RestoreStateListener restoreStateListener;
@@ -277,7 +278,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         entityDurability = new EntityChunkDurabilityGate(mutations);
         liveWorld = new MinecraftLiveBlockWorldAccess(level, freeze);
         liveEntityWorld = new MinecraftLiveEntityWorldAccess(level, freeze);
-        liveBlockEntities = new MinecraftLiveBlockEntityTracker(
+        liveBlocks = new MinecraftLiveBlockTracker(
                 liveActions, liveWorld, this::recordCausalZoneGrowth);
         liveEntities = new MinecraftLiveEntityTracker(
                 liveActions, liveEntityWorld, this::publishBuilderEntityMutation);
@@ -641,13 +642,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public void chunkLoaded(LevelChunk chunk) throws IOException {
         loadedChunks.loaded(chunk.getPos().x, chunk.getPos().z);
         baselineCapture.remember(level, chunk, mutations, blockEntityBaselines);
-        liveBlockEntities.remember(chunk);
+        liveBlocks.remember(chunk);
     }
 
     public void chunkUnloaded(LevelChunk chunk) {
         loadedChunks.unloaded(chunk.getPos().x, chunk.getPos().z);
         blockEntityBaselines.discardChunk(chunk.getPos().x, chunk.getPos().z);
-        liveBlockEntities.discardChunk(chunk.getPos().x, chunk.getPos().z);
+        liveBlocks.discardChunk(chunk.getPos().x, chunk.getPos().z);
     }
 
     public boolean isChunkMutationTrackable(int chunkX, int chunkZ) {
@@ -987,8 +988,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return axiomSetBlockActions;
     }
     public MinecraftLiveBlockWorldAccess liveWorld() { return liveWorld; }
-    public MinecraftLiveBlockEntityTracker liveBlockEntities() {
-        return liveBlockEntities;
+    public MinecraftLiveBlockTracker liveBlocks() {
+        return liveBlocks;
+    }
+    public void blockEntityChanged(BlockEntity entity) throws IOException {
+        if (liveBlocks.changed(entity)) {
+            causalTicks.rememberCarrier(entity);
+        }
     }
     public MinecraftLiveEntityTracker liveEntities() { return liveEntities; }
     public MinecraftCausalTickTracker causalTicks() { return causalTicks; }

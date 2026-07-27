@@ -32,9 +32,7 @@ abstract class BlockEntityMixin {
                     ? runtime.causalTicks().resumeCarrierMutation(blockEntity)
                     : Optional.empty();
             try {
-                if (runtime.liveBlockEntities().changed(blockEntity)) {
-                    runtime.causalTicks().rememberCarrier(blockEntity);
-                }
+                runtime.blockEntityChanged(blockEntity);
             } catch (IOException failed) {
                 LumiMod.LOGGER.warn("Cannot capture live block entity {}",
                         blockEntity.getBlockPos(), failed);
