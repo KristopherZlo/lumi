@@ -69,7 +69,18 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
     @Override
     public BlockSnapshot read(BlockPosition position) throws IOException {
         BlockPos blockPos = minecraft(position);
-        LevelChunk chunk = requireChunk(blockPos);
+        return read(requireChunk(blockPos), blockPos);
+    }
+
+    public BlockSnapshot read(
+            LevelChunk chunk, BlockPosition position) throws IOException {
+        return read(
+                Objects.requireNonNull(chunk, "chunk"),
+                minecraft(Objects.requireNonNull(position, "position")));
+    }
+
+    private BlockSnapshot read(
+            LevelChunk chunk, BlockPos blockPos) throws IOException {
         BlockState state = chunk.getBlockState(blockPos);
         BlockEntity blockEntity = chunk.getBlockEntity(blockPos);
         Optional<CompoundTag> nbt = blockEntity == null

@@ -50,9 +50,13 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         ui.awaitHistory();
 
         BlockPos probe = actions.surfacePosition(2, 2);
-        server.runOnServer(minecraft -> minecraft.getPlayerList().getPlayers()
-                .getFirst().level().setBlockAndUpdate(
-                        probe, Blocks.STONE.defaultBlockState()));
+        BlockPos blockEntityProbe = probe.offset(0, 0, 1);
+        server.runOnServer(minecraft -> {
+            var level = minecraft.getPlayerList().getPlayers().getFirst().level();
+            level.setBlockAndUpdate(
+                    blockEntityProbe, Blocks.CHEST.defaultBlockState());
+            level.setBlockAndUpdate(probe, Blocks.STONE.defaultBlockState());
+        });
         waitFor(context, () -> context.computeOnClient(client ->
                         client.level != null
                                 && client.level.getBlockState(probe).is(Blocks.STONE)),
@@ -98,7 +102,7 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         report.assertNoRuntimeFailures();
         report.event("gate", "first_minute", "succeeded", 0, 0,
                 "real block packets, overlay, entity attack, save, undo, redo");
-        state = new SmokeState(save, probe, pig);
+        state = new SmokeState(save, probe, blockEntityProbe, pig);
     }
 
     private void verifyReopened(
@@ -121,6 +125,10 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
             var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
             return runtime.activeRef().commit().equals(state.save())
                     && player.level().getBlockState(state.probe()).is(Blocks.STONE)
+                    && player.level().getBlockState(
+                            state.blockEntityProbe()).is(Blocks.CHEST)
+                    && player.level().getBlockEntity(
+                            state.blockEntityProbe()) != null
                     && !entityPresent(player.level().getEntityInAnyDimension(state.pig()));
         });
         if (!persisted) {
@@ -224,5 +232,9 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         throw new AssertionError(failure + " within " + TIMEOUT_TICKS + " ticks");
     }
 
-    private record SmokeState(CommitId save, BlockPos probe, UUID pig) { }
+    private record SmokeState(
+            CommitId save,
+            BlockPos probe,
+            BlockPos blockEntityProbe,
+            UUID pig) { }
 }

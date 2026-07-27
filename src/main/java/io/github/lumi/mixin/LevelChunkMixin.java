@@ -130,7 +130,8 @@ abstract class LevelChunkMixin {
                         blockEntity.getBlockPos()) == blockEntity) {
             LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime -> {
                 try {
-                    runtime.liveBlocks().added(blockEntity);
+                    runtime.liveBlocks().added(
+                            (LevelChunk) (Object) this, blockEntity);
                 } catch (IOException failed) {
                     LumiMod.LOGGER.warn("Cannot capture added live block entity {}",
                             blockEntity.getBlockPos(), failed);
@@ -144,7 +145,8 @@ abstract class LevelChunkMixin {
         if (level instanceof ServerLevel serverLevel) {
             LumiMod.serverRuntime().find(serverLevel).ifPresent(runtime -> {
                 try {
-                    runtime.liveBlocks().removing(position);
+                    runtime.liveBlocks().removing(
+                            (LevelChunk) (Object) this, position);
                 } catch (IOException failed) {
                     LumiMod.LOGGER.warn("Cannot capture removed live block entity {}",
                             position, failed);

@@ -34,13 +34,14 @@ public final class MinecraftLiveBlockTracker {
 
     public void remember(LevelChunk chunk) throws IOException {
         for (BlockEntity blockEntity : chunk.getBlockEntities().values()) {
-            remember(blockEntity);
+            remember(chunk, blockEntity);
         }
     }
 
-    public void added(BlockEntity blockEntity) throws IOException {
+    public void added(
+            LevelChunk chunk, BlockEntity blockEntity) throws IOException {
         BlockPosition position = position(blockEntity.getBlockPos());
-        BlockSnapshot after = world.read(position);
+        BlockSnapshot after = world.read(chunk, position);
         BlockSnapshot before = baselines.put(position, after);
         if (before == null) {
             before = new BlockSnapshot(after.blockState(), Optional.empty());
@@ -80,9 +81,10 @@ public final class MinecraftLiveBlockTracker {
         return before;
     }
 
-    public void removing(BlockPos blockPos) throws IOException {
+    public void removing(
+            LevelChunk chunk, BlockPos blockPos) throws IOException {
         BlockPosition position = position(blockPos);
-        BlockSnapshot before = world.read(position);
+        BlockSnapshot before = world.read(chunk, position);
         baselines.put(position, new BlockSnapshot(
                 before.blockState(), Optional.empty()));
         recordCurrent(position, before, baselines.get(position));
@@ -98,9 +100,10 @@ public final class MinecraftLiveBlockTracker {
                         && Math.floorDiv(position.z(), 16) == chunkZ);
     }
 
-    private void remember(BlockEntity blockEntity) throws IOException {
+    private void remember(
+            LevelChunk chunk, BlockEntity blockEntity) throws IOException {
         BlockPosition position = position(blockEntity.getBlockPos());
-        baselines.put(position, world.read(position));
+        baselines.put(position, world.read(chunk, position));
     }
 
     public void record(
