@@ -50,6 +50,11 @@ final class LumiWorldSnapshot {
     }
 
     static LumiWorldSnapshot capture(
+            ServerLevel level, List<BlockBox> areas) throws IOException {
+        return capture(level, areas, null, "");
+    }
+
+    static LumiWorldSnapshot capture(
             ServerLevel level,
             List<BlockBox> areas,
             LumiBehaviorReport report,
@@ -75,8 +80,10 @@ final class LumiWorldSnapshot {
                 .sorted(ENTITY_ORDER).toList());
         LumiWorldSnapshot snapshot = new LumiWorldSnapshot(
                 sections, sortedEntities, copiedAreas);
-        report.snapshot(name, snapshot.digest, sections.size(),
-                sortedEntities.entities().size(), elapsedMillis(started));
+        if (report != null) {
+            report.snapshot(name, snapshot.digest, sections.size(),
+                    sortedEntities.entities().size(), elapsedMillis(started));
+        }
         return snapshot;
     }
 
@@ -109,7 +116,7 @@ final class LumiWorldSnapshot {
                 }
             }
             if (!blockEntities(key, wanted).equals(blockEntities(key, actual))) {
-                return "block entities differ in section " + key;
+                return describeBlockEntityDifference(key, wanted, actual);
             }
         }
         if (!entities.equals(expected.entities)) {
@@ -177,6 +184,33 @@ final class LumiWorldSnapshot {
             }
         });
         return selected;
+    }
+
+    private String describeBlockEntityDifference(
+            SectionKey key, SectionBlob expected, SectionBlob actual) {
+        Map<Integer, io.github.lumi.domain.model.CanonicalNbt> wanted =
+                blockEntities(key, expected);
+        Map<Integer, io.github.lumi.domain.model.CanonicalNbt> found =
+                blockEntities(key, actual);
+        Set<Integer> indices = new TreeSet<>(wanted.keySet());
+        indices.addAll(found.keySet());
+        for (int index : indices) {
+            var wantedNbt = wanted.get(index);
+            var foundNbt = found.get(index);
+            if (Objects.equals(wantedNbt, foundNbt)) {
+                continue;
+            }
+            BlockPos position = absolutePosition(key, index);
+            try {
+                return "block entity " + position + " expected "
+                        + (wantedNbt == null ? "none" : MinecraftNbtCodec.decode(wantedNbt))
+                        + " but was "
+                        + (foundNbt == null ? "none" : MinecraftNbtCodec.decode(foundNbt));
+            } catch (IOException invalid) {
+                return "block entity " + position + " differs: " + invalid.getMessage();
+            }
+        }
+        return "block entities differ in section " + key;
     }
 
     private boolean contains(BlockPos position) {

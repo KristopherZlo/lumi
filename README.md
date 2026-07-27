@@ -130,6 +130,10 @@ Use JDK 21.
 ```
 
 `build` compiles the mod and runs its unit and server GameTest suites.
+The bundled redstone GameTests place both Rube Goldberg machines on the ground,
+press their stone buttons as a nearby player, and verify exact Quick Restore,
+Restore, and Undo results at 2 ticks and every 5 ticks through 40 or 245 ticks.
+Run them directly with `.\gradlew.bat runGameTest --no-daemon`.
 
 The code is split by responsibility:
 
