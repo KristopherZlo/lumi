@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.Objects;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.Identifier;
@@ -17,6 +18,7 @@ import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
 /** Makes durable entity NBT stable across a vanilla save/load cycle. */
 final class MinecraftEntityNbtCanonicalizer {
     private static final float FULL_ROTATION = 360.0F;
+    private static final double MOTION_SCALE = 10_000_000_000_000_000.0D;
 
     CompoundTag normalize(CompoundTag source) {
         return normalize(source, entityType(source));
@@ -31,6 +33,7 @@ final class MinecraftEntityNbtCanonicalizer {
     }
 
     private void normalizeEntity(CompoundTag entity, EntityType<?> type) {
+        normalizeMotion(entity.getListOrEmpty("Motion"));
         normalizeRotation(entity.getListOrEmpty("Rotation"));
         normalizeLastHurtByMob(entity);
         normalizeAttributes(entity, type);
@@ -38,6 +41,24 @@ final class MinecraftEntityNbtCanonicalizer {
         for (int index = 0; index < passengers.size(); index++) {
             passengers.getCompound(index).ifPresent(passenger ->
                     normalizeEntity(passenger, entityType(passenger)));
+        }
+    }
+
+    private static void normalizeMotion(ListTag motion) {
+        if (motion.size() != 3) {
+            return;
+        }
+        for (int index = 0; index < motion.size(); index++) {
+            if (!(motion.get(index) instanceof DoubleTag component)
+                    || !Double.isFinite(component.value())) {
+                return;
+            }
+        }
+        for (int index = 0; index < motion.size(); index++) {
+            double value = ((DoubleTag) motion.get(index)).value();
+            double normalized = Math.rint(value * MOTION_SCALE) / MOTION_SCALE;
+            motion.set(index, DoubleTag.valueOf(
+                    normalized == 0.0D ? 0.0D : normalized));
         }
     }
 

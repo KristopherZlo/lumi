@@ -1797,6 +1797,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     QuickRollbackContext value = context.get();
                     if (value != null) {
                         var saved = value.operation().returnPoint().orElseThrow();
+                        causalTicks.cancelSections(
+                                saved.capturedGenerations().generations().keySet().stream()
+                                        .filter(SectionKey.class::isInstance)
+                                        .map(SectionKey.class::cast)
+                                        .collect(java.util.stream.Collectors.toUnmodifiableSet()));
                         DirectLiveActionContext.recoverOrphanedAction(
                                 liveActions, author.id());
                         liveActions.pushCheckpoint(
@@ -1888,24 +1893,30 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 scopedSavePreparation(pending.generations()::containsKey),
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
                 ignored -> { });
-        var operation = new ReturnPointRestoreOperation(checkpoint, (saved, progress) ->
-                CompletableFuture.supplyAsync(() -> {
-                    try {
-                        if (!activeRef().equals(expected)) {
-                            throw new IOException("Active branch changed during Quick Rollback");
-                        }
-                        var prepared = restores.prepare(
-                                expected, saved.commitId(), expected.commit(),
-                                value -> publishRestoreDiffProgress(progress, value));
-                        return RestoreOperation.startQuickRollback(
-                                prepared, worldApply, new WorkingIndexClearPublication(
-                                        mutations, saved.capturedGenerations()),
-                                journals, operationId, restoreStateListener,
-                                saved.commitId(), saved.capturedGenerations(), progress);
-                    } catch (IOException failed) {
-                        throw new CompletionException(failed);
+        var operation = new ReturnPointRestoreOperation(checkpoint, (saved, progress) -> {
+            try {
+                liveEntities.finalizeOwned();
+            } catch (IOException failed) {
+                return CompletableFuture.failedFuture(failed);
+            }
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    if (!activeRef().equals(expected)) {
+                        throw new IOException("Active branch changed during Quick Rollback");
                     }
-                }, background));
+                    var prepared = restores.prepare(
+                            expected, saved.commitId(), expected.commit(),
+                            value -> publishRestoreDiffProgress(progress, value));
+                    return RestoreOperation.startQuickRollback(
+                            prepared, worldApply, new WorkingIndexClearPublication(
+                                    mutations, saved.capturedGenerations()),
+                            journals, operationId, restoreStateListener,
+                            saved.commitId(), saved.capturedGenerations(), progress);
+                } catch (IOException failed) {
+                    throw new CompletionException(failed);
+                }
+            }, background);
+        });
         return operation;
     }
 

@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
@@ -32,6 +33,15 @@ class MinecraftEntityNbtCanonicalizerTest {
                 "minecraft:attack_damage", "minecraft:movement_speed");
 
         assertEquals(MinecraftNbtCodec.encode(canonicalizer.normalize(legacy)),
+                MinecraftNbtCodec.encode(canonicalizer.normalize(reloaded)));
+    }
+
+    @Test
+    void makesMinecartMotionStableAcrossVanillaReload() throws Exception {
+        CompoundTag saved = motion(0.011428571428571429D);
+        CompoundTag reloaded = motion(0.01142857142857143D);
+
+        assertEquals(MinecraftNbtCodec.encode(canonicalizer.normalize(saved)),
                 MinecraftNbtCodec.encode(canonicalizer.normalize(reloaded)));
     }
 
@@ -134,6 +144,16 @@ class MinecraftEntityNbtCanonicalizerTest {
         entity.putInt("HurtByTimestamp", timestamp);
         entity.put("last_hurt_by_mob", new CompoundTag());
         entity.putInt("ticks_since_last_hurt_by_mob", ticksSince);
+        return entity;
+    }
+
+    private static CompoundTag motion(double vertical) {
+        CompoundTag entity = new CompoundTag();
+        ListTag motion = new ListTag();
+        motion.add(DoubleTag.valueOf(0.0D));
+        motion.add(DoubleTag.valueOf(vertical));
+        motion.add(DoubleTag.valueOf(0.0D));
+        entity.put("Motion", motion);
         return entity;
     }
 

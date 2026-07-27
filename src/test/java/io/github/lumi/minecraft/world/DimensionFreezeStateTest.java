@@ -15,17 +15,26 @@ class DimensionFreezeStateTest {
         assertTrue(freeze.isFrozen());
         assertFalse(freeze.isMutationAllowed());
         assertFalse(freeze.isAuthorizedMutation());
+        assertFalse(freeze.isEntityAdditionAllowed());
         freeze.runAuthorized(() -> {
             assertTrue(freeze.isMutationAllowed());
             assertTrue(freeze.isAuthorizedMutation());
+            assertFalse(freeze.isEntityAdditionAllowed());
             freeze.runAuthorized(() -> assertTrue(freeze.isMutationAllowed()));
+        });
+        freeze.runAuthorizedEntityAddition(() -> {
+            assertTrue(freeze.isMutationAllowed());
+            assertTrue(freeze.isAuthorizedMutation());
+            assertTrue(freeze.isEntityAdditionAllowed());
         });
         assertFalse(freeze.isMutationAllowed());
         assertFalse(freeze.isAuthorizedMutation());
+        assertFalse(freeze.isEntityAdditionAllowed());
 
         lease.release();
         assertFalse(freeze.isFrozen());
         assertTrue(freeze.isMutationAllowed());
+        assertTrue(freeze.isEntityAdditionAllowed());
         assertThrows(IllegalStateException.class, lease::release);
     }
 

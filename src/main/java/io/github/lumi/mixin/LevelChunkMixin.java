@@ -250,6 +250,7 @@ abstract class LevelChunkMixin {
             runtime.liveBlocks().completedBlockMutation(
                     pending.position, after);
             if (!pending.before.equals(after)) {
+                runtime.causalTicks().rememberMinecartsAt(position);
                 BlockEntity carrier = serverLevel.getBlockEntity(position);
                 if (carrier != null) {
                     runtime.causalTicks().rememberCarrier(carrier);

@@ -91,7 +91,7 @@ final class MinecraftEntityRestorer {
             throw new IOException("Cannot replace indexed entity UUIDs " + conflicts);
         }
         boolean[] added = {false};
-        freeze.runAuthorized(
+        freeze.runAuthorizedEntityAddition(
                 () -> added[0] = level.tryAddFreshEntityWithPassengers(replacement));
         if (!added[0]) {
             throw new IOException("Cannot add restored entity " + decoded.id());

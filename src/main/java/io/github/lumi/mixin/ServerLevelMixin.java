@@ -125,7 +125,7 @@ abstract class ServerLevelMixin implements OwnedBlockEventAccess {
         ServerLevel level = (ServerLevel) (Object) this;
         LumiMod.serverRuntime().find(level).ifPresent(runtime -> {
             if (MinecraftEntityChunkCapture.isDurableRoot(entity)
-                    && !runtime.freeze().isMutationAllowed()) {
+                    && !runtime.freeze().isEntityAdditionAllowed()) {
                 callback.setReturnValue(false);
             }
         });

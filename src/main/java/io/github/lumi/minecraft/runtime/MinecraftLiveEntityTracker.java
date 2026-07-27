@@ -64,13 +64,14 @@ public final class MinecraftLiveEntityTracker {
                 actionId, entityId, observedBefore, observedBefore));
     }
 
-    public void finish(Pending pending) throws IOException {
+    public boolean finish(Pending pending) throws IOException {
         Objects.requireNonNull(pending, "pending");
         Optional<EntityState> after = world.read(pending.entity());
         UUID effective = recordEntity(
                 pending.action(), pending.entity(), pending.before(),
                 after);
-        if (!pending.observedBefore().equals(after)) {
+        boolean changed = !pending.observedBefore().equals(after);
+        if (changed) {
             builderMutations.changed(pending.observedBefore(), after);
         }
         if (!effective.equals(pending.action())) {
@@ -81,6 +82,7 @@ public final class MinecraftLiveEntityTracker {
         } else {
             disown(effective, pending.entity());
         }
+        return changed;
     }
 
     public boolean finalizeOwned(UUID action) throws IOException {
@@ -102,6 +104,12 @@ public final class MinecraftLiveEntityTracker {
             journal.release(action);
         }
         return true;
+    }
+
+    public void finalizeOwned() throws IOException {
+        for (UUID action : java.util.Set.copyOf(owned.keySet())) {
+            finalizeOwned(action);
+        }
     }
 
     public void trackApplied(
@@ -141,6 +149,12 @@ public final class MinecraftLiveEntityTracker {
     }
 
     private void own(UUID action, UUID entity, Owned ownership) {
+        owned.entrySet().stream()
+                .filter(entry -> !entry.getKey().equals(action)
+                        && entry.getValue().containsKey(entity))
+                .map(Map.Entry::getKey)
+                .toList()
+                .forEach(other -> disown(other, entity));
         Map<UUID, Owned> entities = owned.get(action);
         if (entities == null) {
             entities = new HashMap<>();

@@ -5,6 +5,7 @@ import java.util.Objects;
 /** Per-dimension freeze flag with a thread-scoped bypass for verified Lumi apply. */
 public final class DimensionFreezeState implements DimensionFreeze {
     private final ThreadLocal<Integer> authorizationDepth = ThreadLocal.withInitial(() -> 0);
+    private final ThreadLocal<Integer> entityAdditionDepth = ThreadLocal.withInitial(() -> 0);
     private boolean frozen;
 
     @Override
@@ -28,17 +29,29 @@ public final class DimensionFreezeState implements DimensionFreeze {
         return authorizationDepth.get() > 0;
     }
 
+    public boolean isEntityAdditionAllowed() {
+        return !isFrozen() || entityAdditionDepth.get() > 0;
+    }
+
     public void runAuthorized(Runnable mutation) {
-        Objects.requireNonNull(mutation, "mutation");
-        int previous = authorizationDepth.get();
-        authorizationDepth.set(previous + 1);
+        runScoped(authorizationDepth, mutation);
+    }
+
+    public void runAuthorizedEntityAddition(Runnable mutation) {
+        runScoped(entityAdditionDepth, () -> runAuthorized(mutation));
+    }
+
+    private static void runScoped(ThreadLocal<Integer> depth, Runnable action) {
+        Objects.requireNonNull(action, "action");
+        int previous = depth.get();
+        depth.set(previous + 1);
         try {
-            mutation.run();
+            action.run();
         } finally {
             if (previous == 0) {
-                authorizationDepth.remove();
+                depth.remove();
             } else {
-                authorizationDepth.set(previous);
+                depth.set(previous);
             }
         }
     }

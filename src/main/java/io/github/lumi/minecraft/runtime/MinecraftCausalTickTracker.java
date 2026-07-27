@@ -21,11 +21,13 @@ import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.level.BlockEventData;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.ticks.LevelTicks;
 import net.minecraft.world.ticks.ScheduledTick;
 
@@ -148,7 +150,7 @@ public final class MinecraftCausalTickTracker {
     }
 
     public void rememberCarrier(Entity carrier) {
-        if (isTransientCarrier(carrier)) {
+        if (isCausalCarrier(carrier)) {
             Set<DirectLiveActionContext.CausalRoot> activeTnt = carrier instanceof PrimedTnt
                     ? entityCarriers.owners(entity -> entity instanceof PrimedTnt)
                     : Set.of();
@@ -160,21 +162,37 @@ public final class MinecraftCausalTickTracker {
         }
     }
 
+    public void rememberMinecartsAt(BlockPos position) {
+        if (DirectLiveActionContext.currentRoot(journal).isEmpty()) {
+            return;
+        }
+        level.getEntities(
+                        (Entity) null, new AABB(position).inflate(0.5D),
+                        entity -> entity instanceof AbstractMinecart minecart
+                                && minecart.getCurrentBlockPosOrRailBelow().equals(position))
+                .forEach(this::rememberCarrier);
+    }
+
     public Optional<CausalExecution> resumeCarrier(Entity carrier) {
         return entityCarriers.owner(carrier).map(root -> new CausalExecution(
                 DirectLiveActionContext.resume(journal, root.action(), root.depth()), () -> { }));
     }
 
-    public void finishedCarrier(Entity carrier) {
-        if (carrier.isRemoved()) {
+    public void finishedCarrier(Entity carrier, boolean changed) {
+        if (carrier.isRemoved()
+                || (carrier instanceof AbstractMinecart && !changed)) {
             entityCarriers.forget(carrier).ifPresent(root -> journal.release(root.action()));
         }
+    }
+
+    public void finishedCarrier(Entity carrier) {
+        finishedCarrier(carrier, true);
     }
 
     public void rememberAppliedCarrier(java.util.UUID action, Entity carrier) {
         Objects.requireNonNull(action, "action");
         Objects.requireNonNull(carrier, "carrier");
-        if (isTransientCarrier(carrier) && !carrier.isRemoved()) {
+        if (isCausalCarrier(carrier) && !carrier.isRemoved()) {
             remember(entityCarriers, carrier,
                     new DirectLiveActionContext.CausalRoot(action, 1));
         }
@@ -393,6 +411,10 @@ public final class MinecraftCausalTickTracker {
                 || carrier instanceof ItemEntity
                 || carrier instanceof PrimedTnt
                 || carrier instanceof AbstractArrow;
+    }
+
+    private static boolean isCausalCarrier(Entity carrier) {
+        return isTransientCarrier(carrier) || carrier instanceof AbstractMinecart;
     }
 
     @SuppressWarnings("unchecked")
