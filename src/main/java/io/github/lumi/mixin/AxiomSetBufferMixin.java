@@ -61,6 +61,7 @@ abstract class AxiomSetBufferMixin {
                 if (exactCapture) {
                     recordAfter(runtime, action, before, generations);
                 } else {
+                    rebaseLiveBlocks(level, runtime, sections);
                     generations.keySet().forEach(runtime.mutations()::markBuilderMutation);
                 }
             }
@@ -138,8 +139,7 @@ abstract class AxiomSetBufferMixin {
             try {
                 BlockSnapshot after = runtime.liveWorld().read(position);
                 if (!snapshot.equals(after)) {
-                    runtime.liveActions().record(action, position, snapshot, after);
-                    runtime.recordCausalZoneGrowth(action, position);
+                    runtime.liveBlocks().record(action, position, snapshot, after);
                     runtime.mutations().recordBuilderBlockMutation(
                             position, generations.get(section(position)));
                 }
@@ -147,6 +147,21 @@ abstract class AxiomSetBufferMixin {
                 throw new UncheckedIOException("Cannot capture Axiom block after mutation", failed);
             }
         });
+    }
+
+    private static void rebaseLiveBlocks(
+            ServerLevel level,
+            FabricDimensionRuntime runtime,
+            Set<SectionKey> sections) {
+        for (SectionKey key : sections) {
+            try {
+                runtime.liveBlocks().rebase(key, LUMI_SECTIONS.capture(
+                        level, level.getChunk(key.chunkX(), key.chunkZ()), key.sectionY()));
+            } catch (IOException failed) {
+                throw new UncheckedIOException(
+                        "Cannot rebase Axiom block entity state", failed);
+            }
+        }
     }
 
     private static SectionKey section(BlockPosition position) {

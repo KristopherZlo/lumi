@@ -37,6 +37,7 @@ import net.minecraft.world.phys.Vec3;
 public final class LumiAxiomGameTests {
     private static final BlockPos FIRST = new BlockPos(2, 2, 2);
     private static final BlockPos SECOND = new BlockPos(3, 2, 2);
+    private static final BlockPos THIRD = new BlockPos(4, 2, 2);
 
     @GameTest(maxTicks = 300000)
     public void axiomInfiniteReachIsUndoable(GameTestHelper helper) {
@@ -190,6 +191,8 @@ public final class LumiAxiomGameTests {
         FabricDimensionRuntime runtime = runtime(helper);
         AtomicReference<ServerPlayer> player = new AtomicReference<>();
         AtomicReference<DimensionMutation> conflicted = new AtomicReference<>();
+        AtomicReference<DimensionMutation> liveUndo = new AtomicReference<>();
+        AtomicReference<DimensionMutation> axiomUndo = new AtomicReference<>();
         UUID secondPlayer = UUID.randomUUID();
         UUID test = UUID.randomUUID();
 
@@ -238,8 +241,40 @@ public final class LumiAxiomGameTests {
                     helper.assertValueEqual(builderBeforeNoOp,
                             runtime.mutations().builderSnapshot(),
                             "No-op Axiom buffer must not advance builder generations");
+                    helper.setBlock(THIRD, Blocks.COMMAND_BLOCK);
+                    helper.assertTrue(
+                            helper.getLevel().getBlockEntity(helper.absolutePos(THIRD)) != null,
+                            "Command block fixture has no block entity");
+                    applyBuffer(helper, player.get(), THIRD, Blocks.AIR.defaultBlockState());
+                    try (var ignored = DirectLiveActionContext.open(
+                            runtime.liveActions(), player.get().getUUID())) {
+                        helper.getLevel().setBlock(helper.absolutePos(THIRD),
+                                Blocks.GOLD_BLOCK.defaultBlockState(), Block.UPDATE_ALL);
+                    }
+                    liveUndo.set(runtime.startLiveAction(player.get().getUUID(),
+                            LiveActionJournal.Direction.UNDO, ignored -> { }));
                 })
-                .thenExecute(() -> releasePlayer(helper, player.get(), test))
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                            liveUndo.get().terminalState(),
+                            "Undo after Axiom block-entity removal must succeed");
+                    helper.assertBlockState(THIRD, Blocks.AIR.defaultBlockState());
+                    axiomUndo.set(runtime.startLiveAction(player.get().getUUID(),
+                            LiveActionJournal.Direction.UNDO, ignored -> { }));
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime))
+                .thenExecute(() -> {
+                    helper.assertValueEqual(MutationTerminalState.SUCCEEDED,
+                            axiomUndo.get().terminalState(),
+                            "Axiom block-entity removal Undo must succeed");
+                    helper.assertBlockState(
+                            THIRD, Blocks.COMMAND_BLOCK.defaultBlockState());
+                    helper.assertTrue(
+                            helper.getLevel().getBlockEntity(helper.absolutePos(THIRD)) != null,
+                            "Axiom Undo did not restore the command block entity");
+                    releasePlayer(helper, player.get(), test);
+                })
                 .thenSucceed();
     }
 
@@ -261,6 +296,18 @@ public final class LumiAxiomGameTests {
                 helper.getLevel().getBlockState(first));
         buffer.set(second.getX(), second.getY(), second.getZ(),
                 helper.getLevel().getBlockState(second));
+        AxiomServerboundSetBuffer.applyBlockBufferServer(
+                buffer, helper.getLevel(), null, player);
+    }
+
+    private static void applyBuffer(
+            GameTestHelper helper,
+            ServerPlayer player,
+            BlockPos relative,
+            BlockState state) {
+        BlockBuffer buffer = new BlockBuffer();
+        BlockPos position = helper.absolutePos(relative);
+        buffer.set(position.getX(), position.getY(), position.getZ(), state);
         AxiomServerboundSetBuffer.applyBlockBufferServer(
                 buffer, helper.getLevel(), null, player);
     }

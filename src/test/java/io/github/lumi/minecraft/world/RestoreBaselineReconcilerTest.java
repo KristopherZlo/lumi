@@ -23,6 +23,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -42,19 +43,22 @@ class RestoreBaselineReconcilerTest {
         SectionKey sectionKey = new SectionKey(2, 4, 3);
         EntityChunkBlob original = entities(1);
         EntityChunkBlob target = entities(2);
+        var reset = new AtomicReference<WorldStateApply.State>();
         entities.rememberLoaded(entityKey, original);
         blockEntities.remember(sectionKey, Map.of(0, new CanonicalNbt(new byte[] {1})));
         var state = new WorldStateApply.State(
                 Map.of(sectionKey, section()),
                 Map.of(entityKey, target, storageOnlyKey, target));
 
-        new RestoreBaselineReconciler(entities, blockEntities).restored(state);
+        new RestoreBaselineReconciler(
+                entities, blockEntities, reset::set).restored(state);
 
         assertFalse(blockEntities.contains(sectionKey));
         assertEquals(Set.of(entityKey), entities.trackedKeys());
         assertTrue(entities.permitStore(entityKey, target));
         assertTrue(mutations.snapshot().generations().isEmpty());
         assertTrue(background.isEmpty());
+        assertEquals(state, reset.get());
     }
 
     private static EntityChunkBlob entities(int marker) {

@@ -100,6 +100,8 @@ Lumi stores only the state needed for exact recovery. Save captures the visible
 world boundary; Restore prepares heavy work away from the server tick, applies
 bounded batches, persists them through Minecraft storage, and reads the result
 back before reporting success.
+Verified Restore and direct Axiom edits also rebase session block-entity
+baselines before later Undo/Redo can use them.
 
 Published history uses immutable content-addressed objects, sparse Merkle trees,
 hash-verified LZ4 packs, atomic refs, and operation journals. A failed or
@@ -135,6 +137,8 @@ press their stone buttons as a nearby player, and verify exact block,
 block-entity, and entity results after Quick Restore, Restore, and Undo at
 2 ticks and every 5 ticks through 40 or 245 ticks.
 Run them directly with `.\gradlew.bat runGameTest --no-daemon`.
+Pass `-Dfabric-api.gametest.filter=<test-id>` before `runGameTest` to run one
+server GameTest without starting the full suite.
 
 The code is split by responsibility:
 

@@ -69,6 +69,10 @@ tasks.named('runGameTest') {
     doFirst {
         delete(layout.buildDirectory.dir('run/gameTest/world'))
     }
+    def filter = System.getProperty('fabric-api.gametest.filter')
+    if (filter != null && !filter.isBlank()) {
+        systemProperty 'fabric-api.gametest.filter', filter
+    }
 }
 
 tasks.named('runClientGameTest') {

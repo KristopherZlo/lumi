@@ -3,6 +3,8 @@ package io.github.lumi.minecraft.runtime;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockSnapshot;
 import io.github.lumi.domain.model.CanonicalNbt;
+import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.minecraft.world.MinecraftLiveBlockWorldAccess;
 import java.io.IOException;
@@ -71,6 +73,17 @@ public final class MinecraftLiveBlockTracker {
         }
     }
 
+    public void rebase(SectionKey key, SectionBlob visible) {
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(visible, "visible");
+        baselines.keySet().removeIf(position -> section(position).equals(key));
+        visible.blockEntities().forEach((index, nbt) -> {
+            BlockPosition position = position(key, index);
+            baselines.put(position, new BlockSnapshot(
+                    visible.blockStates().get(index), Optional.of(nbt)));
+        });
+    }
+
     public BlockSnapshot beforeMutation(
             BlockPosition position, BlockSnapshot visible) throws IOException {
         BlockSnapshot baseline = baselines.getOrDefault(
@@ -123,6 +136,7 @@ public final class MinecraftLiveBlockTracker {
         }
         world.prepare(before);
         world.prepare(after);
+        completedBlockMutation(position, after);
         UUID effective = journal.record(action, position, before, after);
         if (!effective.equals(action)) {
             journal.mergeGroups(action, effective);
@@ -144,5 +158,19 @@ public final class MinecraftLiveBlockTracker {
 
     private static BlockPosition position(BlockPos position) {
         return new BlockPosition(position.getX(), position.getY(), position.getZ());
+    }
+
+    private static BlockPosition position(SectionKey key, int index) {
+        return new BlockPosition(
+                key.chunkX() * 16 + (index & 15),
+                key.sectionY() * 16 + ((index >>> 8) & 15),
+                key.chunkZ() * 16 + ((index >>> 4) & 15));
+    }
+
+    private static SectionKey section(BlockPosition position) {
+        return new SectionKey(
+                Math.floorDiv(position.x(), 16),
+                Math.floorDiv(position.y(), 16),
+                Math.floorDiv(position.z(), 16));
     }
 }
