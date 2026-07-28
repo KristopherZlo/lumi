@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.EntityChunkBlob;
@@ -10,6 +11,7 @@ import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.service.RestorePlanMap;
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import net.minecraft.SharedConstants;
@@ -158,10 +161,7 @@ class StreamingPreparedWorldMutationSessionTest {
 
     @Test
     void fillsFreedEntityTicketSlotsWithoutStartingTheNextBatch() throws Exception {
-        List<EntityChunkKey> keys = new ArrayList<>();
-        for (int chunk = 0; chunk < 65; chunk++) {
-            keys.add(new EntityChunkKey(chunk, 0));
-        }
+        List<EntityChunkKey> keys = entityKeys(65);
         ControlledExecutor background = new ControlledExecutor();
         FakeWorld world = new FakeWorld(null);
         RecordingChunkAccess chunks = new RecordingChunkAccess();
@@ -199,6 +199,71 @@ class StreamingPreparedWorldMutationSessionTest {
         session.close();
         assertEquals(0, chunks.active);
         assertEquals(1, world.persistence.getFirst().closeCalls);
+    }
+
+    @Test
+    void rejectedEntityLookaheadFallsBackAfterDurability() throws Exception {
+        List<EntityChunkKey> keys = entityKeys(40);
+        FakeWorld world = new FakeWorld(null);
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        AtomicInteger requests = new AtomicInteger();
+        var session = session(
+                entityPlan(keys), world, new ControlledExecutor(), ignored -> {
+                    if (requests.incrementAndGet() == 2) {
+                        throw new RejectedExecutionException("expected");
+                    }
+                    return new ChunkLoadSession(chunks, () -> 0L);
+                });
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        world.persistence.getFirst().accepted = keys.subList(0, 32).stream()
+                .map(ChunkCoordinate::from).toList();
+
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(0, chunks.active);
+        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
+
+        world.persistence.getFirst().complete = true;
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(keys, world.startedEntityChunks);
+        assertEquals(3, requests.get());
+
+        session.close();
+        assertEquals(0, chunks.active);
+    }
+
+    @Test
+    void entityLookaheadFailureSurfacesOnlyAfterCurrentDurability() throws Exception {
+        List<EntityChunkKey> keys = entityKeys(33);
+        FakeWorld world = new FakeWorld(null);
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        ChunkCoordinate next = ChunkCoordinate.from(keys.getLast());
+        CompletableFuture<Void> failedLoad = new CompletableFuture<>();
+        chunks.loads.put(next, failedLoad);
+        var session = session(
+                entityPlan(keys), world, new ControlledExecutor(),
+                ignored -> new ChunkLoadSession(chunks, () -> 0L));
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        world.persistence.getFirst().accepted =
+                List.of(ChunkCoordinate.from(keys.getFirst()));
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+
+        failedLoad.completeExceptionally(new IllegalStateException("expected"));
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
+        assertEquals(1, world.persistenceCalls.size());
+
+        world.persistence.getFirst().accepted = keys.subList(1, 32).stream()
+                .map(ChunkCoordinate::from).toList();
+        world.persistence.getFirst().complete = true;
+        IOException failed = assertThrows(
+                IOException.class, () -> session.applyUntil(Long.MAX_VALUE));
+        assertTrue(failed.getMessage().contains("Cannot load Lumi chunk"));
+        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
+        assertEquals(1, world.persistenceCalls.size());
+        assertEquals(1, world.persistence.getFirst().closeCalls);
+
+        session.close();
+        assertEquals(0, chunks.active);
     }
 
     @Test
@@ -366,6 +431,14 @@ class StreamingPreparedWorldMutationSessionTest {
                 state, state, decoded, decoded, List.of(), keys);
     }
 
+    private static List<EntityChunkKey> entityKeys(int chunks) {
+        List<EntityChunkKey> keys = new ArrayList<>();
+        for (int chunk = 0; chunk < chunks; chunk++) {
+            keys.add(new EntityChunkKey(chunk, 0));
+        }
+        return keys;
+    }
+
     private static SectionBlob stoneSection() {
         return new SectionBlob(
                 Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:stone"),
@@ -404,6 +477,8 @@ class StreamingPreparedWorldMutationSessionTest {
 
     private static final class RecordingChunkAccess implements ChunkLoadAccess {
         private final List<Integer> activeBeforeRetain = new ArrayList<>();
+        private final Map<ChunkCoordinate, CompletableFuture<Void>> loads =
+                new LinkedHashMap<>();
         private int active;
         private int peak;
 
@@ -411,7 +486,8 @@ class StreamingPreparedWorldMutationSessionTest {
         public CompletableFuture<Void> retain(ChunkCoordinate chunk) {
             activeBeforeRetain.add(active);
             peak = Math.max(peak, ++active);
-            return CompletableFuture.completedFuture(null);
+            return loads.getOrDefault(
+                    chunk, CompletableFuture.completedFuture(null));
         }
 
         @Override public boolean isReady(ChunkCoordinate chunk) {
