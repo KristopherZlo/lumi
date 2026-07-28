@@ -14,6 +14,10 @@ public final class CanonicalNbt {
         return bytes.clone();
     }
 
+    public int byteSize() {
+        return bytes.length;
+    }
+
     @Override
     public boolean equals(Object other) {
         return other instanceof CanonicalNbt nbt && Arrays.equals(bytes, nbt.bytes);

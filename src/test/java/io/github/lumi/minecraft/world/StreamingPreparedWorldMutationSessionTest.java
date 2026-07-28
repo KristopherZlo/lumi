@@ -48,14 +48,14 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
-    void boundsOnePreparationSlabToEstimatedOneHundredTwentyEightMib() {
+    void capsOnePreparationSlabAtOneThousandTwentyFourSections() {
         List<SectionKey> keys = new ArrayList<>();
         for (int section = 0; section < 1_100; section++) {
             keys.add(new SectionKey(0, section, 0));
         }
 
-        assertEquals(1_024, StreamingPreparedWorldMutationSession.slabEnd(keys, 0));
-        assertEquals(1_100, StreamingPreparedWorldMutationSession.slabEnd(keys, 1_024));
+        assertEquals(1_024,
+                StreamingPreparedWorldMutationSession.MAX_SECTIONS_PER_SLAB);
         assertEquals(1_024, StreamingPreparedWorldMutationSession.windowEnd(
                 keys, 0, 1_024));
     }
@@ -131,6 +131,63 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
+    void splitsDistinctNbtHeavySectionsAtTheResidentBudget() throws Exception {
+        List<SectionKey> keys = List.of(
+                new SectionKey(0, 0, 0), new SectionKey(0, 1, 0));
+        Map<SectionKey, SectionBlob> sections = new LinkedHashMap<>();
+        sections.put(keys.get(0), chestSection(2 * 1024 * 1024));
+        sections.put(keys.get(1), chestSection(2 * 1024 * 1024));
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(sections.get(keys.getFirst()));
+
+        try (var session = session(plan(keys, sections), world, background)) {
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            background.runNext();
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(List.of(1), world.persistenceWindowSizes);
+
+            world.persistence.getFirst().complete = true;
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(2, background.submitted);
+            assertEquals(1, background.pending());
+        }
+    }
+
+    @Test
+    void countsOneSharedNbtHeavyTargetOnlyOnce() throws Exception {
+        List<SectionKey> keys = List.of(
+                new SectionKey(0, 0, 0), new SectionKey(0, 1, 0));
+        SectionBlob shared = chestSection(2 * 1024 * 1024);
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(shared);
+
+        try (var session = session(plan(keys, shared), world, background)) {
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            background.runNext();
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+
+            assertEquals(List.of(2), world.persistenceWindowSizes);
+            assertEquals(1, background.submitted);
+        }
+    }
+
+    @Test
+    void preparesOneOversizedSectionSoTheRestoreCanProgress() throws Exception {
+        List<SectionKey> keys = List.of(new SectionKey(0, 0, 0));
+        SectionBlob section = chestSection(5 * 1024 * 1024);
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(section);
+
+        try (var session = session(plan(keys, section), world, background)) {
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            background.runNext();
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+
+            assertEquals(List.of(1), world.persistenceWindowSizes);
+        }
+    }
+
+    @Test
     void closeCancelsQueuedPreparationWithoutReadingThePlan() throws Exception {
         SectionKey key = new SectionKey(0, 0, 0);
         SectionBlob section = stoneSection();
@@ -172,6 +229,11 @@ class StreamingPreparedWorldMutationSessionTest {
             List<SectionKey> keys, SectionBlob section) {
         Map<SectionKey, SectionBlob> sections = new LinkedHashMap<>();
         keys.forEach(key -> sections.put(key, section));
+        return plan(keys, sections);
+    }
+
+    private static PreparedMinecraftPlanState plan(
+            List<SectionKey> keys, Map<SectionKey, SectionBlob> sections) {
         var state = new WorldStateApply.State(sections, Map.of());
         return new PreparedMinecraftPlanState(
                 state, state, Map.of(), Map.of(), keys, List.of());
@@ -181,6 +243,17 @@ class StreamingPreparedWorldMutationSessionTest {
         return new SectionBlob(
                 Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:stone"),
                 Map.of());
+    }
+
+    private static SectionBlob chestSection(int payloadBytes) throws Exception {
+        var states = new ArrayList<>(
+                Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:stone"));
+        states.set(0, "minecraft:chest");
+        CompoundTag chest = new CompoundTag();
+        chest.putString("id", "minecraft:chest");
+        chest.putByteArray("lumi_test_payload", new byte[payloadBytes]);
+        return new SectionBlob(
+                states, Map.of(0, MinecraftNbtCodec.encode(chest)));
     }
 
     private static final class ControlledExecutor implements Executor {

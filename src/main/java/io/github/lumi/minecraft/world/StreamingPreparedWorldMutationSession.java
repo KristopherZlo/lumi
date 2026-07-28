@@ -5,6 +5,9 @@ import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,8 +22,15 @@ import java.util.function.Supplier;
 final class StreamingPreparedWorldMutationSession implements WorldStateApply.ApplySession {
     static final int MAX_CHUNKS = 32;
     static final long MAX_ESTIMATED_BYTES = 128L * 1024 * 1024;
-    private static final long ESTIMATED_SECTION_BYTES =
-            2L * SectionBlob.BLOCK_COUNT * 16;
+    static final int MAX_SECTIONS_PER_SLAB = 1_024;
+    private static final long RAW_SECTION_BYTES = 32L * 1024;
+    private static final long NATIVE_SECTION_BYTES = 96L * 1024;
+    private static final long PREPARED_DELTA_BYTES = 48L * 1024;
+    private static final long TRANSIENT_PREPARATION_BYTES = 64L * 1024;
+    private static final long NBT_ENTRY_BYTES = 64;
+    private static final long NATIVE_NBT_ENTRY_BYTES = 256;
+    // ponytail: Conservative HotSpot 21 expansion; replace only if the heap gate drifts.
+    private static final long NATIVE_NBT_EXPANSION = 32;
 
     private final PreparedMinecraftPlanState plan;
     private final MinecraftRestorePreparation preparation;
@@ -122,11 +132,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             if (slab == null) {
                 if (preparing == null) {
                     int start = batchStart;
-                    slabEnd = slabEnd(plan.sectionKeys(), start);
-                    int end = slabEnd;
                     preparing = CompletableFuture.supplyAsync(() -> {
                         try {
-                            Batch batch = loadBatch(start, end);
+                            Batch batch = loadBatch(start);
                             return preparation.preparePreflightedBatch(
                                     batch.target(), batch.base(), batch.order(),
                                     () -> closed);
@@ -141,6 +149,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                     return false;
                 }
                 slab = claimPrepared();
+                slabEnd = batchStart + slab.sectionKeys().size();
             }
             batchEnd = windowEnd(plan.sectionKeys(), batchStart, slabEnd);
             current = new PreparedWorldMutationSession(
@@ -188,22 +197,59 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         }
     }
 
-    private Batch loadBatch(int start, int end) {
+    private Batch loadBatch(int start) {
         List<SectionKey> keys = plan.sectionKeys();
         Map<SectionKey, SectionBlob> target = new LinkedHashMap<>();
         Map<SectionKey, SectionBlob> base = new LinkedHashMap<>();
-        for (int index = start; index < end; index++) {
+        List<SectionKey> order = new ArrayList<>();
+        Map<SectionBlob, Boolean> rawSections = new IdentityHashMap<>();
+        Map<SectionBlob, Boolean> nativeSections = new IdentityHashMap<>();
+        long estimatedBytes = TRANSIENT_PREPARATION_BYTES;
+        int limit = (int) Math.min(
+                keys.size(), (long) start + MAX_SECTIONS_PER_SLAB);
+        for (int index = start; index < limit; index++) {
             if (closed) {
                 throw new CancellationException("Restore preparation was cancelled");
             }
+            if (!target.isEmpty() && estimatedBytes >= MAX_ESTIMATED_BYTES) {
+                break;
+            }
             SectionKey key = keys.get(index);
-            target.put(key, plan.source().sections().get(key));
-            base.put(key, plan.base().sections().get(key));
+            SectionBlob targetSection = plan.source().sections().get(key);
+            SectionBlob baseSection = plan.base().sections().get(key);
+            boolean newTargetRaw = !rawSections.containsKey(targetSection);
+            boolean newBaseRaw = baseSection != targetSection
+                    && !rawSections.containsKey(baseSection);
+            boolean newTargetNative = !nativeSections.containsKey(targetSection);
+            long additionalBytes = PREPARED_DELTA_BYTES;
+            if (newTargetRaw) {
+                additionalBytes = addEstimated(
+                        additionalBytes, estimatedRawBytes(targetSection));
+            }
+            if (newBaseRaw) {
+                additionalBytes = addEstimated(
+                        additionalBytes, estimatedRawBytes(baseSection));
+            }
+            if (newTargetNative) {
+                additionalBytes = addEstimated(
+                        additionalBytes, estimatedNativeBytes(targetSection));
+            }
+            if (!target.isEmpty()
+                    && additionalBytes > MAX_ESTIMATED_BYTES - estimatedBytes) {
+                break;
+            }
+            target.put(key, targetSection);
+            base.put(key, baseSection);
+            order.add(key);
+            rawSections.put(targetSection, Boolean.TRUE);
+            rawSections.put(baseSection, Boolean.TRUE);
+            nativeSections.put(targetSection, Boolean.TRUE);
+            estimatedBytes = addEstimated(estimatedBytes, additionalBytes);
         }
         return new Batch(
                 new WorldStateApply.State(target, Map.of()),
                 new WorldStateApply.State(base, Map.of()),
-                List.copyOf(keys.subList(start, end)));
+                order);
     }
 
     private PreparedMinecraftState nextSectionWindow() {
@@ -236,9 +282,29 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 List.of(), keys);
     }
 
-    static int slabEnd(List<SectionKey> keys, int start) {
-        int sections = (int) (MAX_ESTIMATED_BYTES / ESTIMATED_SECTION_BYTES);
-        return Math.min(keys.size(), start + sections);
+    private static long estimatedRawBytes(SectionBlob section) {
+        long bytes = RAW_SECTION_BYTES;
+        for (String state : new HashSet<>(section.blockStates())) {
+            bytes = addEstimated(bytes, 48L + 2L * state.length());
+        }
+        for (var nbt : section.blockEntities().values()) {
+            bytes = addEstimated(bytes, NBT_ENTRY_BYTES + nbt.byteSize());
+        }
+        return bytes;
+    }
+
+    private static long estimatedNativeBytes(SectionBlob section) {
+        long bytes = NATIVE_SECTION_BYTES;
+        for (var nbt : section.blockEntities().values()) {
+            bytes = addEstimated(bytes,
+                    NATIVE_NBT_ENTRY_BYTES
+                            + NATIVE_NBT_EXPANSION * nbt.byteSize());
+        }
+        return bytes;
+    }
+
+    private static long addEstimated(long left, long right) {
+        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
     }
 
     static int windowEnd(List<SectionKey> keys, int start, int limit) {
