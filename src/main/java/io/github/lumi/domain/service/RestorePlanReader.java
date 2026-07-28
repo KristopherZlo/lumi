@@ -13,36 +13,74 @@ import java.util.Objects;
 final class RestorePlanReader implements Closeable {
     static final int MAX_CACHED_SECTIONS = 32;
 
-    private final WorldObjectRepository.ReadSession session;
+    private final RestorePlanMap.Reader<ObjectId, SectionBlob> sectionReader;
+    private final RestorePlanMap.Reader<ObjectId, EntityChunkBlob> entityReader;
+    private final Closeable resource;
     private final LinkedHashMap<ObjectId, SectionBlob> cache =
             new LinkedHashMap<>(MAX_CACHED_SECTIONS, 0.75F, true);
+    private boolean reading;
     private boolean closed;
+    private boolean resourceClosed;
 
     RestorePlanReader(WorldObjectRepository objects) {
-        session = Objects.requireNonNull(objects, "objects").beginReadSession();
+        this(Objects.requireNonNull(objects, "objects").beginReadSession());
     }
 
-    synchronized SectionBlob readSection(ObjectId id) throws IOException {
+    private RestorePlanReader(WorldObjectRepository.ReadSession session) {
+        this(session::readSection, session::readEntities, session);
+    }
+
+    RestorePlanReader(
+            RestorePlanMap.Reader<ObjectId, SectionBlob> sectionReader,
+            RestorePlanMap.Reader<ObjectId, EntityChunkBlob> entityReader,
+            Closeable resource) {
+        this.sectionReader = Objects.requireNonNull(sectionReader, "sectionReader");
+        this.entityReader = Objects.requireNonNull(entityReader, "entityReader");
+        this.resource = Objects.requireNonNull(resource, "resource");
+    }
+
+    SectionBlob readSection(ObjectId id) throws IOException {
         Objects.requireNonNull(id, "id");
-        requireOpen();
-        SectionBlob cached = cache.get(id);
-        if (cached != null) {
-            return cached;
+        synchronized (this) {
+            requireOpen();
+            SectionBlob cached = cache.get(id);
+            if (cached != null) {
+                return cached;
+            }
         }
-        SectionBlob decoded = session.readSection(id);
-        cache.put(id, decoded);
-        if (cache.size() > MAX_CACHED_SECTIONS) {
-            var eldest = cache.entrySet().iterator();
-            eldest.next();
-            eldest.remove();
+        SectionBlob decoded = read(id, sectionReader);
+        synchronized (this) {
+            if (!closed) {
+                cache.put(id, decoded);
+                if (cache.size() > MAX_CACHED_SECTIONS) {
+                    var eldest = cache.entrySet().iterator();
+                    eldest.next();
+                    eldest.remove();
+                }
+            }
         }
         return decoded;
     }
 
-    synchronized EntityChunkBlob readEntities(ObjectId id) throws IOException {
-        Objects.requireNonNull(id, "id");
-        requireOpen();
-        return session.readEntities(id);
+    EntityChunkBlob readEntities(ObjectId id) throws IOException {
+        return read(Objects.requireNonNull(id, "id"), entityReader);
+    }
+
+    private <T> T read(
+            ObjectId id, RestorePlanMap.Reader<ObjectId, T> reader) throws IOException {
+        synchronized (this) {
+            requireOpen();
+            beginRead();
+        }
+        Throwable failure = null;
+        try {
+            return reader.read(id);
+        } catch (IOException | RuntimeException | Error failed) {
+            failure = failed;
+            throw failed;
+        } finally {
+            finishRead(failure);
+        }
     }
 
     synchronized int cachedSectionCount() {
@@ -50,13 +88,52 @@ final class RestorePlanReader implements Closeable {
     }
 
     @Override
-    public synchronized void close() throws IOException {
-        if (closed) {
+    public void close() throws IOException {
+        boolean closeNow;
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            cache.clear();
+            closeNow = !reading;
+            if (closeNow) {
+                resourceClosed = true;
+            }
+        }
+        if (closeNow) {
+            resource.close();
+        }
+    }
+
+    private void beginRead() throws IOException {
+        if (reading) {
+            throw new IOException("Concurrent Restore plan reads are not supported");
+        }
+        reading = true;
+    }
+
+    private void finishRead(Throwable failure) throws IOException {
+        boolean closeNow;
+        synchronized (this) {
+            reading = false;
+            closeNow = closed && !resourceClosed;
+            if (closeNow) {
+                resourceClosed = true;
+            }
+        }
+        if (!closeNow) {
             return;
         }
-        closed = true;
-        cache.clear();
-        session.close();
+        try {
+            resource.close();
+        } catch (IOException closeFailure) {
+            if (failure != null) {
+                failure.addSuppressed(closeFailure);
+            } else {
+                throw closeFailure;
+            }
+        }
     }
 
     private void requireOpen() throws IOException {

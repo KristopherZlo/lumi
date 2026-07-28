@@ -1,9 +1,11 @@
 package io.github.lumi.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.ObjectId;
@@ -14,6 +16,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -78,6 +84,49 @@ class RestorePlanReaderTest {
         reader.close();
         reader.close();
 
+        assertThrows(IOException.class, () -> reader.readSection(id));
+    }
+
+    @Test
+    void closeDefersResourceReleaseWithoutWaitingForAnActiveRead() throws Exception {
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var resourceClosed = new AtomicBoolean();
+        SectionBlob expected = section(0);
+        var reader = new RestorePlanReader(
+                ignored -> {
+                    entered.countDown();
+                    try {
+                        if (!release.await(5, TimeUnit.SECONDS)) {
+                            throw new IOException(
+                                    "Timed out waiting to finish the test read");
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("Interrupted test read", interrupted);
+                    }
+                    return expected;
+                },
+                ignored -> new EntityChunkBlob(List.of()),
+                () -> resourceClosed.set(true));
+        ObjectId id = new ObjectId("0".repeat(64));
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var reading = executor.submit(() -> reader.readSection(id));
+            assertTrue(entered.await(1, TimeUnit.SECONDS));
+            var closing = executor.submit(() -> {
+                reader.close();
+                return null;
+            });
+            try {
+                closing.get(1, TimeUnit.SECONDS);
+                assertFalse(resourceClosed.get());
+            } finally {
+                release.countDown();
+            }
+            assertSame(expected, reading.get(1, TimeUnit.SECONDS));
+        }
+        assertTrue(resourceClosed.get());
         assertThrows(IOException.class, () -> reader.readSection(id));
     }
 
