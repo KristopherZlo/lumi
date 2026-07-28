@@ -109,8 +109,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             actions.placeBlocks(
                     "recovery_fixture_chest", Items.CHEST, List.of(chestPosition));
             fillChest(world.getServer(), chestPosition);
-            actions.placeBlocks(
-                    "recovery_fixture_poi", Items.LECTERN, poiPositions);
+            setPois(world.getServer(), poiPositions, true);
             actions.placeBlocks(
                     "recovery_fixture_light", Items.GLOWSTONE, List.of(lightPosition));
             setRespawn(world.getServer(), respawnPosition);
@@ -135,7 +134,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             actions.destroyBlocks("recovery_fixture_break", positions);
             actions.destroyBlocks("recovery_fixture_break_special",
                     List.of(chestPosition, lightPosition));
-            actions.destroyBlocks("recovery_fixture_break_pois", poiPositions);
+            setPois(world.getServer(), poiPositions, false);
             actions.attackEntity(
                     "recovery_fixture_remove_entity", armorStand, Items.DIAMOND_SWORD);
             setRespawn(world.getServer(), positions.get(6).above());
@@ -235,8 +234,8 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
         List<BlockPos> positions = new ArrayList<>(64);
         positions.add(actions.surfacePosition(
                 originChunkX * 16 + 8, originChunkZ * 16 + 8));
-        for (int chunkZ = originChunkZ - 4; chunkZ < originChunkZ + 4; chunkZ++) {
-            for (int chunkX = originChunkX - 4; chunkX < originChunkX + 4; chunkX++) {
+        for (int chunkZ = originChunkZ - 3; chunkZ < originChunkZ + 4; chunkZ++) {
+            for (int chunkX = originChunkX - 3; chunkX < originChunkX + 4; chunkX++) {
                 if (chunkX != originChunkX || chunkZ != originChunkZ) {
                     positions.add(actions.surfacePosition(
                             chunkX * 16 + 8, chunkZ * 16 + 8));
@@ -244,6 +243,18 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             }
         }
         return List.copyOf(positions);
+    }
+
+    private static void setPois(
+            TestServerContext server, List<BlockPos> positions, boolean present) {
+        server.runOnServer(minecraft -> {
+            var level = minecraft.getPlayerList().getPlayers().getFirst().level();
+            var state = (present ? Blocks.LECTERN : Blocks.AIR).defaultBlockState();
+            for (BlockPos position : positions) {
+                require(level.setBlockAndUpdate(position, state),
+                        "Could not update recovery POI at " + position);
+            }
+        });
     }
 
     private static BranchRef saveThroughUi(
