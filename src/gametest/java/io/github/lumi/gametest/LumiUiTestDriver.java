@@ -315,7 +315,7 @@ final class LumiUiTestDriver {
     }
 
     void pressChord(int keyCode) {
-        pressChord(() -> context.getInput().pressKey(keyCode));
+        pressChord(() -> context.getInput().holdKeyFor(keyCode, 1));
     }
 
     private void pressChord(Runnable press) {
