@@ -18,8 +18,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -95,6 +97,36 @@ class StreamingPreparedWorldMutationSessionTest {
             assertTrue(session.applyUntil(Long.MAX_VALUE));
             assertEquals(1, background.submitted);
         }
+    }
+
+    @Test
+    void releasesFirstWindowTicketsBeforeRetainingTheSecondWindow() throws Exception {
+        List<SectionKey> keys = new ArrayList<>();
+        for (int chunk = 0; chunk < 40; chunk++) {
+            keys.add(new SectionKey(chunk, 0, 0));
+        }
+        SectionBlob section = stoneSection();
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(section);
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+
+        try (var session = session(
+                plan(keys, section), world, background,
+                () -> new ChunkLoadSession(chunks, () -> 0L))) {
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(0, chunks.active);
+            background.runNext();
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(32, chunks.active);
+
+            world.persistence.getFirst().complete = true;
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+
+            assertEquals(8, chunks.active);
+            assertEquals(0, chunks.activeBeforeRetain.get(32));
+            assertEquals(32, chunks.peak);
+        }
+        assertEquals(0, chunks.active);
     }
 
     @Test
@@ -217,12 +249,20 @@ class StreamingPreparedWorldMutationSessionTest {
             PreparedMinecraftPlanState plan,
             FakeWorld world,
             ControlledExecutor background) {
+        return session(plan, world, background, () -> null);
+    }
+
+    private static StreamingPreparedWorldMutationSession session(
+            PreparedMinecraftPlanState plan,
+            FakeWorld world,
+            ControlledExecutor background,
+            Supplier<ChunkLoadSession> chunkLoads) {
         return new StreamingPreparedWorldMutationSession(
                 plan,
                 new MinecraftRestorePreparation(
                         new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                         new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)),
-                world, background, () -> null);
+                world, background, chunkLoads);
     }
 
     private static PreparedMinecraftPlanState plan(
@@ -272,6 +312,27 @@ class StreamingPreparedWorldMutationSessionTest {
 
         private int pending() {
             return queued.size();
+        }
+    }
+
+    private static final class RecordingChunkAccess implements ChunkLoadAccess {
+        private final List<Integer> activeBeforeRetain = new ArrayList<>();
+        private int active;
+        private int peak;
+
+        @Override
+        public CompletableFuture<Void> retain(ChunkCoordinate chunk) {
+            activeBeforeRetain.add(active);
+            peak = Math.max(peak, ++active);
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override public boolean isReady(ChunkCoordinate chunk) {
+            return true;
+        }
+
+        @Override public void release(ChunkCoordinate chunk) {
+            active--;
         }
     }
 
