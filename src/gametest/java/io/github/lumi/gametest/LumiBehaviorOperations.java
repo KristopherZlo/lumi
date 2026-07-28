@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.minecraft.operation.PendingStatisticsOperation;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.operation.SaveOperationStatus;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
@@ -101,26 +102,7 @@ final class LumiBehaviorOperations {
         AtomicReference<Throwable> failure = new AtomicReference<>();
         server.computeOnServer(minecraft -> {
             FabricDimensionRuntime runtime = runtime(minecraft);
-            runtime.operations().observeNextEnqueue((ticket, accepted) -> {
-                if (!(accepted instanceof SaveCaptureOperation save)) {
-                    failure.compareAndSet(null, new AssertionError(
-                            "UI Save did not enqueue SaveCaptureOperation: "
-                                    + accepted.getClass().getName()));
-                    return;
-                }
-                runtime.operations().observeFreezeAcquired(ticket,
-                        () -> captureFrozen(runtime, areas,
-                                "save_" + name + "_before_frozen", before, failure));
-                runtime.operations().observeBeforeFreezeRelease(ticket, () -> {
-                    if (save.status() != SaveOperationStatus.WRITING) {
-                        failure.compareAndSet(null, new AssertionError(
-                                "UI Save released its freeze in " + save.status()));
-                        return;
-                    }
-                    captureFrozen(runtime, areas, "save_" + name + "_frozen",
-                            snapshot, failure);
-                });
-            });
+            observeSaveCapture(runtime, name, areas, before, snapshot, failure);
             return null;
         });
         long started = System.nanoTime();
@@ -139,6 +121,39 @@ final class LumiBehaviorOperations {
             throw mismatch;
         }
         return new SavedBoundary(event.head(), snapshot.get());
+    }
+
+    private void observeSaveCapture(
+            FabricDimensionRuntime runtime,
+            String name,
+            List<BlockBox> areas,
+            AtomicReference<LumiWorldSnapshot> before,
+            AtomicReference<LumiWorldSnapshot> snapshot,
+            AtomicReference<Throwable> failure) {
+        runtime.operations().observeNextEnqueue((ticket, accepted) -> {
+            if (accepted instanceof PendingStatisticsOperation) {
+                observeSaveCapture(runtime, name, areas, before, snapshot, failure);
+                return;
+            }
+            if (!(accepted instanceof SaveCaptureOperation save)) {
+                failure.compareAndSet(null, new AssertionError(
+                        "UI Save did not enqueue SaveCaptureOperation: "
+                                + accepted.getClass().getName()));
+                return;
+            }
+            runtime.operations().observeFreezeAcquired(ticket,
+                    () -> captureFrozen(runtime, areas,
+                            "save_" + name + "_before_frozen", before, failure));
+            runtime.operations().observeBeforeFreezeRelease(ticket, () -> {
+                if (save.status() != SaveOperationStatus.WRITING) {
+                    failure.compareAndSet(null, new AssertionError(
+                            "UI Save released its freeze in " + save.status()));
+                    return;
+                }
+                captureFrozen(runtime, areas, "save_" + name + "_frozen",
+                        snapshot, failure);
+            });
+        });
     }
 
     void restore(String name, CommitId target) throws IOException {
