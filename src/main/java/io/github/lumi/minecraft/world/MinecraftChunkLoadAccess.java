@@ -28,9 +28,13 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
 
     @Override
     public CompletableFuture<Void> retain(ChunkCoordinate chunk) {
-        CompletableFuture<Void> loading = level.getChunkSource().addTicketAndLoadWithRadius(
-                LUMI_TICKET, position(chunk), RADIUS).thenApply(ignored -> null);
-        return isReady(chunk) ? CompletableFuture.completedFuture(null) : loading;
+        ChunkPos position = position(chunk);
+        if (terrainReady(chunk)) {
+            level.getChunkSource().addTicketWithRadius(LUMI_TICKET, position, RADIUS);
+            return CompletableFuture.completedFuture(null);
+        }
+        return level.getChunkSource().addTicketAndLoadWithRadius(
+                LUMI_TICKET, position, RADIUS).thenApply(ignored -> null);
     }
 
     @Override
