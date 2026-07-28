@@ -1,22 +1,26 @@
 package io.github.lumi.gametest;
 
 import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CommitId;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.core.BlockPos;
 
-/** Creates dense random history and measures real UI Save and Restore workflows. */
+/** Creates dense random history and measures real UI history workflows. */
 final class LumiHistoryBenchmarkScenario {
     private static final int EDIT_TILE_SIZE = 256;
     private static final int STORED_FIXTURE_OFFSET = 2_048;
     private static final int TILES_PER_DURABILITY_BARRIER = 4;
+    private final ClientGameTestContext context;
+    private final TestSingleplayerContext singleplayer;
     private final LumiHistoryBenchmarkConfig config;
     private final LumiBehaviorReport report;
     private final LumiBehaviorOperations operations;
@@ -30,6 +34,8 @@ final class LumiHistoryBenchmarkScenario {
             TestSingleplayerContext singleplayer,
             LumiBehaviorReport report,
             LumiHistoryBenchmarkConfig config) {
+        this.context = context;
+        this.singleplayer = singleplayer;
         this.config = config;
         this.report = report;
         operations = new LumiBehaviorOperations(
@@ -60,6 +66,107 @@ final class LumiHistoryBenchmarkScenario {
     }
 
     void run(LumiUiTestDriver ui) throws IOException {
+        PreparedHistory history = prepareHistory(ui, false);
+        List<LumiRestoreMeasurement> restores = new ArrayList<>();
+        LumiRepositoryMetrics.Snapshot previous = history.storage();
+        List<Integer> restoreOrder;
+        if (config.chunkPath().requiresUnloadedFixture()) {
+            fixture.awaitUnloaded("stored_chunks_ready", baseArea);
+            restoreOrder = List.of(0);
+        } else {
+            restoreOrder = restoreIndices(
+                    history.commits().size(), config.restoreSamples());
+        }
+        int restoreNumber = 0;
+        for (int index : restoreOrder) {
+            String name = String.format("%02d-index-%03d", ++restoreNumber, index);
+            LumiRestoreMeasurement restore =
+                    operations.measureRestore(name, history.commits().get(index));
+            restores.add(restore);
+            report.event("restore_metrics", name, "measured", 0,
+                    restore.operationMillis(), restore.describe());
+            previous = recordStorage(
+                    "restore-" + name, history.repository(), previous.bytes());
+            recordMemory("restore-" + name);
+        }
+        verifyPerformance("restore", restores);
+        report.event("benchmark", "configuration", "succeeded", 0, 0,
+                config.describe() + ";versions=" + history.commits().size());
+    }
+
+    BranchFixture prepareBranchSwitch(LumiUiTestDriver ui) throws IOException {
+        PreparedHistory history = prepareHistory(ui, true);
+        var checks = new LumiBehaviorChecks(context, singleplayer, report);
+        CommitId initial = history.commits().getFirst();
+        CommitId latest = history.commits().getLast();
+        BranchRef branchA = history.branchA().orElseThrow();
+        checks.assertValue("branch_a_head_created",
+                branchA.commit().hex(), initial.hex());
+        BranchRef branchB = operations.createBranch("benchmark-b");
+        checks.assertValue("branch_b_head_created",
+                branchB.commit().hex(), latest.hex());
+
+        operations.switchBranch("branch_setup_b", branchB.name());
+        BranchEndpoint endpointB = new BranchEndpoint(
+                branchB, history.latestSnapshot().orElseThrow());
+        assertActive(checks, "branch_setup_b", endpointB);
+        checks.assertSnapshot("branch_setup_b", List.of(baseArea),
+                endpointB.snapshot());
+        checks.finish();
+        if (config.chunkPath().requiresUnloadedFixture()) {
+            fixture.awaitUnloaded("stored_chunks_ready", baseArea);
+        }
+
+        LumiRepositoryMetrics.Snapshot storage = recordStorage(
+                "branch-setup", history.repository(), history.storage().bytes());
+        recordMemory("branch-setup");
+        return new BranchFixture(
+                new BranchEndpoint(
+                        branchA, history.initialSnapshot().orElseThrow()),
+                endpointB, baseArea, storage.bytes());
+    }
+
+    void runBranchSwitch(
+            LumiUiTestDriver ui,
+            BranchFixture branchFixture) throws IOException {
+        ui.completeOnboardingIfShown();
+        ui.awaitHistory();
+        if (!baseArea.equals(branchFixture.area())) {
+            throw new AssertionError("Branch benchmark area changed after reopen");
+        }
+        var checks = new LumiBehaviorChecks(context, singleplayer, report);
+        assertActive(checks, "reopened_branch_b", branchFixture.b());
+        checks.finish();
+        List<LumiRestoreMeasurement> measurements = new ArrayList<>();
+        Path repository = operations.repository();
+        long previousBytes = branchFixture.repositoryBytes();
+
+        previousBytes = measureBranchSwitch(
+                "cold-b-to-a", branchFixture.a(), checks,
+                measurements, repository, previousBytes);
+        checks.finish();
+        operations.switchBranch("prime-a-to-b", branchFixture.b().ref().name());
+        assertActive(checks, "prime_a_to_b", branchFixture.b());
+        checks.assertSnapshot("prime_a_to_b", List.of(baseArea),
+                branchFixture.b().snapshot());
+        checks.finish();
+        previousBytes = measureBranchSwitch(
+                "warm-b-to-a", branchFixture.a(), checks,
+                measurements, repository, previousBytes);
+        checks.finish();
+        measureBranchSwitch(
+                "warm-a-to-b", branchFixture.b(), checks,
+                measurements, repository, previousBytes);
+
+        checks.finish();
+        verifyPerformance("branch-switch", measurements);
+        report.event("benchmark", "configuration", "succeeded", 0, 0,
+                config.describe() + ";versions=" + (config.commits() + 2));
+    }
+
+    private PreparedHistory prepareHistory(
+            LumiUiTestDriver ui,
+            boolean captureEndpoints) throws IOException {
         ui.completeOnboardingIfShown();
         ui.awaitHistory();
         ui.disablePreviewGeneration();
@@ -72,7 +179,7 @@ final class LumiHistoryBenchmarkScenario {
 
         fixture.markBaseline("benchmark_initial_marker");
         operations.awaitDurability("benchmark_initial_world");
-        CommitId initial = operations.save("benchmark-initial");
+        SavedEndpoint initial = save("benchmark-initial", captureEndpoints);
         int initialBuilderKeys = operations.pendingBuilderKeyCount();
         if (initialBuilderKeys != 0) {
             throw new AssertionError("Initial benchmark Save left "
@@ -82,8 +189,10 @@ final class LumiHistoryBenchmarkScenario {
         LumiRepositoryMetrics.Snapshot previous = metrics.capture(repository);
         recordStorage("initial", previous, 0);
         List<CommitId> commits = new ArrayList<>();
-        List<LumiRestoreMeasurement> restores = new ArrayList<>();
-        commits.add(initial);
+        commits.add(initial.commit());
+        Optional<BranchRef> branchA = captureEndpoints
+                ? Optional.of(operations.createBranch("benchmark-a"))
+                : Optional.empty();
 
         editRandomVolume("benchmark_base_edit", baseArea, 0);
         commits.add(operations.save("benchmark-base"));
@@ -95,7 +204,17 @@ final class LumiHistoryBenchmarkScenario {
             String suffix = String.format("%03d", index);
             editRandomVolume(
                     "benchmark_change_edit_" + suffix, change, index);
-            commits.add(operations.save("benchmark-" + suffix));
+            boolean latest = captureEndpoints && index == config.commits();
+            SavedEndpoint saved = save("benchmark-" + suffix, latest);
+            commits.add(saved.commit());
+            if (latest) {
+                previous = recordStorage(
+                        "save-" + suffix, repository, previous.bytes());
+                recordMemory("save-" + suffix);
+                return new PreparedHistory(
+                        commits, repository, previous, initial.snapshot(),
+                        saved.snapshot(), branchA);
+            }
             if (index % config.measureEvery() == 0
                     || index == config.commits()) {
                 previous = recordStorage(
@@ -103,40 +222,63 @@ final class LumiHistoryBenchmarkScenario {
                 recordMemory("save-" + suffix);
             }
         }
-
-        List<Integer> restoreOrder;
-        if (config.chunkPath().requiresUnloadedFixture()) {
-            fixture.awaitUnloaded("stored_chunks_ready", baseArea);
-            restoreOrder = List.of(0);
-        } else {
-            restoreOrder = restoreIndices(
-                    commits.size(), config.restoreSamples());
-        }
-        int restoreNumber = 0;
-        for (int index : restoreOrder) {
-            String name = String.format("%02d-index-%03d", ++restoreNumber, index);
-            LumiRestoreMeasurement restore =
-                    operations.measureRestore(name, commits.get(index));
-            restores.add(restore);
-            report.event("restore_metrics", name, "measured", 0,
-                    restore.operationMillis(), restore.describe());
-            previous = recordStorage(
-                    "restore-" + name, repository, previous.bytes());
-            recordMemory("restore-" + name);
-        }
-        verifyPerformance(restores);
-        report.event("benchmark", "configuration", "succeeded", 0, 0,
-                config.describe() + ";versions=" + commits.size());
+        return new PreparedHistory(
+                commits, repository, previous,
+                initial.snapshot(), Optional.empty(), branchA);
     }
 
-    private void verifyPerformance(List<LumiRestoreMeasurement> restores) {
+    private SavedEndpoint save(String name, boolean captureSnapshot)
+            throws IOException {
+        if (!captureSnapshot) {
+            return new SavedEndpoint(
+                    operations.save(name), Optional.empty());
+        }
+        LumiBehaviorOperations.SavedBoundary saved =
+                operations.save(name, List.of(baseArea));
+        return new SavedEndpoint(
+                saved.commit(), Optional.of(saved.snapshot()));
+    }
+
+    private long measureBranchSwitch(
+            String name,
+            BranchEndpoint endpoint,
+            LumiBehaviorChecks checks,
+            List<LumiRestoreMeasurement> measurements,
+            Path repository,
+            long previousBytes) throws IOException {
+        LumiRestoreMeasurement measurement = operations.measureBranchSwitch(
+                name, endpoint.ref().name());
+        measurements.add(measurement);
+        report.event("restore_metrics", name, "measured", 0,
+                measurement.operationMillis(), measurement.describe());
+        assertActive(checks, name, endpoint);
+        checks.assertSnapshot(name, List.of(baseArea), endpoint.snapshot());
+        LumiRepositoryMetrics.Snapshot storage = recordStorage(
+                "branch-switch-" + name, repository, previousBytes);
+        recordMemory("branch-switch-" + name);
+        return storage.bytes();
+    }
+
+    private void assertActive(
+            LumiBehaviorChecks checks,
+            String name,
+            BranchEndpoint endpoint) throws IOException {
+        checks.assertValue(name + "_active_branch",
+                operations.activeBranch().value(), endpoint.ref().name().value());
+        checks.assertValue(name + "_active_head",
+                operations.activeCommit().hex(), endpoint.ref().commit().hex());
+    }
+
+    private void verifyPerformance(
+            String operation,
+            List<LumiRestoreMeasurement> restores) {
         try {
             LumiRestorePerformanceGate.Result result =
                     LumiRestorePerformanceGate.verify(config, restores);
-            report.event("performance_gate", "restore", "succeeded", 0, 0,
+            report.event("performance_gate", operation, "succeeded", 0, 0,
                     result.describe());
         } catch (AssertionError failed) {
-            report.event("performance_gate", "restore", "failed", 0, 0,
+            report.event("performance_gate", operation, "failed", 0, 0,
                     failed.getMessage());
             throw failed;
         }
@@ -238,4 +380,26 @@ final class LumiHistoryBenchmarkScenario {
         return area.minX() + "," + area.minY() + "," + area.minZ()
                 + ".." + area.maxX() + "," + area.maxY() + "," + area.maxZ();
     }
+
+    record BranchFixture(
+            BranchEndpoint a,
+            BranchEndpoint b,
+            BlockBox area,
+            long repositoryBytes) { }
+
+    private record BranchEndpoint(
+            BranchRef ref,
+            LumiWorldSnapshot snapshot) { }
+
+    private record PreparedHistory(
+            List<CommitId> commits,
+            Path repository,
+            LumiRepositoryMetrics.Snapshot storage,
+            Optional<LumiWorldSnapshot> initialSnapshot,
+            Optional<LumiWorldSnapshot> latestSnapshot,
+            Optional<BranchRef> branchA) { }
+
+    private record SavedEndpoint(
+            CommitId commit,
+            Optional<LumiWorldSnapshot> snapshot) { }
 }
