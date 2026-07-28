@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.EntityChunkBlob;
@@ -11,6 +12,7 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -119,6 +121,46 @@ class MinecraftRestorePreparationTest {
     }
 
     @Test
+    void reusesOnlyIdenticalRecentlyValidatedSectionsWithinTheBound() throws Exception {
+        var decoder = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK);
+        var validated = new MinecraftRestorePreparation.ValidatedSectionWindow(decoder);
+        SectionBlob first = airSection();
+
+        assertTrue(validated.validate(first));
+        assertFalse(validated.validate(first));
+        assertTrue(validated.validate(airSection()));
+
+        List<SectionBlob> distinct = new ArrayList<>();
+        for (int index = 0;
+                index <= MinecraftRestorePreparation.MAX_RECENT_VALIDATIONS;
+                index++) {
+            SectionBlob section = airSection();
+            distinct.add(section);
+            validated.validate(section);
+        }
+
+        assertEquals(MinecraftRestorePreparation.MAX_RECENT_VALIDATIONS,
+                validated.size());
+        assertFalse(validated.tracks(first));
+        assertTrue(validated.tracks(distinct.getLast()));
+    }
+
+    @Test
+    void failedSectionValidationIsNeverReused() {
+        var states = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:air"));
+        states.set(0, "missing:not_a_block");
+        SectionBlob invalid = new SectionBlob(states, Map.of());
+        var validated = new MinecraftRestorePreparation.ValidatedSectionWindow(
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK));
+
+        assertThrows(IOException.class, () -> validated.validate(invalid));
+        assertThrows(IOException.class, () -> validated.validate(invalid));
+        assertEquals(0, validated.size());
+        assertFalse(validated.tracks(invalid));
+    }
+
+    @Test
     void preparesLegacyEntityNbtInItsReloadStableForm() throws Exception {
         EntityChunkKey key = new EntityChunkKey(2, 3);
         UUID id = UUID.fromString("30000000-0000-0000-0000-000000000003");
@@ -157,5 +199,10 @@ class MinecraftRestorePreparationTest {
         CompoundTag attribute = new CompoundTag();
         attribute.putString("id", id);
         return attribute;
+    }
+
+    private static SectionBlob airSection() {
+        return new SectionBlob(new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:air")), Map.of());
     }
 }

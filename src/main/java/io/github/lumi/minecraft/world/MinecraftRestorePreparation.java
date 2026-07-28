@@ -2,11 +2,14 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -15,6 +18,7 @@ import java.util.function.LongConsumer;
 
 /** Converts one persistent Restore state into an immutable Minecraft-native state. */
 public final class MinecraftRestorePreparation {
+    static final int MAX_RECENT_VALIDATIONS = 32;
     private final MinecraftBlockStateDecoder sections;
     private final MinecraftEntityStateDecoder entities;
 
@@ -93,9 +97,11 @@ public final class MinecraftRestorePreparation {
         }
         try {
             long completed = 0;
+            var validatedTarget = new ValidatedSectionWindow(sections);
+            var validatedBase = new ValidatedSectionWindow(sections);
             for (var entry : source.sections().entrySet()) {
-                sections.validate(entry.getValue());
-                sections.validate(base.sections().get(entry.getKey()));
+                validatedTarget.validate(entry.getValue());
+                validatedBase.validate(base.sections().get(entry.getKey()));
                 progress.accept(++completed);
             }
             Map<EntityChunkKey, EntityChunkBlob> normalizedSource =
@@ -139,5 +145,41 @@ public final class MinecraftRestorePreparation {
                         .thenComparingInt(SectionKey::chunkZ)
                         .thenComparingInt(SectionKey::sectionY))
                 .toList();
+    }
+
+    static final class ValidatedSectionWindow {
+        private final MinecraftBlockStateDecoder decoder;
+        private final ArrayDeque<SectionBlob> recent =
+                new ArrayDeque<>(MAX_RECENT_VALIDATIONS);
+
+        ValidatedSectionWindow(MinecraftBlockStateDecoder decoder) {
+            this.decoder = Objects.requireNonNull(decoder, "decoder");
+        }
+
+        boolean validate(SectionBlob section) throws IOException {
+            Objects.requireNonNull(section, "section");
+            for (Iterator<SectionBlob> iterator = recent.iterator();
+                    iterator.hasNext();) {
+                if (iterator.next() == section) {
+                    iterator.remove();
+                    recent.addLast(section);
+                    return false;
+                }
+            }
+            decoder.validate(section);
+            if (recent.size() == MAX_RECENT_VALIDATIONS) {
+                recent.removeFirst();
+            }
+            recent.addLast(section);
+            return true;
+        }
+
+        int size() {
+            return recent.size();
+        }
+
+        boolean tracks(SectionBlob section) {
+            return recent.stream().anyMatch(candidate -> candidate == section);
+        }
     }
 }
