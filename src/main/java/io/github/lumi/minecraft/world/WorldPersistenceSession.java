@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.world;
 
 import java.io.IOException;
+import java.util.List;
 
 /** Advances one verified-world persistence stage or final barrier within tick deadlines. */
 @FunctionalInterface
@@ -8,6 +9,8 @@ public interface WorldPersistenceSession extends AutoCloseable {
     WorldPersistenceSession COMPLETE = deadlineNanos -> true;
 
     boolean advanceUntil(long deadlineNanos) throws IOException;
+    /** Chunks whose immutable write snapshots no longer require a live ticket. */
+    default List<ChunkCoordinate> drainAcceptedSnapshotChunks() { return List.of(); }
     default String phase() { return "persistence"; }
     default Timings timings() { return Timings.EMPTY; }
     @Override

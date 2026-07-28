@@ -11,6 +11,7 @@ import io.github.lumi.mixin.PlayerListPersistenceAccessor;
 import io.github.lumi.mixin.SectionStoragePersistenceAccessor;
 import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,6 +45,9 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private final MinecraftPersistedBatchVerifier verifier;
     private final boolean poiSyncRequired;
     private final boolean forceAndVerify;
+    private final Map<ChunkCoordinate, Integer> pendingSnapshots =
+            new LinkedHashMap<>();
+    private final List<ChunkCoordinate> acceptedSnapshots = new ArrayList<>();
     private int nextChunk;
     private int nextEntityChunk;
     private int nextPlayer;
@@ -95,6 +99,9 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         relightChunks = Set.copyOf(relight);
         poiSyncRequired = forceAndVerify && !verificationChunks.isEmpty();
         entityChunks = writeTarget.entityKeys();
+        chunks.forEach(chunk -> pendingSnapshots.merge(chunk, 1, Integer::sum));
+        entityChunks.forEach(key -> pendingSnapshots.merge(
+                ChunkCoordinate.from(key), 1, Integer::sum));
         Map<EntityChunkKey, EntityChunkBlob> entityTargets =
                 verificationTarget.source().entities();
         players = savePlayers ? level.getServer().getPlayerList().getPlayers().stream()
@@ -187,6 +194,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             }
         }
         nextChunk++;
+        acceptSnapshot(coordinate);
         return true;
     }
 
@@ -203,6 +211,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         if (!saved[0]) {
             return false;
         }
+        acceptSnapshot(ChunkCoordinate.from(key));
         nextEntityChunk++;
         return true;
     }
@@ -289,6 +298,26 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         }
         phase = next;
         phaseStartedNanos = now;
+    }
+
+    private void acceptSnapshot(ChunkCoordinate chunk) {
+        int remaining = pendingSnapshots.getOrDefault(chunk, 0);
+        if (remaining <= 0) {
+            throw new IllegalStateException("Unexpected Restore snapshot: " + chunk);
+        }
+        if (remaining == 1) {
+            pendingSnapshots.remove(chunk);
+            acceptedSnapshots.add(chunk);
+        } else {
+            pendingSnapshots.put(chunk, remaining - 1);
+        }
+    }
+
+    @Override
+    public List<ChunkCoordinate> drainAcceptedSnapshotChunks() {
+        List<ChunkCoordinate> accepted = List.copyOf(acceptedSnapshots);
+        acceptedSnapshots.clear();
+        return accepted;
     }
 
     @SuppressWarnings("unchecked")

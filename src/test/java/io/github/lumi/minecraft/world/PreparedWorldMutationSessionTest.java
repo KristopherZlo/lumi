@@ -12,6 +12,7 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.service.RestorePlanMap;
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -158,6 +159,9 @@ class PreparedWorldMutationSessionTest {
         world.persistence = persistence;
         assertFalse(session.persistUntil(Long.MAX_VALUE));
         assertEquals(1, access.active);
+        persistence.accepted = List.of(new ChunkCoordinate(4, -2));
+        assertFalse(session.persistUntil(Long.MAX_VALUE));
+        assertEquals(0, access.active);
         persistence.complete = true;
         assertTrue(session.persistUntil(Long.MAX_VALUE));
         assertEquals(5, session.statistics().storageWriteNanos());
@@ -165,9 +169,38 @@ class PreparedWorldMutationSessionTest {
         assertEquals(11, session.statistics().verificationNanos());
         assertTrue(session.persistUntil(Long.MAX_VALUE));
         assertEquals(5, session.statistics().storageWriteNanos());
-        assertEquals(1, access.active);
+        assertEquals(0, access.active);
         session.close();
         assertEquals(0, access.active);
+        assertEquals(List.of(new ChunkCoordinate(4, -2)), access.released);
+    }
+
+    @Test
+    void releasesAcceptedSnapshotsWhenPersistenceFails() throws Exception {
+        EntityChunkKey key = new EntityChunkKey(4, -2);
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        var target = new PreparedMinecraftState(
+                new WorldStateApply.State(Map.of(), Map.of(key, empty)),
+                Map.of(), Map.of(key, new DecodedEntityChunk(List.of())));
+        var world = new FakeWorld(new AtomicLong(), null);
+        var access = new ImmediateChunkAccess();
+        var session = new PreparedWorldMutationSession(
+                target, world, () -> 0L,
+                new ChunkLoadSession(access, () -> 0L));
+        assertTrue(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(WorldStateApply.Verification.VERIFIED,
+                session.verifyUntil(Long.MAX_VALUE));
+        var persistence = new ManualPersistence();
+        persistence.accepted = List.of(new ChunkCoordinate(4, -2));
+        persistence.failure = new IOException("expected");
+        world.persistence = persistence;
+
+        IOException failed = assertThrows(
+                IOException.class, () -> session.persistUntil(Long.MAX_VALUE));
+
+        assertEquals("expected", failed.getMessage());
+        assertEquals(0, access.active);
+        session.close();
         assertEquals(List.of(new ChunkCoordinate(4, -2)), access.released);
     }
 
@@ -726,9 +759,21 @@ class PreparedWorldMutationSessionTest {
 
     private static final class ManualPersistence implements WorldPersistenceSession {
         private boolean complete;
+        private List<ChunkCoordinate> accepted = List.of();
+        private IOException failure;
         private Timings timings = Timings.EMPTY;
         private int closeCalls;
-        @Override public boolean advanceUntil(long deadlineNanos) { return complete; }
+        @Override public boolean advanceUntil(long deadlineNanos) throws IOException {
+            if (failure != null) {
+                throw failure;
+            }
+            return complete;
+        }
+        @Override public List<ChunkCoordinate> drainAcceptedSnapshotChunks() {
+            List<ChunkCoordinate> drained = accepted;
+            accepted = List.of();
+            return drained;
+        }
         @Override public Timings timings() { return timings; }
         @Override public void close() { closeCalls++; }
     }

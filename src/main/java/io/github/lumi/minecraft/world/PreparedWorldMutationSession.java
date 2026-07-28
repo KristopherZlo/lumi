@@ -202,13 +202,30 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                         target, verificationTarget, Set.copyOf(durable));
             };
         }
-        boolean complete = persistence.advanceUntil(deadlineNanos);
+        boolean complete;
+        try {
+            complete = persistence.advanceUntil(deadlineNanos);
+        } catch (IOException | RuntimeException failed) {
+            try {
+                releaseAcceptedSnapshots();
+            } catch (RuntimeException releaseFailed) {
+                failed.addSuppressed(releaseFailed);
+            }
+            throw failed;
+        }
+        releaseAcceptedSnapshots();
         if (complete && !persistenceMeasured) {
             metrics.persistence(persistence.timings());
             persistenceMeasured = true;
         }
         persistenceComplete = complete;
         return complete;
+    }
+
+    private void releaseAcceptedSnapshots() {
+        if (chunks != null) {
+            persistence.drainAcceptedSnapshotChunks().forEach(chunks::release);
+        }
     }
 
     Set<ChunkCoordinate> durableStoredChunks() {

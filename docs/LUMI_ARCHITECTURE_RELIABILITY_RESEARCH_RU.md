@@ -186,7 +186,13 @@ merely-updating holders остаются в region-local порядке холо
 
 Оценка памяти консервативно суммирует raw section, native section, prepared delta, transient preparation и NBT expansion. Это инженерная оценка, не жёсткий heap cap: одновременно существуют JVM objects, futures, Minecraft state и GC-reclaimable allocation.
 
-Каждое окно проходит apply → exact verify → staged persist и передаёт изменённые POI в vanilla storage без physical force. Последнее окно slab один раз выполняет force/sync накопленных chunk/POI writes и reread всего slab. После всех окон завершается lighting; затем journal получает `WORLD_PERSISTED`, и только после этого публикуется ref/pointer. Основной автомат [RestoreOperation](../src/main/java/io/github/lumi/minecraft/operation/RestoreOperation.java):
+Каждое окно проходит apply → exact verify → staged persist и передаёт изменённые POI
+в vanilla storage без physical force. После синхронного принятия immutable chunk/entity
+snapshot его FULL ticket уже может быть освобождён; force/sync и persisted reread при этом
+не считаются завершёнными. Последнее окно slab один раз выполняет force/sync накопленных
+chunk/POI writes и reread всего slab. После всех окон завершается lighting; затем journal
+получает `WORLD_PERSISTED`, и только после этого публикуется ref/pointer. Основной автомат
+[RestoreOperation](../src/main/java/io/github/lumi/minecraft/operation/RestoreOperation.java):
 
 `PREPARED → APPLYING → VERIFYING → PERSISTING → WORLD_PERSISTED → REF_PUBLISHED → COMPLETE`.
 
