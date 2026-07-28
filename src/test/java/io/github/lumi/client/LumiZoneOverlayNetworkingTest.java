@@ -10,7 +10,8 @@ class LumiZoneOverlayNetworkingTest {
     @Test
     void correlatesRequestsAndReceivesBoundedShellBatches() throws Exception {
         String source = Files.readString(Path.of(
-                "src/main/java/io/github/lumi/client/LumiClientNetworking.java"));
+                "src/main/java/io/github/lumi/client/LumiClientNetworking.java"))
+                .replace("\r\n", "\n");
 
         assertTrue(source.contains(
                 "ClientPlayNetworking.registerGlobalReceiver(\n"
