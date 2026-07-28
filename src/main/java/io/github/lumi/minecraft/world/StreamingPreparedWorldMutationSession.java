@@ -5,17 +5,17 @@ import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
-/** Decodes, applies and verifies at most 32 chunks or 128 MiB per section batch. */
+/** Decodes an estimated 128 MiB, then applies and persists it in 32-chunk windows. */
 final class StreamingPreparedWorldMutationSession implements WorldStateApply.ApplySession {
     static final int MAX_CHUNKS = 32;
     static final long MAX_ESTIMATED_BYTES = 128L * 1024 * 1024;
@@ -30,14 +30,17 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private final RestoreApplyMetrics metrics = new RestoreApplyMetrics();
     private int batchStart;
     private int batchEnd;
+    private int slabEnd;
     private int entityBatchStart;
     private int entityBatchEnd;
     private CompletableFuture<PreparedMinecraftState> preparing;
+    private PreparedMinecraftState slab;
     private PreparedWorldMutationSession current;
     private BatchKind currentKind;
     private Phase phase = Phase.PREPARING;
     private boolean repairAttempted;
     private boolean spawnsStarted;
+    private volatile boolean closed;
 
     StreamingPreparedWorldMutationSession(
             PreparedMinecraftPlanState plan,
@@ -54,6 +57,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     @Override
     public boolean applyUntil(long deadlineNanos) throws IOException {
+        if (closed) {
+            return false;
+        }
         while (phase != Phase.COMPLETE && System.nanoTime() < deadlineNanos) {
             switch (phase) {
                 case PREPARING -> {
@@ -103,6 +109,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             current = null;
             if (currentKind == BatchKind.SECTIONS) {
                 batchStart = batchEnd;
+                if (batchStart == slabEnd) {
+                    slab = null;
+                }
             } else if (currentKind == BatchKind.ENTITIES) {
                 entityBatchStart = entityBatchEnd;
             }
@@ -110,26 +119,32 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             repairAttempted = false;
         }
         if (batchStart < plan.sectionKeys().size()) {
-            if (preparing == null) {
-                int start = batchStart;
-                batchEnd = batchEnd(plan.sectionKeys(), start);
-                int end = batchEnd;
-                preparing = CompletableFuture.supplyAsync(() -> {
-                    try {
-                        Batch batch = loadBatch(start, end);
-                        return preparation.prepareBatch(batch.target(), batch.base());
-                    } catch (UncheckedIOException failed) {
-                        throw new CompletionException(failed.getCause());
-                    } catch (IOException failed) {
-                        throw new CompletionException(failed);
-                    }
-                }, background);
+            if (slab == null) {
+                if (preparing == null) {
+                    int start = batchStart;
+                    slabEnd = slabEnd(plan.sectionKeys(), start);
+                    int end = slabEnd;
+                    preparing = CompletableFuture.supplyAsync(() -> {
+                        try {
+                            Batch batch = loadBatch(start, end);
+                            return preparation.preparePreflightedBatch(
+                                    batch.target(), batch.base(), batch.order(),
+                                    () -> closed);
+                        } catch (UncheckedIOException failed) {
+                            throw new CompletionException(failed.getCause());
+                        } catch (IOException failed) {
+                            throw new CompletionException(failed);
+                        }
+                    }, background);
+                }
+                if (!preparing.isDone()) {
+                    return false;
+                }
+                slab = claimPrepared();
             }
-            if (!preparing.isDone()) {
-                return false;
-            }
+            batchEnd = windowEnd(plan.sectionKeys(), batchStart, slabEnd);
             current = new PreparedWorldMutationSession(
-                    claimPrepared(), world, System::nanoTime, chunkLoads.get(), metrics);
+                    nextSectionWindow(), world, System::nanoTime, chunkLoads.get(), metrics);
             currentKind = BatchKind.SECTIONS;
             phase = Phase.APPLYING;
             return true;
@@ -158,10 +173,12 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     }
 
     private PreparedMinecraftState claimPrepared() throws IOException {
+        CompletableFuture<PreparedMinecraftState> pending = preparing;
+        preparing = null;
         try {
-            PreparedMinecraftState result = preparing.join();
-            preparing = null;
-            return result;
+            return pending.join();
+        } catch (CancellationException failed) {
+            throw new IOException("Restore preparation was cancelled", failed);
         } catch (CompletionException failed) {
             Throwable cause = failed.getCause() == null ? failed : failed.getCause();
             if (cause instanceof IOException io) {
@@ -173,16 +190,34 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     private Batch loadBatch(int start, int end) {
         List<SectionKey> keys = plan.sectionKeys();
-        Map<SectionKey, io.github.lumi.domain.model.SectionBlob> target = new HashMap<>();
-        Map<SectionKey, io.github.lumi.domain.model.SectionBlob> base = new HashMap<>();
+        Map<SectionKey, SectionBlob> target = new LinkedHashMap<>();
+        Map<SectionKey, SectionBlob> base = new LinkedHashMap<>();
         for (int index = start; index < end; index++) {
+            if (closed) {
+                throw new CancellationException("Restore preparation was cancelled");
+            }
             SectionKey key = keys.get(index);
             target.put(key, plan.source().sections().get(key));
             base.put(key, plan.base().sections().get(key));
         }
         return new Batch(
                 new WorldStateApply.State(target, Map.of()),
-                new WorldStateApply.State(base, Map.of()));
+                new WorldStateApply.State(base, Map.of()),
+                List.copyOf(keys.subList(start, end)));
+    }
+
+    private PreparedMinecraftState nextSectionWindow() {
+        List<SectionKey> keys = List.copyOf(
+                plan.sectionKeys().subList(batchStart, batchEnd));
+        Map<SectionKey, SectionBlob> source = new LinkedHashMap<>();
+        Map<SectionKey, DecodedSection> sections = new LinkedHashMap<>();
+        for (SectionKey key : keys) {
+            source.put(key, slab.source().sections().get(key));
+            sections.put(key, slab.sections().get(key));
+        }
+        return new PreparedMinecraftState(
+                new WorldStateApply.State(source, Map.of()),
+                sections, Map.of(), keys, List.of());
     }
 
     private PreparedMinecraftState nextEntityBatch() {
@@ -201,27 +236,33 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 List.of(), keys);
     }
 
-    static int batchEnd(List<SectionKey> keys, int start) {
+    static int slabEnd(List<SectionKey> keys, int start) {
+        int sections = (int) (MAX_ESTIMATED_BYTES / ESTIMATED_SECTION_BYTES);
+        return Math.min(keys.size(), start + sections);
+    }
+
+    static int windowEnd(List<SectionKey> keys, int start, int limit) {
         int chunks = 0;
-        long bytes = 0;
         SectionKey previous = null;
         int end = start;
-        while (end < keys.size()) {
+        int boundedLimit = Math.min(keys.size(), limit);
+        while (end < boundedLimit) {
             SectionKey key = keys.get(end);
             boolean newChunk = previous == null || !sameChunk(previous, key);
-            long nextBytes = bytes + ESTIMATED_SECTION_BYTES;
-            if (end > start && (newChunk && chunks == MAX_CHUNKS
-                    || nextBytes > MAX_ESTIMATED_BYTES)) {
+            if (end > start && newChunk && chunks == MAX_CHUNKS) {
                 break;
             }
             if (newChunk) {
                 chunks++;
             }
-            bytes = nextBytes;
             previous = key;
             end++;
         }
         return end;
+    }
+
+    static int batchEnd(List<SectionKey> keys, int start) {
+        return windowEnd(keys, start, slabEnd(keys, start));
     }
 
     static int entityBatchEnd(int total, int start) {
@@ -288,11 +329,19 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     @Override
     public void close() {
-        if (preparing != null) {
-            preparing.cancel(true);
+        if (closed) {
+            return;
         }
-        if (current != null) {
-            current.close();
+        closed = true;
+        if (preparing != null) {
+            preparing.cancel(false);
+            preparing = null;
+        }
+        slab = null;
+        PreparedWorldMutationSession open = current;
+        current = null;
+        if (open != null) {
+            open.close();
         }
     }
 
@@ -302,7 +351,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     private record Batch(
             WorldStateApply.State target,
-            WorldStateApply.State base) { }
+            WorldStateApply.State base,
+            List<SectionKey> order) { }
 
     private enum BatchKind { SECTIONS, ENTITIES, SPAWNS }
     private enum Phase {
