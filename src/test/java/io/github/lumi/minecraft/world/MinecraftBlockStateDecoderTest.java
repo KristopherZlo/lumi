@@ -14,6 +14,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.Strategy;
@@ -53,6 +54,28 @@ class MinecraftBlockStateDecoderTest {
         replacement.setBlockState(0, 0, 0, Blocks.DIRT.defaultBlockState(), false);
         assertEquals(Blocks.STONE.defaultBlockState(),
                 decoded.replacementFor(current).getBlockState(0, 0, 0));
+    }
+
+    @Test
+    void bulkPalettePreservesGlobalPaletteStatesAndCoordinates() {
+        var palette = BuiltInRegistries.BLOCK.stream()
+                .flatMap(block -> block.getStateDefinition().getPossibleStates().stream())
+                .limit(300)
+                .toList();
+        var states = new ArrayList<BlockState>(SectionBlob.BLOCK_COUNT);
+        for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+            states.add(palette.get(index % palette.size()));
+        }
+
+        var current = new LevelChunkSection(new PalettedContainer<>(
+                Blocks.AIR.defaultBlockState(),
+                Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY)), null);
+        var replacement = new DecodedSection(states, Map.of()).replacementFor(current);
+
+        for (int index = 0; index < states.size(); index++) {
+            assertEquals(states.get(index), replacement.getBlockState(
+                    index & 15, (index >>> 8) & 15, (index >>> 4) & 15));
+        }
     }
 
     @Test

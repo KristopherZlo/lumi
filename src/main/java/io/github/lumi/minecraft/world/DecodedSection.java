@@ -2,15 +2,21 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.SectionBlob;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.util.Mth;
+import net.minecraft.util.SimpleBitStorage;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.level.chunk.PalettedContainerRO;
 import net.minecraft.world.level.chunk.Strategy;
 
 /** Minecraft-native section payload decoded before tick-time apply. */
@@ -87,15 +93,32 @@ public final class DecodedSection {
     }
 
     private static PalettedContainer<BlockState> prepare(List<BlockState> states) {
-        var prepared = new PalettedContainer<>(
-                Blocks.AIR.defaultBlockState(), BLOCK_STATES);
-        for (int index = 0; index < states.size(); index++) {
-            prepared.set(
-                    index & 15,
-                    (index >>> 8) & 15,
-                    (index >>> 4) & 15,
-                    states.get(index));
+        if (states.size() != SectionBlob.BLOCK_COUNT) {
+            throw new IllegalArgumentException("Decoded section must contain 4096 blocks");
         }
-        return prepared;
+        var palette = new ArrayList<BlockState>();
+        var paletteIndexes = new IdentityHashMap<BlockState, Integer>();
+        var indexes = new int[SectionBlob.BLOCK_COUNT];
+        for (int index = 0; index < states.size(); index++) {
+            BlockState state = states.get(index);
+            Integer paletteIndex = paletteIndexes.get(state);
+            if (paletteIndex == null) {
+                paletteIndex = palette.size();
+                paletteIndexes.put(state, paletteIndex);
+                palette.add(state);
+            }
+            indexes[index] = paletteIndex;
+        }
+        int bits = palette.size() == 1
+                ? 0
+                : Math.max(4, Mth.ceillog2(palette.size()));
+        var storage = bits == 0
+                ? Optional.<java.util.stream.LongStream>empty()
+                : Optional.of(Arrays.stream(
+                        new SimpleBitStorage(bits, indexes.length, indexes).getRaw()));
+        return PalettedContainer.unpack(BLOCK_STATES,
+                new PalettedContainerRO.PackedData<>(palette, storage, bits))
+                .getOrThrow(message -> new IllegalStateException(
+                        "Failed to prepare decoded section: " + message));
     }
 }
