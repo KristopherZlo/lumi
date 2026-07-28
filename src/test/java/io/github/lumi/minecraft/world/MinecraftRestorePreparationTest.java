@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -18,6 +19,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -94,6 +97,63 @@ class MinecraftRestorePreparationTest {
         assertEquals(2, delta.changedCells().length);
         assertTrue(delta.lightChanged());
         assertFalse(delta.blockEntitiesChanged());
+    }
+
+    @Test
+    void reusesPreflightedTargetPayloadWithCoordinateSpecificDeltas() throws Exception {
+        SectionKey firstKey = new SectionKey(0, 0, 0);
+        SectionKey secondKey = new SectionKey(1, 0, 0);
+        var targetStates = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone"));
+        SectionBlob targetSection = new SectionBlob(targetStates, Map.of());
+        var firstBaseStates = new ArrayList<>(targetStates);
+        firstBaseStates.set(17, "minecraft:dirt");
+        var secondBaseStates = new ArrayList<>(targetStates);
+        secondBaseStates.set(23, "minecraft:dirt");
+        List<SectionKey> order = List.of(secondKey, firstKey);
+        var source = new WorldStateApply.State(
+                Map.of(firstKey, targetSection, secondKey, targetSection), Map.of());
+        var base = new WorldStateApply.State(Map.of(
+                firstKey, new SectionBlob(firstBaseStates, Map.of()),
+                secondKey, new SectionBlob(secondBaseStates, Map.of())), Map.of());
+        var preparation = new MinecraftRestorePreparation(
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
+                new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
+
+        PreparedMinecraftState prepared = preparation.preparePreflightedBatch(
+                source, base, order, () -> false);
+
+        DecodedSection first = prepared.sections().get(firstKey);
+        DecodedSection second = prepared.sections().get(secondKey);
+        assertSame(first.blockStates(), second.blockStates());
+        assertArrayEquals(new int[] {17}, first.preparedDelta().changedIndexes());
+        assertArrayEquals(new int[] {23}, second.preparedDelta().changedIndexes());
+        assertEquals(order, prepared.sectionKeys());
+    }
+
+    @Test
+    void cancelsPreflightedPreparationBeforeDecodingLaterSection() {
+        SectionKey firstKey = new SectionKey(0, 0, 0);
+        SectionKey invalidKey = new SectionKey(1, 0, 0);
+        var invalidStates = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:air"));
+        invalidStates.set(0, "missing:not_a_block");
+        var source = new WorldStateApply.State(Map.of(
+                firstKey, airSection(),
+                invalidKey, new SectionBlob(invalidStates, Map.of())), Map.of());
+        var base = new WorldStateApply.State(Map.of(
+                firstKey, airSection(), invalidKey, airSection()), Map.of());
+        AtomicInteger checks = new AtomicInteger();
+        var preparation = new MinecraftRestorePreparation(
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
+                new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
+
+        assertThrows(CancellationException.class,
+                () -> preparation.preparePreflightedBatch(
+                        source, base, List.of(firstKey, invalidKey),
+                        () -> checks.getAndIncrement() > 0));
+
+        assertEquals(2, checks.get());
     }
 
     @Test

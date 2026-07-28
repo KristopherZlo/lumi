@@ -9,11 +9,15 @@ import java.io.UncheckedIOException;
 import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 import java.util.function.LongConsumer;
 
 /** Converts one persistent Restore state into an immutable Minecraft-native state. */
@@ -133,10 +137,44 @@ public final class MinecraftRestorePreparation {
         }
     }
 
-    PreparedMinecraftState prepareBatch(
+    PreparedMinecraftState preparePreflightedBatch(
             WorldStateApply.State source,
-            WorldStateApply.State base) throws IOException {
-        return prepare(source, base, ignored -> { });
+            WorldStateApply.State base,
+            List<SectionKey> order,
+            BooleanSupplier cancelled) throws IOException {
+        Objects.requireNonNull(source, "source");
+        Objects.requireNonNull(base, "base");
+        order = List.copyOf(Objects.requireNonNull(order, "order"));
+        Objects.requireNonNull(cancelled, "cancelled");
+        if (!source.sections().keySet().equals(base.sections().keySet())
+                || !source.entities().isEmpty() || !base.entities().isEmpty()
+                || !source.playerSpawns().isEmpty() || !base.playerSpawns().isEmpty()
+                || source.playerSpawnsIncluded() || base.playerSpawnsIncluded()) {
+            throw new IllegalArgumentException(
+                    "Preflighted section batch keys must match and contain only sections");
+        }
+        if (order.size() != source.sections().size()
+                || !Set.copyOf(order).equals(source.sections().keySet())) {
+            throw new IllegalArgumentException(
+                    "Preflighted section order must contain every key once");
+        }
+        Map<SectionBlob, DecodedSection> templates = new IdentityHashMap<>();
+        Map<SectionKey, DecodedSection> decoded = new LinkedHashMap<>();
+        for (SectionKey key : order) {
+            if (cancelled.getAsBoolean()) {
+                throw new CancellationException("Restore preparation cancelled");
+            }
+            SectionBlob sourceSection = source.sections().get(key);
+            DecodedSection template = templates.get(sourceSection);
+            if (template == null) {
+                template = sections.decode(sourceSection);
+                templates.put(sourceSection, template);
+            }
+            decoded.put(key, template.prepareAgainst(
+                    sourceSection, base.sections().get(key), sections));
+        }
+        return new PreparedMinecraftState(
+                source, decoded, Map.of(), order, List.of());
     }
 
     private static List<SectionKey> orderedSections(Set<SectionKey> keys) {

@@ -14,7 +14,11 @@ import java.util.function.LongConsumer;
 
 /** Server-thread port for bounded application of already decoded world state. */
 public interface WorldStateApply {
-    /** Called off-thread; implementations must decode all persistent representations here. */
+    /**
+     * Called off-thread. Implementations must validate every persistent
+     * representation here; bounded native decoding may continue off-thread
+     * after {@link #begin(PreparedState)}, but never on the apply thread.
+     */
     PreparedState prepare(State target) throws IOException;
 
     default PreparedState prepare(State target, LongConsumer progress) throws IOException {
