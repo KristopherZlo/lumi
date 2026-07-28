@@ -102,7 +102,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                         phase = Phase.PREPARING;
                     } else {
                         if (System.nanoTime() < deadlineNanos) {
-                            prefetchNextEntityBatch();
+                            prefetchNextEntityBatch(deadlineNanos);
                         }
                         return false;
                     }
@@ -310,7 +310,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 List.of(), keys);
     }
 
-    private void prefetchNextEntityBatch() {
+    private void prefetchNextEntityBatch(long deadlineNanos) {
         if (currentKind != BatchKind.ENTITIES
                 || entityBatchEnd == plan.entityKeys().size()
                 || entityLookaheadFailure != null) {
@@ -346,10 +346,12 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             return;
         }
         try {
-            entityLookahead.chunks().prefetch(
-                    plan.entityKeys().subList(entityLookahead.end(), prefetchEnd));
+            int processed = entityLookahead.chunks().prefetch(
+                    plan.entityKeys().subList(entityLookahead.end(), prefetchEnd),
+                    deadlineNanos);
             entityLookahead = new EntityLookahead(
-                    nextStart, prefetchEnd, entityLookahead.chunks());
+                    nextStart, entityLookahead.end() + processed,
+                    entityLookahead.chunks());
         } catch (RuntimeException failed) {
             abandonEntityLookahead(failed);
         }
@@ -528,14 +530,27 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         slab = null;
         PreparedWorldMutationSession open = current;
         current = null;
+        RuntimeException closeFailure = null;
         try {
             if (open != null) {
                 open.close();
             }
-        } finally {
+        } catch (RuntimeException failed) {
+            closeFailure = failed;
+        }
+        try {
             if (pending != null) {
                 pending.chunks().close();
             }
+        } catch (RuntimeException failed) {
+            if (closeFailure == null) {
+                closeFailure = failed;
+            } else {
+                closeFailure.addSuppressed(failed);
+            }
+        }
+        if (closeFailure != null) {
+            throw closeFailure;
         }
     }
 

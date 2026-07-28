@@ -202,6 +202,38 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
+    void handsOffAPartiallyPrefetchedEntityBatch() throws Exception {
+        List<EntityChunkKey> keys = entityKeys(40);
+        FakeWorld world = new FakeWorld(null);
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
+        var session = session(
+                entityPlan(keys), world, new ControlledExecutor(), readiness -> {
+                    requested.add(readiness);
+                    return new ChunkLoadSession(chunks, () -> 0L);
+                });
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        world.persistence.getFirst().accepted = keys.subList(0, 4).stream()
+                .map(ChunkCoordinate::from).toList();
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(32, chunks.active);
+
+        world.persistence.getFirst().accepted = keys.subList(4, 32).stream()
+                .map(ChunkCoordinate::from).toList();
+        world.persistence.getFirst().complete = true;
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+
+        assertEquals(keys, world.startedEntityChunks);
+        assertEquals(2, world.persistenceCalls.size());
+        assertEquals(2, requested.size());
+        assertEquals(40, chunks.activeBeforeRetain.size());
+        assertEquals(32, chunks.peak);
+        assertEquals(8, chunks.active);
+        session.close();
+        assertEquals(0, chunks.active);
+    }
+
+    @Test
     void rejectedEntityLookaheadFallsBackAfterDurability() throws Exception {
         List<EntityChunkKey> keys = entityKeys(40);
         FakeWorld world = new FakeWorld(null);
@@ -264,6 +296,36 @@ class StreamingPreparedWorldMutationSessionTest {
 
         session.close();
         assertEquals(0, chunks.active);
+    }
+
+    @Test
+    void synchronousLookaheadFailureIsDeferredAndReleasesItsTicket() throws Exception {
+        List<EntityChunkKey> keys = entityKeys(33);
+        FakeWorld world = new FakeWorld(null);
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        var session = session(
+                entityPlan(keys), world, new ControlledExecutor(),
+                ignored -> new ChunkLoadSession(chunks, () -> 0L));
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        chunks.startFailure = new IllegalStateException("expected");
+        world.persistence.getFirst().accepted =
+                List.of(ChunkCoordinate.from(keys.getFirst()));
+
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(31, chunks.active);
+        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
+
+        world.persistence.getFirst().accepted = keys.subList(1, 32).stream()
+                .map(ChunkCoordinate::from).toList();
+        world.persistence.getFirst().complete = true;
+        IOException failed = assertThrows(
+                IOException.class, () -> session.applyUntil(Long.MAX_VALUE));
+        assertTrue(failed.getMessage().contains(
+                "Cannot prefetch Restore entity batch"));
+        assertEquals(0, chunks.active);
+        assertEquals(1, world.persistenceCalls.size());
+        assertEquals(1, world.persistence.getFirst().closeCalls);
+        session.close();
     }
 
     @Test
@@ -479,6 +541,7 @@ class StreamingPreparedWorldMutationSessionTest {
         private final List<Integer> activeBeforeRetain = new ArrayList<>();
         private final Map<ChunkCoordinate, CompletableFuture<Void>> loads =
                 new LinkedHashMap<>();
+        private RuntimeException startFailure;
         private int active;
         private int peak;
 
@@ -492,6 +555,14 @@ class StreamingPreparedWorldMutationSessionTest {
 
         @Override public boolean isReady(ChunkCoordinate chunk) {
             return true;
+        }
+
+        @Override public void startLoading() {
+            if (startFailure != null) {
+                RuntimeException failed = startFailure;
+                startFailure = null;
+                throw failed;
+            }
         }
 
         @Override public void release(ChunkCoordinate chunk) {

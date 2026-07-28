@@ -191,7 +191,8 @@ merely-updating holders остаются в region-local порядке холо
 snapshot его FULL ticket уже может быть освобождён; force/sync и persisted reread при этом
 не считаются завершёнными. В entity-фазе освобождённые ticket-слоты могут загружать только
 следующий 32-chunk batch; его mutation и persistence начинаются лишь после durability
-текущего batch. Сумма текущих и lookahead tickets никогда не превышает 32.
+текущего batch. Lookahead заполняется инкрементально только внутри текущего tick deadline;
+сумма текущих и lookahead tickets никогда не превышает 32.
 Последнее окно slab один раз выполняет force/sync накопленных
 chunk/POI writes и reread всего slab. После всех окон завершается lighting; затем journal
 получает `WORLD_PERSISTED`, и только после этого публикуется ref/pointer. Основной автомат
