@@ -2,6 +2,7 @@ package io.github.lumi.gametest;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.LumiClient;
+import io.github.lumi.client.state.ClientBranchSlotStore;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
@@ -168,9 +169,10 @@ final class LumiBehaviorOperations {
 
     LumiRestoreMeasurement measureBranchSwitch(
             String name, BranchName target) throws IOException {
+        int keyCode = branchShortcut(target);
         LumiRestoreMeasurement measurement = measureMutation(
                 "branch_switch_" + name,
-                () -> switchBranchFromHotkey(target));
+                () -> ui.pressChord(keyCode));
         awaitSnapshot(snapshot -> snapshot.branchName().equals(target.value()),
                 "active branch " + target.value());
         return measurement;
@@ -381,23 +383,20 @@ final class LumiBehaviorOperations {
     }
 
     private void switchBranchFromHotkey(BranchName target) {
+        ui.pressChord(branchShortcut(target));
+    }
+
+    private int branchShortcut(BranchName target) {
         awaitSnapshot(snapshot -> snapshot.branches().stream().anyMatch(branch ->
                         branch.name().equals(target.value()) && !branch.active()),
                 "inactive branch " + target.value());
-        int slot = context.computeOnClient(client -> {
-            List<HistorySnapshotPayload.Branch> branches = LumiClient.history()
-                    .state().snapshot().orElseThrow().branches();
-            for (int index = 0; index < branches.size(); index++) {
-                if (branches.get(index).name().equals(target.value())) {
-                    return index;
-                }
-            }
-            return -1;
+        return context.computeOnClient(client -> {
+            HistorySnapshotPayload snapshot = LumiClient.history()
+                    .state().snapshot().orElseThrow();
+            return new ClientBranchSlotStore().keyCode(snapshot, target.value())
+                    .orElseThrow(() -> new AssertionError(
+                            "Branch has no Alt shortcut: " + target.value()));
         });
-        if (slot < 0 || slot > 9) {
-            throw new AssertionError("Branch has no Alt+digit slot: " + target.value());
-        }
-        ui.pressChord("key.lumi.branch_slot." + (slot == 9 ? 0 : slot + 1));
     }
 
     private void mergeFromUi(BranchName source) {

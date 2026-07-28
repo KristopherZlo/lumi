@@ -310,11 +310,19 @@ final class LumiUiTestDriver {
     }
 
     void pressChord(String mappingName) {
-        requireScreen(null);
         KeyMapping mapping = mapping(mappingName);
+        pressChord(() -> context.getInput().pressKey(mapping));
+    }
+
+    void pressChord(int keyCode) {
+        pressChord(() -> context.getInput().pressKey(keyCode));
+    }
+
+    private void pressChord(Runnable press) {
+        requireScreen(null);
         context.getInput().holdAlt();
         try {
-            context.getInput().pressKey(mapping);
+            press.run();
         } finally {
             context.getInput().releaseAlt();
         }
