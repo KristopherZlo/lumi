@@ -1,6 +1,7 @@
 package io.github.lumi.mixin;
 
 import io.github.lumi.minecraft.world.ChunkLoadGate;
+import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
@@ -15,8 +16,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ChunkMap.class)
-abstract class ChunkMapLoadGateMixin {
+abstract class ChunkMapLoadGateMixin implements ChunkLoadGate.PendingUnloadAccess {
     @Shadow @Final private ServerLevel level;
+    @Shadow @Final private Long2ObjectLinkedOpenHashMap<ChunkHolder> pendingUnloads;
+
+    @Override
+    public boolean lumi$hasPendingUnload(long key) {
+        return pendingUnloads.containsKey(key);
+    }
 
     @Inject(method = "prepareAccessibleChunk", at = @At("HEAD"), cancellable = true)
     private void lumi$gateAccessibleChunk(

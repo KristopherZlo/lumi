@@ -23,7 +23,9 @@ public final class ChunkLoadGate {
             return null;
         }
         if (level.getChunkSource().getChunkNow(position.x, position.z) != null
-                || level.getChunkSource().chunkMap.getUpdatingChunkIfPresent(key) != null) {
+                || level.getChunkSource().chunkMap.getUpdatingChunkIfPresent(key) != null
+                || ((PendingUnloadAccess) level.getChunkSource().chunkMap)
+                        .lumi$hasPendingUnload(key)) {
             release(level, key);
             return null;
         }
@@ -45,6 +47,11 @@ public final class ChunkLoadGate {
         if (dimension.isEmpty()) {
             GATED.remove(level);
         }
+    }
+
+    /** Mixin-backed view of vanilla chunks still completing their unload. */
+    public interface PendingUnloadAccess {
+        boolean lumi$hasPendingUnload(long key);
     }
 
     public static final class Lease implements AutoCloseable {

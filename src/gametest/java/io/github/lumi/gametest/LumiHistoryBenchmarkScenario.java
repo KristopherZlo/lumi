@@ -113,9 +113,7 @@ final class LumiHistoryBenchmarkScenario {
         checks.assertSnapshot("branch_setup_b", List.of(baseArea),
                 endpointB.snapshot());
         checks.finish();
-        if (config.chunkPath().requiresUnloadedFixture()) {
-            fixture.awaitUnloaded("stored_chunks_ready", baseArea);
-        }
+        awaitStoredFixture("stored_chunks_ready");
 
         LumiRepositoryMetrics.Snapshot storage = recordStorage(
                 "branch-setup", history.repository(), history.storage().bytes());
@@ -145,15 +143,18 @@ final class LumiHistoryBenchmarkScenario {
                 "cold-b-to-a", branchFixture.a(), checks,
                 measurements, repository, previousBytes);
         checks.finish();
+        awaitStoredFixture("stored_after_cold_b_to_a");
         operations.switchBranch("prime-a-to-b", branchFixture.b().ref().name());
         assertActive(checks, "prime_a_to_b", branchFixture.b());
         checks.assertSnapshot("prime_a_to_b", List.of(baseArea),
                 branchFixture.b().snapshot());
         checks.finish();
+        awaitStoredFixture("stored_after_prime_a_to_b");
         previousBytes = measureBranchSwitch(
                 "warm-b-to-a", branchFixture.a(), checks,
                 measurements, repository, previousBytes);
         checks.finish();
+        awaitStoredFixture("stored_after_warm_b_to_a");
         measureBranchSwitch(
                 "warm-a-to-b", branchFixture.b(), checks,
                 measurements, repository, previousBytes);
@@ -257,6 +258,12 @@ final class LumiHistoryBenchmarkScenario {
                 "branch-switch-" + name, repository, previousBytes);
         recordMemory("branch-switch-" + name);
         return storage.bytes();
+    }
+
+    private void awaitStoredFixture(String name) {
+        if (config.chunkPath().requiresUnloadedFixture()) {
+            fixture.awaitUnloaded(name, baseArea);
+        }
     }
 
     private void assertActive(
