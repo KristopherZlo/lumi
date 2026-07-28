@@ -86,6 +86,31 @@ tasks.named('runClientGameTest') {
     if (benchmarkHeap != null && !benchmarkHeap.isBlank()) {
         jvmArgs "-Xmx${benchmarkHeap}"
     }
+    def existingWorldSource =
+            System.getProperty('lumi.benchmark.existingWorldSource')
+    if (existingWorldSource != null && !existingWorldSource.isBlank()) {
+        def existingWorldName =
+                System.getProperty('lumi.benchmark.existingWorld')
+        if (existingWorldName == null || existingWorldName.isBlank()
+                || existingWorldName == '.' || existingWorldName == '..'
+                || new File(existingWorldName).name != existingWorldName) {
+            throw new GradleException(
+                    'lumi.benchmark.existingWorld must be one save-folder name')
+        }
+        doFirst {
+            def source = file(existingWorldSource)
+            if (!source.isDirectory()) {
+                throw new GradleException(
+                        "Existing benchmark world does not exist: ${source}")
+            }
+            copy {
+                from source
+                exclude 'session.lock'
+                into layout.buildDirectory.dir(
+                        "run/clientGameTest/saves/${existingWorldName}")
+            }
+        }
+    }
 }
 
 dependencies {

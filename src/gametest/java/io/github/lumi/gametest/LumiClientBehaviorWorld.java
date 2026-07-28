@@ -1,9 +1,12 @@
 package io.github.lumi.gametest;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave;
+import net.fabricmc.fabric.impl.client.gametest.world.TestWorldSaveImpl;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.world.level.gamerules.GameRules;
@@ -25,6 +28,37 @@ final class LumiClientBehaviorWorld {
             Scenario scenario,
             Scenario reopenedScenario) {
         run(context, scenarioName, scenario, reopenedScenario);
+    }
+
+    static void runExisting(
+            ClientGameTestContext context,
+            String scenarioName,
+            String saveName,
+            Scenario scenario) {
+        Path relative = Path.of(saveName);
+        if (saveName.isBlank() || relative.isAbsolute()
+                || saveName.equals(".") || saveName.equals("..")
+                || relative.getNameCount() != 1) {
+            throw new IllegalArgumentException(
+                    "Existing test world must be one save-folder name");
+        }
+        Path saveDirectory = context.computeOnClient(client ->
+                client.getLevelSource().getBaseDir().resolve(relative));
+        if (!Files.isDirectory(saveDirectory)) {
+            throw new IllegalArgumentException(
+                    "Existing test world does not exist: " + saveDirectory);
+        }
+        try (LumiBehaviorReport report = LumiBehaviorReport.create(
+                FabricLoader.getInstance().getGameDir(), scenarioName);
+             TestSingleplayerContext singleplayer =
+                     new TestWorldSaveImpl(context, saveDirectory).open()) {
+            prepareClient(context, singleplayer);
+            scenario.run(context, singleplayer, report);
+            report.assertNoRuntimeFailures();
+        } catch (IOException failed) {
+            throw new IllegalStateException(
+                    "Cannot run Lumi existing-world behavior test", failed);
+        }
     }
 
     private static void run(

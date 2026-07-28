@@ -55,6 +55,11 @@ final class LumiBehaviorOperations {
         return server.computeOnServer(minecraft -> runtime(minecraft).activeRef().name());
     }
 
+    List<CommitId> history(int limit) throws IOException {
+        return server.computeOnServer(minecraft -> runtime(minecraft)
+                .history(limit).stream().map(entry -> entry.id()).toList());
+    }
+
     Path repository() {
         return server.computeOnServer(minecraft -> runtime(minecraft).repository());
     }

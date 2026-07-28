@@ -40,6 +40,11 @@ record LumiHistoryBenchmarkConfig(
         return Boolean.getBoolean(ENABLED_PROPERTY);
     }
 
+    static boolean existingWorldEnabled() {
+        String saveName = System.getProperty(PREFIX + "existingWorld");
+        return enabled() && saveName != null && !saveName.isBlank();
+    }
+
     static LumiHistoryBenchmarkConfig load() {
         ChunkPath chunkPath = ChunkPath.parse(System.getProperty(
                 PREFIX + "chunkPath", "natural"));
