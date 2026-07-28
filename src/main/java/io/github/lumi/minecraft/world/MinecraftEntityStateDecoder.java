@@ -1,6 +1,5 @@
 package io.github.lumi.minecraft.world;
 
-import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
@@ -62,33 +61,21 @@ public final class MinecraftEntityStateDecoder {
             normalized.put(entry.getKey(), normalizePayloads(entry.getValue(), passengerIds));
         }
         normalized.replaceAll((key, chunk) -> withoutTopLevelPassengers(chunk, passengerIds));
-        int duplicates = removeDuplicateRoots(normalized);
-        if (duplicates != 0) {
-            LumiMod.LOGGER.warn(
-                    "Lumi removed {} duplicate entity UUID records across saved chunks",
-                    duplicates);
-        }
+        requireUniqueRoots(normalized);
         return Map.copyOf(normalized);
     }
 
-    private static int removeDuplicateRoots(
-            Map<EntityChunkKey, EntityChunkBlob> chunks) {
+    private static void requireUniqueRoots(
+            Map<EntityChunkKey, EntityChunkBlob> chunks) throws IOException {
         Set<UUID> seen = new HashSet<>();
-        int duplicates = 0;
         for (var entry : chunks.entrySet()) {
-            var unique = new ArrayList<EntityState>(entry.getValue().entities().size());
             for (EntityState entity : entry.getValue().entities()) {
-                if (seen.add(entity.id())) {
-                    unique.add(entity);
-                } else {
-                    duplicates++;
+                if (!seen.add(entity.id())) {
+                    throw new IOException("Ambiguous entity UUID in Restore state: "
+                            + entity.id());
                 }
             }
-            if (unique.size() != entry.getValue().entities().size()) {
-                entry.setValue(new EntityChunkBlob(unique));
-            }
         }
-        return duplicates;
     }
 
     private EntityChunkBlob normalizePayloads(

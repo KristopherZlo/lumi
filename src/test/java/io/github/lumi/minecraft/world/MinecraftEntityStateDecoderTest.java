@@ -14,6 +14,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.Bootstrap;
@@ -110,23 +111,18 @@ class MinecraftEntityStateDecoderTest {
     }
 
     @Test
-    void removesLegacyEntityUuidDuplicatedAcrossChunks() throws Exception {
+    void rejectsLegacyEntityUuidDuplicatedAcrossChunks() throws Exception {
         UUID entityId = UUID.fromString("30000000-0000-0000-0000-000000000003");
-        EntityState entity = new EntityState(
-                entityId, "minecraft:rabbit",
-                MinecraftNbtCodec.encode(new CompoundTag()));
         EntityChunkKey first = new EntityChunkKey(0, 0);
         EntityChunkKey second = new EntityChunkKey(1, 0);
 
-        Map<EntityChunkKey, EntityChunkBlob> normalized =
+        assertThrows(IOException.class, () ->
                 new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)
                         .normalize(Map.of(
-                                second, new EntityChunkBlob(List.of(entity)),
-                                first, new EntityChunkBlob(List.of(entity))));
-
-        assertEquals(List.of(entityId), normalized.get(first).entities().stream()
-                .map(EntityState::id).toList());
-        assertEquals(List.of(), normalized.get(second).entities());
+                                first, new EntityChunkBlob(List.of(
+                                        rabbitAt(entityId, 1.0D))),
+                                second, new EntityChunkBlob(List.of(
+                                        rabbitAt(entityId, 17.0D))))));
     }
 
     @Test
@@ -182,6 +178,17 @@ class MinecraftEntityStateDecoderTest {
         attributes.add(attribute(secondAttribute));
         entity.put("attributes", attributes);
         return entity;
+    }
+
+    private static EntityState rabbitAt(UUID id, double x) throws IOException {
+        CompoundTag entity = new CompoundTag();
+        ListTag position = new ListTag();
+        position.add(DoubleTag.valueOf(x));
+        position.add(DoubleTag.valueOf(64.0D));
+        position.add(DoubleTag.valueOf(1.0D));
+        entity.put("Pos", position);
+        return new EntityState(
+                id, "minecraft:rabbit", MinecraftNbtCodec.encode(entity));
     }
 
     private static CompoundTag attribute(String id) {
