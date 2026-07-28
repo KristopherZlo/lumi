@@ -77,12 +77,12 @@ public final class ObjectStore {
     }
 
     private byte[] readLoose(ObjectId id, Path path) throws IOException {
-        long fileSize = Files.size(path);
-        if (fileSize < HEADER_BYTES || fileSize > HEADER_BYTES + (long) MAX_PAYLOAD_BYTES + 1024 * 1024) {
-            throw corrupt(id, "invalid file size");
-        }
-
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+            long fileSize = channel.size();
+            if (fileSize < HEADER_BYTES
+                    || fileSize > HEADER_BYTES + (long) MAX_PAYLOAD_BYTES + 1024 * 1024) {
+                throw corrupt(id, "invalid file size");
+            }
             ByteBuffer header = ByteBuffer.allocate(HEADER_BYTES);
             readFully(channel, header, id);
             header.flip();
@@ -349,12 +349,13 @@ public final class ObjectStore {
                 return packs.read(packed);
             }
             Path path = pathFor(id);
-            if (Files.exists(path)) {
+            try {
                 return readLoose(id, path);
-            }
-            packed = refreshedPackedObject(id);
-            if (packed == null) {
-                throw new java.nio.file.NoSuchFileException(path.toString());
+            } catch (java.nio.file.NoSuchFileException missing) {
+                packed = refreshedPackedObject(id);
+                if (packed == null) {
+                    throw missing;
+                }
             }
             return packs.read(packed);
         }
