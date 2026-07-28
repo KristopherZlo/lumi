@@ -1,6 +1,11 @@
 package io.github.lumi.gametest;
 
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.ObjectId;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /** Validated system-property configuration for the opt-in history benchmark. */
 record LumiHistoryBenchmarkConfig(
@@ -51,6 +56,23 @@ record LumiHistoryBenchmarkConfig(
     static OperationMode operationMode() {
         return OperationMode.parse(System.getProperty(
                 PREFIX + "operation", "restore"));
+    }
+
+    static Optional<List<CommitId>> restoreTargets() {
+        String configured = System.getProperty(PREFIX + "restoreTargets");
+        if (configured == null || configured.isBlank()) {
+            return Optional.empty();
+        }
+        List<CommitId> targets = Arrays.stream(configured.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .map(value -> new CommitId(new ObjectId(value)))
+                .toList();
+        if (targets.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "restoreTargets must contain at least one commit ID");
+        }
+        return Optional.of(targets);
     }
 
     static LumiHistoryBenchmarkConfig load() {

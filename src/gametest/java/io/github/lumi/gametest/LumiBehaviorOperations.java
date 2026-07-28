@@ -281,6 +281,27 @@ final class LumiBehaviorOperations {
 
     BranchRef createBranch(String name) throws IOException {
         runOperation("branch_create_" + name, () -> ui.createBranch(name));
+        return createdBranch(name);
+    }
+
+    BranchRef createBranch(String name, CommitId startingPoint)
+            throws IOException {
+        server.computeOnServer(minecraft -> {
+            runtime(minecraft).createBranch(
+                    new BranchName(name), startingPoint);
+            return null;
+        });
+        context.computeOnClient(client ->
+                LumiClient.networking().refreshSnapshot());
+        BranchRef branch = createdBranch(name);
+        awaitSnapshot(snapshot -> snapshot.branches().stream().anyMatch(
+                        candidate -> candidate.name().equals(
+                                branch.name().value())),
+                "branch " + branch.name().value());
+        return branch;
+    }
+
+    private BranchRef createdBranch(String name) throws IOException {
         return server.computeOnServer(minecraft -> {
             FabricDimensionRuntime runtime = runtime(minecraft);
             BranchName storedName = runtime.visibleBranchName(new BranchName(name));

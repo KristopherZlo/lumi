@@ -1,9 +1,7 @@
 package io.github.lumi.gametest;
 
 import io.github.lumi.domain.model.CommitId;
-import io.github.lumi.domain.model.ObjectId;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -57,22 +55,9 @@ final class LumiExistingWorldRestoreScenario {
 
     private static List<CommitId> restoreTargets(
             List<CommitId> history, int samples) {
-        String configured = System.getProperty(
-                LumiHistoryBenchmarkConfig.PREFIX + "restoreTargets");
-        if (configured == null || configured.isBlank()) {
-            return restoreIndices(history.size(), samples).stream()
-                    .map(history::get).toList();
-        }
-        List<CommitId> targets = Arrays.stream(configured.split(","))
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
-                .map(value -> new CommitId(new ObjectId(value)))
-                .toList();
-        if (targets.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "restoreTargets must contain at least one commit ID");
-        }
-        return targets;
+        return LumiHistoryBenchmarkConfig.restoreTargets().orElseGet(() ->
+                restoreIndices(history.size(), samples).stream()
+                        .map(history::get).toList());
     }
 
     static List<Integer> restoreIndices(int versionCount, int samples) {

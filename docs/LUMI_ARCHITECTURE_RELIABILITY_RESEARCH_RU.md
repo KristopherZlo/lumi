@@ -409,7 +409,7 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 9. Для crash-consistency инъецировать остановку в каждой durable-фазе Save и Restore, затем проверять оба разрешённых направления, pointers, journal cleanup, working generations и повторный reopen.
 10. Для idle сравнивать vanilla и Lumi на одинаковых сохранениях несколькими JVM runs; заранее задать equivalence margin для tick time, allocation и chunk-load latency. Без такого теста формулировка «неотличимо от vanilla» не доказана.
 
-Harness уже поддерживает opt-in dense fixture, natural/stored modes, branch-switch, real existing-world copy, per-phase telemetry и performance gate: [LumiHistoryBenchmarkConfig](../src/gametest/java/io/github/lumi/gametest/LumiHistoryBenchmarkConfig.java), [LumiHistoryBenchmarkScenario](../src/gametest/java/io/github/lumi/gametest/LumiHistoryBenchmarkScenario.java), [LumiRestorePerformanceGate](../src/gametest/java/io/github/lumi/gametest/LumiRestorePerformanceGate.java).
+Harness уже поддерживает opt-in dense fixture, natural/stored modes, branch-switch, real existing-world copy, per-phase telemetry и performance gate: [LumiHistoryBenchmarkConfig](../src/gametest/java/io/github/lumi/gametest/LumiHistoryBenchmarkConfig.java), [LumiHistoryBenchmarkScenario](../src/gametest/java/io/github/lumi/gametest/LumiHistoryBenchmarkScenario.java), [LumiRestorePerformanceGate](../src/gametest/java/io/github/lumi/gametest/LumiRestorePerformanceGate.java). Existing-world branch-switch создаёт две ветки на явно заданных endpoint-коммитах только внутри одноразовой копии, переоткрывает её и измеряет настоящий cold/warm цикл через branch hotkeys.
 
 ### 11.3. Факторная матрица
 

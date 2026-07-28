@@ -19,17 +19,17 @@ public final class LumiHistoryBenchmarkClientGameTest
         }
         String existingWorld = System.getProperty(EXISTING_WORLD_PROPERTY);
         if (existingWorld != null && !existingWorld.isBlank()) {
-            if (LumiHistoryBenchmarkConfig.operationMode()
-                    != LumiHistoryBenchmarkConfig.OperationMode.RESTORE) {
-                throw new IllegalArgumentException(
-                        "Existing-world benchmark supports only restore");
-            }
             try (var ignored = LumiUiScaleTestScope.readableViewport()) {
-                LumiClientBehaviorWorld.runExisting(
-                        context, "history-benchmark-existing-world",
-                        existingWorld, (test, world, report) ->
-                                new LumiExistingWorldRestoreScenario(
-                                        test, world, report).run());
+                if (LumiHistoryBenchmarkConfig.operationMode()
+                        == LumiHistoryBenchmarkConfig.OperationMode.BRANCH_SWITCH) {
+                    runExistingBranchSwitch(context, existingWorld);
+                } else {
+                    LumiClientBehaviorWorld.runExisting(
+                            context, "history-benchmark-existing-world",
+                            existingWorld, (test, world, report) ->
+                                    new LumiExistingWorldRestoreScenario(
+                                            test, world, report).run());
+                }
             }
             return;
         }
@@ -66,5 +66,21 @@ public final class LumiHistoryBenchmarkClientGameTest
                         .runBranchSwitch(
                                 new LumiUiTestDriver(test),
                                 fixture.get()));
+    }
+
+    private static void runExistingBranchSwitch(
+            ClientGameTestContext context,
+            String existingWorld) {
+        var fixture = new AtomicReference<
+                LumiExistingWorldBranchSwitchScenario.Fixture>();
+        LumiClientBehaviorWorld.runExistingWithReopen(
+                context, "history-benchmark-existing-world-branch-switch",
+                existingWorld,
+                (test, world, report) -> fixture.set(
+                        new LumiExistingWorldBranchSwitchScenario(
+                                test, world, report).prepare()),
+                (test, world, report) ->
+                        new LumiExistingWorldBranchSwitchScenario(
+                                test, world, report).run(fixture.get()));
     }
 }

@@ -35,6 +35,25 @@ final class LumiClientBehaviorWorld {
             String scenarioName,
             String saveName,
             Scenario scenario) {
+        runExisting(context, scenarioName, saveName, scenario, null);
+    }
+
+    static void runExistingWithReopen(
+            ClientGameTestContext context,
+            String scenarioName,
+            String saveName,
+            Scenario scenario,
+            Scenario reopenedScenario) {
+        runExisting(
+                context, scenarioName, saveName, scenario, reopenedScenario);
+    }
+
+    private static void runExisting(
+            ClientGameTestContext context,
+            String scenarioName,
+            String saveName,
+            Scenario scenario,
+            Scenario reopenedScenario) {
         Path relative = Path.of(saveName);
         if (saveName.isBlank() || relative.isAbsolute()
                 || saveName.equals(".") || saveName.equals("..")
@@ -49,11 +68,22 @@ final class LumiClientBehaviorWorld {
                     "Existing test world does not exist: " + saveDirectory);
         }
         try (LumiBehaviorReport report = LumiBehaviorReport.create(
-                FabricLoader.getInstance().getGameDir(), scenarioName);
-             TestSingleplayerContext singleplayer =
-                     new TestWorldSaveImpl(context, saveDirectory).open()) {
-            prepareClient(context, singleplayer);
-            scenario.run(context, singleplayer, report);
+                FabricLoader.getInstance().getGameDir(), scenarioName)) {
+            TestWorldSave worldSave =
+                    new TestWorldSaveImpl(context, saveDirectory);
+            try (TestSingleplayerContext singleplayer = worldSave.open()) {
+                prepareClient(context, singleplayer);
+                scenario.run(context, singleplayer, report);
+            }
+            if (reopenedScenario != null) {
+                long started = System.nanoTime();
+                try (TestSingleplayerContext reopened = worldSave.open()) {
+                    prepareClient(context, reopened);
+                    report.event("stage", "world_reopen", "succeeded", 0,
+                            elapsedMillis(started), "");
+                    reopenedScenario.run(context, reopened, report);
+                }
+            }
             report.assertNoRuntimeFailures();
         } catch (IOException failed) {
             throw new IllegalStateException(
