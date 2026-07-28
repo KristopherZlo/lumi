@@ -157,6 +157,51 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
+    void fillsFreedEntityTicketSlotsWithoutStartingTheNextBatch() throws Exception {
+        List<EntityChunkKey> keys = new ArrayList<>();
+        for (int chunk = 0; chunk < 65; chunk++) {
+            keys.add(new EntityChunkKey(chunk, 0));
+        }
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(null);
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
+
+        var session = session(entityPlan(keys), world, background, readiness -> {
+            requested.add(readiness);
+            return new ChunkLoadSession(chunks, () -> 0L);
+        });
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
+        assertEquals(32, chunks.active);
+        assertEquals(1, world.persistenceCalls.size());
+
+        world.persistence.getFirst().accepted = keys.subList(0, 4).stream()
+                .map(ChunkCoordinate::from).toList();
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(32, chunks.active);
+        assertEquals(32, chunks.peak);
+        assertEquals(2, requested.size());
+        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
+        assertEquals(1, world.persistenceCalls.size());
+
+        world.persistence.getFirst().accepted = keys.subList(4, 32).stream()
+                .map(ChunkCoordinate::from).toList();
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(32, chunks.active);
+        assertEquals(64, chunks.activeBeforeRetain.size());
+        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
+        assertEquals(1, world.persistenceCalls.size());
+        assertEquals(2, requested.size());
+        assertEquals(32, chunks.peak);
+
+        session.close();
+        session.close();
+        assertEquals(0, chunks.active);
+        assertEquals(1, world.persistence.getFirst().closeCalls);
+    }
+
+    @Test
     void queuesNextSlabOnlyAfterTheCurrentSlabIsDurable() throws Exception {
         List<SectionKey> keys = new ArrayList<>();
         for (int sectionY = 0; sectionY < 1_025; sectionY++) {
@@ -308,6 +353,19 @@ class StreamingPreparedWorldMutationSessionTest {
                 state, state, Map.of(), Map.of(), keys, List.of());
     }
 
+    private static PreparedMinecraftPlanState entityPlan(List<EntityChunkKey> keys) {
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        Map<EntityChunkKey, EntityChunkBlob> entities = new LinkedHashMap<>();
+        Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
+        keys.forEach(key -> {
+            entities.put(key, empty);
+            decoded.put(key, new DecodedEntityChunk(List.of()));
+        });
+        var state = new WorldStateApply.State(Map.of(), entities);
+        return new PreparedMinecraftPlanState(
+                state, state, decoded, decoded, List.of(), keys);
+    }
+
     private static SectionBlob stoneSection() {
         return new SectionBlob(
                 Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:stone"),
@@ -369,6 +427,7 @@ class StreamingPreparedWorldMutationSessionTest {
         private final SectionBlob captured;
         private final List<ManualPersistence> persistence = new ArrayList<>();
         private final List<PersistenceCall> persistenceCalls = new ArrayList<>();
+        private final List<EntityChunkKey> startedEntityChunks = new ArrayList<>();
         private Set<ChunkCoordinate> directlyStored = Set.of();
 
         private FakeWorld(SectionBlob captured) {
@@ -454,6 +513,7 @@ class StreamingPreparedWorldMutationSessionTest {
             return captured;
         }
         @Override public List<UUID> durableEntityIds(EntityChunkKey key) {
+            startedEntityChunks.add(key);
             return List.of();
         }
         @Override public void removeEntity(EntityChunkKey key, UUID id) { }
@@ -479,11 +539,19 @@ class StreamingPreparedWorldMutationSessionTest {
 
     private static final class ManualPersistence implements WorldPersistenceSession {
         private boolean complete;
+        private List<ChunkCoordinate> accepted = List.of();
         private int closeCalls;
 
         @Override
         public boolean advanceUntil(long deadlineNanos) {
             return complete;
+        }
+
+        @Override
+        public List<ChunkCoordinate> drainAcceptedSnapshotChunks() {
+            List<ChunkCoordinate> drained = accepted;
+            accepted = List.of();
+            return drained;
         }
 
         @Override

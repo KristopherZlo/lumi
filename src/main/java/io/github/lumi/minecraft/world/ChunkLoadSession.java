@@ -3,11 +3,11 @@ package io.github.lumi.minecraft.world;
 import io.github.lumi.domain.model.HistoryKey;
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -38,13 +38,18 @@ public final class ChunkLoadSession implements AutoCloseable {
     }
 
     public void retain(Iterable<? extends HistoryKey> keys) {
-        if (closed) {
-            throw new IllegalStateException("Chunk load session is closed");
-        }
-        if (loadingStarted) {
-            throw new IllegalStateException("Cannot add chunks after loading started");
-        }
+        requireRetainable();
         pendingRetentions.add(Objects.requireNonNull(keys, "keys").iterator());
+    }
+
+    /** Retains and starts one bounded window without observing its result. */
+    void prefetch(Iterable<? extends HistoryKey> keys) {
+        requireRetainable();
+        int retainedBefore = retained.size();
+        Objects.requireNonNull(keys, "keys").forEach(this::retainKey);
+        if (retained.size() > retainedBefore) {
+            access.startLoading();
+        }
     }
 
     public boolean loadUntil(long deadlineNanos) throws IOException {
@@ -53,14 +58,7 @@ public final class ChunkLoadSession implements AutoCloseable {
         }
         loadingStarted = true;
         while (nanoTime.getAsLong() < deadlineNanos) {
-            if (!pendingRetentions.isEmpty()) {
-                Iterator<? extends HistoryKey> keys = pendingRetentions.getFirst();
-                if (keys.hasNext()) {
-                    ChunkCoordinate chunk = ChunkCoordinate.from(keys.next());
-                    retained.computeIfAbsent(chunk, access::retain);
-                } else {
-                    pendingRetentions.removeFirst();
-                }
+            if (retainNext()) {
                 continue;
             }
             if (loading == null) {
@@ -89,6 +87,24 @@ public final class ChunkLoadSession implements AutoCloseable {
             completed++;
         }
         return false;
+    }
+
+    private boolean retainNext() {
+        if (pendingRetentions.isEmpty()) {
+            return false;
+        }
+        Iterator<? extends HistoryKey> keys = pendingRetentions.getFirst();
+        if (keys.hasNext()) {
+            retainKey(keys.next());
+        } else {
+            pendingRetentions.removeFirst();
+        }
+        return true;
+    }
+
+    private void retainKey(HistoryKey key) {
+        ChunkCoordinate chunk = ChunkCoordinate.from(key);
+        retained.computeIfAbsent(chunk, access::retain);
     }
 
     public boolean loadOneUntil(
@@ -143,6 +159,15 @@ public final class ChunkLoadSession implements AutoCloseable {
 
     public int totalChunks() {
         return retained.size();
+    }
+
+    private void requireRetainable() {
+        if (closed) {
+            throw new IllegalStateException("Chunk load session is closed");
+        }
+        if (loadingStarted) {
+            throw new IllegalStateException("Cannot add chunks after loading started");
+        }
     }
 
     @Override

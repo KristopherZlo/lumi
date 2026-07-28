@@ -17,6 +17,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 
 /** Decodes an estimated 128 MiB, then applies and persists it in 32-chunk windows. */
@@ -46,6 +47,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private int entityBatchStart;
     private int entityBatchEnd;
     private CompletableFuture<PreparedMinecraftState> preparing;
+    private EntityLookahead entityLookahead;
+    private IOException entityLookaheadFailure;
     private PreparedMinecraftState slab;
     private PreparedWorldMutationSession current;
     private BatchKind currentKind;
@@ -88,9 +91,19 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 }
                 case VERIFYING -> verifyCurrent(deadlineNanos);
                 case PERSISTING -> {
-                    if (current.persistUntil(deadlineNanos)) {
+                    boolean complete;
+                    try {
+                        complete = current.persistUntil(deadlineNanos);
+                    } catch (IOException | RuntimeException failed) {
+                        discardEntityLookahead(failed);
+                        throw failed;
+                    }
+                    if (complete) {
                         phase = Phase.PREPARING;
                     } else {
+                        if (System.nanoTime() < deadlineNanos) {
+                            prefetchNextEntityBatch();
+                        }
                         return false;
                     }
                 }
@@ -174,7 +187,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             PreparedMinecraftState entities = nextEntityBatch();
             current = new PreparedWorldMutationSession(
                     entities, world, System::nanoTime,
-                    chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES),
+                    nextEntityChunkLoads(),
                     metrics);
             currentKind = BatchKind.ENTITIES;
             phase = Phase.APPLYING;
@@ -297,6 +310,101 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 List.of(), keys);
     }
 
+    private void prefetchNextEntityBatch() {
+        if (currentKind != BatchKind.ENTITIES
+                || entityBatchEnd == plan.entityKeys().size()
+                || entityLookaheadFailure != null) {
+            return;
+        }
+        int available = current.availableChunkTicketCapacity()
+                - (entityLookahead == null
+                        ? 0 : entityLookahead.chunks().totalChunks());
+        if (available <= 0) {
+            return;
+        }
+        int nextStart = entityBatchEnd;
+        if (entityLookahead == null) {
+            try {
+                ChunkLoadSession chunks = chunkLoads.apply(
+                        ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES);
+                if (chunks == null) {
+                    return;
+                }
+                entityLookahead = new EntityLookahead(nextStart, nextStart, chunks);
+            } catch (RejectedExecutionException rejected) {
+                return;
+            } catch (RuntimeException failed) {
+                entityLookaheadFailure = new IOException(
+                        "Cannot start Restore entity lookahead", failed);
+                return;
+            }
+        }
+        int prefetchEnd = Math.min(
+                entityBatchEnd(plan.entityKeys().size(), nextStart),
+                entityLookahead.end() + available);
+        if (prefetchEnd == entityLookahead.end()) {
+            return;
+        }
+        try {
+            entityLookahead.chunks().prefetch(
+                    plan.entityKeys().subList(entityLookahead.end(), prefetchEnd));
+            entityLookahead = new EntityLookahead(
+                    nextStart, prefetchEnd, entityLookahead.chunks());
+        } catch (RuntimeException failed) {
+            abandonEntityLookahead(failed);
+        }
+    }
+
+    private ChunkLoadSession nextEntityChunkLoads() throws IOException {
+        if (entityLookaheadFailure != null) {
+            IOException failed = entityLookaheadFailure;
+            entityLookaheadFailure = null;
+            throw failed;
+        }
+        if (entityLookahead == null) {
+            return chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES);
+        }
+        EntityLookahead ready = entityLookahead;
+        entityLookahead = null;
+        if (ready.start() != entityBatchStart || ready.end() > entityBatchEnd) {
+            ready.chunks().close();
+            throw new IOException("Restore entity lookahead no longer matches its batch");
+        }
+        return ready.chunks();
+    }
+
+    private void abandonEntityLookahead(RuntimeException failed) {
+        EntityLookahead abandoned = entityLookahead;
+        entityLookahead = null;
+        RuntimeException cleanupFailure = null;
+        if (abandoned != null) {
+            try {
+                abandoned.chunks().close();
+            } catch (RuntimeException closeFailed) {
+                failed.addSuppressed(closeFailed);
+                cleanupFailure = closeFailed;
+            }
+        }
+        if (!(failed instanceof RejectedExecutionException)
+                || cleanupFailure != null) {
+            entityLookaheadFailure = new IOException(
+                    "Cannot prefetch Restore entity batch", failed);
+        }
+    }
+
+    private void discardEntityLookahead(Throwable failure) {
+        EntityLookahead discarded = entityLookahead;
+        entityLookahead = null;
+        if (discarded == null) {
+            return;
+        }
+        try {
+            discarded.chunks().close();
+        } catch (RuntimeException closeFailed) {
+            failure.addSuppressed(closeFailed);
+        }
+    }
+
     private static long estimatedRawBytes(SectionBlob section) {
         long bytes = RAW_SECTION_BYTES;
         for (String state : section.distinctBlockStates()) {
@@ -414,11 +522,20 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             preparing.cancel(false);
             preparing = null;
         }
+        EntityLookahead pending = entityLookahead;
+        entityLookahead = null;
+        entityLookaheadFailure = null;
         slab = null;
         PreparedWorldMutationSession open = current;
         current = null;
-        if (open != null) {
-            open.close();
+        try {
+            if (open != null) {
+                open.close();
+            }
+        } finally {
+            if (pending != null) {
+                pending.chunks().close();
+            }
         }
     }
 
@@ -430,6 +547,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             WorldStateApply.State target,
             WorldStateApply.State base,
             List<SectionKey> order) { }
+
+    private record EntityLookahead(
+            int start, int end, ChunkLoadSession chunks) { }
 
     private enum BatchKind { SECTIONS, ENTITIES, SPAWNS }
     private enum Phase {
