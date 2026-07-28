@@ -11,7 +11,8 @@ record LumiHistoryBenchmarkConfig(
         int restoreSamples,
         int measureEvery,
         long seed,
-        ChunkPath chunkPath) {
+        ChunkPath chunkPath,
+        OperationMode operation) {
     static final String PREFIX = "lumi.benchmark.";
     static final String ENABLED_PROPERTY = PREFIX + "enabled";
     private static final long MAX_LIVE_FIXTURE_CHUNKS = 1_089;
@@ -26,11 +27,18 @@ record LumiHistoryBenchmarkConfig(
         if (chunkPath == null) {
             throw new IllegalArgumentException("chunkPath is required");
         }
-        if (chunkPath == ChunkPath.NATURAL && restoreSamples < 2) {
+        if (operation == null) {
+            throw new IllegalArgumentException("operation is required");
+        }
+        if (operation == OperationMode.BRANCH_SWITCH) {
+            if (restoreSamples != 3) {
+                throw new IllegalArgumentException(
+                        "branch-switch operation requires exactly three samples");
+            }
+        } else if (chunkPath == ChunkPath.NATURAL && restoreSamples < 2) {
             throw new IllegalArgumentException(
                     "natural chunkPath requires at least two restoreSamples");
-        }
-        if (chunkPath == ChunkPath.STORED && restoreSamples != 1) {
+        } else if (chunkPath == ChunkPath.STORED && restoreSamples != 1) {
             throw new IllegalArgumentException(
                     "stored chunkPath requires exactly one restore sample");
         }
@@ -45,7 +53,13 @@ record LumiHistoryBenchmarkConfig(
         return enabled() && saveName != null && !saveName.isBlank();
     }
 
+    static OperationMode operationMode() {
+        return OperationMode.parse(System.getProperty(
+                PREFIX + "operation", "restore"));
+    }
+
     static LumiHistoryBenchmarkConfig load() {
+        OperationMode operation = operationMode();
         ChunkPath chunkPath = ChunkPath.parse(System.getProperty(
                 PREFIX + "chunkPath", "natural"));
         return new LumiHistoryBenchmarkConfig(
@@ -54,10 +68,12 @@ record LumiHistoryBenchmarkConfig(
                 integer("layers", 2),
                 integer("commits", 3),
                 integer("restoreSamples",
-                        chunkPath.requiresUnloadedFixture() ? 1 : 4),
+                        operation == OperationMode.BRANCH_SWITCH ? 3
+                                : chunkPath.requiresUnloadedFixture() ? 1 : 4),
                 integer("measureEvery", 1),
                 Long.getLong(PREFIX + "seed", 710L),
-                chunkPath);
+                chunkPath,
+                operation);
     }
 
     void requireRunnableFixture() {
@@ -86,8 +102,9 @@ record LumiHistoryBenchmarkConfig(
     }
 
     String reportName() {
-        return String.format(Locale.ROOT, "history-benchmark-%dx%dx%d-%d%s",
-                baseSize, baseSize, layers, commits, chunkPath.reportSuffix());
+        return String.format(Locale.ROOT, "history-benchmark-%dx%dx%d-%d%s%s",
+                baseSize, baseSize, layers, commits,
+                operation.reportSuffix(), chunkPath.reportSuffix());
     }
 
     String describe() {
@@ -100,6 +117,7 @@ record LumiHistoryBenchmarkConfig(
                 + ";measureEvery=" + measureEvery
                 + ";seed=" + seed
                 + ";chunkPath=" + chunkPath.propertyValue
+                + operation.describeSuffix()
                 + ";baseBlocks=" + baseBlocks()
                 + ";changedBlocksPerCommit=" + changedBlocksPerCommit();
     }
@@ -142,6 +160,37 @@ record LumiHistoryBenchmarkConfig(
 
         String reportSuffix() {
             return requiresUnloadedFixture() ? "-stored" : "";
+        }
+    }
+
+    enum OperationMode {
+        RESTORE("restore", ""),
+        BRANCH_SWITCH("branch-switch", "-branch-switch");
+
+        private final String propertyValue;
+        private final String reportSuffix;
+
+        OperationMode(String propertyValue, String reportSuffix) {
+            this.propertyValue = propertyValue;
+            this.reportSuffix = reportSuffix;
+        }
+
+        static OperationMode parse(String value) {
+            for (OperationMode operation : values()) {
+                if (operation.propertyValue.equalsIgnoreCase(value)) {
+                    return operation;
+                }
+            }
+            throw new IllegalArgumentException(
+                    "operation must be restore or branch-switch, got " + value);
+        }
+
+        String reportSuffix() {
+            return reportSuffix;
+        }
+
+        String describeSuffix() {
+            return this == RESTORE ? "" : ";operation=" + propertyValue;
         }
     }
 }

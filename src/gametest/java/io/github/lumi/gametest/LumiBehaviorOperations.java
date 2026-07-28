@@ -147,6 +147,22 @@ final class LumiBehaviorOperations {
 
     LumiRestoreMeasurement measureRestore(String name, CommitId target)
             throws IOException {
+        return measureMutation(
+                "restore_" + name, () -> restoreFromUi(target));
+    }
+
+    LumiRestoreMeasurement measureBranchSwitch(
+            String name, BranchName target) throws IOException {
+        LumiRestoreMeasurement measurement = measureMutation(
+                "branch_switch_" + name,
+                () -> switchBranchFromHotkey(target));
+        awaitSnapshot(snapshot -> snapshot.branchName().equals(target.value()),
+                "active branch " + target.value());
+        return measurement;
+    }
+
+    private LumiRestoreMeasurement measureMutation(
+            String name, ClientAction action) throws IOException {
         awaitHistoryReady();
         AtomicReference<RestoreApplyStatistics> statistics = new AtomicReference<>();
         AtomicReference<LumiServerTickProbe> tickProbe = new AtomicReference<>();
@@ -164,7 +180,7 @@ final class LumiBehaviorOperations {
                             completed.restoreStatistics();
                     if (measured.isEmpty()) {
                         failure.compareAndSet(null, new AssertionError(
-                                "Restore completed without apply statistics"));
+                                name + " completed without apply statistics"));
                     } else {
                         statistics.set(measured.orElseThrow());
                     }
@@ -178,8 +194,8 @@ final class LumiBehaviorOperations {
         long uiStarted = System.nanoTime();
         long maximumServerTick;
         try {
-            awaitOperation("restore_" + name,
-                    send("restore_" + name, () -> restoreFromUi(target), uiStarted),
+            awaitOperation(name,
+                    send(name, action, uiStarted),
                     failure, uiStarted,
                     () -> peakHeap[0] = Math.max(peakHeap[0], usedHeap(jvm)));
         } finally {
@@ -191,10 +207,11 @@ final class LumiBehaviorOperations {
         }
         RestoreApplyStatistics measured = statistics.get();
         if (measured == null) {
-            throw new AssertionError("Restore metrics observer did not complete");
+            throw new AssertionError(name + " metrics observer did not complete");
         }
         if (acceptedNanos.get() == 0 || terminalNanos.get() == 0) {
-            throw new AssertionError("Restore server timing observer did not complete");
+            throw new AssertionError(
+                    name + " server timing observer did not complete");
         }
         return new LumiRestoreMeasurement(
                 elapsedMillis(acceptedNanos.get(), terminalNanos.get()),
