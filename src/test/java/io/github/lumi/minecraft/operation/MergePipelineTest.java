@@ -76,8 +76,8 @@ class MergePipelineTest {
 
         assertEquals(result.commit(), refs.read(currentRef.name()).orElseThrow().commit());
         assertTrue(journals.read().isEmpty());
-        assertEquals("minecraft:stone", world.target.sections().get(KEY).blockStates().get(0));
-        assertEquals("minecraft:gold_block", world.target.sections().get(KEY).blockStates().get(1));
+        assertEquals("minecraft:stone", world.target.blockStates().get(0));
+        assertEquals("minecraft:gold_block", world.target.blockStates().get(1));
     }
 
     private static Commit commit(
@@ -100,9 +100,9 @@ class MergePipelineTest {
     }
 
     private static final class RecordingApply implements WorldStateApply {
-        private State target;
+        private SectionBlob target;
         @Override public PreparedState prepare(State state) {
-            if (target == null) target = state;
+            if (target == null) target = state.sections().get(KEY);
             return new Prepared(state);
         }
         @Override public ApplySession begin(PreparedState ignored) { return new Session(); }
