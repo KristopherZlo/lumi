@@ -125,9 +125,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
             if (!checked.add(chunk)) {
                 continue;
             }
-            if (level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) != null
-                    || level.getChunkSource().chunkMap.getUpdatingChunkIfPresent(
-                            ChunkPos.asLong(chunk.x(), chunk.z())) != null) {
+            if (level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) != null) {
                 resident.add(chunk);
             }
         }
