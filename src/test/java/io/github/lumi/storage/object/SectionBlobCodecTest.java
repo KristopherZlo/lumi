@@ -28,6 +28,23 @@ class SectionBlobCodecTest {
         SectionBlob decoded = codec.decode(codec.encode(section));
 
         assertEquals(section, decoded);
+        assertEquals(3, java.util.stream.StreamSupport.stream(
+                decoded.distinctBlockStates().spliterator(), false).count());
+    }
+
+    @Test
+    void paletteBackedSectionCopiesMutableInputs() {
+        List<String> palette = new ArrayList<>(List.of(
+                "minecraft:air", "minecraft:stone"));
+        short[] indexes = new short[SectionBlob.BLOCK_COUNT];
+        indexes[17] = 1;
+
+        SectionBlob section = SectionBlob.fromPalette(palette, indexes, Map.of());
+        palette.set(0, "minecraft:dirt");
+        indexes[17] = 0;
+
+        assertEquals("minecraft:air", section.blockStates().get(0));
+        assertEquals("minecraft:stone", section.blockStates().get(17));
     }
 
     @Test

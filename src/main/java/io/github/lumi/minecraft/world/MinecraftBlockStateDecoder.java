@@ -5,7 +5,6 @@ import io.github.lumi.domain.model.SectionBlob;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
@@ -63,7 +62,7 @@ public final class MinecraftBlockStateDecoder {
     /** Validates persistent types without allocating a native section container. */
     public void validate(SectionBlob source) throws IOException {
         Objects.requireNonNull(source, "source");
-        for (String encoded : new HashSet<>(source.blockStates())) {
+        for (String encoded : source.distinctBlockStates()) {
             decodeState(encoded);
         }
         validateBlockEntities(source);

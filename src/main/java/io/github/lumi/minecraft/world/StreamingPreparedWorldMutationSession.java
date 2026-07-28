@@ -6,7 +6,6 @@ import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -288,7 +287,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     private static long estimatedRawBytes(SectionBlob section) {
         long bytes = RAW_SECTION_BYTES;
-        for (String state : new HashSet<>(section.blockStates())) {
+        for (String state : section.distinctBlockStates()) {
             bytes = addEstimated(bytes, 48L + 2L * state.length());
         }
         for (var nbt : section.blockEntities().values()) {

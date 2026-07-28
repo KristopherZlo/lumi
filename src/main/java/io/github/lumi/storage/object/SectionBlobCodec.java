@@ -59,13 +59,13 @@ public final class SectionBlobCodec {
                 palette.add(CanonicalBytes.readString(input, MAX_STRING_BYTES, "block state"));
             }
 
-            List<String> states = new ArrayList<>(SectionBlob.BLOCK_COUNT);
+            short[] states = new short[SectionBlob.BLOCK_COUNT];
             for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
                 int paletteIndex = input.readUnsignedShort();
                 if (paletteIndex >= paletteSize) {
                     throw new IOException("Block state references missing palette entry");
                 }
-                states.add(palette.get(paletteIndex));
+                states[index] = (short) paletteIndex;
             }
 
             int blockEntityCount = input.readInt();
@@ -86,7 +86,7 @@ public final class SectionBlobCodec {
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in section blob");
             }
-            return new SectionBlob(states, blockEntities);
+            return SectionBlob.fromPalette(palette, states, blockEntities);
         } catch (java.io.EOFException truncated) {
             throw new IOException("Truncated section blob", truncated);
         }
