@@ -44,6 +44,7 @@ final class LumiExistingWorldBranchSwitchScenario {
                 "benchmark-existing-initial", endpoints.get(0));
         BranchRef latest = operations.createBranch(
                 "benchmark-existing-latest", endpoints.get(1));
+        ui.completeOnboardingIfShown();
         operations.switchBranch("existing_setup_latest", latest.name());
         assertEndpoint("existing_setup_latest", latest);
         report.event("benchmark", "existing_world_branch_switch", "started",
