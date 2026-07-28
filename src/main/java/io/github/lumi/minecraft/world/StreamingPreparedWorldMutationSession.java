@@ -6,11 +6,13 @@ import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -37,6 +39,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private final Executor background;
     private final Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads;
     private final RestoreApplyMetrics metrics = new RestoreApplyMetrics();
+    private final Set<ChunkCoordinate> slabDurable = new HashSet<>();
     private int batchStart;
     private int batchEnd;
     private int slabEnd;
@@ -114,12 +117,16 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     private boolean prepareNext() throws IOException {
         if (current != null) {
+            Set<ChunkCoordinate> durable = currentKind == BatchKind.SECTIONS
+                    ? current.durableStoredChunks() : Set.of();
             current.close();
             current = null;
             if (currentKind == BatchKind.SECTIONS) {
+                slabDurable.addAll(durable);
                 batchStart = batchEnd;
                 if (batchStart == slabEnd) {
                     slab = null;
+                    slabDurable.clear();
                 }
             } else if (currentKind == BatchKind.ENTITIES) {
                 entityBatchStart = entityBatchEnd;
@@ -151,9 +158,14 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 slabEnd = batchStart + slab.sectionKeys().size();
             }
             batchEnd = windowEnd(plan.sectionKeys(), batchStart, slabEnd);
+            boolean lastWindow = batchEnd == slabEnd;
             current = new PreparedWorldMutationSession(
                     nextSectionWindow(), world, System::nanoTime,
-                    chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN), metrics);
+                    chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN), metrics,
+                    lastWindow
+                            ? PreparedWorldMutationSession.PersistenceMode.SLAB_END
+                            : PreparedWorldMutationSession.PersistenceMode.STAGE,
+                    slab, Set.copyOf(slabDurable));
             currentKind = BatchKind.SECTIONS;
             phase = Phase.APPLYING;
             return true;

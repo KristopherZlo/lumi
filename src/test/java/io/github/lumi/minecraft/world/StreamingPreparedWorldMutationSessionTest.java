@@ -77,6 +77,8 @@ class StreamingPreparedWorldMutationSessionTest {
         SectionBlob section = stoneSection();
         ControlledExecutor background = new ControlledExecutor();
         FakeWorld world = new FakeWorld(section);
+        world.directlyStored = Set.of(
+                new ChunkCoordinate(0, 0), new ChunkCoordinate(32, 0));
 
         try (var session = session(plan(keys, section), world, background)) {
             assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -84,18 +86,35 @@ class StreamingPreparedWorldMutationSessionTest {
 
             background.runNext();
             assertFalse(session.applyUntil(Long.MAX_VALUE));
-            assertEquals(List.of(32), world.persistenceWindowSizes);
+            assertEquals(List.of(32), world.persistenceWindowSizes());
+            assertEquals(PreparedWorldMutationSession.PersistenceMode.STAGE,
+                    world.persistenceCalls.getFirst().mode());
+            assertEquals(32,
+                    world.persistenceCalls.getFirst().verificationSections());
+            assertEquals(Set.of(new ChunkCoordinate(0, 0)),
+                    world.persistenceCalls.getFirst().alreadyDurable());
             assertEquals(1, background.submitted);
+
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(1, world.persistenceCalls.size());
 
             world.persistence.getFirst().complete = true;
             assertFalse(session.applyUntil(Long.MAX_VALUE));
-            assertEquals(List.of(32, 8), world.persistenceWindowSizes);
+            assertEquals(List.of(32, 8), world.persistenceWindowSizes());
+            PersistenceCall commit = world.persistenceCalls.getLast();
+            assertEquals(PreparedWorldMutationSession.PersistenceMode.SLAB_END,
+                    commit.mode());
+            assertEquals(40, commit.verificationSections());
+            assertEquals(Set.of(
+                    new ChunkCoordinate(0, 0), new ChunkCoordinate(32, 0)),
+                    commit.alreadyDurable());
             assertEquals(1, world.persistence.getFirst().closeCalls);
             assertEquals(1, background.submitted);
 
             world.persistence.getLast().complete = true;
             assertTrue(session.applyUntil(Long.MAX_VALUE));
             assertEquals(1, background.submitted);
+            assertEquals(1, world.persistence.getLast().closeCalls);
         }
     }
 
@@ -134,6 +153,7 @@ class StreamingPreparedWorldMutationSessionTest {
                     ChunkLoadAccess.Readiness.TERRAIN), requested);
         }
         assertEquals(0, chunks.active);
+        assertEquals(1, world.persistence.getLast().closeCalls);
     }
 
     @Test
@@ -150,7 +170,9 @@ class StreamingPreparedWorldMutationSessionTest {
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             background.runNext();
             assertFalse(session.applyUntil(Long.MAX_VALUE));
-            assertEquals(List.of(1_024), world.persistenceWindowSizes);
+            assertEquals(List.of(1_024), world.persistenceWindowSizes());
+            assertEquals(PreparedWorldMutationSession.PersistenceMode.SLAB_END,
+                    world.persistenceCalls.getFirst().mode());
             assertEquals(1, background.submitted);
 
             assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -161,11 +183,11 @@ class StreamingPreparedWorldMutationSessionTest {
             assertEquals(2, background.submitted);
             assertEquals(1, background.pending());
             assertEquals(1, world.persistence.getFirst().closeCalls);
-            assertEquals(List.of(1_024), world.persistenceWindowSizes);
+            assertEquals(List.of(1_024), world.persistenceWindowSizes());
 
             background.runNext();
             assertFalse(session.applyUntil(Long.MAX_VALUE));
-            assertEquals(List.of(1_024, 1), world.persistenceWindowSizes);
+            assertEquals(List.of(1_024, 1), world.persistenceWindowSizes());
         }
     }
 
@@ -183,7 +205,7 @@ class StreamingPreparedWorldMutationSessionTest {
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             background.runNext();
             assertFalse(session.applyUntil(Long.MAX_VALUE));
-            assertEquals(List.of(1), world.persistenceWindowSizes);
+            assertEquals(List.of(1), world.persistenceWindowSizes());
 
             world.persistence.getFirst().complete = true;
             assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -205,7 +227,7 @@ class StreamingPreparedWorldMutationSessionTest {
             background.runNext();
             assertFalse(session.applyUntil(Long.MAX_VALUE));
 
-            assertEquals(List.of(2), world.persistenceWindowSizes);
+            assertEquals(List.of(2), world.persistenceWindowSizes());
             assertEquals(1, background.submitted);
         }
     }
@@ -222,7 +244,7 @@ class StreamingPreparedWorldMutationSessionTest {
             background.runNext();
             assertFalse(session.applyUntil(Long.MAX_VALUE));
 
-            assertEquals(List.of(1), world.persistenceWindowSizes);
+            assertEquals(List.of(1), world.persistenceWindowSizes());
         }
     }
 
@@ -346,7 +368,8 @@ class StreamingPreparedWorldMutationSessionTest {
     private static final class FakeWorld implements PreparedWorldAccess {
         private final SectionBlob captured;
         private final List<ManualPersistence> persistence = new ArrayList<>();
-        private final List<Integer> persistenceWindowSizes = new ArrayList<>();
+        private final List<PersistenceCall> persistenceCalls = new ArrayList<>();
+        private Set<ChunkCoordinate> directlyStored = Set.of();
 
         private FakeWorld(SectionBlob captured) {
             this.captured = captured;
@@ -370,10 +393,55 @@ class StreamingPreparedWorldMutationSessionTest {
                 PreparedMinecraftState target,
                 Set<ChunkCoordinate> alreadyDurable,
                 boolean playerSpawnsIncluded) {
-            persistenceWindowSizes.add(target.sectionKeys().size());
+            return persistence(PreparedWorldMutationSession.PersistenceMode.COMPLETE,
+                    target, target, alreadyDurable);
+        }
+
+        @Override
+        public WorldPersistenceSession beginPersistenceStage(
+                PreparedMinecraftState writeTarget,
+                Set<ChunkCoordinate> alreadyDurable) {
+            return persistence(PreparedWorldMutationSession.PersistenceMode.STAGE,
+                    writeTarget, writeTarget, alreadyDurable);
+        }
+
+        @Override
+        public WorldPersistenceSession beginPersistenceCommit(
+                PreparedMinecraftState writeTarget,
+                PreparedMinecraftState verificationTarget,
+                Set<ChunkCoordinate> alreadyDurable) {
+            return persistence(PreparedWorldMutationSession.PersistenceMode.SLAB_END,
+                    writeTarget, verificationTarget, alreadyDurable);
+        }
+
+        private WorldPersistenceSession persistence(
+                PreparedWorldMutationSession.PersistenceMode mode,
+                PreparedMinecraftState writeTarget,
+                PreparedMinecraftState verificationTarget,
+                Set<ChunkCoordinate> alreadyDurable) {
+            persistenceCalls.add(new PersistenceCall(
+                    mode, writeTarget.sectionKeys().size(),
+                    verificationTarget.sectionKeys().size(), alreadyDurable));
             ManualPersistence next = new ManualPersistence();
             persistence.add(next);
             return next;
+        }
+
+        private List<Integer> persistenceWindowSizes() {
+            return persistenceCalls.stream().map(PersistenceCall::writeSections).toList();
+        }
+
+        @Override
+        public CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>>
+                applyStoredChunks(
+                        Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> chunks,
+                        Set<ChunkCoordinate> entityChunks) {
+            Map<ChunkCoordinate, StoredChunkApplyResult> results = new LinkedHashMap<>();
+            chunks.keySet().forEach(chunk -> results.put(chunk,
+                    directlyStored.contains(chunk)
+                            ? StoredChunkApplyResult.APPLIED
+                            : StoredChunkApplyResult.FALLBACK));
+            return CompletableFuture.completedFuture(Map.copyOf(results));
         }
 
         @Override public List<Integer> blockEntityIndexes(SectionKey key) {
@@ -396,6 +464,16 @@ class StreamingPreparedWorldMutationSessionTest {
         @Override public void applyPlayerSpawns(Map<UUID, PlayerSpawn> spawns) { }
         @Override public boolean matchesPlayerSpawns(Map<UUID, PlayerSpawn> spawns) {
             return true;
+        }
+    }
+
+    private record PersistenceCall(
+            PreparedWorldMutationSession.PersistenceMode mode,
+            int writeSections,
+            int verificationSections,
+            Set<ChunkCoordinate> alreadyDurable) {
+        private PersistenceCall {
+            alreadyDurable = Set.copyOf(alreadyDurable);
         }
     }
 

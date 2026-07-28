@@ -2,7 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import java.io.IOException;
 
-/** Advances one verified-world persistence barrier incrementally within tick deadlines. */
+/** Advances one verified-world persistence stage or final barrier within tick deadlines. */
 @FunctionalInterface
 public interface WorldPersistenceSession extends AutoCloseable {
     WorldPersistenceSession COMPLETE = deadlineNanos -> true;
@@ -13,7 +13,7 @@ public interface WorldPersistenceSession extends AutoCloseable {
     @Override
     default void close() { }
 
-    /** Wall time spent writing, forcing and rereading one loaded Restore batch. */
+    /** Wall time spent writing, synchronizing and optionally rereading one Restore stage. */
     record Timings(long writeNanos, long syncNanos, long verificationNanos) {
         public static final Timings EMPTY = new Timings(0, 0, 0);
 

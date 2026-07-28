@@ -29,17 +29,19 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
 import net.minecraft.world.level.storage.TagValueInput;
 
-/** Forces one verified loaded Restore batch through vanilla durable storage. */
+/** Stages or forces one loaded Restore section/entity persistence boundary. */
 final class MinecraftRestorePersistenceSession implements WorldPersistenceSession {
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
     private final List<ChunkCoordinate> chunks;
+    private final List<ChunkCoordinate> verificationChunks;
     private final List<EntityChunkKey> entityChunks;
     private final List<PlayerTarget> players;
     private final Set<ChunkCoordinate> relightChunks;
     private final SimpleRegionStorage entityStorage;
     private final MinecraftPersistedBatchVerifier verifier;
     private final boolean poiSyncRequired;
+    private final boolean forceAndVerify;
     private int nextChunk;
     private int nextEntityChunk;
     private int nextPlayer;
@@ -56,35 +58,38 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             Executor background,
             MinecraftStoredChunkAccess storedChunks,
             MinecraftEntityChunkCapture entityCapture,
-            PreparedMinecraftState target,
+            PreparedMinecraftState writeTarget,
+            PreparedMinecraftState verificationTarget,
             Set<ChunkCoordinate> alreadyDurable,
-            boolean savePlayers) {
+            boolean savePlayers,
+            boolean forceAndVerify) {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         Objects.requireNonNull(background, "background");
         Objects.requireNonNull(storedChunks, "storedChunks");
         Objects.requireNonNull(entityCapture, "entityCapture");
-        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(writeTarget, "writeTarget");
+        Objects.requireNonNull(verificationTarget, "verificationTarget");
         Objects.requireNonNull(alreadyDurable, "alreadyDurable");
+        this.forceAndVerify = forceAndVerify;
 
         Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> grouped =
-                new LinkedHashMap<>();
+                groupedSections(writeTarget, alreadyDurable);
+        Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> verification =
+                verificationTarget == writeTarget
+                        ? grouped : groupedSections(verificationTarget, alreadyDurable);
         Set<ChunkCoordinate> relight = new HashSet<>();
-        target.sectionKeys().forEach(key -> {
+        writeTarget.sectionKeys().forEach(key -> {
             ChunkCoordinate chunk = ChunkCoordinate.from(key);
             if (!alreadyDurable.contains(chunk)) {
-                grouped.computeIfAbsent(chunk, ignored -> new LinkedHashMap<>())
-                        .put(key, target.sections().get(key));
-                DecodedSection section = target.sections().get(key);
+                DecodedSection section = writeTarget.sections().get(key);
                 if (!section.hasPreparedDelta() || section.preparedDelta().lightChanged()) {
                     relight.add(chunk);
                 }
             }
         });
-        grouped.replaceAll((ignored, sections) -> Map.copyOf(sections));
-        Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> chunkTargets =
-                Map.copyOf(grouped);
         chunks = List.copyOf(grouped.keySet());
+        verificationChunks = List.copyOf(verification.keySet());
         relightChunks = Set.copyOf(relight);
         var poiAccess = (SectionStoragePersistenceAccessor) level.getChunkSource()
                 .getPoiManager();
@@ -95,18 +100,38 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         poiSyncRequired = targetPoiChanged || chunks.stream().anyMatch(chunk ->
                 poiAccess.lumi$dirtyChunks().contains(
                         new ChunkPos(chunk.x(), chunk.z()).toLong()));
-        entityChunks = target.entityKeys();
-        Map<EntityChunkKey, EntityChunkBlob> entityTargets = target.source().entities();
+        entityChunks = writeTarget.entityKeys();
+        Map<EntityChunkKey, EntityChunkBlob> entityTargets =
+                verificationTarget.source().entities();
         players = savePlayers ? level.getServer().getPlayerList().getPlayers().stream()
-                .map(player -> playerTarget(player, target.source().playerSpawns()))
+                .map(player -> playerTarget(player, writeTarget.source().playerSpawns()))
                 .toList() : List.of();
         entityStorage = entityChunks.isEmpty() ? null
                 : ((EntityStoragePersistenceAccessor) entityAccess().lumi$permanentStorage())
                         .lumi$simpleRegionStorage();
-        verifier = new MinecraftPersistedBatchVerifier(
-                level, background, storedChunks, entityCapture, chunkTargets,
-                entityTargets, chunks, entityChunks, entityStorage);
+        verifier = forceAndVerify
+                ? new MinecraftPersistedBatchVerifier(
+                        level, background, storedChunks, entityCapture, verification,
+                        entityTargets, verificationChunks, entityChunks, entityStorage)
+                : null;
         phaseStartedNanos = System.nanoTime();
+    }
+
+    private static Map<ChunkCoordinate, Map<SectionKey, DecodedSection>>
+            groupedSections(
+                    PreparedMinecraftState target,
+                    Set<ChunkCoordinate> alreadyDurable) {
+        Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> grouped =
+                new LinkedHashMap<>();
+        target.sectionKeys().forEach(key -> {
+            ChunkCoordinate chunk = ChunkCoordinate.from(key);
+            if (!alreadyDurable.contains(chunk)) {
+                grouped.computeIfAbsent(chunk, ignored -> new LinkedHashMap<>())
+                        .put(key, target.sections().get(key));
+            }
+        });
+        grouped.replaceAll((ignored, sections) -> Map.copyOf(sections));
+        return grouped;
     }
 
     @Override
@@ -224,8 +249,9 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private boolean synchronizeStorage() throws IOException {
         if (synchronization == null) {
             var chunkSync = chunks.isEmpty()
+                    && (!forceAndVerify || verificationChunks.isEmpty())
                     ? CompletableFuture.completedFuture(null)
-                    : level.getChunkSource().chunkMap.synchronize(true);
+                    : level.getChunkSource().chunkMap.synchronize(forceAndVerify);
             var poiSync = !poiSyncRequired
                     ? CompletableFuture.completedFuture(null)
                     : ((SectionStoragePersistenceAccessor) level.getChunkSource().getPoiManager())
@@ -240,7 +266,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         }
         MinecraftPersistenceFuture.join(
                 synchronization, "Restore storage synchronization");
-        transitionTo(Phase.VERIFYING);
+        transitionTo(forceAndVerify ? Phase.VERIFYING : Phase.COMPLETE);
         return true;
     }
 

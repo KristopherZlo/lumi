@@ -55,10 +55,37 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             PreparedMinecraftState target,
             Set<ChunkCoordinate> alreadyDurable,
             boolean playerSpawnsIncluded) {
+        return beginPersistence(
+                target, target, alreadyDurable, playerSpawnsIncluded, true);
+    }
+
+    @Override
+    public WorldPersistenceSession beginPersistenceStage(
+            PreparedMinecraftState writeTarget,
+            Set<ChunkCoordinate> alreadyDurable) {
+        return beginPersistence(
+                writeTarget, writeTarget, alreadyDurable, false, false);
+    }
+
+    @Override
+    public WorldPersistenceSession beginPersistenceCommit(
+            PreparedMinecraftState writeTarget,
+            PreparedMinecraftState verificationTarget,
+            Set<ChunkCoordinate> alreadyDurable) {
+        return beginPersistence(
+                writeTarget, verificationTarget, alreadyDurable, false, true);
+    }
+
+    private WorldPersistenceSession beginPersistence(
+            PreparedMinecraftState writeTarget,
+            PreparedMinecraftState verificationTarget,
+            Set<ChunkCoordinate> alreadyDurable,
+            boolean playerSpawnsIncluded,
+            boolean forceAndVerify) {
         return new MinecraftRestorePersistenceSession(
                 level, freeze, background, storedChunks, entities,
-                target, alreadyDurable,
-                playerSpawnsIncluded);
+                writeTarget, verificationTarget, alreadyDurable,
+                playerSpawnsIncluded, forceAndVerify);
     }
 
     @Override

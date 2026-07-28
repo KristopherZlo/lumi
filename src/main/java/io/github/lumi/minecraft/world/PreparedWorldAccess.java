@@ -60,6 +60,21 @@ public interface PreparedWorldAccess {
             Set<ChunkCoordinate> alreadyDurable,
             boolean playerSpawnsIncluded);
 
+    /** Stages one section window without the slab's final forced reread. */
+    default WorldPersistenceSession beginPersistenceStage(
+            PreparedMinecraftState writeTarget,
+            Set<ChunkCoordinate> alreadyDurable) {
+        return beginPersistence(writeTarget, alreadyDurable, false);
+    }
+
+    /** Writes the last window, then forces and rereads the complete section slab. */
+    default WorldPersistenceSession beginPersistenceCommit(
+            PreparedMinecraftState writeTarget,
+            PreparedMinecraftState verificationTarget,
+            Set<ChunkCoordinate> alreadyDurable) {
+        return beginPersistence(writeTarget, alreadyDurable, false);
+    }
+
     List<Integer> blockEntityIndexes(SectionKey key) throws IOException;
 
     void removeBlockEntity(SectionKey key, int localIndex) throws IOException;

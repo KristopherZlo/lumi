@@ -529,6 +529,10 @@ class PreparedWorldMutationSessionTest {
             assertEquals(List.of(
                     ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES,
                     ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES), requested);
+            assertEquals(List.of(
+                    PreparedWorldMutationSession.PersistenceMode.COMPLETE,
+                    PreparedWorldMutationSession.PersistenceMode.COMPLETE),
+                    world.persistenceModes);
 
             world.lightingComplete = true;
             assertTrue(session.applyUntil(Long.MAX_VALUE));
@@ -632,6 +636,8 @@ class PreparedWorldMutationSessionTest {
         private boolean lightingComplete = true;
         private int lightingChecks;
         private final List<Boolean> persistencePlayerSpawnFlags = new ArrayList<>();
+        private final List<PreparedWorldMutationSession.PersistenceMode> persistenceModes =
+                new ArrayList<>();
 
         private FakeWorld(AtomicLong clock, SectionBlob captured) {
             this.clock = clock;
@@ -650,6 +656,7 @@ class PreparedWorldMutationSessionTest {
                 Set<ChunkCoordinate> alreadyDurable,
                 boolean playerSpawnsIncluded) {
             persistenceStarts++;
+            persistenceModes.add(PreparedWorldMutationSession.PersistenceMode.COMPLETE);
             persistencePlayerSpawnFlags.add(playerSpawnsIncluded);
             return persistence;
         }
