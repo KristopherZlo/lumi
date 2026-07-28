@@ -179,7 +179,10 @@ Native preparation выполняется off-thread slabs. Для slab дейс
 
 `sections ≤ 1024`, `estimated_heap ≤ 128 MiB`, `durable_window ≤ 32 chunks`.
 
-Перед разбиением на окна только уже доступные FULL chunks получают player-distance priority; merely-updating holders остаются в region-local порядке холодного I/O.
+Перед разбиением на окна только уже доступные FULL chunks получают player-distance priority;
+merely-updating holders остаются в region-local порядке холодного I/O. Entity chunks
+детерминированно группируются по ближайшему к игроку region и локальному индексу файла,
+чтобы последовательные batches переиспользовали один entity region без изменения durability-границ.
 
 Оценка памяти консервативно суммирует raw section, native section, prepared delta, transient preparation и NBT expansion. Это инженерная оценка, не жёсткий heap cap: одновременно существуют JVM objects, futures, Minecraft state и GC-reclaimable allocation.
 

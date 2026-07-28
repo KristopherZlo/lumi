@@ -1,14 +1,17 @@
 package io.github.lumi.minecraft.world;
 
+import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.HistoryKey;
+import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
-import java.util.Objects;
-import java.util.function.LongConsumer;
-import java.util.concurrent.Executor;
-import java.util.concurrent.CompletableFuture;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.function.LongConsumer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
@@ -92,12 +95,13 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
 
     private PreparedMinecraftPlanState prioritize(PreparedMinecraftPlanState plan) {
         PrioritySnapshot priority = prioritySnapshot(plan.sectionKeys());
-        return plan.withSectionKeys(prioritize(
-                plan.sectionKeys(), priority.players(), priority.resident()));
+        return plan.withOrder(
+                prioritize(plan.sectionKeys(), priority.players(), priority.resident()),
+                prioritizeEntities(plan.entityKeys(), priority.players()));
     }
 
     private PrioritySnapshot prioritySnapshot(
-            List<io.github.lumi.domain.model.SectionKey> sections) {
+            List<SectionKey> sections) {
         if (level.getServer().isSameThread()) {
             return snapshotPriority(sections);
         }
@@ -132,28 +136,19 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         return new PrioritySnapshot(players, Set.copyOf(resident));
     }
 
-    static List<io.github.lumi.domain.model.SectionKey> prioritize(
-            List<io.github.lumi.domain.model.SectionKey> sections,
+    static List<SectionKey> prioritize(
+            List<SectionKey> sections,
             List<ChunkCoordinate> players,
             Set<ChunkCoordinate> resident) {
-        Comparator<io.github.lumi.domain.model.SectionKey> visibleOrder =
+        Comparator<SectionKey> visibleOrder =
                 Comparator.comparingLong(key -> distanceSquared(key, players));
         visibleOrder = visibleOrder
-                .thenComparingInt(io.github.lumi.domain.model.SectionKey::chunkX)
-                .thenComparingInt(io.github.lumi.domain.model.SectionKey::chunkZ)
-                .thenComparingInt(io.github.lumi.domain.model.SectionKey::sectionY);
-        Comparator<io.github.lumi.domain.model.SectionKey> storedOrder =
-                Comparator.comparingLong(key -> regionDistanceSquared(key, players));
-        storedOrder = storedOrder
-                .thenComparingInt(key -> Math.floorDiv(
-                        key.chunkZ(), ChunkPos.REGION_SIZE))
-                .thenComparingInt(key -> Math.floorDiv(
-                        key.chunkX(), ChunkPos.REGION_SIZE))
-                .thenComparingInt(key -> Math.floorMod(
-                        key.chunkZ(), ChunkPos.REGION_SIZE))
-                .thenComparingInt(key -> Math.floorMod(
-                        key.chunkX(), ChunkPos.REGION_SIZE))
-                .thenComparingInt(io.github.lumi.domain.model.SectionKey::sectionY);
+                .thenComparingInt(SectionKey::chunkX)
+                .thenComparingInt(SectionKey::chunkZ)
+                .thenComparingInt(SectionKey::sectionY);
+        Comparator<SectionKey> storedOrder = MinecraftWorldStateApply
+                .<SectionKey>regionOrder(players)
+                .thenComparingInt(SectionKey::sectionY);
         return java.util.stream.Stream.concat(
                 sections.stream()
                         .filter(key -> resident.contains(ChunkCoordinate.from(key)))
@@ -164,8 +159,29 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
                 .toList();
     }
 
+    static List<EntityChunkKey> prioritizeEntities(
+            List<EntityChunkKey> entities,
+            List<ChunkCoordinate> players) {
+        return entities.stream().sorted(regionOrder(players)).toList();
+    }
+
+    private static <T extends HistoryKey> Comparator<T> regionOrder(
+            List<ChunkCoordinate> players) {
+        Comparator<T> order = Comparator.comparingLong(
+                key -> regionDistanceSquared(key, players));
+        return order
+                .thenComparingInt(key -> Math.floorDiv(
+                        key.chunkZ(), ChunkPos.REGION_SIZE))
+                .thenComparingInt(key -> Math.floorDiv(
+                        key.chunkX(), ChunkPos.REGION_SIZE))
+                .thenComparingInt(key -> Math.floorMod(
+                        key.chunkZ(), ChunkPos.REGION_SIZE))
+                .thenComparingInt(key -> Math.floorMod(
+                        key.chunkX(), ChunkPos.REGION_SIZE));
+    }
+
     private static long distanceSquared(
-            io.github.lumi.domain.model.SectionKey key,
+            SectionKey key,
             List<ChunkCoordinate> players) {
         long nearest = Long.MAX_VALUE;
         for (ChunkCoordinate player : players) {
@@ -177,7 +193,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     }
 
     private static long regionDistanceSquared(
-            io.github.lumi.domain.model.SectionKey key,
+            HistoryKey key,
             List<ChunkCoordinate> players) {
         int regionX = Math.floorDiv(key.chunkX(), ChunkPos.REGION_SIZE);
         int regionZ = Math.floorDiv(key.chunkZ(), ChunkPos.REGION_SIZE);

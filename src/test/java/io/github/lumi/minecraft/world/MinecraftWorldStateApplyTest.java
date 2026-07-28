@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionKey;
 import java.util.List;
 import java.util.Set;
@@ -34,5 +35,23 @@ class MinecraftWorldStateApplyTest {
                 MinecraftWorldStateApply.prioritize(
                         List.of(nextRegion, lateRow, earlyRow),
                         List.of(new ChunkCoordinate(0, 0)), Set.of()));
+    }
+
+    @Test
+    void groupsEntityChunksByNearestRegionAndRegionFileIndex() {
+        EntityChunkKey earlyRow = new EntityChunkKey(31, 0);
+        EntityChunkKey lateRow = new EntityChunkKey(0, 31);
+        EntityChunkKey negativeRegionStart = new EntityChunkKey(-32, 0);
+        EntityChunkKey negativeRegionEnd = new EntityChunkKey(-1, 0);
+        EntityChunkKey nextRegion = new EntityChunkKey(32, 0);
+
+        assertEquals(List.of(
+                        earlyRow, lateRow,
+                        negativeRegionStart, negativeRegionEnd, nextRegion),
+                MinecraftWorldStateApply.prioritizeEntities(
+                        List.of(
+                                nextRegion, negativeRegionEnd, lateRow,
+                                negativeRegionStart, earlyRow),
+                        List.of(new ChunkCoordinate(0, 0))));
     }
 }

@@ -30,9 +30,12 @@ record PreparedMinecraftPlanState(
         }
     }
 
-    PreparedMinecraftPlanState withSectionKeys(List<SectionKey> ordered) {
+    PreparedMinecraftPlanState withOrder(
+            List<SectionKey> orderedSections,
+            List<EntityChunkKey> orderedEntities) {
         return new PreparedMinecraftPlanState(
-                source, base, entities, baseEntities, ordered, entityKeys);
+                source, base, entities, baseEntities,
+                orderedSections, orderedEntities);
     }
 
     PreparedMinecraftPlanState reversed() {
