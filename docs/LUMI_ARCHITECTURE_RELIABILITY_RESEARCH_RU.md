@@ -181,7 +181,7 @@ Native preparation выполняется off-thread slabs. Для slab дейс
 
 Оценка памяти консервативно суммирует raw section, native section, prepared delta, transient preparation и NBT expansion. Это инженерная оценка, не жёсткий heap cap: одновременно существуют JVM objects, futures, Minecraft state и GC-reclaimable allocation.
 
-Каждое окно проходит apply → exact verify → однократный repair при mismatch → persist → force/sync → reread. После всех окон завершается lighting; затем journal получает `WORLD_PERSISTED`, и только после этого публикуется ref/pointer. Основной автомат [RestoreOperation](../src/main/java/io/github/lumi/minecraft/operation/RestoreOperation.java):
+Каждое окно проходит apply → exact verify → staged persist и передаёт изменённые POI в vanilla storage без physical force. Последнее окно slab один раз выполняет force/sync накопленных chunk/POI writes и reread всего slab. После всех окон завершается lighting; затем journal получает `WORLD_PERSISTED`, и только после этого публикуется ref/pointer. Основной автомат [RestoreOperation](../src/main/java/io/github/lumi/minecraft/operation/RestoreOperation.java):
 
 `PREPARED → APPLYING → VERIFYING → PERSISTING → WORLD_PERSISTED → REF_PUBLISHED → COMPLETE`.
 
@@ -355,7 +355,7 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 | origin + generation working index до vanilla publication | сохраняет pre-mutation endpoint и не теряет late mutation | background writes, tickets и save gate добавляют сложность | критично для надёжности |
 | CAS refs/pointers | stale client/operation не переписывает новый HEAD | требует recovery для crash между world и pointer | оправдано |
 | двунаправленный Restore plan + journal | заранее подготовлен проверяемый return path после apply/verify/persist failure | return также может отказать и оставить `DEGRADED`; память/подготовка примерно для двух направлений | надёжность приоритетнее latency |
-| 32-chunk durable windows | ограничивает tickets/writes; 64-window в A/B ухудшил sync, app и heap | много force barriers; остаётся главным latency cost | лучший из измеренных вариантов, не конечное решение |
+| 32-chunk write windows, slab durability | ограничивает tickets/writes; 64-window в A/B ухудшил sync, app и heap | force и persisted reread остаются на границе slab | лучший из измеренных вариантов, не конечное решение |
 | estimated 128 MiB slab | ограничивает подготовку и переиспользует native decode | не является верхней границей JVM heap; 4 GiB run провалил gate | требует heap-метрики, не только estimate |
 | direct native section replacement | direct apply измеряется десятками/сотнями ms даже на больших endpoint | общая операция всё ещё ограничена loading/persistence | решение эффективно локально |
 | vanilla storage, без собственного world overlay | удаление Lumi оставляет обычный мир; неизвестные vanilla данные сохраняются | whole-world publication не атомарна, recovery зависит от journal | соответствует product constraint |

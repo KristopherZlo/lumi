@@ -93,15 +93,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         chunks = List.copyOf(grouped.keySet());
         verificationChunks = List.copyOf(verification.keySet());
         relightChunks = Set.copyOf(relight);
-        var poiAccess = (SectionStoragePersistenceAccessor) level.getChunkSource()
-                .getPoiManager();
-        boolean targetPoiChanged = grouped.values().stream()
-                .flatMap(sections -> sections.values().stream())
-                .anyMatch(section -> !section.hasPreparedDelta()
-                        || section.preparedDelta().poiIndexes().length != 0);
-        poiSyncRequired = targetPoiChanged || chunks.stream().anyMatch(chunk ->
-                poiAccess.lumi$dirtyChunks().contains(
-                        new ChunkPos(chunk.x(), chunk.z()).toLong()));
+        poiSyncRequired = forceAndVerify && !verificationChunks.isEmpty();
         entityChunks = writeTarget.entityKeys();
         Map<EntityChunkKey, EntityChunkBlob> entityTargets =
                 verificationTarget.source().entities();
@@ -257,9 +249,13 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                     || (chunks.isEmpty() && verificationChunks.isEmpty())
                     ? CompletableFuture.completedFuture(null)
                     : level.getChunkSource().chunkMap.synchronize(true);
+            var poiManager = level.getChunkSource().getPoiManager();
+            for (ChunkCoordinate chunk : chunks) {
+                poiManager.flush(new ChunkPos(chunk.x(), chunk.z()));
+            }
             var poiSync = !poiSyncRequired
                     ? CompletableFuture.completedFuture(null)
-                    : ((SectionStoragePersistenceAccessor) level.getChunkSource().getPoiManager())
+                    : ((SectionStoragePersistenceAccessor) poiManager)
                             .lumi$simpleRegionStorage().synchronize(true);
             var entitySync = entityStorage == null
                     ? CompletableFuture.completedFuture(null)
