@@ -17,6 +17,7 @@ class ObjectIdTest {
     @Test
     void rejectsNonCanonicalText() {
         assertThrows(IllegalArgumentException.class, () -> new ObjectId("ABC"));
+        assertThrows(IllegalArgumentException.class, () -> new ObjectId("A".repeat(64)));
         assertThrows(IllegalArgumentException.class, () -> new ObjectId("g".repeat(64)));
     }
 }

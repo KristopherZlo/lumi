@@ -184,6 +184,18 @@ public final class WorldObjectRepository {
             return entityCodec.decode(objects.read(id));
         }
 
+        public ChunkTree readChunk(ObjectId id) throws IOException {
+            return merkleCodec.decodeChunk(objects.read(id));
+        }
+
+        public RegionTree readRegion(ObjectId id) throws IOException {
+            return merkleCodec.decodeRegion(objects.read(id));
+        }
+
+        public DimensionTree readDimension(ObjectId id) throws IOException {
+            return merkleCodec.decodeDimension(objects.read(id));
+        }
+
         @Override
         public void close() throws IOException {
             objects.close();

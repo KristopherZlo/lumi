@@ -10,9 +10,20 @@ public record ObjectId(String hex) {
 
     public ObjectId {
         Objects.requireNonNull(hex, "hex");
-        if (!hex.matches("[0-9a-f]{64}")) {
+        if (hex.length() != HEX_LENGTH || !isLowerHex(hex)) {
             throw new IllegalArgumentException("Object ID must be 64 lowercase hexadecimal characters");
         }
+    }
+
+    private static boolean isLowerHex(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            if (character < '0' || (character > '9'
+                    && (character < 'a' || character > 'f'))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static ObjectId hash(byte[] canonicalPayload) {

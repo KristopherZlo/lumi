@@ -53,11 +53,27 @@ public final class OriginStore {
     }
 
     public synchronized Map<HistoryKey, ObjectId> entries() throws IOException {
-        if (!Files.exists(originsDirectory)) {
+        return entries(originsDirectory);
+    }
+
+    public synchronized Map<EntityChunkKey, ObjectId> entityEntries()
+            throws IOException {
+        Map<EntityChunkKey, ObjectId> entities = new HashMap<>();
+        for (var entry : entries(originsDirectory.resolve("entities")).entrySet()) {
+            if (!(entry.getKey() instanceof EntityChunkKey key)) {
+                throw new IOException("Non-entity origin in entity directory");
+            }
+            entities.put(key, entry.getValue());
+        }
+        return Map.copyOf(entities);
+    }
+
+    private Map<HistoryKey, ObjectId> entries(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
             return Map.of();
         }
         Map<HistoryKey, ObjectId> origins = new HashMap<>();
-        try (var files = Files.walk(originsDirectory)) {
+        try (var files = Files.walk(directory)) {
             for (Path file : files.filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".origin")).toList()) {
                 OriginEntry entry = decode(Files.readAllBytes(file));

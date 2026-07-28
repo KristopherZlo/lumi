@@ -44,6 +44,8 @@ class OriginStoreTest {
         assertEquals(id("entities"), store.read(entities).orElseThrow());
         assertEquals(Map.of(section, id("section"), entities, id("entities")),
                 new OriginStore(repositoryRoot).entries());
+        assertEquals(Map.of(entities, id("entities")),
+                new OriginStore(repositoryRoot).entityEntries());
     }
 
     private static ObjectId id(String value) {

@@ -164,12 +164,7 @@ final class EntityRestorePlanner {
 
     private Map<EntityChunkKey, ObjectId> entityOrigins() throws IOException {
         if (entityOrigins == null) {
-            entityOrigins = new HashMap<>();
-            for (var entry : origins.entries().entrySet()) {
-                if (entry.getKey() instanceof EntityChunkKey key) {
-                    entityOrigins.put(key, entry.getValue());
-                }
-            }
+            entityOrigins = origins.entityEntries();
         }
         return entityOrigins;
     }

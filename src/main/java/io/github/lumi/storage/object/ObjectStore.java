@@ -344,11 +344,15 @@ public final class ObjectStore {
 
         public byte[] read(ObjectId id) throws IOException {
             Objects.requireNonNull(id, "id");
+            PackedObject packed = packedObject(id);
+            if (packed != null) {
+                return packs.read(packed);
+            }
             Path path = pathFor(id);
             if (Files.exists(path)) {
                 return readLoose(id, path);
             }
-            PackedObject packed = refreshedPackedObject(id);
+            packed = refreshedPackedObject(id);
             if (packed == null) {
                 throw new java.nio.file.NoSuchFileException(path.toString());
             }

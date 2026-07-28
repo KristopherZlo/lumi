@@ -25,25 +25,27 @@ public final class WorldObjectGraph {
         Set<ObjectId> reachable = new HashSet<>();
         Map<HistoryKey, ObjectId> leaves = new HashMap<>();
         reachable.add(root);
-        for (var regionEntry : objects.readDimension(root).regions().entrySet()) {
-            ObjectId regionId = regionEntry.getValue();
-            reachable.add(regionId);
-            int regionChunkX = Math.multiplyExact(regionEntry.getKey().x(), REGION_SIZE);
-            int regionChunkZ = Math.multiplyExact(regionEntry.getKey().z(), REGION_SIZE);
-            for (var chunkEntry : objects.readRegion(regionId).chunks().entrySet()) {
-                ObjectId chunkId = chunkEntry.getValue();
-                reachable.add(chunkId);
-                int chunkX = Math.addExact(regionChunkX, chunkEntry.getKey().x());
-                int chunkZ = Math.addExact(regionChunkZ, chunkEntry.getKey().z());
-                var chunk = objects.readChunk(chunkId);
-                chunk.sections().forEach((sectionY, sectionId) -> {
-                    reachable.add(sectionId);
-                    leaves.put(new SectionKey(chunkX, sectionY, chunkZ), sectionId);
-                });
-                chunk.entities().ifPresent(entityId -> {
-                    reachable.add(entityId);
-                    leaves.put(new EntityChunkKey(chunkX, chunkZ), entityId);
-                });
+        try (var reader = objects.beginReadSession()) {
+            for (var regionEntry : reader.readDimension(root).regions().entrySet()) {
+                ObjectId regionId = regionEntry.getValue();
+                reachable.add(regionId);
+                int regionChunkX = Math.multiplyExact(regionEntry.getKey().x(), REGION_SIZE);
+                int regionChunkZ = Math.multiplyExact(regionEntry.getKey().z(), REGION_SIZE);
+                for (var chunkEntry : reader.readRegion(regionId).chunks().entrySet()) {
+                    ObjectId chunkId = chunkEntry.getValue();
+                    reachable.add(chunkId);
+                    int chunkX = Math.addExact(regionChunkX, chunkEntry.getKey().x());
+                    int chunkZ = Math.addExact(regionChunkZ, chunkEntry.getKey().z());
+                    var chunk = reader.readChunk(chunkId);
+                    chunk.sections().forEach((sectionY, sectionId) -> {
+                        reachable.add(sectionId);
+                        leaves.put(new SectionKey(chunkX, sectionY, chunkZ), sectionId);
+                    });
+                    chunk.entities().ifPresent(entityId -> {
+                        reachable.add(entityId);
+                        leaves.put(new EntityChunkKey(chunkX, chunkZ), entityId);
+                    });
+                }
             }
         }
         return new Snapshot(reachable, leaves);
