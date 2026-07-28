@@ -229,7 +229,13 @@ merely-updating holders остаются в region-local порядке холо
 
 GC строит корни из refs, tombstones, explicit retained commits, свежих commits и всех origins, затем трассирует commit parents и world-object graph. После удаления старых недостижимых данных та же операция crash-safe упаковывает не более одной группы world objects, достижимых от durable roots; свежая недостижимая history и raw orphans остаются отдельно удаляемыми. Стоимость полной сборки линейна по достижимому commit/object graph плюс полный inventory store; scheduler запускает её off-thread только при idle, впервые через 6000 ticks, затем раз в 72000 ticks, при busy повторяет проверку через 1200 ticks.
 
-Проверки кода включают unit-тесты Save journal recovery, published apply recovery, generation-safe clear, target/return/degraded Restore, object corruption и pack publication. Интегрированный [LumiRecoveryClientGameTest](../src/gametest/java/io/github/lumi/gametest/LumiRecoveryClientGameTest.java) создаёт копию durably restored world на crash boundary и проходит recovery UI; [LumiWorldSnapshot](../src/gametest/java/io/github/lumi/gametest/LumiWorldSnapshot.java) служит oracle блоков, block entities и entities.
+Проверки кода включают unit-тесты Save journal recovery, published apply recovery,
+generation-safe clear, target/return/degraded Restore, object corruption и pack publication.
+Интегрированный [LumiRecoveryClientGameTest](../src/gametest/java/io/github/lumi/gametest/LumiRecoveryClientGameTest.java)
+проводит 40 loaded lectern POI через две 32-chunk durability windows, создаёт копию
+durably restored world на crash boundary и проходит recovery UI;
+[LumiWorldSnapshot](../src/gametest/java/io/github/lumi/gametest/LumiWorldSnapshot.java)
+служит oracle блоков, block entities и entities.
 
 ### 6.1. Обязательная fault-injection матрица
 

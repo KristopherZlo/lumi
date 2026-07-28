@@ -37,6 +37,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
@@ -72,7 +73,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
         List<BlockPos> positions;
         UUID armorStand;
         BlockPos chestPosition;
-        BlockPos poiPosition;
+        List<BlockPos> poiPositions;
         BlockPos lightPosition;
         BlockPos respawnPosition;
         int expectedBlockLight;
@@ -98,18 +99,23 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             armorStand = actions.placeArmorStands(
                     List.of(positions.get(1).above())).getFirst();
             chestPosition = positions.get(2).above();
-            poiPosition = positions.get(3).above();
+            poiPositions = positions.subList(7, 47).stream()
+                    .map(BlockPos::above)
+                    .toList();
+            require(poiPositions.stream().map(ChunkPos::new).distinct().count() == 40,
+                    "Recovery POI fixture must span exactly 40 chunks");
             lightPosition = positions.get(4).above();
             respawnPosition = positions.get(5).above();
             actions.placeBlocks(
                     "recovery_fixture_chest", Items.CHEST, List.of(chestPosition));
             fillChest(world.getServer(), chestPosition);
             actions.placeBlocks(
-                    "recovery_fixture_poi", Items.LECTERN, List.of(poiPosition));
+                    "recovery_fixture_poi", Items.LECTERN, poiPositions);
             actions.placeBlocks(
                     "recovery_fixture_light", Items.GLOWSTONE, List.of(lightPosition));
             setRespawn(world.getServer(), respawnPosition);
             context.waitTicks(2);
+            assertPois(world.getServer(), poiPositions, true, "Recovery baseline");
             expectedBlockLight = blockLight(world.getServer(), lightPosition);
             require(expectedBlockLight > 0,
                     "Recovery fixture did not create block lighting");
@@ -128,11 +134,13 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                             "player_packets_before_recovery", positions.getFirst());
             actions.destroyBlocks("recovery_fixture_break", positions);
             actions.destroyBlocks("recovery_fixture_break_special",
-                    List.of(chestPosition, poiPosition, lightPosition));
+                    List.of(chestPosition, lightPosition));
+            actions.destroyBlocks("recovery_fixture_break_pois", poiPositions);
             actions.attackEntity(
                     "recovery_fixture_remove_entity", armorStand, Items.DIAMOND_SWORD);
             setRespawn(world.getServer(), positions.get(6).above());
             context.waitTicks(2);
+            assertPois(world.getServer(), poiPositions, false, "Interrupted state");
             require(!actions.hasEntity(armorStand),
                     "Recovery fixture armor stand was not removed");
             interruptedState = saveThroughUi(
@@ -152,7 +160,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                 worldSave.getSaveDirectory())) {
             crash.captureRefs(repository);
             createPersistedCrashCopy(
-                    context, worldSave, baseline, crash, report);
+                    context, worldSave, baseline, poiPositions, crash, report);
             crash.install(worldSave.getSaveDirectory(), repository);
             interrupted = createWorldPersistedFixture(
                     repository, interruptedState, baseline);
@@ -184,7 +192,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                     elapsedMillis(recoveryAt), terminal.message());
 
             assertRecoveredWorld(
-                    recovered.getServer(), positions, chestPosition, poiPosition,
+                    recovered.getServer(), positions, chestPosition, poiPositions,
                     lightPosition, expectedBlockLight, respawnPosition);
             LumiBehaviorActions actions = new LumiBehaviorActions(
                     recovered.getServer(), report);
@@ -307,11 +315,26 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             ClientGameTestContext context,
             TestWorldSave worldSave,
             BranchRef baseline,
+            List<BlockPos> poiPositions,
             LumiCrashCopy crash,
             LumiBehaviorReport report) throws IOException {
         long started = System.nanoTime();
         try (TestSingleplayerContext restored = worldSave.open()) {
+            restored.getClientWorld().waitForChunksDownload();
             awaitHistory(context);
+            long loadedPoiChunks = restored.getServer().computeOnServer(minecraft -> {
+                var level = minecraft.getPlayerList().getPlayers().getFirst().level();
+                return poiPositions.stream()
+                        .map(ChunkPos::new)
+                        .filter(chunk -> level.getChunkSource()
+                                .getChunkNow(chunk.x, chunk.z) != null)
+                        .count();
+            });
+            require(loadedPoiChunks == poiPositions.size(),
+                    "Loaded Restore POI fixture has " + loadedPoiChunks
+                            + " of " + poiPositions.size() + " chunks");
+            assertPois(restored.getServer(), poiPositions, false,
+                    "Reopened interrupted state");
             AtomicReference<Throwable> copyFailure = new AtomicReference<>();
             AtomicReference<MutationTerminalState> terminal = new AtomicReference<>();
             restored.getServer().computeOnServer(minecraft -> {
@@ -434,7 +457,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             TestServerContext server,
             List<BlockPos> positions,
             BlockPos chestPosition,
-            BlockPos poiPosition,
+            List<BlockPos> poiPositions,
             BlockPos lightPosition,
             int expectedBlockLight,
             BlockPos respawnPosition) {
@@ -455,10 +478,6 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                             && chest.getItem(0).is(Items.DIAMOND)
                             && chest.getItem(0).getCount() == 7,
                     "Recovery did not restore exact chest contents");
-            var poi = level.getChunkSource().getPoiManager().getType(poiPosition);
-            require(poi.equals(PoiTypes.forState(level.getBlockState(poiPosition)))
-                            && poi.isPresent(),
-                    "Recovery did not restore the lectern POI");
             require(level.getBrightness(
                             LightLayer.BLOCK, lightPosition.relative(Direction.EAST))
                             == expectedBlockLight,
@@ -472,6 +491,28 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                             && respawn.forced(),
                     "Recovery did not restore player respawn data");
         });
+        assertPois(server, poiPositions, true, "Recovery");
+    }
+
+    private static void assertPois(
+            TestServerContext server,
+            List<BlockPos> positions,
+            boolean expectedPresent,
+            String phase) {
+        List<BlockPos> mismatches = server.computeOnServer(minecraft -> {
+            var level = minecraft.getPlayerList().getPlayers().getFirst().level();
+            var pois = level.getChunkSource().getPoiManager();
+            return positions.stream()
+                    .filter(position -> {
+                        var actual = pois.getType(position);
+                        return actual.isPresent() != expectedPresent
+                                || !actual.equals(PoiTypes.forState(
+                                        level.getBlockState(position)));
+                    })
+                    .toList();
+        });
+        require(mismatches.isEmpty(),
+                phase + " POI mismatch at " + mismatches);
     }
 
     private static int blockLight(TestServerContext server, BlockPos lightPosition) {
