@@ -2,7 +2,9 @@ package io.github.lumi.storage.repository;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.Commit;
@@ -48,6 +50,10 @@ class GarbageCollectorTest {
         Instant now = Instant.parse("2026-07-15T12:00:00Z");
         makeObjectsOld(now.minus(Duration.ofDays(2)));
         ObjectId freshOrphan = rawObjects.write(new byte[] {4});
+        ObjectId freshCommitPayload = rawObjects.write(new byte[] {5});
+        ObjectId freshTree = new MerkleTreeEditor(objects).update(
+                Optional.empty(), Map.of(new SectionKey(2, 0, 2), freshCommitPayload));
+        commits.write(commit(freshTree));
 
         GarbageCollector collector = new GarbageCollector(repositoryRoot);
         GarbageCollectionInspection inspection = collector.inspect(
@@ -64,7 +70,12 @@ class GarbageCollectorTest {
         assertArrayEquals(new byte[] {1}, rawObjects.read(livePayload));
         assertArrayEquals(new byte[] {2}, rawObjects.read(originPayload));
         assertArrayEquals(new byte[] {4}, rawObjects.read(freshOrphan));
+        assertArrayEquals(new byte[] {5}, rawObjects.read(freshCommitPayload));
         assertThrows(NoSuchFileException.class, () -> rawObjects.read(oldOrphan));
+        assertFalse(Files.exists(loosePath(livePayload)));
+        assertFalse(Files.exists(loosePath(originPayload)));
+        assertTrue(Files.exists(loosePath(freshOrphan)));
+        assertTrue(Files.exists(loosePath(freshCommitPayload)));
     }
 
     @Test
@@ -95,6 +106,12 @@ class GarbageCollectorTest {
 
     private void makeObjectsOld(Instant timestamp) throws IOException {
         makeOld(repositoryRoot.resolve("objects"), timestamp);
+    }
+
+    private Path loosePath(ObjectId id) {
+        return repositoryRoot.resolve("objects")
+                .resolve(id.hex().substring(0, 2))
+                .resolve(id.hex().substring(2) + ".lz4");
     }
 
     private static void makeOld(Path root, Instant timestamp) throws IOException {

@@ -48,6 +48,7 @@ public final class GarbageCollector {
             commits.delete(id);
             deletedCommits++;
         }
+        objects.compactLoose(plan.compactableObjects());
         return new GarbageCollectionResult(deletedCommits, deletedObjects);
     }
 
@@ -59,24 +60,19 @@ public final class GarbageCollector {
         refs.list().forEach(ref -> roots.add(ref.commit()));
         tombstones.list().forEach(tombstone -> roots.add(tombstone.commit()));
         Set<ObjectId> allCommitObjects = commits.listIds();
-        for (ObjectId id : allCommitObjects) {
-            if (!commits.modifiedAt(id).isBefore(deleteBefore)) {
-                roots.add(new CommitId(id));
-            }
-        }
 
         Set<CommitId> reachableCommits = new HashSet<>();
         Set<ObjectId> reachableObjects = new HashSet<>(origins.allOrigins());
-        ArrayDeque<CommitId> pending = new ArrayDeque<>(roots);
-        while (!pending.isEmpty()) {
-            CommitId id = pending.removeFirst();
-            if (!reachableCommits.add(id)) {
-                continue;
+        trace(new ArrayDeque<>(roots), reachableCommits, reachableObjects);
+        Set<ObjectId> compactableObjects = Set.copyOf(reachableObjects);
+
+        ArrayDeque<CommitId> fresh = new ArrayDeque<>();
+        for (ObjectId id : allCommitObjects) {
+            if (!commits.modifiedAt(id).isBefore(deleteBefore)) {
+                fresh.add(new CommitId(id));
             }
-            var commit = commitRepository.read(id);
-            pending.addAll(commit.parents());
-            reachableObjects.addAll(worldGraph.scan(commit.tree()).reachable());
         }
+        trace(fresh, reachableCommits, reachableObjects);
 
         Set<ObjectId> collectableObjects = new HashSet<>();
         for (ObjectId id : objects.listIds()) {
@@ -91,9 +87,29 @@ public final class GarbageCollector {
                 collectableCommits.add(id);
             }
         }
-        return new Plan(Set.copyOf(collectableCommits), Set.copyOf(collectableObjects));
+        return new Plan(
+                Set.copyOf(collectableCommits), Set.copyOf(collectableObjects),
+                compactableObjects);
     }
 
-    private record Plan(Set<ObjectId> commits, Set<ObjectId> objects) {
+    private void trace(
+            ArrayDeque<CommitId> pending,
+            Set<CommitId> reachableCommits,
+            Set<ObjectId> reachableObjects) throws IOException {
+        while (!pending.isEmpty()) {
+            CommitId id = pending.removeFirst();
+            if (!reachableCommits.add(id)) {
+                continue;
+            }
+            var commit = commitRepository.read(id);
+            pending.addAll(commit.parents());
+            reachableObjects.addAll(worldGraph.scan(commit.tree()).reachable());
+        }
+    }
+
+    private record Plan(
+            Set<ObjectId> commits,
+            Set<ObjectId> objects,
+            Set<ObjectId> compactableObjects) {
     }
 }

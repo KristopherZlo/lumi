@@ -2,6 +2,7 @@ package io.github.lumi.storage.object;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -162,5 +163,67 @@ class ObjectStoreTest {
         assertArrayEquals("first".getBytes(StandardCharsets.UTF_8), store.read(first));
         assertEquals(2, store.deleteAll(Set.of(first, second)));
         assertTrue(store.listIds().isEmpty());
+    }
+
+    @Test
+    void compactsSelectedLooseObjectsAndFinishesPublishedDuplicates()
+            throws IOException {
+        ObjectStore store = new ObjectStore(tempDir);
+        byte[] duplicate = "published duplicate".getBytes(StandardCharsets.UTF_8);
+        byte[] migrate = "legacy loose".getBytes(StandardCharsets.UTF_8);
+        byte[] untouched = "fresh orphan".getBytes(StandardCharsets.UTF_8);
+        ObjectId duplicateId = store.write(duplicate);
+        ObjectId migrateId = store.write(migrate);
+        ObjectId untouchedId = store.write(untouched);
+        try (ObjectPack.Writer writer = ObjectPack.writer(tempDir.resolve("packs"))) {
+            assertEquals(duplicateId, writer.write(duplicate));
+            writer.publish();
+        }
+
+        store.compactLoose(Set.of(duplicateId, migrateId));
+
+        assertFalse(Files.exists(loosePath(duplicateId)));
+        assertFalse(Files.exists(loosePath(migrateId)));
+        assertTrue(Files.exists(loosePath(untouchedId)));
+        assertArrayEquals(duplicate, new ObjectStore(tempDir).read(duplicateId));
+        assertArrayEquals(migrate, new ObjectStore(tempDir).read(migrateId));
+        assertArrayEquals(untouched, new ObjectStore(tempDir).read(untouchedId));
+        long packCount;
+        try (var files = Files.list(tempDir.resolve("packs"))) {
+            packCount = files.filter(path -> path.toString().endsWith(".pack")).count();
+        }
+        store.compactLoose(Set.of(duplicateId, migrateId));
+        try (var files = Files.list(tempDir.resolve("packs"))) {
+            assertEquals(packCount,
+                    files.filter(path -> path.toString().endsWith(".pack")).count());
+        }
+    }
+
+    @Test
+    void retainsLooseDuplicateWhenPublishedPackIsCorrupt() throws IOException {
+        ObjectStore store = new ObjectStore(tempDir);
+        byte[] payload = "valid loose fallback".getBytes(StandardCharsets.UTF_8);
+        ObjectId id = store.write(payload);
+        byte[] looseFile = Files.readAllBytes(loosePath(id));
+        ObjectPack.Published published;
+        try (ObjectPack.Writer writer = ObjectPack.writer(tempDir.resolve("packs"))) {
+            writer.write(payload);
+            published = writer.publish();
+        }
+        Path pack = published.entries().get(id).pack();
+        byte[] corrupt = Files.readAllBytes(pack);
+        corrupt[corrupt.length - 1] ^= 0x7f;
+        Files.write(pack, corrupt);
+
+        assertThrows(CorruptObjectException.class,
+                () -> store.compactLoose(Set.of(id)));
+
+        assertTrue(Files.exists(loosePath(id)));
+        assertArrayEquals(looseFile, Files.readAllBytes(loosePath(id)));
+    }
+
+    private Path loosePath(ObjectId id) {
+        return tempDir.resolve(id.hex().substring(0, 2))
+                .resolve(id.hex().substring(2) + ".lz4");
     }
 }

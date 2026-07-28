@@ -11,9 +11,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileTime;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -24,6 +28,8 @@ public final class ObjectStore {
     private static final int MAGIC = 0x4C554F32;
     private static final int HEADER_BYTES = 12;
     private static final int MAX_PAYLOAD_BYTES = 256 * 1024 * 1024;
+    private static final int MAX_COMPACTION_OBJECTS = 4_096;
+    private static final long MAX_COMPACTION_RAW_BYTES = 64L * 1024 * 1024;
 
     private final Path objectsDirectory;
     private final Path packsDirectory;
@@ -196,6 +202,57 @@ public final class ObjectStore {
                     Files.deleteIfExists(pack);
                 }
             }
+        }
+    }
+
+    /** Publishes selected loose objects in one bounded pack before deleting their sources. */
+    public synchronized void compactLoose(Set<ObjectId> retained) throws IOException {
+        Objects.requireNonNull(retained, "retained");
+        Map<ObjectId, PackedObject> packed = refreshPackedObjects();
+        List<ObjectId> loose = retained.stream()
+                .sorted(Comparator.comparing(ObjectId::hex))
+                .filter(id -> Files.isRegularFile(pathFor(id)))
+                .toList();
+        List<ObjectId> migrated = new ArrayList<>();
+        long rawBytes = 0;
+        int processed = 0;
+        FileTime newestSource = null;
+        try (ObjectPack.Reader reader = new ObjectPack.Reader();
+                ObjectPack.Writer writer = ObjectPack.writer(packsDirectory)) {
+            for (ObjectId id : loose) {
+                if (processed == MAX_COMPACTION_OBJECTS) {
+                    break;
+                }
+                byte[] payload = readLoose(id, pathFor(id));
+                if (processed > 0
+                        && rawBytes + payload.length > MAX_COMPACTION_RAW_BYTES) {
+                    break;
+                }
+                PackedObject existing = packed.get(id);
+                if (existing == null) {
+                    writer.write(payload);
+                    migrated.add(id);
+                    FileTime modified = Files.getLastModifiedTime(pathFor(id));
+                    if (newestSource == null || modified.compareTo(newestSource) > 0) {
+                        newestSource = modified;
+                    }
+                } else if (!Arrays.equals(payload, reader.read(existing))) {
+                    throw corrupt(id, "SHA-256 collision");
+                } else {
+                    Files.deleteIfExists(pathFor(id));
+                }
+                rawBytes += payload.length;
+                processed++;
+            }
+            if (!migrated.isEmpty()) {
+                ObjectPack.Published published = writer.publish();
+                Files.setLastModifiedTime(
+                        published.entries().values().iterator().next().pack(), newestSource);
+                register(published);
+            }
+        }
+        for (ObjectId id : migrated) {
+            Files.deleteIfExists(pathFor(id));
         }
     }
 
