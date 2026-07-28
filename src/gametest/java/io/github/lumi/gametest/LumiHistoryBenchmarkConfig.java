@@ -48,11 +48,6 @@ record LumiHistoryBenchmarkConfig(
         return Boolean.getBoolean(ENABLED_PROPERTY);
     }
 
-    static boolean existingWorldEnabled() {
-        String saveName = System.getProperty(PREFIX + "existingWorld");
-        return enabled() && saveName != null && !saveName.isBlank();
-    }
-
     static OperationMode operationMode() {
         return OperationMode.parse(System.getProperty(
                 PREFIX + "operation", "restore"));

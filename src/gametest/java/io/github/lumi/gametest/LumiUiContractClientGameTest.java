@@ -25,7 +25,7 @@ public final class LumiUiContractClientGameTest implements FabricClientGameTest 
     @Override
     public void runTest(ClientGameTestContext context) {
         if (LumiClientBehaviorWorld.firstMinuteOnly()
-                || LumiHistoryBenchmarkConfig.existingWorldEnabled()) return;
+                || LumiHistoryBenchmarkConfig.enabled()) return;
         try (var ignored = LumiUiScaleTestScope.readableViewport()) {
             LumiClientBehaviorWorld.run(
                     context, "ui-contract", (test, world, report) -> {

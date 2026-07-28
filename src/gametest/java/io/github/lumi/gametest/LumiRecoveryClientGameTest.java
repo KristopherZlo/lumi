@@ -53,7 +53,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
         if (LumiClientBehaviorWorld.firstMinuteOnly()
-                || LumiHistoryBenchmarkConfig.existingWorldEnabled()) return;
+                || LumiHistoryBenchmarkConfig.enabled()) return;
         try (LumiBehaviorReport report = LumiBehaviorReport.create(
                 FabricLoader.getInstance().getGameDir(), "recovery")) {
             run(context, report);
