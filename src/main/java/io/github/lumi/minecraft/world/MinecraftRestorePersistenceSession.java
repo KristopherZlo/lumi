@@ -31,6 +31,8 @@ import net.minecraft.world.level.storage.TagValueInput;
 
 /** Stages or forces one loaded Restore section/entity persistence boundary. */
 final class MinecraftRestorePersistenceSession implements WorldPersistenceSession {
+    private static final int MAX_PENDING_CHUNK_WRITES =
+            StreamingPreparedWorldMutationSession.MAX_CHUNKS;
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
     private final List<ChunkCoordinate> chunks;
@@ -161,6 +163,10 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             transitionTo(Phase.ENTITIES);
             return true;
         }
+        var chunkMap = (ChunkMapPersistenceAccessor) level.getChunkSource().chunkMap;
+        if (chunkMap.lumi$activeChunkWrites().get() >= MAX_PENDING_CHUNK_WRITES) {
+            return false;
+        }
         ChunkCoordinate coordinate = chunks.get(nextChunk);
         LevelChunk chunk = level.getChunkSource().getChunkNow(
                 coordinate.x(), coordinate.z());
@@ -175,8 +181,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             if (forceRelight) {
                 chunk.setLightCorrect(false);
             }
-            if (!((ChunkMapPersistenceAccessor) level.getChunkSource().chunkMap)
-                    .lumi$save(chunk)) {
+            if (!chunkMap.lumi$save(chunk)) {
                 throw new IOException("Cannot persist restored chunk " + coordinate);
             }
             saved = true;
@@ -248,10 +253,10 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
 
     private boolean synchronizeStorage() throws IOException {
         if (synchronization == null) {
-            var chunkSync = chunks.isEmpty()
-                    && (!forceAndVerify || verificationChunks.isEmpty())
+            var chunkSync = !forceAndVerify
+                    || (chunks.isEmpty() && verificationChunks.isEmpty())
                     ? CompletableFuture.completedFuture(null)
-                    : level.getChunkSource().chunkMap.synchronize(forceAndVerify);
+                    : level.getChunkSource().chunkMap.synchronize(true);
             var poiSync = !poiSyncRequired
                     ? CompletableFuture.completedFuture(null)
                     : ((SectionStoragePersistenceAccessor) level.getChunkSource().getPoiManager())
