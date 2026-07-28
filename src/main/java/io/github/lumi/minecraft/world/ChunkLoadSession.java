@@ -64,6 +64,7 @@ public final class ChunkLoadSession implements AutoCloseable {
                 continue;
             }
             if (loading == null) {
+                access.startLoading();
                 loading = retained.entrySet().iterator();
             }
             if (current == null) {
@@ -104,7 +105,12 @@ public final class ChunkLoadSession implements AutoCloseable {
         if (ready.contains(chunk)) {
             return true;
         }
-        CompletableFuture<Void> future = retained.computeIfAbsent(chunk, access::retain);
+        CompletableFuture<Void> future = retained.get(chunk);
+        if (future == null) {
+            future = access.retain(chunk);
+            retained.put(chunk, future);
+            access.startLoading();
+        }
         if (nanoTime.getAsLong() >= deadlineNanos || !future.isDone()) {
             return false;
         }

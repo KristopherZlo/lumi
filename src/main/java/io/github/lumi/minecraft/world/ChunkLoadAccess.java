@@ -11,6 +11,9 @@ public interface ChunkLoadAccess {
 
     CompletableFuture<Void> retain(ChunkCoordinate chunk);
 
+    /** Starts retained chunks queued by the adapter; does nothing when none are queued. */
+    default void startLoading() { }
+
     boolean isReady(ChunkCoordinate chunk);
 
     void release(ChunkCoordinate chunk);

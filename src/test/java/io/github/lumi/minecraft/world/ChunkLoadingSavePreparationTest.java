@@ -25,11 +25,13 @@ class ChunkLoadingSavePreparationTest {
 
         assertFalse(session.prepareUntil(50));
         assertEquals(java.util.List.of(new ChunkCoordinate(4, 6)), access.retained);
+        assertEquals(1, access.starts);
         assertEquals(new io.github.lumi.minecraft.operation.OperationProgress(
                 "Save: loading dirty chunks", 0, 1), session.progress());
 
         access.loaded.complete(null);
         assertFalse(session.prepareUntil(50));
+        assertEquals(1, access.starts);
 
         access.ready = true;
         assertTrue(session.prepareUntil(50));
@@ -52,6 +54,7 @@ class ChunkLoadingSavePreparationTest {
 
         assertFalse(session.prepareUntil(1));
         assertEquals(1, access.retained.size());
+        assertEquals(0, access.starts);
         session.close();
         assertEquals(1, access.released.size());
     }
@@ -74,6 +77,7 @@ class ChunkLoadingSavePreparationTest {
         private final CompletableFuture<Void> loaded = new CompletableFuture<>();
         private final ArrayList<ChunkCoordinate> retained = new ArrayList<>();
         private final ArrayList<ChunkCoordinate> released = new ArrayList<>();
+        private int starts;
         private boolean ready;
 
         @Override
@@ -82,6 +86,7 @@ class ChunkLoadingSavePreparationTest {
             return loaded;
         }
 
+        @Override public void startLoading() { starts++; }
         @Override public boolean isReady(ChunkCoordinate chunk) { return ready; }
         @Override public void release(ChunkCoordinate chunk) { released.add(chunk); }
     }

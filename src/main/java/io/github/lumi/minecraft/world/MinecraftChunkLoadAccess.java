@@ -1,21 +1,28 @@
 package io.github.lumi.minecraft.world;
 
+import io.github.lumi.mixin.ServerChunkCacheAccessor;
 import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 /** Holds a FULL chunk ticket until block and entity state are both available. */
 public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
     private static final int RADIUS = 0;
+    private static final int MAX_PENDING = 32;
     private static final TicketType LUMI_TICKET =
             new TicketType(
                     TicketType.NO_TIMEOUT,
                     TicketType.FLAG_LOADING | TicketType.FLAG_KEEP_DIMENSION_ACTIVE);
     private final ServerLevel level;
     private final Readiness readiness;
+    private final Map<ChunkCoordinate, CompletableFuture<Void>> pending =
+            new LinkedHashMap<>();
 
     public MinecraftChunkLoadAccess(ServerLevel level) {
         this(level, Readiness.TERRAIN_AND_ENTITIES);
@@ -28,13 +35,51 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
 
     @Override
     public CompletableFuture<Void> retain(ChunkCoordinate chunk) {
-        ChunkPos position = position(chunk);
-        if (terrainReady(chunk)) {
-            level.getChunkSource().addTicketWithRadius(LUMI_TICKET, position, RADIUS);
+        boolean ready = terrainReady(chunk);
+        level.getChunkSource().addTicketWithRadius(
+                LUMI_TICKET, position(chunk), RADIUS);
+        if (ready) {
             return CompletableFuture.completedFuture(null);
         }
-        return level.getChunkSource().addTicketAndLoadWithRadius(
-                LUMI_TICKET, position, RADIUS).thenApply(ignored -> null);
+        CompletableFuture<Void> loading = new CompletableFuture<>();
+        pending.put(chunk, loading);
+        if (pending.size() == MAX_PENDING) {
+            try {
+                startLoading();
+            } catch (RuntimeException failed) {
+                release(chunk);
+                throw failed;
+            }
+        }
+        return loading;
+    }
+
+    @Override
+    public void startLoading() {
+        if (pending.isEmpty()) {
+            return;
+        }
+        var chunks = level.getChunkSource();
+        var access = (ServerChunkCacheAccessor) chunks;
+        access.lumi$runDistanceManagerUpdates();
+        pending.forEach((chunk, loading) -> {
+            var holder = chunks.chunkMap.getUpdatingChunkIfPresent(
+                    position(chunk).toLong());
+            if (holder == null) {
+                loading.completeExceptionally(
+                        new IllegalStateException("No chunk was scheduled for loading"));
+                return;
+            }
+            holder.scheduleChunkGenerationTask(ChunkStatus.FULL, chunks.chunkMap)
+                    .whenComplete((ignored, failure) -> {
+                        if (failure == null) {
+                            loading.complete(null);
+                        } else {
+                            loading.completeExceptionally(failure);
+                        }
+                    });
+        });
+        pending.clear();
     }
 
     @Override
@@ -50,6 +95,7 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
 
     @Override
     public void release(ChunkCoordinate chunk) {
+        pending.remove(chunk);
         level.getChunkSource().removeTicketWithRadius(
                 LUMI_TICKET, position(chunk), RADIUS);
     }
