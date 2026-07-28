@@ -2,9 +2,42 @@
 
 ## Аннотация
 
-Документ описывает фактически реализованную систему Lumi V2 для Minecraft 1.21.11 и предназначен для воспроизводимого исследования времени Save/Restore, нагрузки на серверный тик, потребления памяти, роста репозитория и устойчивости к прерыванию операций. Основание анализа — исходное дерево на 2026-07-29, базовая ревизия `2c5b5a7bdf215f05efcbf599f901e80b0f447282`, версия мода `0.2.0-rc.1`, Java 21. Проектные обещания отделены от проверенных свойств и от исторических измерений.
+Документ описывает фактически реализованную систему Lumi V2 для Minecraft 1.21.11 и задаёт воспроизводимый протокол исследования времени Save/Restore, нагрузки на серверный тик, потребления памяти, роста репозитория и устойчивости к прерыванию операций. Анализ кода зафиксирован на ревизии `9011a1de217b176586ad3c8982086f699158eeb9` от 2026-07-29 (`Reduce cold object metadata probes`), версия мода `0.2.0-rc.1`, Java 21. Локальные UI-изменения вне этой ревизии не входят в доказательную базу; tracked core-код `domain`, `storage` и `minecraft` совпадает с указанной ревизией. Проектные требования, выводы из кода, тестовые свидетельства и исторические измерения рассматриваются раздельно.
 
-Главный вывод: Lumi реализует версионирование минимального собственного состояния мира через неизменяемые content-addressed-объекты, разреженное Merkle-дерево, CAS-публикацию ссылок и журнал восстановления. Эта схема хорошо защищает уже опубликованную историю и позволяет сравнивать конечные состояния независимо от числа промежуточных версий. Основной нерешённый предел — полная задержка крупного Restore: актуальные измерения соблюдают 50 ms tick-gate, но не соблюдают заданные 750 ms для application и 3 s для полного профиля `512×512×16`; на JVM с heap 4 GiB актуальный кандидат также превысил лимит дополнительной памяти 1 GiB.
+Главный вывод: Lumi реализует версионирование минимального собственного состояния мира через неизменяемые content-addressed-объекты, разреженное Merkle-дерево, CAS-публикацию ссылок и журнал восстановления. Эта схема хорошо защищает уже опубликованную историю и позволяет сравнивать конечные состояния независимо от числа промежуточных версий. Основной нерешённый предел — полная задержка крупного Restore: последние исторические измерения соблюдают 50 ms tick-gate, но не соблюдают заданные 750 ms для application и 3 s для полного профиля `512×512×16`; на JVM с heap 4 GiB измеренный кандидат также превысил лимит дополнительной памяти 1 GiB.
+
+## 0. Исследовательская постановка и статус доказательств
+
+Документ отвечает не на вопрос «работает ли Lumi вообще», а на следующие исследовательские вопросы:
+
+- `RQ1`: какие инварианты предотвращают потерю уже опубликованной истории при crash в каждой фазе Save и Restore?
+- `RQ2`: соответствует ли опубликованный Save наблюдаемому состоянию блоков, block entities, durable entities и respawn points на зафиксированной capture boundary?
+- `RQ3`: какими параметрами определяется стоимость Save, Compare и Restore: числом commits, endpoint delta, пространственной локальностью, chunk path или durable barriers?
+- `RQ4`: ограничена ли живая память размером текущего batch/slab при росте полного operation volume и истории?
+- `RQ5`: эквивалентна ли idle-нагрузка Lumi vanilla в заранее заданных практически значимых пределах?
+- `RQ6`: какие архитектурные решения следует сохранить, изменить или отклонить по совокупности correctness, crash safety, latency, memory и maintainability?
+
+Типы свидетельств имеют строгий порядок силы:
+
+1. `CODE` — свойство непосредственно следует из control/data flow указанной ревизии.
+2. `UNIT` — свойство проверено детерминированным тестом отдельных collaborators.
+3. `INTEGRATION` — свойство проверено реальным Minecraft/Fabric workflow и независимым oracle.
+4. `FAULT` — свойство пережило принудительное завершение процесса в конкретной durable boundary.
+5. `MEASURED` — опубликованы raw samples, среда, повторения и неопределённость.
+6. `REQUIREMENT` — желаемая гарантия без достаточного результата; она не считается доказанной.
+
+| ID | Проверяемое утверждение | Нулевая гипотеза или falsifier | Текущий статус |
+| --- | --- | --- | --- |
+| `C1` | Save равен capture boundary | существует хотя бы одно несовпадение owned state | `CODE` + частичное `INTEGRATION` |
+| `C2` | старый опубликованный commit не теряется при crash | после recovery commit/ref/object не читается или изменён | `CODE` + `UNIT`; phase-exhaustive `FAULT` отсутствует |
+| `C3` | поздняя generation переживает clear старой операции | `g' > g` удалена publication boundary `g` | `CODE` + `UNIT` |
+| `C4` | Compare не зависит от числа промежуточных commits | при постоянных endpoints/delta время линейно растёт с history length | `CODE`; контролируемый scaling experiment требуется |
+| `C5` | Restore terminal success равен target | persisted reread или reopen не совпадает с oracle | `CODE` + `UNIT` + частичное `INTEGRATION` |
+| `C6` | память ограничена текущим slab/batch | retained live set растёт с полным operation volume | structural `CODE`; 4 GiB occupancy gate провален |
+| `C7` | idle Lumi эквивалентен vanilla | разность выходит за preregistered equivalence margin | только `REQUIREMENT` |
+| `C8` | крупный Restore проходит release budget | любой обязательный latency/heap/tick gate превышен | предварительно опровергнуто историческими измерениями |
+
+Ни один исторический benchmark не получает статус `MEASURED` для ревизии `9011a1de`, пока он не повторён на чистом checkout этой ревизии с сохранёнными raw-артефактами. Таблица раздела 9 является предварительной базой для гипотез, а не результатом текущего артефакта.
 
 ## 1. Объект исследования и границы точности
 
@@ -18,6 +51,12 @@ Lumi ведёт отдельный репозиторий для каждого 
 - canonical player respawn points для полного Restore.
 
 В commit не сохраняются биомы, световые данные, heightmap, POI и scheduled ticks как независимое историческое состояние. При Restore неизменяемые биомы сохраняются из live/vanilla chunk, производные heightmap и POI перестраиваются по изменённым клеткам, а chunk с изменением света публикуется как `lightCorrect=false` для последующего vanilla relight. Поэтому «точность Restore» в этом документе означает равенство принадлежащего Lumi состояния: block states, block entities, durable entities и, для полного Restore, respawn points; она не означает снимок всех подсистем Minecraft.
+
+Логический oracle состояния задаётся как canonical tuple:
+
+`W = (B, BE, E, P)`,
+
+где `B` — отображение block coordinate → block state, `BE` — coordinate → canonical block-entity NBT, `E` — UUID → `(entity type, canonical NBT, chunk placement)`, `P` — player UUID → canonical respawn point. Для partial Restore сравниваются только выбранные `B` и `BE`; `E` и `P` должны остаться неизменными. Для zone Restore сравнение ограничено zone cells и entity columns, respawn points не входят в target.
 
 Первичные реализации: [Commit](../src/main/java/io/github/lumi/domain/model/Commit.java), [SectionBlob](../src/main/java/io/github/lumi/domain/model/SectionBlob.java), [EntityChunkBlob](../src/main/java/io/github/lumi/domain/model/EntityChunkBlob.java), [storage-format.md](storage-format.md).
 
@@ -74,6 +113,35 @@ Region содержит `32×32` chunks. Для chunk `(cx,cz)`:
 Один Save помещает captured leaves и изменённые Merkle nodes в один `LUP2` pack. Pack сначала force-записывается, атомарно перемещается, полностью перечитывается с hash-проверкой, после чего атомарно публикуется sorted `LUI2` index. Только index делает pack видимым другим repository instances. Crash до index оставляет недостижимый pack, удаляемый GC после cutoff. Частично живой pack не перепаковывается: он удаляется только если collectable все его objects.
 
 Верхние границы формата: payload одного object 256 MiB, pack не более 1,000,000 entries. Реализации: [ObjectStore](../src/main/java/io/github/lumi/storage/object/ObjectStore.java), [ObjectPack](../src/main/java/io/github/lumi/storage/object/ObjectPack.java), [ObjectPackIndex](../src/main/java/io/github/lumi/storage/object/ObjectPackIndex.java).
+
+Для pack с `n` новыми entries физический metadata overhead без filesystem allocation равен:
+
+`M_pack_index(n) = 8 + 40n + 8 + 48n = 16 + 88n bytes`.
+
+Здесь первые `8+40n` принадлежат pack, вторые `8+48n` — index; compressed payload bytes добавляются отдельно. Поэтому измеренная `bytes/block` зависит от palette, NBT, дедупликации, LZ4, количества Merkle nodes и pack occupancy и не является универсальной константой Lumi.
+
+### 3.4. Формальная модель операций
+
+Состояние dimension представляется как:
+
+`X = (W, H, R, G, J, V, F, Q)`,
+
+где `W` — owned logical world state, `H` — immutable commit/object graph, `R` — refs и active pointers, `G` — working/builder generations, `J` — operation journal, `V` — физическое vanilla storage, `F` — freeze state, `Q` — dimension operation queue.
+
+Обязательные инварианты:
+
+- `I1 Object integrity`: для каждого читаемого object `hash(payload)=id`, type codec принимает весь payload без trailing bytes.
+- `I2 Reachability`: каждый опубликованный ref/pointer разрешается в существующий commit и существующий Merkle root.
+- `I3 Save boundary`: опубликованный commit содержит ровно `W` на захваченных keys/generations и не очищает keys вне boundary.
+- `I4 Generation monotonicity`: для одного key `g_{k,n+1}>g_{k,n}`; clear boundary `g` не удаляет `g'>g`.
+- `I5 Publication order`: Restore не изменяет `R` до persisted verification target; Save не изменяет ref до durable commit и journal.
+- `I6 Terminal exactness`: `COMPLETE ⇒ W=target`; `RETURNED ⇒ W=checkpoint`.
+- `I7 Fail closed`: если ни target, ни checkpoint не доказаны, то `F=frozen` и `J≠∅`.
+- `I8 Single mutation`: одновременно существует не более одной active mutating operation на dimension.
+- `I9 Bidirectional scope`: target/return планы имеют одинаковые множества section/entity keys.
+- `I10 Restart idempotence`: повторное открытие уже восстановленного состояния не выполняет publication или apply второй раз.
+
+`I1`, `I4`, `I5`, `I7`, `I8` и `I9` имеют прямые code paths и unit tests. `I2`, `I3`, `I6` и `I10` требуют интегрированного oracle и fault injection для каждой durable boundary. Формальная модель должна рассматривать crash как переход `X → persisted(X)`, удаляющий volatile cursors/futures, но сохраняющий forced files, vanilla storage и атомарно опубликованные pointers. Этот конечный автомат следует независимо закодировать в PlusCal/TLA+ или эквивалентном model checker с crash-переходом после каждой durable action; model checking дополняет, но не заменяет Minecraft fault runs.
 
 ## 4. Модель capture и Save
 
@@ -158,6 +226,30 @@ GC строит корни из refs, tombstones, explicit retained commits, с�
 
 Проверки кода включают unit-тесты Save journal recovery, published apply recovery, generation-safe clear, target/return/degraded Restore, object corruption и pack publication. Интегрированный [LumiRecoveryClientGameTest](../src/gametest/java/io/github/lumi/gametest/LumiRecoveryClientGameTest.java) создаёт копию durably restored world на crash boundary и проходит recovery UI; [LumiWorldSnapshot](../src/gametest/java/io/github/lumi/gametest/LumiWorldSnapshot.java) служит oracle блоков, block entities и entities.
 
+### 6.1. Обязательная fault-injection матрица
+
+Fault test должен завершать отдельный Minecraft/JVM process, а не только выбрасывать catchable exception. Для каждого cutpoint сохраняются exit code, последние durable logs, hashes repository/world до и после, journal/ref/pointer bytes и оба post-restart oracle.
+
+| Операция | Обязательные cutpoints |
+| --- | --- |
+| Save | до/после origin force; working-index publication; pack force; pack move; pack verification; index move; commit force; journal create; ref CAS; generation clear; journal clear |
+| full Restore | journal create; каждый slab apply; verify; repair; staged write; force; persisted reread; lighting; `WORLD_PERSISTED`; ref publication; journal clear |
+| branch/workspace switch | target world persisted; destination ref CAS; active-branch pointer; active-workspace pointer; captured-generation clear |
+| partial/zone Restore | checkpoint publication; scoped apply; zone-revision validation; pending-state publication; journal clear |
+| Quick Restore/checkpoint Undo | hidden checkpoint ref; target/return apply; inverse working-index publication; session-ref release |
+| Merge | merge commit publication; target apply/persist; two-parent ref publication; safe return |
+
+Минимальный post-crash oracle:
+
+1. Все pre-test visible refs, commits и reachable objects читаются и сохраняют hashes.
+2. Startup либо автоматически финализирует уже доказанную publication, либо удерживает freeze и предлагает только `RESUME_TARGET`/`RETURN_CHECKPOINT`.
+3. После выбранного направления `W` точно равен соответствующему oracle, а unrelated state не изменён.
+4. Working/builder generations совпадают с направлением и сохраняют `g'>captured(g)`.
+5. Второй restart ничего не применяет повторно, journal/temporary refs очищены согласно terminal state.
+6. Один и тот же cutpoint проверяется для loaded, stored и mixed path; state coverage включает block entity NBT, entity create/remove/move и respawn point там, где операция их поддерживает.
+
+Power-loss/faulty-filesystem исследование является отдельным уровнем: process kill проверяет protocol ordering при соблюдении `force`/atomic move, но не моделирует накопитель, нарушающий эти контракты.
+
 ## 7. Ограничения конкурентности и памяти
 
 | Ресурс | Реальный предел |
@@ -208,6 +300,20 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 
 Для `n` независимых испытаний без отказа rule-of-three даёт лишь верхнюю 95%-границу вероятности отказа `p < 3/n`; детерминированные unit-тесты не являются независимой случайной выборкой, поэтому эту оценку допустимо применять только к повторным crash/behavior runs с заранее определённым распределением сценариев.
 
+### 8.1. Статистический план
+
+До запуска фиксируются primary metrics, practically significant effect и правила исключения samples. Не допускается выбирать лучший run, менять gate после наблюдения результата или смешивать cold/warm paths.
+
+- Baseline и candidate запускаются в отдельных JVM на одинаковом world image, seed и endpoint sequence; порядок пары чередуется, чтобы уменьшить временной drift среды.
+- Pilot оценивает дисперсию; окончательное `n` определяется power analysis для заданного эффекта, а не произвольным числом повторов.
+- Для latency публикуются все samples, median, nearest-rank p95/p99, maximum и 95% bootstrap confidence interval. Average допускается только вместе с распределением.
+- Для paired A/B primary effect равен `d_i = candidate_i - baseline_i`; публикуются median `d`, относительное изменение и confidence interval.
+- Для heap одновременно сохраняются used heap time series, GC events, allocation rate и post-GC live set. `M_extra` без GC-контекста обозначает occupancy, не retained memory.
+- Для idle используется equivalence test с заранее заданными симметричными margins по tick time, CPU и allocation. Неспособность отвергнуть обычную null hypothesis различия не является доказательством эквивалентности.
+- Любое нарушение exact oracle, crash invariant или 50 ms maximum tick является отдельным failure и не усредняется с успешными runs.
+
+Интегрированный client/server benchmark содержит UI scheduling и совместный JVM noise. Для локализации причин нужны оба уровня: end-to-end `T_ui+T_op` и instrumented phase timings. Phase timings объясняют результат, но release gate применяется к end-to-end операции.
+
 ## 9. Зафиксированные экспериментальные результаты
 
 Исторические результаты ниже взяты из [behavior-test-findings.md](behavior-test-findings.md); они не заменяют повторный benchmark текущего бинарного артефакта.
@@ -224,7 +330,21 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 | real player world, 31 versions | Restore 48.021/10.883/18.556 s; chunk load 41.541/7.936/14.688 s; max tick 35/21/5 ms | latency доминируется readiness chunks |
 | heavy real endpoint, 940+940 sections | preparation 5.258 s; total 108.758 s; chunk load 96.651 s; live apply 157 ms; max tick 46 ms | два bottleneck: immutable decode и последовательная readiness |
 
-Текущий release-gate не пройден: latest natural result 9.937 s превышает 3 s, application около 3.317 s превышает 750 ms, а 4 GiB run превышает 1 GiB extra heap. Снижение требований не является техническим улучшением; измерения указывают на chunk readiness, vanilla write/sync и persisted verification как на доминирующие области, а не на direct section swap.
+По последней зафиксированной исторической серии release-gate не пройден: natural result 9.937 s превышает 3 s, application около 3.317 s превышает 750 ms, а 4 GiB run превышает 1 GiB extra heap. Снижение требований не является техническим улучшением; измерения указывают на chunk readiness, vanilla write/sync и persisted verification как на доминирующие области, а не на direct section swap.
+
+### 9.1. Ограничение потенциального ускорения
+
+Для latest natural sample устранение всей measured application оставило бы не менее:
+
+`9.937 - 3.317 = 6.620 s`,
+
+что всё ещё больше 3 s gate. Следовательно, только оптимизация apply/write/sync не может выполнить этот gate.
+
+Для heavy real endpoint доля live mutation:
+
+`f_apply = 0.157 / 108.758 ≈ 0.00144 = 0.144%`.
+
+Даже нулевая стоимость live apply дала бы по закону Амдала ускорение не более `1/(1-f_apply) ≈ 1.00144`. Chunk readiness занимает `96.651/108.758 ≈ 88.87%`; этот профиль опровергает приоритет дальнейшей микрооптимизации section swap. Вывод относится к данному endpoint и требует повторения на ревизии исследования.
 
 ## 10. Оценка принятых решений
 
@@ -234,7 +354,7 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 | immutable pack + отдельно опубликованный index | crash до visibility не повреждает старую историю; один file вместо file-per-object | orphan pack до GC; partially-live pack нельзя уменьшить | оправдано |
 | origin + generation working index до vanilla publication | сохраняет pre-mutation endpoint и не теряет late mutation | background writes, tickets и save gate добавляют сложность | критично для надёжности |
 | CAS refs/pointers | stale client/operation не переписывает новый HEAD | требует recovery для crash между world и pointer | оправдано |
-| двунаправленный Restore plan + journal | можно доказанно вернуться после apply/verify/persist failure | память/подготовка примерно для двух направлений; freeze длиннее | надёжность приоритетнее latency |
+| двунаправленный Restore plan + journal | заранее подготовлен проверяемый return path после apply/verify/persist failure | return также может отказать и оставить `DEGRADED`; память/подготовка примерно для двух направлений | надёжность приоритетнее latency |
 | 32-chunk durable windows | ограничивает tickets/writes; 64-window в A/B ухудшил sync, app и heap | много force barriers; остаётся главным latency cost | лучший из измеренных вариантов, не конечное решение |
 | estimated 128 MiB slab | ограничивает подготовку и переиспользует native decode | не является верхней границей JVM heap; 4 GiB run провалил gate | требует heap-метрики, не только estimate |
 | direct native section replacement | direct apply измеряется десятками/сотнями ms даже на больших endpoint | общая операция всё ещё ограничена loading/persistence | решение эффективно локально |
@@ -244,6 +364,18 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 | крупный `FabricDimensionRuntime` | все lifecycle invariants собраны в одном composition root | 2011 строк и много причин изменения | главный архитектурный риск сопровождения |
 
 ## 11. Воспроизводимый протокол дальнейшего исследования
+
+### 11.1. Preregistration
+
+До получения результатов создаётся immutable protocol record со следующими полями:
+
+`{code_commit, artifact_sha256, hypotheses, primary_metrics, profiles, seeds, sample_size_rule, gates, equivalence_margins, exclusion_rules, analysis_version}`.
+
+Изменение protocol после первого sample создаёт новую experiment series; старые данные не смешиваются с новой серией. Для каждого run manifest должен содержать:
+
+`{run_id, UTC time, OS/build, CPU, RAM, storage model/filesystem, power mode, JDK, JVM args, heap, Minecraft/Fabric/mod versions, world_sha256, seed, path, warm/cold state, raw_report_sha256, exit status}`.
+
+### 11.2. Последовательность эксперимента
 
 1. Зафиксировать commit, JDK, Minecraft/Fabric versions, JVM flags, heap, CPU, storage device, ОС, render/simulation distance и набор модов.
 2. Отключить Save previews для storage/performance профиля; отдельно измерять их стоимость, не смешивая с core history.
@@ -258,8 +390,66 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 
 Harness уже поддерживает opt-in dense fixture, natural/stored modes, branch-switch, real existing-world copy, per-phase telemetry и performance gate: [LumiHistoryBenchmarkConfig](../src/gametest/java/io/github/lumi/gametest/LumiHistoryBenchmarkConfig.java), [LumiHistoryBenchmarkScenario](../src/gametest/java/io/github/lumi/gametest/LumiHistoryBenchmarkScenario.java), [LumiRestorePerformanceGate](../src/gametest/java/io/github/lumi/gametest/LumiRestorePerformanceGate.java).
 
-## 12. Итог
+### 11.3. Факторная матрица
+
+| Фактор | Минимальные уровни | Изолируемый эффект |
+| --- | --- | --- |
+| history length `h` | 1, 10, 100, 1000 при одинаковых endpoints | зависимость от числа commits/catalog |
+| changed sections `SΔ` | 0, 1, 1024, 1025 | slab boundary и linear decode |
+| changed chunks `CΔ` | 1, 32, 33, 1024 | ticket/write window и force barriers |
+| density | 1 block/section, sparse, все 4096 cells | scan, palette и packet cost |
+| locality | один chunk; один region; region-scattered | chunk readiness и storage synchronization |
+| chunk path | resident, natural cold, forced stored, mixed | loading против storage |
+| state kind | blocks; block entities с NBT; entity create/remove/move; spawns | отдельные persistence paths |
+| history operation | Save, full/partial/zone Restore, branch switch, Merge, Quick Restore | protocol-specific cost и correctness |
+| heap | не менее 2 GiB и 4 GiB | GC pressure и bounded progress |
+| storage | минимум один SSD-профиль; дополнительные устройства отдельно | внешняя валидность sync/readiness |
+
+Нулевой delta обязателен: он отделяет fixed orchestration/return-point cost от работы, пропорциональной изменениям. Значения 32/33 chunks и 1024/1025 sections проверяют реальные границы реализации. Synthetic dense fixture и реальные миры анализируются отдельно.
+
+### 11.4. Контракт артефактов
+
+Каждая experiment series должна сохранять:
+
+- clean source commit и собранный mod JAR с SHA-256;
+- неизменяемый исходный world image и hash inventory;
+- manifest среды и preregistration;
+- stdout/stderr и Lumi/Minecraft logs без ручного редактирования;
+- raw JSONL events, tick samples, heap/GC series и repository-size inventory;
+- pre/post/reopen world oracle hashes;
+- fault cutpoint и durable files для crash runs;
+- analysis script/notebook с pinned dependencies и generated tables/plots;
+- итоговый machine-readable verdict по каждому `C1`–`C8` и `I1`–`I10`.
+
+Raw data не хранится только внутри `build/`, если этот каталог не входит в архив исследования. Документ не должен ссылаться на локальный report, отсутствующий в опубликованном artifact bundle.
+
+### 11.5. Критерии завершения
+
+| Область | Условие PASS |
+| --- | --- |
+| correctness | ноль oracle mismatches во всех обязательных workflow/path/state combinations |
+| crash safety | каждый cutpoint приводит только к доказанному target, доказанному return или frozen recoverable state; старые published roots неизменны |
+| idempotence | два последовательных reopen после recovery не меняют world, refs, generations или journal |
+| performance | все существующие `LumiRestorePerformanceGate` budgets выполнены без изменения gate |
+| memory | gate 1 GiB выполнен, post-GC live set не масштабируется с полным operation volume при фиксированном slab |
+| tick | ни один complete server tick обязательного профиля не превышает 50 ms |
+| idle | equivalence test проходит preregistered margins; до задания margins статус остаётся `NOT TESTED` |
+| reproducibility | независимый rerun из artifact bundle воспроизводит verdict и confidence intervals |
+
+Failure correctness/crash/idempotence блокирует release независимо от performance. Performance failure не разрешается ослаблением integrity, force, persisted reread, journal или CAS.
+
+## 12. Угрозы валидности
+
+- `Construct validity`: owned-state oracle не охватывает биомы, scheduled ticks, scoreboard, weather и иные неверсируемые подсистемы; результат нельзя называть полным snapshot Minecraft.
+- `Internal validity`: JIT warm-up, GC, OS page cache, antivirus, background I/O, совместный client/server JVM и UI scheduling способны менять latency. Они фиксируются или рандомизируются, но не объясняются задним числом.
+- `External validity`: synthetic random palette не представляет все реальные NBT/entity workloads; один CPU, filesystem или world не обобщается на все установки.
+- `Conclusion validity`: maximum нестабилен, малое `n` не даёт надёжных tail estimates, а отсутствие наблюдаемого crash failure не доказывает его невозможность.
+- `Instrumentation`: sampling used heap может пропустить краткий peak; phase timers могут перекрываться или исключать ожидание. End-to-end clock и independent complete-tick probe остаются primary.
+- `Artifact drift`: результаты другой ревизии, dirty worktree или отсутствующий raw report не подтверждают текущий код.
+- `Model limitation`: atomic move и `force` принимаются согласно контракту ОС/filesystem; power-loss поведение неисправного накопителя требует отдельной fault model.
+
+## 13. Итог
 
 Архитектура Lumi согласована с задачей безопасной истории строительных изменений: published history immutable, stale publication блокируется CAS, live mutations получают durable origins до vanilla save, Restore публикует указатели только после apply/verify/persist/reread, а недоказанное состояние не выпускается из freeze. Математическая стоимость Save и endpoint Compare определяется разреженной областью изменений; стоимость block-exact Restore дополнительно линейна по числу декодируемых секций и их 4096 cells.
 
-Надёжность старой истории обоснована кодом и тестами сильнее, чем скорость крупного Restore. Актуальные данные не позволяют объявить release readiness: строгие application/full-time/4-GiB-memory gates не выполнены, статистический idle A/B gate отсутствует, а crash coverage не перечисляет автоматическую инъекцию каждой persistence-фазы. Следующий технический выбор должен оцениваться по уменьшению chunk-readiness и durable sync/reread latency без удаления journal, persisted verification, CAS или bounded-memory ограничений.
+Надёжность старой истории обоснована кодом и unit/integration tests сильнее, чем скорость крупного Restore, но ещё не имеет phase-exhaustive process-crash доказательства. Доступные исторические данные не позволяют объявить release readiness: строгие application/full-time/4-GiB-memory gates не выполнены, статистический idle A/B gate отсутствует, а результаты не воспроизведены для зафиксированной ревизии `9011a1de`. Следующий технический выбор должен оцениваться по уменьшению chunk-readiness и durable sync/reread latency без удаления journal, persisted verification, CAS или bounded-memory ограничений.
