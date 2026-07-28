@@ -29,6 +29,7 @@ import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -197,9 +198,13 @@ class RestoreServiceTest {
         PreparedRestore included = service.prepare(currentRef, target);
         PreparedRestore excluded = service.prepareWithoutEntities(currentRef, target);
 
-        assertEquals(Map.of(new EntityChunkKey(0, 0), after), included.entities());
-        assertEquals(Map.of(), excluded.entities());
-        assertEquals(Map.of(), excluded.returnEntities());
+        try (included; excluded) {
+            assertEquals(Map.of(new EntityChunkKey(0, 0), after), included.entities());
+            assertEquals(Map.of(), excluded.entities());
+            assertEquals(Map.of(), excluded.returnEntities());
+        }
+        assertThrows(UncheckedIOException.class,
+                () -> included.entities().get(new EntityChunkKey(0, 0)));
     }
 
     @Test

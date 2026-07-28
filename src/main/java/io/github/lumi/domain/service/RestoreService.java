@@ -156,12 +156,13 @@ public final class RestoreService {
             CommitId targetCommit,
             BlockAreaTarget area) throws IOException {
         Objects.requireNonNull(area, "area");
-        PreparedRestore prepared = preparePartial(
+        try (PreparedRestore prepared = preparePartial(
                 expectedRef, sourceCommit, targetCommit,
-                area.area(), area.outside());
-        return new PartialRestorePlan(
-                targetCommit, area, prepared.sections().size(),
-                changedBlockCount(prepared));
+                area.area(), area.outside())) {
+            return new PartialRestorePlan(
+                    targetCommit, area, prepared.sections().size(),
+                    changedBlockCount(prepared));
+        }
     }
 
     public PreparedRestore prepareZone(
@@ -234,18 +235,20 @@ public final class RestoreService {
                     regionIndex + 1, changedRegions.size(), progress);
         }
         boolean restorePlayerSpawns = area == null && scope == null;
-        var targetSectionReader = new RestoreSectionReader(objects);
-        var returnSectionReader = new RestoreSectionReader(objects);
+        var targetReader = new RestorePlanReader(objects);
+        var returnReader = new RestorePlanReader(objects);
         var targetSections = new RestorePlanMap<>(
-                sections.keySet(), key -> sections.get(key).target(targetSectionReader),
-                targetSectionReader);
+                sections.keySet(), key -> sections.get(key).target(targetReader),
+                targetReader);
         var returnSections = new RestorePlanMap<>(
-                sections.keySet(), key -> sections.get(key).before(returnSectionReader),
-                returnSectionReader);
+                sections.keySet(), key -> sections.get(key).before(returnReader),
+                returnReader);
         var targetEntities = new RestorePlanMap<>(
-                entities.keySet(), key -> objects.readEntities(entities.get(key).target()));
+                entities.keySet(), key -> targetReader.readEntities(
+                        entities.get(key).target()));
         var returnEntities = new RestorePlanMap<>(
-                entities.keySet(), key -> objects.readEntities(entities.get(key).before()));
+                entities.keySet(), key -> returnReader.readEntities(
+                        entities.get(key).before()));
         return new PreparedRestore(currentRef, targetCommit,
                 targetSections, targetEntities, returnSections, returnEntities,
                 restorePlayerSpawns ? targetCommitValue.playerSpawns() : Map.of(),
@@ -423,12 +426,12 @@ public final class RestoreService {
             ObjectId targetId,
             SectionBlob selectedTarget,
             SectionBlob selectedBefore) {
-        private SectionBlob target(RestoreSectionReader sections) throws IOException {
-            return selectedTarget == null ? sections.read(targetId) : selectedTarget;
+        private SectionBlob target(RestorePlanReader objects) throws IOException {
+            return selectedTarget == null ? objects.readSection(targetId) : selectedTarget;
         }
 
-        private SectionBlob before(RestoreSectionReader sections) throws IOException {
-            return selectedBefore == null ? sections.read(beforeId) : selectedBefore;
+        private SectionBlob before(RestorePlanReader objects) throws IOException {
+            return selectedBefore == null ? objects.readSection(beforeId) : selectedBefore;
         }
     }
 
