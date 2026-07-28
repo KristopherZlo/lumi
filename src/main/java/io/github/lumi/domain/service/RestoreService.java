@@ -216,7 +216,7 @@ public final class RestoreService {
         DimensionTree current = objects.readDimension(currentCommit.tree());
         DimensionTree target = objects.readDimension(targetCommitValue.tree());
         Map<SectionKey, SectionPlan> sections = new HashMap<>();
-        Map<EntityChunkKey, EntityPlan> entities = new HashMap<>();
+        Set<EntityChunkKey> entities = new HashSet<>();
         var changedRegions = union(current.regions().keySet(), target.regions().keySet())
                 .stream().filter(region -> !Objects.equals(
                         current.regions().get(region), target.regions().get(region)))
@@ -235,6 +235,10 @@ public final class RestoreService {
                     regionIndex + 1, changedRegions.size(), progress);
         }
         boolean restorePlayerSpawns = area == null && scope == null;
+        EntityRestorePlanner.Plan entityPlan = includeEntities
+                ? new EntityRestorePlanner(objects, commits, origins)
+                        .plan(sourceCommit, targetCommit, entities, scope)
+                : new EntityRestorePlanner.Plan(Map.of(), Map.of());
         var targetReader = new RestorePlanReader(objects);
         var returnReader = new RestorePlanReader(objects);
         var targetSections = new RestorePlanMap<>(
@@ -243,14 +247,8 @@ public final class RestoreService {
         var returnSections = new RestorePlanMap<>(
                 sections.keySet(), key -> sections.get(key).before(returnReader),
                 returnReader);
-        var targetEntities = new RestorePlanMap<>(
-                entities.keySet(), key -> targetReader.readEntities(
-                        entities.get(key).target()));
-        var returnEntities = new RestorePlanMap<>(
-                entities.keySet(), key -> returnReader.readEntities(
-                        entities.get(key).before()));
         return new PreparedRestore(currentRef, targetCommit,
-                targetSections, targetEntities, returnSections, returnEntities,
+                targetSections, entityPlan.target(), returnSections, entityPlan.before(),
                 restorePlayerSpawns ? targetCommitValue.playerSpawns() : Map.of(),
                 restorePlayerSpawns ? currentCommit.playerSpawns() : Map.of(),
                 restorePlayerSpawns);
@@ -261,7 +259,7 @@ public final class RestoreService {
             RegionTree currentRegion,
             RegionTree targetRegion,
             Map<SectionKey, SectionPlan> sections,
-            Map<EntityChunkKey, EntityPlan> entities,
+            Set<EntityChunkKey> entities,
             BlockBox area,
             boolean outside,
             boolean includeEntities,
@@ -299,7 +297,7 @@ public final class RestoreService {
             ChunkTree current,
             ChunkTree target,
             Map<SectionKey, SectionPlan> sections,
-            Map<EntityChunkKey, EntityPlan> entities,
+            Set<EntityChunkKey> entities,
             BlockBox area,
             boolean outside,
             boolean includeEntities,
@@ -342,7 +340,7 @@ public final class RestoreService {
                     ? current.entities().orElseThrow()
                     : origin(key);
             if (!resolved.equals(returnId)) {
-                entities.put(key, new EntityPlan(returnId, resolved));
+                entities.add(key);
             }
         }
     }
@@ -435,5 +433,4 @@ public final class RestoreService {
         }
     }
 
-    private record EntityPlan(ObjectId before, ObjectId target) { }
 }

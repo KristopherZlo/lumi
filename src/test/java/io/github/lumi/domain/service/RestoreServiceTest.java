@@ -29,7 +29,6 @@ import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -203,8 +202,43 @@ class RestoreServiceTest {
             assertEquals(Map.of(), excluded.entities());
             assertEquals(Map.of(), excluded.returnEntities());
         }
-        assertThrows(UncheckedIOException.class,
-                () -> included.entities().get(new EntityChunkKey(0, 0)));
+    }
+
+    @Test
+    void crossChunkEntityMoveIncludesUnchangedOldPlacementInRestorePlan()
+            throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        UUID id = new UUID(0, 10);
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob oldPlacement = new EntityChunkBlob(List.of(new EntityState(
+                id, "minecraft:rabbit", new CanonicalNbt(new byte[] {1}))));
+        EntityChunkBlob newPlacement = new EntityChunkBlob(List.of(new EntityState(
+                id, "minecraft:rabbit", new CanonicalNbt(new byte[] {2}))));
+        var oldChunk = objects.write(new ChunkTree(
+                Map.of(), Optional.of(objects.write(oldPlacement))));
+        var emptyNewChunk = objects.write(new ChunkTree(
+                Map.of(), Optional.of(objects.write(empty))));
+        var movedNewChunk = objects.write(new ChunkTree(
+                Map.of(), Optional.of(objects.write(newPlacement))));
+        var current = commits.write(commit(tree(objects, Map.of(
+                new ChunkInRegion(0, 0), oldChunk,
+                new ChunkInRegion(1, 0), emptyNewChunk)), List.of()));
+        var target = commits.write(commit(tree(objects, Map.of(
+                new ChunkInRegion(0, 0), oldChunk,
+                new ChunkInRegion(1, 0), movedNewChunk)), List.of(current)));
+        var currentRef = new BranchRef(new BranchName("main"), current, 1);
+
+        PreparedRestore prepared = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot))
+                .prepare(currentRef, target);
+
+        assertEquals(Map.of(
+                new EntityChunkKey(0, 0), empty,
+                new EntityChunkKey(1, 0), newPlacement), prepared.entities());
+        assertEquals(Map.of(
+                new EntityChunkKey(0, 0), oldPlacement,
+                new EntityChunkKey(1, 0), empty), prepared.returnEntities());
     }
 
     @Test
@@ -259,7 +293,14 @@ class RestoreServiceTest {
     private static io.github.lumi.domain.model.ObjectId tree(
             WorldObjectRepository objects,
             io.github.lumi.domain.model.ObjectId chunk) throws IOException {
-        var region = objects.write(new RegionTree(Map.of(new ChunkInRegion(0, 0), chunk)));
+        return tree(objects, Map.of(new ChunkInRegion(0, 0), chunk));
+    }
+
+    private static io.github.lumi.domain.model.ObjectId tree(
+            WorldObjectRepository objects,
+            Map<ChunkInRegion, io.github.lumi.domain.model.ObjectId> chunks)
+            throws IOException {
+        var region = objects.write(new RegionTree(chunks));
         return objects.write(new DimensionTree(Map.of(new RegionCoordinate(0, 0), region)));
     }
 
