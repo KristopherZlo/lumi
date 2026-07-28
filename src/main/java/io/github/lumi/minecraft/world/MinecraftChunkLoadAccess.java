@@ -15,9 +15,15 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
                     TicketType.NO_TIMEOUT,
                     TicketType.FLAG_LOADING | TicketType.FLAG_KEEP_DIMENSION_ACTIVE);
     private final ServerLevel level;
+    private final Readiness readiness;
 
     public MinecraftChunkLoadAccess(ServerLevel level) {
+        this(level, Readiness.TERRAIN_AND_ENTITIES);
+    }
+
+    MinecraftChunkLoadAccess(ServerLevel level, Readiness readiness) {
         this.level = Objects.requireNonNull(level, "level");
+        this.readiness = Objects.requireNonNull(readiness, "readiness");
     }
 
     @Override
@@ -29,11 +35,13 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
 
     @Override
     public boolean isReady(ChunkCoordinate chunk) {
+        if (readiness == Readiness.TERRAIN) {
+            return terrainReady(chunk);
+        }
         ChunkPos position = position(chunk);
         var entities = ((ServerLevelEntityManagerAccessor) level).lumi$entityManager();
         entities.processPendingLoads();
-        return level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) != null
-                && entities.areEntitiesLoaded(position.toLong());
+        return terrainReady(chunk) && entities.areEntitiesLoaded(position.toLong());
     }
 
     @Override
@@ -44,5 +52,9 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
 
     private static ChunkPos position(ChunkCoordinate chunk) {
         return new ChunkPos(chunk.x(), chunk.z());
+    }
+
+    private boolean terrainReady(ChunkCoordinate chunk) {
+        return level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) != null;
     }
 }

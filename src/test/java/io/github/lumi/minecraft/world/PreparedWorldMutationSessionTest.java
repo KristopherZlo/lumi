@@ -501,16 +501,22 @@ class PreparedWorldMutationSessionTest {
         var persistence = new ManualPersistence();
         world.persistence = persistence;
         world.lightingComplete = false;
+        List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
 
         try (var session = new StreamingPreparedWorldMutationSession(
                 plan,
                 new MinecraftRestorePreparation(
                         new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                         new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)),
-                world, Runnable::run, () -> null)) {
+                world, Runnable::run, readiness -> {
+                    requested.add(readiness);
+                    return null;
+                })) {
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(keys.subList(0, 32), world.startedEntityChunks);
             assertEquals(1, world.persistenceStarts);
+            assertEquals(List.of(
+                    ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES), requested);
 
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(keys.subList(0, 32), world.startedEntityChunks);
@@ -520,6 +526,9 @@ class PreparedWorldMutationSessionTest {
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(keys, world.startedEntityChunks);
             assertEquals(1, world.lightingChecks);
+            assertEquals(List.of(
+                    ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES,
+                    ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES), requested);
 
             world.lightingComplete = true;
             assertTrue(session.applyUntil(Long.MAX_VALUE));
@@ -556,7 +565,8 @@ class PreparedWorldMutationSessionTest {
                         new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                         new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)),
                 new FakeWorld(new AtomicLong(), section), background::add,
-                () -> new ChunkLoadSession(new ImmediateChunkAccess(), () -> 0L))) {
+                ignored -> new ChunkLoadSession(
+                        new ImmediateChunkAccess(), () -> 0L))) {
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(0, targetReads.get());
             assertEquals(0, baseReads.get());
@@ -587,7 +597,7 @@ class PreparedWorldMutationSessionTest {
                 new MinecraftRestorePreparation(
                         new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                         new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)),
-                world, Runnable::run, () -> null)) {
+                world, Runnable::run, ignored -> null)) {
             assertTrue(session.applyUntil(Long.MAX_VALUE));
         }
 

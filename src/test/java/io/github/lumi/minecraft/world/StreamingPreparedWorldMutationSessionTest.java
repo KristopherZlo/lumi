@@ -21,7 +21,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
+import java.util.function.Function;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -109,15 +109,19 @@ class StreamingPreparedWorldMutationSessionTest {
         ControlledExecutor background = new ControlledExecutor();
         FakeWorld world = new FakeWorld(section);
         RecordingChunkAccess chunks = new RecordingChunkAccess();
+        List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
 
         try (var session = session(
-                plan(keys, section), world, background,
-                () -> new ChunkLoadSession(chunks, () -> 0L))) {
+                plan(keys, section), world, background, readiness -> {
+                    requested.add(readiness);
+                    return new ChunkLoadSession(chunks, () -> 0L);
+                })) {
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(0, chunks.active);
             background.runNext();
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(32, chunks.active);
+            assertEquals(List.of(ChunkLoadAccess.Readiness.TERRAIN), requested);
 
             world.persistence.getFirst().complete = true;
             assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -125,6 +129,9 @@ class StreamingPreparedWorldMutationSessionTest {
             assertEquals(8, chunks.active);
             assertEquals(0, chunks.activeBeforeRetain.get(32));
             assertEquals(32, chunks.peak);
+            assertEquals(List.of(
+                    ChunkLoadAccess.Readiness.TERRAIN,
+                    ChunkLoadAccess.Readiness.TERRAIN), requested);
         }
         assertEquals(0, chunks.active);
     }
@@ -249,14 +256,14 @@ class StreamingPreparedWorldMutationSessionTest {
             PreparedMinecraftPlanState plan,
             FakeWorld world,
             ControlledExecutor background) {
-        return session(plan, world, background, () -> null);
+        return session(plan, world, background, ignored -> null);
     }
 
     private static StreamingPreparedWorldMutationSession session(
             PreparedMinecraftPlanState plan,
             FakeWorld world,
             ControlledExecutor background,
-            Supplier<ChunkLoadSession> chunkLoads) {
+            Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads) {
         return new StreamingPreparedWorldMutationSession(
                 plan,
                 new MinecraftRestorePreparation(

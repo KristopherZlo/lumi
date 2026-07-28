@@ -74,14 +74,20 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         if (target instanceof PreparedMinecraftPlanState plan) {
             return new StreamingPreparedWorldMutationSession(
                     plan, preparation, world, background,
-                    () -> new ChunkLoadSession(new MinecraftChunkLoadAccess(level)));
+                    this::chunkLoads);
         }
         if (!(target instanceof PreparedMinecraftState minecraft)) {
             throw new IllegalArgumentException("Restore state was not prepared for Minecraft");
         }
         return new PreparedWorldMutationSession(
                 minecraft, world, System::nanoTime,
-                new ChunkLoadSession(new MinecraftChunkLoadAccess(level)));
+                chunkLoads(minecraft.entityKeys().isEmpty()
+                        ? ChunkLoadAccess.Readiness.TERRAIN
+                        : ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES));
+    }
+
+    private ChunkLoadSession chunkLoads(ChunkLoadAccess.Readiness readiness) {
+        return new ChunkLoadSession(new MinecraftChunkLoadAccess(level, readiness));
     }
 
     private PreparedMinecraftPlanState prioritize(PreparedMinecraftPlanState plan) {

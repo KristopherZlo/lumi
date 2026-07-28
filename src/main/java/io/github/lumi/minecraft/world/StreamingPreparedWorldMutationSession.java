@@ -16,7 +16,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 /** Decodes an estimated 128 MiB, then applies and persists it in 32-chunk windows. */
 final class StreamingPreparedWorldMutationSession implements WorldStateApply.ApplySession {
@@ -36,7 +36,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private final MinecraftRestorePreparation preparation;
     private final PreparedWorldAccess world;
     private final Executor background;
-    private final Supplier<ChunkLoadSession> chunkLoads;
+    private final Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads;
     private final RestoreApplyMetrics metrics = new RestoreApplyMetrics();
     private int batchStart;
     private int batchEnd;
@@ -57,7 +57,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             MinecraftRestorePreparation preparation,
             PreparedWorldAccess world,
             Executor background,
-            Supplier<ChunkLoadSession> chunkLoads) {
+            Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads) {
         this.plan = Objects.requireNonNull(plan, "plan");
         this.preparation = Objects.requireNonNull(preparation, "preparation");
         this.world = Objects.requireNonNull(world, "world");
@@ -153,7 +153,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             }
             batchEnd = windowEnd(plan.sectionKeys(), batchStart, slabEnd);
             current = new PreparedWorldMutationSession(
-                    nextSectionWindow(), world, System::nanoTime, chunkLoads.get(), metrics);
+                    nextSectionWindow(), world, System::nanoTime,
+                    chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN), metrics);
             currentKind = BatchKind.SECTIONS;
             phase = Phase.APPLYING;
             return true;
@@ -161,7 +162,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         if (entityBatchStart < plan.entityKeys().size()) {
             PreparedMinecraftState entities = nextEntityBatch();
             current = new PreparedWorldMutationSession(
-                    entities, world, System::nanoTime, chunkLoads.get(), metrics);
+                    entities, world, System::nanoTime,
+                    chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES),
+                    metrics);
             currentKind = BatchKind.ENTITIES;
             phase = Phase.APPLYING;
             return true;
@@ -171,8 +174,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             var source = new WorldStateApply.State(
                     Map.of(), Map.of(), plan.source().playerSpawns());
             current = new PreparedWorldMutationSession(
-                    new PreparedMinecraftState(source, Map.of(), Map.of()),
-                    world, System::nanoTime, chunkLoads.get(), metrics);
+                    new PreparedMinecraftState(source, Map.of(), Map.of()), world,
+                    System::nanoTime,
+                    chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN), metrics);
             currentKind = BatchKind.SPAWNS;
             phase = Phase.APPLYING;
             return true;
