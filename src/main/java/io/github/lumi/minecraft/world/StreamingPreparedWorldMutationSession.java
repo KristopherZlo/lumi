@@ -261,10 +261,6 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         return end;
     }
 
-    static int batchEnd(List<SectionKey> keys, int start) {
-        return windowEnd(keys, start, slabEnd(keys, start));
-    }
-
     static int entityBatchEnd(int total, int start) {
         return Math.min(total, start + MAX_CHUNKS);
     }
