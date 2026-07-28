@@ -239,6 +239,127 @@ class PreparedWorldMutationSessionTest {
     }
 
     @Test
+    void bulkReadinessWaitsForStoredClassificationAndEveryLiveChunk() throws Exception {
+        SectionKey storedKey = new SectionKey(6, 0, -3);
+        SectionKey sectionKey = new SectionKey(7, 0, -3);
+        EntityChunkKey entityKey = new EntityChunkKey(8, -3);
+        SectionBlob section = new SectionBlob(new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
+        DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
+                .decode(section);
+        EntityChunkBlob entities = new EntityChunkBlob(List.of());
+        var target = new PreparedMinecraftState(
+                new WorldStateApply.State(
+                        Map.of(storedKey, section, sectionKey, section),
+                        Map.of(entityKey, entities)),
+                Map.of(storedKey, decoded, sectionKey, decoded),
+                Map.of(entityKey, new DecodedEntityChunk(List.of())),
+                List.of(storedKey, sectionKey), List.of(entityKey));
+        AtomicLong clock = new AtomicLong();
+        FakeWorld world = new FakeWorld(clock, section);
+        world.storedBatchResult = new CompletableFuture<>();
+        ManualPersistence persistence = new ManualPersistence();
+        world.persistence = persistence;
+        ControlledChunkAccess access = new ControlledChunkAccess();
+        var session = new PreparedWorldMutationSession(
+                target, world, clock::get, new ChunkLoadSession(access, clock::get));
+        ChunkCoordinate storedChunk = ChunkCoordinate.from(storedKey);
+        ChunkCoordinate sectionChunk = ChunkCoordinate.from(sectionKey);
+        ChunkCoordinate entityChunk = ChunkCoordinate.from(entityKey);
+
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(), access.retained);
+        assertEquals(0, world.sectionWrites);
+
+        world.storedBatchResult.complete(Map.of(
+                storedChunk, StoredChunkApplyResult.APPLIED,
+                sectionChunk, StoredChunkApplyResult.fallback(
+                        StoredChunkApplyResult.Outcome.RESIDENT)));
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(sectionChunk, entityChunk), access.retained);
+        assertEquals(0, world.sectionWrites);
+        assertEquals(List.of(), world.startedEntityChunks);
+
+        access.complete(sectionChunk);
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(0, world.sectionWrites);
+        clock.set(25);
+        access.complete(entityChunk);
+        assertTrue(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(1, world.sectionWrites);
+        assertEquals(25, session.statistics().chunkLoadNanos());
+        assertEquals(WorldStateApply.Verification.VERIFIED,
+                session.verifyUntil(Long.MAX_VALUE));
+        assertFalse(session.persistUntil(Long.MAX_VALUE));
+        assertEquals(2, access.active());
+        persistence.complete = true;
+        assertTrue(session.persistUntil(Long.MAX_VALUE));
+        assertEquals(2, access.active());
+
+        session.close();
+        session.close();
+        assertEquals(List.of(sectionChunk, entityChunk), access.released);
+        assertEquals(1, persistence.closeCalls);
+    }
+
+    @Test
+    void bulkLoadsAnEntityOnlyWindowBeforeItsFirstMutation() throws Exception {
+        EntityChunkKey first = new EntityChunkKey(1, 1);
+        EntityChunkKey second = new EntityChunkKey(2, 2);
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        var target = new PreparedMinecraftState(
+                new WorldStateApply.State(Map.of(), Map.of(first, empty, second, empty)),
+                Map.of(), Map.of(
+                        first, new DecodedEntityChunk(List.of()),
+                        second, new DecodedEntityChunk(List.of())),
+                List.of(), List.of(first, second));
+        FakeWorld world = new FakeWorld(new AtomicLong(), null);
+        ControlledChunkAccess access = new ControlledChunkAccess();
+        var session = new PreparedWorldMutationSession(
+                target, world, () -> 0L,
+                new ChunkLoadSession(access, () -> 0L));
+
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(
+                ChunkCoordinate.from(first), ChunkCoordinate.from(second)),
+                access.retained);
+        assertEquals(List.of(), world.startedEntityChunks);
+
+        access.complete(ChunkCoordinate.from(first));
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(), world.startedEntityChunks);
+        access.complete(ChunkCoordinate.from(second));
+        assertTrue(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(first, second), world.startedEntityChunks);
+        session.close();
+    }
+
+    @Test
+    void keepsTheSequentialLoaderForStatesLargerThanOneWindow() throws Exception {
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        Map<EntityChunkKey, EntityChunkBlob> persistent = new LinkedHashMap<>();
+        Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
+        List<EntityChunkKey> keys = new ArrayList<>();
+        for (int chunkX = 0; chunkX < 33; chunkX++) {
+            EntityChunkKey key = new EntityChunkKey(chunkX, 0);
+            keys.add(key);
+            persistent.put(key, empty);
+            decoded.put(key, new DecodedEntityChunk(List.of()));
+        }
+        var target = new PreparedMinecraftState(
+                new WorldStateApply.State(Map.of(), persistent),
+                Map.of(), decoded, List.of(), keys);
+        RecordingChunkAccess access = new RecordingChunkAccess();
+        var session = new PreparedWorldMutationSession(
+                target, new FakeWorld(new AtomicLong(), null), () -> 0L,
+                new ChunkLoadSession(access, () -> 0L));
+
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(ChunkCoordinate.from(keys.getFirst())), access.retained);
+        session.close();
+    }
+
+    @Test
     void synchronizesAllSectionsInOneChunkOnce() throws Exception {
         SectionKey low = new SectionKey(1, 0, 2);
         SectionKey high = new SectionKey(1, 1, 2);
@@ -484,6 +605,8 @@ class PreparedWorldMutationSessionTest {
         private int storedBatches;
         private int maxStoredBatch;
         private StoredChunkApplyResult storedResult = StoredChunkApplyResult.FALLBACK;
+        private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>>
+                storedBatchResult;
         private List<UUID> entityIds = List.of();
         private Map<EntityChunkKey, List<UUID>> entityIdsByChunk = Map.of();
         private EntityChunkBlob capturedEntities = new EntityChunkBlob(List.of());
@@ -545,6 +668,9 @@ class PreparedWorldMutationSessionTest {
             storedBatches++;
             maxStoredBatch = Math.max(maxStoredBatch, chunks.size());
             storedWrites += chunks.size();
+            if (storedBatchResult != null) {
+                return storedBatchResult;
+            }
             Map<ChunkCoordinate, StoredChunkApplyResult> results = new LinkedHashMap<>();
             chunks.keySet().forEach(chunk -> results.put(chunk, storedResult));
             return CompletableFuture.completedFuture(Map.copyOf(results));
@@ -584,8 +710,10 @@ class PreparedWorldMutationSessionTest {
     private static final class ManualPersistence implements WorldPersistenceSession {
         private boolean complete;
         private Timings timings = Timings.EMPTY;
+        private int closeCalls;
         @Override public boolean advanceUntil(long deadlineNanos) { return complete; }
         @Override public Timings timings() { return timings; }
+        @Override public void close() { closeCalls++; }
     }
 
     private static final class RecordingChunkAccess implements ChunkLoadAccess {
@@ -617,6 +745,39 @@ class PreparedWorldMutationSessionTest {
         @Override public void release(ChunkCoordinate chunk) {
             released.add(chunk);
             active--;
+        }
+    }
+
+    private static final class ControlledChunkAccess implements ChunkLoadAccess {
+        private final Map<ChunkCoordinate, CompletableFuture<Void>> loads =
+                new LinkedHashMap<>();
+        private final Set<ChunkCoordinate> ready = new java.util.HashSet<>();
+        private final List<ChunkCoordinate> retained = new ArrayList<>();
+        private final List<ChunkCoordinate> released = new ArrayList<>();
+
+        @Override
+        public CompletableFuture<Void> retain(ChunkCoordinate chunk) {
+            retained.add(chunk);
+            return loads.computeIfAbsent(chunk, ignored -> new CompletableFuture<>());
+        }
+
+        @Override
+        public boolean isReady(ChunkCoordinate chunk) {
+            return ready.contains(chunk);
+        }
+
+        @Override
+        public void release(ChunkCoordinate chunk) {
+            released.add(chunk);
+        }
+
+        private void complete(ChunkCoordinate chunk) {
+            ready.add(chunk);
+            loads.get(chunk).complete(null);
+        }
+
+        private int active() {
+            return retained.size() - released.size();
         }
     }
 }

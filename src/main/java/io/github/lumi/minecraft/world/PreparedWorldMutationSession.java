@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,6 +27,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private final boolean playerSpawnsIncluded;
     private final List<SectionKey> sections;
     private final List<EntityChunkKey> entities;
+    private final boolean bulkLoading;
     private MutationCursor apply;
     private MutationCursor repair;
     private int sectionVerificationIndex;
@@ -37,6 +39,11 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private boolean persistenceMeasured;
     private final Set<ChunkCoordinate> storedChunks = new HashSet<>();
     private final Map<ChunkCoordinate, Long> loadStarts = new LinkedHashMap<>();
+    private boolean storedClassificationComplete;
+    private boolean bulkRetained;
+    private boolean bulkReady;
+    private long bulkLoadStartedNanos;
+    private boolean closed;
 
     public PreparedWorldMutationSession(
             PreparedMinecraftState target, PreparedWorldAccess world, LongSupplier nanoTime) {
@@ -65,6 +72,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         this.playerSpawnsIncluded = target.source().playerSpawnsIncluded();
         sections = target.sectionKeys();
         entities = target.entityKeys();
+        bulkLoading = chunks != null && fitsBulkWindow(sections, entities);
+        storedClassificationComplete = sections.isEmpty();
         playerSpawnsVerified = !playerSpawnsIncluded;
         apply = new MutationCursor();
     }
@@ -186,11 +195,18 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
 
     @Override
     public void close() {
-        if (persistence != null) {
-            persistence.close();
+        if (closed) {
+            return;
         }
-        if (chunks != null) {
-            chunks.close();
+        closed = true;
+        try {
+            if (persistence != null) {
+                persistence.close();
+            }
+        } finally {
+            if (chunks != null) {
+                chunks.close();
+            }
         }
     }
 
@@ -212,6 +228,9 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         if (chunks == null) {
             return true;
         }
+        if (bulkLoading) {
+            return loadWindowUntil(deadlineNanos);
+        }
         ChunkCoordinate coordinate = ChunkCoordinate.from(key);
         long started = loadStarts.computeIfAbsent(coordinate, ignored -> nanoTime.getAsLong());
         if (!chunks.loadOneUntil(coordinate, deadlineNanos)) {
@@ -219,6 +238,66 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         }
         loadStarts.remove(coordinate);
         metrics.chunkLoad(Math.max(0, nanoTime.getAsLong() - started));
+        return true;
+    }
+
+    private boolean loadWindowUntil(long deadlineNanos) throws IOException {
+        if (!bulkLoading) {
+            return true;
+        }
+        if (bulkReady) {
+            return true;
+        }
+        if (!storedClassificationComplete) {
+            return false;
+        }
+        if (!bulkRetained) {
+            List<HistoryKey> required = liveChunkRepresentatives();
+            if (required.isEmpty()) {
+                bulkReady = true;
+                return true;
+            }
+            bulkLoadStartedNanos = nanoTime.getAsLong();
+            chunks.retain(required);
+            bulkRetained = true;
+        }
+        if (!chunks.loadUntil(deadlineNanos)) {
+            return false;
+        }
+        bulkReady = true;
+        metrics.chunkLoad(Math.max(0, nanoTime.getAsLong() - bulkLoadStartedNanos));
+        return true;
+    }
+
+    private List<HistoryKey> liveChunkRepresentatives() {
+        Map<ChunkCoordinate, HistoryKey> required = new LinkedHashMap<>();
+        for (SectionKey key : sections) {
+            ChunkCoordinate chunk = ChunkCoordinate.from(key);
+            if (!storedChunks.contains(chunk)) {
+                required.putIfAbsent(chunk, key);
+            }
+        }
+        for (EntityChunkKey key : entities) {
+            required.putIfAbsent(ChunkCoordinate.from(key), key);
+        }
+        return List.copyOf(required.values());
+    }
+
+    private static boolean fitsBulkWindow(
+            List<SectionKey> sections, List<EntityChunkKey> entities) {
+        Set<ChunkCoordinate> chunks = new HashSet<>();
+        for (HistoryKey key : sections) {
+            if (chunks.add(ChunkCoordinate.from(key))
+                    && chunks.size() > StreamingPreparedWorldMutationSession.MAX_CHUNKS) {
+                return false;
+            }
+        }
+        for (HistoryKey key : entities) {
+            if (chunks.add(ChunkCoordinate.from(key))
+                    && chunks.size() > StreamingPreparedWorldMutationSession.MAX_CHUNKS) {
+                return false;
+            }
+        }
         return true;
     }
 
@@ -255,6 +334,9 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 }
                 if (storage == StorageAttempt.APPLIED) {
                     continue;
+                }
+                if (!loadWindowUntil(deadlineNanos)) {
+                    return false;
                 }
                 var required = requiredChunk();
                 if (required != null && !loadUntil(required, deadlineNanos)) {
@@ -315,6 +397,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 throw new IOException("Stored Restore batch failed", cause);
             }
             storedApply = null;
+            storedClassificationComplete = true;
             storedResults.forEach((chunk, result) -> {
                 metrics.storedChunk(result);
                 if (result.applied()) {
