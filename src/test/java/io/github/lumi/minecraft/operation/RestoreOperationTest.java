@@ -13,12 +13,22 @@ import io.github.lumi.domain.model.BranchSwitchPlan;
 import io.github.lumi.domain.model.BranchSwitchTarget;
 import io.github.lumi.domain.model.BlockAreaTarget;
 import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.domain.model.ChunkInRegion;
+import io.github.lumi.domain.model.ChunkTree;
+import io.github.lumi.domain.model.Commit;
+import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.CommitKind;
+import io.github.lumi.domain.model.CommitStatistics;
+import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationJournal;
 import io.github.lumi.domain.model.OperationKind;
 import io.github.lumi.domain.model.OperationTarget;
+import io.github.lumi.domain.model.RegionCoordinate;
+import io.github.lumi.domain.model.RegionTree;
+import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
@@ -26,12 +36,19 @@ import io.github.lumi.domain.model.WorkspaceSwitchTarget;
 import io.github.lumi.domain.model.Zone;
 import io.github.lumi.domain.model.ZoneRestoreTarget;
 import io.github.lumi.domain.service.PreparedRestore;
+import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.storage.repository.BranchRefRepository;
+import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.OperationJournalRepository;
+import io.github.lumi.storage.repository.OriginStore;
+import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -678,11 +695,11 @@ class RestoreOperationTest {
 
     @Test
     void closesTargetAndReturnSessionsAfterSafeReturn() throws IOException {
-        var expected = new BranchRef(new BranchName("main"), id('3'), 1);
+        PreparedRestore restore = lazyRestore();
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
         CloseTrackingReturnWorld world = new CloseTrackingReturnWorld();
         RestoreOperation operation = RestoreOperation.start(
-                new PreparedRestore(expected, id('4'), Map.of(), Map.of(), Map.of(), Map.of()),
+                restore,
                 world, ignored -> { }, journals, UUID.randomUUID());
 
         activate(operation, journals);
@@ -692,10 +709,69 @@ class RestoreOperationTest {
 
         assertEquals(RestoreStatus.RETURNED, operation.status());
         assertEquals(2, world.closes);
+        assertPlanClosed(restore);
+    }
+
+    @Test
+    void closesPreparedRestoreAfterSuccessfulPublication() throws IOException {
+        PreparedRestore restore = lazyRestore();
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        RestoreOperation operation = RestoreOperation.start(
+                restore, new ImmediatelyVerified(), ignored -> { },
+                journals, UUID.randomUUID());
+
+        activate(operation, journals);
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+
+        assertEquals(RestoreStatus.COMPLETE, operation.status());
+        assertPlanClosed(restore);
     }
 
     private static CommitId id(char digit) {
         return new CommitId(new ObjectId(String.valueOf(digit).repeat(64)));
+    }
+
+    private PreparedRestore lazyRestore() throws IOException {
+        var objects = new WorldObjectRepository(repositoryRoot);
+        var commits = new CommitRepository(repositoryRoot);
+        CommitId target = commits.write(commit(
+                tree(objects, objects.write(section("minecraft:air"))), List.of()));
+        CommitId current = commits.write(commit(
+                tree(objects, objects.write(section("minecraft:stone"))),
+                List.of(target)));
+        return new RestoreService(objects, commits, new OriginStore(repositoryRoot))
+                .prepare(new BranchRef(new BranchName("main"), current, 1), target);
+    }
+
+    private static ObjectId tree(
+            WorldObjectRepository objects, ObjectId section) throws IOException {
+        ObjectId chunk = objects.write(new ChunkTree(
+                Map.of(0, section), Optional.empty()));
+        ObjectId region = objects.write(new RegionTree(
+                Map.of(new ChunkInRegion(0, 0), chunk)));
+        return objects.write(new DimensionTree(
+                Map.of(new RegionCoordinate(0, 0), region)));
+    }
+
+    private static SectionBlob section(String state) {
+        return new SectionBlob(
+                new ArrayList<>(Collections.nCopies(SectionBlob.BLOCK_COUNT, state)),
+                Map.of());
+    }
+
+    private static Commit commit(ObjectId tree, List<CommitId> parents) {
+        return new Commit(
+                tree, parents,
+                new CommitAuthor(new UUID(0, 1), "Builder"), "Save", Instant.EPOCH,
+                new UUID(0, 2), Optional.empty(), CommitKind.MANUAL,
+                new CommitStatistics(1, 0, SectionBlob.BLOCK_COUNT, 0));
+    }
+
+    private static void assertPlanClosed(PreparedRestore restore) {
+        SectionKey key = new SectionKey(0, 0, 0);
+        assertThrows(UncheckedIOException.class, () -> restore.sections().get(key));
+        assertThrows(UncheckedIOException.class, () -> restore.returnSections().get(key));
     }
 
     private static final class RecordingRestoreStateListener implements RestoreStateListener {

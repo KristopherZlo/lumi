@@ -719,7 +719,11 @@ public final class RestoreOperation implements DimensionMutation {
         logStatistics("target", targetSession.statistics());
         targetSession.close();
         status = RestoreStatus.COMPLETE;
-        stateListener.restored(preparedTarget.source());
+        try {
+            stateListener.restored(preparedTarget.source());
+        } finally {
+            closeRestorePlan();
+        }
     }
 
     private void beginReturn() throws IOException {
@@ -795,7 +799,11 @@ public final class RestoreOperation implements DimensionMutation {
         logStatistics("safe-return", returnSession.statistics());
         returnSession.close();
         status = RestoreStatus.RETURNED;
-        stateListener.returned(preparedReturn.source());
+        try {
+            stateListener.returned(preparedReturn.source());
+        } finally {
+            closeRestorePlan();
+        }
     }
 
     private static void logStatistics(
@@ -861,6 +869,15 @@ public final class RestoreOperation implements DimensionMutation {
             status = RestoreStatus.CANCELLED;
         } finally {
             targetSession.close();
+            restore.close();
+        }
+    }
+
+    private void closeRestorePlan() {
+        try {
+            restore.close();
+        } catch (IOException failed) {
+            LumiMod.LOGGER.warn("Failed to close terminal Restore plan", failed);
         }
     }
 
