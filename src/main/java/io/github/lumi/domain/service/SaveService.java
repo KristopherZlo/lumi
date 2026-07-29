@@ -14,17 +14,14 @@ import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.MerkleTreeEditor;
 import io.github.lumi.storage.repository.OperationJournalRepository;
-import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.RefConflictException;
 import io.github.lumi.storage.repository.VersionTagRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -35,7 +32,6 @@ public final class SaveService implements SavePublisher {
     private final BranchRefRepository refs;
     private final OperationJournalRepository journals;
     private final VersionTagRepository tags;
-    private final OriginStore origins;
 
     public SaveService(
             WorldObjectRepository objects,
@@ -43,15 +39,13 @@ public final class SaveService implements SavePublisher {
             CommitRepository commits,
             BranchRefRepository refs,
             OperationJournalRepository journals,
-            VersionTagRepository tags,
-            OriginStore origins) {
+            VersionTagRepository tags) {
         this.objects = Objects.requireNonNull(objects, "objects");
         this.trees = Objects.requireNonNull(trees, "trees");
         this.commits = Objects.requireNonNull(commits, "commits");
         this.refs = Objects.requireNonNull(refs, "refs");
         this.journals = Objects.requireNonNull(journals, "journals");
         this.tags = Objects.requireNonNull(tags, "tags");
-        this.origins = Objects.requireNonNull(origins, "origins");
     }
 
     @Override
@@ -169,19 +163,6 @@ public final class SaveService implements SavePublisher {
         }
         ObjectId tree;
         try (WorldObjectRepository.WriteBatch batch = objects.beginBatch()) {
-            Set<HistoryKey> capturedKeys = captured.generations().generations().keySet();
-            progress.accept(new SavePublicationProgress(
-                    "Save: packing restore origins", 0, capturedKeys.size()));
-            Set<ObjectId> packedOrigins = new HashSet<>();
-            long completedOrigins = 0;
-            for (HistoryKey key : capturedKeys) {
-                Optional<ObjectId> origin = origins.read(key);
-                origin.ifPresent(packedOrigins::add);
-                progress.accept(new SavePublicationProgress(
-                        "Save: packing restore origins",
-                        ++completedOrigins, capturedKeys.size()));
-            }
-            batch.packExisting(packedOrigins);
             long capturedTotal = captured.sections().size() + (long) captured.entities().size();
             progress.accept(new SavePublicationProgress(
                     "Save: writing captured state", 0, capturedTotal));

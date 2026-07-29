@@ -1,7 +1,6 @@
 package io.github.lumi.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,7 +11,6 @@ import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
-import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
@@ -22,7 +20,6 @@ import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.MerkleTreeEditor;
 import io.github.lumi.storage.repository.OperationJournalRepository;
-import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.RefConflictException;
 import io.github.lumi.storage.repository.VersionTagRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -56,12 +53,6 @@ class SaveServiceTest {
         UUID player = UUID.fromString("30000000-0000-0000-0000-000000000003");
         PlayerSpawn spawn = new PlayerSpawn(10, 70, -20, 180.0F, 0.0F, true);
         SectionKey key = new SectionKey(0, 0, 0);
-        SectionBlob origin = oneBlockSection("minecraft:stone");
-        ObjectId originId = objects.write(origin);
-        OriginStore origins = new OriginStore(repositoryRoot);
-        origins.register(key, originId);
-        ObjectId unrelatedOrigin = objects.write(oneBlockSection("minecraft:dirt"));
-        origins.register(new SectionKey(1, 0, 0), unrelatedOrigin);
         CapturedWorldState captured = new CapturedWorldState(
                 Map.of(key, airSection()), Map.of(),
                 new WorkingIndexSnapshot(Map.of(key, 3L)),
@@ -69,7 +60,7 @@ class SaveServiceTest {
         VersionTagRepository tags = new VersionTagRepository(repositoryRoot);
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
         SaveService service = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
-                journals, tags, origins);
+                journals, tags);
         var progress = new ArrayList<SavePublicationProgress>();
         var completionCalled = new AtomicBoolean();
 
@@ -104,11 +95,6 @@ class SaveServiceTest {
         try (var files = Files.walk(repositoryRoot.resolve("objects").resolve("packs"))) {
             assertEquals(1, files.filter(path -> path.toString().endsWith(".pack")).count());
         }
-        Files.delete(loosePath(originId));
-        assertFalse(Files.exists(loosePath(originId)));
-        assertTrue(Files.exists(loosePath(unrelatedOrigin)));
-        assertEquals(origin,
-                new WorldObjectRepository(repositoryRoot).readSection(originId));
     }
 
     @Test
@@ -121,8 +107,7 @@ class SaveServiceTest {
         var initialRef = refs.create(new BranchName("main"), initialId);
         SaveService service = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
                 new OperationJournalRepository(repositoryRoot),
-                new VersionTagRepository(repositoryRoot),
-                new OriginStore(repositoryRoot));
+                new VersionTagRepository(repositoryRoot));
 
         SaveResult result = service.save(new SaveRequest(
                 initialRef, author(), "Milestone", Instant.parse("2026-07-15T12:00:00Z"),
@@ -146,8 +131,7 @@ class SaveServiceTest {
         SaveService service = new SaveService(
                 objects, new MerkleTreeEditor(objects), commits, refs,
                 new OperationJournalRepository(repositoryRoot),
-                new VersionTagRepository(repositoryRoot),
-                new OriginStore(repositoryRoot));
+                new VersionTagRepository(repositoryRoot));
         var completionCalled = new AtomicBoolean();
         var request = new SaveRequest(
                 initialRef, author(), "Return point", Instant.EPOCH,
@@ -210,8 +194,7 @@ class SaveServiceTest {
         SaveService service = new SaveService(
                 objects, new MerkleTreeEditor(objects), commits, refs,
                 new OperationJournalRepository(repositoryRoot),
-                new VersionTagRepository(repositoryRoot),
-                new OriginStore(repositoryRoot));
+                new VersionTagRepository(repositoryRoot));
         var request = new SaveRequest(
                 initialRef, author(), "Wrong project", Instant.EPOCH,
                 UUID.fromString("90000000-0000-0000-0000-000000000009"),
@@ -240,8 +223,7 @@ class SaveServiceTest {
         SaveService service = new SaveService(
                 objects, new MerkleTreeEditor(objects), commits, refs,
                 new OperationJournalRepository(repositoryRoot),
-                new VersionTagRepository(repositoryRoot),
-                new OriginStore(repositoryRoot));
+                new VersionTagRepository(repositoryRoot));
         var request = new SaveRequest(
                 initialRef, author(), "Tagged", Instant.EPOCH,
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
@@ -267,8 +249,7 @@ class SaveServiceTest {
         var ref = refs.create(new BranchName("main"), previous);
         SaveService service = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
                 new OperationJournalRepository(repositoryRoot),
-                new VersionTagRepository(repositoryRoot),
-                new OriginStore(repositoryRoot));
+                new VersionTagRepository(repositoryRoot));
 
         SaveResult result = service.save(new SaveRequest(
                 ref, author(), "Replacement", Instant.parse("2026-07-15T12:00:00Z"),
@@ -293,8 +274,7 @@ class SaveServiceTest {
         var ref = refs.create(new BranchName("main"), previous);
         SaveService service = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
                 new OperationJournalRepository(repositoryRoot),
-                new VersionTagRepository(repositoryRoot),
-                new OriginStore(repositoryRoot));
+                new VersionTagRepository(repositoryRoot));
         UUID zone = new UUID(0, 17);
 
         SaveResult result = service.save(new SaveRequest(
@@ -327,8 +307,7 @@ class SaveServiceTest {
                 new CommitStatistics(1, 0, 1, 0));
         SaveService service = new SaveService(objects, new MerkleTreeEditor(objects), commits, refs,
                 new OperationJournalRepository(repositoryRoot),
-                new VersionTagRepository(repositoryRoot),
-                new OriginStore(repositoryRoot));
+                new VersionTagRepository(repositoryRoot));
         var request = new SaveRequest(
                 initialRef, author(), "Partial Restore checkpoint", Instant.EPOCH,
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
@@ -369,8 +348,7 @@ class SaveServiceTest {
         SaveService service = new SaveService(
                 objects, new MerkleTreeEditor(objects), commits, refs,
                 new OperationJournalRepository(repositoryRoot),
-                new VersionTagRepository(repositoryRoot),
-                new OriginStore(repositoryRoot));
+                new VersionTagRepository(repositoryRoot));
         SectionKey key = new SectionKey(0, 0, 0);
         UUID workspace = UUID.fromString("20000000-0000-0000-0000-000000000002");
 
@@ -403,12 +381,6 @@ class SaveServiceTest {
 
     private static CommitAuthor author() {
         return new CommitAuthor(UUID.fromString("10000000-0000-0000-0000-000000000001"), "Builder");
-    }
-
-    private Path loosePath(ObjectId id) {
-        return repositoryRoot.resolve("objects")
-                .resolve(id.hex().substring(0, 2))
-                .resolve(id.hex().substring(2) + ".lz4");
     }
 
     private static SectionBlob airSection() {
