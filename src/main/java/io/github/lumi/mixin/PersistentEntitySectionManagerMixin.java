@@ -64,6 +64,7 @@ abstract class PersistentEntitySectionManagerMixin<T extends EntityAccess> {
     private void lumi$skipFrozenPendingEntityLoads(CallbackInfo callback) {
         var runtime = lumi$runtime();
         if (runtime != null && runtime.freeze().isFrozen()
+                && runtime.operations().hasActiveOperation()
                 && !runtime.freeze().isEntityAdditionAllowed()) {
             callback.cancel();
         }
