@@ -80,9 +80,6 @@ final class EntityRestorePlanner {
                     canonical(storedBefore, key, identities, beforeSelection);
             EntityChunkBlob targetChunk = canonical(
                     requireChunk(targetState, key, target), key, identities, targetSelection);
-            if (storedBefore.equals(beforeChunk) && beforeChunk.equals(targetChunk)) {
-                continue;
-            }
             if (scope != null && !scope.includes(key)) {
                 throw new IOException("Entity Restore crosses zone boundary at " + key);
             }

@@ -240,39 +240,36 @@ class RestoreServiceTest {
     }
 
     @Test
-    void unchangedLegacyDuplicatePlacementIsStillCleaned() throws IOException {
+    void identityCompletePlanIncludesUnchangedSelectedPlacement() throws IOException {
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
         CommitRepository commits = new CommitRepository(repositoryRoot);
         UUID duplicate = new UUID(0, 10);
         EntityChunkBlob empty = new EntityChunkBlob(List.of());
         EntityChunkBlob oldPlacement = entities(entity(duplicate, 1));
         EntityChunkBlob selectedPlacement = entities(entity(duplicate, 2));
-        EntityChunkBlob targetPlacement = entities(
-                entity(duplicate, 2), entity(new UUID(0, 11), 3));
         var oldChunk = objects.write(new ChunkTree(
                 Map.of(), Optional.of(objects.write(oldPlacement))));
+        var emptyChunk = objects.write(new ChunkTree(
+                Map.of(), Optional.of(objects.write(empty))));
         var selectedChunk = objects.write(new ChunkTree(
                 Map.of(), Optional.of(objects.write(selectedPlacement))));
-        var targetChunk = objects.write(new ChunkTree(
-                Map.of(), Optional.of(objects.write(targetPlacement))));
         var origin = commits.write(commit(tree(objects, Map.of(
                 new ChunkInRegion(0, 0), oldChunk)), List.of()));
         var current = commits.write(commit(tree(objects, Map.of(
                 new ChunkInRegion(0, 0), oldChunk,
                 new ChunkInRegion(1, 0), selectedChunk)), List.of(origin)));
         var target = commits.write(commit(tree(objects, Map.of(
-                new ChunkInRegion(0, 0), oldChunk,
-                new ChunkInRegion(1, 0), targetChunk)), List.of(current)));
+                new ChunkInRegion(0, 0), emptyChunk,
+                new ChunkInRegion(1, 0), selectedChunk)), List.of(current)));
 
         PreparedRestore prepared = new RestoreService(
                 objects, commits, new OriginStore(repositoryRoot))
                 .prepare(new BranchRef(new BranchName("main"), current, 1), target);
 
-        assertEquals(empty, prepared.entities().get(new EntityChunkKey(0, 0)));
-        assertEquals(empty, prepared.returnEntities().get(new EntityChunkKey(0, 0)));
-        assertEquals(targetPlacement, prepared.entities().get(new EntityChunkKey(1, 0)));
-        assertEquals(selectedPlacement,
-                prepared.returnEntities().get(new EntityChunkKey(1, 0)));
+        assertEquals(Map.of(
+                new EntityChunkKey(0, 0), empty,
+                new EntityChunkKey(1, 0), selectedPlacement), prepared.entities());
+        assertEquals(prepared.entities(), prepared.returnEntities());
     }
 
     @Test
