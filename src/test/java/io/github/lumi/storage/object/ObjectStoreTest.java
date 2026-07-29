@@ -65,7 +65,12 @@ class ObjectStoreTest {
         Map<ObjectId, byte[]> expected = new LinkedHashMap<>();
         expected.put(looseId, loose);
 
+        try (ObjectStore.WriteBatch abandoned = store.beginBatch()) {
+            abandoned.packExisting(Set.of(looseId));
+        }
+        assertTrue(Files.exists(loosePath(looseId)));
         try (ObjectStore.WriteBatch batch = store.beginBatch()) {
+            batch.packExisting(Set.of(looseId));
             assertEquals(looseId, batch.write(loose));
             for (int index = 0; index < 128; index++) {
                 byte[] payload = ("packed-" + index).getBytes(StandardCharsets.UTF_8);
@@ -74,13 +79,14 @@ class ObjectStoreTest {
             batch.publish();
         }
 
+        Files.delete(loosePath(looseId));
         store = new ObjectStore(tempDir);
         assertEquals(expected.keySet(), store.listIds());
         for (var entry : expected.entrySet()) {
             assertArrayEquals(entry.getValue(), store.read(entry.getKey()));
         }
         try (var files = Files.walk(tempDir)) {
-            assertEquals(3, files.filter(Files::isRegularFile).count());
+            assertEquals(2, files.filter(Files::isRegularFile).count());
         }
     }
 

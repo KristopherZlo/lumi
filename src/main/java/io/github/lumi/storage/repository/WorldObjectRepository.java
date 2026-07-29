@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.LongConsumer;
 
 public final class WorldObjectRepository {
@@ -157,6 +158,10 @@ public final class WorldObjectRepository {
 
         public ObjectId write(DimensionTree dimension) throws IOException {
             return batch.write(merkleCodec.encode(dimension));
+        }
+
+        public void packExisting(Set<ObjectId> ids) throws IOException {
+            batch.packExisting(ids);
         }
 
         public void publish() throws IOException {

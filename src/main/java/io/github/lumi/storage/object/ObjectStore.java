@@ -381,6 +381,21 @@ public final class ObjectStore {
             return writer.write(canonicalPayload);
         }
 
+        /** Copies loose objects into this pack while leaving GC to remove their sources. */
+        public void packExisting(Set<ObjectId> ids) throws IOException {
+            Objects.requireNonNull(ids, "ids");
+            if (ids.isEmpty()) {
+                return;
+            }
+            Map<ObjectId, PackedObject> packed = refreshPackedObjects();
+            for (ObjectId id : ids.stream()
+                    .sorted(Comparator.comparing(ObjectId::hex)).toList()) {
+                if (!packed.containsKey(id)) {
+                    writer.write(readLoose(id, pathFor(id)));
+                }
+            }
+        }
+
         public void publish() throws IOException {
             if (published) {
                 throw new IllegalStateException("Object batch is already published");

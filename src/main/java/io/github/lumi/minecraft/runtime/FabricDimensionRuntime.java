@@ -379,7 +379,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                                 "Lumi operation observer failed", failure)),
                 mutations,
                 new SaveService(objects, trees, commits, refs, journals,
-                        new VersionTagRepository(repository)),
+                        new VersionTagRepository(repository), origins),
                 restoreService, blockOnlyRestoreService,
                 new MinecraftWorldStateApply(level, freeze, background), journals,
                 background, refs, sessionCheckpoints, branches,
