@@ -117,11 +117,17 @@ class StreamingPreparedWorldMutationSessionTest {
         assertEquals(2, chunks.peak);
         assertEquals(2, chunks.active);
         assertTrue(world.persistence.isEmpty());
-        assertEquals(0, background.submitted);
+        assertEquals(1, background.submitted);
+        assertEquals(1, background.pending());
         assertEquals(Set.copyOf(keys), world.suppressedEntityLoads);
         assertEquals(0, world.entitySuppressionReleases);
         assertEquals(List.of(
                 ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES), requested);
+
+        background.runNext();
+        assertEquals(0, background.pending());
+        assertTrue(world.persistence.isEmpty());
+        assertTrue(world.startedEntityChunks.isEmpty());
 
         secondCleanupLoad.complete(null);
         assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -132,11 +138,9 @@ class StreamingPreparedWorldMutationSessionTest {
         world.persistence.getFirst().complete = true;
         assertFalse(session.applyUntil(Long.MAX_VALUE));
         assertEquals(1, background.submitted);
+        assertEquals(0, background.pending());
         assertTrue(world.suppressedEntityLoads.isEmpty());
         assertEquals(1, world.entitySuppressionReleases);
-
-        background.runNext();
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
         world.persistence.getLast().complete = true;
         assertFalse(session.applyUntil(Long.MAX_VALUE));
         assertEquals(List.of(

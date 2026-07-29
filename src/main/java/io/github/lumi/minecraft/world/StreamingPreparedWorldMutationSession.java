@@ -161,6 +161,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             currentKind = null;
             repairAttempted = false;
         }
+        startSectionPreparation();
         if (!prepareEntityCleanup(deadlineNanos)) {
             return false;
         }
@@ -173,21 +174,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         cleanupEntityIds = null;
         if (batchStart < plan.sectionKeys().size()) {
             if (slab == null) {
-                if (preparing == null) {
-                    int start = batchStart;
-                    preparing = CompletableFuture.supplyAsync(() -> {
-                        try {
-                            Batch batch = loadBatch(start);
-                            return preparation.preparePreflightedBatch(
-                                    batch.target(), batch.base(), batch.order(),
-                                    () -> closed);
-                        } catch (UncheckedIOException failed) {
-                            throw new CompletionException(failed.getCause());
-                        } catch (IOException failed) {
-                            throw new CompletionException(failed);
-                        }
-                    }, background);
-                }
+                startSectionPreparation();
                 if (!preparing.isDone()) {
                     return false;
                 }
@@ -224,6 +211,26 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         }
         phase = Phase.LIGHTING;
         return true;
+    }
+
+    private void startSectionPreparation() {
+        if (slab != null || preparing != null
+                || batchStart >= plan.sectionKeys().size()) {
+            return;
+        }
+        int start = batchStart;
+        preparing = CompletableFuture.supplyAsync(() -> {
+            try {
+                Batch batch = loadBatch(start);
+                return preparation.preparePreflightedBatch(
+                        batch.target(), batch.base(), batch.order(),
+                        () -> closed);
+            } catch (UncheckedIOException failed) {
+                throw new CompletionException(failed.getCause());
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
     }
 
     private boolean startEntityBatch() throws IOException {

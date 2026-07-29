@@ -1,8 +1,6 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.SectionBlob;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -41,29 +39,14 @@ final class PreparedSectionDelta {
     static PreparedSectionDelta between(
             SectionBlob source,
             SectionBlob before,
-            MinecraftBlockStateDecoder decoder,
-            DecodedSection target) throws IOException {
+            List<BlockState> beforePalette,
+            DecodedSection target) {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(before, "before");
-        Objects.requireNonNull(decoder, "decoder");
-        List<String> sourceStates = source.blockStates();
-        List<String> beforeStates = before.blockStates();
-        List<BlockState> targetStates = target.blockStates();
-        try {
-            return create(index -> {
-                String encoded = beforeStates.get(index);
-                if (encoded.equals(sourceStates.get(index))) {
-                    return targetStates.get(index);
-                }
-                try {
-                    return decoder.decodeState(encoded);
-                } catch (IOException failed) {
-                    throw new UncheckedIOException(failed);
-                }
-            }, target, !before.blockEntities().equals(source.blockEntities()));
-        } catch (UncheckedIOException failed) {
-            throw failed.getCause();
-        }
+        Objects.requireNonNull(beforePalette, "beforePalette");
+        return create(index -> beforePalette.get(
+                        before.palette().paletteIndex(index)),
+                target, !before.blockEntities().equals(source.blockEntities()));
     }
 
     static PreparedSectionDelta inspect(
@@ -87,10 +70,9 @@ final class PreparedSectionDelta {
         boolean hasLight = false;
         int count = 0;
         int poiCount = 0;
-        List<BlockState> targetStates = target.blockStates();
         for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
             BlockState current = before.apply(index);
-            BlockState replacement = targetStates.get(index);
+            BlockState replacement = target.stateAt(index);
             if (current.equals(replacement)) {
                 continue;
             }

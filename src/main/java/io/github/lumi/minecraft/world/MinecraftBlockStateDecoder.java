@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.SectionBlob;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
@@ -28,32 +29,34 @@ public final class MinecraftBlockStateDecoder {
 
     public DecodedSection decode(SectionBlob source) throws IOException {
         DecodedPayload decoded = decodePayload(source);
-        return new DecodedSection(decoded.states(), decoded.blockEntities());
+        return DecodedSection.fromPalette(
+                decoded.palette(), decoded.indexes(), decoded.blockEntities());
     }
 
     DecodedSection decodeAgainst(SectionBlob source, SectionBlob before)
             throws IOException {
         DecodedPayload target = decodePayload(source);
-        validateBlockEntities(before);
-        return new DecodedSection(target.states(), target.blockEntities())
+        return DecodedSection.fromPalette(
+                target.palette(), target.indexes(), target.blockEntities())
                 .prepareAgainst(source, before, this);
     }
 
     private DecodedPayload decodePayload(SectionBlob source) throws IOException {
         Objects.requireNonNull(source, "source");
-        var states = new ArrayList<BlockState>(SectionBlob.BLOCK_COUNT);
-        for (String encoded : source.blockStates()) {
-            states.add(decodeState(encoded));
-        }
-        return new DecodedPayload(states, decodeBlockEntities(source, states));
+        List<BlockState> palette = decodePalette(source);
+        return new DecodedPayload(
+                palette, source.palette().copyIndexes(),
+                decodeBlockEntities(source, palette));
     }
 
     private HashMap<Integer, CompoundTag> decodeBlockEntities(
-            SectionBlob source, java.util.List<BlockState> states) throws IOException {
+            SectionBlob source, java.util.List<BlockState> palette) throws IOException {
         var blockEntities = new HashMap<Integer, CompoundTag>();
         for (var entry : source.blockEntities().entrySet()) {
             var decoded = MinecraftNbtCodec.decode(entry.getValue());
-            validateBlockEntityState(states.get(entry.getKey()), decoded);
+            validateBlockEntityState(
+                    palette.get(source.palette().paletteIndex(entry.getKey())),
+                    decoded);
             blockEntities.put(entry.getKey(), decoded);
         }
         return blockEntities;
@@ -62,18 +65,25 @@ public final class MinecraftBlockStateDecoder {
     /** Validates persistent types without allocating a native section container. */
     public void validate(SectionBlob source) throws IOException {
         Objects.requireNonNull(source, "source");
-        for (String encoded : source.distinctBlockStates()) {
-            decodeState(encoded);
-        }
-        validateBlockEntities(source);
+        List<BlockState> palette = decodePalette(source);
+        validateBlockEntities(source, palette);
     }
 
-    private void validateBlockEntities(SectionBlob source) throws IOException {
+    void validateBlockEntities(
+            SectionBlob source, List<BlockState> palette) throws IOException {
         for (var entry : source.blockEntities().entrySet()) {
             validateBlockEntityState(
-                    decodeState(source.blockStates().get(entry.getKey())),
+                    palette.get(source.palette().paletteIndex(entry.getKey())),
                     MinecraftNbtCodec.decode(entry.getValue()));
         }
+    }
+
+    List<BlockState> decodePalette(SectionBlob source) throws IOException {
+        var decoded = new ArrayList<BlockState>(source.palette().palette().size());
+        for (String encoded : source.palette().palette()) {
+            decoded.add(decodeState(encoded));
+        }
+        return List.copyOf(decoded);
     }
 
     void validateBlockEntityState(
@@ -118,6 +128,7 @@ public final class MinecraftBlockStateDecoder {
     }
 
     private record DecodedPayload(
-            java.util.List<BlockState> states,
+            java.util.List<BlockState> palette,
+            short[] indexes,
             java.util.Map<Integer, net.minecraft.nbt.CompoundTag> blockEntities) { }
 }
