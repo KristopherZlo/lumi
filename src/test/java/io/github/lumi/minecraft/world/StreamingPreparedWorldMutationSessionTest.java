@@ -5,8 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
@@ -73,24 +75,44 @@ class StreamingPreparedWorldMutationSessionTest {
 
     @Test
     void cleansUnchangedStoredEntityChunksBeforeRequestingTickets() throws Exception {
-        List<EntityChunkKey> keys = entityKeys(2);
-        FakeWorld world = new FakeWorld(null);
+        List<EntityChunkKey> keys = entityKeys(3);
+        SectionKey sectionKey = new SectionKey(3, 0, 0);
+        SectionBlob section = stoneSection();
+        PreparedMinecraftPlanState entities = entityPlan(keys);
+        var state = new WorldStateApply.State(
+                Map.of(sectionKey, section), entities.source().entities());
+        var mixedPlan = new PreparedMinecraftPlanState(
+                state, state, entities.entities(), entities.entities(),
+                List.of(sectionKey), keys);
+        FakeWorld world = new FakeWorld(section);
         world.directlyCleanedEntities = Set.of(keys.getFirst());
         RecordingChunkAccess chunks = new RecordingChunkAccess();
         List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
+        ControlledExecutor background = new ControlledExecutor();
 
         var session = session(
-                entityPlan(keys), world, new ControlledExecutor(), readiness -> {
+                mixedPlan, world, background, readiness -> {
                     requested.add(readiness);
                     return new ChunkLoadSession(chunks, () -> 0L);
                 });
 
         assertFalse(session.applyUntil(Long.MAX_VALUE));
         assertEquals(keys, world.requestedEntityCleanup);
-        assertEquals(List.of(keys.getLast()), world.startedEntityChunks);
+        assertEquals(List.of(keys.get(1)), world.startedEntityChunks);
         assertEquals(1, chunks.peak);
+        assertEquals(0, background.submitted);
         assertEquals(List.of(
                 ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES), requested);
+
+        world.persistence.getFirst().complete = true;
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(keys.subList(1, 3), world.startedEntityChunks);
+        assertEquals(1, chunks.peak);
+        assertEquals(0, background.submitted);
+
+        world.persistence.getLast().complete = true;
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(1, background.submitted);
 
         session.close();
         assertEquals(0, chunks.active);
@@ -508,14 +530,19 @@ class StreamingPreparedWorldMutationSessionTest {
     private static PreparedMinecraftPlanState entityPlan(List<EntityChunkKey> keys) {
         EntityChunkBlob empty = new EntityChunkBlob(List.of());
         Map<EntityChunkKey, EntityChunkBlob> entities = new LinkedHashMap<>();
+        Map<EntityChunkKey, EntityChunkBlob> baseEntities = new LinkedHashMap<>();
         Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
         keys.forEach(key -> {
             entities.put(key, empty);
+            baseEntities.put(key, new EntityChunkBlob(List.of(new EntityState(
+                    new UUID(key.chunkX(), key.chunkZ() + 1L),
+                    "minecraft:rabbit", new CanonicalNbt(new byte[] {1})))));
             decoded.put(key, new DecodedEntityChunk(List.of()));
         });
-        var state = new WorldStateApply.State(Map.of(), entities);
+        var source = new WorldStateApply.State(Map.of(), entities);
+        var base = new WorldStateApply.State(Map.of(), baseEntities);
         return new PreparedMinecraftPlanState(
-                state, state, decoded, decoded, List.of(), keys);
+                source, base, decoded, decoded, List.of(), keys);
     }
 
     private static List<EntityChunkKey> entityKeys(int chunks) {

@@ -46,8 +46,10 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private int slabEnd;
     private int entityBatchStart;
     private int entityBatchEnd;
+    private int entityCleanupCount;
     private CompletableFuture<PreparedMinecraftState> preparing;
     private CompletableFuture<Set<EntityChunkKey>> entityCleanup;
+    private List<EntityChunkKey> entityCleanupKeys;
     private List<EntityChunkKey> entityKeys;
     private EntityLookahead entityLookahead;
     private IOException entityLookaheadFailure;
@@ -154,6 +156,10 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         if (!prepareEntityCleanup()) {
             return false;
         }
+        // Legacy copies may share a UUID, so clean them one at a time before terrain.
+        if (entityBatchStart < entityCleanupCount) {
+            return startEntityBatch();
+        }
         if (batchStart < plan.sectionKeys().size()) {
             if (slab == null) {
                 if (preparing == null) {
@@ -191,14 +197,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             return true;
         }
         if (entityBatchStart < entityKeys.size()) {
-            PreparedMinecraftState entities = nextEntityBatch();
-            current = new PreparedWorldMutationSession(
-                    entities, world, System::nanoTime,
-                    nextEntityChunkLoads(),
-                    metrics);
-            currentKind = BatchKind.ENTITIES;
-            phase = Phase.APPLYING;
-            return true;
+            return startEntityBatch();
         }
         if (!spawnsStarted && plan.source().playerSpawnsIncluded()) {
             spawnsStarted = true;
@@ -216,29 +215,38 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         return true;
     }
 
+    private boolean startEntityBatch() throws IOException {
+        current = new PreparedWorldMutationSession(
+                nextEntityBatch(), world, System::nanoTime,
+                nextEntityChunkLoads(), metrics);
+        currentKind = BatchKind.ENTITIES;
+        phase = Phase.APPLYING;
+        return true;
+    }
+
     private boolean prepareEntityCleanup() throws IOException {
         if (entityCleanupComplete) {
             return true;
         }
         if (entityCleanup == null) {
-            List<EntityChunkKey> cleanupKeys = plan.entityKeys().stream()
+            entityCleanupKeys = plan.entityKeys().stream()
                     .filter(key -> plan.source().entities().get(key)
                             .equals(plan.base().entities().get(key)))
                     .toList();
-            if (cleanupKeys.isEmpty()) {
+            if (entityCleanupKeys.isEmpty()) {
                 entityCleanupComplete = true;
                 return true;
             }
             Map<EntityChunkKey, io.github.lumi.domain.model.EntityChunkBlob> source =
                     new LinkedHashMap<>();
             Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
-            cleanupKeys.forEach(key -> {
+            entityCleanupKeys.forEach(key -> {
                 source.put(key, plan.source().entities().get(key));
                 decoded.put(key, plan.entities().get(key));
             });
             var target = new PreparedMinecraftState(
                     new WorldStateApply.State(Map.of(), source),
-                    Map.of(), decoded, List.of(), cleanupKeys);
+                    Map.of(), decoded, List.of(), entityCleanupKeys);
             entityCleanup = world.cleanStoredEntities(target);
         }
         if (!entityCleanup.isDone()) {
@@ -256,10 +264,17 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             }
             throw new IOException("Cannot clean stored entity chunks", cause);
         }
-        entityKeys = plan.entityKeys().stream()
-                .filter(key -> !cleaned.contains(key))
-                .toList();
+        Set<EntityChunkKey> cleanupKeySet = Set.copyOf(entityCleanupKeys);
+        List<EntityChunkKey> ordered = new ArrayList<>(plan.entityKeys().size());
+        entityCleanupKeys.stream().filter(key -> !cleaned.contains(key))
+                .forEach(ordered::add);
+        entityCleanupCount = ordered.size();
+        plan.entityKeys().stream()
+                .filter(key -> !cleaned.contains(key) && !cleanupKeySet.contains(key))
+                .forEach(ordered::add);
+        entityKeys = List.copyOf(ordered);
         entityCleanup = null;
+        entityCleanupKeys = null;
         entityCleanupComplete = true;
         return true;
     }
@@ -350,7 +365,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     }
 
     private PreparedMinecraftState nextEntityBatch() {
-        entityBatchEnd = entityBatchEnd(entityKeys.size(), entityBatchStart);
+        entityBatchEnd = nextEntityBatchEnd(entityBatchStart);
         List<EntityChunkKey> keys = entityKeys.subList(
                 entityBatchStart, entityBatchEnd);
         Map<EntityChunkKey, io.github.lumi.domain.model.EntityChunkBlob> source =
@@ -368,6 +383,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private void prefetchNextEntityBatch(long deadlineNanos) {
         if (currentKind != BatchKind.ENTITIES
                 || entityBatchEnd == entityKeys.size()
+                || entityBatchStart < entityCleanupCount
                 || entityLookaheadFailure != null) {
             return;
         }
@@ -395,7 +411,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             }
         }
         int prefetchEnd = Math.min(
-                entityBatchEnd(entityKeys.size(), nextStart),
+                nextEntityBatchEnd(nextStart),
                 entityLookahead.end() + available);
         if (prefetchEnd == entityLookahead.end()) {
             return;
@@ -511,6 +527,11 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         return Math.min(total, start + MAX_CHUNKS);
     }
 
+    private int nextEntityBatchEnd(int start) {
+        return start < entityCleanupCount
+                ? start + 1 : entityBatchEnd(entityKeys.size(), start);
+    }
+
     private void verifyCurrent(long deadlineNanos) throws IOException {
         WorldStateApply.Verification verification = current.verifyUntil(deadlineNanos);
         if (verification == WorldStateApply.Verification.IN_PROGRESS) {
@@ -580,6 +601,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             preparing = null;
         }
         entityCleanup = null;
+        entityCleanupKeys = null;
         EntityLookahead pending = entityLookahead;
         entityLookahead = null;
         entityLookaheadFailure = null;
