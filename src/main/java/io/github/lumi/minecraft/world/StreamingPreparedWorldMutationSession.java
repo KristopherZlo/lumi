@@ -47,6 +47,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private int entityBatchStart;
     private int entityBatchEnd;
     private CompletableFuture<PreparedMinecraftState> preparing;
+    private CompletableFuture<Set<EntityChunkKey>> entityCleanup;
+    private List<EntityChunkKey> entityKeys;
     private EntityLookahead entityLookahead;
     private IOException entityLookaheadFailure;
     private PreparedMinecraftState slab;
@@ -55,6 +57,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private Phase phase = Phase.PREPARING;
     private boolean repairAttempted;
     private boolean spawnsStarted;
+    private boolean entityCleanupComplete;
     private volatile boolean closed;
 
     StreamingPreparedWorldMutationSession(
@@ -68,6 +71,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         this.world = Objects.requireNonNull(world, "world");
         this.background = Objects.requireNonNull(background, "background");
         this.chunkLoads = Objects.requireNonNull(chunkLoads, "chunkLoads");
+        entityKeys = plan.entityKeys();
     }
 
     @Override
@@ -147,6 +151,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             currentKind = null;
             repairAttempted = false;
         }
+        if (!prepareEntityCleanup()) {
+            return false;
+        }
         if (batchStart < plan.sectionKeys().size()) {
             if (slab == null) {
                 if (preparing == null) {
@@ -183,7 +190,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             phase = Phase.APPLYING;
             return true;
         }
-        if (entityBatchStart < plan.entityKeys().size()) {
+        if (entityBatchStart < entityKeys.size()) {
             PreparedMinecraftState entities = nextEntityBatch();
             current = new PreparedWorldMutationSession(
                     entities, world, System::nanoTime,
@@ -206,6 +213,54 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             return true;
         }
         phase = Phase.LIGHTING;
+        return true;
+    }
+
+    private boolean prepareEntityCleanup() throws IOException {
+        if (entityCleanupComplete) {
+            return true;
+        }
+        if (entityCleanup == null) {
+            List<EntityChunkKey> cleanupKeys = plan.entityKeys().stream()
+                    .filter(key -> plan.source().entities().get(key)
+                            .equals(plan.base().entities().get(key)))
+                    .toList();
+            if (cleanupKeys.isEmpty()) {
+                entityCleanupComplete = true;
+                return true;
+            }
+            Map<EntityChunkKey, io.github.lumi.domain.model.EntityChunkBlob> source =
+                    new LinkedHashMap<>();
+            Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
+            cleanupKeys.forEach(key -> {
+                source.put(key, plan.source().entities().get(key));
+                decoded.put(key, plan.entities().get(key));
+            });
+            var target = new PreparedMinecraftState(
+                    new WorldStateApply.State(Map.of(), source),
+                    Map.of(), decoded, List.of(), cleanupKeys);
+            entityCleanup = world.cleanStoredEntities(target);
+        }
+        if (!entityCleanup.isDone()) {
+            return false;
+        }
+        Set<EntityChunkKey> cleaned;
+        try {
+            cleaned = entityCleanup.join();
+        } catch (CancellationException failed) {
+            throw new IOException("Stored entity cleanup was cancelled", failed);
+        } catch (CompletionException failed) {
+            Throwable cause = failed.getCause() == null ? failed : failed.getCause();
+            if (cause instanceof IOException io) {
+                throw io;
+            }
+            throw new IOException("Cannot clean stored entity chunks", cause);
+        }
+        entityKeys = plan.entityKeys().stream()
+                .filter(key -> !cleaned.contains(key))
+                .toList();
+        entityCleanup = null;
+        entityCleanupComplete = true;
         return true;
     }
 
@@ -295,8 +350,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     }
 
     private PreparedMinecraftState nextEntityBatch() {
-        entityBatchEnd = entityBatchEnd(plan.entityKeys().size(), entityBatchStart);
-        List<EntityChunkKey> keys = plan.entityKeys().subList(
+        entityBatchEnd = entityBatchEnd(entityKeys.size(), entityBatchStart);
+        List<EntityChunkKey> keys = entityKeys.subList(
                 entityBatchStart, entityBatchEnd);
         Map<EntityChunkKey, io.github.lumi.domain.model.EntityChunkBlob> source =
                 new LinkedHashMap<>();
@@ -312,7 +367,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     private void prefetchNextEntityBatch(long deadlineNanos) {
         if (currentKind != BatchKind.ENTITIES
-                || entityBatchEnd == plan.entityKeys().size()
+                || entityBatchEnd == entityKeys.size()
                 || entityLookaheadFailure != null) {
             return;
         }
@@ -340,14 +395,14 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             }
         }
         int prefetchEnd = Math.min(
-                entityBatchEnd(plan.entityKeys().size(), nextStart),
+                entityBatchEnd(entityKeys.size(), nextStart),
                 entityLookahead.end() + available);
         if (prefetchEnd == entityLookahead.end()) {
             return;
         }
         try {
             int processed = entityLookahead.chunks().prefetch(
-                    plan.entityKeys().subList(entityLookahead.end(), prefetchEnd),
+                    entityKeys.subList(entityLookahead.end(), prefetchEnd),
                     deadlineNanos);
             entityLookahead = new EntityLookahead(
                     nextStart, entityLookahead.end() + processed,
@@ -524,6 +579,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             preparing.cancel(false);
             preparing = null;
         }
+        entityCleanup = null;
         EntityLookahead pending = entityLookahead;
         entityLookahead = null;
         entityLookaheadFailure = null;

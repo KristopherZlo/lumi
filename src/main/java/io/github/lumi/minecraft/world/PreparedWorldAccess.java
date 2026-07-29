@@ -47,6 +47,15 @@ public interface PreparedWorldAccess {
                 });
     }
 
+    /**
+     * Canonically rewrites unloaded entity chunks whose source and return states
+     * are equal, returning the keys made durable without loading them.
+     */
+    default CompletableFuture<Set<EntityChunkKey>> cleanStoredEntities(
+            PreparedMinecraftState target) {
+        return CompletableFuture.completedFuture(Set.of());
+    }
+
     default String mutationPhase() {
         return "loaded apply";
     }

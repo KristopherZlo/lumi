@@ -72,6 +72,31 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
+    void cleansUnchangedStoredEntityChunksBeforeRequestingTickets() throws Exception {
+        List<EntityChunkKey> keys = entityKeys(2);
+        FakeWorld world = new FakeWorld(null);
+        world.directlyCleanedEntities = Set.of(keys.getFirst());
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
+
+        var session = session(
+                entityPlan(keys), world, new ControlledExecutor(), readiness -> {
+                    requested.add(readiness);
+                    return new ChunkLoadSession(chunks, () -> 0L);
+                });
+
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(keys, world.requestedEntityCleanup);
+        assertEquals(List.of(keys.getLast()), world.startedEntityChunks);
+        assertEquals(1, chunks.peak);
+        assertEquals(List.of(
+                ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES), requested);
+
+        session.close();
+        assertEquals(0, chunks.active);
+    }
+
+    @Test
     void preparesFortyChunksOnceAndPersistsTwoWindows() throws Exception {
         List<SectionKey> keys = new ArrayList<>();
         for (int chunk = 0; chunk < 40; chunk++) {
@@ -575,7 +600,9 @@ class StreamingPreparedWorldMutationSessionTest {
         private final List<ManualPersistence> persistence = new ArrayList<>();
         private final List<PersistenceCall> persistenceCalls = new ArrayList<>();
         private final List<EntityChunkKey> startedEntityChunks = new ArrayList<>();
+        private final List<EntityChunkKey> requestedEntityCleanup = new ArrayList<>();
         private Set<ChunkCoordinate> directlyStored = Set.of();
+        private Set<EntityChunkKey> directlyCleanedEntities = Set.of();
 
         private FakeWorld(SectionBlob captured) {
             this.captured = captured;
@@ -648,6 +675,15 @@ class StreamingPreparedWorldMutationSessionTest {
                             ? StoredChunkApplyResult.APPLIED
                             : StoredChunkApplyResult.FALLBACK));
             return CompletableFuture.completedFuture(Map.copyOf(results));
+        }
+
+        @Override
+        public CompletableFuture<Set<EntityChunkKey>> cleanStoredEntities(
+                PreparedMinecraftState target) {
+            requestedEntityCleanup.addAll(target.entityKeys());
+            return CompletableFuture.completedFuture(target.entityKeys().stream()
+                    .filter(directlyCleanedEntities::contains)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet()));
         }
 
         @Override public List<Integer> blockEntityIndexes(SectionKey key) {

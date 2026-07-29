@@ -47,7 +47,7 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
         sectionRewriter = new MinecraftSectionRewriter(level);
         entityLookup = ChunkEntityLookup.forLevel(level);
         entityRestorer = new MinecraftEntityRestorer(level, freeze, entities, entityLookup);
-        storedChunks = new MinecraftStoredChunkAccess(level, background);
+        storedChunks = new MinecraftStoredChunkAccess(level, background, entities);
     }
 
     @Override
@@ -149,6 +149,12 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> chunks,
             Set<ChunkCoordinate> entityChunks) {
         return storedChunks.apply(chunks, entityChunks);
+    }
+
+    @Override
+    public CompletableFuture<Set<EntityChunkKey>> cleanStoredEntities(
+            PreparedMinecraftState target) {
+        return storedChunks.cleanEntities(target);
     }
 
     @Override

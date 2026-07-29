@@ -1,6 +1,11 @@
 package io.github.lumi.minecraft.world;
 
+import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.mixin.EntityStoragePersistenceAccessor;
+import io.github.lumi.mixin.PersistentEntityManagerPersistenceAccessor;
+import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,12 +20,16 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.storage.SerializableChunkData;
+import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 /** Rewrites gated, unloaded chunks through the running world's vanilla I/O worker. */
@@ -29,13 +38,18 @@ final class MinecraftStoredChunkAccess {
     private final Executor background;
     private final PalettedContainerFactory containers;
     private final MinecraftStoredChunkPatcher patcher;
+    private final MinecraftEntityChunkCapture entityCapture;
     private final Map<ChunkCoordinate, ChunkLoadGate.Lease> gates =
             new ConcurrentHashMap<>();
     private volatile String phase = "loaded apply";
 
-    MinecraftStoredChunkAccess(ServerLevel level, Executor background) {
+    MinecraftStoredChunkAccess(
+            ServerLevel level,
+            Executor background,
+            MinecraftEntityChunkCapture entityCapture) {
         this.level = Objects.requireNonNull(level, "level");
         this.background = Objects.requireNonNull(background, "background");
+        this.entityCapture = Objects.requireNonNull(entityCapture, "entityCapture");
         containers = PalettedContainerFactory.create(level.registryAccess());
         patcher = new MinecraftStoredChunkPatcher(
                 containers.blockStatesContainerCodec(),
@@ -91,14 +105,9 @@ final class MinecraftStoredChunkAccess {
                     Preparation.fallback(StoredChunkApplyResult.Outcome.UNSUPPORTED_DELTA));
         }
         ChunkPos position = new ChunkPos(coordinate.x(), coordinate.z());
-        ChunkLoadGate.Lease gate = gates.get(coordinate);
-        if (gate == null) {
-            gate = ChunkLoadGate.tryAcquire(level, position);
-            if (gate == null) {
-                return CompletableFuture.completedFuture(
-                        Preparation.fallback(StoredChunkApplyResult.Outcome.RESIDENT));
-            }
-            gates.put(coordinate, gate);
+        if (!acquire(coordinate, position)) {
+            return CompletableFuture.completedFuture(
+                    Preparation.fallback(StoredChunkApplyResult.Outcome.RESIDENT));
         }
         phase = "stored read";
         return level.getChunkSource().chunkMap.read(position).thenApplyAsync(stored -> {
@@ -120,6 +129,109 @@ final class MinecraftStoredChunkAccess {
                 throw new CompletionException(failed);
             }
         }, background);
+    }
+
+    CompletableFuture<Set<EntityChunkKey>> cleanEntities(
+            PreparedMinecraftState target) {
+        Objects.requireNonNull(target, "target");
+        if (target.entityKeys().isEmpty()) {
+            return CompletableFuture.completedFuture(Set.of());
+        }
+        EntityStoragePersistenceAccessor entityAccess = entityAccess();
+        SimpleRegionStorage storage = entityAccess.lumi$simpleRegionStorage();
+        Map<EntityChunkKey, ChunkCoordinate> acquired = new LinkedHashMap<>();
+        List<CompletableFuture<Void>> writes = new ArrayList<>();
+        try {
+            for (EntityChunkKey key : target.entityKeys()) {
+                ChunkCoordinate coordinate = ChunkCoordinate.from(key);
+                ChunkPos position = new ChunkPos(key.chunkX(), key.chunkZ());
+                if (!acquire(coordinate, position)) {
+                    continue;
+                }
+                acquired.put(key, coordinate);
+                entityAccess.lumi$emptyChunks().remove(position.toLong());
+                writes.add(storage.write(position, entityTag(
+                        key, target.entities().get(key))));
+            }
+        } catch (RuntimeException failed) {
+            acquired.values().forEach(this::release);
+            return CompletableFuture.failedFuture(failed);
+        }
+        if (writes.isEmpty()) {
+            return CompletableFuture.completedFuture(Set.of());
+        }
+        phase = "stored write";
+        CompletableFuture<Set<EntityChunkKey>> result =
+                CompletableFuture.allOf(writes.toArray(CompletableFuture[]::new))
+                        .thenCompose(ignored -> {
+                            phase = "storage sync";
+                            return storage.synchronize(true);
+                        })
+                        .thenCompose(ignored -> verifyEntities(
+                                storage, target, acquired.keySet()));
+        return result.whenComplete((ignored, failure) ->
+                acquired.values().forEach(this::release));
+    }
+
+    private CompletableFuture<Set<EntityChunkKey>> verifyEntities(
+            SimpleRegionStorage storage,
+            PreparedMinecraftState target,
+            Set<EntityChunkKey> keys) {
+        phase = "verification";
+        Map<EntityChunkKey, CompletableFuture<java.util.Optional<CompoundTag>>> reads =
+                new LinkedHashMap<>();
+        keys.forEach(key -> reads.put(key, storage.read(
+                new ChunkPos(key.chunkX(), key.chunkZ()))));
+        return CompletableFuture.allOf(reads.values().toArray(CompletableFuture[]::new))
+                .thenApplyAsync(ignored -> {
+                    for (var entry : reads.entrySet()) {
+                        try {
+                            EntityChunkBlob actual = entityCapture.captureStored(
+                                    entry.getKey(), entry.getValue().join());
+                            if (!actual.equals(target.source().entities()
+                                    .get(entry.getKey()))) {
+                                throw new IOException(
+                                        "Stored entity cleanup verification failed for "
+                                                + entry.getKey());
+                            }
+                        } catch (IOException failed) {
+                            throw new CompletionException(failed);
+                        }
+                    }
+                    return Set.copyOf(keys);
+                }, background);
+    }
+
+    static CompoundTag entityTag(
+            EntityChunkKey key, DecodedEntityChunk target) {
+        CompoundTag root = NbtUtils.addCurrentDataVersion(new CompoundTag());
+        ListTag entities = new ListTag();
+        target.entities().forEach(entity -> entities.add(entity.nbt().copy()));
+        root.put("Entities", entities);
+        root.store("Position", ChunkPos.CODEC,
+                new ChunkPos(key.chunkX(), key.chunkZ()));
+        return root;
+    }
+
+    @SuppressWarnings("unchecked")
+    private EntityStoragePersistenceAccessor entityAccess() {
+        var manager = ((ServerLevelEntityManagerAccessor) level).lumi$entityManager();
+        var storage = ((PersistentEntityManagerPersistenceAccessor<Entity>) manager)
+                .lumi$permanentStorage();
+        return (EntityStoragePersistenceAccessor) storage;
+    }
+
+    private boolean acquire(
+            ChunkCoordinate coordinate, ChunkPos position) {
+        if (gates.containsKey(coordinate)) {
+            return true;
+        }
+        ChunkLoadGate.Lease gate = ChunkLoadGate.tryAcquire(level, position);
+        if (gate == null) {
+            return false;
+        }
+        gates.put(coordinate, gate);
+        return true;
     }
 
     private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> writeAndVerify(

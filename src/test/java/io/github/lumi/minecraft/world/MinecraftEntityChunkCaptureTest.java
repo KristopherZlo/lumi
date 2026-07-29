@@ -5,9 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.SharedConstants;
@@ -16,6 +18,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.ChunkPos;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -98,6 +101,26 @@ class MinecraftEntityChunkCaptureTest {
 
         assertThrows(IOException.class, () -> new MinecraftEntityChunkCapture()
                 .captureStored(key, Optional.of(storedRoot(key, entities))));
+    }
+
+    @Test
+    void storedCleanupTagRoundTripsThroughTheVanillaShape() throws Exception {
+        EntityChunkKey key = new EntityChunkKey(-3, 7);
+        UUID id = UUID.fromString("10000000-0000-0000-0000-000000000002");
+        CompoundTag entity = new CompoundTag();
+        entity.putString("id", "minecraft:armor_stand");
+        entity.store("UUID", UUIDUtil.CODEC, id);
+        entity.putString("CustomName", "cleanup marker");
+        MinecraftEntityChunkCapture capture = new MinecraftEntityChunkCapture();
+        EntityState state = new EntityState(
+                id, "minecraft:armor_stand", capture.canonicalEntityNbt(entity));
+        var decoded = new DecodedEntityChunk(List.of(
+                new DecodedEntity(state, EntityType.ARMOR_STAND, entity)));
+
+        CompoundTag stored = MinecraftStoredChunkAccess.entityTag(key, decoded);
+
+        assertEquals(new EntityChunkBlob(List.of(state)),
+                capture.captureStored(key, Optional.of(stored)));
     }
 
     private static CompoundTag storedRoot(EntityChunkKey key, ListTag entities) {
