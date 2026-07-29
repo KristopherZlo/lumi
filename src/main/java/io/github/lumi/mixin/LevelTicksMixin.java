@@ -1,13 +1,18 @@
 package io.github.lumi.mixin;
 
+import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.minecraft.runtime.MinecraftCausalTickTracker;
 import io.github.lumi.minecraft.world.OwnedTickAccess;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.ticks.LevelChunkTicks;
 import net.minecraft.world.ticks.LevelTicks;
 import net.minecraft.world.ticks.ScheduledTick;
@@ -36,17 +41,39 @@ abstract class LevelTicksMixin<T> implements OwnedTickAccess<T> {
         // update LevelTicks internals only if profiling shows that scan matters.
         java.util.function.Predicate<ScheduledTick<T>> matches =
                 tick -> tick.pos().equals(position) && tick.type() == type;
-        lumi$removeTicks(matches);
+        LevelChunkTicks<T> container = allContainers.get(
+                ChunkPos.asLong(position.getX() >> 4, position.getZ() >> 4));
+        if (container != null) {
+            container.removeIf(matches);
+        }
+        lumi$removeQueued(matches);
     }
 
     @Override
-    public void lumi$removeWhere(Predicate<BlockPos> positions) {
-        lumi$removeTicks(tick -> positions.test(tick.pos()));
+    public void lumi$removeSections(Set<SectionKey> sections) {
+        Map<Long, Set<Integer>> sectionYs = new HashMap<>();
+        for (SectionKey section : sections) {
+            sectionYs.computeIfAbsent(
+                    ChunkPos.asLong(section.chunkX(), section.chunkZ()),
+                    ignored -> new HashSet<>()).add(section.sectionY());
+        }
+        Predicate<ScheduledTick<T>> matches = tick -> {
+            BlockPos position = tick.pos();
+            Set<Integer> ys = sectionYs.get(ChunkPos.asLong(
+                    position.getX() >> 4, position.getZ() >> 4));
+            return ys != null && ys.contains(position.getY() >> 4);
+        };
+        for (long chunk : sectionYs.keySet()) {
+            LevelChunkTicks<T> container = allContainers.get(chunk);
+            if (container != null) {
+                container.removeIf(matches);
+            }
+        }
+        lumi$removeQueued(matches);
     }
 
     @SuppressWarnings("unchecked")
-    private void lumi$removeTicks(Predicate<ScheduledTick<T>> matches) {
-        allContainers.values().forEach(container -> container.removeIf(matches));
+    private void lumi$removeQueued(Predicate<ScheduledTick<T>> matches) {
         toRunThisTick.removeIf(matches);
         alreadyRunThisTick.removeIf(matches);
         toRunThisTickSet.removeIf(tick -> matches.test((ScheduledTick<T>) tick));

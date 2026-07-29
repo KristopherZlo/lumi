@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import net.minecraft.core.BlockPos;
@@ -82,6 +83,14 @@ public final class MinecraftLiveBlockTracker {
             baselines.put(position, new BlockSnapshot(
                     visible.blockStates().get(index), Optional.of(nbt)));
         });
+    }
+
+    public void rebaseSections(Set<SectionKey> sections) {
+        Set<SectionKey> restored = Set.copyOf(
+                Objects.requireNonNull(sections, "sections"));
+        baselines.keySet().removeIf(position ->
+                restored.contains(section(position)));
+        baselines.putAll(world.loadedBlockEntityBaselines(restored));
     }
 
     public BlockSnapshot beforeMutation(

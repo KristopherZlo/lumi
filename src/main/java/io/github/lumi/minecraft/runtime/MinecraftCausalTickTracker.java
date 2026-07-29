@@ -290,10 +290,13 @@ public final class MinecraftCausalTickTracker {
     public void cancelSections(Set<SectionKey> sections) {
         Set<SectionKey> restored = Set.copyOf(
                 Objects.requireNonNull(sections, "sections"));
+        if (restored.isEmpty()) {
+            return;
+        }
         java.util.function.Predicate<BlockPos> matches =
                 position -> restored.contains(MinecraftSectionCapture.key(position));
-        ((OwnedTickAccess<?>) blockTicks).lumi$removeWhere(matches);
-        ((OwnedTickAccess<?>) fluidTicks).lumi$removeWhere(matches);
+        ((OwnedTickAccess<?>) blockTicks).lumi$removeSections(restored);
+        ((OwnedTickAccess<?>) fluidTicks).lumi$removeSections(restored);
         eventAccess.lumi$removeBlockEventsWhere(matches);
         var cancelledTicks = tokens.cancelKeys(
                 key -> matches.test(key.position()));
