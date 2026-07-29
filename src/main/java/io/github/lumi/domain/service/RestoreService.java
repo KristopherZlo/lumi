@@ -22,15 +22,18 @@ import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public final class RestoreService {
     private static final int REGION_SIZE = 32;
@@ -248,16 +251,38 @@ public final class RestoreService {
         var targetReader = new RestorePlanReader(objects);
         var returnReader = new RestorePlanReader(objects);
         var targetSections = new RestorePlanMap<>(
-                sections.keySet(), key -> sections.get(key).target(targetReader),
+                physicalSectionOrder(sections, SectionPlan::targetId),
+                key -> sections.get(key).target(targetReader),
                 targetReader);
         var returnSections = new RestorePlanMap<>(
-                sections.keySet(), key -> sections.get(key).before(returnReader),
+                physicalSectionOrder(sections, SectionPlan::beforeId),
+                key -> sections.get(key).before(returnReader),
                 returnReader);
         return new PreparedRestore(currentRef, targetCommit,
                 targetSections, entityPlan.target(), returnSections, entityPlan.before(),
                 restorePlayerSpawns ? targetCommitValue.playerSpawns() : Map.of(),
                 restorePlayerSpawns ? currentCommit.playerSpawns() : Map.of(),
                 restorePlayerSpawns);
+    }
+
+    private List<SectionKey> physicalSectionOrder(
+            Map<SectionKey, SectionPlan> sections,
+            Function<SectionPlan, ObjectId> id) throws IOException {
+        Set<ObjectId> ids = sections.values().stream()
+                .map(id)
+                .collect(java.util.stream.Collectors.toSet());
+        List<ObjectId> orderedIds = objects.physicalReadOrder(ids);
+        Map<ObjectId, Integer> rank = new HashMap<>();
+        for (int index = 0; index < orderedIds.size(); index++) {
+            rank.put(orderedIds.get(index), index);
+        }
+        return sections.keySet().stream()
+                .sorted(Comparator.<SectionKey>comparingInt(
+                                key -> rank.get(id.apply(sections.get(key))))
+                        .thenComparingInt(SectionKey::chunkX)
+                        .thenComparingInt(SectionKey::chunkZ)
+                        .thenComparingInt(SectionKey::sectionY))
+                .toList();
     }
 
     private void prepareRegion(

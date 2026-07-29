@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
@@ -41,5 +43,15 @@ class RestorePlanMapTest {
         assertThrows(UncheckedIOException.class, () -> plan.get("a"));
         IOException failure = assertThrows(IOException.class, plan::materialize);
         assertEquals("missing object", failure.getMessage());
+    }
+
+    @Test
+    void preservesSuppliedReadOrder() {
+        var plan = new RestorePlanMap<>(
+                new LinkedHashSet<>(List.of("second", "first")),
+                String::toUpperCase);
+
+        assertEquals(List.of("second", "first"),
+                plan.entrySet().stream().map(java.util.Map.Entry::getKey).toList());
     }
 }

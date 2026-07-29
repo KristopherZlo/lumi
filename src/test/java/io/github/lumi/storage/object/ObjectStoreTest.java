@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -197,6 +198,28 @@ class ObjectStoreTest {
             assertEquals(packCount,
                     files.filter(path -> path.toString().endsWith(".pack")).count());
         }
+    }
+
+    @Test
+    void ordersPackedReadsByContainerAndOffset() throws IOException {
+        ObjectStore store = new ObjectStore(tempDir);
+        ObjectId looseA = store.write("loose-a".getBytes(StandardCharsets.UTF_8));
+        ObjectId looseB = store.write("loose-b".getBytes(StandardCharsets.UTF_8));
+        List<ObjectId> packed;
+        try (ObjectStore.WriteBatch batch = store.beginBatch()) {
+            packed = List.of(
+                    batch.write("packed-z".getBytes(StandardCharsets.UTF_8)),
+                    batch.write("packed-a".getBytes(StandardCharsets.UTF_8)));
+            batch.publish();
+        }
+
+        List<ObjectId> ordered = store.physicalReadOrder(
+                Set.of(packed.get(1), looseB, packed.get(0), looseA));
+
+        assertEquals(packed, ordered.stream().filter(packed::contains).toList());
+        assertEquals(java.util.stream.Stream.of(looseA, looseB)
+                        .sorted(java.util.Comparator.comparing(ObjectId::hex)).toList(),
+                ordered.stream().filter(id -> !packed.contains(id)).toList());
     }
 
     @Test

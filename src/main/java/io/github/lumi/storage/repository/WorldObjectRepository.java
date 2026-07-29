@@ -17,8 +17,10 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.LongConsumer;
 
 public final class WorldObjectRepository {
@@ -105,6 +107,10 @@ public final class WorldObjectRepository {
 
     public ReadSession beginReadSession() {
         return new ReadSession(store.beginReadSession());
+    }
+
+    public List<ObjectId> physicalReadOrder(Set<ObjectId> ids) throws IOException {
+        return store.physicalReadOrder(ids);
     }
 
     public final class WriteBatch implements AutoCloseable {

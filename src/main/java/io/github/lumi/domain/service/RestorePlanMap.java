@@ -5,7 +5,10 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -27,8 +30,10 @@ public final class RestorePlanMap<K, V> extends AbstractMap<K, V>
         this(keys, reader, null);
     }
 
-    RestorePlanMap(Set<K> keys, Reader<K, V> reader, Closeable resource) {
-        this.keys = Set.copyOf(Objects.requireNonNull(keys, "keys"));
+    RestorePlanMap(
+            Collection<K> keys, Reader<K, V> reader, Closeable resource) {
+        this.keys = Collections.unmodifiableSet(
+                new LinkedHashSet<>(Objects.requireNonNull(keys, "keys")));
         this.reader = Objects.requireNonNull(reader, "reader");
         this.resource = resource;
     }

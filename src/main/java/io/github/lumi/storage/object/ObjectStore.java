@@ -82,6 +82,16 @@ public final class ObjectStore {
         return new ReadSession();
     }
 
+    public List<ObjectId> physicalReadOrder(Set<ObjectId> ids) throws IOException {
+        Objects.requireNonNull(ids, "ids");
+        Map<ObjectId, PackedObject> packed = packedObjects();
+        return ids.stream()
+                .sorted(Comparator.comparing(
+                                (ObjectId id) -> readLocation(id, packed))
+                        .thenComparing(ObjectId::hex))
+                .toList();
+    }
+
     private byte[] readLoose(ObjectId id, Path path) throws IOException {
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
             long fileSize = channel.size();
@@ -306,6 +316,14 @@ public final class ObjectStore {
         return objectsDirectory.resolve(hex.substring(0, 2)).resolve(hex.substring(2) + ".lz4");
     }
 
+    private ReadLocation readLocation(
+            ObjectId id, Map<ObjectId, PackedObject> packed) {
+        PackedObject entry = packed.get(id);
+        return entry == null
+                ? new ReadLocation(pathFor(id).toString(), 0)
+                : new ReadLocation(entry.pack().toString(), entry.offset());
+    }
+
     private static Path indexFor(Path pack) {
         String name = pack.getFileName().toString();
         return pack.resolveSibling(name.substring(0, name.length() - 5) + ".idx");
@@ -420,6 +438,15 @@ public final class ObjectStore {
         @Override
         public void close() throws IOException {
             packs.close();
+        }
+    }
+
+    private record ReadLocation(String container, long offset)
+            implements Comparable<ReadLocation> {
+        @Override
+        public int compareTo(ReadLocation other) {
+            int compared = container.compareTo(other.container);
+            return compared != 0 ? compared : Long.compare(offset, other.offset);
         }
     }
 }

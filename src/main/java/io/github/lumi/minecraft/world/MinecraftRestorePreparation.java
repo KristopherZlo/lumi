@@ -105,10 +105,12 @@ public final class MinecraftRestorePreparation {
             long completed = 0;
             var validatedTarget = new ValidatedSectionWindow(sections);
             var validatedBase = new ValidatedSectionWindow(sections);
-            for (var entry : source.sections().entrySet()) {
-                validatedTarget.validate(entry.getValue());
-                validatedBase.validate(base.sections().get(entry.getKey()));
+            for (SectionBlob section : source.sections().values()) {
+                validatedTarget.validate(section);
                 progress.accept(++completed);
+            }
+            for (SectionBlob section : base.sections().values()) {
+                validatedBase.validate(section);
             }
             Map<EntityChunkKey, EntityChunkBlob> normalizedSource =
                     entities.normalize(source.entities());
