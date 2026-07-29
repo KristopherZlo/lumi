@@ -102,7 +102,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         Objects.requireNonNull(chunkRetention, "chunkRetention");
         return new MutationDurabilityTracker(
                 objects, origins, indexRepository, background, chunkRetention,
-                indexRepository.readState(), origins.entries().keySet());
+                indexRepository.readState(), origins.keys());
     }
 
     public long registerSectionMutation(SectionKey key, Supplier<SectionBlob> preMutationCapture) {

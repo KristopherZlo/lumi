@@ -10,16 +10,23 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HexFormat;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
 public final class OriginStore {
     private static final int MAGIC = 0x4C4F5232;
+    private static final long SECTION_ENTRY_BYTES = Integer.BYTES + 1L
+            + 3L * Integer.BYTES + 32L;
+    private static final long ENTITY_ENTRY_BYTES = Integer.BYTES + 1L
+            + 2L * Integer.BYTES + 32L;
     private final Path originsDirectory;
 
     public OriginStore(Path dimensionRepository) {
@@ -50,6 +57,28 @@ public final class OriginStore {
 
     public synchronized Set<ObjectId> allOrigins() throws IOException {
         return Set.copyOf(entries().values());
+    }
+
+    /**
+     * Reads origin membership from canonical paths without loading immutable
+     * payloads. Payload readers still validate the stored key and object ID.
+     */
+    public synchronized Set<HistoryKey> keys() throws IOException {
+        if (!Files.exists(originsDirectory)) {
+            return Set.of();
+        }
+        Set<HistoryKey> keys = new HashSet<>();
+        try (var files = Files.walk(originsDirectory)) {
+            for (Path file : files
+                    .filter(path -> path.getFileName().toString().endsWith(".origin"))
+                    .toList()) {
+                HistoryKey key = keyFromPath(file);
+                if (!keys.add(key)) {
+                    throw new IOException("Duplicate origin entry for " + key);
+                }
+            }
+        }
+        return Set.copyOf(keys);
     }
 
     public synchronized Map<HistoryKey, ObjectId> entries() throws IOException {
@@ -142,6 +171,50 @@ public final class OriginStore {
         return originsDirectory.resolve("entities")
                 .resolve(Integer.toString(entities.chunkX()))
                 .resolve(entities.chunkZ() + ".origin");
+    }
+
+    private HistoryKey keyFromPath(Path file) throws IOException {
+        Path relative = originsDirectory.relativize(file);
+        try {
+            if (relative.getNameCount() == 4
+                    && relative.getName(0).toString().equals("sections")) {
+                requireSize(file, SECTION_ENTRY_BYTES);
+                return new SectionKey(
+                        parseCoordinate(relative.getName(1).toString()),
+                        parseCoordinate(originCoordinate(relative.getName(3).toString())),
+                        parseCoordinate(relative.getName(2).toString()));
+            }
+            if (relative.getNameCount() == 3
+                    && relative.getName(0).toString().equals("entities")) {
+                requireSize(file, ENTITY_ENTRY_BYTES);
+                return new EntityChunkKey(
+                        parseCoordinate(relative.getName(1).toString()),
+                        parseCoordinate(originCoordinate(relative.getName(2).toString())));
+            }
+        } catch (IllegalArgumentException invalid) {
+            throw new IOException("Invalid origin path: " + file, invalid);
+        }
+        throw new IOException("Invalid origin path: " + file);
+    }
+
+    private static String originCoordinate(String filename) {
+        return filename.substring(0, filename.length() - ".origin".length());
+    }
+
+    private static int parseCoordinate(String value) {
+        int coordinate = Integer.parseInt(value);
+        if (!Integer.toString(coordinate).equals(value)) {
+            throw new IllegalArgumentException("Non-canonical coordinate");
+        }
+        return coordinate;
+    }
+
+    private static void requireSize(Path file, long expected) throws IOException {
+        BasicFileAttributes attributes = Files.readAttributes(
+                file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (!attributes.isRegularFile() || attributes.size() != expected) {
+            throw new IOException("Invalid origin entry size: " + file);
+        }
     }
 
     private record OriginEntry(HistoryKey key, ObjectId id) { }
