@@ -795,6 +795,7 @@ class PreparedWorldMutationSessionTest {
             startedEntityChunks.add(key);
             return entityIdsByChunk.getOrDefault(key, entityIds);
         }
+        @Override public void removeEntity(UUID id) { }
         @Override public void removeEntity(EntityChunkKey key, UUID id) {
             removedEntities.add(id);
             entityMutations.add("remove:" + id);

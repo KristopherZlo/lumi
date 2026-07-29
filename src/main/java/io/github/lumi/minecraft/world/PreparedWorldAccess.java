@@ -99,6 +99,8 @@ public interface PreparedWorldAccess {
 
     List<UUID> durableEntityIds(EntityChunkKey key) throws IOException;
 
+    void removeEntity(UUID id) throws IOException;
+
     void removeEntity(EntityChunkKey key, UUID id) throws IOException;
 
     void addEntity(EntityChunkKey key, DecodedEntity entity) throws IOException;

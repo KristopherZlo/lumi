@@ -16,7 +16,7 @@ record PreparedMinecraftPlanState(
         Map<EntityChunkKey, DecodedEntityChunk> baseEntities,
         List<SectionKey> sectionKeys,
         List<EntityChunkKey> entityKeys,
-        Set<UUID> replacedEntityIds)
+        Set<UUID> cleanupEntityIds)
         implements WorldStateApply.PreparedState {
     PreparedMinecraftPlanState {
         Objects.requireNonNull(source, "source");
@@ -25,8 +25,8 @@ record PreparedMinecraftPlanState(
         baseEntities = Map.copyOf(Objects.requireNonNull(baseEntities, "baseEntities"));
         sectionKeys = List.copyOf(Objects.requireNonNull(sectionKeys, "sectionKeys"));
         entityKeys = List.copyOf(Objects.requireNonNull(entityKeys, "entityKeys"));
-        replacedEntityIds = Set.copyOf(
-                Objects.requireNonNull(replacedEntityIds, "replacedEntityIds"));
+        cleanupEntityIds = Set.copyOf(
+                Objects.requireNonNull(cleanupEntityIds, "cleanupEntityIds"));
         if (!source.sections().keySet().equals(base.sections().keySet())
                 || !source.entities().keySet().equals(base.entities().keySet())
                 || !entities.keySet().equals(source.entities().keySet())
@@ -40,12 +40,12 @@ record PreparedMinecraftPlanState(
             List<EntityChunkKey> orderedEntities) {
         return new PreparedMinecraftPlanState(
                 source, base, entities, baseEntities,
-                orderedSections, orderedEntities, replacedEntityIds);
+                orderedSections, orderedEntities, cleanupEntityIds);
     }
 
     PreparedMinecraftPlanState reversed() {
         return new PreparedMinecraftPlanState(
                 base, source, baseEntities, entities, sectionKeys, entityKeys,
-                replacedEntityIds);
+                cleanupEntityIds);
     }
 }

@@ -87,7 +87,7 @@ class StreamingPreparedWorldMutationSessionTest {
                 Map.of(sectionKey, section), entities.base().entities());
         var mixedPlan = new PreparedMinecraftPlanState(
                 source, base, entities.entities(), entities.baseEntities(),
-                List.of(sectionKey), keys, entities.replacedEntityIds());
+                List.of(sectionKey), keys, entities.cleanupEntityIds());
         FakeWorld world = new FakeWorld(section);
         world.cleanAllStoredEntities = false;
         world.directlyCleanedEntities = Set.of(keys.getFirst());
@@ -145,13 +145,19 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
-    void keepsLargeFallbackCleanupAtOneChunkPerDurabilityBatch() throws Exception {
+    void boundsLargeFallbackCleanupDurabilityBatchesToThirtyTwoChunks()
+            throws Exception {
         List<EntityChunkKey> keys = entityKeys(33);
+        UUID duplicate = new UUID(7, 7);
         FakeWorld world = new FakeWorld(null);
         world.cleanAllStoredEntities = false;
+        world.durableEntities = Map.of(
+                keys.getFirst(), List.of(duplicate),
+                keys.getLast(), List.of(duplicate));
+        world.indexedEntities = new HashSet<>(Set.of(duplicate));
         RecordingChunkAccess chunks = new RecordingChunkAccess();
         var session = session(
-                entityPlan(keys), world, new ControlledExecutor(),
+                legacyDuplicatePlan(keys, duplicate), world, new ControlledExecutor(),
                 ignored -> new ChunkLoadSession(chunks, () -> 0L));
 
         assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -160,9 +166,22 @@ class StreamingPreparedWorldMutationSessionTest {
 
         assertFalse(session.applyUntil(Long.MAX_VALUE));
         assertEquals(List.of(32, 1), world.requestedEntityCleanupSizes);
-        assertEquals(List.of(keys.getFirst()), world.startedEntityChunks);
+        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
         assertEquals(1, world.persistence.size());
-        assertEquals(1, chunks.peak);
+        assertEquals(32, chunks.peak);
+        assertTrue(world.globalRemovalBeforeFirstEntityChunk);
+        assertFalse(world.duplicateEntityLoad);
+        assertTrue(world.addedEntities.isEmpty());
+
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
+        world.persistence.getFirst().complete = true;
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(keys, world.startedEntityChunks);
+        assertEquals(2, world.persistence.size());
+        assertEquals(1, chunks.active);
+        assertFalse(world.duplicateEntityLoad);
+        assertTrue(world.addedEntities.isEmpty());
 
         session.close();
         assertEquals(0, chunks.active);
@@ -600,11 +619,11 @@ class StreamingPreparedWorldMutationSessionTest {
         Map<EntityChunkKey, EntityChunkBlob> entities = new LinkedHashMap<>();
         Map<EntityChunkKey, EntityChunkBlob> baseEntities = new LinkedHashMap<>();
         Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
-        Set<UUID> replaced = new HashSet<>();
+        Set<UUID> cleanupIds = new HashSet<>();
         keys.forEach(key -> {
             entities.put(key, empty);
             UUID id = new UUID(key.chunkX(), key.chunkZ() + 1L);
-            replaced.add(id);
+            cleanupIds.add(id);
             baseEntities.put(key, new EntityChunkBlob(List.of(new EntityState(
                     id, "minecraft:rabbit", new CanonicalNbt(new byte[] {1})))));
             decoded.put(key, new DecodedEntityChunk(List.of()));
@@ -612,7 +631,28 @@ class StreamingPreparedWorldMutationSessionTest {
         var source = new WorldStateApply.State(Map.of(), entities);
         var base = new WorldStateApply.State(Map.of(), baseEntities);
         return new PreparedMinecraftPlanState(
-                source, base, decoded, decoded, List.of(), keys, replaced);
+                source, base, decoded, decoded, List.of(), keys, cleanupIds);
+    }
+
+    private static PreparedMinecraftPlanState legacyDuplicatePlan(
+            List<EntityChunkKey> keys, UUID id) throws IOException {
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob canonical = new EntityChunkBlob(List.of(new EntityState(
+                id, "minecraft:rabbit",
+                MinecraftNbtCodec.encode(new CompoundTag()))));
+        DecodedEntityChunk decodedEmpty = new DecodedEntityChunk(List.of());
+        DecodedEntityChunk decodedCanonical = new MinecraftEntityStateDecoder(
+                BuiltInRegistries.ENTITY_TYPE).decode(canonical);
+        Map<EntityChunkKey, EntityChunkBlob> entities = new LinkedHashMap<>();
+        Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
+        keys.forEach(key -> {
+            boolean selected = key.equals(keys.getFirst());
+            entities.put(key, selected ? canonical : empty);
+            decoded.put(key, selected ? decodedCanonical : decodedEmpty);
+        });
+        var state = new WorldStateApply.State(Map.of(), entities);
+        return new PreparedMinecraftPlanState(
+                state, state, decoded, decoded, List.of(), keys, Set.of(id));
     }
 
     private static List<EntityChunkKey> entityKeys(int chunks) {
@@ -698,12 +738,17 @@ class StreamingPreparedWorldMutationSessionTest {
         private final List<PersistenceCall> persistenceCalls = new ArrayList<>();
         private final List<EntityChunkKey> startedEntityChunks = new ArrayList<>();
         private final List<EntityChunkKey> removedEntityChunks = new ArrayList<>();
+        private final List<UUID> globallyRemovedEntityIds = new ArrayList<>();
+        private final List<DecodedEntity> addedEntities = new ArrayList<>();
         private final List<EntityChunkKey> requestedEntityCleanup = new ArrayList<>();
         private final List<Integer> requestedEntityCleanupSizes = new ArrayList<>();
         private Set<ChunkCoordinate> directlyStored = Set.of();
         private boolean cleanAllStoredEntities = true;
         private Set<EntityChunkKey> directlyCleanedEntities = Set.of();
         private Map<EntityChunkKey, List<UUID>> durableEntities = Map.of();
+        private Set<UUID> indexedEntities;
+        private boolean globalRemovalBeforeFirstEntityChunk;
+        private boolean duplicateEntityLoad;
         private PreparedMinecraftState requestedEntityCleanupTarget;
 
         private FakeWorld(SectionBlob captured) {
@@ -801,13 +846,35 @@ class StreamingPreparedWorldMutationSessionTest {
             return captured;
         }
         @Override public List<UUID> durableEntityIds(EntityChunkKey key) {
+            if (startedEntityChunks.isEmpty()) {
+                globalRemovalBeforeFirstEntityChunk =
+                        !globallyRemovedEntityIds.isEmpty();
+            }
             startedEntityChunks.add(key);
-            return durableEntities.getOrDefault(key, List.of());
+            List<UUID> ids = durableEntities.getOrDefault(key, List.of());
+            if (indexedEntities != null) {
+                ids.forEach(id -> duplicateEntityLoad |= !indexedEntities.add(id));
+            }
+            return ids;
+        }
+        @Override public void removeEntity(UUID id) {
+            globallyRemovedEntityIds.add(id);
+            if (indexedEntities != null) {
+                indexedEntities.remove(id);
+            }
         }
         @Override public void removeEntity(EntityChunkKey key, UUID id) {
             removedEntityChunks.add(key);
+            if (indexedEntities != null) {
+                indexedEntities.remove(id);
+            }
         }
-        @Override public void addEntity(EntityChunkKey key, DecodedEntity entity) { }
+        @Override public void addEntity(EntityChunkKey key, DecodedEntity entity) {
+            addedEntities.add(entity);
+            if (indexedEntities != null) {
+                duplicateEntityLoad |= !indexedEntities.add(entity.id());
+            }
+        }
         @Override public EntityChunkBlob captureEntities(EntityChunkKey key) {
             return new EntityChunkBlob(List.of());
         }

@@ -216,6 +216,11 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     }
 
     @Override
+    public void removeEntity(UUID id) throws IOException {
+        entityRestorer.remove(id);
+    }
+
+    @Override
     public void removeEntity(EntityChunkKey key, UUID id) throws IOException {
         entityRestorer.remove(key, id);
     }

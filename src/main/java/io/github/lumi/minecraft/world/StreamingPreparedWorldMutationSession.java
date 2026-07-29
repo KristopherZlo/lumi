@@ -54,7 +54,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private CompletableFuture<PreparedMinecraftState> preparing;
     private CompletableFuture<Set<EntityChunkKey>> entityCleanup;
     private PreparedMinecraftState entityRemoval;
-    private Set<UUID> replacedEntityIds;
+    private List<UUID> cleanupEntityIds;
+    private int cleanupEntityIndex;
     private List<EntityChunkKey> entityRemovalKeys;
     private List<EntityChunkKey> entityKeys;
     private EntityLookahead entityLookahead;
@@ -90,7 +91,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         while (phase != Phase.COMPLETE && System.nanoTime() < deadlineNanos) {
             switch (phase) {
                 case PREPARING -> {
-                    if (!prepareNext()) {
+                    if (!prepareNext(deadlineNanos)) {
                         return false;
                     }
                 }
@@ -140,7 +141,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         return phase == Phase.COMPLETE;
     }
 
-    private boolean prepareNext() throws IOException {
+    private boolean prepareNext(long deadlineNanos) throws IOException {
         if (current != null) {
             Set<ChunkCoordinate> durable = currentKind == BatchKind.SECTIONS
                     ? current.durableStoredChunks() : Set.of();
@@ -159,7 +160,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             currentKind = null;
             repairAttempted = false;
         }
-        if (!prepareEntityCleanup()) {
+        if (!prepareEntityCleanup(deadlineNanos)) {
             return false;
         }
         // Remove old/legacy UUIDs durably before terrain can load final placements.
@@ -167,7 +168,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             return startEntityBatch();
         }
         entityRemoval = null;
-        replacedEntityIds = null;
+        cleanupEntityIds = null;
         if (batchStart < plan.sectionKeys().size()) {
             if (slab == null) {
                 if (preparing == null) {
@@ -236,46 +237,55 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         return true;
     }
 
-    private boolean prepareEntityCleanup() throws IOException {
+    private boolean prepareEntityCleanup(long deadlineNanos) throws IOException {
         if (entityCleanupComplete) {
             return true;
         }
-        if (entityCleanup == null) {
-            if (plan.entityKeys().isEmpty()) {
-                entityCleanupComplete = true;
-                return true;
-            }
-            if (replacedEntityIds == null) {
-                replacedEntityIds = plan.replacedEntityIds();
-                entityRemovalKeys = new ArrayList<>();
-            }
-            entityStorageCleanupEnd = entityBatchEnd(
-                    plan.entityKeys().size(), entityStorageCleanupStart);
-            entityRemoval = prepareEntityRemoval(plan.entityKeys().subList(
-                    entityStorageCleanupStart, entityStorageCleanupEnd));
-            entityCleanup = world.cleanStoredEntities(entityRemoval);
+        if (plan.entityKeys().isEmpty()) {
+            entityCleanupComplete = true;
+            return true;
         }
-        if (!entityCleanup.isDone()) {
-            return false;
-        }
-        Set<EntityChunkKey> cleaned;
-        try {
-            cleaned = entityCleanup.join();
-        } catch (CancellationException failed) {
-            throw new IOException("Stored entity cleanup was cancelled", failed);
-        } catch (CompletionException failed) {
-            Throwable cause = failed.getCause() == null ? failed : failed.getCause();
-            if (cause instanceof IOException io) {
-                throw io;
-            }
-            throw new IOException("Cannot clean stored entity chunks", cause);
-        }
-        entityRemoval.entityKeys().stream().filter(key -> !cleaned.contains(key))
-                .forEach(entityRemovalKeys::add);
-        entityStorageCleanupStart = entityStorageCleanupEnd;
-        entityCleanup = null;
-        entityRemoval = null;
         if (entityStorageCleanupStart < plan.entityKeys().size()) {
+            if (entityCleanup == null) {
+                if (entityRemovalKeys == null) {
+                    cleanupEntityIds = List.copyOf(plan.cleanupEntityIds());
+                    entityRemovalKeys = new ArrayList<>();
+                }
+                entityStorageCleanupEnd = entityBatchEnd(
+                        plan.entityKeys().size(), entityStorageCleanupStart);
+                entityRemoval = prepareEntityRemoval(plan.entityKeys().subList(
+                        entityStorageCleanupStart, entityStorageCleanupEnd));
+                entityCleanup = world.cleanStoredEntities(entityRemoval);
+            }
+            if (!entityCleanup.isDone()) {
+                return false;
+            }
+            Set<EntityChunkKey> cleaned;
+            try {
+                cleaned = entityCleanup.join();
+            } catch (CancellationException failed) {
+                throw new IOException("Stored entity cleanup was cancelled", failed);
+            } catch (CompletionException failed) {
+                Throwable cause = failed.getCause() == null ? failed : failed.getCause();
+                if (cause instanceof IOException io) {
+                    throw io;
+                }
+                throw new IOException("Cannot clean stored entity chunks", cause);
+            }
+            entityRemoval.entityKeys().stream().filter(key -> !cleaned.contains(key))
+                    .forEach(entityRemovalKeys::add);
+            entityStorageCleanupStart = entityStorageCleanupEnd;
+            entityCleanup = null;
+            entityRemoval = null;
+            if (entityStorageCleanupStart < plan.entityKeys().size()) {
+                return false;
+            }
+        }
+        while (cleanupEntityIndex < cleanupEntityIds.size()
+                && System.nanoTime() < deadlineNanos) {
+            world.removeEntity(cleanupEntityIds.get(cleanupEntityIndex++));
+        }
+        if (cleanupEntityIndex < cleanupEntityIds.size()) {
             return false;
         }
         List<EntityChunkKey> ordered = new ArrayList<>(
@@ -293,15 +303,11 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             List<EntityChunkKey> keys) {
         Map<EntityChunkKey, EntityChunkBlob> entities = new LinkedHashMap<>();
         Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        DecodedEntityChunk decodedEmpty = new DecodedEntityChunk(List.of());
         for (EntityChunkKey key : keys) {
-            entities.put(key, new EntityChunkBlob(
-                    plan.base().entities().get(key).entities().stream()
-                            .filter(entity -> !replacedEntityIds.contains(entity.id()))
-                            .toList()));
-            decoded.put(key, new DecodedEntityChunk(
-                    plan.baseEntities().get(key).entities().stream()
-                            .filter(entity -> !replacedEntityIds.contains(entity.id()))
-                            .toList()));
+            entities.put(key, empty);
+            decoded.put(key, decodedEmpty);
         }
         return new PreparedMinecraftState(
                 new WorldStateApply.State(Map.of(), entities),
@@ -562,10 +568,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     }
 
     private int nextEntityBatchEnd(int start) {
-        return start < entityCleanupCount
-                ? (entityCleanupCount <= MAX_CHUNKS
-                        ? entityCleanupCount : start + 1)
-                : entityBatchEnd(entityKeys.size(), start);
+        return entityBatchEnd(
+                start < entityCleanupCount ? entityCleanupCount : entityKeys.size(),
+                start);
     }
 
     private void verifyCurrent(long deadlineNanos) throws IOException {
@@ -638,7 +643,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         }
         entityCleanup = null;
         entityRemoval = null;
-        replacedEntityIds = null;
+        cleanupEntityIds = null;
         entityRemovalKeys = null;
         EntityLookahead pending = entityLookahead;
         entityLookahead = null;
