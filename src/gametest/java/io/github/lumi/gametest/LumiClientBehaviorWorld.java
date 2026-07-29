@@ -1,5 +1,6 @@
 package io.github.lumi.gametest;
 
+import com.moulberry.axiom.Axiom;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -72,13 +73,13 @@ final class LumiClientBehaviorWorld {
             TestWorldSave worldSave =
                     new TestWorldSaveImpl(context, saveDirectory);
             try (TestSingleplayerContext singleplayer = worldSave.open()) {
-                prepareClient(context, singleplayer);
+                prepareClient(context, singleplayer, false);
                 scenario.run(context, singleplayer, report);
             }
             if (reopenedScenario != null) {
                 long started = System.nanoTime();
                 try (TestSingleplayerContext reopened = worldSave.open()) {
-                    prepareClient(context, reopened);
+                    prepareClient(context, reopened, false);
                     report.event("stage", "world_reopen", "succeeded", 0,
                             elapsedMillis(started), "");
                     reopenedScenario.run(context, reopened, report);
@@ -105,7 +106,7 @@ final class LumiClientBehaviorWorld {
                     .adjustSettings(LumiClientBehaviorWorld::configureWorld)
                     .create()) {
                 worldSave = singleplayer.getWorldSave();
-                prepareClient(context, singleplayer);
+                prepareClient(context, singleplayer, true);
                 report.event("stage", "world_create", "succeeded", 0,
                         elapsedMillis(started), "seed=710 mode=creative");
                 context.takeScreenshot("lumi-" + scenarioName + "-world-created");
@@ -114,7 +115,7 @@ final class LumiClientBehaviorWorld {
             if (reopenedScenario != null) {
                 started = System.nanoTime();
                 try (TestSingleplayerContext reopened = worldSave.open()) {
-                    prepareClient(context, reopened);
+                    prepareClient(context, reopened, true);
                     report.event("stage", "world_reopen", "succeeded", 0,
                             elapsedMillis(started), "");
                     reopenedScenario.run(context, reopened, report);
@@ -144,10 +145,22 @@ final class LumiClientBehaviorWorld {
 
     private static void prepareClient(
             ClientGameTestContext context,
-            TestSingleplayerContext singleplayer) {
+            TestSingleplayerContext singleplayer,
+            boolean requireRenderedChunks) {
+        context.runOnClient(client -> {
+            client.options.pauseOnLostFocus = false;
+            Axiom.configuration.internal.shownIntroduction = true;
+        });
         context.setScreen(() -> null);
         context.waitForScreen(null);
-        singleplayer.getClientWorld().waitForChunksRender();
+        if (requireRenderedChunks) {
+            singleplayer.getClientWorld().waitForChunksRender();
+        } else {
+            context.waitFor(client -> client.level != null && client.player != null
+                    && client.level.getChunkSource().hasChunk(
+                            client.player.chunkPosition().x,
+                            client.player.chunkPosition().z));
+        }
     }
 
     private static long elapsedMillis(long started) {
