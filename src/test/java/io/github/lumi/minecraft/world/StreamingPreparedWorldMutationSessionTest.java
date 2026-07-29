@@ -118,6 +118,8 @@ class StreamingPreparedWorldMutationSessionTest {
         assertEquals(2, chunks.active);
         assertTrue(world.persistence.isEmpty());
         assertEquals(0, background.submitted);
+        assertEquals(Set.copyOf(keys), world.suppressedEntityLoads);
+        assertEquals(0, world.entitySuppressionReleases);
         assertEquals(List.of(
                 ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES), requested);
 
@@ -130,6 +132,8 @@ class StreamingPreparedWorldMutationSessionTest {
         world.persistence.getFirst().complete = true;
         assertFalse(session.applyUntil(Long.MAX_VALUE));
         assertEquals(1, background.submitted);
+        assertTrue(world.suppressedEntityLoads.isEmpty());
+        assertEquals(1, world.entitySuppressionReleases);
 
         background.runNext();
         assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -141,7 +145,10 @@ class StreamingPreparedWorldMutationSessionTest {
                 world.startedEntityChunks);
 
         session.close();
+        session.close();
         assertEquals(0, chunks.active);
+        assertEquals(1, world.entitySuppressionReleases);
+        assertFalse(world.finalEntityAddedWhileSuppressed);
     }
 
     @Test
@@ -749,6 +756,9 @@ class StreamingPreparedWorldMutationSessionTest {
         private Set<UUID> indexedEntities;
         private boolean globalRemovalBeforeFirstEntityChunk;
         private boolean duplicateEntityLoad;
+        private boolean finalEntityAddedWhileSuppressed;
+        private int entitySuppressionReleases;
+        private Set<EntityChunkKey> suppressedEntityLoads = Set.of();
         private PreparedMinecraftState requestedEntityCleanupTarget;
 
         private FakeWorld(SectionBlob captured) {
@@ -836,6 +846,21 @@ class StreamingPreparedWorldMutationSessionTest {
                     .collect(java.util.stream.Collectors.toUnmodifiableSet()));
         }
 
+        @Override
+        public DimensionFreeze.Lease suppressEntityLoads(Set<EntityChunkKey> keys) {
+            if (!suppressedEntityLoads.isEmpty()) {
+                throw new IllegalStateException("Entity loads are already suppressed");
+            }
+            suppressedEntityLoads = Set.copyOf(keys);
+            return () -> {
+                if (suppressedEntityLoads.isEmpty()) {
+                    throw new IllegalStateException("Entity loads are not suppressed");
+                }
+                suppressedEntityLoads = Set.of();
+                entitySuppressionReleases++;
+            };
+        }
+
         @Override public List<Integer> blockEntityIndexes(SectionKey key) {
             return List.of();
         }
@@ -870,6 +895,7 @@ class StreamingPreparedWorldMutationSessionTest {
             }
         }
         @Override public void addEntity(EntityChunkKey key, DecodedEntity entity) {
+            finalEntityAddedWhileSuppressed |= !suppressedEntityLoads.isEmpty();
             addedEntities.add(entity);
             if (indexedEntities != null) {
                 duplicateEntityLoad |= !indexedEntities.add(entity.id());

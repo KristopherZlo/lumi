@@ -5,7 +5,9 @@ import io.github.lumi.minecraft.runtime.EntityStorageLevelAccess;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.entity.ChunkEntities;
 import net.minecraft.world.level.entity.EntityAccess;
 import net.minecraft.world.level.entity.EntityPersistentStorage;
 import net.minecraft.world.level.entity.EntitySectionStorage;
@@ -15,6 +17,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -55,6 +58,29 @@ abstract class PersistentEntitySectionManagerMixin<T extends EntityAccess> {
             // saveAll retries false chunk stores forever; the journal owns this freeze.
             callback.cancel();
         }
+    }
+
+    @Inject(method = "processPendingLoads", at = @At("HEAD"), cancellable = true)
+    private void lumi$skipFrozenPendingEntityLoads(CallbackInfo callback) {
+        var runtime = lumi$runtime();
+        if (runtime != null && runtime.freeze().isFrozen()
+                && !runtime.freeze().isEntityAdditionAllowed()) {
+            callback.cancel();
+        }
+    }
+
+    @Redirect(
+            method = "processPendingLoads",
+            at = @At(value = "INVOKE", target =
+                    "Lnet/minecraft/world/level/entity/ChunkEntities;getEntities()"
+                            + "Ljava/util/stream/Stream;"))
+    private Stream<T> lumi$filterSuppressedEntityLoads(ChunkEntities<T> loaded) {
+        var runtime = lumi$runtime();
+        ChunkPos position = loaded.getPos();
+        return runtime != null && runtime.freeze().suppressesEntityLoad(
+                position.x, position.z)
+                ? Stream.empty()
+                : loaded.getEntities();
     }
 
     @Inject(method = "processChunkUnload", at = @At("RETURN"))

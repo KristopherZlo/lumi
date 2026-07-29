@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.PlayerSpawn;
+import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -155,6 +156,16 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     public CompletableFuture<Set<EntityChunkKey>> cleanStoredEntities(
             PreparedMinecraftState target) {
         return storedChunks.cleanEntities(target);
+    }
+
+    @Override
+    public DimensionFreeze.Lease suppressEntityLoads(Set<EntityChunkKey> keys) {
+        DimensionFreeze.Lease suppression = freeze.suppressEntityLoads(keys);
+        return () -> {
+            var manager = ((ServerLevelEntityManagerAccessor) level).lumi$entityManager();
+            freeze.runAuthorizedEntityAddition(manager::processPendingLoads);
+            suppression.release();
+        };
     }
 
     @Override

@@ -56,6 +56,9 @@ public interface PreparedWorldAccess {
         return CompletableFuture.completedFuture(Set.of());
     }
 
+    /** Prevents queued legacy payloads for these chunks from entering the live index. */
+    DimensionFreeze.Lease suppressEntityLoads(Set<EntityChunkKey> keys);
+
     default String mutationPhase() {
         return "loaded apply";
     }

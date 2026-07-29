@@ -11,7 +11,7 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 
-/** Holds a FULL chunk ticket until block and entity state are both available. */
+/** Holds a FULL chunk ticket until the requested terrain/entity state is available. */
 public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
     private static final int RADIUS = 0;
     private static final int MAX_PENDING = 32;
@@ -20,16 +20,19 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
                     TicketType.NO_TIMEOUT,
                     TicketType.FLAG_LOADING | TicketType.FLAG_KEEP_DIMENSION_ACTIVE);
     private final ServerLevel level;
+    private final DimensionFreezeState freeze;
     private final Readiness readiness;
     private final Map<ChunkCoordinate, CompletableFuture<Void>> pending =
             new LinkedHashMap<>();
 
-    public MinecraftChunkLoadAccess(ServerLevel level) {
-        this(level, Readiness.TERRAIN_AND_ENTITIES);
+    public MinecraftChunkLoadAccess(ServerLevel level, DimensionFreezeState freeze) {
+        this(level, freeze, Readiness.TERRAIN_AND_ENTITIES);
     }
 
-    MinecraftChunkLoadAccess(ServerLevel level, Readiness readiness) {
+    MinecraftChunkLoadAccess(
+            ServerLevel level, DimensionFreezeState freeze, Readiness readiness) {
         this.level = Objects.requireNonNull(level, "level");
+        this.freeze = Objects.requireNonNull(freeze, "freeze");
         this.readiness = Objects.requireNonNull(readiness, "readiness");
     }
 
@@ -89,7 +92,7 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
         }
         ChunkPos position = position(chunk);
         var entities = ((ServerLevelEntityManagerAccessor) level).lumi$entityManager();
-        entities.processPendingLoads();
+        freeze.runAuthorizedEntityAddition(entities::processPendingLoads);
         return terrainReady(chunk) && entities.areEntitiesLoaded(position.toLong());
     }
 

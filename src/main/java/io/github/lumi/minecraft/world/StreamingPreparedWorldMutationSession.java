@@ -53,6 +53,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private int entityStorageCleanupEnd;
     private CompletableFuture<PreparedMinecraftState> preparing;
     private CompletableFuture<Set<EntityChunkKey>> entityCleanup;
+    private DimensionFreeze.Lease entityLoadSuppression;
     private PreparedMinecraftState entityRemoval;
     private List<UUID> cleanupEntityIds;
     private int cleanupEntityIndex;
@@ -167,6 +168,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         if (entityBatchStart < entityCleanupCount) {
             return startEntityBatch();
         }
+        releaseEntityLoadSuppression();
         entityRemoval = null;
         cleanupEntityIds = null;
         if (batchStart < plan.sectionKeys().size()) {
@@ -245,6 +247,10 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             entityCleanupComplete = true;
             return true;
         }
+        if (entityLoadSuppression == null) {
+            entityLoadSuppression = world.suppressEntityLoads(
+                    Set.copyOf(plan.entityKeys()));
+        }
         if (entityStorageCleanupStart < plan.entityKeys().size()) {
             if (entityCleanup == null) {
                 if (entityRemovalKeys == null) {
@@ -297,6 +303,14 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         entityRemovalKeys = null;
         entityCleanupComplete = true;
         return true;
+    }
+
+    private void releaseEntityLoadSuppression() {
+        if (entityLoadSuppression == null) {
+            return;
+        }
+        entityLoadSuppression.release();
+        entityLoadSuppression = null;
     }
 
     private PreparedMinecraftState prepareEntityRemoval(
@@ -663,6 +677,15 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             if (pending != null) {
                 pending.chunks().close();
             }
+        } catch (RuntimeException failed) {
+            if (closeFailure == null) {
+                closeFailure = failed;
+            } else {
+                closeFailure.addSuppressed(failed);
+            }
+        }
+        try {
+            releaseEntityLoadSuppression();
         } catch (RuntimeException failed) {
             if (closeFailure == null) {
                 closeFailure = failed;

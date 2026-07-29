@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.lumi.domain.model.EntityChunkKey;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class DimensionFreezeStateTest {
@@ -43,5 +45,27 @@ class DimensionFreezeStateTest {
         DimensionFreezeState freeze = new DimensionFreezeState();
         freeze.acquire();
         assertThrows(IllegalStateException.class, freeze::acquire);
+    }
+
+    @Test
+    void suppressesOnlyScopedEntityLoadsWhileFrozen() {
+        DimensionFreezeState freeze = new DimensionFreezeState();
+        EntityChunkKey key = new EntityChunkKey(3, -7);
+
+        assertThrows(IllegalStateException.class,
+                () -> freeze.suppressEntityLoads(Set.of(key)));
+        DimensionFreeze.Lease dimension = freeze.acquire();
+        DimensionFreeze.Lease suppression = freeze.suppressEntityLoads(Set.of(key));
+
+        assertTrue(freeze.suppressesEntityLoad(3, -7));
+        assertFalse(freeze.suppressesEntityLoad(3, -6));
+        assertThrows(IllegalStateException.class,
+                () -> freeze.suppressEntityLoads(Set.of(key)));
+        assertThrows(IllegalStateException.class, dimension::release);
+
+        suppression.release();
+        assertFalse(freeze.suppressesEntityLoad(3, -7));
+        assertThrows(IllegalStateException.class, suppression::release);
+        dimension.release();
     }
 }

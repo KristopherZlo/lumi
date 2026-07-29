@@ -22,6 +22,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     private final MinecraftRestorePreparation preparation;
     private final PreparedWorldAccess world;
     private final ServerLevel level;
+    private final DimensionFreezeState freeze;
     private final Executor background;
 
     public MinecraftWorldStateApply(ServerLevel level, DimensionFreezeState freeze) {
@@ -31,6 +32,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     public MinecraftWorldStateApply(
             ServerLevel level, DimensionFreezeState freeze, Executor background) {
         this.level = Objects.requireNonNull(level, "level");
+        this.freeze = Objects.requireNonNull(freeze, "freeze");
         this.background = Objects.requireNonNull(background, "background");
         preparation = new MinecraftRestorePreparation(
                 new MinecraftBlockStateDecoder(
@@ -90,7 +92,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     }
 
     private ChunkLoadSession chunkLoads(ChunkLoadAccess.Readiness readiness) {
-        return new ChunkLoadSession(new MinecraftChunkLoadAccess(level, readiness));
+        return new ChunkLoadSession(new MinecraftChunkLoadAccess(level, freeze, readiness));
     }
 
     private PreparedMinecraftPlanState prioritize(PreparedMinecraftPlanState plan) {

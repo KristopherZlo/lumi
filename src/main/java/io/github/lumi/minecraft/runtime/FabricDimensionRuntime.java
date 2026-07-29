@@ -778,7 +778,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             SavePreparation preparation,
             SavePublisher publisher,
             CapturedGenerationCompletion completion) {
-        ChunkLoadSession chunks = new ChunkLoadSession(new MinecraftChunkLoadAccess(level));
+        ChunkLoadSession chunks =
+                new ChunkLoadSession(new MinecraftChunkLoadAccess(level, freeze));
         return new SaveCaptureOperation(
                 Objects.requireNonNull(request, "request"),
                 new ChunkLoadingSavePreparation(preparation, chunks),
@@ -1314,7 +1315,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         WorkingIndexSnapshot boundary = pendingBoundary(workspace);
         var durability = mutations.durabilityBoundary(boundary);
         ChunkLoadSession chunks = new ChunkLoadSession(
-                new MinecraftChunkLoadAccess(level));
+                new MinecraftChunkLoadAccess(level, freeze));
         chunks.retain(boundary.generations().keySet());
         var operation = new PendingStatisticsOperation(
                 expected.commit(), boundary, historyViews.zones(), worldReader,

@@ -786,6 +786,10 @@ class PreparedWorldMutationSessionTest {
                 PreparedMinecraftState target) {
             return CompletableFuture.completedFuture(Set.copyOf(target.entityKeys()));
         }
+        @Override public DimensionFreeze.Lease suppressEntityLoads(
+                Set<EntityChunkKey> keys) {
+            return () -> { };
+        }
         @Override public List<Integer> blockEntityIndexes(SectionKey key) { return List.of(); }
         @Override public void removeBlockEntity(SectionKey key, int localIndex) { }
         @Override public void loadBlockEntity(
