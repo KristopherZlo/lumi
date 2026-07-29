@@ -91,7 +91,14 @@ class StreamingPreparedWorldMutationSessionTest {
         FakeWorld world = new FakeWorld(section);
         world.cleanAllStoredEntities = false;
         world.directlyCleanedEntities = Set.of(keys.getFirst());
+        world.durableEntities = Map.of(
+                keys.get(1), List.of(new UUID(1, 1)),
+                keys.get(2), List.of(new UUID(2, 2)));
         RecordingChunkAccess chunks = new RecordingChunkAccess();
+        CompletableFuture<Void> secondCleanupLoad = new CompletableFuture<>();
+        chunks.loads.put(
+                new ChunkCoordinate(keys.get(2).chunkX(), keys.get(2).chunkZ()),
+                secondCleanupLoad);
         List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
         ControlledExecutor background = new ControlledExecutor();
 
@@ -106,18 +113,21 @@ class StreamingPreparedWorldMutationSessionTest {
         assertTrue(world.requestedEntityCleanupTarget.source().entities().values()
                 .stream().allMatch(chunk -> chunk.entities().isEmpty()));
         assertEquals(List.of(keys.get(1)), world.startedEntityChunks);
-        assertEquals(1, chunks.peak);
+        assertEquals(List.of(keys.get(1)), world.removedEntityChunks);
+        assertEquals(2, chunks.peak);
+        assertEquals(2, chunks.active);
+        assertTrue(world.persistence.isEmpty());
         assertEquals(0, background.submitted);
         assertEquals(List.of(
                 ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES), requested);
 
-        world.persistence.getFirst().complete = true;
+        secondCleanupLoad.complete(null);
         assertFalse(session.applyUntil(Long.MAX_VALUE));
         assertEquals(keys.subList(1, 3), world.startedEntityChunks);
-        assertEquals(1, chunks.peak);
-        assertEquals(0, background.submitted);
+        assertEquals(keys.subList(1, 3), world.removedEntityChunks);
+        assertEquals(1, world.persistence.size());
 
-        world.persistence.getLast().complete = true;
+        world.persistence.getFirst().complete = true;
         assertFalse(session.applyUntil(Long.MAX_VALUE));
         assertEquals(1, background.submitted);
 
@@ -129,6 +139,30 @@ class StreamingPreparedWorldMutationSessionTest {
                 keys.get(1), keys.get(2),
                 keys.get(0), keys.get(1), keys.get(2)),
                 world.startedEntityChunks);
+
+        session.close();
+        assertEquals(0, chunks.active);
+    }
+
+    @Test
+    void keepsLargeFallbackCleanupAtOneChunkPerDurabilityBatch() throws Exception {
+        List<EntityChunkKey> keys = entityKeys(33);
+        FakeWorld world = new FakeWorld(null);
+        world.cleanAllStoredEntities = false;
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        var session = session(
+                entityPlan(keys), world, new ControlledExecutor(),
+                ignored -> new ChunkLoadSession(chunks, () -> 0L));
+
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(32), world.requestedEntityCleanupSizes);
+        assertTrue(world.persistence.isEmpty());
+
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(32, 1), world.requestedEntityCleanupSizes);
+        assertEquals(List.of(keys.getFirst()), world.startedEntityChunks);
+        assertEquals(1, world.persistence.size());
+        assertEquals(1, chunks.peak);
 
         session.close();
         assertEquals(0, chunks.active);
@@ -663,11 +697,13 @@ class StreamingPreparedWorldMutationSessionTest {
         private final List<ManualPersistence> persistence = new ArrayList<>();
         private final List<PersistenceCall> persistenceCalls = new ArrayList<>();
         private final List<EntityChunkKey> startedEntityChunks = new ArrayList<>();
+        private final List<EntityChunkKey> removedEntityChunks = new ArrayList<>();
         private final List<EntityChunkKey> requestedEntityCleanup = new ArrayList<>();
         private final List<Integer> requestedEntityCleanupSizes = new ArrayList<>();
         private Set<ChunkCoordinate> directlyStored = Set.of();
         private boolean cleanAllStoredEntities = true;
         private Set<EntityChunkKey> directlyCleanedEntities = Set.of();
+        private Map<EntityChunkKey, List<UUID>> durableEntities = Map.of();
         private PreparedMinecraftState requestedEntityCleanupTarget;
 
         private FakeWorld(SectionBlob captured) {
@@ -766,9 +802,11 @@ class StreamingPreparedWorldMutationSessionTest {
         }
         @Override public List<UUID> durableEntityIds(EntityChunkKey key) {
             startedEntityChunks.add(key);
-            return List.of();
+            return durableEntities.getOrDefault(key, List.of());
         }
-        @Override public void removeEntity(EntityChunkKey key, UUID id) { }
+        @Override public void removeEntity(EntityChunkKey key, UUID id) {
+            removedEntityChunks.add(key);
+        }
         @Override public void addEntity(EntityChunkKey key, DecodedEntity entity) { }
         @Override public EntityChunkBlob captureEntities(EntityChunkKey key) {
             return new EntityChunkBlob(List.of());

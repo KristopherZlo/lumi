@@ -224,9 +224,13 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     }
 
     private boolean startEntityBatch() throws IOException {
+        boolean removing = entityBatchStart < entityCleanupCount;
+        PreparedMinecraftState batch = nextEntityBatch();
         current = new PreparedWorldMutationSession(
-                nextEntityBatch(), world, System::nanoTime,
-                nextEntityChunkLoads(), metrics);
+                batch, world, System::nanoTime, nextEntityChunkLoads(), metrics,
+                removing
+                        ? PreparedWorldMutationSession.LoadingMode.SEQUENTIAL
+                        : PreparedWorldMutationSession.LoadingMode.BULK);
         currentKind = BatchKind.ENTITIES;
         phase = Phase.APPLYING;
         return true;
@@ -559,7 +563,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     private int nextEntityBatchEnd(int start) {
         return start < entityCleanupCount
-                ? start + 1 : entityBatchEnd(entityKeys.size(), start);
+                ? (entityCleanupCount <= MAX_CHUNKS
+                        ? entityCleanupCount : start + 1)
+                : entityBatchEnd(entityKeys.size(), start);
     }
 
     private void verifyCurrent(long deadlineNanos) throws IOException {
