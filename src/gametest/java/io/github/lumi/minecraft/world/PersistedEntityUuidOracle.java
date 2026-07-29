@@ -31,6 +31,7 @@ import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
 /** GameTest-only global UUID uniqueness check over persisted vanilla entities. */
 public final class PersistedEntityUuidOracle {
     private static final int REGION_HEADER_ENTRIES = 32 * 32;
+    private static final long REGION_HEADER_BYTES = 8L * 1024;
     private static final Pattern REGION_FILE =
             Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca");
 
@@ -87,6 +88,13 @@ public final class PersistedEntityUuidOracle {
             EntityStore store,
             Path region,
             Map<UUID, Location> locations) throws IOException {
+        long bytes = Files.size(region);
+        if (bytes == 0) {
+            return new Counts(0, 0);
+        }
+        if (bytes < REGION_HEADER_BYTES) {
+            throw new IOException("Truncated entity region header: " + region);
+        }
         Matcher name = REGION_FILE.matcher(region.getFileName().toString());
         if (!name.matches()) {
             return new Counts(0, 0);
