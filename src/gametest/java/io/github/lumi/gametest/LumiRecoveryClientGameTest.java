@@ -12,6 +12,7 @@ import io.github.lumi.domain.model.OperationPhase;
 import io.github.lumi.domain.model.OperationTarget;
 import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
+import io.github.lumi.mixin.SectionStoragePersistenceAccessor;
 import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.OperationJournalRepository;
@@ -247,14 +248,18 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
 
     private static void setPois(
             TestServerContext server, List<BlockPos> positions, boolean present) {
-        server.runOnServer(minecraft -> {
+        server.computeOnServer(minecraft -> {
             var level = minecraft.getPlayerList().getPlayers().getFirst().level();
             var state = (present ? Blocks.LECTERN : Blocks.AIR).defaultBlockState();
             for (BlockPos position : positions) {
                 require(level.setBlockAndUpdate(position, state),
                         "Could not update recovery POI at " + position);
             }
-        });
+            var pois = level.getChunkSource().getPoiManager();
+            positions.stream().map(ChunkPos::new).distinct().forEach(pois::flush);
+            return ((SectionStoragePersistenceAccessor) pois)
+                    .lumi$simpleRegionStorage().synchronize(true);
+        }).join();
     }
 
     private static BranchRef saveThroughUi(
