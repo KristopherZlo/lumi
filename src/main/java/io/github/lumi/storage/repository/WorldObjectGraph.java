@@ -22,30 +22,38 @@ public final class WorldObjectGraph {
 
     public Snapshot scan(ObjectId root) throws IOException {
         Objects.requireNonNull(root, "root");
+        try (var reader = objects.beginReadSession()) {
+            return scan(root, reader);
+        }
+    }
+
+    public Snapshot scan(
+            ObjectId root,
+            WorldObjectRepository.ReadSession reader) throws IOException {
+        Objects.requireNonNull(root, "root");
+        Objects.requireNonNull(reader, "reader");
         Set<ObjectId> reachable = new HashSet<>();
         Map<HistoryKey, ObjectId> leaves = new HashMap<>();
         reachable.add(root);
-        try (var reader = objects.beginReadSession()) {
-            for (var regionEntry : reader.readDimension(root).regions().entrySet()) {
-                ObjectId regionId = regionEntry.getValue();
-                reachable.add(regionId);
-                int regionChunkX = Math.multiplyExact(regionEntry.getKey().x(), REGION_SIZE);
-                int regionChunkZ = Math.multiplyExact(regionEntry.getKey().z(), REGION_SIZE);
-                for (var chunkEntry : reader.readRegion(regionId).chunks().entrySet()) {
-                    ObjectId chunkId = chunkEntry.getValue();
-                    reachable.add(chunkId);
-                    int chunkX = Math.addExact(regionChunkX, chunkEntry.getKey().x());
-                    int chunkZ = Math.addExact(regionChunkZ, chunkEntry.getKey().z());
-                    var chunk = reader.readChunk(chunkId);
-                    chunk.sections().forEach((sectionY, sectionId) -> {
-                        reachable.add(sectionId);
-                        leaves.put(new SectionKey(chunkX, sectionY, chunkZ), sectionId);
-                    });
-                    chunk.entities().ifPresent(entityId -> {
-                        reachable.add(entityId);
-                        leaves.put(new EntityChunkKey(chunkX, chunkZ), entityId);
-                    });
-                }
+        for (var regionEntry : reader.readDimension(root).regions().entrySet()) {
+            ObjectId regionId = regionEntry.getValue();
+            reachable.add(regionId);
+            int regionChunkX = Math.multiplyExact(regionEntry.getKey().x(), REGION_SIZE);
+            int regionChunkZ = Math.multiplyExact(regionEntry.getKey().z(), REGION_SIZE);
+            for (var chunkEntry : reader.readRegion(regionId).chunks().entrySet()) {
+                ObjectId chunkId = chunkEntry.getValue();
+                reachable.add(chunkId);
+                int chunkX = Math.addExact(regionChunkX, chunkEntry.getKey().x());
+                int chunkZ = Math.addExact(regionChunkZ, chunkEntry.getKey().z());
+                var chunk = reader.readChunk(chunkId);
+                chunk.sections().forEach((sectionY, sectionId) -> {
+                    reachable.add(sectionId);
+                    leaves.put(new SectionKey(chunkX, sectionY, chunkZ), sectionId);
+                });
+                chunk.entities().ifPresent(entityId -> {
+                    reachable.add(entityId);
+                    leaves.put(new EntityChunkKey(chunkX, chunkZ), entityId);
+                });
             }
         }
         return new Snapshot(reachable, leaves);

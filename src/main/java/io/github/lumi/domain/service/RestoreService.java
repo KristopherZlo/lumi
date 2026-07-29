@@ -215,6 +215,7 @@ public final class RestoreService {
         Commit targetCommitValue = commits.read(targetCommit);
         Map<SectionKey, SectionPlan> sections = new HashMap<>();
         Set<EntityChunkKey> entities = new HashSet<>();
+        EntityRestorePlanner.Plan entityPlan;
         try (var reader = objects.beginReadSession()) {
             DimensionTree current = reader.readDimension(currentCommit.tree());
             DimensionTree target = reader.readDimension(targetCommitValue.tree());
@@ -238,12 +239,12 @@ public final class RestoreService {
                         sections, entities, area, outside, includeEntities, scope,
                         regionIndex + 1, changedRegions.size(), progress);
             }
+            entityPlan = includeEntities
+                    ? new EntityRestorePlanner(objects, reader, commits, origins)
+                            .plan(sourceCommit, targetCommit, entities, scope)
+                    : new EntityRestorePlanner.Plan(Map.of(), Map.of());
         }
         boolean restorePlayerSpawns = area == null && scope == null;
-        EntityRestorePlanner.Plan entityPlan = includeEntities
-                ? new EntityRestorePlanner(objects, commits, origins)
-                        .plan(sourceCommit, targetCommit, entities, scope)
-                : new EntityRestorePlanner.Plan(Map.of(), Map.of());
         var targetReader = new RestorePlanReader(objects);
         var returnReader = new RestorePlanReader(objects);
         var targetSections = new RestorePlanMap<>(

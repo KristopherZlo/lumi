@@ -180,6 +180,10 @@ public final class WorldObjectRepository {
             return sectionCodec.decode(objects.read(id));
         }
 
+        public EntityChunkBlob readEntities(ObjectId id) throws IOException {
+            return entityCodec.decode(objects.read(id));
+        }
+
         public ChunkTree readChunk(ObjectId id) throws IOException {
             return merkleCodec.decodeChunk(objects.read(id));
         }

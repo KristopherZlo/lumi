@@ -24,6 +24,7 @@ import java.util.UUID;
 final class EntityRestorePlanner {
     private static final EntityChunkBlob EMPTY = new EntityChunkBlob(List.of());
     private final WorldObjectRepository objects;
+    private final WorldObjectRepository.ReadSession reader;
     private final CommitRepository commits;
     private final OriginStore origins;
     private final Map<CommitId, Snapshot> snapshots = new HashMap<>();
@@ -32,8 +33,12 @@ final class EntityRestorePlanner {
     private Map<EntityChunkKey, ObjectId> entityOrigins;
 
     EntityRestorePlanner(
-            WorldObjectRepository objects, CommitRepository commits, OriginStore origins) {
+            WorldObjectRepository objects,
+            WorldObjectRepository.ReadSession reader,
+            CommitRepository commits,
+            OriginStore origins) {
         this.objects = Objects.requireNonNull(objects, "objects");
+        this.reader = Objects.requireNonNull(reader, "reader");
         this.commits = Objects.requireNonNull(commits, "commits");
         this.origins = Objects.requireNonNull(origins, "origins");
     }
@@ -140,7 +145,7 @@ final class EntityRestorePlanner {
         }
         Map<EntityChunkKey, ObjectId> ids = new HashMap<>(entityOrigins());
         for (var entry : new WorldObjectGraph(objects)
-                .scan(commits.read(id).tree()).leaves().entrySet()) {
+                .scan(commits.read(id).tree(), reader).leaves().entrySet()) {
             if (entry.getKey() instanceof EntityChunkKey key) {
                 ids.put(key, entry.getValue());
             }
@@ -170,7 +175,7 @@ final class EntityRestorePlanner {
     private EntityChunkBlob blob(ObjectId id) throws IOException {
         EntityChunkBlob cached = blobs.get(id);
         if (cached == null) {
-            cached = objects.readEntities(id);
+            cached = reader.readEntities(id);
             blobs.put(id, cached);
         }
         return cached;
