@@ -105,19 +105,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 }
                 case VERIFYING -> verifyCurrent(deadlineNanos);
                 case PERSISTING -> {
-                    boolean complete;
-                    try {
-                        complete = current.persistUntil(deadlineNanos);
-                    } catch (IOException | RuntimeException failed) {
-                        discardEntityLookahead(failed);
-                        throw failed;
-                    }
-                    if (complete) {
+                    if (current.persistUntil(deadlineNanos)) {
                         phase = Phase.PREPARING;
                     } else {
-                        if (System.nanoTime() < deadlineNanos) {
-                            prefetchNextEntityBatch(deadlineNanos);
-                        }
                         return false;
                     }
                 }
@@ -236,7 +226,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private boolean startEntityBatch() throws IOException {
         current = new PreparedWorldMutationSession(
                 nextEntityBatch(), world, System::nanoTime,
-                nextEntityChunkLoads(), metrics);
+                chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES),
+                metrics);
         currentKind = BatchKind.ENTITIES;
         phase = Phase.APPLYING;
         return true;

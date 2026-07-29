@@ -2,7 +2,6 @@ package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.CanonicalNbt;
@@ -25,7 +24,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import net.minecraft.SharedConstants;
@@ -287,184 +285,6 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
-    void fillsFreedEntityTicketSlotsWithoutStartingTheNextBatch() throws Exception {
-        List<EntityChunkKey> keys = entityKeys(65);
-        ControlledExecutor background = new ControlledExecutor();
-        FakeWorld world = new FakeWorld(null);
-        RecordingChunkAccess chunks = new RecordingChunkAccess();
-        List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
-
-        var session = session(entityPlan(keys), world, background, readiness -> {
-            requested.add(readiness);
-            return new ChunkLoadSession(chunks, () -> 0L);
-        });
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(List.of(32), world.requestedEntityCleanupSizes);
-        assertTrue(world.startedEntityChunks.isEmpty());
-        assertTrue(world.persistence.isEmpty());
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(List.of(32, 32), world.requestedEntityCleanupSizes);
-        assertTrue(world.startedEntityChunks.isEmpty());
-        assertTrue(world.persistence.isEmpty());
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(List.of(32, 32, 1), world.requestedEntityCleanupSizes);
-        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
-        assertEquals(32, chunks.active);
-        assertEquals(1, world.persistenceCalls.size());
-
-        world.persistence.getFirst().accepted = keys.subList(0, 4).stream()
-                .map(ChunkCoordinate::from).toList();
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(32, chunks.active);
-        assertEquals(32, chunks.peak);
-        assertEquals(2, requested.size());
-        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
-        assertEquals(1, world.persistenceCalls.size());
-
-        world.persistence.getFirst().accepted = keys.subList(4, 32).stream()
-                .map(ChunkCoordinate::from).toList();
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(32, chunks.active);
-        assertEquals(64, chunks.activeBeforeRetain.size());
-        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
-        assertEquals(1, world.persistenceCalls.size());
-        assertEquals(2, requested.size());
-        assertEquals(32, chunks.peak);
-
-        session.close();
-        session.close();
-        assertEquals(0, chunks.active);
-        assertEquals(1, world.persistence.getFirst().closeCalls);
-    }
-
-    @Test
-    void handsOffAPartiallyPrefetchedEntityBatch() throws Exception {
-        List<EntityChunkKey> keys = entityKeys(40);
-        FakeWorld world = new FakeWorld(null);
-        RecordingChunkAccess chunks = new RecordingChunkAccess();
-        List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
-        var session = session(
-                entityPlan(keys), world, new ControlledExecutor(), readiness -> {
-                    requested.add(readiness);
-                    return new ChunkLoadSession(chunks, () -> 0L);
-                });
-        startFirstMutation(session, world);
-        world.persistence.getFirst().accepted = keys.subList(0, 4).stream()
-                .map(ChunkCoordinate::from).toList();
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(32, chunks.active);
-
-        world.persistence.getFirst().accepted = keys.subList(4, 32).stream()
-                .map(ChunkCoordinate::from).toList();
-        world.persistence.getFirst().complete = true;
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-
-        assertEquals(keys, world.startedEntityChunks);
-        assertEquals(2, world.persistenceCalls.size());
-        assertEquals(2, requested.size());
-        assertEquals(40, chunks.activeBeforeRetain.size());
-        assertEquals(32, chunks.peak);
-        assertEquals(8, chunks.active);
-        session.close();
-        assertEquals(0, chunks.active);
-    }
-
-    @Test
-    void rejectedEntityLookaheadFallsBackAfterDurability() throws Exception {
-        List<EntityChunkKey> keys = entityKeys(40);
-        FakeWorld world = new FakeWorld(null);
-        RecordingChunkAccess chunks = new RecordingChunkAccess();
-        AtomicInteger requests = new AtomicInteger();
-        var session = session(
-                entityPlan(keys), world, new ControlledExecutor(), ignored -> {
-                    if (requests.incrementAndGet() == 2) {
-                        throw new RejectedExecutionException("expected");
-                    }
-                    return new ChunkLoadSession(chunks, () -> 0L);
-                });
-        startFirstMutation(session, world);
-        world.persistence.getFirst().accepted = keys.subList(0, 32).stream()
-                .map(ChunkCoordinate::from).toList();
-
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(0, chunks.active);
-        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
-
-        world.persistence.getFirst().complete = true;
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(keys, world.startedEntityChunks);
-        assertEquals(3, requests.get());
-
-        session.close();
-        assertEquals(0, chunks.active);
-    }
-
-    @Test
-    void entityLookaheadFailureSurfacesOnlyAfterCurrentDurability() throws Exception {
-        List<EntityChunkKey> keys = entityKeys(33);
-        FakeWorld world = new FakeWorld(null);
-        RecordingChunkAccess chunks = new RecordingChunkAccess();
-        ChunkCoordinate next = ChunkCoordinate.from(keys.getLast());
-        CompletableFuture<Void> failedLoad = new CompletableFuture<>();
-        chunks.loads.put(next, failedLoad);
-        var session = session(
-                entityPlan(keys), world, new ControlledExecutor(),
-                ignored -> new ChunkLoadSession(chunks, () -> 0L));
-        startFirstMutation(session, world);
-        world.persistence.getFirst().accepted =
-                List.of(ChunkCoordinate.from(keys.getFirst()));
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-
-        failedLoad.completeExceptionally(new IllegalStateException("expected"));
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
-        assertEquals(1, world.persistenceCalls.size());
-
-        world.persistence.getFirst().accepted = keys.subList(1, 32).stream()
-                .map(ChunkCoordinate::from).toList();
-        world.persistence.getFirst().complete = true;
-        IOException failed = assertThrows(
-                IOException.class, () -> session.applyUntil(Long.MAX_VALUE));
-        assertTrue(failed.getMessage().contains("Cannot load Lumi chunk"));
-        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
-        assertEquals(1, world.persistenceCalls.size());
-        assertEquals(1, world.persistence.getFirst().closeCalls);
-
-        session.close();
-        assertEquals(0, chunks.active);
-    }
-
-    @Test
-    void synchronousLookaheadFailureIsDeferredAndReleasesItsTicket() throws Exception {
-        List<EntityChunkKey> keys = entityKeys(33);
-        FakeWorld world = new FakeWorld(null);
-        RecordingChunkAccess chunks = new RecordingChunkAccess();
-        var session = session(
-                entityPlan(keys), world, new ControlledExecutor(),
-                ignored -> new ChunkLoadSession(chunks, () -> 0L));
-        startFirstMutation(session, world);
-        chunks.startFailure = new IllegalStateException("expected");
-        world.persistence.getFirst().accepted =
-                List.of(ChunkCoordinate.from(keys.getFirst()));
-
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(31, chunks.active);
-        assertEquals(keys.subList(0, 32), world.startedEntityChunks);
-
-        world.persistence.getFirst().accepted = keys.subList(1, 32).stream()
-                .map(ChunkCoordinate::from).toList();
-        world.persistence.getFirst().complete = true;
-        IOException failed = assertThrows(
-                IOException.class, () -> session.applyUntil(Long.MAX_VALUE));
-        assertTrue(failed.getMessage().contains(
-                "Cannot prefetch Restore entity batch"));
-        assertEquals(0, chunks.active);
-        assertEquals(1, world.persistenceCalls.size());
-        assertEquals(1, world.persistence.getFirst().closeCalls);
-        session.close();
-    }
-
-    @Test
     void queuesNextSlabOnlyAfterTheCurrentSlabIsDurable() throws Exception {
         List<SectionKey> keys = new ArrayList<>();
         for (int sectionY = 0; sectionY < 1_025; sectionY++) {
@@ -714,7 +534,6 @@ class StreamingPreparedWorldMutationSessionTest {
         private final List<Integer> activeBeforeRetain = new ArrayList<>();
         private final Map<ChunkCoordinate, CompletableFuture<Void>> loads =
                 new LinkedHashMap<>();
-        private RuntimeException startFailure;
         private int active;
         private int peak;
 
@@ -730,13 +549,7 @@ class StreamingPreparedWorldMutationSessionTest {
             return true;
         }
 
-        @Override public void startLoading() {
-            if (startFailure != null) {
-                RuntimeException failed = startFailure;
-                startFailure = null;
-                throw failed;
-            }
-        }
+        @Override public void startLoading() { }
 
         @Override public void release(ChunkCoordinate chunk) {
             active--;
