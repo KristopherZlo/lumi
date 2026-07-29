@@ -111,6 +111,20 @@ class MinecraftEntityStateDecoderTest {
     }
 
     @Test
+    void rejectsPassengerUuidDuplicatedAcrossRootGraphs() throws Exception {
+        UUID passengerId =
+                UUID.fromString("20000000-0000-0000-0000-000000000002");
+        var decoder = new MinecraftEntityStateDecoder(
+                BuiltInRegistries.ENTITY_TYPE);
+
+        assertThrows(IOException.class, () -> decoder.normalize(Map.of(
+                new EntityChunkKey(0, 0), vehicle(
+                        new UUID(0, 1), passengerId),
+                new EntityChunkKey(1, 0), vehicle(
+                        new UUID(0, 2), passengerId))));
+    }
+
+    @Test
     void rejectsLegacyEntityUuidDuplicatedAcrossChunks() throws Exception {
         UUID entityId = UUID.fromString("30000000-0000-0000-0000-000000000003");
         EntityChunkKey first = new EntityChunkKey(0, 0);
@@ -189,6 +203,19 @@ class MinecraftEntityStateDecoderTest {
         entity.put("Pos", position);
         return new EntityState(
                 id, "minecraft:rabbit", MinecraftNbtCodec.encode(entity));
+    }
+
+    private static EntityChunkBlob vehicle(UUID id, UUID passengerId)
+            throws IOException {
+        CompoundTag passenger = new CompoundTag();
+        passenger.putString("id", "minecraft:armor_stand");
+        passenger.putIntArray("UUID", UUIDUtil.uuidToIntArray(passengerId));
+        ListTag passengers = new ListTag();
+        passengers.add(passenger);
+        CompoundTag vehicle = new CompoundTag();
+        vehicle.put("Passengers", passengers);
+        return new EntityChunkBlob(List.of(new EntityState(
+                id, "minecraft:oak_boat", MinecraftNbtCodec.encode(vehicle))));
     }
 
     private static CompoundTag attribute(String id) {

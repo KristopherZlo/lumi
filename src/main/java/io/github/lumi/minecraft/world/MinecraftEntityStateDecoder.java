@@ -126,16 +126,22 @@ public final class MinecraftEntityStateDecoder {
                 () -> new IOException("Missing persistent entity type: " + value));
     }
 
-    private static void collectPassengerIds(CompoundTag parent, Set<UUID> passengerIds) {
+    private static void collectPassengerIds(
+            CompoundTag parent, Set<UUID> passengerIds) throws IOException {
         ListTag passengers = parent.getListOrEmpty("Passengers");
         for (int index = 0; index < passengers.size(); index++) {
-            passengers.getCompound(index).ifPresent(passenger -> {
-                passenger.getIntArray("UUID")
-                        .filter(parts -> parts.length == 4)
-                        .map(UUIDUtil::uuidFromIntArray)
-                        .ifPresent(passengerIds::add);
-                collectPassengerIds(passenger, passengerIds);
-            });
+            CompoundTag passenger = passengers.getCompound(index).orElseThrow(
+                    () -> new IOException("Malformed passenger entity NBT"));
+            int[] parts = passenger.getIntArray("UUID")
+                    .filter(value -> value.length == 4)
+                    .orElseThrow(() ->
+                            new IOException("Passenger entity UUID is missing"));
+            UUID id = UUIDUtil.uuidFromIntArray(parts);
+            if (!passengerIds.add(id)) {
+                throw new IOException(
+                        "Ambiguous passenger UUID in Restore state: " + id);
+            }
+            collectPassengerIds(passenger, passengerIds);
         }
     }
 }
