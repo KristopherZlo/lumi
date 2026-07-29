@@ -4,6 +4,8 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.LumiZonesScreen;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
+import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.UUID;
@@ -21,7 +23,9 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 
 /** Fast real client-to-Netty-to-server smoke for the first minute of play. */
 @SuppressWarnings("UnstableApiUsage")
@@ -88,7 +92,7 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         requireConnected(context, server);
 
         operations.awaitDurability("first_minute_actions");
-        CommitId save = operations.save("first-minute");
+        operations.save("first-minute");
         ui.completeOnboardingIfShown();
         operations.undo("first_minute_entity");
         waitFor(context, () -> entityPresent(server, pig),
@@ -100,12 +104,31 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
                 "Redo did not remove the attacked pig");
         waitForStableIdle(context, server,
                 "Redo did not release the world operation slot");
-        operations.awaitDurability("first_minute_final");
+
+        int boundaryX = ((probe.getX() >> 4) + 1) << 4;
+        Vec3 entityOrigin = new Vec3(
+                boundaryX - 0.5, probe.getY(), probe.getZ() + 0.5);
+        Vec3 entityMoved = new Vec3(
+                boundaryX + 0.5, probe.getY(), probe.getZ() + 0.5);
+        UUID movedEntity = spawnDurableEntity(server, entityOrigin);
+        operations.awaitDurability("first_minute_entity_origin");
+        CommitId entityOriginSave =
+                operations.save("first-minute-entity-origin");
+        moveDurableEntity(server, movedEntity, entityMoved);
+        operations.awaitDurability("first_minute_entity_moved");
+        operations.save("first-minute-entity-moved");
+        operations.restore("first-minute-entity-origin", entityOriginSave);
+        operations.awaitDurability("first_minute_entity_restored");
+        waitFor(context, () -> entityChunksReady(server, entityOrigin),
+                "Cross-chunk entity storage did not become ready after Restore");
+        assertExactEntity(server, movedEntity, entityOrigin);
         requireConnected(context, server);
         report.assertNoRuntimeFailures();
         report.event("gate", "first_minute", "succeeded", 0, 0,
-                "real block packets, overlay, entity attack, save, undo, redo");
-        state = new SmokeState(save, probe, blockEntityProbe, pig);
+                "real packets, entity move, Save, Restore, Undo, Redo");
+        state = new SmokeState(
+                entityOriginSave, probe, blockEntityProbe, pig,
+                movedEntity, entityOrigin);
     }
 
     private void verifyReopened(
@@ -137,7 +160,101 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         if (!persisted) {
             throw new AssertionError("First-minute state did not survive world reopen");
         }
+        waitFor(context, () -> entityChunksReady(server, state.entityOrigin()),
+                "Cross-chunk entity storage did not become ready after reopen");
+        assertExactEntity(server, state.movedEntity(), state.entityOrigin());
         report.event("gate", "first_minute_reopen", "succeeded", 0, 0, "");
+    }
+
+    private static UUID spawnDurableEntity(
+            TestServerContext server, Vec3 position) {
+        return server.computeOnServer(minecraft -> {
+            var player = minecraft.getPlayerList().getPlayers().getFirst();
+            var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
+            try (var ignored = DirectLiveActionContext.open(
+                    runtime.liveActions(), player.getUUID())) {
+                Entity entity = Objects.requireNonNull(EntityType.ARMOR_STAND.create(
+                        player.level(), EntitySpawnReason.COMMAND));
+                entity.setPos(position);
+                entity.setNoGravity(true);
+                if (!player.level().addFreshEntity(entity)) {
+                    throw new AssertionError(
+                            "Could not spawn the cross-chunk entity");
+                }
+                player.teleportTo(position.x, position.y, position.z);
+                return entity.getUUID();
+            }
+        });
+    }
+
+    private static void moveDurableEntity(
+            TestServerContext server, UUID id, Vec3 position) {
+        server.runOnServer(minecraft -> {
+            var player = minecraft.getPlayerList().getPlayers().getFirst();
+            var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
+            Entity entity = Objects.requireNonNull(
+                    player.level().getEntityInAnyDimension(id));
+            try (var ignored = DirectLiveActionContext.open(
+                    runtime.liveActions(), player.getUUID())) {
+                var pending = runtime.liveEntities().begin(entity).orElseThrow(
+                        () -> new AssertionError(
+                                "Could not capture the cross-chunk entity move"));
+                entity.setPos(position);
+                if (!runtime.liveEntities().finish(pending)) {
+                    throw new AssertionError(
+                            "Cross-chunk entity move was not captured");
+                }
+            } catch (IOException failed) {
+                throw new AssertionError(
+                        "Could not record the cross-chunk entity move", failed);
+            }
+        });
+    }
+
+    private static void assertExactEntity(
+            TestServerContext server, UUID id, Vec3 expectedPosition) {
+        server.runOnServer(minecraft -> {
+            var level = minecraft.getPlayerList().getPlayers().getFirst().level();
+            ChunkPos origin = new ChunkPos(BlockPos.containing(expectedPosition));
+            if (level.getChunkSource().getChunkNow(origin.x, origin.z) == null
+                    || level.getChunkSource().getChunkNow(origin.x + 1, origin.z) == null) {
+                throw new AssertionError(
+                        "Cross-chunk entity audit needs both chunks loaded");
+            }
+            Entity found = null;
+            int count = 0;
+            for (Entity entity : level.getAllEntities()) {
+                if (entity.getUUID().equals(id)) {
+                    found = entity;
+                    count++;
+                }
+            }
+            if (count != 1) {
+                throw new AssertionError(
+                        "Expected one durable entity " + id + ", found " + count);
+            }
+            if (!found.position().equals(expectedPosition)) {
+                throw new AssertionError("Durable entity " + id + " was at "
+                        + found.position() + " instead of " + expectedPosition);
+            }
+        });
+    }
+
+    private static boolean entityChunksReady(
+            TestServerContext server, Vec3 expectedPosition) {
+        return server.computeOnServer(minecraft -> {
+            var level = minecraft.getPlayerList().getPlayers().getFirst().level();
+            ChunkPos origin = new ChunkPos(BlockPos.containing(expectedPosition));
+            var entities = ((ServerLevelEntityManagerAccessor) level)
+                    .lumi$entityManager();
+            entities.processPendingLoads();
+            return level.getChunkSource().getChunkNow(origin.x, origin.z) != null
+                    && level.getChunkSource().getChunkNow(
+                            origin.x + 1, origin.z) != null
+                    && entities.areEntitiesLoaded(origin.toLong())
+                    && entities.areEntitiesLoaded(
+                            ChunkPos.asLong(origin.x + 1, origin.z));
+        });
     }
 
     private static UUID spawnFragilePig(
@@ -239,5 +356,7 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
             CommitId save,
             BlockPos probe,
             BlockPos blockEntityProbe,
-            UUID pig) { }
+            UUID pig,
+            UUID movedEntity,
+            Vec3 entityOrigin) { }
 }

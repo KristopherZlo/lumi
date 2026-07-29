@@ -125,6 +125,7 @@ final class LumiBehaviorReport implements AutoCloseable {
                     .filter(line -> line.contains("/ERROR] (lumi)")
                             || line.contains("Uncaught exception in thread \"Lumi-")
                             || line.contains("lost connection: Internal Exception")
+                            || line.contains("UUID of added entity already exists")
                             || line.contains("at knot//io.github.lumi"))
                     .limit(8)
                     .toList();
