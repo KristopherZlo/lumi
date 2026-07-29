@@ -1,6 +1,8 @@
 package io.github.lumi.minecraft.world;
 
+import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
@@ -13,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -49,7 +52,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private int entityCleanupCount;
     private CompletableFuture<PreparedMinecraftState> preparing;
     private CompletableFuture<Set<EntityChunkKey>> entityCleanup;
-    private List<EntityChunkKey> entityCleanupKeys;
+    private PreparedMinecraftState entityRemoval;
     private List<EntityChunkKey> entityKeys;
     private EntityLookahead entityLookahead;
     private IOException entityLookaheadFailure;
@@ -156,10 +159,11 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         if (!prepareEntityCleanup()) {
             return false;
         }
-        // Legacy copies may share a UUID, so clean them one at a time before terrain.
+        // Remove old/legacy UUIDs durably before terrain can load final placements.
         if (entityBatchStart < entityCleanupCount) {
             return startEntityBatch();
         }
+        entityRemoval = null;
         if (batchStart < plan.sectionKeys().size()) {
             if (slab == null) {
                 if (preparing == null) {
@@ -229,25 +233,12 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             return true;
         }
         if (entityCleanup == null) {
-            entityCleanupKeys = plan.entityKeys().stream()
-                    .filter(key -> plan.source().entities().get(key)
-                            .equals(plan.base().entities().get(key)))
-                    .toList();
-            if (entityCleanupKeys.isEmpty()) {
+            if (plan.entityKeys().isEmpty()) {
                 entityCleanupComplete = true;
                 return true;
             }
-            Map<EntityChunkKey, io.github.lumi.domain.model.EntityChunkBlob> source =
-                    new LinkedHashMap<>();
-            Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
-            entityCleanupKeys.forEach(key -> {
-                source.put(key, plan.source().entities().get(key));
-                decoded.put(key, plan.entities().get(key));
-            });
-            var target = new PreparedMinecraftState(
-                    new WorldStateApply.State(Map.of(), source),
-                    Map.of(), decoded, List.of(), entityCleanupKeys);
-            entityCleanup = world.cleanStoredEntities(target);
+            entityRemoval = prepareEntityRemoval();
+            entityCleanup = world.cleanStoredEntities(entityRemoval);
         }
         if (!entityCleanup.isDone()) {
             return false;
@@ -264,19 +255,58 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             }
             throw new IOException("Cannot clean stored entity chunks", cause);
         }
-        Set<EntityChunkKey> cleanupKeySet = Set.copyOf(entityCleanupKeys);
-        List<EntityChunkKey> ordered = new ArrayList<>(plan.entityKeys().size());
-        entityCleanupKeys.stream().filter(key -> !cleaned.contains(key))
+        List<EntityChunkKey> ordered = new ArrayList<>(
+                plan.entityKeys().size() * 2);
+        entityRemoval.entityKeys().stream().filter(key -> !cleaned.contains(key))
                 .forEach(ordered::add);
         entityCleanupCount = ordered.size();
-        plan.entityKeys().stream()
-                .filter(key -> !cleaned.contains(key) && !cleanupKeySet.contains(key))
-                .forEach(ordered::add);
+        ordered.addAll(plan.entityKeys());
         entityKeys = List.copyOf(ordered);
         entityCleanup = null;
-        entityCleanupKeys = null;
         entityCleanupComplete = true;
         return true;
+    }
+
+    private PreparedMinecraftState prepareEntityRemoval() throws IOException {
+        Map<UUID, EntityPlacement> source =
+                entityPlacements(plan.source().entities());
+        Map<UUID, EntityPlacement> base =
+                entityPlacements(plan.base().entities());
+        Set<UUID> replaced = new HashSet<>(source.keySet());
+        replaced.addAll(base.keySet());
+        replaced.removeIf(id -> Objects.equals(source.get(id), base.get(id)));
+
+        Map<EntityChunkKey, EntityChunkBlob> entities = new LinkedHashMap<>();
+        Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
+        for (EntityChunkKey key : plan.entityKeys()) {
+            entities.put(key, new EntityChunkBlob(
+                    plan.base().entities().get(key).entities().stream()
+                            .filter(entity -> !replaced.contains(entity.id()))
+                            .toList()));
+            decoded.put(key, new DecodedEntityChunk(
+                    plan.baseEntities().get(key).entities().stream()
+                            .filter(entity -> !replaced.contains(entity.id()))
+                            .toList()));
+        }
+        return new PreparedMinecraftState(
+                new WorldStateApply.State(Map.of(), entities),
+                Map.of(), decoded, List.of(), plan.entityKeys());
+    }
+
+    private static Map<UUID, EntityPlacement> entityPlacements(
+            Map<EntityChunkKey, EntityChunkBlob> chunks) throws IOException {
+        Map<UUID, EntityPlacement> placements = new LinkedHashMap<>();
+        for (var entry : chunks.entrySet()) {
+            for (EntityState entity : entry.getValue().entities()) {
+                EntityPlacement previous = placements.put(
+                        entity.id(), new EntityPlacement(entry.getKey(), entity));
+                if (previous != null) {
+                    throw new IOException("Ambiguous prepared entity UUID "
+                            + entity.id());
+                }
+            }
+        }
+        return placements;
     }
 
     private PreparedMinecraftState claimPrepared() throws IOException {
@@ -368,12 +398,17 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         entityBatchEnd = nextEntityBatchEnd(entityBatchStart);
         List<EntityChunkKey> keys = entityKeys.subList(
                 entityBatchStart, entityBatchEnd);
-        Map<EntityChunkKey, io.github.lumi.domain.model.EntityChunkBlob> source =
+        boolean removing = entityBatchStart < entityCleanupCount;
+        Map<EntityChunkKey, EntityChunkBlob> source =
                 new LinkedHashMap<>();
         Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
         for (EntityChunkKey key : keys) {
-            source.put(key, plan.source().entities().get(key));
-            decoded.put(key, plan.entities().get(key));
+            source.put(key, removing
+                    ? entityRemoval.source().entities().get(key)
+                    : plan.source().entities().get(key));
+            decoded.put(key, removing
+                    ? entityRemoval.entities().get(key)
+                    : plan.entities().get(key));
         }
         return new PreparedMinecraftState(
                 new WorldStateApply.State(Map.of(), source), Map.of(), decoded,
@@ -601,7 +636,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             preparing = null;
         }
         entityCleanup = null;
-        entityCleanupKeys = null;
+        entityRemoval = null;
         EntityLookahead pending = entityLookahead;
         entityLookahead = null;
         entityLookaheadFailure = null;
@@ -643,6 +678,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     private record EntityLookahead(
             int start, int end, ChunkLoadSession chunks) { }
+    private record EntityPlacement(EntityChunkKey key, EntityState state) { }
 
     private enum BatchKind { SECTIONS, ENTITIES, SPAWNS }
     private enum Phase {

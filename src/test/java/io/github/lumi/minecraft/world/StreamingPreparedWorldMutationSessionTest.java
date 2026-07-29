@@ -74,17 +74,21 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
-    void cleansUnchangedStoredEntityChunksBeforeRequestingTickets() throws Exception {
+    void removesReplacedEntitiesBeforeSectionsAndStillAppliesFinalState()
+            throws Exception {
         List<EntityChunkKey> keys = entityKeys(3);
         SectionKey sectionKey = new SectionKey(3, 0, 0);
         SectionBlob section = stoneSection();
         PreparedMinecraftPlanState entities = entityPlan(keys);
-        var state = new WorldStateApply.State(
+        var source = new WorldStateApply.State(
                 Map.of(sectionKey, section), entities.source().entities());
+        var base = new WorldStateApply.State(
+                Map.of(sectionKey, section), entities.base().entities());
         var mixedPlan = new PreparedMinecraftPlanState(
-                state, state, entities.entities(), entities.entities(),
+                source, base, entities.entities(), entities.baseEntities(),
                 List.of(sectionKey), keys);
         FakeWorld world = new FakeWorld(section);
+        world.cleanAllStoredEntities = false;
         world.directlyCleanedEntities = Set.of(keys.getFirst());
         RecordingChunkAccess chunks = new RecordingChunkAccess();
         List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
@@ -98,6 +102,8 @@ class StreamingPreparedWorldMutationSessionTest {
 
         assertFalse(session.applyUntil(Long.MAX_VALUE));
         assertEquals(keys, world.requestedEntityCleanup);
+        assertTrue(world.requestedEntityCleanupTarget.source().entities().values()
+                .stream().allMatch(chunk -> chunk.entities().isEmpty()));
         assertEquals(List.of(keys.get(1)), world.startedEntityChunks);
         assertEquals(1, chunks.peak);
         assertEquals(0, background.submitted);
@@ -113,6 +119,15 @@ class StreamingPreparedWorldMutationSessionTest {
         world.persistence.getLast().complete = true;
         assertFalse(session.applyUntil(Long.MAX_VALUE));
         assertEquals(1, background.submitted);
+
+        background.runNext();
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        world.persistence.getLast().complete = true;
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(
+                keys.get(1), keys.get(2),
+                keys.get(0), keys.get(1), keys.get(2)),
+                world.startedEntityChunks);
 
         session.close();
         assertEquals(0, chunks.active);
@@ -629,7 +644,9 @@ class StreamingPreparedWorldMutationSessionTest {
         private final List<EntityChunkKey> startedEntityChunks = new ArrayList<>();
         private final List<EntityChunkKey> requestedEntityCleanup = new ArrayList<>();
         private Set<ChunkCoordinate> directlyStored = Set.of();
+        private boolean cleanAllStoredEntities = true;
         private Set<EntityChunkKey> directlyCleanedEntities = Set.of();
+        private PreparedMinecraftState requestedEntityCleanupTarget;
 
         private FakeWorld(SectionBlob captured) {
             this.captured = captured;
@@ -707,9 +724,11 @@ class StreamingPreparedWorldMutationSessionTest {
         @Override
         public CompletableFuture<Set<EntityChunkKey>> cleanStoredEntities(
                 PreparedMinecraftState target) {
+            requestedEntityCleanupTarget = target;
             requestedEntityCleanup.addAll(target.entityKeys());
             return CompletableFuture.completedFuture(target.entityKeys().stream()
-                    .filter(directlyCleanedEntities::contains)
+                    .filter(key -> cleanAllStoredEntities
+                            || directlyCleanedEntities.contains(key))
                     .collect(java.util.stream.Collectors.toUnmodifiableSet()));
         }
 

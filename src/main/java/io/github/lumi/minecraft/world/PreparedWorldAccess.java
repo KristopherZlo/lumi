@@ -48,8 +48,8 @@ public interface PreparedWorldAccess {
     }
 
     /**
-     * Canonically rewrites unloaded entity chunks whose source and return states
-     * are equal, returning the keys made durable without loading them.
+     * Canonically rewrites eligible unloaded entity chunks to an intermediate
+     * removal state, returning the keys made durable without loading them.
      */
     default CompletableFuture<Set<EntityChunkKey>> cleanStoredEntities(
             PreparedMinecraftState target) {
