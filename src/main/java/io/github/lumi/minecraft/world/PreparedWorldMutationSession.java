@@ -235,12 +235,6 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         return Set.copyOf(storedChunks);
     }
 
-    int availableChunkTicketCapacity() {
-        return chunks == null ? 0 : Math.max(
-                0, StreamingPreparedWorldMutationSession.MAX_CHUNKS
-                        - chunks.totalChunks());
-    }
-
     @Override
     public boolean repairUntil(long deadlineNanos) throws IOException {
         if (repair == null) {

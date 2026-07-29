@@ -42,25 +42,6 @@ public final class ChunkLoadSession implements AutoCloseable {
         pendingRetentions.add(Objects.requireNonNull(keys, "keys").iterator());
     }
 
-    /** Retains and starts a bounded prefix without observing its result. */
-    int prefetch(
-            Iterable<? extends HistoryKey> keys, long deadlineNanos) {
-        requireRetainable();
-        int retainedBefore = retained.size();
-        int processed = 0;
-        for (HistoryKey key : Objects.requireNonNull(keys, "keys")) {
-            if (nanoTime.getAsLong() >= deadlineNanos) {
-                break;
-            }
-            retainKey(key);
-            processed++;
-        }
-        if (retained.size() > retainedBefore) {
-            access.startLoading();
-        }
-        return processed;
-    }
-
     public boolean loadUntil(long deadlineNanos) throws IOException {
         if (windowed) {
             throw new IllegalStateException("Windowed chunk loading is already active");

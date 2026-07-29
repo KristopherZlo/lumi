@@ -59,25 +59,6 @@ class ChunkLoadingSavePreparationTest {
         assertEquals(1, access.released.size());
     }
 
-    @Test
-    void prefetchRetainsOnlyWithinTheCurrentDeadline() {
-        AtomicLong clock = new AtomicLong();
-        RecordingChunkAccess access = new RecordingChunkAccess();
-        ChunkLoadSession chunks = new ChunkLoadSession(
-                access, clock::getAndIncrement);
-
-        int processed = chunks.prefetch(java.util.List.of(
-                new SectionKey(1, 0, 1),
-                new SectionKey(2, 0, 2),
-                new SectionKey(3, 0, 3)), 2);
-
-        assertEquals(2, processed);
-        assertEquals(2, access.retained.size());
-        assertEquals(1, access.starts);
-        chunks.close();
-        assertEquals(2, access.released.size());
-    }
-
     private static SavePreparation fixed(WorkingIndexSnapshot boundary) {
         return () -> new SavePreparation.Session() {
             private int finishes;
