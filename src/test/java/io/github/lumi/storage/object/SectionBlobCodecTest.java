@@ -28,6 +28,7 @@ class SectionBlobCodecTest {
         SectionBlob decoded = codec.decode(codec.encode(section));
 
         assertEquals(section, decoded);
+        assertArrayEquals(codec.encode(section), codec.encode(decoded));
         assertEquals(3, java.util.stream.StreamSupport.stream(
                 decoded.distinctBlockStates().spliterator(), false).count());
     }

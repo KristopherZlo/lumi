@@ -8,11 +8,9 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeSet;
 
 public final class SectionBlobCodec {
     private static final int MAGIC = 0x4C555332;
@@ -20,11 +18,8 @@ public final class SectionBlobCodec {
     private static final int MAX_NBT_BYTES = 16 * 1024 * 1024;
 
     public byte[] encode(SectionBlob section) throws IOException {
-        List<String> palette = new ArrayList<>(new TreeSet<>(section.blockStates()));
-        Map<String, Integer> paletteIndexes = new HashMap<>();
-        for (int index = 0; index < palette.size(); index++) {
-            paletteIndexes.put(palette.get(index), index);
-        }
+        SectionBlob.PaletteBlockStates states = section.palette();
+        List<String> palette = states.palette();
 
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream output = new DataOutputStream(bytes)) {
@@ -33,8 +28,8 @@ public final class SectionBlobCodec {
             for (String state : palette) {
                 CanonicalBytes.writeString(output, state, MAX_STRING_BYTES, "block state");
             }
-            for (String state : section.blockStates()) {
-                output.writeShort(paletteIndexes.get(state));
+            for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+                output.writeShort(states.paletteIndex(index));
             }
             output.writeInt(section.blockEntities().size());
             for (var entry : new java.util.TreeMap<>(section.blockEntities()).entrySet()) {
@@ -89,6 +84,8 @@ public final class SectionBlobCodec {
             return SectionBlob.fromPalette(palette, states, blockEntities);
         } catch (java.io.EOFException truncated) {
             throw new IOException("Truncated section blob", truncated);
+        } catch (IllegalArgumentException invalid) {
+            throw new IOException("Invalid section blob", invalid);
         }
     }
 
