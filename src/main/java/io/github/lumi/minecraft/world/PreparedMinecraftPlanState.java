@@ -5,6 +5,8 @@ import io.github.lumi.domain.model.SectionKey;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 
 /** Preflighted persistent state whose native sections are decoded per bounded batch. */
 record PreparedMinecraftPlanState(
@@ -13,7 +15,8 @@ record PreparedMinecraftPlanState(
         Map<EntityChunkKey, DecodedEntityChunk> entities,
         Map<EntityChunkKey, DecodedEntityChunk> baseEntities,
         List<SectionKey> sectionKeys,
-        List<EntityChunkKey> entityKeys)
+        List<EntityChunkKey> entityKeys,
+        Set<UUID> replacedEntityIds)
         implements WorldStateApply.PreparedState {
     PreparedMinecraftPlanState {
         Objects.requireNonNull(source, "source");
@@ -22,6 +25,8 @@ record PreparedMinecraftPlanState(
         baseEntities = Map.copyOf(Objects.requireNonNull(baseEntities, "baseEntities"));
         sectionKeys = List.copyOf(Objects.requireNonNull(sectionKeys, "sectionKeys"));
         entityKeys = List.copyOf(Objects.requireNonNull(entityKeys, "entityKeys"));
+        replacedEntityIds = Set.copyOf(
+                Objects.requireNonNull(replacedEntityIds, "replacedEntityIds"));
         if (!source.sections().keySet().equals(base.sections().keySet())
                 || !source.entities().keySet().equals(base.entities().keySet())
                 || !entities.keySet().equals(source.entities().keySet())
@@ -35,11 +40,12 @@ record PreparedMinecraftPlanState(
             List<EntityChunkKey> orderedEntities) {
         return new PreparedMinecraftPlanState(
                 source, base, entities, baseEntities,
-                orderedSections, orderedEntities);
+                orderedSections, orderedEntities, replacedEntityIds);
     }
 
     PreparedMinecraftPlanState reversed() {
         return new PreparedMinecraftPlanState(
-                base, source, baseEntities, entities, sectionKeys, entityKeys);
+                base, source, baseEntities, entities, sectionKeys, entityKeys,
+                replacedEntityIds);
     }
 }

@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
@@ -9,6 +10,7 @@ import java.io.UncheckedIOException;
 import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -16,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongConsumer;
@@ -112,6 +115,8 @@ public final class MinecraftRestorePreparation {
                     entities.normalize(source.entities());
             Map<EntityChunkKey, EntityChunkBlob> normalizedBase =
                     entities.normalize(base.entities());
+            Set<UUID> replacedEntityIds =
+                    replacedEntityIds(normalizedSource, normalizedBase);
             Map<EntityChunkKey, DecodedEntityChunk> decodedEntities = new HashMap<>();
             Map<EntityChunkKey, DecodedEntityChunk> decodedBaseEntities = new HashMap<>();
             for (var entry : normalizedSource.entrySet()) {
@@ -131,7 +136,7 @@ public final class MinecraftRestorePreparation {
                     normalizedTarget, normalizedReturn, decodedEntities,
                     decodedBaseEntities,
                     orderedSections(source.sections().keySet()),
-                    List.copyOf(decodedEntities.keySet()));
+                    List.copyOf(decodedEntities.keySet()), replacedEntityIds);
         } catch (UncheckedIOException failed) {
             throw failed.getCause();
         }
@@ -185,6 +190,25 @@ public final class MinecraftRestorePreparation {
                 .toList();
     }
 
+    private static Set<UUID> replacedEntityIds(
+            Map<EntityChunkKey, EntityChunkBlob> target,
+            Map<EntityChunkKey, EntityChunkBlob> base) {
+        Map<UUID, EntityPlacement> targetPlacements = new HashMap<>();
+        target.forEach((key, chunk) -> chunk.entities().forEach(
+                entity -> targetPlacements.put(
+                        entity.id(), new EntityPlacement(key, entity))));
+        Set<UUID> replaced = new HashSet<>();
+        base.forEach((key, chunk) -> chunk.entities().forEach(entity -> {
+            EntityPlacement targetPlacement = targetPlacements.remove(entity.id());
+            if (!Objects.equals(
+                    targetPlacement, new EntityPlacement(key, entity))) {
+                replaced.add(entity.id());
+            }
+        }));
+        replaced.addAll(targetPlacements.keySet());
+        return Set.copyOf(replaced);
+    }
+
     static final class ValidatedSectionWindow {
         private final MinecraftBlockStateDecoder decoder;
         private final ArrayDeque<SectionBlob> recent =
@@ -220,4 +244,6 @@ public final class MinecraftRestorePreparation {
             return recent.stream().anyMatch(candidate -> candidate == section);
         }
     }
+
+    private record EntityPlacement(EntityChunkKey key, EntityState state) { }
 }

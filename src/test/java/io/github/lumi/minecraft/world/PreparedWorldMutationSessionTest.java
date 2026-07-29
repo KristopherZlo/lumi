@@ -529,7 +529,7 @@ class PreparedWorldMutationSessionTest {
         }
         var state = new WorldStateApply.State(Map.of(), persistent);
         var plan = new PreparedMinecraftPlanState(
-                state, state, decoded, decoded, List.of(), keys);
+                state, state, decoded, decoded, List.of(), keys, Set.of());
         var world = new FakeWorld(new AtomicLong(), null);
         var persistence = new ManualPersistence();
         world.persistence = persistence;
@@ -545,6 +545,10 @@ class PreparedWorldMutationSessionTest {
                     requested.add(readiness);
                     return null;
                 })) {
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertTrue(world.startedEntityChunks.isEmpty());
+            assertEquals(0, world.persistenceStarts);
+
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(keys.subList(0, 32), world.startedEntityChunks);
             assertEquals(1, world.persistenceStarts);
@@ -593,7 +597,7 @@ class PreparedWorldMutationSessionTest {
         var plan = new PreparedMinecraftPlanState(
                 new WorldStateApply.State(target, Map.of()),
                 new WorldStateApply.State(base, Map.of()),
-                Map.of(), Map.of(), List.of(key), List.of());
+                Map.of(), Map.of(), List.of(key), List.of(), Set.of());
         ArrayDeque<Runnable> background = new ArrayDeque<>();
 
         try (var session = new StreamingPreparedWorldMutationSession(
@@ -626,7 +630,7 @@ class PreparedWorldMutationSessionTest {
                 state, state,
                 Map.of(key, new DecodedEntityChunk(List.of())),
                 Map.of(key, new DecodedEntityChunk(List.of())),
-                List.of(), List.of(key));
+                List.of(), List.of(key), Set.of());
         var world = new FakeWorld(new AtomicLong(), null);
 
         try (var session = new StreamingPreparedWorldMutationSession(
@@ -724,6 +728,10 @@ class PreparedWorldMutationSessionTest {
             Map<ChunkCoordinate, StoredChunkApplyResult> results = new LinkedHashMap<>();
             chunks.keySet().forEach(chunk -> results.put(chunk, storedResult));
             return CompletableFuture.completedFuture(Map.copyOf(results));
+        }
+        @Override public CompletableFuture<Set<EntityChunkKey>> cleanStoredEntities(
+                PreparedMinecraftState target) {
+            return CompletableFuture.completedFuture(Set.copyOf(target.entityKeys()));
         }
         @Override public List<Integer> blockEntityIndexes(SectionKey key) { return List.of(); }
         @Override public void removeBlockEntity(SectionKey key, int localIndex) { }

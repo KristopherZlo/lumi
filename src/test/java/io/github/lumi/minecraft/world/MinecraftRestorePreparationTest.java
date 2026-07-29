@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -178,6 +179,29 @@ class MinecraftRestorePreparationTest {
         assertEquals(source, plan.source());
         assertEquals(base, plan.reversed().source());
         assertEquals(Map.of(), plan.entities());
+    }
+
+    @Test
+    void preflightsMovedEntityIdentityForBothRestoreDirections() throws Exception {
+        EntityChunkKey oldKey = new EntityChunkKey(1, 2);
+        EntityChunkKey targetKey = new EntityChunkKey(2, 2);
+        UUID id = UUID.fromString("40000000-0000-0000-0000-000000000004");
+        EntityChunkBlob entity = entityChunk(id, 0.0F, 0.0F,
+                "minecraft:movement_speed", "minecraft:attack_damage");
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        var target = new WorldStateApply.State(Map.of(), Map.of(
+                oldKey, empty, targetKey, entity));
+        var base = new WorldStateApply.State(Map.of(), Map.of(
+                oldKey, entity, targetKey, empty));
+        var preparation = new MinecraftRestorePreparation(
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
+                new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
+
+        PreparedMinecraftPlanState plan =
+                preparation.preflight(target, base, ignored -> { });
+
+        assertEquals(Set.of(id), plan.replacedEntityIds());
+        assertEquals(plan.replacedEntityIds(), plan.reversed().replacedEntityIds());
     }
 
     @Test

@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -86,7 +87,7 @@ class StreamingPreparedWorldMutationSessionTest {
                 Map.of(sectionKey, section), entities.base().entities());
         var mixedPlan = new PreparedMinecraftPlanState(
                 source, base, entities.entities(), entities.baseEntities(),
-                List.of(sectionKey), keys);
+                List.of(sectionKey), keys, entities.replacedEntityIds());
         FakeWorld world = new FakeWorld(section);
         world.cleanAllStoredEntities = false;
         world.directlyCleanedEntities = Set.of(keys.getFirst());
@@ -234,6 +235,15 @@ class StreamingPreparedWorldMutationSessionTest {
             return new ChunkLoadSession(chunks, () -> 0L);
         });
         assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(32), world.requestedEntityCleanupSizes);
+        assertTrue(world.startedEntityChunks.isEmpty());
+        assertTrue(world.persistence.isEmpty());
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(32, 32), world.requestedEntityCleanupSizes);
+        assertTrue(world.startedEntityChunks.isEmpty());
+        assertTrue(world.persistence.isEmpty());
+        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        assertEquals(List.of(32, 32, 1), world.requestedEntityCleanupSizes);
         assertEquals(keys.subList(0, 32), world.startedEntityChunks);
         assertEquals(32, chunks.active);
         assertEquals(1, world.persistenceCalls.size());
@@ -274,7 +284,7 @@ class StreamingPreparedWorldMutationSessionTest {
                     requested.add(readiness);
                     return new ChunkLoadSession(chunks, () -> 0L);
                 });
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        startFirstMutation(session, world);
         world.persistence.getFirst().accepted = keys.subList(0, 4).stream()
                 .map(ChunkCoordinate::from).toList();
         assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -308,7 +318,7 @@ class StreamingPreparedWorldMutationSessionTest {
                     }
                     return new ChunkLoadSession(chunks, () -> 0L);
                 });
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        startFirstMutation(session, world);
         world.persistence.getFirst().accepted = keys.subList(0, 32).stream()
                 .map(ChunkCoordinate::from).toList();
 
@@ -336,7 +346,7 @@ class StreamingPreparedWorldMutationSessionTest {
         var session = session(
                 entityPlan(keys), world, new ControlledExecutor(),
                 ignored -> new ChunkLoadSession(chunks, () -> 0L));
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        startFirstMutation(session, world);
         world.persistence.getFirst().accepted =
                 List.of(ChunkCoordinate.from(keys.getFirst()));
         assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -368,7 +378,7 @@ class StreamingPreparedWorldMutationSessionTest {
         var session = session(
                 entityPlan(keys), world, new ControlledExecutor(),
                 ignored -> new ChunkLoadSession(chunks, () -> 0L));
-        assertFalse(session.applyUntil(Long.MAX_VALUE));
+        startFirstMutation(session, world);
         chunks.startFailure = new IllegalStateException("expected");
         world.persistence.getFirst().accepted =
                 List.of(ChunkCoordinate.from(keys.getFirst()));
@@ -494,7 +504,8 @@ class StreamingPreparedWorldMutationSessionTest {
                 });
         var state = new WorldStateApply.State(sections, Map.of());
         var plan = new PreparedMinecraftPlanState(
-                state, state, Map.of(), Map.of(), List.of(key), List.of());
+                state, state, Map.of(), Map.of(), List.of(key), List.of(),
+                Set.of());
         ControlledExecutor background = new ControlledExecutor();
         var session = session(plan, new FakeWorld(section), background);
 
@@ -528,6 +539,14 @@ class StreamingPreparedWorldMutationSessionTest {
                 world, background, chunkLoads);
     }
 
+    private static void startFirstMutation(
+            StreamingPreparedWorldMutationSession session,
+            FakeWorld world) throws IOException {
+        while (world.persistence.isEmpty()) {
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+        }
+    }
+
     private static PreparedMinecraftPlanState plan(
             List<SectionKey> keys, SectionBlob section) {
         Map<SectionKey, SectionBlob> sections = new LinkedHashMap<>();
@@ -539,7 +558,7 @@ class StreamingPreparedWorldMutationSessionTest {
             List<SectionKey> keys, Map<SectionKey, SectionBlob> sections) {
         var state = new WorldStateApply.State(sections, Map.of());
         return new PreparedMinecraftPlanState(
-                state, state, Map.of(), Map.of(), keys, List.of());
+                state, state, Map.of(), Map.of(), keys, List.of(), Set.of());
     }
 
     private static PreparedMinecraftPlanState entityPlan(List<EntityChunkKey> keys) {
@@ -547,17 +566,19 @@ class StreamingPreparedWorldMutationSessionTest {
         Map<EntityChunkKey, EntityChunkBlob> entities = new LinkedHashMap<>();
         Map<EntityChunkKey, EntityChunkBlob> baseEntities = new LinkedHashMap<>();
         Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
+        Set<UUID> replaced = new HashSet<>();
         keys.forEach(key -> {
             entities.put(key, empty);
+            UUID id = new UUID(key.chunkX(), key.chunkZ() + 1L);
+            replaced.add(id);
             baseEntities.put(key, new EntityChunkBlob(List.of(new EntityState(
-                    new UUID(key.chunkX(), key.chunkZ() + 1L),
-                    "minecraft:rabbit", new CanonicalNbt(new byte[] {1})))));
+                    id, "minecraft:rabbit", new CanonicalNbt(new byte[] {1})))));
             decoded.put(key, new DecodedEntityChunk(List.of()));
         });
         var source = new WorldStateApply.State(Map.of(), entities);
         var base = new WorldStateApply.State(Map.of(), baseEntities);
         return new PreparedMinecraftPlanState(
-                source, base, decoded, decoded, List.of(), keys);
+                source, base, decoded, decoded, List.of(), keys, replaced);
     }
 
     private static List<EntityChunkKey> entityKeys(int chunks) {
@@ -643,6 +664,7 @@ class StreamingPreparedWorldMutationSessionTest {
         private final List<PersistenceCall> persistenceCalls = new ArrayList<>();
         private final List<EntityChunkKey> startedEntityChunks = new ArrayList<>();
         private final List<EntityChunkKey> requestedEntityCleanup = new ArrayList<>();
+        private final List<Integer> requestedEntityCleanupSizes = new ArrayList<>();
         private Set<ChunkCoordinate> directlyStored = Set.of();
         private boolean cleanAllStoredEntities = true;
         private Set<EntityChunkKey> directlyCleanedEntities = Set.of();
@@ -726,6 +748,7 @@ class StreamingPreparedWorldMutationSessionTest {
                 PreparedMinecraftState target) {
             requestedEntityCleanupTarget = target;
             requestedEntityCleanup.addAll(target.entityKeys());
+            requestedEntityCleanupSizes.add(target.entityKeys().size());
             return CompletableFuture.completedFuture(target.entityKeys().stream()
                     .filter(key -> cleanAllStoredEntities
                             || directlyCleanedEntities.contains(key))
