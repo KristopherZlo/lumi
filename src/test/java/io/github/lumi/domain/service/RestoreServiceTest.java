@@ -211,10 +211,8 @@ class RestoreServiceTest {
         CommitRepository commits = new CommitRepository(repositoryRoot);
         UUID id = new UUID(0, 10);
         EntityChunkBlob empty = new EntityChunkBlob(List.of());
-        EntityChunkBlob oldPlacement = new EntityChunkBlob(List.of(new EntityState(
-                id, "minecraft:rabbit", new CanonicalNbt(new byte[] {1}))));
-        EntityChunkBlob newPlacement = new EntityChunkBlob(List.of(new EntityState(
-                id, "minecraft:rabbit", new CanonicalNbt(new byte[] {2}))));
+        EntityChunkBlob oldPlacement = entities(entity(id, 1));
+        EntityChunkBlob newPlacement = entities(entity(id, 2));
         var oldChunk = objects.write(new ChunkTree(
                 Map.of(), Optional.of(objects.write(oldPlacement))));
         var emptyNewChunk = objects.write(new ChunkTree(
@@ -239,6 +237,42 @@ class RestoreServiceTest {
         assertEquals(Map.of(
                 new EntityChunkKey(0, 0), oldPlacement,
                 new EntityChunkKey(1, 0), empty), prepared.returnEntities());
+    }
+
+    @Test
+    void unchangedLegacyDuplicatePlacementIsStillCleaned() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        UUID duplicate = new UUID(0, 10);
+        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob oldPlacement = entities(entity(duplicate, 1));
+        EntityChunkBlob selectedPlacement = entities(entity(duplicate, 2));
+        EntityChunkBlob targetPlacement = entities(
+                entity(duplicate, 2), entity(new UUID(0, 11), 3));
+        var oldChunk = objects.write(new ChunkTree(
+                Map.of(), Optional.of(objects.write(oldPlacement))));
+        var selectedChunk = objects.write(new ChunkTree(
+                Map.of(), Optional.of(objects.write(selectedPlacement))));
+        var targetChunk = objects.write(new ChunkTree(
+                Map.of(), Optional.of(objects.write(targetPlacement))));
+        var origin = commits.write(commit(tree(objects, Map.of(
+                new ChunkInRegion(0, 0), oldChunk)), List.of()));
+        var current = commits.write(commit(tree(objects, Map.of(
+                new ChunkInRegion(0, 0), oldChunk,
+                new ChunkInRegion(1, 0), selectedChunk)), List.of(origin)));
+        var target = commits.write(commit(tree(objects, Map.of(
+                new ChunkInRegion(0, 0), oldChunk,
+                new ChunkInRegion(1, 0), targetChunk)), List.of(current)));
+
+        PreparedRestore prepared = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot))
+                .prepare(new BranchRef(new BranchName("main"), current, 1), target);
+
+        assertEquals(empty, prepared.entities().get(new EntityChunkKey(0, 0)));
+        assertEquals(empty, prepared.returnEntities().get(new EntityChunkKey(0, 0)));
+        assertEquals(targetPlacement, prepared.entities().get(new EntityChunkKey(1, 0)));
+        assertEquals(selectedPlacement,
+                prepared.returnEntities().get(new EntityChunkKey(1, 0)));
     }
 
     @Test
@@ -307,6 +341,15 @@ class RestoreServiceTest {
     private static SectionBlob section(String state) {
         return new SectionBlob(
                 new ArrayList<>(Collections.nCopies(SectionBlob.BLOCK_COUNT, state)), Map.of());
+    }
+
+    private static EntityChunkBlob entities(EntityState... entities) {
+        return new EntityChunkBlob(List.of(entities));
+    }
+
+    private static EntityState entity(UUID id, int state) {
+        return new EntityState(
+                id, "minecraft:rabbit", new CanonicalNbt(new byte[] {(byte) state}));
     }
 
     private static Commit commit(io.github.lumi.domain.model.ObjectId tree,

@@ -75,11 +75,12 @@ final class EntityRestorePlanner {
         Map<EntityChunkKey, EntityChunkBlob> beforeChunks = new HashMap<>();
         Map<EntityChunkKey, EntityChunkBlob> targetChunks = new HashMap<>();
         for (EntityChunkKey key : keys) {
-            EntityChunkBlob beforeChunk = canonical(
-                    requireChunk(beforeState, key, before), key, identities, beforeSelection);
+            EntityChunkBlob storedBefore = requireChunk(beforeState, key, before);
+            EntityChunkBlob beforeChunk =
+                    canonical(storedBefore, key, identities, beforeSelection);
             EntityChunkBlob targetChunk = canonical(
                     requireChunk(targetState, key, target), key, identities, targetSelection);
-            if (beforeChunk.equals(targetChunk)) {
+            if (storedBefore.equals(beforeChunk) && beforeChunk.equals(targetChunk)) {
                 continue;
             }
             if (scope != null && !scope.includes(key)) {
