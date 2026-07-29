@@ -1,5 +1,6 @@
 package io.github.lumi.mixin;
 
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import java.util.function.Consumer;
 import net.minecraft.world.level.entity.EntityAccess;
 import net.minecraft.world.level.entity.EntityPersistentStorage;
@@ -19,4 +20,7 @@ public interface PersistentEntityManagerPersistenceAccessor<T extends EntityAcce
 
     @Accessor("sectionStorage")
     EntitySectionStorage<T> lumi$sectionStorage();
+
+    @Accessor("chunkLoadStatuses")
+    Long2ObjectMap<?> lumi$chunkLoadStatuses();
 }

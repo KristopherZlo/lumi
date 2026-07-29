@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -137,24 +138,44 @@ final class MinecraftStoredChunkAccess {
         if (target.entityKeys().isEmpty()) {
             return CompletableFuture.completedFuture(Set.of());
         }
-        EntityStoragePersistenceAccessor entityAccess = entityAccess();
+        PersistentEntityManagerPersistenceAccessor<Entity> entityManager =
+                entityManager();
+        EntityStoragePersistenceAccessor entityAccess =
+                (EntityStoragePersistenceAccessor) entityManager.lumi$permanentStorage();
         SimpleRegionStorage storage = entityAccess.lumi$simpleRegionStorage();
         Map<EntityChunkKey, ChunkCoordinate> acquired = new LinkedHashMap<>();
+        Set<EntityChunkKey> fullyGated = new HashSet<>();
+        Set<Long> temporaryEmptyChunks = new HashSet<>();
         List<CompletableFuture<Void>> writes = new ArrayList<>();
+        Runnable releaseCleanup = () -> {
+            temporaryEmptyChunks.forEach(
+                    packed -> entityAccess.lumi$emptyChunks().remove(packed.longValue()));
+            acquired.values().forEach(this::release);
+        };
         try {
             for (EntityChunkKey key : target.entityKeys()) {
                 ChunkCoordinate coordinate = ChunkCoordinate.from(key);
                 ChunkPos position = new ChunkPos(key.chunkX(), key.chunkZ());
-                if (!acquire(coordinate, position)) {
+                long packed = position.toLong();
+                boolean chunkGated = acquire(coordinate, position);
+                if (!chunkGated && (ChunkLoadGate.isGated(level, position)
+                        || entityManager.lumi$chunkLoadStatuses().containsKey(packed))) {
                     continue;
                 }
+                // A terrain holder may exist before its entity load is requested.
+                // Mask that first load until the canonical tag is forced and reread.
                 acquired.put(key, coordinate);
-                entityAccess.lumi$emptyChunks().remove(position.toLong());
+                if (chunkGated) {
+                    fullyGated.add(key);
+                }
+                if (entityAccess.lumi$emptyChunks().add(packed)) {
+                    temporaryEmptyChunks.add(packed);
+                }
                 writes.add(storage.write(position, entityTag(
                         key, target.entities().get(key))));
             }
         } catch (RuntimeException failed) {
-            acquired.values().forEach(this::release);
+            releaseCleanup.run();
             return CompletableFuture.failedFuture(failed);
         }
         if (writes.isEmpty()) {
@@ -168,15 +189,16 @@ final class MinecraftStoredChunkAccess {
                             return storage.synchronize(true);
                         })
                         .thenCompose(ignored -> verifyEntities(
-                                storage, target, acquired.keySet()));
-        return result.whenComplete((ignored, failure) ->
-                acquired.values().forEach(this::release));
+                                storage, target, acquired.keySet(), fullyGated));
+        return result.whenCompleteAsync(
+                (ignored, failure) -> releaseCleanup.run(), level.getServer());
     }
 
     private CompletableFuture<Set<EntityChunkKey>> verifyEntities(
             SimpleRegionStorage storage,
             PreparedMinecraftState target,
-            Set<EntityChunkKey> keys) {
+            Set<EntityChunkKey> keys,
+            Set<EntityChunkKey> fullyGated) {
         phase = "verification";
         Map<EntityChunkKey, CompletableFuture<java.util.Optional<CompoundTag>>> reads =
                 new LinkedHashMap<>();
@@ -198,7 +220,7 @@ final class MinecraftStoredChunkAccess {
                             throw new CompletionException(failed);
                         }
                     }
-                    return Set.copyOf(keys);
+                    return Set.copyOf(fullyGated);
                 }, background);
     }
 
@@ -214,11 +236,9 @@ final class MinecraftStoredChunkAccess {
     }
 
     @SuppressWarnings("unchecked")
-    private EntityStoragePersistenceAccessor entityAccess() {
-        var manager = ((ServerLevelEntityManagerAccessor) level).lumi$entityManager();
-        var storage = ((PersistentEntityManagerPersistenceAccessor<Entity>) manager)
-                .lumi$permanentStorage();
-        return (EntityStoragePersistenceAccessor) storage;
+    private PersistentEntityManagerPersistenceAccessor<Entity> entityManager() {
+        return (PersistentEntityManagerPersistenceAccessor<Entity>)
+                ((ServerLevelEntityManagerAccessor) level).lumi$entityManager();
     }
 
     private boolean acquire(
