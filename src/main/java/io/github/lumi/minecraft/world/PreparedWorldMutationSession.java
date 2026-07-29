@@ -68,18 +68,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             LongSupplier nanoTime,
             ChunkLoadSession chunks,
             RestoreApplyMetrics metrics) {
-        this(target, world, nanoTime, chunks, metrics, LoadingMode.BULK);
-    }
-
-    PreparedWorldMutationSession(
-            PreparedMinecraftState target,
-            PreparedWorldAccess world,
-            LongSupplier nanoTime,
-            ChunkLoadSession chunks,
-            RestoreApplyMetrics metrics,
-            LoadingMode loadingMode) {
         this(target, world, nanoTime, chunks, metrics,
-                PersistenceMode.COMPLETE, target, Set.of(), loadingMode);
+                PersistenceMode.COMPLETE, target, Set.of());
     }
 
     PreparedWorldMutationSession(
@@ -91,20 +81,6 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             PersistenceMode persistenceMode,
             PreparedMinecraftState verificationTarget,
             Set<ChunkCoordinate> alreadyDurable) {
-        this(target, world, nanoTime, chunks, metrics, persistenceMode,
-                verificationTarget, alreadyDurable, LoadingMode.BULK);
-    }
-
-    private PreparedWorldMutationSession(
-            PreparedMinecraftState target,
-            PreparedWorldAccess world,
-            LongSupplier nanoTime,
-            ChunkLoadSession chunks,
-            RestoreApplyMetrics metrics,
-            PersistenceMode persistenceMode,
-            PreparedMinecraftState verificationTarget,
-            Set<ChunkCoordinate> alreadyDurable,
-            LoadingMode loadingMode) {
         this.target = Objects.requireNonNull(target, "target");
         this.world = Objects.requireNonNull(world, "world");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
@@ -131,9 +107,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             throw new IllegalArgumentException(
                     "Slab verification must include the final write window");
         }
-        bulkLoading = Objects.requireNonNull(loadingMode, "loadingMode")
-                == LoadingMode.BULK
-                && chunks != null && fitsBulkWindow(sections, entities);
+        bulkLoading = chunks != null && fitsBulkWindow(sections, entities);
         storedClassificationComplete = sections.isEmpty();
         playerSpawnsVerified = !playerSpawnsIncluded;
         apply = new MutationCursor();
@@ -665,5 +639,4 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     }
 
     enum PersistenceMode { COMPLETE, STAGE, SLAB_END }
-    enum LoadingMode { BULK, SEQUENTIAL }
 }

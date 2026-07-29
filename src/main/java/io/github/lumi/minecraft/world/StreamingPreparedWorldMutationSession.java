@@ -227,13 +227,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     }
 
     private boolean startEntityBatch() throws IOException {
-        boolean removing = entityBatchStart < entityCleanupCount;
-        PreparedMinecraftState batch = nextEntityBatch();
         current = new PreparedWorldMutationSession(
-                batch, world, System::nanoTime, nextEntityChunkLoads(), metrics,
-                removing
-                        ? PreparedWorldMutationSession.LoadingMode.SEQUENTIAL
-                        : PreparedWorldMutationSession.LoadingMode.BULK);
+                nextEntityBatch(), world, System::nanoTime,
+                nextEntityChunkLoads(), metrics);
         currentKind = BatchKind.ENTITIES;
         phase = Phase.APPLYING;
         return true;

@@ -112,8 +112,8 @@ class StreamingPreparedWorldMutationSessionTest {
         assertEquals(keys, world.requestedEntityCleanup);
         assertTrue(world.requestedEntityCleanupTarget.source().entities().values()
                 .stream().allMatch(chunk -> chunk.entities().isEmpty()));
-        assertEquals(List.of(keys.get(1)), world.startedEntityChunks);
-        assertEquals(List.of(keys.get(1)), world.removedEntityChunks);
+        assertTrue(world.startedEntityChunks.isEmpty());
+        assertTrue(world.removedEntityChunks.isEmpty());
         assertEquals(2, chunks.peak);
         assertEquals(2, chunks.active);
         assertTrue(world.persistence.isEmpty());

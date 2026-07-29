@@ -127,59 +127,6 @@ class PreparedWorldMutationSessionTest {
     }
 
     @Test
-    void sequentialEntityLoadingRemovesBeforeRetainingTheNextChunk()
-            throws Exception {
-        EntityChunkKey first = new EntityChunkKey(4, -2);
-        EntityChunkKey second = new EntityChunkKey(5, -2);
-        UUID firstOld = new UUID(0, 1);
-        UUID secondOld = new UUID(0, 2);
-        EntityChunkBlob empty = new EntityChunkBlob(List.of());
-        var target = new PreparedMinecraftState(
-                new WorldStateApply.State(Map.of(), Map.of(
-                        first, empty, second, empty)),
-                Map.of(), Map.of(
-                        first, new DecodedEntityChunk(List.of()),
-                        second, new DecodedEntityChunk(List.of())),
-                List.of(), List.of(first, second));
-        AtomicLong clock = new AtomicLong();
-        FakeWorld world = new FakeWorld(clock, null);
-        world.entityIdsByChunk = Map.of(
-                first, List.of(firstOld),
-                second, List.of(secondOld));
-        ImmediateChunkAccess access = new ImmediateChunkAccess();
-        var session = new PreparedWorldMutationSession(
-                target, world, clock::get,
-                new ChunkLoadSession(access, clock::get),
-                new RestoreApplyMetrics(),
-                PreparedWorldMutationSession.LoadingMode.SEQUENTIAL);
-
-        assertFalse(session.applyUntil(1));
-        assertEquals(List.of(new ChunkCoordinate(4, -2)), access.retained);
-        assertEquals(List.of(firstOld), world.removedEntities);
-        assertFalse(session.applyUntil(2));
-        assertEquals(List.of(
-                new ChunkCoordinate(4, -2),
-                new ChunkCoordinate(5, -2)), access.retained);
-        assertEquals(List.of(firstOld, secondOld), world.removedEntities);
-        assertEquals(2, access.active);
-
-        assertTrue(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(WorldStateApply.Verification.VERIFIED,
-                session.verifyUntil(Long.MAX_VALUE));
-        assertEquals(2, access.active);
-        ManualPersistence persistence = new ManualPersistence();
-        world.persistence = persistence;
-        assertFalse(session.persistUntil(Long.MAX_VALUE));
-        assertEquals(2, access.active);
-        persistence.accepted = List.of(
-                new ChunkCoordinate(4, -2),
-                new ChunkCoordinate(5, -2));
-        assertFalse(session.persistUntil(Long.MAX_VALUE));
-        assertEquals(0, access.active);
-        session.close();
-    }
-
-    @Test
     void retainsEntityChunksAcrossTheGlobalRemoveAndAddPasses() throws Exception {
         EntityChunkKey key = new EntityChunkKey(4, -2);
         UUID oldId = new UUID(0, 1);
