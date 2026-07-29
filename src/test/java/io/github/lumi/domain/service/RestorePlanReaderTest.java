@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -62,20 +61,6 @@ class RestorePlanReaderTest {
     }
 
     @Test
-    void readsSectionsAndEntitiesThroughOnePlanReader() throws IOException {
-        var objects = new WorldObjectRepository(repository);
-        ObjectId sectionId = objects.write(section(0));
-        EntityChunkBlob entities = new EntityChunkBlob(List.of());
-        ObjectId entityId = objects.write(entities);
-
-        try (var reader = new RestorePlanReader(objects)) {
-            assertEquals(section(0), reader.readSection(sectionId));
-            assertEquals(entities, reader.readEntities(entityId));
-            assertEquals(1, reader.cachedSectionCount());
-        }
-    }
-
-    @Test
     void closeIsIdempotentAndPreventsReopeningTheSession() throws IOException {
         var objects = new WorldObjectRepository(repository);
         ObjectId id = objects.write(section(0));
@@ -107,7 +92,6 @@ class RestorePlanReaderTest {
                     }
                     return expected;
                 },
-                ignored -> new EntityChunkBlob(List.of()),
                 () -> resourceClosed.set(true));
         ObjectId id = new ObjectId("0".repeat(64));
 

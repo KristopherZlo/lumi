@@ -1,6 +1,5 @@
 package io.github.lumi.domain.service;
 
-import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.storage.repository.WorldObjectRepository;
@@ -14,7 +13,6 @@ final class RestorePlanReader implements Closeable {
     static final int MAX_CACHED_SECTIONS = 32;
 
     private final RestorePlanMap.Reader<ObjectId, SectionBlob> sectionReader;
-    private final RestorePlanMap.Reader<ObjectId, EntityChunkBlob> entityReader;
     private final Closeable resource;
     private final LinkedHashMap<ObjectId, SectionBlob> cache =
             new LinkedHashMap<>(MAX_CACHED_SECTIONS, 0.75F, true);
@@ -27,15 +25,13 @@ final class RestorePlanReader implements Closeable {
     }
 
     private RestorePlanReader(WorldObjectRepository.ReadSession session) {
-        this(session::readSection, session::readEntities, session);
+        this(session::readSection, session);
     }
 
     RestorePlanReader(
             RestorePlanMap.Reader<ObjectId, SectionBlob> sectionReader,
-            RestorePlanMap.Reader<ObjectId, EntityChunkBlob> entityReader,
             Closeable resource) {
         this.sectionReader = Objects.requireNonNull(sectionReader, "sectionReader");
-        this.entityReader = Objects.requireNonNull(entityReader, "entityReader");
         this.resource = Objects.requireNonNull(resource, "resource");
     }
 
@@ -60,10 +56,6 @@ final class RestorePlanReader implements Closeable {
             }
         }
         return decoded;
-    }
-
-    EntityChunkBlob readEntities(ObjectId id) throws IOException {
-        return read(Objects.requireNonNull(id, "id"), entityReader);
     }
 
     private <T> T read(
