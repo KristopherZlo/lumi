@@ -213,26 +213,31 @@ public final class RestoreService {
         Objects.requireNonNull(progress, "progress");
         Commit currentCommit = commits.read(sourceCommit);
         Commit targetCommitValue = commits.read(targetCommit);
-        DimensionTree current = objects.readDimension(currentCommit.tree());
-        DimensionTree target = objects.readDimension(targetCommitValue.tree());
         Map<SectionKey, SectionPlan> sections = new HashMap<>();
         Set<EntityChunkKey> entities = new HashSet<>();
-        var changedRegions = union(current.regions().keySet(), target.regions().keySet())
-                .stream().filter(region -> !Objects.equals(
-                        current.regions().get(region), target.regions().get(region)))
-                .toList();
-        for (int regionIndex = 0; regionIndex < changedRegions.size(); regionIndex++) {
-            RegionCoordinate regionCoordinate = changedRegions.get(regionIndex);
-            Optional<ObjectId> currentRegionId = Optional.ofNullable(current.regions().get(regionCoordinate));
-            Optional<ObjectId> targetRegionId = Optional.ofNullable(target.regions().get(regionCoordinate));
-            RegionTree currentRegion = currentRegionId.isPresent()
-                    ? objects.readRegion(currentRegionId.orElseThrow()) : new RegionTree(Map.of());
-            RegionTree targetRegion = targetRegionId.isPresent()
-                    ? objects.readRegion(targetRegionId.orElseThrow()) : new RegionTree(Map.of());
-            prepareRegion(regionCoordinate, currentRegion, targetRegion,
-                    sections, entities,
-                    area, outside, includeEntities, scope,
-                    regionIndex + 1, changedRegions.size(), progress);
+        try (var reader = objects.beginReadSession()) {
+            DimensionTree current = reader.readDimension(currentCommit.tree());
+            DimensionTree target = reader.readDimension(targetCommitValue.tree());
+            var changedRegions = union(current.regions().keySet(), target.regions().keySet())
+                    .stream().filter(region -> !Objects.equals(
+                            current.regions().get(region), target.regions().get(region)))
+                    .toList();
+            for (int regionIndex = 0; regionIndex < changedRegions.size(); regionIndex++) {
+                RegionCoordinate regionCoordinate = changedRegions.get(regionIndex);
+                Optional<ObjectId> currentRegionId =
+                        Optional.ofNullable(current.regions().get(regionCoordinate));
+                Optional<ObjectId> targetRegionId =
+                        Optional.ofNullable(target.regions().get(regionCoordinate));
+                RegionTree currentRegion = currentRegionId.isPresent()
+                        ? reader.readRegion(currentRegionId.orElseThrow())
+                        : new RegionTree(Map.of());
+                RegionTree targetRegion = targetRegionId.isPresent()
+                        ? reader.readRegion(targetRegionId.orElseThrow())
+                        : new RegionTree(Map.of());
+                prepareRegion(reader, regionCoordinate, currentRegion, targetRegion,
+                        sections, entities, area, outside, includeEntities, scope,
+                        regionIndex + 1, changedRegions.size(), progress);
+            }
         }
         boolean restorePlayerSpawns = area == null && scope == null;
         EntityRestorePlanner.Plan entityPlan = includeEntities
@@ -255,6 +260,7 @@ public final class RestoreService {
     }
 
     private void prepareRegion(
+            WorldObjectRepository.ReadSession reader,
             RegionCoordinate regionCoordinate,
             RegionTree currentRegion,
             RegionTree targetRegion,
@@ -278,12 +284,14 @@ public final class RestoreService {
             Optional<ObjectId> currentId = Optional.ofNullable(currentRegion.chunks().get(local));
             Optional<ObjectId> targetId = Optional.ofNullable(targetRegion.chunks().get(local));
             ChunkTree current = currentId.isPresent()
-                    ? objects.readChunk(currentId.orElseThrow()) : new ChunkTree(Map.of(), Optional.empty());
+                    ? reader.readChunk(currentId.orElseThrow())
+                    : new ChunkTree(Map.of(), Optional.empty());
             ChunkTree target = targetId.isPresent()
-                    ? objects.readChunk(targetId.orElseThrow()) : new ChunkTree(Map.of(), Optional.empty());
+                    ? reader.readChunk(targetId.orElseThrow())
+                    : new ChunkTree(Map.of(), Optional.empty());
             int chunkX = regionCoordinate.x() * REGION_SIZE + local.x();
             int chunkZ = regionCoordinate.z() * REGION_SIZE + local.z();
-            prepareChunk(chunkX, chunkZ, current, target,
+            prepareChunk(reader, chunkX, chunkZ, current, target,
                     sections, entities,
                     area, outside, includeEntities, scope);
             progress.accept(new PreparationProgress(
@@ -292,6 +300,7 @@ public final class RestoreService {
     }
 
     private void prepareChunk(
+            WorldObjectRepository.ReadSession reader,
             int chunkX,
             int chunkZ,
             ChunkTree current,
@@ -316,9 +325,9 @@ public final class RestoreService {
                 }
                 if (area != null && !(outside
                         ? !area.intersects(key) : area.contains(key))) {
-                    SectionBlob before = objects.readSection(returnId);
+                    SectionBlob before = reader.readSection(returnId);
                     SectionBlob selected = select(
-                            before, objects.readSection(resolved), key, area, outside);
+                            before, reader.readSection(resolved), key, area, outside);
                     if (!selected.equals(before)) {
                         sections.put(key, new SectionPlan(
                                 returnId, resolved, selected, before));

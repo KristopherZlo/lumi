@@ -40,23 +40,27 @@ final class ObjectPack {
         return ObjectPackIndex.load(directory);
     }
 
-    private static byte[] read(PackedObject entry, boolean requirePublished) throws IOException {
-        Objects.requireNonNull(entry, "entry");
-        try (FileChannel channel = FileChannel.open(entry.pack(), StandardOpenOption.READ)) {
-            return read(channel, entry, requirePublished);
-        }
-    }
-
     private static byte[] read(
             FileChannel channel, PackedObject entry, boolean requirePublished)
+            throws IOException {
+        validateHeader(channel, entry.pack(), requirePublished);
+        return readEntry(channel, entry);
+    }
+
+    private static void validateHeader(
+            FileChannel channel, Path pack, boolean requirePublished)
             throws IOException {
         ByteBuffer packHeader = ByteBuffer.allocate(PACK_HEADER_BYTES);
         readFully(channel, packHeader, 0);
         packHeader.flip();
         int count = packHeader.getInt() == PACK_MAGIC ? packHeader.getInt() : -1;
         if (count < 0 || (requirePublished && count == 0)) {
-            throw corrupt(entry.pack(), "invalid pack header");
+            throw corrupt(pack, "invalid pack header");
         }
+    }
+
+    private static byte[] readEntry(FileChannel channel, PackedObject entry)
+            throws IOException {
         ByteBuffer header = ByteBuffer.allocate(ENTRY_HEADER_BYTES);
         readFully(channel, header, entry.offset());
         header.flip();
@@ -98,27 +102,60 @@ final class ObjectPack {
         }
     }
 
-    /** Reuses one channel while consecutive immutable objects come from the same pack. */
+    /** Reuses a bounded set of immutable pack channels for one read session. */
     static final class Reader implements Closeable {
-        private Path pack;
-        private FileChannel channel;
+        private static final int MAX_OPEN_PACKS = 32;
+        private final LinkedHashMap<Path, FileChannel> channels =
+                new LinkedHashMap<>(MAX_OPEN_PACKS, 0.75F, true);
 
         byte[] read(PackedObject entry) throws IOException {
             Objects.requireNonNull(entry, "entry");
-            if (!entry.pack().equals(pack)) {
-                close();
-                pack = entry.pack();
-                channel = FileChannel.open(pack, StandardOpenOption.READ);
+            FileChannel channel = channels.get(entry.pack());
+            if (channel == null) {
+                channel = open(entry.pack());
             }
-            return ObjectPack.read(channel, entry, true);
+            return ObjectPack.readEntry(channel, entry);
+        }
+
+        private FileChannel open(Path pack) throws IOException {
+            FileChannel channel = FileChannel.open(pack, StandardOpenOption.READ);
+            try {
+                validateHeader(channel, pack, true);
+            } catch (IOException failed) {
+                try {
+                    channel.close();
+                } catch (IOException closeFailed) {
+                    failed.addSuppressed(closeFailed);
+                }
+                throw failed;
+            }
+            channels.put(pack, channel);
+            if (channels.size() > MAX_OPEN_PACKS) {
+                var eldest = channels.entrySet().iterator();
+                FileChannel evicted = eldest.next().getValue();
+                eldest.remove();
+                evicted.close();
+            }
+            return channel;
         }
 
         @Override
         public void close() throws IOException {
-            if (channel != null) {
-                channel.close();
-                channel = null;
-                pack = null;
+            IOException failure = null;
+            for (FileChannel channel : channels.values()) {
+                try {
+                    channel.close();
+                } catch (IOException failed) {
+                    if (failure == null) {
+                        failure = failed;
+                    } else {
+                        failure.addSuppressed(failed);
+                    }
+                }
+            }
+            channels.clear();
+            if (failure != null) {
+                throw failure;
             }
         }
     }

@@ -57,43 +57,47 @@ public final class MerkleTreeEditor {
             progress.accept(1L, 1L);
             return baseRoot.orElseThrow();
         }
-        DimensionTree base = baseRoot.isPresent()
-                ? objects.readDimension(baseRoot.orElseThrow())
-                : new DimensionTree(Map.of());
-        Map<RegionCoordinate, Map<ChunkInRegion, Map<HistoryKey, ObjectId>>> grouped = group(changes);
-        Map<RegionCoordinate, ObjectId> regions = new HashMap<>(base.regions());
-        long total = grouped.values().stream().mapToLong(Map::size).sum()
-                + grouped.size() + 1L;
-        long completed = 0;
-        progress.accept(completed, total);
+        try (var reader = objects.beginReadSession()) {
+            DimensionTree base = baseRoot.isPresent()
+                    ? reader.readDimension(baseRoot.orElseThrow())
+                    : new DimensionTree(Map.of());
+            Map<RegionCoordinate, Map<ChunkInRegion, Map<HistoryKey, ObjectId>>> grouped =
+                    group(changes);
+            Map<RegionCoordinate, ObjectId> regions = new HashMap<>(base.regions());
+            long total = grouped.values().stream().mapToLong(Map::size).sum()
+                    + grouped.size() + 1L;
+            long completed = 0;
+            progress.accept(completed, total);
 
-        for (var regionChange : grouped.entrySet()) {
-            RegionTree oldRegion = regions.containsKey(regionChange.getKey())
-                    ? objects.readRegion(regions.get(regionChange.getKey()))
-                    : new RegionTree(Map.of());
-            Map<ChunkInRegion, ObjectId> chunks = new HashMap<>(oldRegion.chunks());
-            for (var chunkChange : regionChange.getValue().entrySet()) {
-                ChunkTree oldChunk = chunks.containsKey(chunkChange.getKey())
-                        ? objects.readChunk(chunks.get(chunkChange.getKey()))
-                        : new ChunkTree(Map.of(), Optional.empty());
-                Map<Integer, ObjectId> sections = new HashMap<>(oldChunk.sections());
-                Optional<ObjectId> entities = oldChunk.entities();
-                for (var change : chunkChange.getValue().entrySet()) {
-                    if (change.getKey() instanceof SectionKey section) {
-                        sections.put(section.sectionY(), change.getValue());
-                    } else {
-                        entities = Optional.of(change.getValue());
+            for (var regionChange : grouped.entrySet()) {
+                RegionTree oldRegion = regions.containsKey(regionChange.getKey())
+                        ? reader.readRegion(regions.get(regionChange.getKey()))
+                        : new RegionTree(Map.of());
+                Map<ChunkInRegion, ObjectId> chunks = new HashMap<>(oldRegion.chunks());
+                for (var chunkChange : regionChange.getValue().entrySet()) {
+                    ChunkTree oldChunk = chunks.containsKey(chunkChange.getKey())
+                            ? reader.readChunk(chunks.get(chunkChange.getKey()))
+                            : new ChunkTree(Map.of(), Optional.empty());
+                    Map<Integer, ObjectId> sections = new HashMap<>(oldChunk.sections());
+                    Optional<ObjectId> entities = oldChunk.entities();
+                    for (var change : chunkChange.getValue().entrySet()) {
+                        if (change.getKey() instanceof SectionKey section) {
+                            sections.put(section.sectionY(), change.getValue());
+                        } else {
+                            entities = Optional.of(change.getValue());
+                        }
                     }
+                    chunks.put(chunkChange.getKey(), batch.write(
+                            new ChunkTree(sections, entities)));
+                    progress.accept(++completed, total);
                 }
-                chunks.put(chunkChange.getKey(), batch.write(new ChunkTree(sections, entities)));
+                regions.put(regionChange.getKey(), batch.write(new RegionTree(chunks)));
                 progress.accept(++completed, total);
             }
-            regions.put(regionChange.getKey(), batch.write(new RegionTree(chunks)));
+            ObjectId root = batch.write(new DimensionTree(regions));
             progress.accept(++completed, total);
+            return root;
         }
-        ObjectId root = batch.write(new DimensionTree(regions));
-        progress.accept(++completed, total);
-        return root;
     }
 
     private static Map<RegionCoordinate, Map<ChunkInRegion, Map<HistoryKey, ObjectId>>> group(
