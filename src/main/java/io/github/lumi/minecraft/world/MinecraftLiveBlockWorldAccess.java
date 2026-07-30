@@ -85,38 +85,10 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
         return snapshot(blockEntity.getBlockState(), blockEntity);
     }
 
-    public Map<BlockPosition, BlockSnapshot> loadedBlockEntityBaselines(
-            Set<SectionKey> sections) {
-        Set<SectionKey> restored = Set.copyOf(
-                Objects.requireNonNull(sections, "sections"));
-        Set<ChunkCoordinate> chunks = new java.util.HashSet<>();
-        restored.forEach(section -> chunks.add(ChunkCoordinate.from(section)));
-        Map<BlockPosition, BlockSnapshot> baselines = new HashMap<>();
-        for (ChunkCoordinate coordinate : chunks) {
-            LevelChunk chunk = level.getChunkSource().getChunkNow(
-                    coordinate.x(), coordinate.z());
-            if (chunk == null) {
-                continue;
-            }
-            for (BlockEntity blockEntity : chunk.getBlockEntities().values()) {
-                if (!restored.contains(
-                        MinecraftSectionCapture.key(blockEntity.getBlockPos()))) {
-                    continue;
-                }
-                BlockPosition position = new BlockPosition(
-                        blockEntity.getBlockPos().getX(),
-                        blockEntity.getBlockPos().getY(),
-                        blockEntity.getBlockPos().getZ());
-                try {
-                    baselines.put(position, read(blockEntity));
-                } catch (IOException failed) {
-                    throw new IllegalStateException(
-                            "Cannot rebase restored block entity " + position,
-                            failed);
-                }
-            }
-        }
-        return Map.copyOf(baselines);
+    public boolean isLoaded(SectionKey section) {
+        Objects.requireNonNull(section, "section");
+        return level.getChunkSource().getChunkNow(
+                section.chunkX(), section.chunkZ()) != null;
     }
 
     private BlockSnapshot read(

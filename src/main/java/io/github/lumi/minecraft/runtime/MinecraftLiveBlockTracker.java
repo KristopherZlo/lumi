@@ -12,7 +12,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import net.minecraft.core.BlockPos;
@@ -78,19 +77,27 @@ public final class MinecraftLiveBlockTracker {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(visible, "visible");
         baselines.keySet().removeIf(position -> section(position).equals(key));
+        rememberBlockEntities(key, visible);
+    }
+
+    public void rebaseSections(Map<SectionKey, SectionBlob> sections) {
+        Map<SectionKey, SectionBlob> restored = Map.copyOf(
+                Objects.requireNonNull(sections, "sections"));
+        baselines.keySet().removeIf(position ->
+                restored.containsKey(section(position)));
+        restored.forEach((key, visible) -> {
+            if (world.isLoaded(key)) {
+                rememberBlockEntities(key, visible);
+            }
+        });
+    }
+
+    private void rememberBlockEntities(SectionKey key, SectionBlob visible) {
         visible.blockEntities().forEach((index, nbt) -> {
             BlockPosition position = position(key, index);
             baselines.put(position, new BlockSnapshot(
                     visible.blockStates().get(index), Optional.of(nbt)));
         });
-    }
-
-    public void rebaseSections(Set<SectionKey> sections) {
-        Set<SectionKey> restored = Set.copyOf(
-                Objects.requireNonNull(sections, "sections"));
-        baselines.keySet().removeIf(position ->
-                restored.contains(section(position)));
-        baselines.putAll(world.loadedBlockEntityBaselines(restored));
     }
 
     public BlockSnapshot beforeMutation(

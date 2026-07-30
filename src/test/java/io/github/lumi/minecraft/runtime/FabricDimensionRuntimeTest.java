@@ -21,9 +21,17 @@ class FabricDimensionRuntimeTest {
     }
 
     @Test
+    void rebasesLiveBlockEntitiesFromTheVerifiedRestoreState() throws Exception {
+        String source = runtimeSource();
+
+        assertTrue(source.contains("liveBlocks.rebaseSections(state.sections())"));
+        assertFalse(source.contains(
+                "liveBlocks.rebaseSections(state.sections().keySet())"));
+    }
+
+    @Test
     void technobladeTributeRequiresARevivedNamedPig() throws Exception {
-        String source = Files.readString(Path.of(
-                "src/main/java/io/github/lumi/minecraft/runtime/FabricDimensionRuntime.java"));
+        String source = runtimeSource();
 
         assertTrue(source.contains(
                 "plan.direction() != LiveActionJournal.Direction.UNDO"));
@@ -36,8 +44,7 @@ class FabricDimensionRuntimeTest {
 
     @Test
     void refusesLiveActionsWhileAnotherWorldOperationIsRunning() throws Exception {
-        String source = Files.readString(Path.of(
-                "src/main/java/io/github/lumi/minecraft/runtime/FabricDimensionRuntime.java"));
+        String source = runtimeSource();
         int start = source.indexOf("public synchronized DimensionMutation startLiveAction(");
         int end = source.indexOf("private DimensionMutation createSessionAction(", start);
         String liveAction = source.substring(start, end);
@@ -47,5 +54,10 @@ class FabricDimensionRuntimeTest {
         assertTrue(liveAction.contains("\"luma.status.world_operation_busy\""));
         assertTrue(liveAction.indexOf("world_operation_busy")
                 < liveAction.indexOf("operations.enqueue("));
+    }
+
+    private static String runtimeSource() throws Exception {
+        return Files.readString(Path.of(
+                "src/main/java/io/github/lumi/minecraft/runtime/FabricDimensionRuntime.java"));
     }
 }

@@ -286,7 +286,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 liveActions, level, freeze, level.getBlockTicks(), level.getFluidTicks());
         restoreStateListener = new RestoreBaselineReconciler(
                 entityDurability, blockEntityBaselines, state -> {
-                    liveBlocks.rebaseSections(state.sections().keySet());
+                    liveBlocks.rebaseSections(state.sections());
                     causalTicks.cancelSections(state.sections().keySet());
                 });
         returnPointRestores = new ReturnPointRestorePreparation(
