@@ -145,7 +145,8 @@ Use JDK 21.
 `build` compiles the mod and runs its unit and server GameTest suites.
 The bundled redstone GameTests place both Rube Goldberg machines on the ground,
 press their stone buttons as a nearby player, and verify exact block,
-block-entity, and entity results after Quick Restore, Restore, and Undo at
+block-entity, entity, and player-respawn results after Quick Restore, Restore,
+and Undo at
 2 ticks and every 5 ticks through 40 or 245 ticks.
 Run them directly with `.\gradlew.bat runGameTest --no-daemon`.
 Pass `-Dfabric-api.gametest.filter=<test-id>` before `runGameTest` to run one

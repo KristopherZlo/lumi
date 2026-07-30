@@ -3,11 +3,13 @@ package io.github.lumi.gametest;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.minecraft.world.MinecraftEntityChunkCapture;
 import io.github.lumi.minecraft.world.MinecraftNbtCodec;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
+import io.github.lumi.minecraft.world.MinecraftWorldStateReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -21,11 +23,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.stream.StreamSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
-/** Exact blocks, block entities and durable entities for bounded test volumes. */
+/** Exact blocks, block entities, durable entities and player spawns for tests. */
 final class LumiWorldSnapshot {
     private static final Comparator<SectionKey> SECTION_ORDER =
             Comparator.comparingInt(SectionKey::chunkX)
@@ -36,15 +39,18 @@ final class LumiWorldSnapshot {
 
     private final Map<SectionKey, SectionBlob> sections;
     private final EntityChunkBlob entities;
+    private final Map<UUID, PlayerSpawn> playerSpawns;
     private final List<BlockBox> areas;
     private final String digest;
 
     private LumiWorldSnapshot(
             Map<SectionKey, SectionBlob> sections,
             EntityChunkBlob entities,
+            Map<UUID, PlayerSpawn> playerSpawns,
             List<BlockBox> areas) {
         this.sections = Map.copyOf(sections);
         this.entities = entities;
+        this.playerSpawns = Map.copyOf(playerSpawns);
         this.areas = List.copyOf(areas);
         digest = digest();
     }
@@ -78,8 +84,10 @@ final class LumiWorldSnapshot {
                         entity.getBlockX(), entity.getBlockY(), entity.getBlockZ()))));
         var sortedEntities = new EntityChunkBlob(capturedEntities.entities().stream()
                 .sorted(ENTITY_ORDER).toList());
+        Map<UUID, PlayerSpawn> playerSpawns =
+                new MinecraftWorldStateReader(level).readPlayerSpawns();
         LumiWorldSnapshot snapshot = new LumiWorldSnapshot(
-                sections, sortedEntities, copiedAreas);
+                sections, sortedEntities, playerSpawns, copiedAreas);
         if (report != null) {
             report.snapshot(name, snapshot.digest, sections.size(),
                     sortedEntities.entities().size(), elapsedMillis(started));
@@ -126,6 +134,10 @@ final class LumiWorldSnapshot {
         if (!entities.equals(expected.entities)) {
             return describeEntityDifference(expected.entities, entities);
         }
+        if (!playerSpawns.equals(expected.playerSpawns)) {
+            return describePlayerSpawnDifference(
+                    expected.playerSpawns, playerSpawns);
+        }
         return "digest differs despite equal decoded state";
     }
 
@@ -153,6 +165,16 @@ final class LumiWorldSnapshot {
                 update(digest, entity.type());
                 digest.update(entity.nbt().bytes());
             }
+            playerSpawns.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> {
+                        PlayerSpawn spawn = entry.getValue();
+                        update(digest, entry.getKey().toString());
+                        update(digest, spawn.x() + "," + spawn.y() + "," + spawn.z());
+                        update(digest, Float.toString(spawn.yaw()));
+                        update(digest, Float.toString(spawn.pitch()));
+                        update(digest, Boolean.toString(spawn.forced()));
+                    });
             return HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is unavailable", impossible);
@@ -252,6 +274,23 @@ final class LumiWorldSnapshot {
         }
         return "durable entities differ: expected "
                 + describe(expected) + " but was " + describe(actual);
+    }
+
+    private static String describePlayerSpawnDifference(
+            Map<UUID, PlayerSpawn> expected,
+            Map<UUID, PlayerSpawn> actual) {
+        Set<UUID> players = new TreeSet<>();
+        players.addAll(expected.keySet());
+        players.addAll(actual.keySet());
+        for (UUID player : players) {
+            PlayerSpawn wanted = expected.get(player);
+            PlayerSpawn found = actual.get(player);
+            if (!Objects.equals(wanted, found)) {
+                return "player spawn " + player + " expected "
+                        + wanted + " but was " + found;
+            }
+        }
+        return "player spawns differ";
     }
 
     private static void update(MessageDigest digest, String value) {
