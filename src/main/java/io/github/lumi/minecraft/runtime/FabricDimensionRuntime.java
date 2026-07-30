@@ -176,6 +176,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final VersionDisplayNameService versionDisplayNames;
     private final DimensionHistoryViewService historyViews;
     private final PendingChangeStatisticsService pendingStatistics;
+    private PendingStatisticsOperation pendingStatisticsOperation;
     private final CausalZoneGrowthTracker zoneGrowth;
     private final ReturnPointRestorePreparation returnPointRestores;
     private final DimensionPackageService packages;
@@ -418,7 +419,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
         switch (operation.terminalState()) {
             case SUCCEEDED -> LumiMod.LOGGER.info("Lumi operation completed: {}", description);
-            case CANCELLED -> LumiMod.LOGGER.warn("Lumi operation cancelled: {}", description);
+            case CANCELLED -> LumiMod.LOGGER.info("Lumi operation cancelled: {}", description);
             case RETURNED -> operation.failure().ifPresentOrElse(
                     failure -> LumiMod.LOGGER.warn(
                             "Lumi operation could not apply its target and returned safely: "
@@ -732,7 +733,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             SaveRequest request, Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         SaveCaptureOperation operation = createSave(request);
-        operations.enqueue(operation, OperationPriority.NORMAL, completed -> {
+        enqueueForeground(operation, OperationPriority.NORMAL, completed -> {
             if (completed.terminalState()
                     == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
                 operation.result().ifPresent(result ->
@@ -847,7 +848,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(author, "author");
         var operation = new DeferredDimensionMutation(
                 () -> createRestore(target, author, includeEntities));
-        operations.enqueue(
+        enqueueForeground(
                 operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
         return operation;
     }
@@ -888,6 +889,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             LiveActionJournal.Direction direction,
             Consumer<DimensionMutation> terminalObserver) {
         requireNoRecovery();
+        try {
+            cancelPendingStatistics();
+        } catch (IOException failed) {
+            throw new java.io.UncheckedIOException(failed);
+        }
         if (operations.hasActiveOperation() || operations.queuedCount() > 0) {
             throw new IllegalStateException("luma.status.world_operation_busy");
         }
@@ -1128,7 +1134,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         requireNoRecovery();
         Objects.requireNonNull(target, "target");
         var operation = new DeferredDimensionMutation(() -> createBranchSwitch(target));
-        operations.enqueue(
+        enqueueForeground(
                 operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
         return operation;
     }
@@ -1178,7 +1184,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(targetWorkspace, "targetWorkspace");
         var operation = new DeferredDimensionMutation(
                 () -> createWorkspaceSwitch(targetWorkspace));
-        operations.enqueue(
+        enqueueForeground(
                 operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
         return operation;
     }
@@ -1244,7 +1250,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             return new GarbageCollectionOperation.Counts(
                     result.commits(), result.objects());
         }, background);
-        operations.enqueue(operation, OperationPriority.NORMAL, terminalObserver);
+        enqueueForeground(operation, OperationPriority.NORMAL, terminalObserver);
         return operation;
     }
 
@@ -1307,6 +1313,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             throw new IOException(
                     "History changed before pending statistics started");
         }
+        cancelPendingStatistics();
         var workspace = activeWorkspace();
         WorkingIndexSnapshot boundary = pendingBoundary(workspace);
         var durability = mutations.durabilityBoundary(boundary);
@@ -1318,10 +1325,40 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 () -> pendingBoundary(workspace),
                 () -> mutations.isDurable(durability), pendingStatistics,
                 background, chunks);
-        operations.enqueue(
-                operation, OperationPriority.NORMAL,
-                Objects.requireNonNull(terminalObserver, "terminalObserver"));
+        Consumer<DimensionMutation> observer =
+                Objects.requireNonNull(terminalObserver, "terminalObserver");
+        operations.enqueue(operation, OperationPriority.NORMAL, completed -> {
+            synchronized (FabricDimensionRuntime.this) {
+                if (pendingStatisticsOperation == operation) {
+                    pendingStatisticsOperation = null;
+                }
+            }
+            observer.accept(completed);
+        });
+        pendingStatisticsOperation = operation;
         return operation;
+    }
+
+    private void enqueueForeground(
+            DimensionMutation operation,
+            OperationPriority priority,
+            Consumer<DimensionMutation> observer) throws IOException {
+        cancelPendingStatistics();
+        operations.enqueue(operation, priority, observer);
+    }
+
+    private void cancelPendingStatistics() throws IOException {
+        PendingStatisticsOperation operation = pendingStatisticsOperation;
+        if (operation == null) {
+            return;
+        }
+        var ticket = operations.ticketOf(operation);
+        if (ticket.isPresent()) {
+            operations.cancel(ticket.orElseThrow());
+        }
+        if (pendingStatisticsOperation == operation) {
+            pendingStatisticsOperation = null;
+        }
     }
 
     private WorkingIndexSnapshot pendingBoundary(
@@ -1609,7 +1646,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         requireNoRecovery();
         Objects.requireNonNull(plan, "plan");
         var operation = new DeferredDimensionMutation(() -> createMerge(plan));
-        operations.enqueue(
+        enqueueForeground(
                 operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
         return operation;
     }
@@ -1667,7 +1704,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(author, "author");
         var operation = new DeferredDimensionMutation(
                 () -> createPartialRestore(target, area, author));
-        operations.enqueue(operation, OperationPriority.NORMAL, terminalObserver);
+        enqueueForeground(operation, OperationPriority.NORMAL, terminalObserver);
         return operation;
     }
 
@@ -1724,7 +1761,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(author, "author");
         var operation = new DeferredDimensionMutation(
                 () -> createZoneRestore(target, zoneId, author));
-        operations.enqueue(operation, OperationPriority.NORMAL, terminalObserver);
+        enqueueForeground(operation, OperationPriority.NORMAL, terminalObserver);
         return operation;
     }
 
@@ -1794,7 +1831,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             context.set(new QuickRollbackContext(expected, rollback));
             return rollback;
         });
-        operations.enqueue(operation, OperationPriority.URGENT, completed -> {
+        enqueueForeground(operation, OperationPriority.URGENT, completed -> {
             try {
                 if (completed.terminalState()
                         == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
@@ -1855,7 +1892,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         }
         var operation = new DeferredDimensionMutation(
                 () -> createPlannedPartialRestore(token, author));
-        operations.enqueue(operation, OperationPriority.NORMAL, terminalObserver);
+        enqueueForeground(operation, OperationPriority.NORMAL, terminalObserver);
         return operation;
     }
 

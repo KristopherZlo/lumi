@@ -1,6 +1,7 @@
 package io.github.lumi.network;
 
 import io.github.lumi.minecraft.operation.DimensionMutation;
+import io.github.lumi.minecraft.operation.MutationTerminalState;
 import io.github.lumi.minecraft.operation.PendingStatisticsOperation;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import java.io.IOException;
@@ -59,6 +60,9 @@ final class PendingStatisticsCommandHandler {
             ServerPlayNetworking.Context context) {
         if (context.server().getPlayerList()
                 .getPlayer(player.getUUID()) != player) {
+            return;
+        }
+        if (outcome.terminalState() == MutationTerminalState.CANCELLED) {
             return;
         }
         Optional<io.github.lumi.domain.service.PendingChangeStatisticsService.Result>

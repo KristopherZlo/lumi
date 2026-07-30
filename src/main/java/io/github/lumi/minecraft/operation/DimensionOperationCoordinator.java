@@ -321,13 +321,22 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
                 continue;
             }
             entry.operation().close();
+            DimensionMutation outcome = entry.operation();
             queued.remove(index);
             positionObservers.remove(ticket);
             progressObservers.remove(ticket);
             freezeObservers.remove(ticket);
             freezeReleaseObservers.remove(ticket);
-            terminalObservers.remove(ticket);
+            Consumer<DimensionMutation> ticketObserver =
+                    terminalObservers.remove(ticket);
             publishedProgress.remove(ticket);
+            if (outcome.isTerminal()) {
+                notifyObserver(terminalObserver, outcome, "global terminal");
+                notifyObserver(entry.observer(), outcome, "request terminal");
+                if (ticketObserver != null) {
+                    notifyObserver(ticketObserver, outcome, "ticket terminal");
+                }
+            }
             notifyPositions();
             return true;
         }

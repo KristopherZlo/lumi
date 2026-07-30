@@ -74,14 +74,24 @@ class DimensionOperationCoordinatorTest {
 
     @Test
     void queuedOperationCanBeCancelledBeforeItStarts() throws Exception {
+        var global = new ArrayList<MutationTerminalState>();
+        var request = new ArrayList<MutationTerminalState>();
+        var ticket = new ArrayList<MutationTerminalState>();
         DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
-                new RecordingFreeze(), () -> 0L, 1L);
+                new RecordingFreeze(), () -> 0L, 1L,
+                operation -> global.add(operation.terminalState()));
         coordinator.start(new TwoTickMutation(false));
         OperationTicket queued = coordinator.enqueue(
-                new TwoTickMutation(false), OperationPriority.NORMAL, ignored -> { });
+                new CancellableMutation(), OperationPriority.NORMAL,
+                operation -> request.add(operation.terminalState()));
+        coordinator.observeTerminal(
+                queued, operation -> ticket.add(operation.terminalState()));
 
         assertTrue(coordinator.cancel(queued));
         assertEquals(0, coordinator.queuedCount());
+        assertEquals(java.util.List.of(MutationTerminalState.CANCELLED), global);
+        assertEquals(java.util.List.of(MutationTerminalState.CANCELLED), request);
+        assertEquals(java.util.List.of(MutationTerminalState.CANCELLED), ticket);
         assertTrue(!coordinator.cancel(queued));
     }
 
@@ -462,6 +472,7 @@ class DimensionOperationCoordinatorTest {
         @Override public MutationTerminalState terminalState() {
             return MutationTerminalState.CANCELLED;
         }
+        @Override public void close() { cancel(); }
     }
 
     private static final class CloseTrackingMutation implements DimensionMutation {

@@ -16,10 +16,17 @@ class PendingStatisticsThreadingTest {
         String operation = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/minecraft/operation/"
                         + "PendingStatisticsOperation.java"));
+        String runtime = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/minecraft/runtime/"
+                        + "FabricDimensionRuntime.java"));
 
         assertTrue(handler.contains("runtime.startPendingStatistics("));
+        assertTrue(handler.contains(
+                "outcome.terminalState() == MutationTerminalState.CANCELLED"));
         assertTrue(!handler.contains("reader.read("));
         assertTrue(operation.indexOf("reader.read(key)")
                 < operation.indexOf("CompletableFuture.supplyAsync"));
+        assertTrue(runtime.contains("private void enqueueForeground("));
+        assertTrue(runtime.contains("operations.cancel(ticket.orElseThrow())"));
     }
 }
