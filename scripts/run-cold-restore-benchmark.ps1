@@ -83,7 +83,8 @@ try {
         "-Dlumi.benchmark.changeSize=$ChangeSize",
         "-Dlumi.benchmark.layers=$Layers",
         "-Dlumi.benchmark.commits=$Commits",
-        '-Dlumi.benchmark.restoreSamples=2'
+        '-Dlumi.benchmark.restoreSamples=2',
+        '-Dlumi.benchmark.chunkPath=natural'
     )
     if (-not (Test-Path -LiteralPath $runWorld)) {
         throw "Fixture JVM did not leave the expected world: $runWorld"
@@ -127,6 +128,26 @@ foreach ($result in $results) {
     if ($result.exact -ne 'true') {
         $violations.Add("PID $($result.pid) did not reach the exact Initial endpoint")
     }
+    $configuredBlocks = [long]$BaseSize * $BaseSize * $Layers
+    if ([long]$result.expectedBlocks -ne $configuredBlocks) {
+        $violations.Add(
+            "PID $($result.pid) fixture blocks actual=$($result.expectedBlocks), " +
+            "expected=$configuredBlocks")
+    }
+    if ([long]$result.changedBlocks -ne [long]$result.expectedBlocks) {
+        $violations.Add(
+            "PID $($result.pid) changedBlocks actual=$($result.changedBlocks), " +
+            "expected=$($result.expectedBlocks)")
+    }
+    if ([long]$result.storedChunks -le 0) {
+        $violations.Add("PID $($result.pid) exercised no stored chunks")
+    }
+    $appliedChunks = [long]$result.loadedChunks + [long]$result.storedChunks
+    if ($appliedChunks -lt [long]$result.expectedChunks) {
+        $violations.Add(
+            "PID $($result.pid) applied chunks actual=$appliedChunks, " +
+            "expectedAtLeast=$($result.expectedChunks)")
+    }
     if ([long]$result.confirmationToEnqueueMillis -gt 250) {
         $violations.Add(
             "PID $($result.pid) confirmationToEnqueueMillis actual=" +
@@ -150,7 +171,8 @@ if ($p95 -gt 10000) {
 
 $results | Format-Table pid, jvmStartMillis,
     confirmationToClientAckMillis, confirmationToEnqueueMillis,
-    enqueueToTerminalMillis, maximumServerTickNanos
+    enqueueToTerminalMillis, changedBlocks, loadedChunks, storedChunks,
+    maximumServerTickNanos
 Write-Host "fixtureDigest=$fixtureDigest;freshJvmColdP95Millis=$p95;samples=$Samples"
 if ($violations.Count -gt 0) {
     throw ($violations -join '; ')

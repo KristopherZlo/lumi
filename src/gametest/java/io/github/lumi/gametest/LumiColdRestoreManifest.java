@@ -105,6 +105,20 @@ record LumiColdRestoreManifest(
                 area, initialDigest, latestDigest, digest);
     }
 
+    long blockCount() {
+        return (long) (area.maxX() - area.minX() + 1)
+                * (area.maxY() - area.minY() + 1)
+                * (area.maxZ() - area.minZ() + 1);
+    }
+
+    long chunkCount() {
+        long x = Math.floorDiv(area.maxX(), 16)
+                - Math.floorDiv(area.minX(), 16) + 1L;
+        long z = Math.floorDiv(area.maxZ(), 16)
+                - Math.floorDiv(area.minZ(), 16) + 1L;
+        return x * z;
+    }
+
     private static CommitId commit(Properties values, String name) {
         return new CommitId(new ObjectId(required(values, name)));
     }

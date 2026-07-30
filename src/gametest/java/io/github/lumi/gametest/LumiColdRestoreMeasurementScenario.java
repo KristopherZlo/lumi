@@ -96,6 +96,14 @@ final class LumiColdRestoreMeasurementScenario {
         values.setProperty("fixtureDigest", manifest.fixtureDigest());
         values.setProperty("priorRestores", "0");
         values.setProperty("exact", "true");
+        values.setProperty("expectedBlocks", Long.toString(manifest.blockCount()));
+        values.setProperty("expectedChunks", Long.toString(manifest.chunkCount()));
+        values.setProperty("changedBlocks",
+                Long.toString(measurement.apply().changedBlocks()));
+        values.setProperty("loadedChunks",
+                Long.toString(measurement.apply().loadedChunks()));
+        values.setProperty("storedChunks",
+                Long.toString(measurement.apply().storedChunks()));
         values.setProperty("confirmationToClientAckMillis",
                 Long.toString(measurement.totalMillis()));
         values.setProperty("confirmationToEnqueueMillis",
