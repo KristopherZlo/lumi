@@ -112,6 +112,14 @@ final class LumiColdRestoreMeasurementScenario {
                 Long.toString(measurement.serverMillis()));
         values.setProperty("maximumServerTickNanos",
                 Long.toString(measurement.maximumServerTickNanos()));
+        values.setProperty("extraHeapBytes",
+                Long.toString(measurement.extraHeapBytes()));
+        values.setProperty("applicationNanos",
+                Long.toString(measurement.applicationNanos()));
+        values.setProperty("batchPreparationNanos",
+                Long.toString(measurement.apply().batchPreparationNanos()));
+        values.setProperty("lightingNanos",
+                Long.toString(measurement.apply().lightingNanos()));
         try (Writer writer = Files.newBufferedWriter(
                 absolute, StandardCharsets.UTF_8)) {
             values.store(writer, "Lumi fresh-JVM cold Restore sample");

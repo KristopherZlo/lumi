@@ -158,6 +158,11 @@ foreach ($result in $results) {
             "PID $($result.pid) maximumServerTickNanos actual=" +
             "$($result.maximumServerTickNanos), limit=50000000")
     }
+    if ([long]$result.extraHeapBytes -gt 1073741824) {
+        $violations.Add(
+            "PID $($result.pid) extraHeapBytes actual=" +
+            "$($result.extraHeapBytes), limit=1073741824")
+    }
 }
 $ordered = $results |
     Sort-Object { [long]$_.confirmationToClientAckMillis }
@@ -168,12 +173,24 @@ if ($p95 -gt 10000) {
         "fresh-JVM cold P95 actual=$p95 ms, limit=10000 ms, " +
         "samplePid=$($ordered[$rank].pid)")
 }
+$application = $results | Sort-Object { [long]$_.applicationNanos }
+$applicationRank = [Math]::Ceiling(0.5 * $application.Count) - 1
+$applicationP50 = [long]$application[$applicationRank].applicationNanos
+if ($BaseSize -eq 512 -and $Layers -eq 16 -and
+        $applicationP50 -gt 750000000) {
+    $violations.Add(
+        "fresh-JVM application P50 actual=$applicationP50 ns, " +
+        "limit=750000000 ns, samplePid=$($application[$applicationRank].pid)")
+}
 
 $results | Format-Table pid, jvmStartMillis,
     confirmationToClientAckMillis, confirmationToEnqueueMillis,
-    enqueueToTerminalMillis, changedBlocks, loadedChunks, storedChunks,
-    maximumServerTickNanos
-Write-Host "fixtureDigest=$fixtureDigest;freshJvmColdP95Millis=$p95;samples=$Samples"
+    enqueueToTerminalMillis, batchPreparationNanos, lightingNanos,
+    applicationNanos, extraHeapBytes, maximumServerTickNanos,
+    changedBlocks, loadedChunks, storedChunks
+Write-Host (
+    "fixtureDigest=$fixtureDigest;freshJvmColdP95Millis=$p95;" +
+    "applicationP50Nanos=$applicationP50;samples=$Samples")
 if ($violations.Count -gt 0) {
     throw ($violations -join '; ')
 }
