@@ -509,12 +509,14 @@ public final class LumiClient implements ClientModInitializer {
             Screen parent, HistorySnapshotPayload.Version version) {
         Minecraft client = Minecraft.getInstance();
         HistorySnapshotPayload snapshot = HISTORY.state().snapshot().orElseThrow();
-        List<HistorySnapshotPayload.Version> versions = HISTORY_PAGES.page(
-                        snapshot.dimensionId(), snapshot.workspaceId(),
-                        new io.github.lumi.domain.model.BranchName(snapshot.branchName()),
-                        Optional.empty())
-                .map(io.github.lumi.network.HistoryPagePayload::versions)
-                .orElse(snapshot.versions());
+        List<HistorySnapshotPayload.Version> versions = HISTORY_PAGES.versions(
+                snapshot.dimensionId(), HISTORY_PAGES.page(
+                                snapshot.dimensionId(), snapshot.workspaceId(),
+                                new io.github.lumi.domain.model.BranchName(
+                                        snapshot.branchName()),
+                                Optional.empty())
+                        .map(io.github.lumi.network.HistoryPagePayload::versions)
+                        .orElse(snapshot.versions()));
         int index = versions.indexOf(version);
         var compare = new VersionCompareController()
                 .target(versions, index)
@@ -647,7 +649,9 @@ public final class LumiClient implements ClientModInitializer {
                 () -> openZoneSave(
                         client.screen, zone, SaveScreenController.Intent.AMEND,
                         zone.versions().isEmpty()
-                                ? "" : zone.versions().getFirst().message()),
+                                ? "" : HISTORY_PAGES.version(
+                                        snapshot.dimensionId(),
+                                        zone.versions().getFirst()).message()),
                 () -> {
                     NETWORKING.refreshSnapshot();
                     showFeedback("luma.hotkeys.pending_preview_help");

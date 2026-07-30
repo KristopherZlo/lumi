@@ -1,15 +1,20 @@
 package io.github.lumi.client.state;
 
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.network.HistoryPagePayload;
+import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Bounded latest-request-wins owner for independently paged history scopes. */
+/** Bounded owner for paged history scopes and optimistic mutable metadata. */
 public final class ClientHistoryPageStore {
     private static final int MAX_SCOPES = 16;
+    private static final int MAX_METADATA_OVERRIDES = 64;
     private static final Channel DEFAULT_CHANNEL =
             new Channel(new UUID(0L, 0L));
     private final LinkedHashMap<PageScope, Pending> pending =
@@ -17,6 +22,10 @@ public final class ClientHistoryPageStore {
     private final LinkedHashMap<PageScope, HistoryPagePayload> pages =
             new LinkedHashMap<>();
     private final LinkedHashMap<String, Long> revisions = new LinkedHashMap<>();
+    private final LinkedHashMap<VersionKey, VersionTags> optimisticTags =
+            new LinkedHashMap<>();
+    private final LinkedHashMap<VersionKey, String> optimisticNames =
+            new LinkedHashMap<>();
 
     public static Channel createChannel() {
         return new Channel(UUID.randomUUID());
@@ -65,10 +74,56 @@ public final class ClientHistoryPageStore {
             return false;
         }
         pending.remove(pageScope);
+        payload.versions().forEach(version ->
+                reconcile(payload.dimensionId(), version));
         pages.remove(pageScope);
         pages.put(pageScope, payload);
         trim(pages);
         return true;
+    }
+
+    public synchronized void replaceVersionTags(
+            String dimensionId, CommitId versionId, VersionTags replacement) {
+        replace(optimisticTags, dimensionId, versionId,
+                Objects.requireNonNull(replacement, "replacement"));
+    }
+
+    public synchronized void replaceVersionName(
+            String dimensionId, CommitId versionId, String replacement) {
+        replace(optimisticNames, dimensionId, versionId,
+                Objects.requireNonNull(replacement, "replacement"));
+    }
+
+    public synchronized void rejectVersionTags(
+            String dimensionId, CommitId versionId) {
+        optimisticTags.remove(new VersionKey(dimensionId, versionId));
+    }
+
+    public synchronized void rejectVersionName(
+            String dimensionId, CommitId versionId) {
+        optimisticNames.remove(new VersionKey(dimensionId, versionId));
+    }
+
+    public synchronized HistorySnapshotPayload.Version version(
+            String dimensionId, HistorySnapshotPayload.Version source) {
+        VersionKey key = new VersionKey(dimensionId, source.id());
+        String name = optimisticNames.getOrDefault(key, source.message());
+        VersionTags tags = optimisticTags.getOrDefault(key, source.tags());
+        if (name.equals(source.message()) && tags.equals(source.tags())) {
+            return source;
+        }
+        return new HistorySnapshotPayload.Version(
+                source.id(), name, source.author(), source.timestampMillis(),
+                source.kind(), tags, source.parents(), source.statistics(),
+                source.zoneId());
+    }
+
+    public synchronized List<HistorySnapshotPayload.Version> versions(
+            String dimensionId,
+            List<HistorySnapshotPayload.Version> sources) {
+        return sources.stream()
+                .map(source -> version(dimensionId, source))
+                .toList();
     }
 
     public synchronized Optional<HistoryPagePayload> page(
@@ -107,10 +162,37 @@ public final class ClientHistoryPageStore {
         pending.clear();
         pages.clear();
         revisions.clear();
+        optimisticTags.clear();
+        optimisticNames.clear();
+    }
+
+    private <T> void replace(
+            LinkedHashMap<VersionKey, T> values,
+            String dimensionId,
+            CommitId versionId,
+            T replacement) {
+        VersionKey key = new VersionKey(dimensionId, versionId);
+        values.remove(key);
+        values.put(key, replacement);
+        trim(values, MAX_METADATA_OVERRIDES);
+    }
+
+    private void reconcile(
+            String dimensionId, HistorySnapshotPayload.Version version) {
+        VersionKey key = new VersionKey(dimensionId, version.id());
+        optimisticTags.computeIfPresent(key, (ignored, value) ->
+                value.equals(version.tags()) ? null : value);
+        optimisticNames.computeIfPresent(key, (ignored, value) ->
+                value.equals(version.message()) ? null : value);
     }
 
     private static <K, V> void trim(LinkedHashMap<K, V> values) {
-        while (values.size() > MAX_SCOPES) {
+        trim(values, MAX_SCOPES);
+    }
+
+    private static <K, V> void trim(
+            LinkedHashMap<K, V> values, int maximumSize) {
+        while (values.size() > maximumSize) {
             values.remove(values.keySet().iterator().next());
         }
     }
@@ -127,6 +209,13 @@ public final class ClientHistoryPageStore {
         private PageScope {
             Objects.requireNonNull(channel, "channel");
             Objects.requireNonNull(scope, "scope");
+        }
+    }
+
+    private record VersionKey(String dimensionId, CommitId versionId) {
+        private VersionKey {
+            Objects.requireNonNull(dimensionId, "dimensionId");
+            Objects.requireNonNull(versionId, "versionId");
         }
     }
 

@@ -45,6 +45,8 @@ import io.github.lumi.network.WorkspaceCreateArgument;
 import io.github.lumi.network.WorkspaceSettingsArgument;
 import io.github.lumi.network.VersionTagsArgument;
 import io.github.lumi.network.VersionRenameArgument;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -66,6 +68,7 @@ public final class LumiClientNetworking {
     private final Consumer<PackageInspectionPayload> packageListener;
     private final Consumer<CleanupResultPayload> cleanupListener;
     private final Consumer<PartialRestorePlanPayload> partialRestoreListener;
+    private final Map<UUID, MetadataEdit> metadataEdits = new HashMap<>();
 
     public LumiClientNetworking(
             ClientHistoryStore history,
@@ -108,6 +111,7 @@ public final class LumiClientNetworking {
                 OperationEventPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> {
                             history.accept(payload);
+                            acceptMetadataEdit(payload);
                             eventListener.accept(payload);
                         }));
         ClientPlayNetworking.registerGlobalReceiver(
@@ -143,6 +147,7 @@ public final class LumiClientNetworking {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             history.clear();
             historyPages.clear();
+            metadataEdits.clear();
             pendingStatistics.clear();
             survivalSettings.clear();
             comparisons.clear();
@@ -328,17 +333,29 @@ public final class LumiClientNetworking {
     }
 
     public UUID updateVersionTags(CommitId target, VersionTags tags) {
-        return send(HistoryCommandPayload.Kind.UPDATE_VERSION_TAGS,
+        CommitId versionId = Objects.requireNonNull(target, "target");
+        VersionTags replacement = Objects.requireNonNull(tags, "tags");
+        String dimensionId = activeDimension();
+        UUID requestId = send(HistoryCommandPayload.Kind.UPDATE_VERSION_TAGS,
                 new VersionTagsArgument(
-                        Objects.requireNonNull(target, "target"),
-                        Objects.requireNonNull(tags, "tags")).encode());
+                        versionId, replacement).encode());
+        historyPages.replaceVersionTags(dimensionId, versionId, replacement);
+        metadataEdits.put(requestId, new MetadataEdit(
+                dimensionId, versionId, MetadataKind.TAGS));
+        return requestId;
     }
 
     public UUID renameVersion(CommitId target, String replacement) {
-        return send(HistoryCommandPayload.Kind.RENAME_VERSION,
+        CommitId versionId = Objects.requireNonNull(target, "target");
+        VersionDisplayName name = new VersionDisplayName(replacement);
+        String dimensionId = activeDimension();
+        UUID requestId = send(HistoryCommandPayload.Kind.RENAME_VERSION,
                 new VersionRenameArgument(
-                        Objects.requireNonNull(target, "target"),
-                        new VersionDisplayName(replacement)).encode());
+                        versionId, name).encode());
+        historyPages.replaceVersionName(dimensionId, versionId, name.value());
+        metadataEdits.put(requestId, new MetadataEdit(
+                dimensionId, versionId, MetadataKind.NAME));
+        return requestId;
     }
 
     public UUID exportPackage(String name, boolean includePreview) {
@@ -585,6 +602,27 @@ public final class LumiClientNetworking {
         return requestId;
     }
 
+    private String activeDimension() {
+        return history.state().snapshot().orElseThrow(
+                () -> new IllegalStateException(
+                        "Lumi history has not synchronized yet")).dimensionId();
+    }
+
+    private void acceptMetadataEdit(OperationEventPayload event) {
+        if (event.state() == OperationEventPayload.State.ACCEPTED
+                || event.state() == OperationEventPayload.State.PROGRESS) {
+            return;
+        }
+        MetadataEdit edit = metadataEdits.remove(event.requestId());
+        if (edit == null) {
+            return;
+        }
+        if (event.state() != OperationEventPayload.State.SUCCEEDED) {
+            edit.reject(historyPages);
+        }
+        historyPages.invalidateDimension(edit.dimensionId());
+    }
+
     private static void sendCommand(
             UUID requestId,
             HistoryCommandPayload.Kind kind,
@@ -595,5 +633,17 @@ public final class LumiClientNetworking {
                 requestId, kind, snapshot.dimensionId(), snapshot.revision());
         ClientPlayNetworking.send(new HistoryCommandPayload(
                 requestId, kind, argument, snapshot.head(), snapshot.revision()));
+    }
+
+    private enum MetadataKind { TAGS, NAME }
+
+    private record MetadataEdit(
+            String dimensionId, CommitId versionId, MetadataKind kind) {
+        private void reject(ClientHistoryPageStore pages) {
+            switch (kind) {
+                case TAGS -> pages.rejectVersionTags(dimensionId, versionId);
+                case NAME -> pages.rejectVersionName(dimensionId, versionId);
+            }
+        }
     }
 }

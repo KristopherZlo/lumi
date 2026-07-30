@@ -12,9 +12,7 @@ import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -85,8 +83,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private int actionButtonWidth;
     private DashboardGeometry dashboardGeometry;
     private LumiCommitCard commitCards;
-    private final Map<CommitId, VersionTags> optimisticTags = new HashMap<>();
-
     public LumiDashboardScreen(
             Screen parent,
             ClientHistoryStore history,
@@ -431,14 +427,12 @@ public final class LumiDashboardScreen extends LumiPageScreen {
 
     private void editTags(HistorySnapshotPayload.Version version) {
         minecraft.setScreen(new LumiVersionTagsScreen(
-                this, displayedTags(version), replacement -> {
-                    updateTags.accept(version.id(), replacement);
-                    optimisticTags.put(version.id(), replacement);
-                }));
+                this, displayedTags(version), replacement ->
+                        updateTags.accept(version.id(), replacement)));
     }
 
     private VersionTags displayedTags(HistorySnapshotPayload.Version version) {
-        return optimisticTags.getOrDefault(version.id(), version.tags());
+        return historyPages.version(snapshot.dimensionId(), version).tags();
     }
 
     private Optional<HistorySnapshotPayload.Version> latestCreated() {

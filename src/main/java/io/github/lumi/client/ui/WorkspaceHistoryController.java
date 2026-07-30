@@ -86,10 +86,13 @@ final class WorkspaceHistoryController {
                     loadedRequest = current.requestId();
                     awaitingRefresh = false;
                 });
-        if (!loaded.isEmpty()) return List.copyOf(loaded);
+        if (!loaded.isEmpty()) {
+            return pages.versions(snapshot.dimensionId(), loaded);
+        }
         if (awaitingRefresh) return List.of();
         return offset == 0 && branch.value().equals(snapshot.branchName())
-                ? snapshot.versions() : List.of();
+                ? pages.versions(snapshot.dimensionId(), snapshot.versions())
+                : List.of();
     }
 
     BranchName branch() {

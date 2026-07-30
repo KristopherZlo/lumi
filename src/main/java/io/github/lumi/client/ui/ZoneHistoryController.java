@@ -58,10 +58,12 @@ public final class ZoneHistoryController {
     List<HistorySnapshotPayload.Version> versions(
             List<HistorySnapshotPayload.Version> initial) {
         acceptPage();
-        if (!loaded.isEmpty()) return List.copyOf(loaded);
+        if (!loaded.isEmpty()) {
+            return pages.versions(snapshot.dimensionId(), loaded);
+        }
         if (awaitingRefresh) return List.of();
         return offset == 0 && branch.value().equals(snapshot.branchName())
-                ? List.copyOf(initial) : List.of();
+                ? pages.versions(snapshot.dimensionId(), initial) : List.of();
     }
 
     List<HistorySnapshotPayload.Branch> branches(

@@ -3,15 +3,12 @@ package io.github.lumi.client.ui;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
-import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistoryPageRequestPayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.client.gui.GuiGraphics;
@@ -24,6 +21,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     private final Screen parent;
     private final HistorySnapshotPayload snapshot;
     private final HistorySnapshotPayload.ZoneView zone;
+    private final ClientHistoryPageStore historyPages;
     private final ClientVersionPreviewStore previews;
     private final ZoneHistoryActions actions;
     private final ZoneHistoryController zoneHistory;
@@ -35,7 +33,6 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     private final Runnable leaveZone;
     private final HistoryViewController historyView;
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
-    private final Map<CommitId, VersionTags> optimisticTags = new HashMap<>();
     private LumiPageLayout layout;
     private LumiDashboardScreen.DashboardGeometry geometry;
     private EditBox search;
@@ -68,6 +65,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         this.parent = parent;
         this.snapshot = Objects.requireNonNull(snapshot, "snapshot");
         this.zone = Objects.requireNonNull(zone, "zone");
+        this.historyPages = Objects.requireNonNull(pages, "pages");
         this.previews = Objects.requireNonNull(previews, "previews");
         this.actions = Objects.requireNonNull(actions, "actions");
         this.pendingStatistics = Objects.requireNonNull(
@@ -290,18 +288,17 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
 
     private void editTags(HistorySnapshotPayload.Version version) {
         minecraft.setScreen(new LumiVersionTagsScreen(
-                this, displayedTags(version), replacement -> {
-                    actions.updateTags().accept(version.id(), replacement);
-                    optimisticTags.put(version.id(), replacement);
-                }));
+                this, displayedTags(version), replacement ->
+                        actions.updateTags().accept(version.id(), replacement)));
     }
 
     private VersionTags displayedTags(HistorySnapshotPayload.Version version) {
-        return optimisticTags.getOrDefault(version.id(), version.tags());
+        return historyPages.version(snapshot.dimensionId(), version).tags();
     }
 
     private Optional<HistorySnapshotPayload.Version> latestCreated() {
-        return zone.versions().stream().filter(VersionText::featured)
+        return historyPages.versions(snapshot.dimensionId(), zone.versions())
+                .stream().filter(VersionText::featured)
                 .max(Comparator.comparingLong(
                 HistorySnapshotPayload.Version::timestampMillis));
     }

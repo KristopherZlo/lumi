@@ -9,6 +9,7 @@ import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.network.HistoryPagePayload;
 import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.List;
@@ -162,6 +163,36 @@ class WorkspaceHistoryControllerTest {
                 List.of(version('3')), "")));
         assertFalse(controller.loadNextPage());
         assertEquals(3, controller.versions().size());
+    }
+
+    @Test
+    void appliesMetadataEditsToAnAlreadyLoadedVersion() {
+        HistorySnapshotPayload snapshot = snapshot();
+        ClientHistoryPageStore pages = new ClientHistoryPageStore();
+        UUID request = new UUID(0, 11);
+        WorkspaceHistoryController controller = new WorkspaceHistoryController(
+                snapshot, pages, (branch, zone, offset, limit, query) -> {
+                    pages.begin(request, snapshot.dimensionId(),
+                            snapshot.workspaceId(), branch, zone, offset);
+                    return request;
+                });
+        controller.ensurePageSize(7);
+        assertTrue(pages.accept(new HistoryPagePayload(
+                request, snapshot.dimensionId(), snapshot.workspaceId(),
+                new BranchName("main"), Optional.empty(), 0, false,
+                List.of(version()), "")));
+        assertEquals("Save 1", controller.versions().getFirst().message());
+
+        pages.replaceVersionName(
+                snapshot.dimensionId(), version().id(), "Castle");
+        pages.replaceVersionTags(
+                snapshot.dimensionId(), version().id(),
+                new VersionTags(List.of("finished")));
+
+        HistorySnapshotPayload.Version updated =
+                controller.versions().getFirst();
+        assertEquals("Castle", updated.message());
+        assertEquals(List.of("finished"), updated.tags().values());
     }
 
     private static HistorySnapshotPayload snapshot() {

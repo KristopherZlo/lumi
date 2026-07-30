@@ -20,6 +20,8 @@ class LumiVersionDetailsScreenTest {
                 "src/main/java/io/github/lumi/client/ui/LumiVersionRenameScreen.java"));
         String client = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClient.java"));
+        String networking = Files.readString(Path.of(
+                "src/main/java/io/github/lumi/client/LumiClientNetworking.java"));
 
         assertTrue(details.contains("previews.texture(dimensionId, version.id())"));
         assertTrue(details.contains("luma.save_details.raw_info_id"));
@@ -70,6 +72,10 @@ class LumiVersionDetailsScreenTest {
         assertTrue(client.contains("() -> openDelete(client.screen, version)"));
         assertTrue(client.contains("NETWORKING.updateVersionTags(version.id(), tags)"));
         assertTrue(client.contains("NETWORKING.renameVersion(version.id(), name)"));
+        assertTrue(networking.contains("historyPages.replaceVersionTags("));
+        assertTrue(networking.contains("historyPages.replaceVersionName("));
+        assertTrue(networking.contains(
+                "historyPages.invalidateDimension(edit.dimensionId())"));
         assertTrue(client.contains("NETWORKING.createBranchAt(name, version.id())"));
         assertFalse(client.contains("var partialRestore ="));
     }
