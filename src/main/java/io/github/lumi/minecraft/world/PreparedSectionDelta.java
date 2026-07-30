@@ -7,6 +7,7 @@ import java.util.Objects;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
+import net.minecraft.world.level.lighting.LightEngine;
 
 /** Immutable block delta computed before the server-tick apply path. */
 @SuppressWarnings("deprecation")
@@ -133,12 +134,6 @@ final class PreparedSectionDelta {
     }
 
     private static boolean requiresLightCheck(BlockState current, BlockState target) {
-        return current.getLightEmission() != target.getLightEmission()
-                || current.getLightBlock() != target.getLightBlock()
-                || current.useShapeForLightOcclusion() != target.useShapeForLightOcclusion()
-                || current.propagatesSkylightDown() != target.propagatesSkylightDown()
-                || current.canOcclude() != target.canOcclude()
-                || current.blocksMotion() != target.blocksMotion()
-                || !current.getFluidState().equals(target.getFluidState());
+        return LightEngine.hasDifferentLightProperties(current, target);
     }
 }

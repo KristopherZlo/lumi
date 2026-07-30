@@ -24,6 +24,8 @@ import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
@@ -105,6 +107,9 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         waitForStableIdle(context, server,
                 "Redo did not release the world operation slot");
 
+        assertClientLightRestore(context, server, report, operations, actions,
+                probe.offset(8, 2, 0));
+
         int boundaryX = ((probe.getX() >> 4) + 1) << 4;
         Vec3 entityOrigin = new Vec3(
                 boundaryX - 0.5, probe.getY(), probe.getZ() + 0.5);
@@ -129,6 +134,90 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         state = new SmokeState(
                 entityOriginSave, probe, blockEntityProbe, pig,
                 movedEntity, entityOrigin);
+    }
+
+    private static void assertClientLightRestore(
+            ClientGameTestContext context,
+            TestServerContext server,
+            LumiBehaviorReport report,
+            LumiBehaviorOperations operations,
+            LumiBehaviorActions actions,
+            BlockPos gate) throws IOException {
+        BlockPos source = gate.west();
+        BlockPos lightProbe = gate.east();
+        actions.playerCommand("client_light_shell",
+                "fill " + coordinates(gate.offset(-2, -1, -1)) + " "
+                        + coordinates(gate.offset(2, 1, 1)) + " minecraft:stone");
+        actions.playerCommand("client_light_source",
+                "setblock " + coordinates(source) + " minecraft:glowstone");
+        actions.playerCommand("client_light_probe",
+                "setblock " + coordinates(lightProbe) + " minecraft:air");
+        actions.playerCommand("client_light_open",
+                "setblock " + coordinates(gate) + " minecraft:air");
+        awaitBlock(context, server, gate, Blocks.AIR);
+        int bright = awaitLight(context, server, lightProbe, null);
+        operations.awaitDurability("client_light_bright");
+        CommitId brightCommit = operations.save("client-light-bright");
+
+        actions.playerCommand("client_light_closed",
+                "setblock " + coordinates(gate) + " minecraft:stone");
+        awaitBlock(context, server, gate, Blocks.STONE);
+        int dark = awaitLight(context, server, lightProbe, null);
+        if (bright <= dark) {
+            throw new AssertionError("Client-light fixture was not brighter when "
+                    + "open: bright=" + bright + ", dark=" + dark);
+        }
+        operations.awaitDurability("client_light_dark");
+        operations.save("client-light-dark");
+        operations.restore("client-light-bright", brightCommit);
+
+        awaitBlock(context, server, gate, Blocks.AIR);
+        awaitLight(context, server, lightProbe, bright);
+        report.event("gate", "restore_light_client", "succeeded", 0, 0,
+                "bright=" + bright + ";dark=" + dark);
+    }
+
+    private static void awaitBlock(
+            ClientGameTestContext context,
+            TestServerContext server,
+            BlockPos position,
+            Block expected) {
+        waitFor(context, () -> {
+            var serverState = server.computeOnServer(minecraft -> minecraft
+                    .getPlayerList().getPlayers().getFirst().level()
+                    .getBlockState(position));
+            var clientState = context.computeOnClient(client ->
+                    client.level == null ? Blocks.AIR.defaultBlockState()
+                            : client.level.getBlockState(position));
+            return serverState.equals(clientState) && serverState.is(expected);
+        }, "Client did not receive block " + expected);
+    }
+
+    private static int awaitLight(
+            ClientGameTestContext context,
+            TestServerContext server,
+            BlockPos position,
+            Integer expected) {
+        context.waitTicks(5);
+        for (int tick = 0; tick < TIMEOUT_TICKS; tick++) {
+            int serverLight = server.computeOnServer(minecraft -> minecraft
+                    .getPlayerList().getPlayers().getFirst().level()
+                    .getBrightness(LightLayer.BLOCK, position));
+            int clientLight = context.computeOnClient(client ->
+                    client.level == null ? -1
+                            : client.level.getBrightness(LightLayer.BLOCK, position));
+            if (serverLight == clientLight
+                    && (expected == null || serverLight == expected)) {
+                return serverLight;
+            }
+            context.waitTick();
+        }
+        throw new AssertionError("Server and client light did not converge at "
+                + position + (expected == null ? "" : " to " + expected));
+    }
+
+    private static String coordinates(BlockPos position) {
+        return position.getX() + " " + position.getY() + " " + position.getZ();
     }
 
     private void verifyReopened(

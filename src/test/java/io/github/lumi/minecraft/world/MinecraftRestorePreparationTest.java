@@ -101,6 +101,31 @@ class MinecraftRestorePreparationTest {
     }
 
     @Test
+    void relightsWhenShapeOcclusionChangesBetweenBlockStates() throws Exception {
+        SectionKey key = new SectionKey(0, 0, 0);
+        var beforeStates = new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:air"));
+        var targetStates = new ArrayList<>(beforeStates);
+        beforeStates.set(0,
+                "minecraft:oak_stairs[facing=east,half=bottom,shape=straight,waterlogged=false]");
+        targetStates.set(0,
+                "minecraft:oak_stairs[facing=west,half=bottom,shape=straight,waterlogged=false]");
+        var preparation = new MinecraftRestorePreparation(
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
+                new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
+
+        PreparedSectionDelta delta = preparation.prepare(
+                        new WorldStateApply.State(Map.of(
+                                key, new SectionBlob(targetStates, Map.of())), Map.of()),
+                        new WorldStateApply.State(Map.of(
+                                key, new SectionBlob(beforeStates, Map.of())), Map.of()),
+                        ignored -> { })
+                .sections().get(key).deltaFrom(null);
+
+        assertTrue(delta.lightChanged());
+    }
+
+    @Test
     void reusesPreflightedTargetPayloadWithCoordinateSpecificDeltas() throws Exception {
         SectionKey firstKey = new SectionKey(0, 0, 0);
         SectionKey secondKey = new SectionKey(1, 0, 0);

@@ -458,7 +458,7 @@ final class LumiBehaviorActions {
         }));
     }
 
-    private void playerCommand(String name, String command) {
+    void playerCommand(String name, String command) {
         timed(name, () -> server.runOnServer(minecraft -> {
             execute(minecraft, player(minecraft), command);
         }));
