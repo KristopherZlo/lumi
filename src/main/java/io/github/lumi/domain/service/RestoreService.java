@@ -32,6 +32,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -41,12 +42,22 @@ public final class RestoreService {
     private final WorldObjectRepository objects;
     private final CommitRepository commits;
     private final OriginStore origins;
+    private final Executor merkleReads;
 
     public RestoreService(
             WorldObjectRepository objects, CommitRepository commits, OriginStore origins) {
+        this(objects, commits, origins, Runnable::run);
+    }
+
+    public RestoreService(
+            WorldObjectRepository objects,
+            CommitRepository commits,
+            OriginStore origins,
+            Executor merkleReads) {
         this.objects = Objects.requireNonNull(objects, "objects");
         this.commits = Objects.requireNonNull(commits, "commits");
         this.origins = Objects.requireNonNull(origins, "origins");
+        this.merkleReads = Objects.requireNonNull(merkleReads, "merkleReads");
     }
 
     public void requireTargetInWorkspace(CommitId targetCommit, UUID workspaceId)
@@ -309,9 +320,7 @@ public final class RestoreService {
             Optional.ofNullable(currentRegion.chunks().get(chunk)).ifPresent(chunkIds::add);
             Optional.ofNullable(targetRegion.chunks().get(chunk)).ifPresent(chunkIds::add);
         }
-        for (ObjectId id : objects.physicalReadOrder(chunkIds)) {
-            decoded.chunk(id);
-        }
+        decoded.preloadChunks(chunkIds, merkleReads);
         progress.accept(new PreparationProgress(
                 regionIndex, regionTotal, 0, changedChunks.size()));
         for (int chunkIndex = 0; chunkIndex < changedChunks.size(); chunkIndex++) {

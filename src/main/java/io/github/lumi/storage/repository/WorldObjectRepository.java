@@ -15,12 +15,18 @@ import io.github.lumi.storage.object.ObjectStore;
 import io.github.lumi.storage.object.SectionBlobCodec;
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.LongConsumer;
 
 public final class WorldObjectRepository {
@@ -194,12 +200,70 @@ public final class WorldObjectRepository {
             return merkleCodec.decodeChunk(objects.read(id));
         }
 
+        /**
+         * Reads physically ordered chunk trees with one independent helper
+         * session. The number of tasks stays constant for every Restore size.
+         */
+        public Map<ObjectId, ChunkTree> readChunks(
+                Set<ObjectId> ids, Executor background) throws IOException {
+            Objects.requireNonNull(ids, "ids");
+            Objects.requireNonNull(background, "background");
+            List<ObjectId> ordered = physicalReadOrder(ids);
+            if (ordered.size() < 2) {
+                return readChunkRange(ordered, 0, ordered.size());
+            }
+            int split = ordered.size() / 2;
+            CompletableFuture<Map<ObjectId, ChunkTree>> second;
+            try {
+                second = CompletableFuture.supplyAsync(
+                        () -> readChunkRangeUnchecked(ordered, split, ordered.size()),
+                        background);
+            } catch (RejectedExecutionException rejected) {
+                return readChunkRange(ordered, 0, ordered.size());
+            }
+            Map<ObjectId, ChunkTree> combined;
+            try {
+                combined = new HashMap<>(readChunkRange(ordered, 0, split));
+            } catch (IOException failed) {
+                second.cancel(true);
+                throw failed;
+            }
+            try {
+                combined.putAll(second.join());
+            } catch (CompletionException failed) {
+                if (failed.getCause() instanceof UncheckedIOException io) {
+                    throw io.getCause();
+                }
+                throw failed;
+            }
+            return Map.copyOf(combined);
+        }
+
         public RegionTree readRegion(ObjectId id) throws IOException {
             return merkleCodec.decodeRegion(objects.read(id));
         }
 
         public DimensionTree readDimension(ObjectId id) throws IOException {
             return merkleCodec.decodeDimension(objects.read(id));
+        }
+
+        private Map<ObjectId, ChunkTree> readChunkRange(
+                List<ObjectId> ids, int start, int end) throws IOException {
+            Map<ObjectId, ChunkTree> chunks = new HashMap<>();
+            for (int index = start; index < end; index++) {
+                ObjectId id = ids.get(index);
+                chunks.put(id, readChunk(id));
+            }
+            return chunks;
+        }
+
+        private Map<ObjectId, ChunkTree> readChunkRangeUnchecked(
+                List<ObjectId> ids, int start, int end) {
+            try (ReadSession reader = beginReadSession()) {
+                return reader.readChunkRange(ids, start, end);
+            } catch (IOException failed) {
+                throw new UncheckedIOException(failed);
+            }
         }
 
         @Override

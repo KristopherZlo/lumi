@@ -366,7 +366,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 new MinecraftChunkDurabilityRetention(level));
         var branches = new BranchService(commits, refs, active, working);
         var trees = new MerkleTreeEditor(objects);
-        var restoreService = new RestoreService(objects, commits, origins);
+        var restoreService = new RestoreService(
+                objects, commits, origins, durabilityBackground);
         var blockOnlyRestoreService = new BlockOnlyRestoreService(
                 objects, commits, origins);
         FabricDimensionRuntime runtime = new FabricDimensionRuntime(

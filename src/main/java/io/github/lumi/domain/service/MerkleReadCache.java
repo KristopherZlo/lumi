@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.Executor;
 
 /** Reuses decoded Merkle nodes within one bounded domain workflow. */
 final class MerkleReadCache {
@@ -35,5 +37,9 @@ final class MerkleReadCache {
             chunks.put(id, chunk);
         }
         return chunk;
+    }
+
+    void preloadChunks(Set<ObjectId> ids, Executor background) throws IOException {
+        chunks.putAll(reader.readChunks(ids, background));
     }
 }

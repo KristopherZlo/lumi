@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -34,6 +36,18 @@ class WorldObjectRepositoryTest {
         assertEquals(section, repository.readSection(sectionId));
         assertEquals(chunk, repository.readChunk(chunkId));
         assertEquals(dimension, repository.readDimension(dimensionId));
+
+        ChunkTree secondChunk = new ChunkTree(Map.of(1, sectionId), Optional.empty());
+        var secondChunkId = repository.write(secondChunk);
+        AtomicInteger submitted = new AtomicInteger();
+        try (var reader = repository.beginReadSession()) {
+            assertEquals(Map.of(chunkId, chunk, secondChunkId, secondChunk),
+                    reader.readChunks(Set.of(chunkId, secondChunkId), task -> {
+                        submitted.incrementAndGet();
+                        task.run();
+                    }));
+        }
+        assertEquals(1, submitted.get());
     }
 
     @Test

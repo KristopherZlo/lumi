@@ -350,8 +350,11 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 | candidate, heap 2 GiB | `M_extra=674,183,888 B`, max tick 13 ms, median Restore 9.894 s | bounded progress подтверждён под memory pressure, но это отдельный run |
 | real player world, 31 versions | Restore 48.021/10.883/18.556 s; chunk load 41.541/7.936/14.688 s; max tick 35/21/5 ms | latency доминируется readiness chunks |
 | heavy real endpoint, 940+940 sections | preparation 5.258 s; total 108.758 s; chunk load 96.651 s; live apply 157 ms; max tick 46 ms | два bottleneck: immutable decode и последовательная readiness |
+| fresh-JVM cold Merkle-read A/B, 2026-07-30 | baseline median diff 2.944 s → candidate 2.356 s (`-20.0%`); candidate total 10.240 s; exact digest совпал; heap 209,692,504 B | baseline содержит пять runs, candidate — один подтверждающий run; перед release gate нужна повторная серия |
 
 По последней зафиксированной исторической серии release-gate не пройден: natural result 9.937 s превышает 3 s, application около 3.317 s превышает 750 ms, а 4 GiB run превышает 1 GiB extra heap. Снижение требований не является техническим улучшением; измерения указывают на chunk readiness, vanilla write/sync и persisted verification как на доминирующие области, а не на direct section swap.
+
+В candidate чтение `ChunkTree` сохраняет physical order и делится между текущим read session и одним независимым helper session. Количество helper tasks постоянно и не зависит от размера Restore; при отказе executor чтение остаётся последовательным.
 
 ### 9.1. Ограничение потенциального ускорения
 

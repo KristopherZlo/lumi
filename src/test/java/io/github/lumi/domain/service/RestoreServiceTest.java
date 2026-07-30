@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -81,23 +82,31 @@ class RestoreServiceTest {
         var stone = objects.write(section("minecraft:stone"));
         var repeated = objects.write(new ChunkTree(
                 Map.of(0, stone), Optional.empty()));
+        var repeatedTarget = objects.write(new ChunkTree(
+                Map.of(0, air), Optional.empty()));
         var region = objects.write(new RegionTree(Map.of(
                 new ChunkInRegion(0, 0), repeated,
                 new ChunkInRegion(1, 0), repeated)));
+        var targetRegion = objects.write(new RegionTree(Map.of(
+                new ChunkInRegion(0, 0), repeatedTarget,
+                new ChunkInRegion(1, 0), repeatedTarget)));
         var currentTree = objects.write(new DimensionTree(
                 Map.of(new RegionCoordinate(0, 0), region)));
-        var targetTree = objects.write(new DimensionTree(Map.of()));
+        var targetTree = objects.write(new DimensionTree(
+                Map.of(new RegionCoordinate(0, 0), targetRegion)));
         var target = commits.write(commit(targetTree, List.of()));
         var current = commits.write(commit(currentTree, List.of(target)));
         var origins = new OriginStore(repositoryRoot);
-        origins.register(new SectionKey(0, 0, 0), air);
-        origins.register(new SectionKey(1, 0, 0), air);
         Path repeatedFile = repositoryRoot.resolve("objects")
                 .resolve(repeated.hex().substring(0, 2))
                 .resolve(repeated.hex().substring(2) + ".lz4");
+        AtomicInteger merkleReadTasks = new AtomicInteger();
 
         try (PreparedRestore prepared = new RestoreService(
-                objects, commits, origins).prepare(
+                objects, commits, origins, task -> {
+                    merkleReadTasks.incrementAndGet();
+                    task.run();
+                }).prepare(
                         new BranchRef(new BranchName("main"), current, 1),
                         target, progress -> {
                             if (progress.chunkCompleted() == 1) {
@@ -110,6 +119,7 @@ class RestoreServiceTest {
                         })) {
             assertEquals(2, prepared.sections().size());
         }
+        assertEquals(1, merkleReadTasks.get());
     }
 
     @Test
