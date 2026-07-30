@@ -15,6 +15,7 @@ import io.github.lumi.domain.model.VersionTags;
 import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.domain.model.WorkspaceSettings;
 import io.github.lumi.minecraft.operation.OperationProgress;
+import io.github.lumi.minecraft.world.RestoreApplyStatistics;
 import io.netty.buffer.Unpooled;
 import java.util.UUID;
 import java.util.Optional;
@@ -385,12 +386,18 @@ class LumiPayloadCodecTest {
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 "minecraft:overworld", OperationEventPayload.State.SUCCEEDED,
                 "Saved", id('b'), 8, Optional.empty(), -1, Optional.empty(),
-                Optional.of(new BlockBox(-16, 0, -32, 31, 47, 15)));
+                Optional.of(new BlockBox(-16, 0, -32, 31, 47, 15)),
+                Optional.of(RestoreStatisticsPayload.from(
+                        new RestoreApplyStatistics(
+                                7, 5, java.util.Map.of(), 9, 4096, 3,
+                                2, 4, 8192, 10, 11, 12, 13, 14, 15, 16, 17))));
 
         assertEquals(snapshot, roundTrip(HistorySnapshotPayload.CODEC, snapshot));
         assertEquals(event, roundTrip(OperationEventPayload.CODEC, event));
         assertEquals(new BlockBox(-16, 0, -32, 31, 47, 15),
                 event.previewBounds().orElseThrow());
+        assertEquals(4096,
+                event.restoreStatistics().orElseThrow().changedBlocks());
         OperationEventPayload progress = new OperationEventPayload(
                 UUID.randomUUID(), "minecraft:overworld",
                 OperationEventPayload.State.PROGRESS, "Restore: applying", id('b'), 8,

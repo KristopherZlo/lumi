@@ -805,7 +805,8 @@ public final class LumiServerNetworking {
         message = branchSwitchMessage(payload.kind(), state, message);
         sendEvent(
                 player, payload.requestId(), runtime, state, message,
-                Optional.empty(), -1, previewBounds(operation));
+                Optional.empty(), -1, previewBounds(operation),
+                operation.restoreStatistics().map(RestoreStatisticsPayload::from));
         deferSnapshotBroadcast(runtime);
     }
 
@@ -965,7 +966,7 @@ public final class LumiServerNetworking {
             int queuePosition) {
         sendEvent(
                 player, requestId, runtime, state, message,
-                ticket, queuePosition, Optional.empty());
+                ticket, queuePosition, Optional.empty(), Optional.empty());
     }
 
     private static void sendEvent(
@@ -976,14 +977,16 @@ public final class LumiServerNetworking {
             String message,
             Optional<OperationTicket> ticket,
             int queuePosition,
-            Optional<BlockBox> previewBounds) {
+            Optional<BlockBox> previewBounds,
+            Optional<RestoreStatisticsPayload> restoreStatistics) {
         try {
             BranchRef head = runtime.activeRef();
             send(player, new OperationEventPayload(
                     requestId, dimension(runtime), state,
                     message == null ? "Operation failed" : message,
                     head.commit(), head.revision(), ticket.map(OperationTicket::id),
-                    queuePosition, Optional.empty(), previewBounds));
+                    queuePosition, Optional.empty(), previewBounds,
+                    restoreStatistics));
             if (state != OperationEventPayload.State.ACCEPTED
                     && state != OperationEventPayload.State.PROGRESS) {
                 LumiMod.LOGGER.info(

@@ -24,7 +24,9 @@ public record OperationEventPayload(
         Optional<UUID> ticketId,
         int queuePosition,
         Optional<OperationProgress> progress,
-        Optional<BlockBox> previewBounds) implements CustomPacketPayload {
+        Optional<BlockBox> previewBounds,
+        Optional<RestoreStatisticsPayload> restoreStatistics)
+        implements CustomPacketPayload {
     private static final int MAX_DIMENSION_BYTES = 256;
     private static final int MAX_MESSAGE_BYTES = 4096;
     public static final Type<OperationEventPayload> TYPE = new Type<>(
@@ -41,6 +43,8 @@ public record OperationEventPayload(
         ticketId = Objects.requireNonNull(ticketId, "ticketId");
         progress = Objects.requireNonNull(progress, "progress");
         previewBounds = Objects.requireNonNull(previewBounds, "previewBounds");
+        restoreStatistics = Objects.requireNonNull(
+                restoreStatistics, "restoreStatistics");
         if (dimensionId.isBlank() || dimensionId.length() > MAX_DIMENSION_BYTES) {
             throw new IllegalArgumentException("Invalid dimension ID");
         }
@@ -60,6 +64,11 @@ public record OperationEventPayload(
             throw new IllegalArgumentException(
                     "Only successful saves carry preview bounds");
         }
+        if (restoreStatistics.isPresent()
+                && (state == State.ACCEPTED || state == State.PROGRESS)) {
+            throw new IllegalArgumentException(
+                    "Only terminal events carry Restore statistics");
+        }
     }
 
     public OperationEventPayload(
@@ -70,7 +79,8 @@ public record OperationEventPayload(
             CommitId head,
             long revision) {
         this(requestId, dimensionId, state, message, head, revision,
-                Optional.empty(), -1, Optional.empty(), Optional.empty());
+                Optional.empty(), -1, Optional.empty(), Optional.empty(),
+                Optional.empty());
     }
 
     public OperationEventPayload(
@@ -83,7 +93,8 @@ public record OperationEventPayload(
             Optional<UUID> ticketId,
             int queuePosition) {
         this(requestId, dimensionId, state, message, head, revision,
-                ticketId, queuePosition, Optional.empty(), Optional.empty());
+                ticketId, queuePosition, Optional.empty(), Optional.empty(),
+                Optional.empty());
     }
 
     public OperationEventPayload(
@@ -97,7 +108,8 @@ public record OperationEventPayload(
             int queuePosition,
             Optional<OperationProgress> progress) {
         this(requestId, dimensionId, state, message, head, revision,
-                ticketId, queuePosition, progress, Optional.empty());
+                ticketId, queuePosition, progress, Optional.empty(),
+                Optional.empty());
     }
 
     private void write(FriendlyByteBuf buffer) {
@@ -125,6 +137,8 @@ public record OperationEventPayload(
             buffer.writeInt(bounds.maxY());
             buffer.writeInt(bounds.maxZ());
         });
+        buffer.writeBoolean(restoreStatistics.isPresent());
+        restoreStatistics.ifPresent(value -> value.write(buffer));
     }
 
     private static OperationEventPayload read(FriendlyByteBuf buffer) {
@@ -146,9 +160,14 @@ public record OperationEventPayload(
                         buffer.readInt(), buffer.readInt(), buffer.readInt(),
                         buffer.readInt(), buffer.readInt(), buffer.readInt()))
                 : Optional.empty();
+        Optional<RestoreStatisticsPayload> restoreStatistics =
+                buffer.readBoolean()
+                        ? Optional.of(RestoreStatisticsPayload.read(buffer))
+                        : Optional.empty();
         return new OperationEventPayload(
                 request, dimension, state, message, head, revision,
-                ticket, queuePosition, progress, previewBounds);
+                ticket, queuePosition, progress, previewBounds,
+                restoreStatistics);
     }
 
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
