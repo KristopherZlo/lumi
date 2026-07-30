@@ -13,9 +13,10 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.LongSupplier;
 
-/** Serializes mutation and enforces the global 50 ms server-tick work limit. */
+/** Serializes mutation and leaves vanilla work inside the global 50 ms tick limit. */
 public final class DimensionOperationCoordinator implements AutoCloseable {
     public static final long MAX_TICK_WORK_NANOS = 50_000_000L;
+    public static final long DEFAULT_TICK_WORK_NANOS = 30_000_000L;
     public static final int MAX_QUEUED_OPERATIONS = 64;
 
     private final DimensionFreeze freeze;
@@ -54,7 +55,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             DimensionFreeze freeze,
             Consumer<DimensionMutation> terminalObserver,
             Consumer<RuntimeException> observerFailure) {
-        this(freeze, System::nanoTime, MAX_TICK_WORK_NANOS,
+        this(freeze, System::nanoTime, DEFAULT_TICK_WORK_NANOS,
                 terminalObserver, observerFailure);
     }
 

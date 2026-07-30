@@ -4,6 +4,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.server.MinecraftServer;
 
 /** Measures complete integrated-server ticks only while a benchmark lease is open. */
 final class LumiServerTickProbe implements AutoCloseable {
@@ -11,36 +12,34 @@ final class LumiServerTickProbe implements AutoCloseable {
             ConcurrentHashMap.newKeySet();
 
     static {
-        ServerTickEvents.START_SERVER_TICK.register(server ->
-                ACTIVE.forEach(LumiServerTickProbe::startTick));
-        ServerTickEvents.END_SERVER_TICK.register(server ->
-                ACTIVE.forEach(LumiServerTickProbe::endTick));
+        ServerTickEvents.START_SERVER_TICK.register(server -> ACTIVE.forEach(
+                probe -> probe.samplePreviousTick(server)));
     }
 
-    private final AtomicLong tickStarted = new AtomicLong();
+    private final MinecraftServer server;
+    private final int openedAtTick;
     private final AtomicLong maximumNanos = new AtomicLong();
 
-    private LumiServerTickProbe() {
+    private LumiServerTickProbe(MinecraftServer server) {
+        this.server = server;
+        openedAtTick = server.getTickCount();
         ACTIVE.add(this);
     }
 
-    static LumiServerTickProbe open() {
-        return new LumiServerTickProbe();
+    static LumiServerTickProbe open(MinecraftServer server) {
+        return new LumiServerTickProbe(server);
     }
 
     long maximumNanos() {
         return maximumNanos.get();
     }
 
-    private void startTick() {
-        tickStarted.set(System.nanoTime());
-    }
-
-    private void endTick() {
-        long started = tickStarted.getAndSet(0);
-        if (started != 0) {
+    private void samplePreviousTick(MinecraftServer tickingServer) {
+        int completedTick = tickingServer.getTickCount() - 1;
+        if (tickingServer == server && completedTick > openedAtTick) {
+            long[] times = tickingServer.getTickTimesNanos();
             maximumNanos.accumulateAndGet(
-                    System.nanoTime() - started, Math::max);
+                    times[Math.floorMod(completedTick, times.length)], Math::max);
         }
     }
 

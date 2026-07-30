@@ -184,6 +184,8 @@ class DimensionOperationCoordinatorTest {
 
     @Test
     void rejectsBudgetsBeyondGlobalTickLimit() {
+        assertEquals(30_000_000L,
+                DimensionOperationCoordinator.DEFAULT_TICK_WORK_NANOS);
         assertThrows(IllegalArgumentException.class,
                 () -> new DimensionOperationCoordinator(new RecordingFreeze(), () -> 0L, 50_000_001L));
     }

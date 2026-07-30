@@ -219,7 +219,7 @@ final class LumiBehaviorOperations {
                 heapBefore[0] = usedHeap(jvm);
                 peakHeap[0] = heapBefore[0];
                 uiStarted.set(System.nanoTime());
-                tickProbe.set(LumiServerTickProbe.open());
+                tickProbe.set(server.computeOnServer(LumiServerTickProbe::open));
             }), uiStarted::get);
             if (uiStarted.get() == 0) {
                 throw new AssertionError(

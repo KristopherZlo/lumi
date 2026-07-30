@@ -159,6 +159,8 @@ confirmation and ends at the durable terminal event. `queueMs` and `serverMs`
 split that same interval; performance gates report every failed budget together.
 Apply metrics cover loaded and stored changes and separate background batch
 preparation from lighting drain time.
+The tick gate reads Minecraft's completed full-tick timings. Lumi gives
+incremental operations 30 ms of the 50 ms limit so vanilla work keeps headroom.
 The fresh-JVM cold benchmark rejects latency, tick, heap, application, workload,
 or exactness regressions instead of accepting a small or already-warm sample.
 
