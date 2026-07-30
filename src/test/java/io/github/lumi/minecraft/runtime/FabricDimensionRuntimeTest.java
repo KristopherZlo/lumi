@@ -24,9 +24,10 @@ class FabricDimensionRuntimeTest {
     void rebasesLiveBlockEntitiesFromTheVerifiedRestoreState() throws Exception {
         String source = runtimeSource();
 
-        assertTrue(source.contains("liveBlocks.rebaseSections(state.sections())"));
-        assertFalse(source.contains(
-                "liveBlocks.rebaseSections(state.sections().keySet())"));
+        assertTrue(source.contains("var restoredSections = state.sections().keySet()"));
+        assertTrue(source.contains("liveBlocks.rebaseSections(restoredSections)"));
+        assertTrue(source.contains("causalTicks.cancelSections(restoredSections)"));
+        assertFalse(source.contains("liveBlocks.rebaseSections(state.sections())"));
     }
 
     @Test

@@ -85,10 +85,24 @@ public final class MinecraftLiveBlockWorldAccess implements LiveBlockWorldAccess
         return snapshot(blockEntity.getBlockState(), blockEntity);
     }
 
-    public boolean isLoaded(SectionKey section) {
+    public Map<BlockPosition, BlockSnapshot> loadedBlockEntities(
+            SectionKey section) throws IOException {
         Objects.requireNonNull(section, "section");
-        return level.getChunkSource().getChunkNow(
-                section.chunkX(), section.chunkZ()) != null;
+        LevelChunk chunk = level.getChunkSource().getChunkNow(
+                section.chunkX(), section.chunkZ());
+        if (chunk == null) {
+            return Map.of();
+        }
+        Map<BlockPosition, BlockSnapshot> snapshots = new HashMap<>();
+        for (BlockEntity blockEntity : chunk.getBlockEntities().values()) {
+            BlockPos position = blockEntity.getBlockPos();
+            if (position.getY() >> 4 == section.sectionY()) {
+                snapshots.put(new BlockPosition(
+                        position.getX(), position.getY(), position.getZ()),
+                        read(blockEntity));
+            }
+        }
+        return snapshots;
     }
 
     private BlockSnapshot read(

@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import net.minecraft.core.BlockPos;
@@ -80,16 +81,14 @@ public final class MinecraftLiveBlockTracker {
         rememberBlockEntities(key, visible);
     }
 
-    public void rebaseSections(Map<SectionKey, SectionBlob> sections) {
-        Map<SectionKey, SectionBlob> restored = Map.copyOf(
+    public void rebaseSections(Set<SectionKey> sections) throws IOException {
+        Set<SectionKey> restored = Set.copyOf(
                 Objects.requireNonNull(sections, "sections"));
         baselines.keySet().removeIf(position ->
-                restored.containsKey(section(position)));
-        restored.forEach((key, visible) -> {
-            if (world.isLoaded(key)) {
-                rememberBlockEntities(key, visible);
-            }
-        });
+                restored.contains(section(position)));
+        for (SectionKey key : restored) {
+            baselines.putAll(world.loadedBlockEntities(key));
+        }
     }
 
     private void rememberBlockEntities(SectionKey key, SectionBlob visible) {

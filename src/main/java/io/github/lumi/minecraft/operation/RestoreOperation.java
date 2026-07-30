@@ -713,17 +713,14 @@ public final class RestoreOperation implements DimensionMutation {
         if (!publication.isDurable()) {
             return;
         }
+        stateListener.restored(preparedTarget.source());
         journal = journals.advance(journal, OperationPhase.REF_PUBLISHED);
         journal = journals.advance(journal, OperationPhase.COMPLETE);
         journals.clear(journal);
         logStatistics("target", targetSession.statistics());
         targetSession.close();
         status = RestoreStatus.COMPLETE;
-        try {
-            stateListener.restored(preparedTarget.source());
-        } finally {
-            closeRestorePlan();
-        }
+        closeRestorePlan();
     }
 
     private void beginReturn() throws IOException {
@@ -794,16 +791,13 @@ public final class RestoreOperation implements DimensionMutation {
         if (!publication.isReturnDurable()) {
             return;
         }
+        stateListener.returned(preparedReturn.source());
         journal = journals.advance(journal, OperationPhase.COMPLETE);
         journals.clear(journal);
         logStatistics("safe-return", returnSession.statistics());
         returnSession.close();
         status = RestoreStatus.RETURNED;
-        try {
-            stateListener.returned(preparedReturn.source());
-        } finally {
-            closeRestorePlan();
-        }
+        closeRestorePlan();
     }
 
     private static void logStatistics(

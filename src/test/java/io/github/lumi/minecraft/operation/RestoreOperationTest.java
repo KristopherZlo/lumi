@@ -341,6 +341,37 @@ class RestoreOperationTest {
     }
 
     @Test
+    void keepsPublishedRestoreRecoverableUntilRuntimeStateIsReconciled()
+            throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('1'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        AtomicInteger attempts = new AtomicInteger();
+        RestoreStateListener listener = new RestoreStateListener() {
+            @Override public void restored(WorldStateApply.State state) throws IOException {
+                if (attempts.getAndIncrement() == 0) {
+                    throw new IOException("Cannot rebase runtime state");
+                }
+            }
+            @Override public void returned(WorldStateApply.State state) { }
+        };
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('2'), Map.of(), Map.of(), Map.of(), Map.of()),
+                new ImmediatelyVerified(), ignored -> { }, journals,
+                UUID.randomUUID(), listener);
+
+        activate(operation, journals);
+        assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
+        assertThrows(IOException.class, () -> operation.tick(Long.MAX_VALUE));
+        assertEquals(RestoreStatus.PUBLISHING, operation.status());
+        assertEquals(OperationPhase.WORLD_PERSISTED,
+                journals.read().orElseThrow().phase());
+
+        assertEquals(RestoreStatus.COMPLETE, operation.tick(Long.MAX_VALUE));
+        assertTrue(journals.read().isEmpty());
+        assertEquals(2, attempts.get());
+    }
+
+    @Test
     void doesNotPublishBeforeWorldPersistenceCompletes() throws IOException {
         var expected = new BranchRef(new BranchName("main"), id('2'), 1);
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);

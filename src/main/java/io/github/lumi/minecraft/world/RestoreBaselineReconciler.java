@@ -1,14 +1,19 @@
 package io.github.lumi.minecraft.world;
 
 import io.github.lumi.minecraft.operation.RestoreStateListener;
+import java.io.IOException;
 import java.util.Objects;
-import java.util.function.Consumer;
 
 /** Rebases runtime-only mutation baselines to Lumi's verified apply result. */
 public final class RestoreBaselineReconciler implements RestoreStateListener {
+    @FunctionalInterface
+    public interface StateReset {
+        void reset(WorldStateApply.State state) throws IOException;
+    }
+
     private final EntityChunkDurabilityGate entities;
     private final BlockEntityBaselineStore blockEntities;
-    private final Consumer<WorldStateApply.State> stateReset;
+    private final StateReset stateReset;
 
     public RestoreBaselineReconciler(
             EntityChunkDurabilityGate entities,
@@ -19,25 +24,25 @@ public final class RestoreBaselineReconciler implements RestoreStateListener {
     public RestoreBaselineReconciler(
             EntityChunkDurabilityGate entities,
             BlockEntityBaselineStore blockEntities,
-            Consumer<WorldStateApply.State> stateReset) {
+            StateReset stateReset) {
         this.entities = Objects.requireNonNull(entities, "entities");
         this.blockEntities = Objects.requireNonNull(blockEntities, "blockEntities");
         this.stateReset = Objects.requireNonNull(stateReset, "stateReset");
     }
 
     @Override
-    public void restored(WorldStateApply.State state) {
+    public void restored(WorldStateApply.State state) throws IOException {
         reconcile(state);
     }
 
     @Override
-    public void returned(WorldStateApply.State state) {
+    public void returned(WorldStateApply.State state) throws IOException {
         reconcile(state);
     }
 
-    private void reconcile(WorldStateApply.State state) {
+    private void reconcile(WorldStateApply.State state) throws IOException {
         state.sections().keySet().forEach(blockEntities::discard);
         state.entities().forEach(entities::rebaseTracked);
-        stateReset.accept(state);
+        stateReset.reset(state);
     }
 }
