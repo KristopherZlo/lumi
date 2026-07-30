@@ -22,9 +22,18 @@ public final class LumiHistoryBenchmarkClientGameTest
                 || !LumiHistoryBenchmarkConfig.enabled()) {
             return;
         }
-        if ("fixture".equalsIgnoreCase(System.getProperty(COLD_MODE_PROPERTY, ""))) {
+        String coldMode = System.getProperty(COLD_MODE_PROPERTY, "").trim();
+        if ("fixture".equalsIgnoreCase(coldMode)) {
             runColdFixture(context);
             return;
+        }
+        if ("measure".equalsIgnoreCase(coldMode)) {
+            runColdMeasurement(context);
+            return;
+        }
+        if (!coldMode.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Unknown cold benchmark mode: " + coldMode);
         }
         String existingWorld = System.getProperty(EXISTING_WORLD_PROPERTY);
         if (existingWorld != null && !existingWorld.isBlank()) {
@@ -55,6 +64,21 @@ public final class LumiHistoryBenchmarkClientGameTest
                             new LumiHistoryBenchmarkScenario(
                                     test, world, report, config)
                                     .run(new LumiUiTestDriver(test)));
+        }
+    }
+
+    private static void runColdMeasurement(ClientGameTestContext context) {
+        String existingWorld = System.getProperty(EXISTING_WORLD_PROPERTY);
+        if (existingWorld == null || existingWorld.isBlank()) {
+            throw new IllegalArgumentException(
+                    EXISTING_WORLD_PROPERTY + " is required for measurement mode");
+        }
+        try (var ignored = LumiUiScaleTestScope.readableViewport()) {
+            LumiClientBehaviorWorld.runExisting(
+                    context, "cold-restore-fresh-jvm", existingWorld,
+                    (test, world, report) ->
+                            new LumiColdRestoreMeasurementScenario(
+                                    test, world, report).run());
         }
     }
 
