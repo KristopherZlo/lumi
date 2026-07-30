@@ -1,6 +1,7 @@
 package io.github.lumi.minecraft.operation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.CommitId;
@@ -33,7 +34,7 @@ class PendingStatisticsOperationTest {
         var operation = new PendingStatisticsOperation(
                 HEAD, boundary, List.of(), reader(), () -> boundary,
                 () -> true,
-                (head, sections, zones) -> {
+                (head, sections, zones, cancelled) -> {
                     calculated.set(sections);
                     return result(new PendingChangeStatistics(2, 1, 3));
                 },
@@ -50,7 +51,7 @@ class PendingStatisticsOperationTest {
     }
 
     @Test
-    void rejectsAResultWhenTheDirtyGenerationMoves() throws Exception {
+    void cancelsAResultWhenTheDirtyGenerationMoves() throws Exception {
         WorkingIndexSnapshot boundary = new WorkingIndexSnapshot(
                 Map.of(SECTION, 1L));
         AtomicReference<WorkingIndexSnapshot> current =
@@ -58,7 +59,7 @@ class PendingStatisticsOperationTest {
         var operation = new PendingStatisticsOperation(
                 HEAD, boundary, List.of(), reader(), current::get,
                 () -> true,
-                (head, sections, zones) -> {
+                (head, sections, zones, cancelled) -> {
                     current.set(new WorkingIndexSnapshot(Map.of(SECTION, 2L)));
                     return result(PendingChangeStatistics.NONE);
                 },
@@ -68,8 +69,56 @@ class PendingStatisticsOperationTest {
         operation.advance(Long.MAX_VALUE);
 
         assertTrue(operation.result().isEmpty());
-        assertTrue(operation.failure().isPresent());
-        assertEquals(MutationTerminalState.FAILED,
+        assertTrue(operation.failure().isEmpty());
+        assertEquals(MutationTerminalState.CANCELLED,
+                operation.terminalState());
+    }
+
+    @Test
+    void cancelsBeforeDurabilityWhenTheBoundaryMoves() throws Exception {
+        WorkingIndexSnapshot boundary = new WorkingIndexSnapshot(
+                Map.of(SECTION, 1L));
+        WorkingIndexSnapshot moved = new WorkingIndexSnapshot(
+                Map.of(SECTION, 2L));
+        AtomicInteger reads = new AtomicInteger();
+        var operation = new PendingStatisticsOperation(
+                HEAD, boundary, List.of(), reader(reads::incrementAndGet),
+                () -> moved, () -> false,
+                (head, sections, zones, cancelled) ->
+                        result(PendingChangeStatistics.NONE),
+                Runnable::run, System::nanoTime);
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(0, reads.get());
+        assertTrue(operation.failure().isEmpty());
+        assertEquals(MutationTerminalState.CANCELLED,
+                operation.terminalState());
+    }
+
+    @Test
+    void cancelsAfterCaptureWhenTheBoundaryMoves() throws Exception {
+        WorkingIndexSnapshot boundary = new WorkingIndexSnapshot(
+                Map.of(SECTION, 1L));
+        WorkingIndexSnapshot moved = new WorkingIndexSnapshot(
+                Map.of(SECTION, 2L));
+        AtomicInteger boundaryReads = new AtomicInteger();
+        AtomicBoolean calculated = new AtomicBoolean();
+        var operation = new PendingStatisticsOperation(
+                HEAD, boundary, List.of(), reader(),
+                () -> boundaryReads.incrementAndGet() == 1 ? boundary : moved,
+                () -> true,
+                (head, sections, zones, cancelled) -> {
+                    calculated.set(true);
+                    return result(PendingChangeStatistics.NONE);
+                },
+                Runnable::run, System::nanoTime);
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertFalse(calculated.get());
+        assertTrue(operation.failure().isEmpty());
+        assertEquals(MutationTerminalState.CANCELLED,
                 operation.terminalState());
     }
 
@@ -82,7 +131,8 @@ class PendingStatisticsOperationTest {
         WorldStateReader reader = reader(() -> reads.incrementAndGet());
         var operation = new PendingStatisticsOperation(
                 HEAD, boundary, List.of(), reader, () -> boundary, durable::get,
-                (head, sections, zones) -> result(PendingChangeStatistics.NONE),
+                (head, sections, zones, cancelled) ->
+                        result(PendingChangeStatistics.NONE),
                 Runnable::run, System::nanoTime);
 
         operation.advance(Long.MAX_VALUE);
@@ -98,6 +148,28 @@ class PendingStatisticsOperationTest {
         assertEquals(1, reads.get());
         assertEquals(MutationTerminalState.SUCCEEDED,
                 operation.terminalState());
+    }
+
+    @Test
+    void cancelsBeforeReadingWithoutReportingFailure() throws Exception {
+        WorkingIndexSnapshot boundary = new WorkingIndexSnapshot(
+                Map.of(SECTION, 1L));
+        AtomicInteger reads = new AtomicInteger();
+        var operation = new PendingStatisticsOperation(
+                HEAD, boundary, List.of(),
+                reader(reads::incrementAndGet), () -> boundary, () -> false,
+                (head, sections, zones, cancelled) ->
+                        result(PendingChangeStatistics.NONE),
+                Runnable::run, System::nanoTime);
+
+        assertTrue(operation.cancel());
+
+        operation.advance(Long.MAX_VALUE);
+        assertEquals(0, reads.get());
+        assertTrue(operation.failure().isEmpty());
+        assertEquals(MutationTerminalState.CANCELLED,
+                operation.terminalState());
+        assertFalse(operation.cancel());
     }
 
     private static WorldStateReader reader() {

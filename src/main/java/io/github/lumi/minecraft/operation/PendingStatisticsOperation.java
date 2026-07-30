@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -36,6 +37,7 @@ public final class PendingStatisticsOperation implements DimensionMutation {
     private final LongSupplier nanoTime;
     private final ChunkLoadSession chunks;
     private final Map<SectionKey, SectionBlob> captured = new HashMap<>();
+    private final AtomicBoolean cancelled = new AtomicBoolean();
     private int next;
     private CompletableFuture<PendingChangeStatisticsService.Result> future;
     private PendingChangeStatisticsService.Result result;
@@ -132,8 +134,7 @@ public final class PendingStatisticsOperation implements DimensionMutation {
         }
         if (!durabilityReady) {
             if (!boundary.equals(currentBoundary.get())) {
-                fail(new IOException(
-                        "Pending changes moved while statistics awaited durability"));
+                markStale();
                 return;
             }
             if (!boundaryDurable.getAsBoolean()) {
@@ -156,11 +157,13 @@ public final class PendingStatisticsOperation implements DimensionMutation {
                 return;
             }
             if (!boundary.equals(currentBoundary.get())) {
-                fail(new IOException(
-                        "Pending changes moved while statistics were captured"));
+                markStale();
                 return;
             }
-            future = CompletableFuture.supplyAsync(this::calculate, background);
+            Map<SectionKey, SectionBlob> snapshot = Map.copyOf(captured);
+            captured.clear();
+            future = CompletableFuture.supplyAsync(
+                    () -> calculate(snapshot), background);
             return;
         }
         if (!future.isDone()) {
@@ -169,8 +172,7 @@ public final class PendingStatisticsOperation implements DimensionMutation {
         try {
             PendingChangeStatisticsService.Result calculated = future.join();
             if (!boundary.equals(currentBoundary.get())) {
-                fail(new IOException(
-                        "Pending changes moved while statistics were calculated"));
+                markStale();
                 return;
             }
             result = calculated;
@@ -180,9 +182,10 @@ public final class PendingStatisticsOperation implements DimensionMutation {
         }
     }
 
-    private PendingChangeStatisticsService.Result calculate() {
+    private PendingChangeStatisticsService.Result calculate(
+            Map<SectionKey, SectionBlob> snapshot) {
         try {
-            return calculator.calculate(head, Map.copyOf(captured), zones);
+            return calculator.calculate(head, snapshot, zones, cancelled::get);
         } catch (IOException failed) {
             throw new CompletionException(failed);
         }
@@ -194,7 +197,7 @@ public final class PendingStatisticsOperation implements DimensionMutation {
 
     @Override
     public boolean isTerminal() {
-        return result != null || failure != null;
+        return result != null || failure != null || cancelled.get();
     }
 
     @Override
@@ -208,8 +211,10 @@ public final class PendingStatisticsOperation implements DimensionMutation {
             throw new IllegalStateException(
                     "Pending statistics are not terminal");
         }
-        return failure == null
-                ? MutationTerminalState.SUCCEEDED
+        if (cancelled.get()) {
+            return MutationTerminalState.CANCELLED;
+        }
+        return failure == null ? MutationTerminalState.SUCCEEDED
                 : MutationTerminalState.FAILED;
     }
 
@@ -243,10 +248,29 @@ public final class PendingStatisticsOperation implements DimensionMutation {
     }
 
     @Override
-    public void close() {
-        if (future != null && !future.isDone()) {
-            future.cancel(true);
+    public boolean cancel() {
+        if (isTerminal()) {
+            return false;
         }
+        markStale();
+        return true;
+    }
+
+    @Override
+    public void close() {
+        if (!isTerminal()) {
+            markStale();
+        } else {
+            releaseChunks();
+        }
+    }
+
+    private void markStale() {
+        cancelled.set(true);
+        if (future != null && !future.isDone()) {
+            future.cancel(false);
+        }
+        captured.clear();
         releaseChunks();
     }
 
@@ -267,6 +291,7 @@ public final class PendingStatisticsOperation implements DimensionMutation {
         PendingChangeStatisticsService.Result calculate(
                 CommitId head,
                 Map<SectionKey, SectionBlob> current,
-                List<Zone> zones) throws IOException;
+                List<Zone> zones,
+                BooleanSupplier cancelled) throws IOException;
     }
 }

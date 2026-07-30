@@ -22,6 +22,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 
 /** Compares captured dirty sections with saved HEAD without reading live Minecraft state. */
 public final class PendingChangeStatisticsService {
@@ -45,30 +47,52 @@ public final class PendingChangeStatisticsService {
             CommitId head,
             Map<SectionKey, SectionBlob> current,
             List<Zone> zones) throws IOException {
+        return calculate(head, current, zones, () -> false);
+    }
+
+    public Result calculate(
+            CommitId head,
+            Map<SectionKey, SectionBlob> current,
+            List<Zone> zones,
+            BooleanSupplier cancelled) throws IOException {
         Objects.requireNonNull(head, "head");
         Map<SectionKey, SectionBlob> captured = Map.copyOf(
                 Objects.requireNonNull(current, "current"));
         List<Zone> visibleZones = List.copyOf(
                 Objects.requireNonNull(zones, "zones"));
-        DimensionTree saved = objects.readDimension(commits.read(head).tree());
-        PendingChangeStatistics workspace = PendingChangeStatistics.NONE;
-        Map<UUID, PendingChangeStatistics> byZone = new HashMap<>();
-        for (var entry : captured.entrySet()) {
-            PendingChangeStatistics section = compare(
-                    baseline(saved, entry.getKey()), entry.getValue());
-            workspace = workspace.plus(section);
-            for (Zone zone : visibleZones) {
-                if (zone.cells().contains(entry.getKey())) {
-                    byZone.merge(zone.id(), section, PendingChangeStatistics::plus);
+        Objects.requireNonNull(cancelled, "cancelled");
+        checkCancelled(cancelled);
+        try (var reader = objects.beginReadSession()) {
+            DimensionTree saved = reader.readDimension(commits.read(head).tree());
+            Map<ObjectId, RegionTree> regions = new HashMap<>();
+            Map<ObjectId, ChunkTree> chunks = new HashMap<>();
+            PendingChangeStatistics workspace = PendingChangeStatistics.NONE;
+            Map<UUID, PendingChangeStatistics> byZone = new HashMap<>();
+            for (var entry : captured.entrySet()) {
+                checkCancelled(cancelled);
+                PendingChangeStatistics section = compare(
+                        baseline(saved, entry.getKey(), reader, regions, chunks),
+                        entry.getValue(), cancelled);
+                workspace = workspace.plus(section);
+                for (Zone zone : visibleZones) {
+                    if (zone.cells().contains(entry.getKey())) {
+                        byZone.merge(
+                                zone.id(), section, PendingChangeStatistics::plus);
+                    }
                 }
             }
+            visibleZones.forEach(zone ->
+                    byZone.putIfAbsent(zone.id(), PendingChangeStatistics.NONE));
+            return new Result(workspace, byZone);
         }
-        visibleZones.forEach(zone ->
-                byZone.putIfAbsent(zone.id(), PendingChangeStatistics.NONE));
-        return new Result(workspace, byZone);
     }
 
-    private SectionBlob baseline(DimensionTree tree, SectionKey key)
+    private SectionBlob baseline(
+            DimensionTree tree,
+            SectionKey key,
+            WorldObjectRepository.ReadSession reader,
+            Map<ObjectId, RegionTree> regions,
+            Map<ObjectId, ChunkTree> chunks)
             throws IOException {
         int regionX = Math.floorDiv(key.chunkX(), REGION_SIZE);
         int regionZ = Math.floorDiv(key.chunkZ(), REGION_SIZE);
@@ -76,12 +100,20 @@ public final class PendingChangeStatisticsService {
         ObjectId regionId = tree.regions().get(
                 new RegionCoordinate(regionX, regionZ));
         if (regionId != null) {
-            RegionTree region = objects.readRegion(regionId);
+            RegionTree region = regions.get(regionId);
+            if (region == null) {
+                region = reader.readRegion(regionId);
+                regions.put(regionId, region);
+            }
             ObjectId chunkId = region.chunks().get(new ChunkInRegion(
                     Math.floorMod(key.chunkX(), REGION_SIZE),
                     Math.floorMod(key.chunkZ(), REGION_SIZE)));
             if (chunkId != null) {
-                ChunkTree chunk = objects.readChunk(chunkId);
+                ChunkTree chunk = chunks.get(chunkId);
+                if (chunk == null) {
+                    chunk = reader.readChunk(chunkId);
+                    chunks.put(chunkId, chunk);
+                }
                 section = Optional.ofNullable(
                         chunk.sections().get(key.sectionY()));
             }
@@ -90,15 +122,20 @@ public final class PendingChangeStatisticsService {
                 ? section.orElseThrow()
                 : origins.read(key).orElseThrow(() -> new IOException(
                         "Missing saved section and origin for " + key));
-        return objects.readSection(resolved);
+        return reader.readSection(resolved);
     }
 
     private static PendingChangeStatistics compare(
-            SectionBlob before, SectionBlob after) throws IOException {
+            SectionBlob before,
+            SectionBlob after,
+            BooleanSupplier cancelled) throws IOException {
         long added = 0;
         long removed = 0;
         long changed = 0;
         for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+            if ((index & 255) == 0) {
+                checkCancelled(cancelled);
+            }
             String left = before.blockStates().get(index);
             String right = after.blockStates().get(index);
             if (left.equals(right)
@@ -116,6 +153,13 @@ public final class PendingChangeStatisticsService {
             }
         }
         return new PendingChangeStatistics(added, removed, changed);
+    }
+
+    private static void checkCancelled(BooleanSupplier cancelled) {
+        if (cancelled.getAsBoolean()) {
+            throw new CancellationException(
+                    "Pending statistics calculation was cancelled");
+        }
     }
 
     private static boolean isAir(String state) throws IOException {

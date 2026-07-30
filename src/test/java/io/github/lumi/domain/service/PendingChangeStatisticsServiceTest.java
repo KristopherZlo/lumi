@@ -1,6 +1,7 @@
 package io.github.lumi.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.PendingChangeStatistics;
 import io.github.lumi.domain.model.Commit;
@@ -22,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -94,6 +97,27 @@ class PendingChangeStatisticsServiceTest {
 
         assertEquals(new PendingChangeStatistics(0, 1, 0),
                 result.workspace());
+    }
+
+    @Test
+    void stopsComparingWhenCancelled() throws Exception {
+        UUID workspace = new UUID(0, 6);
+        SectionKey key = new SectionKey(0, 4, 0);
+        var objects = new WorldObjectRepository(repository);
+        var commits = new CommitRepository(repository);
+        var origins = new OriginStore(repository);
+        var head = new DimensionHistoryInitializer(
+                objects, commits, new BranchRefRepository(repository),
+                new ActiveBranchRepository(repository))
+                .initialize(workspace).commit();
+        origins.register(key, objects.write(section("minecraft:stone")));
+        AtomicInteger checks = new AtomicInteger();
+
+        assertThrows(CancellationException.class, () ->
+                new PendingChangeStatisticsService(
+                        objects, commits, origins).calculate(
+                                head, Map.of(key, section("minecraft:air")),
+                                List.of(), () -> checks.incrementAndGet() > 2));
     }
 
     private static SectionBlob section(String... leadingStates) {
