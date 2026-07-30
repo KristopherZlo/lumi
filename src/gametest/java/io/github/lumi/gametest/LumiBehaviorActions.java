@@ -40,15 +40,17 @@ import net.minecraft.world.phys.Vec3;
 /** Performs the requested changes through real player and command entry points. */
 final class LumiBehaviorActions {
     private static final List<String> DENSE_BLOCK_PALETTE = List.of(
-            "stone", "granite", "diorite", "andesite", "deepslate",
-            "tuff", "calcite", "dripstone_block", "terracotta",
             "white_concrete", "orange_concrete", "magenta_concrete",
             "light_blue_concrete", "yellow_concrete", "lime_concrete",
             "pink_concrete", "gray_concrete", "light_gray_concrete",
             "cyan_concrete", "purple_concrete", "blue_concrete",
-            "brown_concrete", "green_concrete", "red_concrete",
-            "black_concrete", "bricks", "mud_bricks", "quartz_block",
-            "prismarine", "dark_prismarine", "purpur_block", "end_stone");
+            "brown_concrete", "green_concrete", "red_concrete", "black_concrete",
+            "white_terracotta", "orange_terracotta", "magenta_terracotta",
+            "light_blue_terracotta", "yellow_terracotta", "lime_terracotta",
+            "pink_terracotta", "gray_terracotta", "light_gray_terracotta",
+            "cyan_terracotta", "purple_terracotta", "blue_terracotta",
+            "brown_terracotta", "green_terracotta", "red_terracotta",
+            "black_terracotta");
     private final TestServerContext server;
     private final LumiBehaviorReport report;
 
@@ -419,15 +421,15 @@ final class LumiBehaviorActions {
     }
 
     void worldEditRandomVolume(String name, BlockBox area, int paletteOffset) {
-        List<String> palette = new ArrayList<>(DENSE_BLOCK_PALETTE.size());
-        for (int index = 0; index < DENSE_BLOCK_PALETTE.size(); index++) {
-            palette.add(DENSE_BLOCK_PALETTE.get(Math.floorMod(
-                    index + paletteOffset, DENSE_BLOCK_PALETTE.size())));
-        }
+        int paletteSize = DENSE_BLOCK_PALETTE.size() / 2;
+        int start = Math.floorMod(paletteOffset, 2) * paletteSize;
+        List<String> palette = DENSE_BLOCK_PALETTE.subList(
+                start, start + paletteSize);
         worldEdit(name, List.of(
                 "//pos1 " + area.minX() + "," + area.minY() + "," + area.minZ(),
                 "//pos2 " + area.maxX() + "," + area.maxY() + "," + area.maxZ(),
-                "//set " + String.join(",", palette)));
+                "//set " + String.join(",", palette),
+                "//clearhistory"));
     }
 
     void buildOakCube(BlockPos center) {

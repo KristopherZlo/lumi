@@ -17,7 +17,8 @@ record LumiHistoryBenchmarkConfig(
         int measureEvery,
         long seed,
         ChunkPath chunkPath,
-        OperationMode operation) {
+        OperationMode operation,
+        Profile profile) {
     static final String PREFIX = "lumi.benchmark.";
     static final String ENABLED_PROPERTY = PREFIX + "enabled";
     private static final long MAX_LIVE_FIXTURE_CHUNKS = 1_089;
@@ -34,6 +35,17 @@ record LumiHistoryBenchmarkConfig(
         }
         if (operation == null) {
             throw new IllegalArgumentException("operation is required");
+        }
+        if (profile == null) {
+            throw new IllegalArgumentException("profile is required");
+        }
+        if (profile == Profile.PLAYER_SCALE_30
+                && (baseSize != 512 || changeSize != 512 || layers != 16
+                || commits != 30 || chunkPath != ChunkPath.NATURAL
+                || operation != OperationMode.RESTORE)) {
+            throw new IllegalArgumentException(
+                    "player-scale-30 requires 512x512x16, 30 commits, "
+                            + "natural chunks, and restore operation");
         }
         if (operation == OperationMode.BRANCH_SWITCH) {
             if (restoreSamples != 3) {
@@ -76,9 +88,17 @@ record LumiHistoryBenchmarkConfig(
     }
 
     static LumiHistoryBenchmarkConfig load() {
+        Profile profile = Profile.parse(System.getProperty(
+                PREFIX + "profile", "native"));
         OperationMode operation = operationMode();
         ChunkPath chunkPath = ChunkPath.parse(System.getProperty(
                 PREFIX + "chunkPath", "natural"));
+        if (profile == Profile.PLAYER_SCALE_30) {
+            return new LumiHistoryBenchmarkConfig(
+                    512, 512, 16, 30, 8, 5,
+                    Long.getLong(PREFIX + "seed", 710L),
+                    chunkPath, operation, profile);
+        }
         return new LumiHistoryBenchmarkConfig(
                 integer("baseSize", 64),
                 integer("changeSize", 32),
@@ -90,7 +110,8 @@ record LumiHistoryBenchmarkConfig(
                 integer("measureEvery", 1),
                 Long.getLong(PREFIX + "seed", 710L),
                 chunkPath,
-                operation);
+                operation,
+                profile);
     }
 
     void requireRunnableFixture() {
@@ -121,11 +142,12 @@ record LumiHistoryBenchmarkConfig(
     String reportName() {
         return String.format(Locale.ROOT, "history-benchmark-%dx%dx%d-%d%s%s",
                 baseSize, baseSize, layers, commits,
-                operation.reportSuffix(), chunkPath.reportSuffix());
+                operation.reportSuffix(), chunkPath.reportSuffix()
+                        + profile.reportSuffix());
     }
 
     String describe() {
-        return "fixture=loaded-native-sections"
+        return "fixture=" + profile.fixture()
                 + ";baseSize=" + baseSize
                 + ";changeSize=" + changeSize
                 + ";layers=" + layers
@@ -136,7 +158,9 @@ record LumiHistoryBenchmarkConfig(
                 + ";chunkPath=" + chunkPath.propertyValue
                 + operation.describeSuffix()
                 + ";baseBlocks=" + baseBlocks()
-                + ";changedBlocksPerCommit=" + changedBlocksPerCommit();
+                + (profile == Profile.PLAYER_SCALE_30
+                        ? ";changedBlocksRange=1..4194304"
+                        : ";changedBlocksPerCommit=" + changedBlocksPerCommit());
     }
 
     private static int integer(String name, int fallback) {
@@ -208,6 +232,41 @@ record LumiHistoryBenchmarkConfig(
 
         String describeSuffix() {
             return this == RESTORE ? "" : ";operation=" + propertyValue;
+        }
+    }
+
+    enum Profile {
+        NATIVE("native", "loaded-native-sections", ""),
+        PLAYER_SCALE_30(
+                "player-scale-30", "player-worldedit-scale-30",
+                "-player-scale-30");
+
+        private final String propertyValue;
+        private final String fixture;
+        private final String reportSuffix;
+
+        Profile(String propertyValue, String fixture, String reportSuffix) {
+            this.propertyValue = propertyValue;
+            this.fixture = fixture;
+            this.reportSuffix = reportSuffix;
+        }
+
+        static Profile parse(String value) {
+            for (Profile profile : values()) {
+                if (profile.propertyValue.equalsIgnoreCase(value)) {
+                    return profile;
+                }
+            }
+            throw new IllegalArgumentException(
+                    "profile must be native or player-scale-30, got " + value);
+        }
+
+        String fixture() {
+            return fixture;
+        }
+
+        String reportSuffix() {
+            return reportSuffix;
         }
     }
 }

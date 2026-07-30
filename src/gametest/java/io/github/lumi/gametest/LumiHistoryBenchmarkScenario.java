@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.CommitId;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +20,37 @@ final class LumiHistoryBenchmarkScenario {
     private static final int EDIT_TILE_SIZE = 256;
     private static final int STORED_FIXTURE_OFFSET = 2_048;
     private static final int TILES_PER_DURABILITY_BARRIER = 4;
+    private static final List<EditSize> PLAYER_SCALE_30 = List.of(
+            new EditSize(1, 1, 1),
+            new EditSize(2, 1, 1),
+            new EditSize(2, 2, 1),
+            new EditSize(2, 2, 2),
+            new EditSize(4, 2, 2),
+            new EditSize(4, 4, 2),
+            new EditSize(4, 4, 4),
+            new EditSize(8, 4, 4),
+            new EditSize(8, 8, 4),
+            new EditSize(8, 8, 8),
+            new EditSize(16, 8, 8),
+            new EditSize(16, 16, 8),
+            new EditSize(16, 16, 16),
+            new EditSize(24, 16, 16),
+            new EditSize(32, 16, 16),
+            new EditSize(32, 24, 16),
+            new EditSize(32, 32, 16),
+            new EditSize(48, 32, 16),
+            new EditSize(64, 32, 16),
+            new EditSize(64, 48, 16),
+            new EditSize(64, 64, 16),
+            new EditSize(96, 64, 16),
+            new EditSize(128, 64, 16),
+            new EditSize(128, 96, 16),
+            new EditSize(128, 128, 16),
+            new EditSize(192, 128, 16),
+            new EditSize(256, 128, 16),
+            new EditSize(256, 256, 16),
+            new EditSize(512, 256, 16),
+            new EditSize(512, 512, 16));
     private final ClientGameTestContext context;
     private final TestSingleplayerContext singleplayer;
     private final LumiHistoryBenchmarkConfig config;
@@ -66,6 +98,11 @@ final class LumiHistoryBenchmarkScenario {
     }
 
     void run(LumiUiTestDriver ui) throws IOException {
+        if (config.profile()
+                == LumiHistoryBenchmarkConfig.Profile.PLAYER_SCALE_30) {
+            runPlayerScale(ui);
+            return;
+        }
         PreparedHistory history = prepareHistory(ui, false);
         List<LumiRestoreMeasurement> restores = new ArrayList<>();
         LumiRepositoryMetrics.Snapshot previous = history.storage();
@@ -92,6 +129,115 @@ final class LumiHistoryBenchmarkScenario {
         verifyPerformance("restore", restores);
         report.event("benchmark", "configuration", "succeeded", 0, 0,
                 config.describe() + ";versions=" + history.commits().size());
+    }
+
+    private void runPlayerScale(LumiUiTestDriver ui) throws IOException {
+        PreparedHistory history = preparePlayerScale(ui);
+        var checks = new LumiBehaviorChecks(context, singleplayer, report);
+        List<CommitId> commits = history.commits();
+        String restoreBranch = operations.activeBranch().value();
+        List<BranchRef> branches = List.of(
+                operations.createBranch("scale-initial", commits.getFirst()),
+                operations.createBranch("scale-middle", commits.get(15)),
+                operations.createBranch("scale-latest", commits.getLast()));
+        List<LumiRestoreMeasurement> measurements = new ArrayList<>();
+        LumiRepositoryMetrics.Snapshot previous = history.storage();
+        List<Integer> restoreOrder = playerScaleRestoreIndices(
+                commits.size(), config.restoreSamples(), config.seed());
+
+        int number = 0;
+        for (int index : restoreOrder) {
+            String name = String.format(
+                    "scale-restore-%02d-index-%02d", ++number, index);
+            LumiRestoreMeasurement measurement =
+                    operations.measureRestore(name, commits.get(index));
+            measurements.add(measurement);
+            report.event("restore_metrics", name, "measured", 0,
+                    measurement.operationMillis(), measurement.describe());
+            checks.assertValue(name + "_active_branch",
+                    operations.activeBranch().value(), restoreBranch);
+            checks.assertValue(name + "_active_head",
+                    operations.activeCommit().hex(), commits.get(index).hex());
+            previous = recordStorage(
+                    name, history.repository(), previous.bytes());
+            recordMemory(name);
+        }
+
+        List<BranchRef> branchOrder = playerScaleBranchOrder(branches, config.seed());
+        for (int index = 0; index < branchOrder.size(); index++) {
+            BranchRef branch = branchOrder.get(index);
+            String name = String.format(
+                    "scale-branch-%02d-%s", index + 1, branch.name().value());
+            LumiRestoreMeasurement measurement =
+                    operations.measureBranchSwitch(name, branch.name());
+            measurements.add(measurement);
+            report.event("restore_metrics", name, "measured", 0,
+                    measurement.operationMillis(), measurement.describe());
+            assertActive(checks, name, branch);
+            previous = recordStorage(
+                    name, history.repository(), previous.bytes());
+            recordMemory(name);
+        }
+        checks.finish();
+        verifyPerformance("player-scale-30", measurements);
+        report.event("benchmark", "configuration", "succeeded", 0, 0,
+                config.describe() + ";builderCommits="
+                        + PLAYER_SCALE_30.size() + ";versions="
+                        + commits.size() + ";protectedBranchHeads=3"
+                        + ";directRestores=" + restoreOrder.size()
+                        + ";branchSwitches=" + branchOrder.size());
+    }
+
+    private PreparedHistory preparePlayerScale(LumiUiTestDriver ui)
+            throws IOException {
+        ui.completeOnboardingIfShown();
+        ui.awaitHistory();
+        ui.disablePreviewGeneration();
+        report.event("benchmark", "configuration", "started", 0, 0,
+                config.describe() + ";previewGeneration=false;baseArea="
+                        + describe(baseArea));
+
+        fixture.markBaseline("benchmark_initial_marker");
+        operations.awaitDurability("benchmark_initial_world");
+        CommitId initial = operations.save("benchmark-initial");
+        Path repository = operations.repository();
+        LumiRepositoryMetrics.Snapshot previous = metrics.capture(repository);
+        recordStorage("initial", previous, 0);
+        List<CommitId> commits = new ArrayList<>(31);
+        commits.add(initial);
+        var actions = new LumiBehaviorActions(singleplayer.getServer(), report);
+
+        for (int index = 0; index < PLAYER_SCALE_30.size(); index++) {
+            EditSize size = PLAYER_SCALE_30.get(index);
+            BlockBox area = size.at(baseArea);
+            String suffix = String.format("%02d", index + 1);
+            long started = System.nanoTime();
+            actions.worldEditRandomVolume(
+                    "player_scale_edit_" + suffix, area, index);
+            operations.awaitDurability("player_scale_edit_" + suffix);
+            long expectedKeys = sectionCount(area);
+            int actualKeys = operations.pendingBuilderKeyCount();
+            if (actualKeys != expectedKeys) {
+                throw new AssertionError("player_scale_edit_" + suffix
+                        + " dirtied " + actualKeys
+                        + " history keys; expected " + expectedKeys);
+            }
+            report.event("fixture", "player_scale_edit_" + suffix + "_durable",
+                    "succeeded", 0,
+                    (System.nanoTime() - started) / 1_000_000,
+                    "blocks=" + size.blocks() + ";historyKeys=" + actualKeys
+                            + ";area=" + describe(area));
+            commits.add(operations.save("player-scale-" + suffix));
+            if ((index + 1) % config.measureEvery() == 0
+                    || index + 1 == PLAYER_SCALE_30.size()) {
+                previous = recordStorage(
+                        "save-" + suffix, repository, previous.bytes());
+                recordMemory("save-" + suffix);
+            }
+        }
+        return new PreparedHistory(
+                commits, repository, previous,
+                Optional.empty(), Optional.empty(), Optional.empty());
     }
 
     BranchFixture prepareBranchSwitch(LumiUiTestDriver ui) throws IOException {
@@ -270,10 +416,17 @@ final class LumiHistoryBenchmarkScenario {
             LumiBehaviorChecks checks,
             String name,
             BranchEndpoint endpoint) throws IOException {
+        assertActive(checks, name, endpoint.ref());
+    }
+
+    private void assertActive(
+            LumiBehaviorChecks checks,
+            String name,
+            BranchRef ref) throws IOException {
         checks.assertValue(name + "_active_branch",
-                operations.activeBranch().value(), endpoint.ref().name().value());
+                operations.activeBranch().value(), ref.name().value());
         checks.assertValue(name + "_active_head",
-                operations.activeCommit().hex(), endpoint.ref().commit().hex());
+                operations.activeCommit().hex(), ref.commit().hex());
     }
 
     private void verifyPerformance(
@@ -383,6 +536,41 @@ final class LumiHistoryBenchmarkScenario {
         return List.copyOf(indices);
     }
 
+    static List<Integer> playerScaleRestoreIndices(
+            int versionCount, int samples, long seed) {
+        int last = versionCount - 1;
+        List<Integer> indices = new ArrayList<>();
+        Random seeded = new Random(seed);
+        while (indices.size() < samples - 1) {
+            int candidate = 1 + seeded.nextInt(last - 1);
+            if (!indices.contains(candidate)) {
+                indices.add(candidate);
+            }
+        }
+        indices.sort(java.util.Comparator.reverseOrder());
+        indices.add(0);
+        return List.copyOf(indices);
+    }
+
+    private static List<BranchRef> playerScaleBranchOrder(
+            List<BranchRef> branches, long seed) {
+        List<BranchRef> order = new ArrayList<>(6);
+        BranchRef latest = branches.getLast();
+        Random seeded = new Random(seed);
+        order.add(latest);
+        List<BranchRef> remainder = new ArrayList<>(branches);
+        remainder.remove(latest);
+        Collections.shuffle(remainder, seeded);
+        order.addAll(remainder);
+        List<BranchRef> secondCycle = new ArrayList<>(branches);
+        Collections.shuffle(secondCycle, seeded);
+        if (secondCycle.getFirst().equals(order.getLast())) {
+            Collections.rotate(secondCycle, 1);
+        }
+        order.addAll(secondCycle);
+        return List.copyOf(order);
+    }
+
     private static String describe(BlockBox area) {
         return area.minX() + "," + area.minY() + "," + area.minZ()
                 + ".." + area.maxX() + "," + area.maxY() + "," + area.maxZ();
@@ -409,4 +597,18 @@ final class LumiHistoryBenchmarkScenario {
     private record SavedEndpoint(
             CommitId commit,
             Optional<LumiWorldSnapshot> snapshot) { }
+
+    private record EditSize(int width, int depth, int layers) {
+        BlockBox at(BlockBox base) {
+            return new BlockBox(
+                    base.minX(), base.minY(), base.minZ(),
+                    base.minX() + width - 1,
+                    base.minY() + layers - 1,
+                    base.minZ() + depth - 1);
+        }
+
+        long blocks() {
+            return (long) width * depth * layers;
+        }
+    }
 }
