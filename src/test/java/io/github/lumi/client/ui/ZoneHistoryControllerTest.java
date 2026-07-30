@@ -43,13 +43,12 @@ class ZoneHistoryControllerTest {
                 new BranchName("main"), Optional.of(zone), 0, true,
                 List.of(version()), List.of(
                         new BranchName("main"), new BranchName("idea")), "")));
-        assertTrue(controller.hasNext());
+        assertTrue(controller.loadNextPage());
         assertEquals(2, controller.branches(snapshot.branches()).size());
 
         controller.nextBranch(snapshot.branches());
         assertEquals(new BranchName("idea"), requestedBranch.get());
         assertEquals(0, controller.offset());
-        assertFalse(controller.hasPrevious());
     }
 
     @Test
@@ -74,7 +73,7 @@ class ZoneHistoryControllerTest {
                 List.of(version()), "")));
         assertEquals(1, controller.versions(List.of()).size());
 
-        controller.next();
+        assertTrue(controller.loadNextPage());
         assertTrue(pages.accept(new HistoryPagePayload(
                 request.get(), "minecraft:overworld", workspace,
                 new BranchName("main"), Optional.of(zone),

@@ -26,6 +26,7 @@ public final class ClientHistoryPageStore {
             new LinkedHashMap<>();
     private final LinkedHashMap<VersionKey, String> optimisticNames =
             new LinkedHashMap<>();
+    private long metadataRevision;
 
     public static Channel createChannel() {
         return new Channel(UUID.randomUUID());
@@ -86,22 +87,28 @@ public final class ClientHistoryPageStore {
             String dimensionId, CommitId versionId, VersionTags replacement) {
         replace(optimisticTags, dimensionId, versionId,
                 Objects.requireNonNull(replacement, "replacement"));
+        metadataRevision++;
     }
 
     public synchronized void replaceVersionName(
             String dimensionId, CommitId versionId, String replacement) {
         replace(optimisticNames, dimensionId, versionId,
                 Objects.requireNonNull(replacement, "replacement"));
+        metadataRevision++;
     }
 
     public synchronized void rejectVersionTags(
             String dimensionId, CommitId versionId) {
-        optimisticTags.remove(new VersionKey(dimensionId, versionId));
+        if (optimisticTags.remove(new VersionKey(dimensionId, versionId)) != null) {
+            metadataRevision++;
+        }
     }
 
     public synchronized void rejectVersionName(
             String dimensionId, CommitId versionId) {
-        optimisticNames.remove(new VersionKey(dimensionId, versionId));
+        if (optimisticNames.remove(new VersionKey(dimensionId, versionId)) != null) {
+            metadataRevision++;
+        }
     }
 
     public synchronized HistorySnapshotPayload.Version version(
@@ -158,12 +165,17 @@ public final class ClientHistoryPageStore {
                 Objects.requireNonNull(dimensionId, "dimensionId"), 0L);
     }
 
+    public synchronized long metadataRevision() {
+        return metadataRevision;
+    }
+
     public synchronized void clear() {
         pending.clear();
         pages.clear();
         revisions.clear();
         optimisticTags.clear();
         optimisticNames.clear();
+        metadataRevision++;
     }
 
     private <T> void replace(

@@ -2,6 +2,7 @@ package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.client.state.ClientHistoryPageStore;
@@ -39,10 +40,9 @@ class WorkspaceHistoryControllerTest {
                 new BranchName("main"), Optional.empty(), 0, true,
                 List.of(version()), "")));
 
-        controller.next();
+        assertTrue(controller.loadNextPage());
 
         assertEquals(7, requestedOffset.get());
-        assertEquals(2, controller.pageNumber());
     }
 
     @Test
@@ -122,7 +122,7 @@ class WorkspaceHistoryControllerTest {
                 List.of(version('1'), version('2')), "")));
         assertEquals(2, controller.versions().size());
 
-        controller.next();
+        assertTrue(controller.loadNextPage());
         assertTrue(pages.accept(new HistoryPagePayload(
                 request.get(), snapshot.dimensionId(), snapshot.workspaceId(),
                 new BranchName("main"), Optional.empty(), 2, false,
@@ -155,14 +155,15 @@ class WorkspaceHistoryControllerTest {
                 List.of(version('1'), version('2')), "")));
 
         assertTrue(controller.loadNextPage());
-        assertEquals(2, controller.pageNumber());
         assertFalse(controller.loadNextPage());
         assertTrue(pages.accept(new HistoryPagePayload(
                 request.get(), snapshot.dimensionId(), snapshot.workspaceId(),
                 new BranchName("main"), Optional.empty(), 2, false,
                 List.of(version('3')), "")));
         assertFalse(controller.loadNextPage());
-        assertEquals(3, controller.versions().size());
+        List<HistorySnapshotPayload.Version> versions = controller.versions();
+        assertEquals(3, versions.size());
+        assertSame(versions, controller.versions());
     }
 
     @Test
@@ -193,6 +194,7 @@ class WorkspaceHistoryControllerTest {
                 controller.versions().getFirst();
         assertEquals("Castle", updated.message());
         assertEquals(List.of("finished"), updated.tags().values());
+        assertSame(updated, controller.versions().getFirst());
     }
 
     private static HistorySnapshotPayload snapshot() {

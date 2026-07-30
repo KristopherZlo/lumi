@@ -22,9 +22,13 @@ public final class ZoneHistoryController {
     private int offset;
     private String query = "";
     private final List<HistorySnapshotPayload.Version> loaded = new ArrayList<>();
+    private List<HistorySnapshotPayload.Version> loadedView = List.of();
+    private List<HistorySnapshotPayload.Version> initialView = List.of();
+    private List<HistorySnapshotPayload.Version> initialSource = List.of();
     private List<BranchName> availableBranches = List.of();
     private UUID loadedRequest;
     private long observedRevision;
+    private long observedMetadataRevision;
     private boolean awaitingRefresh;
     private int searchDelay;
 
@@ -39,6 +43,7 @@ public final class ZoneHistoryController {
         this.requester = Objects.requireNonNull(requester, "requester");
         branch = new BranchName(snapshot.branchName());
         observedRevision = pages.revision(snapshot.dimensionId());
+        observedMetadataRevision = pages.metadataRevision();
     }
 
     void request() {
@@ -58,12 +63,13 @@ public final class ZoneHistoryController {
     List<HistorySnapshotPayload.Version> versions(
             List<HistorySnapshotPayload.Version> initial) {
         acceptPage();
+        synchronizeMetadata(initial);
         if (!loaded.isEmpty()) {
-            return pages.versions(snapshot.dimensionId(), loaded);
+            return loadedView;
         }
         if (awaitingRefresh) return List.of();
         return offset == 0 && branch.value().equals(snapshot.branchName())
-                ? pages.versions(snapshot.dimensionId(), initial) : List.of();
+                ? initialView : List.of();
     }
 
     List<HistorySnapshotPayload.Branch> branches(
@@ -83,6 +89,7 @@ public final class ZoneHistoryController {
                         availableBranches = current.branches();
                     }
                     loaded.addAll(current.versions());
+                    loadedView = pages.versions(snapshot.dimensionId(), loaded);
                     loadedRequest = current.requestId();
                     awaitingRefresh = false;
                 });
@@ -96,26 +103,16 @@ public final class ZoneHistoryController {
         return offset;
     }
 
-    boolean hasPrevious() {
-        return offset > 0;
-    }
-
-    boolean hasNext() {
-        return page().map(HistoryPagePayload::hasMore).orElse(false);
-    }
-
-    void previous() {
-        if (hasPrevious()) {
-            offset = Math.max(0, offset - PAGE_SIZE);
-            request();
+    boolean loadNextPage() {
+        Optional<HistoryPagePayload> current = page();
+        if (current.isEmpty() || current.orElseThrow().offset() != offset) {
+            return false;
         }
-    }
-
-    void next() {
-        if (hasNext()) {
-            offset += PAGE_SIZE;
-            request();
-        }
+        acceptPage();
+        if (!current.orElseThrow().hasMore()) return false;
+        offset += PAGE_SIZE;
+        request();
+        return true;
     }
 
     void nextBranch(List<HistorySnapshotPayload.Branch> branches) {
@@ -163,7 +160,20 @@ public final class ZoneHistoryController {
     private void reset() {
         offset = 0;
         loaded.clear();
+        loadedView = List.of();
         loadedRequest = null;
+    }
+
+    private void synchronizeMetadata(
+            List<HistorySnapshotPayload.Version> initial) {
+        long current = pages.metadataRevision();
+        if (initial == initialSource && current == observedMetadataRevision) {
+            return;
+        }
+        observedMetadataRevision = current;
+        initialSource = initial;
+        initialView = pages.versions(snapshot.dimensionId(), initial);
+        loadedView = pages.versions(snapshot.dimensionId(), loaded);
     }
 
     private void synchronizeInvalidation() {

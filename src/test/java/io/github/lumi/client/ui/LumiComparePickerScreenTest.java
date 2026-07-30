@@ -22,7 +22,7 @@ class LumiComparePickerScreenTest {
         assertTrue(source.contains(
                 "rightHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS)"));
         assertTrue(source.contains("public boolean mouseScrolled("));
-        assertTrue(source.contains("history(left).next()"));
+        assertTrue(source.contains("history(left).loadNextPage()"));
         assertTrue(source.contains("leftSelection"));
         assertTrue(source.contains("rightSelection"));
         assertTrue(source.contains("LumiDropdown.branches("));

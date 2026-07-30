@@ -410,8 +410,8 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
             if (replacement != scroll(left)) {
                 setScroll(left, replacement);
                 rebuildWidgets();
-            } else if (verticalAmount < 0 && history(left).hasNext()) {
-                history(left).next();
+            } else if (verticalAmount < 0) {
+                history(left).loadNextPage();
             }
             return true;
         }

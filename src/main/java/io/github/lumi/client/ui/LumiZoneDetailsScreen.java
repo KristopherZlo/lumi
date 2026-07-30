@@ -462,8 +462,8 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
             if (replacement != historyScroll) {
                 historyScroll = replacement;
                 rebuildWidgets();
-            } else if (verticalAmount < 0 && zoneHistory.hasNext()) {
-                zoneHistory.next();
+            } else if (verticalAmount < 0) {
+                zoneHistory.loadNextPage();
             }
             return true;
         }

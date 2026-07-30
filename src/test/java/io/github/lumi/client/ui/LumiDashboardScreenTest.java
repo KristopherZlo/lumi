@@ -194,7 +194,7 @@ class LumiDashboardScreenTest {
         assertTrue(source.contains("new LumiCommitCard("));
         assertTrue(source.contains(
                 "pagedHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS)"));
-        assertTrue(source.contains("pagedHistory.next()"));
+        assertTrue(source.contains("pagedHistory.loadNextPage()"));
         assertFalse(source.contains("addHistoryPageButtons"));
         assertTrue(source.contains("public boolean mouseScrolled("));
         assertTrue(source.contains("LumiDropdown.branches("));

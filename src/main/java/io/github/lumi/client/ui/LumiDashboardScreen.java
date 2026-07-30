@@ -725,8 +725,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             if (replacement != historyScroll) {
                 historyScroll = replacement;
                 rebuildWidgets();
-            } else if (verticalAmount < 0 && pagedHistory.hasNext()) {
-                pagedHistory.next();
+            } else if (verticalAmount < 0) {
+                pagedHistory.loadNextPage();
             }
             return true;
         }

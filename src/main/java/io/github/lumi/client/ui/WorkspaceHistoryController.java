@@ -22,8 +22,11 @@ final class WorkspaceHistoryController {
     private int pageSize;
     private String query = "";
     private final List<HistorySnapshotPayload.Version> loaded = new ArrayList<>();
+    private List<HistorySnapshotPayload.Version> loadedView = List.of();
+    private List<HistorySnapshotPayload.Version> snapshotView;
     private UUID loadedRequest;
     private long observedRevision;
+    private long observedMetadataRevision;
     private boolean awaitingRefresh;
     private int searchDelay;
 
@@ -45,6 +48,9 @@ final class WorkspaceHistoryController {
         this.requester = Objects.requireNonNull(requester, "requester");
         branch = new BranchName(snapshot.branchName());
         observedRevision = pages.revision(snapshot.dimensionId());
+        observedMetadataRevision = pages.metadataRevision();
+        snapshotView = pages.versions(
+                snapshot.dimensionId(), snapshot.versions());
     }
 
     boolean matches(HistorySnapshotPayload candidate) {
@@ -78,51 +84,18 @@ final class WorkspaceHistoryController {
     }
 
     List<HistorySnapshotPayload.Version> versions() {
-        Optional<HistoryPagePayload> currentPage = page();
-        currentPage.filter(current -> !current.requestId().equals(loadedRequest))
-                .ifPresent(current -> {
-                    if (current.offset() == 0) loaded.clear();
-                    loaded.addAll(current.versions());
-                    loadedRequest = current.requestId();
-                    awaitingRefresh = false;
-                });
+        acceptPage();
+        synchronizeMetadata();
         if (!loaded.isEmpty()) {
-            return pages.versions(snapshot.dimensionId(), loaded);
+            return loadedView;
         }
         if (awaitingRefresh) return List.of();
         return offset == 0 && branch.value().equals(snapshot.branchName())
-                ? pages.versions(snapshot.dimensionId(), snapshot.versions())
-                : List.of();
+                ? snapshotView : List.of();
     }
 
     BranchName branch() {
         return branch;
-    }
-
-    int pageNumber() {
-        return pageSize == 0 ? 1 : offset / pageSize + 1;
-    }
-
-    boolean hasPrevious() {
-        return offset > 0;
-    }
-
-    boolean hasNext() {
-        return page().map(HistoryPagePayload::hasMore).orElse(false);
-    }
-
-    void previous() {
-        if (hasPrevious()) {
-            offset = Math.max(0, offset - pageSize);
-            request();
-        }
-    }
-
-    void next() {
-        if (hasNext()) {
-            offset += pageSize;
-            request();
-        }
     }
 
     boolean loadNextPage() {
@@ -130,7 +103,7 @@ final class WorkspaceHistoryController {
         if (current.isEmpty() || current.orElseThrow().offset() != offset) {
             return false;
         }
-        versions();
+        acceptPage();
         if (!current.orElseThrow().hasMore()) {
             return false;
         }
@@ -186,7 +159,29 @@ final class WorkspaceHistoryController {
     private void reset() {
         offset = 0;
         loaded.clear();
+        loadedView = List.of();
         loadedRequest = null;
+    }
+
+    private void acceptPage() {
+        page().filter(current -> current.offset() == offset)
+                .filter(current -> !current.requestId().equals(loadedRequest))
+                .ifPresent(current -> {
+                    if (current.offset() == 0) loaded.clear();
+                    loaded.addAll(current.versions());
+                    loadedView = pages.versions(snapshot.dimensionId(), loaded);
+                    loadedRequest = current.requestId();
+                    awaitingRefresh = false;
+                });
+    }
+
+    private void synchronizeMetadata() {
+        long current = pages.metadataRevision();
+        if (current == observedMetadataRevision) return;
+        observedMetadataRevision = current;
+        loadedView = pages.versions(snapshot.dimensionId(), loaded);
+        snapshotView = pages.versions(
+                snapshot.dimensionId(), snapshot.versions());
     }
 
     private void request() {
