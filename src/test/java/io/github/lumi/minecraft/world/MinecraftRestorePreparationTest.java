@@ -93,9 +93,8 @@ class MinecraftRestorePreparationTest {
         PreparedSectionDelta delta = preparation.prepare(target, before, ignored -> { })
                 .sections().get(key).deltaFrom(null);
 
-        assertArrayEquals(new int[] {17, 18}, delta.changedIndexes());
         assertArrayEquals(new int[] {18}, delta.poiIndexes());
-        assertEquals(2, delta.changedCells().length);
+        assertArrayEquals(new short[] {272, 528}, delta.changedCells());
         assertTrue(delta.lightChanged());
         assertFalse(delta.blockEntitiesChanged());
     }
@@ -152,8 +151,8 @@ class MinecraftRestorePreparationTest {
         DecodedSection first = prepared.sections().get(firstKey);
         DecodedSection second = prepared.sections().get(secondKey);
         assertSame(first.blockStates(), second.blockStates());
-        assertArrayEquals(new int[] {17}, first.preparedDelta().changedIndexes());
-        assertArrayEquals(new int[] {23}, second.preparedDelta().changedIndexes());
+        assertArrayEquals(new short[] {272}, first.preparedDelta().changedCells());
+        assertArrayEquals(new short[] {1808}, second.preparedDelta().changedCells());
         assertEquals(order, prepared.sectionKeys());
     }
 

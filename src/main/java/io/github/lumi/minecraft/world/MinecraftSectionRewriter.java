@@ -33,7 +33,7 @@ final class MinecraftSectionRewriter {
         LevelChunkSection section = chunk.getSection(sectionIndex);
         LevelChunkSection replacementSection = target.replacementFor(section);
         PreparedSectionDelta delta = target.deltaFrom(section);
-        if (delta.changedIndexes().length == 0) {
+        if (delta.changedCells().length == 0) {
             return new SectionApplyResult(key, delta.changedCells(), 0,
                     delta.blockEntitiesChanged(), false);
         }
