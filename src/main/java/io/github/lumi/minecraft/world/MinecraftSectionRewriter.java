@@ -38,10 +38,20 @@ final class MinecraftSectionRewriter {
                     delta.blockEntitiesChanged(), false);
         }
 
+        boolean wasOnlyAir = section.hasOnlyAir();
         chunk.getSections()[sectionIndex] = replacementSection;
         updatePois(key, replacementSection, delta.poiIndexes());
         updateHeightmaps(chunk, key, replacementSection, delta.heightmapIndexes());
+        boolean isOnlyAir = replacementSection.hasOnlyAir();
+        if (wasOnlyAir != isOnlyAir) {
+            SectionPos position = SectionPos.of(
+                    key.chunkX(), key.sectionY(), key.chunkZ());
+            level.getLightEngine().updateSectionStatus(position, isOnlyAir);
+            level.getChunkSource().onSectionEmptinessChanged(
+                    key.chunkX(), key.sectionY(), key.chunkZ(), isOnlyAir);
+        }
         if (delta.lightChanged()) {
+            updateSkyLightSources(chunk, key, delta.lightColumns());
             ((SectionLightBatchScheduler) level.getLightEngine())
                     .lumi$scheduleSectionChecks(
                             key.chunkX(), key.sectionY(), key.chunkZ(),
@@ -75,6 +85,21 @@ final class MinecraftSectionRewriter {
         }
     }
 
+    private static void updateSkyLightSources(
+            LevelChunk chunk, SectionKey key, short[] changedColumns) {
+        for (int z = 0; z < 16; z++) {
+            for (int y = 0; y < 16; y++) {
+                int changedX = changedColumns[(z << 4) | y] & 0xffff;
+                for (int x = 0; changedX != 0; x++, changedX >>>= 1) {
+                    if ((changedX & 1) != 0) {
+                        chunk.getSkyLightSources().update(
+                                chunk, x, key.sectionY() * 16 + y, z);
+                    }
+                }
+            }
+        }
+    }
+
     ChunkSyncResult synchronize(
             LevelChunk chunk,
             List<SectionApplyResult> sections,
@@ -84,12 +109,15 @@ final class MinecraftSectionRewriter {
         if (changedCells == 0 && !blockEntitiesChanged) {
             return ChunkSyncResult.NONE;
         }
+        var players = level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false);
+        if (players.isEmpty()) {
+            return ChunkSyncResult.NONE;
+        }
         boolean full = useFullChunkPacket(changedCells, blockEntitiesChanged);
         Packet<ClientGamePacketListener> packet = full
                 ? new ClientboundLevelChunkWithLightPacket(
                         chunk, level.getLightEngine(), new BitSet(), new BitSet())
                 : null;
-        var players = level.getChunkSource().chunkMap.getPlayers(chunk.getPos(), false);
         long payloadBytes = packetPayloadBytes(packet, sections);
         for (var player : players) {
             if (packet != null) {

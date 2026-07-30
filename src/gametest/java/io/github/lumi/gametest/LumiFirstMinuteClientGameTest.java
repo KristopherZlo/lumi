@@ -108,8 +108,9 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         waitForStableIdle(context, server,
                 "Redo did not release the world operation slot");
 
-        assertClientLightRestore(context, server, report, operations, actions,
-                probe.offset(8, 2, 0));
+        LightState light = assertClientLightRestore(
+                context, server, report, operations, actions,
+                probe.offset(8, 32, 0));
 
         int boundaryX = ((probe.getX() >> 4) + 1) << 4;
         Vec3 entityOrigin = new Vec3(
@@ -134,48 +135,46 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
                 "real packets, entity move, Save, Restore, Undo, Redo");
         state = new SmokeState(
                 entityOriginSave, probe, blockEntityProbe, pig,
-                movedEntity, entityOrigin);
+                movedEntity, entityOrigin, light);
     }
 
-    private static void assertClientLightRestore(
+    private static LightState assertClientLightRestore(
             ClientGameTestContext context,
             TestServerContext server,
             LumiBehaviorReport report,
             LumiBehaviorOperations operations,
             LumiBehaviorActions actions,
-            BlockPos gate) throws IOException {
-        BlockPos source = gate.west();
-        BlockPos lightProbe = gate.east();
-        actions.playerCommand("client_light_shell",
-                "fill " + coordinates(gate.offset(-2, -1, -1)) + " "
-                        + coordinates(gate.offset(2, 1, 1)) + " minecraft:stone");
+            BlockPos source) throws IOException {
+        BlockPos lightProbe = source.east();
         actions.playerCommand("client_light_source",
                 "setblock " + coordinates(source) + " minecraft:glowstone");
         actions.playerCommand("client_light_probe",
                 "setblock " + coordinates(lightProbe) + " minecraft:air");
-        actions.playerCommand("client_light_open",
-                "setblock " + coordinates(gate) + " minecraft:air");
-        awaitBlock(context, server, gate, Blocks.AIR);
+        awaitBlock(context, server, source, Blocks.GLOWSTONE);
         int bright = awaitLight(context, server, lightProbe, null);
         operations.awaitDurability("client_light_bright");
         CommitId brightCommit = operations.save("client-light-bright");
 
-        actions.playerCommand("client_light_closed",
-                "setblock " + coordinates(gate) + " minecraft:stone");
-        awaitBlock(context, server, gate, Blocks.STONE);
+        actions.playerCommand("client_light_removed",
+                "setblock " + coordinates(source) + " minecraft:air");
+        awaitBlock(context, server, source, Blocks.AIR);
         int dark = awaitLight(context, server, lightProbe, null);
         if (bright <= dark) {
-            throw new AssertionError("Client-light fixture was not brighter when "
-                    + "open: bright=" + bright + ", dark=" + dark);
+            throw new AssertionError("Client-light fixture did not darken after "
+                    + "source removal: bright=" + bright + ", dark=" + dark);
         }
         operations.awaitDurability("client_light_dark");
-        operations.save("client-light-dark");
+        CommitId darkCommit = operations.save("client-light-dark");
         operations.restore("client-light-bright", brightCommit);
 
-        awaitBlock(context, server, gate, Blocks.AIR);
+        awaitBlock(context, server, source, Blocks.GLOWSTONE);
         awaitLight(context, server, lightProbe, bright);
+        operations.restore("client-light-dark", darkCommit);
+        awaitBlock(context, server, source, Blocks.AIR);
+        awaitLight(context, server, lightProbe, dark);
         report.event("gate", "restore_light_client", "succeeded", 0, 0,
                 "bright=" + bright + ";dark=" + dark);
+        return new LightState(source, lightProbe, dark);
     }
 
     private static void awaitBlock(
@@ -242,6 +241,8 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
             return runtime.activeRef().commit().equals(state.save())
                     && player.level().getBlockState(state.probe()).is(Blocks.STONE)
                     && player.level().getBlockState(
+                            state.light().source()).is(Blocks.AIR)
+                    && player.level().getBlockState(
                             state.blockEntityProbe()).is(Blocks.CHEST)
                     && player.level().getBlockEntity(
                             state.blockEntityProbe()) != null
@@ -250,6 +251,8 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         if (!persisted) {
             throw new AssertionError("First-minute state did not survive world reopen");
         }
+        awaitBlock(context, server, state.light().source(), Blocks.AIR);
+        awaitLight(context, server, state.light().probe(), state.light().level());
         waitFor(context, () -> entityChunksReady(server, state.entityOrigin()),
                 "Cross-chunk entity storage did not become ready after reopen");
         assertExactEntity(server, state.movedEntity(), state.entityOrigin());
@@ -448,5 +451,8 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
             BlockPos blockEntityProbe,
             UUID pig,
             UUID movedEntity,
-            Vec3 entityOrigin) { }
+            Vec3 entityOrigin,
+            LightState light) { }
+
+    private record LightState(BlockPos source, BlockPos probe, int level) { }
 }
