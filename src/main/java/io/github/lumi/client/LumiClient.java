@@ -2,6 +2,8 @@ package io.github.lumi.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.LumiMod;
+import io.github.lumi.client.diagnostics.ClientOperationDiagnostics;
+import io.github.lumi.client.state.ClientDeveloperMode;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientNotificationStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
@@ -96,6 +98,10 @@ public final class LumiClient implements ClientModInitializer {
             new ClientPendingStatisticsStore();
     private static final ClientNotificationStore NOTIFICATIONS =
             new ClientNotificationStore();
+    private static final ClientDeveloperMode DEVELOPER_MODE =
+            new ClientDeveloperMode();
+    private static final ClientOperationDiagnostics OPERATION_DIAGNOSTICS =
+            new ClientOperationDiagnostics();
     private static final ClientSurvivalSettingsStore SURVIVAL_SETTINGS =
             new ClientSurvivalSettingsStore();
     private static final ClientOnboardingStateRepository ONBOARDING =
@@ -234,7 +240,7 @@ public final class LumiClient implements ClientModInitializer {
                 LumiClient::openPackages,
                 LumiClient::openMore,
                 screen -> client.setScreen(new LumiSettingsScreen(
-                        screen, HISTORY, TELEMETRY,
+                        screen, HISTORY, TELEMETRY, DEVELOPER_MODE,
                         NETWORKING::updateWorkspaceSettings,
                         SURVIVAL_SETTINGS,
                         NETWORKING::requestSurvivalSettings,
@@ -282,6 +288,13 @@ public final class LumiClient implements ClientModInitializer {
 
     private static void acceptOperationEvent(OperationEventPayload event) {
         PREVIEW_CAPTURE.accept(event);
+        OPERATION_DIAGNOSTICS.accept(event, DEVELOPER_MODE.enabled())
+                .ifPresent(report -> {
+                    var player = Minecraft.getInstance().player;
+                    if (player != null) {
+                        player.displayClientMessage(report, false);
+                    }
+                });
         if (Minecraft.getInstance().screen instanceof LumiDeleteVersionScreen delete
                 && delete.accept(event)) {
             HISTORY_PAGES.invalidateDimension(event.dimensionId());

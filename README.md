@@ -133,6 +133,9 @@ History search waits four client ticks after the last keystroke before requestin
 a page, while initial loads, paging, branch changes, and invalidations stay immediate.
 Zone overlays likewise wait for a stable player cell and history revision before
 requesting a new shell.
+The opt-in developer mode in Lumi settings prints observed operation timings,
+exact Restore apply phases and verification status in chat; every terminal
+report, including failures, has a copy action.
 
 ## For Developers
 

@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
+import io.github.lumi.client.state.ClientDeveloperMode;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientSurvivalSettingsStore;
 import io.github.lumi.domain.model.HudDisplayMode;
@@ -17,12 +18,13 @@ import net.minecraft.network.chat.Component;
 
 /** Active-workspace defaults and client-local diagnostic controls. */
 public final class LumiSettingsScreen extends LumiPageScreen {
-    private static final int SETTING_COUNT = 8;
+    private static final int SETTING_COUNT = 9;
     private static final int SETTING_STRIDE = LumiSettingRow.HEIGHT + 2;
     private static final List<HudDisplayMode> HUD_MODES = List.of(
             HudDisplayMode.GUI, HudDisplayMode.BOSSBAR, HudDisplayMode.NONE);
     private final ClientHistoryStore history;
     private final TelemetryService telemetry;
+    private final ClientDeveloperMode developerMode;
     private final Consumer<WorkspaceSettings> updateWorkspace;
     private final ClientSurvivalSettingsStore survivalSettings;
     private final Runnable requestSurvivalSettings;
@@ -51,6 +53,7 @@ public final class LumiSettingsScreen extends LumiPageScreen {
             Screen parent,
             ClientHistoryStore history,
             TelemetryService telemetry,
+            ClientDeveloperMode developerMode,
             Consumer<WorkspaceSettings> updateWorkspace,
             ClientSurvivalSettingsStore survivalSettings,
             Runnable requestSurvivalSettings,
@@ -59,6 +62,8 @@ public final class LumiSettingsScreen extends LumiPageScreen {
                 ProjectTab.SETTINGS);
         this.history = Objects.requireNonNull(history, "history");
         this.telemetry = Objects.requireNonNull(telemetry, "telemetry");
+        this.developerMode = Objects.requireNonNull(
+                developerMode, "developerMode");
         this.updateWorkspace = Objects.requireNonNull(
                 updateWorkspace, "updateWorkspace");
         this.survivalSettings = Objects.requireNonNull(
@@ -145,7 +150,11 @@ public final class LumiSettingsScreen extends LumiPageScreen {
                 "luma.settings.telemetry_enabled",
                 "luma.settings.telemetry_enabled_help",
                 enabled, this::toggleTelemetry);
-        addActionSetting(7, x, width,
+        addToggleSetting(7, x, width,
+                "luma.settings.developer_mode",
+                "luma.settings.developer_mode_help",
+                developerMode.enabled(), this::toggleDeveloperMode);
+        addActionSetting(8, x, width,
                 Component.translatable("luma.settings.telemetry_clear_queue"),
                 Component.translatable("luma.settings.telemetry_pending",
                         telemetry.pendingEventCount()).append(" · ").append(
@@ -293,6 +302,11 @@ public final class LumiSettingsScreen extends LumiPageScreen {
 
     private void toggleTelemetry() {
         telemetry.setEnabled(!telemetry.settings().enabled());
+        rebuildWidgets();
+    }
+
+    private void toggleDeveloperMode() {
+        developerMode.setEnabled(!developerMode.enabled());
         rebuildWidgets();
     }
 

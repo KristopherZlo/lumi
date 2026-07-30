@@ -538,6 +538,8 @@
   "luma.settings.telemetry_help": "Send technical crash, failure, rejection, and severe performance diagnostics to help fix Lumi.",
   "luma.settings.telemetry_enabled": "Send diagnostic telemetry",
   "luma.settings.telemetry_enabled_help": "Lumi sends only technical diagnostics, not screen views, clicks, world names, coordinates, seed, raw logs, or raw NBT. You can turn this off at any time.",
+  "luma.settings.developer_mode": "Developer chat statistics",
+  "luma.settings.developer_mode_help": "Show operation phase times, Restore verification, and copyable errors in chat. Off by default.",
   "luma.settings.telemetry_pending": "Pending telemetry events: %s",
   "luma.settings.telemetry_last_send": "Last telemetry send: %s",
   "luma.settings.telemetry_clear_queue": "Clear local telemetry queue",

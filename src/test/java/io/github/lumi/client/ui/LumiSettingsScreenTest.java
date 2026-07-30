@@ -38,6 +38,9 @@ class LumiSettingsScreenTest {
         assertTrue(source.contains("active.automaticVersionsEnabled()"));
         assertTrue(source.contains("toggleAutomaticVersions"));
         assertTrue(source.contains("luma.settings.telemetry_enabled"));
+        assertTrue(source.contains("luma.settings.developer_mode"));
+        assertTrue(source.contains("ClientDeveloperMode developerMode"));
+        assertTrue(source.contains("developerMode.setEnabled("));
         assertTrue(source.contains("luma.settings.survival_mode"));
         assertTrue(source.contains("ClientSurvivalSettingsStore"));
         assertTrue(source.contains("requestSurvivalSettings.run()"));
