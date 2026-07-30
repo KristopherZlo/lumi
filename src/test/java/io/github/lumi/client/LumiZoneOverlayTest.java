@@ -5,8 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.ZoneShellFace;
+import io.github.lumi.network.ZoneOverlayArgument;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class LumiZoneOverlayTest {
@@ -65,5 +69,61 @@ class LumiZoneOverlayTest {
                 colors.resolve("jeb_", persisted, 1_000));
         assertEquals(0xff000000,
                 colors.resolve("jeb_", persisted, 2_000) & 0xff000000);
+    }
+
+    @Test
+    void requestsOnlyAfterTheSameCellIsStableForFourTicks() {
+        List<ZoneOverlayArgument.Mode> requests = new ArrayList<>();
+        LumiZoneOverlay overlay = overlay(requests);
+
+        for (int cell = 0; cell < 100; cell++) {
+            overlay.considerRequest(key(cell, LumiZoneOverlay.Mode.FOCUSED), false);
+        }
+        assertTrue(requests.isEmpty());
+
+        var stable = key(100, LumiZoneOverlay.Mode.FOCUSED);
+        for (int tick = 0; tick < 4; tick++) {
+            overlay.considerRequest(stable, false);
+        }
+        assertEquals(List.of(ZoneOverlayArgument.Mode.FOCUSED), requests);
+
+        for (int tick = 0; tick < 10; tick++) {
+            overlay.considerRequest(stable, false);
+        }
+        assertEquals(1, requests.size());
+    }
+
+    @Test
+    void changingModeReplacesThePreviousCandidate() {
+        List<ZoneOverlayArgument.Mode> requests = new ArrayList<>();
+        LumiZoneOverlay overlay = overlay(requests);
+        var focused = key(0, LumiZoneOverlay.Mode.FOCUSED);
+        for (int tick = 0; tick < 3; tick++) {
+            overlay.considerRequest(focused, false);
+        }
+
+        overlay.cycle();
+        var all = key(0, LumiZoneOverlay.Mode.ALL);
+        for (int tick = 0; tick < 3; tick++) {
+            overlay.considerRequest(all, false);
+        }
+        assertTrue(requests.isEmpty());
+        overlay.considerRequest(all, false);
+        assertEquals(List.of(ZoneOverlayArgument.Mode.ALL), requests);
+    }
+
+    private static LumiZoneOverlay overlay(
+            List<ZoneOverlayArgument.Mode> requests) {
+        return new LumiZoneOverlay(
+                new io.github.lumi.client.state.ClientZoneOverlayStore(),
+                new io.github.lumi.client.state.ClientHistoryStore(),
+                requests::add);
+    }
+
+    private static LumiZoneOverlay.RequestKey key(
+            int cell, LumiZoneOverlay.Mode mode) {
+        return new LumiZoneOverlay.RequestKey(
+                "minecraft:overworld", new UUID(0, 1), mode,
+                cell, 0, 0, List.of());
     }
 }

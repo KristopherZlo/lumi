@@ -129,6 +129,8 @@ Outdated pending-work statistics are cancelled without reporting a history error
 and never delay a confirmed Save, Restore, or undo action.
 History search waits four client ticks after the last keystroke before requesting
 a page, while initial loads, paging, branch changes, and invalidations stay immediate.
+Zone overlays likewise wait for a stable player cell and history revision before
+requesting a new shell.
 
 ## For Developers
 

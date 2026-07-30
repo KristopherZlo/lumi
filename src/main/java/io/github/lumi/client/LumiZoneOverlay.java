@@ -22,12 +22,15 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 /** Requests and renders bounded zone shells in the world. */
 public final class LumiZoneOverlay {
     private static final double FACE_THICKNESS = 0.015;
+    private static final int REQUEST_STABLE_TICKS = 4;
     private final ClientZoneOverlayStore overlays;
     private final ClientHistoryStore history;
     private final Consumer<ZoneOverlayArgument.Mode> request;
     private final LumiZoneColor zoneColors = new LumiZoneColor();
     private Mode mode = Mode.FOCUSED;
-    private RequestKey lastRequest;
+    private RequestKey candidateRequest;
+    private int candidateStableTicks;
+    private RequestKey lastRequestedKey;
     private UUID lastEntered;
     private ClientZoneOverlayStore.Snapshot renderedSnapshot;
     private List<RenderZone> renderedZones = List.of();
@@ -64,7 +67,9 @@ public final class LumiZoneOverlay {
             case ALL -> Mode.HIDDEN;
             case HIDDEN -> Mode.FOCUSED;
         };
-        lastRequest = null;
+        candidateRequest = null;
+        candidateStableTicks = 0;
+        lastRequestedKey = null;
         if (mode == Mode.HIDDEN) {
             overlays.clear();
         }
@@ -85,15 +90,25 @@ public final class LumiZoneOverlay {
                         .map(zone -> new ZoneRevision(
                                 zone.id(), zone.revision()))
                         .toList());
-        if (!key.equals(lastRequest)
-                && !overlays.loading(
-                        snapshot.dimensionId(), snapshot.workspaceId())) {
-            request.accept(mode == Mode.ALL
+        considerRequest(key, overlays.loading(
+                snapshot.dimensionId(), snapshot.workspaceId()));
+        notifyEntered(client);
+    }
+
+    void considerRequest(RequestKey key, boolean loading) {
+        if (!key.equals(candidateRequest)) {
+            candidateRequest = key;
+            candidateStableTicks = 1;
+        } else {
+            candidateStableTicks++;
+        }
+        if (candidateStableTicks >= REQUEST_STABLE_TICKS
+                && !key.equals(lastRequestedKey) && !loading) {
+            request.accept(key.mode() == Mode.ALL
                     ? ZoneOverlayArgument.Mode.ALL
                     : ZoneOverlayArgument.Mode.FOCUSED);
-            lastRequest = key;
+            lastRequestedKey = key;
         }
-        notifyEntered(client);
     }
 
     private void notifyEntered(Minecraft client) {
@@ -254,7 +269,7 @@ public final class LumiZoneOverlay {
     private record RenderFace(
             Direction side, AABB bounds, VoxelShape outline) { }
 
-    private record RequestKey(
+    record RequestKey(
             String dimension,
             UUID workspace,
             Mode mode,
