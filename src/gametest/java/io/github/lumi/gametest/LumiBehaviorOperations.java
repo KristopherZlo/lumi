@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
@@ -164,7 +165,8 @@ final class LumiBehaviorOperations {
     LumiRestoreMeasurement measureRestore(String name, CommitId target)
             throws IOException {
         return measureMutation(
-                "restore_" + name, () -> restoreFromUi(target));
+                "restore_" + name,
+                boundary -> ui.restore(target, boundary));
     }
 
     LumiRestoreMeasurement measureBranchSwitch(
@@ -172,14 +174,17 @@ final class LumiBehaviorOperations {
         int keyCode = branchShortcut(target);
         LumiRestoreMeasurement measurement = measureMutation(
                 "branch_switch_" + name,
-                () -> ui.pressChord(keyCode));
+                boundary -> {
+                    boundary.run();
+                    ui.pressChord(keyCode);
+                });
         awaitSnapshot(snapshot -> snapshot.branchName().equals(target.value()),
                 "active branch " + target.value());
         return measurement;
     }
 
     private LumiRestoreMeasurement measureMutation(
-            String name, ClientAction action) throws IOException {
+            String name, MeasuredClientAction action) throws IOException {
         awaitHistoryReady();
         AtomicReference<RestoreApplyStatistics> statistics = new AtomicReference<>();
         AtomicReference<LumiServerTickProbe> tickProbe = new AtomicReference<>();
@@ -206,14 +211,22 @@ final class LumiBehaviorOperations {
             return null;
         });
         Runtime jvm = Runtime.getRuntime();
-        long heapBefore = usedHeap(jvm);
-        long[] peakHeap = {heapBefore};
-        long uiStarted = System.nanoTime();
+        long[] heapBefore = {-1};
+        long[] peakHeap = {0};
+        AtomicLong uiStarted = new AtomicLong();
         long maximumServerTick;
         try {
+            UUID requestId = send(name, () -> action.run(() -> {
+                heapBefore[0] = usedHeap(jvm);
+                peakHeap[0] = heapBefore[0];
+                uiStarted.set(System.nanoTime());
+            }), uiStarted::get);
+            if (uiStarted.get() == 0) {
+                throw new AssertionError(
+                        name + " did not mark its mutation boundary");
+            }
             awaitOperation(name,
-                    send(name, action, uiStarted),
-                    failure, uiStarted,
+                    requestId, failure, uiStarted.get(),
                     () -> peakHeap[0] = Math.max(peakHeap[0], usedHeap(jvm)));
         } finally {
             LumiServerTickProbe probe = tickProbe.get();
@@ -232,8 +245,8 @@ final class LumiBehaviorOperations {
         }
         return new LumiRestoreMeasurement(
                 elapsedMillis(acceptedNanos.get(), terminalNanos.get()),
-                elapsedMillis(uiStarted, acceptedNanos.get()),
-                heapBefore, peakHeap[0],
+                elapsedMillis(uiStarted.get(), acceptedNanos.get()),
+                heapBefore[0], peakHeap[0],
                 maximumServerTick, measured);
     }
 
@@ -370,6 +383,11 @@ final class LumiBehaviorOperations {
     }
 
     private UUID send(String name, ClientAction action, long started) {
+        return send(name, action, () -> started);
+    }
+
+    private UUID send(
+            String name, ClientAction action, LongSupplier started) {
         Set<UUID> known = context.computeOnClient(client ->
                 LumiClient.history().state().events().keySet());
         action.run();
@@ -384,7 +402,7 @@ final class LumiBehaviorOperations {
             if (added.size() == 1) {
                 UUID requestId = added.iterator().next();
                 report.event("ui_request", name, "accepted", ticks,
-                        elapsedMillis(started), requestId.toString());
+                        elapsedMillis(started.getAsLong()), requestId.toString());
                 return requestId;
             }
             if (added.size() > 1) {
@@ -394,7 +412,7 @@ final class LumiBehaviorOperations {
             ticks++;
         }
         report.event("ui_request", name, "timeout", ticks,
-                elapsedMillis(started), "No new operation event");
+                elapsedMillis(started.getAsLong()), "No new operation event");
         throw new AssertionError(name + " produced no operation event within "
                 + OPERATION_TIMEOUT_TICKS + " ticks");
     }
@@ -625,4 +643,7 @@ final class LumiBehaviorOperations {
 
     @FunctionalInterface
     private interface ClientAction { void run(); }
+
+    @FunctionalInterface
+    private interface MeasuredClientAction { void run(Runnable boundary); }
 }

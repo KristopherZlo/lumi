@@ -43,11 +43,16 @@ final class LumiUiTestDriver {
     }
 
     void restore(CommitId target) {
+        restore(target, () -> { });
+    }
+
+    void restore(CommitId target, Runnable beforeConfirm) {
         String query = uniquePrefix(target);
         openDashboard();
         typeIntoFocusedTextBox(LumiDashboardScreen.class, query);
         pressFilteredHistoryAction("luma.action.restore");
         context.waitForScreen(LumiRestoreScreen.class);
+        beforeConfirm.run();
         pressUniqueButton(LumiRestoreScreen.class, "luma.action.restore");
         context.waitForScreen(LumiDashboardScreen.class);
         closeScreen(LumiDashboardScreen.class, null);
