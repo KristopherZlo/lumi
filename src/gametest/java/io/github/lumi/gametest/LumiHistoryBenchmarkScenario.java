@@ -582,7 +582,7 @@ final class LumiHistoryBenchmarkScenario {
             BlockBox area,
             long repositoryBytes) { }
 
-    private record BranchEndpoint(
+    record BranchEndpoint(
             BranchRef ref,
             LumiWorldSnapshot snapshot) { }
 

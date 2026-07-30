@@ -96,6 +96,10 @@ final class LumiWorldSnapshot {
                 + expected.digest + ", got " + digest + "; " + firstDifference(expected));
     }
 
+    String sha256() {
+        return digest;
+    }
+
     private String firstDifference(LumiWorldSnapshot expected) {
         if (!sections.keySet().equals(expected.sections.keySet())) {
             return "section keys differ";

@@ -1,5 +1,6 @@
 package io.github.lumi.gametest;
 
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -10,11 +11,19 @@ public final class LumiHistoryBenchmarkClientGameTest
         implements FabricClientGameTest {
     private static final String EXISTING_WORLD_PROPERTY =
             LumiHistoryBenchmarkConfig.PREFIX + "existingWorld";
+    private static final String COLD_MODE_PROPERTY =
+            LumiHistoryBenchmarkConfig.PREFIX + "coldMode";
+    private static final String COLD_MANIFEST_PROPERTY =
+            LumiHistoryBenchmarkConfig.PREFIX + "coldManifest";
 
     @Override
     public void runTest(ClientGameTestContext context) {
         if (!LumiClientTestSuite.includes(LumiClientTestSuite.BENCHMARK)
                 || !LumiHistoryBenchmarkConfig.enabled()) {
+            return;
+        }
+        if ("fixture".equalsIgnoreCase(System.getProperty(COLD_MODE_PROPERTY, ""))) {
+            runColdFixture(context);
             return;
         }
         String existingWorld = System.getProperty(EXISTING_WORLD_PROPERTY);
@@ -46,6 +55,36 @@ public final class LumiHistoryBenchmarkClientGameTest
                             new LumiHistoryBenchmarkScenario(
                                     test, world, report, config)
                                     .run(new LumiUiTestDriver(test)));
+        }
+    }
+
+    private static void runColdFixture(ClientGameTestContext context) {
+        LumiHistoryBenchmarkConfig config = LumiHistoryBenchmarkConfig.load();
+        config.requireRunnableFixture();
+        String manifest = System.getProperty(COLD_MANIFEST_PROPERTY);
+        if (manifest == null || manifest.isBlank()) {
+            throw new IllegalArgumentException(
+                    COLD_MANIFEST_PROPERTY + " is required for fixture mode");
+        }
+        try (var ignored = LumiUiScaleTestScope.readableViewport()) {
+            LumiClientBehaviorWorld.run(
+                    context, "cold-restore-fixture", (test, world, report) -> {
+                        LumiHistoryBenchmarkScenario.BranchFixture fixture =
+                                new LumiHistoryBenchmarkScenario(
+                                        test, world, report, config)
+                                        .prepareBranchSwitch(
+                                                new LumiUiTestDriver(test));
+                        LumiColdRestoreManifest captured =
+                                LumiColdRestoreManifest.capture(
+                                        "Lumi behavior seed 710", fixture);
+                        captured.write(Path.of(manifest));
+                        report.event("fixture", "cold_restore_manifest",
+                                "written", 0, 0,
+                                "initial=" + captured.initialCommit().hex()
+                                        + ";latest=" + captured.latestCommit().hex()
+                                        + ";latestBranch="
+                                        + captured.latestBranch().value());
+                    });
         }
     }
 
