@@ -22,7 +22,7 @@ class LumiDimensionsScreenTest {
         String history = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDimensionHistoryScreen.java"));
         assertTrue(history.contains("new HistoryScope.Dimension(dimensionId)"));
-        assertTrue(history.contains("renderLatest(graphics)"));
+        assertTrue(history.contains("renderLatest(graphics, render.mouseX(), render.mouseY())"));
         assertTrue(history.contains("luma.history.empty"));
     }
 }

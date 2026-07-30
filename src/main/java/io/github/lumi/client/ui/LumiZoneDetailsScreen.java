@@ -323,7 +323,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                     Component.translatable(zone.active()
                             ? "luma.zones.details_active"
                             : "luma.zones.details_inactive"));
-            renderWorkspace(graphics);
+            renderWorkspace(graphics, render.mouseX(), render.mouseY());
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
             if (graphView != null && geometry.historyHeight() >= 56) {
                 graphView.renderHover(
@@ -334,7 +334,8 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         }
     }
 
-    private void renderWorkspace(GuiGraphics graphics) {
+    private void renderWorkspace(
+            GuiGraphics graphics, int mouseX, int mouseY) {
         int x = layout.bodyX();
         int width = layout.bodyWidth();
         renderPanel(
@@ -368,7 +369,8 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                     geometry.latestY() + 7, LumiTheme.TEXT, false);
             latestCreated().ifPresent(version -> renderVersionCard(
                     graphics, version,
-                    LumiDashboardScreen.latestCardY(geometry), true));
+                    LumiDashboardScreen.latestCardY(geometry), true,
+                    mouseX, mouseY));
         }
         if (geometry.historyHeight() <= 0) return;
         renderPanel(graphics, x, geometry.historyY(),
@@ -388,7 +390,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                             + LumiDashboardScreen.HISTORY_FIRST_ROW_OFFSET
                             + index * LumiDashboardScreen.historyRowStride(
                                     layout.bodyWidth()),
-                    false);
+                    false, mouseX, mouseY);
         }
         renderScrollbar(
                 graphics, x,
@@ -415,12 +417,15 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
             GuiGraphics graphics,
             HistorySnapshotPayload.Version version,
             int rowY,
-            boolean featured) {
+            boolean featured,
+            int mouseX,
+            int mouseY) {
         commitCards.render(
                 graphics, version, displayedTags(version),
                 LumiDashboardScreen.versionCardLayout(
                         layout.bodyX(), layout.bodyWidth(), rowY),
-                zone.color(), snapshot.head().equals(version.id()), featured);
+                zone.color(), snapshot.head().equals(version.id()), featured,
+                mouseX, mouseY);
     }
 
     private void requestPendingStatistics() {

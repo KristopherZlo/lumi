@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.lumi.domain.model.VersionTags;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class LumiCommitCardTest {
@@ -25,6 +27,20 @@ class LumiCommitCardTest {
         var error = assertThrows(IllegalArgumentException.class,
                 () -> card.actionX(4));
         assertTrue(error.getMessage().contains("save-card action"));
+    }
+
+    @Test
+    void scrollsOnlyTagContentLinearlyThroughTwoSpaces() {
+        assertEquals("hello  hello", LumiCommitCard.marqueeText("hello"));
+        assertEquals(
+                "#redstone #tower  #redstone #tower",
+                LumiCommitCard.marqueeText(LumiCommitCard.tagText(
+                        new VersionTags(List.of("redstone", "tower")))));
+        assertEquals(0.0F, LumiCommitCard.marqueeOffset(0L, 24));
+        assertEquals(6.0F, LumiCommitCard.marqueeOffset(
+                250_000_000L, 24), 0.001F);
+        assertEquals(6.0F, LumiCommitCard.marqueeOffset(
+                1_250_000_000L, 24), 0.001F);
     }
 
     private static void assertBounded(

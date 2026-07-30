@@ -500,7 +500,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                     layout.bodyX() + 14, layout.bodyY() + 36,
                     LumiTheme.MUTED, false);
         } else {
-            drawWorkspace(graphics);
+            drawWorkspace(graphics, render.mouseX(), render.mouseY());
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         if (graphView != null) {
@@ -574,7 +574,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 : server.getWorldData().getLevelName();
     }
 
-    private void drawWorkspace(GuiGraphics graphics) {
+    private void drawWorkspace(
+            GuiGraphics graphics, int mouseX, int mouseY) {
         int x = layout.bodyX();
         int width = layout.bodyWidth();
         drawPanel(graphics, x, layout.bodyY(), width,
@@ -610,7 +611,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                     x + PANEL_PADDING, dashboardGeometry.latestY() + 7,
                     LumiTheme.TEXT, false);
             latestCreated().ifPresent(version -> renderVersionCard(
-                    graphics, version, latestCardY(dashboardGeometry), true));
+                    graphics, version, latestCardY(dashboardGeometry), true,
+                    mouseX, mouseY));
         }
         if (historyHeight <= 0) {
             return;
@@ -651,7 +653,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             HistorySnapshotPayload.Version version = visible.get(index);
             int rowY = historyY + HISTORY_FIRST_ROW_OFFSET
                     + index * historyRowStride(width);
-            renderVersionCard(graphics, version, rowY, false);
+            renderVersionCard(
+                    graphics, version, rowY, false, mouseX, mouseY);
         }
         renderScrollbar(
                 graphics, x,
@@ -676,7 +679,9 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             GuiGraphics graphics,
             HistorySnapshotPayload.Version version,
             int rowY,
-            boolean featured) {
+            boolean featured,
+            int mouseX,
+            int mouseY) {
         VersionTags tags = displayedTags(version);
         LumiCommitCard.Layout card = versionCardLayout(
                 layout.bodyX(), layout.bodyWidth(), rowY);
@@ -689,7 +694,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         try {
             commitCards.render(
                     graphics, version, tags, card, LumiTheme.ACCENT,
-                    snapshot.head().equals(version.id()), featured);
+                    snapshot.head().equals(version.id()), featured,
+                    mouseX, mouseY);
         } finally {
             if (upsideDown) graphics.pose().popMatrix();
         }

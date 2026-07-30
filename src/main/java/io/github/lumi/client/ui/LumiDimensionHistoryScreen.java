@@ -232,14 +232,14 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
                     layout.contentWidth(), title,
                     Component.translatable("luma.dimensions.read_only"));
             renderBuildPanel(graphics);
-            renderLatest(graphics);
+            renderLatest(graphics, render.mouseX(), render.mouseY());
             if (historyHeight > 0) {
                 renderPanel(graphics, layout.bodyX(), historyY,
                         layout.bodyWidth(), historyHeight);
             }
             if (search != null) renderTextField(graphics, search);
             if (graphView != null) graphView.renderConnections(graphics);
-            renderRows(graphics);
+            renderRows(graphics, render.mouseX(), render.mouseY());
             renderScrollbar(
                     graphics, layout.bodyX(), rowsY(), layout.bodyWidth() - 3,
                     Math.max(0, historyHeight
@@ -272,7 +272,8 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
                 layout.bodyY() + statusOffset, LumiTheme.MUTED, false);
     }
 
-    private void renderRows(GuiGraphics graphics) {
+    private void renderRows(
+            GuiGraphics graphics, int mouseX, int mouseY) {
         if (graphView != null) return;
         List<HistorySnapshotPayload.Version> visible = loaded.stream()
                 .skip(scroll).limit(capacity()).toList();
@@ -284,7 +285,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
                     graphics, version, version.tags(),
                     LumiDashboardScreen.versionCardLayout(
                             layout.bodyX(), layout.bodyWidth(), y),
-                    LumiTheme.ACCENT, false, false);
+                    LumiTheme.ACCENT, false, false, mouseX, mouseY);
         }
         if (loaded.isEmpty()) {
             Optional<HistoryPagePayload> page = page();
@@ -306,7 +307,8 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
         }
     }
 
-    private void renderLatest(GuiGraphics graphics) {
+    private void renderLatest(
+            GuiGraphics graphics, int mouseX, int mouseY) {
         if (!geometry.latestVisible()) return;
         latestCreated().ifPresent(version -> {
             renderPanel(graphics, layout.bodyX(), geometry.latestY(),
@@ -320,7 +322,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
                     LumiDashboardScreen.versionCardLayout(
                             layout.bodyX(), layout.bodyWidth(),
                             LumiDashboardScreen.latestCardY(geometry)),
-                    LumiTheme.ACCENT, false, true);
+                    LumiTheme.ACCENT, false, true, mouseX, mouseY);
         });
     }
 
