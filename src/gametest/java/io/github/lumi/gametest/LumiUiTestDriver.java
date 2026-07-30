@@ -129,32 +129,43 @@ final class LumiUiTestDriver {
     }
 
     void disablePreviewGeneration() {
-        disableSetting(
+        setSetting(
                 "luma.settings.preview_generation",
-                HistorySnapshotPayload.WorkspaceView::previewGenerationEnabled);
+                HistorySnapshotPayload.WorkspaceView::previewGenerationEnabled,
+                false);
     }
 
     void disableEntityRestore() {
-        disableSetting(
+        setSetting(
                 "luma.settings.restore_entities",
-                HistorySnapshotPayload.WorkspaceView::includeEntitiesOnRestore);
+                HistorySnapshotPayload.WorkspaceView::includeEntitiesOnRestore,
+                false);
     }
 
-    private void disableSetting(
+    void enableEntityRestore() {
+        setSetting(
+                "luma.settings.restore_entities",
+                HistorySnapshotPayload.WorkspaceView::includeEntitiesOnRestore,
+                true);
+    }
+
+    private void setSetting(
             String translationKey,
-            Predicate<HistorySnapshotPayload.WorkspaceView> enabled) {
-        if (!enabled.test(activeWorkspace())) return;
+            Predicate<HistorySnapshotPayload.WorkspaceView> enabled,
+            boolean expected) {
+        if (enabled.test(activeWorkspace()) == expected) return;
         openTab("luma.action.settings", LumiSettingsScreen.class);
         pressUniqueButton(LumiSettingsScreen.class, translationKey);
         for (int tick = 0; tick < 1_200; tick++) {
-            if (!enabled.test(activeWorkspace())) {
+            if (enabled.test(activeWorkspace()) == expected) {
                 closeScreen(LumiSettingsScreen.class, LumiDashboardScreen.class);
                 closeScreen(LumiDashboardScreen.class, null);
                 return;
             }
             context.waitTick();
         }
-        throw new AssertionError(translationKey + " remained enabled");
+        throw new AssertionError(translationKey + " remained "
+                + (expected ? "disabled" : "enabled"));
     }
 
     void awaitZone(String name, boolean active) {

@@ -53,6 +53,7 @@ final class LumiColdRestoreMeasurementScenario {
 
         ui.completeOnboardingIfShown();
         ui.awaitHistory();
+        ui.enableEntityRestore();
         assertValue("fixture_latest_branch",
                 operations.activeBranch().value(), manifest.latestBranch().value());
         assertValue("fixture_latest_head",
