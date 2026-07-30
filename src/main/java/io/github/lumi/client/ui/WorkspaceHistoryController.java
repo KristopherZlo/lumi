@@ -24,7 +24,7 @@ final class WorkspaceHistoryController {
     private final List<HistorySnapshotPayload.Version> loaded = new ArrayList<>();
     private List<HistorySnapshotPayload.Version> loadedView = List.of();
     private List<HistorySnapshotPayload.Version> snapshotView;
-    private UUID loadedRequest;
+    private UUID requestedPage;
     private long observedRevision;
     private long observedMetadataRevision;
     private boolean awaitingRefresh;
@@ -160,17 +160,17 @@ final class WorkspaceHistoryController {
         offset = 0;
         loaded.clear();
         loadedView = List.of();
-        loadedRequest = null;
+        requestedPage = null;
     }
 
     private void acceptPage() {
         page().filter(current -> current.offset() == offset)
-                .filter(current -> !current.requestId().equals(loadedRequest))
+                .filter(current -> current.requestId().equals(requestedPage))
                 .ifPresent(current -> {
                     if (current.offset() == 0) loaded.clear();
                     loaded.addAll(current.versions());
                     loadedView = pages.versions(snapshot.dimensionId(), loaded);
-                    loadedRequest = current.requestId();
+                    requestedPage = null;
                     awaitingRefresh = false;
                 });
     }
@@ -186,7 +186,7 @@ final class WorkspaceHistoryController {
 
     private void request() {
         searchDelay = 0;
-        requester.request(
+        requestedPage = requester.request(
                 branch, Optional.empty(), offset, pageSize, query);
     }
 

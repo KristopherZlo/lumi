@@ -86,16 +86,28 @@ class ZoneHistoryControllerTest {
     void resetsPagingWhenTheServerSearchChanges() {
         UUID workspace = new UUID(0, 11);
         UUID zone = new UUID(0, 12);
+        ClientHistoryPageStore pages = new ClientHistoryPageStore();
         AtomicInteger requests = new AtomicInteger();
+        AtomicReference<UUID> request = new AtomicReference<>();
         AtomicReference<String> requestedQuery = new AtomicReference<>();
         ZoneHistoryController controller = new ZoneHistoryController(
-                snapshot(workspace), zone, new ClientHistoryPageStore(),
+                snapshot(workspace), zone, pages,
                 (branch, ignored, offset, limit, query) -> {
                     requests.incrementAndGet();
                     requestedQuery.set(query + ":" + offset);
-                    return UUID.randomUUID();
+                    UUID id = UUID.randomUUID();
+                    request.set(id);
+                    pages.begin(id, "minecraft:overworld", workspace,
+                            branch, Optional.of(zone), offset);
+                    return id;
                 });
 
+        controller.request();
+        assertTrue(pages.accept(new HistoryPagePayload(
+                request.get(), "minecraft:overworld", workspace,
+                new BranchName("main"), Optional.of(zone), 0, false,
+                List.of(version()), "")));
+        assertEquals(1, controller.versions(List.of()).size());
         controller.search("tow");
         controller.search("  tower  ");
         for (int tick = 1;
@@ -104,10 +116,11 @@ class ZoneHistoryControllerTest {
             controller.tick();
         }
 
-        assertEquals(0, requests.get());
-        controller.tick();
         assertEquals(1, requests.get());
+        controller.tick();
+        assertEquals(2, requests.get());
         assertEquals("tower:0", requestedQuery.get());
+        assertTrue(controller.versions(List.of()).isEmpty());
     }
 
     private static HistorySnapshotPayload snapshot(UUID workspace) {

@@ -26,7 +26,7 @@ public final class ZoneHistoryController {
     private List<HistorySnapshotPayload.Version> initialView = List.of();
     private List<HistorySnapshotPayload.Version> initialSource = List.of();
     private List<BranchName> availableBranches = List.of();
-    private UUID loadedRequest;
+    private UUID requestedPage;
     private long observedRevision;
     private long observedMetadataRevision;
     private boolean awaitingRefresh;
@@ -48,7 +48,7 @@ public final class ZoneHistoryController {
 
     void request() {
         searchDelay = 0;
-        requester.request(
+        requestedPage = requester.request(
                 branch, Optional.of(zoneId), offset, PAGE_SIZE, query);
     }
 
@@ -82,7 +82,8 @@ public final class ZoneHistoryController {
     }
 
     private void acceptPage() {
-        page().filter(current -> !current.requestId().equals(loadedRequest))
+        page().filter(current -> current.offset() == offset)
+                .filter(current -> current.requestId().equals(requestedPage))
                 .ifPresent(current -> {
                     if (current.offset() == 0) {
                         loaded.clear();
@@ -90,7 +91,7 @@ public final class ZoneHistoryController {
                     }
                     loaded.addAll(current.versions());
                     loadedView = pages.versions(snapshot.dimensionId(), loaded);
-                    loadedRequest = current.requestId();
+                    requestedPage = null;
                     awaitingRefresh = false;
                 });
     }
@@ -161,7 +162,7 @@ public final class ZoneHistoryController {
         offset = 0;
         loaded.clear();
         loadedView = List.of();
-        loadedRequest = null;
+        requestedPage = null;
     }
 
     private void synchronizeMetadata(

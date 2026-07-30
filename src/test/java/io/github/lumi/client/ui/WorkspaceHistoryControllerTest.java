@@ -73,18 +73,29 @@ class WorkspaceHistoryControllerTest {
     @Test
     void requestsTheFirstFilteredPageFromTheServer() {
         HistorySnapshotPayload snapshot = snapshot();
+        ClientHistoryPageStore pages = new ClientHistoryPageStore();
         AtomicInteger requestedOffset = new AtomicInteger(-1);
         AtomicInteger requests = new AtomicInteger();
+        AtomicReference<UUID> request = new AtomicReference<>();
         AtomicReference<String> requestedQuery = new AtomicReference<>();
         WorkspaceHistoryController controller = new WorkspaceHistoryController(
-                snapshot, new ClientHistoryPageStore(),
+                snapshot, pages,
                 (branch, zone, offset, limit, query) -> {
                     requests.incrementAndGet();
                     requestedOffset.set(offset);
                     requestedQuery.set(query);
-                    return UUID.randomUUID();
+                    UUID id = UUID.randomUUID();
+                    request.set(id);
+                    pages.begin(id, snapshot.dimensionId(),
+                            snapshot.workspaceId(), branch, zone, offset);
+                    return id;
                 });
         controller.ensurePageSize(7);
+        assertTrue(pages.accept(new HistoryPagePayload(
+                request.get(), snapshot.dimensionId(), snapshot.workspaceId(),
+                new BranchName("main"), Optional.empty(), 0, false,
+                List.of(version()), "")));
+        assertEquals(1, controller.versions().size());
 
         controller.search("tow");
         controller.search("  tower  ");
@@ -99,6 +110,7 @@ class WorkspaceHistoryControllerTest {
         assertEquals(2, requests.get());
         assertEquals(0, requestedOffset.get());
         assertEquals("tower", requestedQuery.get());
+        assertTrue(controller.versions().isEmpty());
     }
 
     @Test
