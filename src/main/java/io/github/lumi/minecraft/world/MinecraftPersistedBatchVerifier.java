@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -64,13 +65,11 @@ final class MinecraftPersistedBatchVerifier {
     }
 
     private CompletableFuture<Void> beginVerification() {
-        CompletableFuture<Void> result = CompletableFuture.completedFuture(null);
+        List<CompletableFuture<Void>> pending = new ArrayList<>(
+                chunks.size() + entityChunks.size());
         for (ChunkCoordinate chunk : chunks) {
             ChunkPos position = new ChunkPos(chunk.x(), chunk.z());
-            result = result.thenCompose(ignored -> {
-                phase = "persisted chunk verification";
-                return level.getChunkSource().chunkMap.read(position);
-            })
+            pending.add(level.getChunkSource().chunkMap.read(position)
                     .thenApplyAsync(stored -> {
                         try {
                             String mismatch = stored.isEmpty()
@@ -87,15 +86,12 @@ final class MinecraftPersistedBatchVerifier {
                         } catch (IOException failed) {
                             throw new CompletionException(failed);
                         }
-                    }, background);
+                    }, background));
         }
         for (EntityChunkKey key : entityChunks) {
             EntityChunkBlob expected = entityTargets.get(key);
             ChunkPos position = new ChunkPos(key.chunkX(), key.chunkZ());
-            result = result.thenCompose(ignored -> {
-                phase = "persisted entity verification";
-                return entityStorage.read(position);
-            })
+            pending.add(entityStorage.read(position)
                     .thenApplyAsync(stored -> {
                         try {
                             if (!expected.equals(entityCapture.captureStored(key, stored))) {
@@ -106,9 +102,14 @@ final class MinecraftPersistedBatchVerifier {
                         } catch (IOException failed) {
                             throw new CompletionException(failed);
                         }
-                    }, background);
+                    }, background));
         }
-        return result;
+        phase = entityChunks.isEmpty()
+                ? "persisted chunk verification"
+                : chunks.isEmpty()
+                        ? "persisted entity verification"
+                        : "persisted chunk/entity verification";
+        return CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new));
     }
 
     String phase() {
