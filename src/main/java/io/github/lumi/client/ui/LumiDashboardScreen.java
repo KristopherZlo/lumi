@@ -83,6 +83,11 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private int actionButtonWidth;
     private DashboardGeometry dashboardGeometry;
     private LumiCommitCard commitCards;
+    private List<HistorySnapshotPayload.Version> historyVersions = List.of();
+    private Optional<HistorySnapshotPayload.Version> latestVersion = Optional.empty();
+    private List<HistorySnapshotPayload.Version> graphedVersions = List.of();
+    private List<HistorySnapshotPayload.Branch> graphedBranches = List.of();
+    private List<HistoryGraphLayout.Node> graphNodes = List.of();
     public LumiDashboardScreen(
             Screen parent,
             ClientHistoryStore history,
@@ -174,6 +179,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     protected void init() {
         beginScreenInit();
         snapshot = history.state().snapshot().orElse(null);
+        refreshHistory();
         commitCards = snapshot == null ? null
                 : new LumiCommitCard(font, previews, snapshot.dimensionId());
         layout = LumiPageLayout.fit(width, height);
@@ -225,12 +231,6 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             return;
         }
         requestPendingStatistics();
-        if (pagedHistory == null || !pagedHistory.matches(snapshot)) {
-            pagedHistory = new WorkspaceHistoryController(
-                    snapshot, historyPages, requestPage);
-        }
-        pagedHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS);
-        pagedHistory.search(historySearch(searchQuery));
         renderedPage = pagedHistory.page().orElse(null);
         if (dashboardGeometry.latestVisible()) {
             latestCreated().ifPresent(version -> addVersionActions(
@@ -282,12 +282,12 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 historyHeight, Integer.MAX_VALUE, layout.bodyWidth());
         historyScroll = Math.min(historyScroll,
                 Math.max(0, versions.size() - capacity));
+        prefetchHistory(capacity);
         List<HistorySnapshotPayload.Version> visible = versions.stream()
                 .skip(historyScroll).limit(capacity).toList();
         if (historyView.mode() == HistoryViewController.Mode.GRAPH) {
             List<HistoryGraphLayout.Node> nodes = graphLayout.window(
-                    graphLayout.build(versions, snapshot.branches()),
-                    historyScroll, capacity);
+                    graphNodes(versions), historyScroll, capacity);
             graphView = new LumiHistoryGraphView(
                     snapshot.dimensionId(), previews, nodes, snapshot.zones(),
                     layout.bodyX() + PANEL_PADDING,
@@ -436,20 +436,47 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     }
 
     private Optional<HistorySnapshotPayload.Version> latestCreated() {
-        List<HistorySnapshotPayload.Version> versions = pagedHistory == null
-                ? snapshot == null ? List.of() : snapshot.versions()
-                : pagedHistory.versions();
-        return versions.stream()
-                .filter(VersionText::featured).max(
-                Comparator.comparingLong(
-                        HistorySnapshotPayload.Version::timestampMillis));
+        return latestVersion;
     }
 
     private List<HistorySnapshotPayload.Version> visibleVersions() {
-        return snapshot == null || pagedHistory == null
-                ? List.of()
-                : historyView.filtered(
-                        pagedHistory.versions(), historySearch(searchQuery));
+        return historyVersions;
+    }
+
+    private void refreshHistory() {
+        if (snapshot == null) {
+            historyVersions = List.of();
+            latestVersion = Optional.empty();
+            return;
+        }
+        if (pagedHistory == null || !pagedHistory.matches(snapshot)) {
+            pagedHistory = new WorkspaceHistoryController(
+                    snapshot, historyPages, requestPage);
+        }
+        pagedHistory.ensurePageSize(HistoryPagePayload.MAX_VERSIONS);
+        pagedHistory.search(historySearch(searchQuery));
+        historyVersions = pagedHistory.versions();
+        latestVersion = historyVersions.stream()
+                .filter(VersionText::featured)
+                .max(Comparator.comparingLong(
+                        HistorySnapshotPayload.Version::timestampMillis));
+    }
+
+    private List<HistoryGraphLayout.Node> graphNodes(
+            List<HistorySnapshotPayload.Version> versions) {
+        if (graphedVersions != versions
+                || graphedBranches != snapshot.branches()) {
+            graphedVersions = versions;
+            graphedBranches = snapshot.branches();
+            graphNodes = graphLayout.build(versions, graphedBranches);
+        }
+        return graphNodes;
+    }
+
+    private void prefetchHistory(int capacity) {
+        if (historyScroll + capacity * 2 >= historyVersions.size()) {
+            pagedHistory.loadNextPage();
+        }
     }
 
     private void showHistoryMode(HistoryViewController.Mode mode) {
