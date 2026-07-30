@@ -85,7 +85,7 @@ final class LumiExistingWorldBranchSwitchScenario {
         LumiRestoreMeasurement measurement =
                 operations.measureBranchSwitch(name, endpoint.name());
         report.event("restore_metrics", name, "measured", 0,
-                measurement.operationMillis(), measurement.describe());
+                measurement.totalMillis(), measurement.describe());
         assertEndpoint(name, endpoint);
     }
 

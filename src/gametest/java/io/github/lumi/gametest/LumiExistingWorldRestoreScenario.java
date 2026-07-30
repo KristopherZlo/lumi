@@ -47,7 +47,7 @@ final class LumiExistingWorldRestoreScenario {
             LumiRestoreMeasurement measurement =
                     operations.measureRestore(name, target);
             report.event("restore_metrics", name, "measured", 0,
-                    measurement.operationMillis(), measurement.describe());
+                    measurement.totalMillis(), measurement.describe());
         }
         report.event("benchmark", "existing_world", "succeeded", 0, 0,
                 "versions=" + history.size() + ";restores=" + targets.size());

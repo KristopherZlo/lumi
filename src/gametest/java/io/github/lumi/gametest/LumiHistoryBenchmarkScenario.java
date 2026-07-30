@@ -121,7 +121,7 @@ final class LumiHistoryBenchmarkScenario {
                     operations.measureRestore(name, history.commits().get(index));
             restores.add(restore);
             report.event("restore_metrics", name, "measured", 0,
-                    restore.operationMillis(), restore.describe());
+                    restore.totalMillis(), restore.describe());
             previous = recordStorage(
                     "restore-" + name, history.repository(), previous.bytes());
             recordMemory("restore-" + name);
@@ -153,7 +153,7 @@ final class LumiHistoryBenchmarkScenario {
                     operations.measureRestore(name, commits.get(index));
             measurements.add(measurement);
             report.event("restore_metrics", name, "measured", 0,
-                    measurement.operationMillis(), measurement.describe());
+                    measurement.totalMillis(), measurement.describe());
             checks.assertValue(name + "_active_branch",
                     operations.activeBranch().value(), restoreBranch);
             checks.assertValue(name + "_active_head",
@@ -172,7 +172,7 @@ final class LumiHistoryBenchmarkScenario {
                     operations.measureBranchSwitch(name, branch.name());
             measurements.add(measurement);
             report.event("restore_metrics", name, "measured", 0,
-                    measurement.operationMillis(), measurement.describe());
+                    measurement.totalMillis(), measurement.describe());
             assertActive(checks, name, branch);
             previous = recordStorage(
                     name, history.repository(), previous.bytes());
@@ -397,7 +397,7 @@ final class LumiHistoryBenchmarkScenario {
                 name, endpoint.ref().name());
         measurements.add(measurement);
         report.event("restore_metrics", name, "measured", 0,
-                measurement.operationMillis(), measurement.describe());
+                measurement.totalMillis(), measurement.describe());
         assertActive(checks, name, endpoint);
         checks.assertSnapshot(name, List.of(baseArea), endpoint.snapshot());
         LumiRepositoryMetrics.Snapshot storage = recordStorage(

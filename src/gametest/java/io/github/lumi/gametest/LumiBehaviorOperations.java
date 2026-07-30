@@ -195,7 +195,6 @@ final class LumiBehaviorOperations {
             FabricDimensionRuntime runtime = runtime(minecraft);
             runtime.operations().observeNextEnqueue((ticket, ignored) -> {
                 acceptedNanos.set(System.nanoTime());
-                tickProbe.set(LumiServerTickProbe.open());
                 runtime.operations().observeTerminal(ticket, completed -> {
                     terminalNanos.set(System.nanoTime());
                     Optional<RestoreApplyStatistics> measured =
@@ -220,6 +219,7 @@ final class LumiBehaviorOperations {
                 heapBefore[0] = usedHeap(jvm);
                 peakHeap[0] = heapBefore[0];
                 uiStarted.set(System.nanoTime());
+                tickProbe.set(LumiServerTickProbe.open());
             }), uiStarted::get);
             if (uiStarted.get() == 0) {
                 throw new AssertionError(
@@ -244,8 +244,9 @@ final class LumiBehaviorOperations {
                     name + " server timing observer did not complete");
         }
         return new LumiRestoreMeasurement(
-                elapsedMillis(acceptedNanos.get(), terminalNanos.get()),
+                elapsedMillis(uiStarted.get(), terminalNanos.get()),
                 elapsedMillis(uiStarted.get(), acceptedNanos.get()),
+                elapsedMillis(acceptedNanos.get(), terminalNanos.get()),
                 heapBefore[0], peakHeap[0],
                 maximumServerTick, measured);
     }

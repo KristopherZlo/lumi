@@ -147,6 +147,9 @@ server GameTest without starting the full suite.
 Client GameTests run all current suites by default. Select `SMOKE`, `UI`,
 `RECOVERY`, or `BENCHMARK` with
 `-Dlumi.gametest.suite=<name> runClientGameTest --no-daemon`.
+Restore benchmark `totalMs` starts immediately before the final UI
+confirmation and ends at the durable terminal event. `queueMs` and `serverMs`
+split that same interval; performance gates report every failed budget together.
 
 The code is split by responsibility:
 
