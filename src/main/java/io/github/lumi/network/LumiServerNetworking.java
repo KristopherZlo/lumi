@@ -182,6 +182,10 @@ public final class LumiServerNetworking {
                         UUID.fromString(payload.argument()), player.getUUID());
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.ZONE_OVERLAY) {
+                ZONE_OVERLAYS.start(player, runtime, payload, context);
+                return;
+            }
             BranchRef actual = runtime.activeRef();
             if (!actual.commit().equals(payload.expectedCommit())
                     || actual.revision() != payload.expectedRevision()) {
@@ -293,10 +297,6 @@ public final class LumiServerNetworking {
             if (payload.kind() == HistoryCommandPayload.Kind.COMPARE
                     || payload.kind() == HistoryCommandPayload.Kind.ZONE_COMPARE) {
                 COMPARES.start(player, runtime, payload, context);
-                return;
-            }
-            if (payload.kind() == HistoryCommandPayload.Kind.ZONE_OVERLAY) {
-                ZONE_OVERLAYS.start(player, runtime, payload, context);
                 return;
             }
             if (payload.kind() == HistoryCommandPayload.Kind.MERGE) {

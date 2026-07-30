@@ -19,8 +19,7 @@ class LumiServerNetworkingTest {
 
     @Test
     void resolvesHudModeBeforeStartingTrackedWork() throws Exception {
-        String source = Files.readString(Path.of(
-                "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));
+        String source = networkingSource();
         int start = source.indexOf("start(player, runtime, actual, payload)");
         int mode = source.lastIndexOf("HudDisplayMode hudDisplayMode", start);
 
@@ -29,8 +28,7 @@ class LumiServerNetworkingTest {
 
     @Test
     void keepsJoinSnapshotBoundedOnTheServerThread() throws Exception {
-        String networking = Files.readString(Path.of(
-                "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));
+        String networking = networkingSource();
         String factory = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/network/HistorySnapshotFactory.java"));
         int join = networking.indexOf("ServerPlayConnectionEvents.JOIN.register");
@@ -47,8 +45,7 @@ class LumiServerNetworkingTest {
 
     @Test
     void defersTerminalSnapshotUntilCoordinatorReleasesOwnership() throws Exception {
-        String source = Files.readString(Path.of(
-                "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));
+        String source = networkingSource();
         int terminalStart = source.indexOf("private static void terminal(");
         int terminalEnd = source.indexOf("private static void cancel(", terminalStart);
         String terminal = source.substring(terminalStart, terminalEnd);
@@ -61,12 +58,21 @@ class LumiServerNetworkingTest {
 
     @Test
     void refreshesPendingHudAfterBuilderChangesSettle() throws Exception {
-        String source = Files.readString(Path.of(
-                "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));
+        String source = networkingSource();
 
         assertTrue(source.contains("ServerTickEvents.END_SERVER_TICK"));
         assertTrue(source.contains("runtime.pendingRevision()"));
         assertTrue(source.contains("PENDING_REFRESH_TICKS"));
+    }
+
+    @Test
+    void readsZoneOverlaysFromCurrentHistoryWithoutTheMutationGuard() throws Exception {
+        String source = networkingSource();
+        int overlay = source.indexOf(
+                "payload.kind() == HistoryCommandPayload.Kind.ZONE_OVERLAY");
+        int mutationGuard = source.indexOf("BranchRef actual = runtime.activeRef()");
+
+        assertTrue(overlay >= 0 && overlay < mutationGuard);
     }
 
     @Test
@@ -85,8 +91,7 @@ class LumiServerNetworkingTest {
 
     @Test
     void reportsFailuresEvenWhenTheDimensionRuntimeIsUnavailable() throws Exception {
-        String source = Files.readString(Path.of(
-                "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));
+        String source = networkingSource();
         int reject = source.indexOf("private static void reject(");
         int sendEvent = source.indexOf("private static void sendEvent(", reject);
 
@@ -94,5 +99,10 @@ class LumiServerNetworkingTest {
                 .contains("notifyFailure(player, message)"));
         assertTrue(source.contains("luma.status.dimension_not_ready"));
         assertTrue(source.contains("luma.status.operation_feedback_failed"));
+    }
+
+    private static String networkingSource() throws Exception {
+        return Files.readString(Path.of(
+                "src/main/java/io/github/lumi/network/LumiServerNetworking.java"));
     }
 }
