@@ -29,6 +29,7 @@ import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -70,6 +71,45 @@ class RestoreServiceTest {
         assertEquals(List.of(
                 new RestoreService.PreparationProgress(1, 1, 0, 1),
                 new RestoreService.PreparationProgress(1, 1, 1, 1)), progress);
+    }
+
+    @Test
+    void decodesRepeatedChunkTreesOncePerRegion() throws IOException {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        var air = objects.write(section("minecraft:air"));
+        var stone = objects.write(section("minecraft:stone"));
+        var repeated = objects.write(new ChunkTree(
+                Map.of(0, stone), Optional.empty()));
+        var region = objects.write(new RegionTree(Map.of(
+                new ChunkInRegion(0, 0), repeated,
+                new ChunkInRegion(1, 0), repeated)));
+        var currentTree = objects.write(new DimensionTree(
+                Map.of(new RegionCoordinate(0, 0), region)));
+        var targetTree = objects.write(new DimensionTree(Map.of()));
+        var target = commits.write(commit(targetTree, List.of()));
+        var current = commits.write(commit(currentTree, List.of(target)));
+        var origins = new OriginStore(repositoryRoot);
+        origins.register(new SectionKey(0, 0, 0), air);
+        origins.register(new SectionKey(1, 0, 0), air);
+        Path repeatedFile = repositoryRoot.resolve("objects")
+                .resolve(repeated.hex().substring(0, 2))
+                .resolve(repeated.hex().substring(2) + ".lz4");
+
+        try (PreparedRestore prepared = new RestoreService(
+                objects, commits, origins).prepare(
+                        new BranchRef(new BranchName("main"), current, 1),
+                        target, progress -> {
+                            if (progress.chunkCompleted() == 1) {
+                                try {
+                                    Files.delete(repeatedFile);
+                                } catch (IOException failed) {
+                                    throw new java.io.UncheckedIOException(failed);
+                                }
+                            }
+                        })) {
+            assertEquals(2, prepared.sections().size());
+        }
     }
 
     @Test

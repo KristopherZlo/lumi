@@ -123,7 +123,8 @@ and does not import legacy patch-v9 or snapshot-v8 projects.
 When there is no useful work, Lumi does no history processing. Long operations
 remain incremental and observable, while their working memory is bounded by the
 current batch instead of the entire world. Restore reuses one immutable object
-pack channel at a time instead of reopening it for every section.
+pack channel at a time instead of reopening it for every section, and decodes
+repeated Merkle chunk nodes once per compared region in physical pack order.
 Outdated pending-work statistics are cancelled without reporting a history error,
 and never delay a confirmed Save, Restore, or undo action.
 History search waits four client ticks after the last keystroke before requesting

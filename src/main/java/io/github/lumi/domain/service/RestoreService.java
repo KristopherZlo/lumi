@@ -299,10 +299,19 @@ public final class RestoreService {
             int regionIndex,
             int regionTotal,
             Consumer<PreparationProgress> progress) throws IOException {
+        MerkleReadCache decoded = new MerkleReadCache(reader);
         var changedChunks = union(currentRegion.chunks().keySet(), targetRegion.chunks().keySet())
                 .stream().filter(chunk -> !Objects.equals(
                         currentRegion.chunks().get(chunk), targetRegion.chunks().get(chunk)))
                 .toList();
+        Set<ObjectId> chunkIds = new HashSet<>();
+        for (ChunkInRegion chunk : changedChunks) {
+            Optional.ofNullable(currentRegion.chunks().get(chunk)).ifPresent(chunkIds::add);
+            Optional.ofNullable(targetRegion.chunks().get(chunk)).ifPresent(chunkIds::add);
+        }
+        for (ObjectId id : objects.physicalReadOrder(chunkIds)) {
+            decoded.chunk(id);
+        }
         progress.accept(new PreparationProgress(
                 regionIndex, regionTotal, 0, changedChunks.size()));
         for (int chunkIndex = 0; chunkIndex < changedChunks.size(); chunkIndex++) {
@@ -310,10 +319,10 @@ public final class RestoreService {
             Optional<ObjectId> currentId = Optional.ofNullable(currentRegion.chunks().get(local));
             Optional<ObjectId> targetId = Optional.ofNullable(targetRegion.chunks().get(local));
             ChunkTree current = currentId.isPresent()
-                    ? reader.readChunk(currentId.orElseThrow())
+                    ? decoded.chunk(currentId.orElseThrow())
                     : new ChunkTree(Map.of(), Optional.empty());
             ChunkTree target = targetId.isPresent()
-                    ? reader.readChunk(targetId.orElseThrow())
+                    ? decoded.chunk(targetId.orElseThrow())
                     : new ChunkTree(Map.of(), Optional.empty());
             int chunkX = regionCoordinate.x() * REGION_SIZE + local.x();
             int chunkZ = regionCoordinate.z() * REGION_SIZE + local.z();

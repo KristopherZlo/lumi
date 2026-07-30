@@ -64,14 +64,13 @@ public final class PendingChangeStatisticsService {
         checkCancelled(cancelled);
         try (var reader = objects.beginReadSession()) {
             DimensionTree saved = reader.readDimension(commits.read(head).tree());
-            Map<ObjectId, RegionTree> regions = new HashMap<>();
-            Map<ObjectId, ChunkTree> chunks = new HashMap<>();
+            MerkleReadCache merkle = new MerkleReadCache(reader);
             PendingChangeStatistics workspace = PendingChangeStatistics.NONE;
             Map<UUID, PendingChangeStatistics> byZone = new HashMap<>();
             for (var entry : captured.entrySet()) {
                 checkCancelled(cancelled);
                 PendingChangeStatistics section = compare(
-                        baseline(saved, entry.getKey(), reader, regions, chunks),
+                        baseline(saved, entry.getKey(), reader, merkle),
                         entry.getValue(), cancelled);
                 workspace = workspace.plus(section);
                 for (Zone zone : visibleZones) {
@@ -91,8 +90,7 @@ public final class PendingChangeStatisticsService {
             DimensionTree tree,
             SectionKey key,
             WorldObjectRepository.ReadSession reader,
-            Map<ObjectId, RegionTree> regions,
-            Map<ObjectId, ChunkTree> chunks)
+            MerkleReadCache merkle)
             throws IOException {
         int regionX = Math.floorDiv(key.chunkX(), REGION_SIZE);
         int regionZ = Math.floorDiv(key.chunkZ(), REGION_SIZE);
@@ -100,20 +98,12 @@ public final class PendingChangeStatisticsService {
         ObjectId regionId = tree.regions().get(
                 new RegionCoordinate(regionX, regionZ));
         if (regionId != null) {
-            RegionTree region = regions.get(regionId);
-            if (region == null) {
-                region = reader.readRegion(regionId);
-                regions.put(regionId, region);
-            }
+            RegionTree region = merkle.region(regionId);
             ObjectId chunkId = region.chunks().get(new ChunkInRegion(
                     Math.floorMod(key.chunkX(), REGION_SIZE),
                     Math.floorMod(key.chunkZ(), REGION_SIZE)));
             if (chunkId != null) {
-                ChunkTree chunk = chunks.get(chunkId);
-                if (chunk == null) {
-                    chunk = reader.readChunk(chunkId);
-                    chunks.put(chunkId, chunk);
-                }
+                ChunkTree chunk = merkle.chunk(chunkId);
                 section = Optional.ofNullable(
                         chunk.sections().get(key.sectionY()));
             }
