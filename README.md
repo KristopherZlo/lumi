@@ -153,7 +153,8 @@ Client GameTests run all current suites by default. Select `SMOKE`, `UI`,
 Restore benchmark `totalMs` starts immediately before the final UI
 confirmation and ends at the durable terminal event. `queueMs` and `serverMs`
 split that same interval; performance gates report every failed budget together.
-Apply metrics also separate background batch preparation and lighting drain time.
+Apply metrics cover loaded and stored changes and separate background batch
+preparation from lighting drain time.
 The fresh-JVM cold benchmark rejects latency, tick, heap, application, workload,
 or exactness regressions instead of accepting a small or already-warm sample.
 

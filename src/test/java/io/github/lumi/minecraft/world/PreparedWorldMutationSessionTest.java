@@ -467,7 +467,8 @@ class PreparedWorldMutationSessionTest {
                 Map.of(low, decoded, high, decoded), Map.of(),
                 List.of(low, high), List.of());
         FakeWorld world = new FakeWorld(new AtomicLong(), source);
-        world.storedResult = StoredChunkApplyResult.applied(1, 2, 3, 4);
+        world.storedResult = StoredChunkApplyResult.applied(
+                1, 2, 3, 4, 2, 8_192, 1);
         ImmediateChunkAccess chunks = new ImmediateChunkAccess();
         var session = new PreparedWorldMutationSession(
                 target, world, () -> 0L, new ChunkLoadSession(chunks, () -> 0L));
@@ -477,6 +478,9 @@ class PreparedWorldMutationSessionTest {
         assertEquals(0, world.sectionWrites);
         assertEquals(0, chunks.retained.size());
         assertEquals(1, session.statistics().storedChunks());
+        assertEquals(2, session.statistics().sectionSwaps());
+        assertEquals(8_192, session.statistics().changedBlocks());
+        assertEquals(1, session.statistics().lightSections());
         assertEquals(1, session.statistics().storageReadNanos());
         assertEquals(2, session.statistics().storageWriteNanos());
         assertEquals(3, session.statistics().storageSyncNanos());

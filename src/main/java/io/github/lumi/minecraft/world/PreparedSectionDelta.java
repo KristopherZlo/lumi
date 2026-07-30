@@ -111,6 +111,10 @@ final class PreparedSectionDelta {
         return changedCells;
     }
 
+    int changedCount() {
+        return changedCells.length;
+    }
+
     short[] lightColumns() {
         return lightColumns;
     }

@@ -332,11 +332,27 @@ final class MinecraftStoredChunkAccess {
                 throw new CompletionException(failed);
             }
             release(write.coordinate());
+            long sectionSwaps = 0;
+            long changedBlocks = 0;
+            long lightSections = 0;
+            for (DecodedSection section : write.target().values()) {
+                PreparedSectionDelta delta = section.preparedDelta();
+                int changed = delta.changedCount();
+                if (changed == 0) {
+                    continue;
+                }
+                sectionSwaps++;
+                changedBlocks += changed;
+                if (delta.lightChanged()) {
+                    lightSections++;
+                }
+            }
             results.put(write.coordinate(), StoredChunkApplyResult.applied(
                     first ? readNanos : 0,
                     first ? writeNanos : 0,
                     first ? syncNanos : 0,
-                    first ? verifyNanos : 0));
+                    first ? verifyNanos : 0,
+                    sectionSwaps, changedBlocks, lightSections));
             first = false;
         }
         phase = "loaded apply";

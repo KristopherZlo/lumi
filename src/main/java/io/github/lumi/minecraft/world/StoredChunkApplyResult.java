@@ -5,12 +5,23 @@ import java.util.Objects;
 /** Result and timings of one gated vanilla-storage attempt. */
 public record StoredChunkApplyResult(
         Outcome outcome,
+        long sectionSwaps,
+        long changedBlocks,
+        long lightSections,
         long readNanos,
         long writeNanos,
         long syncNanos,
         long verifyNanos) {
     public StoredChunkApplyResult {
         Objects.requireNonNull(outcome, "outcome");
+        for (long value : new long[] {
+                sectionSwaps, changedBlocks, lightSections,
+                readNanos, writeNanos, syncNanos, verifyNanos}) {
+            if (value < 0) {
+                throw new IllegalArgumentException(
+                        "Stored chunk statistics cannot be negative");
+            }
+        }
     }
 
     public static final StoredChunkApplyResult APPLIED = applied(0, 0, 0, 0);
@@ -22,15 +33,22 @@ public record StoredChunkApplyResult(
 
     public static StoredChunkApplyResult applied(
             long readNanos, long writeNanos, long syncNanos, long verifyNanos) {
+        return applied(readNanos, writeNanos, syncNanos, verifyNanos, 0, 0, 0);
+    }
+
+    public static StoredChunkApplyResult applied(
+            long readNanos, long writeNanos, long syncNanos, long verifyNanos,
+            long sectionSwaps, long changedBlocks, long lightSections) {
         return new StoredChunkApplyResult(
-                Outcome.APPLIED, readNanos, writeNanos, syncNanos, verifyNanos);
+                Outcome.APPLIED, sectionSwaps, changedBlocks, lightSections,
+                readNanos, writeNanos, syncNanos, verifyNanos);
     }
 
     public static StoredChunkApplyResult fallback(Outcome outcome) {
         if (outcome == Outcome.APPLIED) {
             throw new IllegalArgumentException("Applied is not a fallback outcome");
         }
-        return new StoredChunkApplyResult(outcome, 0, 0, 0, 0);
+        return new StoredChunkApplyResult(outcome, 0, 0, 0, 0, 0, 0, 0);
     }
 
     public enum Outcome {

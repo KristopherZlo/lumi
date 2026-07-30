@@ -58,6 +58,9 @@ final class RestoreApplyMetrics {
             return;
         }
         storedChunks.increment();
+        sectionSwaps.add(result.sectionSwaps());
+        changedBlocks.add(result.changedBlocks());
+        lightSections.add(result.lightSections());
         storageReadNanos.add(result.readNanos());
         storageWriteNanos.add(result.writeNanos());
         storageSyncNanos.add(result.syncNanos());
