@@ -13,11 +13,20 @@ import java.util.Objects;
 
 /** Computes deterministic branch lanes and parent edges for the history graph. */
 final class HistoryGraphLayout {
+    private List<HistorySnapshotPayload.Version> cachedVersions;
+    private List<HistorySnapshotPayload.Branch> cachedBranches = List.of();
+    private List<Node> cachedNodes = List.of();
+
     List<Node> build(
             List<HistorySnapshotPayload.Version> versions,
             List<HistorySnapshotPayload.Branch> branches) {
         Objects.requireNonNull(versions, "versions");
         Objects.requireNonNull(branches, "branches");
+        if (cachedVersions == versions && cachedBranches.equals(branches)) {
+            return cachedNodes;
+        }
+        cachedVersions = versions;
+        cachedBranches = List.copyOf(branches);
         List<HistorySnapshotPayload.Version> ordered = versions.stream()
                 .sorted(Comparator
                         .comparingLong(HistorySnapshotPayload.Version::timestampMillis)
@@ -25,7 +34,8 @@ final class HistoryGraphLayout {
                         .thenComparing(version -> version.id().hex()))
                 .toList();
         if (ordered.isEmpty()) {
-            return List.of();
+            cachedNodes = List.of();
+            return cachedNodes;
         }
 
         Map<CommitId, HistorySnapshotPayload.Version> byId = new HashMap<>();
@@ -94,7 +104,8 @@ final class HistoryGraphLayout {
                     version, row, lanes.get(version.id()), laneCount,
                     edges, branchHeads, activeHead));
         }
-        return List.copyOf(nodes);
+        cachedNodes = List.copyOf(nodes);
+        return cachedNodes;
     }
 
     List<Node> window(List<Node> nodes, int offset, int limit) {

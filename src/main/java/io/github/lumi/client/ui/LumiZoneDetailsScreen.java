@@ -49,9 +49,6 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     private List<HistorySnapshotPayload.Branch> zoneBranches = List.of();
     private Optional<HistorySnapshotPayload.Version> latestVersion = Optional.empty();
     private long latestMetadataRevision = -1;
-    private List<HistorySnapshotPayload.Version> graphedVersions = List.of();
-    private List<HistorySnapshotPayload.Branch> graphedBranches = List.of();
-    private List<HistoryGraphLayout.Node> graphNodes = List.of();
 
     public LumiZoneDetailsScreen(
             Screen parent,
@@ -230,7 +227,8 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
             graphView = new LumiHistoryGraphView(
                     snapshot.dimensionId(), previews,
                     graphLayout.window(
-                            graphNodes(versions), historyScroll, capacity),
+                            graphLayout.build(versions, zoneBranches),
+                            historyScroll, capacity),
                     snapshot.zones(),
                     layout.bodyX() + LumiDashboardScreen.PANEL_PADDING,
                     geometry.historyY()
@@ -324,17 +322,6 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                     .max(Comparator.comparingLong(
                             HistorySnapshotPayload.Version::timestampMillis));
         }
-    }
-
-    private List<HistoryGraphLayout.Node> graphNodes(
-            List<HistorySnapshotPayload.Version> versions) {
-        if (graphedVersions != versions
-                || !graphedBranches.equals(zoneBranches)) {
-            graphedVersions = versions;
-            graphedBranches = zoneBranches;
-            graphNodes = graphLayout.build(versions, graphedBranches);
-        }
-        return graphNodes;
     }
 
     private void prefetchHistory(int capacity) {

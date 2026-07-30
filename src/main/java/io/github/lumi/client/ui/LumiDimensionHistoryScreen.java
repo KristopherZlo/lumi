@@ -26,11 +26,13 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     private final HistoryViewController view;
     private final HistoryGraphLayout graphLayout = new HistoryGraphLayout();
     private final List<HistorySnapshotPayload.Version> loaded = new ArrayList<>();
+    private List<HistorySnapshotPayload.Version> loadedView = List.of();
+    private Optional<HistorySnapshotPayload.Version> latestVersion = Optional.empty();
     private HistoryPagePayload renderedPage;
     private LumiHistoryGraphView graphView;
     private EditBox search;
     private String query = "";
-    private UUID loadedRequest;
+    private UUID requestedPage;
     private int scroll;
     private LumiPageLayout layout;
     private LumiDashboardScreen.DashboardGeometry geometry;
@@ -154,14 +156,16 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
 
     private void addRows() {
         int capacity = capacity();
-        scroll = Math.min(scroll, Math.max(0, loaded.size() - capacity));
-        List<HistorySnapshotPayload.Version> visible = loaded.stream()
+        scroll = Math.min(scroll, Math.max(0, loadedView.size() - capacity));
+        prefetchHistory(capacity);
+        List<HistorySnapshotPayload.Version> visible = loadedView.stream()
                 .skip(scroll).limit(capacity).toList();
         if (view.mode() == HistoryViewController.Mode.GRAPH) {
             graphView = new LumiHistoryGraphView(
                     dimensionId, previews,
                     graphLayout.window(
-                            graphLayout.build(loaded, List.of()), scroll, capacity),
+                            graphLayout.build(loadedView, List.of()),
+                            scroll, capacity),
                     List.of(),
                     layout.bodyX() + LumiDashboardScreen.PANEL_PADDING,
                     rowsY(), layout.bodyWidth()
@@ -207,7 +211,9 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
         if (historyRevision != observedHistoryRevision) {
             observedHistoryRevision = historyRevision;
             loaded.clear();
-            loadedRequest = null;
+            loadedView = List.of();
+            latestVersion = Optional.empty();
+            requestedPage = null;
             renderedPage = null;
             scroll = 0;
             request(0);
@@ -244,7 +250,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
                     graphics, layout.bodyX(), rowsY(), layout.bodyWidth() - 3,
                     Math.max(0, historyHeight
                             - LumiDashboardScreen.HISTORY_FIRST_ROW_OFFSET - 5),
-                    loaded.size(), capacity(), scroll,
+                    loadedView.size(), capacity(), scroll,
                     value -> scroll = value);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
             if (graphView != null) {
@@ -275,7 +281,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     private void renderRows(
             GuiGraphics graphics, int mouseX, int mouseY) {
         if (graphView != null) return;
-        List<HistorySnapshotPayload.Version> visible = loaded.stream()
+        List<HistorySnapshotPayload.Version> visible = loadedView.stream()
                 .skip(scroll).limit(capacity()).toList();
         for (int index = 0; index < visible.size(); index++) {
             HistorySnapshotPayload.Version version = visible.get(index);
@@ -287,7 +293,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
                             layout.bodyX(), layout.bodyWidth(), y),
                     LumiTheme.ACCENT, false, false, mouseX, mouseY);
         }
-        if (loaded.isEmpty()) {
+        if (loadedView.isEmpty()) {
             Optional<HistoryPagePayload> page = page();
             String error = page.map(HistoryPagePayload::error).orElse("");
             Component message = page.isEmpty()
@@ -327,9 +333,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     }
 
     private Optional<HistorySnapshotPayload.Version> latestCreated() {
-        return loaded.stream().filter(VersionText::featured)
-                .max(java.util.Comparator.comparingLong(
-                        HistorySnapshotPayload.Version::timestampMillis));
+        return latestVersion;
     }
 
     private int rowsY() {
@@ -349,15 +353,14 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
             return super.mouseScrolled(
                     mouseX, mouseY, horizontalAmount, verticalAmount);
         }
-        int maximum = Math.max(0, loaded.size() - capacity());
+        int maximum = Math.max(0, loadedView.size() - capacity());
         int replacement = Math.max(
                 0, Math.min(maximum, scroll + (verticalAmount < 0 ? 1 : -1)));
         if (replacement != scroll) {
             scroll = replacement;
             rebuildWidgets();
-        } else if (verticalAmount < 0
-                && page().map(HistoryPagePayload::hasMore).orElse(false)) {
-            request(loaded.size());
+        } else if (verticalAmount < 0) {
+            prefetchHistory(capacity());
         }
         return true;
     }
@@ -377,7 +380,8 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
 
     private void request(int offset) {
         requested = true;
-        requester.request(dimensionId, offset, HistoryPagePayload.MAX_VERSIONS, query);
+        requestedPage = requester.request(
+                dimensionId, offset, HistoryPagePayload.MAX_VERSIONS, query);
     }
 
     private Optional<HistoryPagePayload> page() {
@@ -387,13 +391,26 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
     }
 
     private void syncPage() {
-        page().filter(current -> !current.requestId().equals(loadedRequest))
+        page().filter(current -> current.requestId().equals(requestedPage))
                 .ifPresent(current -> {
                     if (current.offset() == 0) loaded.clear();
                     if (current.error().isEmpty()) loaded.addAll(current.versions());
-                    loadedRequest = current.requestId();
+                    loadedView = pages.versions(dimensionId, loaded);
+                    latestVersion = loadedView.stream()
+                            .filter(VersionText::featured)
+                            .max(java.util.Comparator.comparingLong(
+                                    HistorySnapshotPayload.Version::timestampMillis));
+                    requestedPage = null;
                     renderedPage = current;
                 });
+    }
+
+    private void prefetchHistory(int capacity) {
+        if (requestedPage == null
+                && scroll + capacity * 2 >= loadedView.size()
+                && page().map(HistoryPagePayload::hasMore).orElse(false)) {
+            request(loaded.size());
+        }
     }
 
     private int capacity() {
@@ -415,6 +432,6 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
 
     @FunctionalInterface
     public interface Requester {
-        void request(String dimensionId, int offset, int limit, String query);
+        UUID request(String dimensionId, int offset, int limit, String query);
     }
 }

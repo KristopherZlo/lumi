@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.CommitId;
@@ -22,10 +23,11 @@ class HistoryGraphLayoutTest {
         var root = version('a', 1, List.of(), Optional.empty());
         var main = version('b', 2, List.of(root.id()), Optional.empty());
         var idea = version('c', 3, List.of(root.id()), Optional.empty());
-        var nodes = layout.build(
-                List.of(idea, main, root),
-                List.of(branch("idea", idea.id(), false),
-                        branch("workspace/id/main", main.id(), true)));
+        var versions = List.of(idea, main, root);
+        var branches = List.of(
+                branch("idea", idea.id(), false),
+                branch("workspace/id/main", main.id(), true));
+        var nodes = layout.build(versions, branches);
 
         assertEquals(main.id(), nodes.get(1).version().id());
         assertEquals(0, nodes.get(1).lane());
@@ -33,6 +35,7 @@ class HistoryGraphLayoutTest {
         assertEquals(1, nodes.get(0).lane());
         assertEquals(List.of("main"), nodes.get(1).branchHeads());
         assertTrue(nodes.get(1).activeHead());
+        assertSame(nodes, layout.build(versions, branches));
     }
 
     @Test
