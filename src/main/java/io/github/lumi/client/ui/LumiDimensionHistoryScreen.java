@@ -407,7 +407,8 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
 
     private void prefetchHistory(int capacity) {
         if (requestedPage == null
-                && scroll + capacity * 2 >= loadedView.size()
+                && HistoryViewController.shouldPrefetch(
+                        scroll, capacity, loadedView.size())
                 && page().map(HistoryPagePayload::hasMore).orElse(false)) {
             request(loaded.size());
         }
@@ -415,7 +416,7 @@ public final class LumiDimensionHistoryScreen extends LumiPageScreen {
 
     private int capacity() {
         return LumiDashboardScreen.visibleHistoryRows(
-                historyHeight, loaded.size(), layout.bodyWidth());
+                historyHeight, loadedView.size(), layout.bodyWidth());
     }
 
     @Override

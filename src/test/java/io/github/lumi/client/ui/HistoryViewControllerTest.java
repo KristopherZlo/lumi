@@ -50,6 +50,12 @@ class HistoryViewControllerTest {
     }
 
     @Test
+    void prefetchesOneViewportBeforeTheLoadedTail() {
+        assertFalse(HistoryViewController.shouldPrefetch(20, 10, 64));
+        assertTrue(HistoryViewController.shouldPrefetch(44, 10, 64));
+    }
+
+    @Test
     void sharesTagSearchAndMergeAncestryAcrossViews() {
         var root = version('a', "Root", List.of(), "base");
         var left = version('b', "Left", List.of(root.id()), "stone");

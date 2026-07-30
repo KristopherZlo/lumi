@@ -461,7 +461,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     }
 
     private void prefetchHistory(int capacity) {
-        if (historyScroll + capacity * 2 >= historyVersions.size()) {
+        if (HistoryViewController.shouldPrefetch(
+                historyScroll, capacity, historyVersions.size())) {
             pagedHistory.loadNextPage();
         }
     }

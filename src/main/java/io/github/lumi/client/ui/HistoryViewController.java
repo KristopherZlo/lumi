@@ -38,6 +38,10 @@ final class HistoryViewController {
         mode = Objects.requireNonNull(replacement, "replacement");
     }
 
+    static boolean shouldPrefetch(int scroll, int capacity, int loaded) {
+        return scroll + capacity * 2 >= loaded;
+    }
+
     String branch() {
         return branch;
     }
