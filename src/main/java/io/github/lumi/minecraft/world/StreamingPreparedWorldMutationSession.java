@@ -65,6 +65,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private boolean repairAttempted;
     private boolean spawnsStarted;
     private boolean entityCleanupComplete;
+    private long lightingStartedNanos;
     private volatile boolean closed;
 
     StreamingPreparedWorldMutationSession(
@@ -117,7 +118,12 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                     }
                 }
                 case LIGHTING -> {
+                    if (lightingStartedNanos == 0) {
+                        lightingStartedNanos = System.nanoTime();
+                    }
                     if (world.finishLighting()) {
+                        metrics.lighting(Math.max(
+                                0, System.nanoTime() - lightingStartedNanos));
                         phase = Phase.COMPLETE;
                     } else {
                         return false;
@@ -207,6 +213,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         }
         int start = batchStart;
         preparing = CompletableFuture.supplyAsync(() -> {
+            long started = System.nanoTime();
             try {
                 Batch batch = loadBatch(start);
                 return preparation.preparePreflightedBatch(
@@ -216,6 +223,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 throw new CompletionException(failed.getCause());
             } catch (IOException failed) {
                 throw new CompletionException(failed);
+            } finally {
+                metrics.batchPreparation(Math.max(0, System.nanoTime() - started));
             }
         }, background);
     }

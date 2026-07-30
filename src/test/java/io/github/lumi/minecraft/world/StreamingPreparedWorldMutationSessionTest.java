@@ -243,6 +243,7 @@ class StreamingPreparedWorldMutationSessionTest {
             assertTrue(session.applyUntil(Long.MAX_VALUE));
             assertEquals(1, background.submitted);
             assertEquals(1, world.persistence.getLast().closeCalls);
+            assertTrue(session.statistics().batchPreparationNanos() > 0);
         }
     }
 

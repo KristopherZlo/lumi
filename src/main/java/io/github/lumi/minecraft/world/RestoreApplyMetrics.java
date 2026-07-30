@@ -16,6 +16,8 @@ final class RestoreApplyMetrics {
     private final LongAdder fullChunkPackets = new LongAdder();
     private final LongAdder sectionPackets = new LongAdder();
     private final LongAdder packetPayloadBytes = new LongAdder();
+    private final LongAdder batchPreparationNanos = new LongAdder();
+    private final LongAdder lightingNanos = new LongAdder();
     private final LongAdder chunkLoadNanos = new LongAdder();
     private final LongAdder loadedApplyNanos = new LongAdder();
     private final LongAdder storageReadNanos = new LongAdder();
@@ -63,6 +65,8 @@ final class RestoreApplyMetrics {
     }
 
     void chunkLoad(long nanos) { chunkLoadNanos.add(nanos); }
+    void batchPreparation(long nanos) { batchPreparationNanos.add(nanos); }
+    void lighting(long nanos) { lightingNanos.add(nanos); }
     void loadedApply(long nanos) { loadedApplyNanos.add(nanos); }
     void verification(long nanos) { verificationNanos.add(nanos); }
 
@@ -80,8 +84,9 @@ final class RestoreApplyMetrics {
                                 Map.Entry::getKey, entry -> entry.getValue().sum())),
                 sectionSwaps.sum(),
                 changedBlocks.sum(), lightSections.sum(), fullChunkPackets.sum(),
-                sectionPackets.sum(), packetPayloadBytes.sum(), chunkLoadNanos.sum(),
-                loadedApplyNanos.sum(), storageReadNanos.sum(), storageWriteNanos.sum(),
-                storageSyncNanos.sum(), verificationNanos.sum());
+                sectionPackets.sum(), packetPayloadBytes.sum(),
+                batchPreparationNanos.sum(), lightingNanos.sum(),
+                chunkLoadNanos.sum(), loadedApplyNanos.sum(), storageReadNanos.sum(),
+                storageWriteNanos.sum(), storageSyncNanos.sum(), verificationNanos.sum());
     }
 }

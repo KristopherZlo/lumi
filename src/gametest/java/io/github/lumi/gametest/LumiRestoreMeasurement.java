@@ -63,6 +63,8 @@ record LumiRestoreMeasurement(
                 + ";storedFallbacks=" + apply.storedFallbacks()
                 + ";sectionSwaps=" + apply.sectionSwaps()
                 + ";changedBlocks=" + apply.changedBlocks()
+                + ";batchPreparationMs=" + millis(apply.batchPreparationNanos())
+                + ";lightingMs=" + millis(apply.lightingNanos())
                 + ";fullChunkPackets=" + apply.fullChunkPackets()
                 + ";sectionPackets=" + apply.sectionPackets()
                 + ";packetPayloadBytes=" + apply.packetPayloadBytes()

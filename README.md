@@ -153,6 +153,7 @@ Client GameTests run all current suites by default. Select `SMOKE`, `UI`,
 Restore benchmark `totalMs` starts immediately before the final UI
 confirmation and ends at the durable terminal event. `queueMs` and `serverMs`
 split that same interval; performance gates report every failed budget together.
+Apply metrics also separate background batch preparation and lighting drain time.
 
 The code is split by responsibility:
 
