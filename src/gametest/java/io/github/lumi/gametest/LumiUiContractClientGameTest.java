@@ -24,7 +24,7 @@ import net.minecraft.client.gui.screens.Screen;
 public final class LumiUiContractClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
-        if (LumiClientBehaviorWorld.firstMinuteOnly()
+        if (!LumiClientTestSuite.includes(LumiClientTestSuite.UI)
                 || LumiHistoryBenchmarkConfig.enabled()) return;
         try (var ignored = LumiUiScaleTestScope.readableViewport()) {
             LumiClientBehaviorWorld.run(

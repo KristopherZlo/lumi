@@ -144,6 +144,9 @@ block-entity, and entity results after Quick Restore, Restore, and Undo at
 Run them directly with `.\gradlew.bat runGameTest --no-daemon`.
 Pass `-Dfabric-api.gametest.filter=<test-id>` before `runGameTest` to run one
 server GameTest without starting the full suite.
+Client GameTests run all current suites by default. Select `SMOKE`, `UI`,
+`RECOVERY`, or `BENCHMARK` with
+`-Dlumi.gametest.suite=<name> runClientGameTest --no-daemon`.
 
 The code is split by responsibility:
 

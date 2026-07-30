@@ -37,7 +37,8 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
 
     @Override
     public void runTest(ClientGameTestContext context) {
-        if (LumiHistoryBenchmarkConfig.enabled()) return;
+        if (!LumiClientTestSuite.includes(LumiClientTestSuite.SMOKE)
+                || LumiHistoryBenchmarkConfig.enabled()) return;
         try (var ignored = LumiUiScaleTestScope.readableViewport()) {
             LumiClientBehaviorWorld.runWithReopen(
                     context, "first-minute", this::exercise, this::verifyReopened);

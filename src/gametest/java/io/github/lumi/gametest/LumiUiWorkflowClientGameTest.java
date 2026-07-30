@@ -28,7 +28,7 @@ import net.minecraft.world.item.Items;
 public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest {
     @Override
     public void runTest(ClientGameTestContext context) {
-        if (LumiClientBehaviorWorld.firstMinuteOnly()
+        if (!LumiClientTestSuite.includes(LumiClientTestSuite.UI)
                 || LumiHistoryBenchmarkConfig.enabled()) return;
         try (var ignored = LumiUiScaleTestScope.readableViewport()) {
             LumiClientBehaviorWorld.run(

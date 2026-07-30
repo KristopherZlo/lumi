@@ -13,7 +13,7 @@ public final class LumiHistoryBenchmarkClientGameTest
 
     @Override
     public void runTest(ClientGameTestContext context) {
-        if (LumiClientBehaviorWorld.firstMinuteOnly()
+        if (!LumiClientTestSuite.includes(LumiClientTestSuite.BENCHMARK)
                 || !LumiHistoryBenchmarkConfig.enabled()) {
             return;
         }
