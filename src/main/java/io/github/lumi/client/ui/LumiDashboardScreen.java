@@ -155,6 +155,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     @Override
     public void tick() {
         super.tick();
+        if (pagedHistory != null) pagedHistory.tick();
         if (starWarsSearch(searchQuery) && pagedHistory != null) {
             pagedHistory.loadNextPage();
         }

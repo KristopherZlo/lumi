@@ -125,6 +125,8 @@ remain incremental and observable, while their working memory is bounded by the
 current batch instead of the entire world. Restore reuses one immutable object
 pack channel at a time instead of reopening it for every section.
 Outdated pending-work statistics are cancelled without reporting a history error.
+History search waits four client ticks after the last keystroke before requesting
+a page, while initial loads, paging, branch changes, and invalidations stay immediate.
 
 ## For Developers
 

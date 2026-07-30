@@ -13,6 +13,7 @@ import java.util.UUID;
 /** Owns branch-filtered, incrementally loaded history for one zone. */
 public final class ZoneHistoryController {
     static final int PAGE_SIZE = HistoryPagePayload.MAX_VERSIONS;
+    static final int SEARCH_DEBOUNCE_TICKS = 4;
     private final HistorySnapshotPayload snapshot;
     private final UUID zoneId;
     private final ClientHistoryPageStore pages;
@@ -25,6 +26,7 @@ public final class ZoneHistoryController {
     private UUID loadedRequest;
     private long observedRevision;
     private boolean awaitingRefresh;
+    private int searchDelay;
 
     ZoneHistoryController(
             HistorySnapshotPayload snapshot,
@@ -40,12 +42,14 @@ public final class ZoneHistoryController {
     }
 
     void request() {
+        searchDelay = 0;
         requester.request(
                 branch, Optional.of(zoneId), offset, PAGE_SIZE, query);
     }
 
     Optional<HistoryPagePayload> page() {
         synchronizeInvalidation();
+        if (searchDelay > 0) return Optional.empty();
         return pages.page(
                 snapshot.dimensionId(), snapshot.workspaceId(),
                 branch, Optional.of(zoneId));
@@ -142,7 +146,12 @@ public final class ZoneHistoryController {
         }
         query = normalized;
         reset();
-        request();
+        awaitingRefresh = true;
+        searchDelay = SEARCH_DEBOUNCE_TICKS;
+    }
+
+    void tick() {
+        if (searchDelay > 0 && --searchDelay == 0) request();
     }
 
     String error() {

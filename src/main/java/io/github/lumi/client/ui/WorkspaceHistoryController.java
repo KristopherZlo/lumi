@@ -12,6 +12,7 @@ import java.util.UUID;
 
 /** Owns branch-filtered, incrementally loaded history for the scroll view. */
 final class WorkspaceHistoryController {
+    static final int SEARCH_DEBOUNCE_TICKS = 4;
     private final HistorySnapshotPayload snapshot;
     private final ClientHistoryPageStore pages;
     private final ClientHistoryPageStore.Channel channel;
@@ -24,6 +25,7 @@ final class WorkspaceHistoryController {
     private UUID loadedRequest;
     private long observedRevision;
     private boolean awaitingRefresh;
+    private int searchDelay;
 
     WorkspaceHistoryController(
             HistorySnapshotPayload snapshot,
@@ -64,6 +66,7 @@ final class WorkspaceHistoryController {
 
     Optional<HistoryPagePayload> page() {
         synchronizeInvalidation();
+        if (searchDelay > 0) return Optional.empty();
         if (channel != null) {
             return pages.page(
                     channel, snapshot.dimensionId(), snapshot.workspaceId(),
@@ -163,9 +166,14 @@ final class WorkspaceHistoryController {
         }
         query = normalized;
         reset();
+        awaitingRefresh = true;
         if (pageSize > 0) {
-            request();
+            searchDelay = SEARCH_DEBOUNCE_TICKS;
         }
+    }
+
+    void tick() {
+        if (searchDelay > 0 && --searchDelay == 0) request();
     }
 
     String error() {
@@ -179,6 +187,7 @@ final class WorkspaceHistoryController {
     }
 
     private void request() {
+        searchDelay = 0;
         requester.request(
                 branch, Optional.empty(), offset, pageSize, query);
     }

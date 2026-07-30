@@ -86,6 +86,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     @Override
     public void tick() {
         super.tick();
+        zoneHistory.tick();
         HistoryPagePayload latest = zoneHistory.page().orElse(null);
         if (!Objects.equals(renderedPage, latest)) {
             focusSearchAfterInit = search != null && search.isFocused();

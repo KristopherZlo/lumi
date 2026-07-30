@@ -14,6 +14,7 @@ import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -86,16 +87,27 @@ class ZoneHistoryControllerTest {
     void resetsPagingWhenTheServerSearchChanges() {
         UUID workspace = new UUID(0, 11);
         UUID zone = new UUID(0, 12);
+        AtomicInteger requests = new AtomicInteger();
         AtomicReference<String> requestedQuery = new AtomicReference<>();
         ZoneHistoryController controller = new ZoneHistoryController(
                 snapshot(workspace), zone, new ClientHistoryPageStore(),
                 (branch, ignored, offset, limit, query) -> {
+                    requests.incrementAndGet();
                     requestedQuery.set(query + ":" + offset);
                     return UUID.randomUUID();
                 });
 
+        controller.search("tow");
         controller.search("  tower  ");
+        for (int tick = 1;
+                tick < ZoneHistoryController.SEARCH_DEBOUNCE_TICKS;
+                tick++) {
+            controller.tick();
+        }
 
+        assertEquals(0, requests.get());
+        controller.tick();
+        assertEquals(1, requests.get());
         assertEquals("tower:0", requestedQuery.get());
     }
 

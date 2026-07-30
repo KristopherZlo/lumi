@@ -386,8 +386,15 @@ final class LumiUiTestDriver {
                 context.getInput().typeChars(text);
                 context.waitTick();
                 String actual = context.computeOnClient(client ->
-                        ((EditBox) client.screen.getFocused()).getValue());
-                if (!actual.equals(text)) {
+                        expectedScreen.isInstance(client.screen)
+                                ? client.screen.children().stream()
+                                        .filter(EditBox.class::isInstance)
+                                        .map(EditBox.class::cast)
+                                        .map(EditBox::getValue)
+                                        .filter(text::equals)
+                                        .findFirst().orElse(null)
+                                : null);
+                if (!text.equals(actual)) {
                     throw new AssertionError(expectedScreen.getSimpleName()
                             + " received '" + actual + "' instead of '" + text + "'");
                 }
