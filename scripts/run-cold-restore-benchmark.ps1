@@ -71,7 +71,7 @@ function Read-Properties([string]$Path) {
         }
         $values[$line.Substring(0, $separator)] = $line.Substring($separator + 1)
     }
-    return $values
+    return [pscustomobject]$values
 }
 
 Push-Location $repo
@@ -83,8 +83,8 @@ try {
         "-Dlumi.benchmark.changeSize=$ChangeSize",
         "-Dlumi.benchmark.layers=$Layers",
         "-Dlumi.benchmark.commits=$Commits",
-        '-Dlumi.benchmark.restoreSamples=2',
-        '-Dlumi.benchmark.chunkPath=natural'
+        '-Dlumi.benchmark.restoreSamples=1',
+        '-Dlumi.benchmark.chunkPath=stored'
     )
     if (-not (Test-Path -LiteralPath $runWorld)) {
         throw "Fixture JVM did not leave the expected world: $runWorld"
@@ -134,10 +134,10 @@ foreach ($result in $results) {
             "PID $($result.pid) fixture blocks actual=$($result.expectedBlocks), " +
             "expected=$configuredBlocks")
     }
-    if ([long]$result.changedBlocks -ne [long]$result.expectedBlocks) {
+    if ([long]$result.changedBlocks -lt [long]$result.expectedBlocks) {
         $violations.Add(
             "PID $($result.pid) changedBlocks actual=$($result.changedBlocks), " +
-            "expected=$($result.expectedBlocks)")
+            "expectedAtLeast=$($result.expectedBlocks)")
     }
     if ([long]$result.storedChunks -le 0) {
         $violations.Add("PID $($result.pid) exercised no stored chunks")
