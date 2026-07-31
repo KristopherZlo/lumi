@@ -398,15 +398,21 @@ class MutationDurabilityTrackerTest {
                 new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
                 new WorkingIndexRepository(repositoryRoot), background);
 
-        tracker.registerSectionMutation(new SectionKey(0, 0, 0), MutationDurabilityTrackerTest::airSection);
-        tracker.registerSectionMutation(new SectionKey(0, 1, 0), MutationDurabilityTrackerTest::airSection);
-        tracker.registerSectionMutation(new SectionKey(1, 0, 0), MutationDurabilityTrackerTest::airSection);
+        for (int index = 0; index < 257; index++) {
+            int coordinate = index;
+            tracker.registerSectionMutation(
+                    new SectionKey(coordinate % 32, coordinate / 1_024,
+                            coordinate / 32),
+                    () -> section("minecraft:test_" + coordinate));
+        }
 
         assertEquals(2, background.size());
         background.runNext();
         background.runNext();
         assertTrue(tracker.canPublishChunk(0, 0));
-        assertTrue(tracker.canPublishChunk(1, 0));
+        assertTrue(tracker.canPublishChunk(0, 8));
+        assertEquals(2, fileCount(repositoryRoot.resolve("objects/packs"), ".pack"));
+        assertEquals(1, fileCount(repositoryRoot.resolve("origins/regions"), ".bin"));
     }
 
     @Test
@@ -429,8 +435,8 @@ class MutationDurabilityTrackerTest {
 
     @Test
     void retriesFailedOriginWriteWithoutRecapturingTheOrigin() throws Exception {
-        Path objectsPath = repositoryRoot.resolve("objects");
-        Files.writeString(objectsPath, "temporarily unavailable");
+        Path originsPath = repositoryRoot.resolve("origins");
+        Files.writeString(originsPath, "temporarily unavailable");
         ManualExecutor background = new ManualExecutor();
         MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
                 new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
@@ -445,8 +451,9 @@ class MutationDurabilityTrackerTest {
         background.runNext();
         background.runNext();
         assertFalse(tracker.canPublishChunk(4, 6));
+        assertEquals(1, fileCount(repositoryRoot.resolve("objects/packs"), ".pack"));
 
-        Files.delete(objectsPath);
+        Files.delete(originsPath);
         tracker.retryFailedWrites();
         background.runNext();
 
@@ -455,6 +462,7 @@ class MutationDurabilityTrackerTest {
         background.runNext();
         assertTrue(tracker.canPublishChunk(4, 6));
         assertTrue(new OriginStore(repositoryRoot).read(key).isPresent());
+        assertEquals(1, fileCount(repositoryRoot.resolve("objects/packs"), ".pack"));
     }
 
     @Test
@@ -483,8 +491,20 @@ class MutationDurabilityTrackerTest {
     }
 
     private static SectionBlob airSection() {
+        return section("minecraft:air");
+    }
+
+    private static SectionBlob section(String block) {
         return new SectionBlob(
-                new ArrayList<>(Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:air")), Map.of());
+                new ArrayList<>(Collections.nCopies(SectionBlob.BLOCK_COUNT, block)), Map.of());
+    }
+
+    private static long fileCount(Path directory, String suffix) throws Exception {
+        try (var files = Files.walk(directory)) {
+            return files.filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith(suffix))
+                    .count();
+        }
     }
 
     private static final class ManualExecutor implements Executor {

@@ -4,7 +4,6 @@ import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.HistoryKey;
-import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndex;
@@ -33,6 +32,7 @@ import java.util.logging.Logger;
 /** Coalesces dirty persistence and gates vanilla chunk publication until it is durable. */
 public final class MutationDurabilityTracker implements CapturedGenerationCompletion {
     private static final int MAX_PENDING_BLOCKS = 16_384;
+    private static final int MAX_ORIGINS_PER_BATCH = 256;
     private static final Logger LOGGER = Logger.getLogger(MutationDurabilityTracker.class.getName());
 
     private final WorldObjectRepository objects;
@@ -51,7 +51,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             new LinkedHashMap<>();
     private final Map<ChunkCoordinate, Integer> blockedChunks = new HashMap<>();
     private final Set<HistoryKey> pendingOrigins = new HashSet<>();
-    private final ArrayDeque<PendingOriginWrite> originWrites = new ArrayDeque<>();
+    private final ArrayDeque<PendingOrigin> originWrites = new ArrayDeque<>();
     private long indexRevision;
     private long builderRevision;
     private long durableIndexRevision;
@@ -106,12 +106,16 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     }
 
     public long registerSectionMutation(SectionKey key, Supplier<SectionBlob> preMutationCapture) {
-        return register(key, preMutationCapture, objects::write);
+        Objects.requireNonNull(preMutationCapture, "preMutationCapture");
+        return register(key, () -> new PendingSectionOrigin(
+                key, Objects.requireNonNull(preMutationCapture.get(), "captured origin")));
     }
 
     public long registerEntityMutation(
             EntityChunkKey key, Supplier<EntityChunkBlob> preMutationCapture) {
-        return register(key, preMutationCapture, objects::write);
+        Objects.requireNonNull(preMutationCapture, "preMutationCapture");
+        return register(key, () -> new PendingEntityOrigin(
+                key, Objects.requireNonNull(preMutationCapture.get(), "captured origin")));
     }
 
     public long markTrackedSection(SectionKey key) {
@@ -128,7 +132,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         }
     }
 
-    private <T> long register(HistoryKey key, Supplier<T> capture, OriginWriter<T> writer) {
+    private long register(HistoryKey key, Supplier<PendingOrigin> capture) {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(capture, "preMutationCapture");
         boolean scheduleOrigins = false;
@@ -136,9 +140,12 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         long generation;
         synchronized (this) {
             if (!durableOrigins.contains(key) && pendingOrigins.add(key)) {
-                T origin = Objects.requireNonNull(capture.get(), "captured origin");
-                originWrites.add(new PendingOriginWrite(
-                        key, () -> persistOrigin(key, origin, writer)));
+                PendingOrigin origin =
+                        Objects.requireNonNull(capture.get(), "captured origin");
+                if (!origin.key().equals(key)) {
+                    throw new IllegalArgumentException("Captured origin key does not match");
+                }
+                originWrites.add(origin);
                 scheduleOrigins = !originWriterScheduled;
                 originWriterScheduled = true;
             }
@@ -494,47 +501,62 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         }
     }
 
-    private <T> void persistOrigin(
-            HistoryKey key, T origin, OriginWriter<T> writer) throws IOException {
-        ObjectId id = writer.write(origin);
-        origins.register(key, id);
-        boolean scheduleIndex;
-        synchronized (this) {
-            durableOrigins.add(key);
-            pendingOrigins.remove(key);
-            releaseSatisfied(key);
-            scheduleIndex = durableIndexRevision < indexRevision && !indexWriterScheduled;
-            indexWriterScheduled |= scheduleIndex;
-        }
-        if (scheduleIndex) {
-            scheduleIndexWriter();
-        }
-    }
-
     private void drainOrigins() {
         while (true) {
-            PendingOriginWrite write;
+            List<PendingOrigin> batch;
             synchronized (this) {
-                write = originWrites.peek();
-                if (write == null) {
+                if (originWrites.isEmpty()) {
                     originWriterScheduled = false;
                     return;
                 }
+                batch = originWrites.stream()
+                        .limit(MAX_ORIGINS_PER_BATCH)
+                        .toList();
             }
             try {
-                write.persistence().persist();
+                persistOrigins(batch);
             } catch (IOException | RuntimeException failed) {
                 synchronized (this) {
                     originWriterScheduled = false;
                 }
                 LOGGER.log(Level.SEVERE,
-                        "Failed to persist Lumi origin for " + write.key(), failed);
+                        "Failed to persist Lumi origin batch starting at "
+                                + batch.getFirst().key(), failed);
                 return;
             }
+            boolean scheduleIndex;
             synchronized (this) {
-                originWrites.removeFirst();
+                for (PendingOrigin persisted : batch) {
+                    PendingOrigin removed = originWrites.removeFirst();
+                    if (removed != persisted) {
+                        throw new IllegalStateException("Origin queue order changed");
+                    }
+                    durableOrigins.add(persisted.key());
+                    pendingOrigins.remove(persisted.key());
+                    releaseSatisfied(persisted.key());
+                }
+                scheduleIndex = durableIndexRevision < indexRevision
+                        && !indexWriterScheduled;
+                indexWriterScheduled |= scheduleIndex;
+            }
+            if (scheduleIndex) {
+                scheduleIndexWriter();
             }
         }
+    }
+
+    private void persistOrigins(List<PendingOrigin> batch) throws IOException {
+        Map<SectionKey, SectionBlob> sections = new LinkedHashMap<>();
+        Map<EntityChunkKey, EntityChunkBlob> entities = new LinkedHashMap<>();
+        for (PendingOrigin origin : batch) {
+            if (origin instanceof PendingSectionOrigin section) {
+                sections.put(section.key(), section.payload());
+            } else {
+                PendingEntityOrigin entity = (PendingEntityOrigin) origin;
+                entities.put(entity.key(), entity.payload());
+            }
+        }
+        origins.registerAll(objects.writeCaptured(sections, entities));
     }
 
     private void writeIndexUntilCurrent() {
@@ -668,17 +690,16 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 Math.floorDiv(position.z(), 16));
     }
 
-    @FunctionalInterface
-    private interface OriginWriter<T> {
-        ObjectId write(T origin) throws IOException;
+    private sealed interface PendingOrigin
+            permits PendingSectionOrigin, PendingEntityOrigin {
+        HistoryKey key();
     }
 
-    @FunctionalInterface
-    private interface OriginPersistence {
-        void persist() throws IOException;
-    }
+    private record PendingSectionOrigin(SectionKey key, SectionBlob payload)
+            implements PendingOrigin { }
 
-    private record PendingOriginWrite(HistoryKey key, OriginPersistence persistence) { }
+    private record PendingEntityOrigin(EntityChunkKey key, EntityChunkBlob payload)
+            implements PendingOrigin { }
 
     private record PendingBlock(
             BlockPosition position, SectionKey section,
