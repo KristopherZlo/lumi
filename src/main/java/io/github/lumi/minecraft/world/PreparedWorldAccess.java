@@ -82,7 +82,7 @@ public interface PreparedWorldAccess {
     /** Writes the last window, then forces and rereads the complete section slab. */
     default WorldPersistenceSession beginPersistenceCommit(
             PreparedMinecraftState writeTarget,
-            PreparedMinecraftState verificationTarget,
+            WorldStateApply.State verificationTarget,
             Set<ChunkCoordinate> alreadyDurable) {
         return beginPersistence(writeTarget, alreadyDurable, false);
     }

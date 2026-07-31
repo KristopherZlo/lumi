@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.world;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.PlayerSpawn;
+import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.mixin.ChunkMapPersistenceAccessor;
 import io.github.lumi.mixin.EntityStoragePersistenceAccessor;
@@ -67,7 +68,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             MinecraftStoredChunkAccess storedChunks,
             MinecraftEntityChunkCapture entityCapture,
             PreparedMinecraftState writeTarget,
-            PreparedMinecraftState verificationTarget,
+            WorldStateApply.State verificationTarget,
             Set<ChunkCoordinate> alreadyDurable,
             boolean savePlayers,
             boolean forceAndVerify) {
@@ -83,9 +84,8 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
 
         Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> grouped =
                 groupedSections(writeTarget, alreadyDurable);
-        Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> verification =
-                verificationTarget == writeTarget
-                        ? grouped : groupedSections(verificationTarget, alreadyDurable);
+        Map<ChunkCoordinate, Map<SectionKey, SectionBlob>> verification =
+                groupedSections(verificationTarget, alreadyDurable);
         Set<ChunkCoordinate> relight = new HashSet<>();
         writeTarget.sectionKeys().forEach(key -> {
             ChunkCoordinate chunk = ChunkCoordinate.from(key);
@@ -101,21 +101,25 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         relightChunks = Set.copyOf(relight);
         poiSyncRequired = forceAndVerify && !verificationChunks.isEmpty();
         entityChunks = writeTarget.entityKeys();
+        List<EntityChunkKey> verificationEntityChunks =
+                List.copyOf(verificationTarget.entities().keySet());
         chunks.forEach(chunk -> pendingSnapshots.merge(chunk, 1, Integer::sum));
         entityChunks.forEach(key -> pendingSnapshots.merge(
                 ChunkCoordinate.from(key), 1, Integer::sum));
         Map<EntityChunkKey, EntityChunkBlob> entityTargets =
-                verificationTarget.source().entities();
+                verificationTarget.entities();
         players = savePlayers ? level.getServer().getPlayerList().getPlayers().stream()
                 .map(player -> playerTarget(player, writeTarget.source().playerSpawns()))
                 .toList() : List.of();
-        entityStorage = entityChunks.isEmpty() ? null
+        entityStorage = entityChunks.isEmpty()
+                && verificationEntityChunks.isEmpty() ? null
                 : ((EntityStoragePersistenceAccessor) entityAccess().lumi$permanentStorage())
                         .lumi$simpleRegionStorage();
         verifier = forceAndVerify
                 ? new MinecraftPersistedBatchVerifier(
                         level, background, storedChunks, entityCapture, verification,
-                        entityTargets, verificationChunks, entityChunks, entityStorage)
+                        entityTargets, verificationChunks,
+                        verificationEntityChunks, entityStorage)
                 : null;
         phaseStartedNanos = System.nanoTime();
     }
@@ -131,6 +135,23 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             if (!alreadyDurable.contains(chunk)) {
                 grouped.computeIfAbsent(chunk, ignored -> new LinkedHashMap<>())
                         .put(key, target.sections().get(key));
+            }
+        });
+        grouped.replaceAll((ignored, sections) -> Map.copyOf(sections));
+        return grouped;
+    }
+
+    private static Map<ChunkCoordinate, Map<SectionKey, SectionBlob>>
+            groupedSections(
+                    WorldStateApply.State target,
+                    Set<ChunkCoordinate> alreadyDurable) {
+        Map<ChunkCoordinate, Map<SectionKey, SectionBlob>> grouped =
+                new LinkedHashMap<>();
+        target.sections().forEach((key, section) -> {
+            ChunkCoordinate chunk = ChunkCoordinate.from(key);
+            if (!alreadyDurable.contains(chunk)) {
+                grouped.computeIfAbsent(chunk, ignored -> new LinkedHashMap<>())
+                        .put(key, section);
             }
         });
         grouped.replaceAll((ignored, sections) -> Map.copyOf(sections));

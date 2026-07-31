@@ -25,7 +25,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private final ChunkLoadSession chunks;
     private final RestoreApplyMetrics metrics;
     private final PersistenceMode persistenceMode;
-    private final PreparedMinecraftState verificationTarget;
+    private final WorldStateApply.State verificationTarget;
     private final Set<ChunkCoordinate> alreadyDurable;
     private final boolean playerSpawnsIncluded;
     private final List<SectionKey> sections;
@@ -69,7 +69,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             ChunkLoadSession chunks,
             RestoreApplyMetrics metrics) {
         this(target, world, nanoTime, chunks, metrics,
-                PersistenceMode.COMPLETE, target, Set.of());
+                PersistenceMode.COMPLETE, target.source(), Set.of());
     }
 
     PreparedWorldMutationSession(
@@ -79,7 +79,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             ChunkLoadSession chunks,
             RestoreApplyMetrics metrics,
             PersistenceMode persistenceMode,
-            PreparedMinecraftState verificationTarget,
+            WorldStateApply.State verificationTarget,
             Set<ChunkCoordinate> alreadyDurable) {
         this.target = Objects.requireNonNull(target, "target");
         this.world = Objects.requireNonNull(world, "world");
@@ -96,13 +96,13 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         entities = target.entityKeys();
         if (persistenceMode != PersistenceMode.COMPLETE
                 && (!entities.isEmpty() || playerSpawnsIncluded
-                || !verificationTarget.entityKeys().isEmpty()
-                || verificationTarget.source().playerSpawnsIncluded())) {
+                || !verificationTarget.entities().isEmpty()
+                || verificationTarget.playerSpawnsIncluded())) {
             throw new IllegalArgumentException(
                     "Optimized persistence accepts section-only Restore batches");
         }
         if (persistenceMode == PersistenceMode.SLAB_END
-                && !verificationTarget.source().sections().keySet()
+                && !verificationTarget.sections().keySet()
                         .containsAll(target.source().sections().keySet())) {
             throw new IllegalArgumentException(
                     "Slab verification must include the final write window");

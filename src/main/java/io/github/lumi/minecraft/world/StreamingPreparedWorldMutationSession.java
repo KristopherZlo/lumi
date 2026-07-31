@@ -183,7 +183,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                     lastWindow
                             ? PreparedWorldMutationSession.PersistenceMode.SLAB_END
                             : PreparedWorldMutationSession.PersistenceMode.STAGE,
-                    slab, Set.copyOf(slabDurable));
+                    slab.source(), Set.copyOf(slabDurable));
             currentKind = BatchKind.SECTIONS;
             phase = Phase.APPLYING;
             return true;

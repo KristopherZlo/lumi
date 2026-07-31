@@ -1,7 +1,9 @@
 package io.github.lumi.minecraft.world;
 
+import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.mixin.EntityStoragePersistenceAccessor;
 import io.github.lumi.mixin.PersistentEntityManagerPersistenceAccessor;
@@ -20,6 +22,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
@@ -389,6 +392,42 @@ final class MinecraftStoredChunkAccess {
         return mismatch(position, source, target, null);
     }
 
+    String mismatchRaw(
+            ChunkPos position,
+            CompoundTag source,
+            Map<SectionKey, SectionBlob> target) throws IOException {
+        SerializableChunkData data = SerializableChunkData.parse(level, containers, source);
+        if (!position.equals(data.chunkPos())) {
+            return "chunk position is " + data.chunkPos();
+        }
+        Map<Integer, SerializableChunkData.SectionData> sections = sectionMap(data);
+        for (var entry : target.entrySet()) {
+            var stored = sections.get(entry.getKey().sectionY());
+            if (stored == null || stored.chunkSection() == null) {
+                return "section is absent: " + entry.getKey();
+            }
+            int block = firstMismatchedState(stored.chunkSection(), entry.getValue());
+            if (block >= 0) {
+                return "block " + MinecraftPreparedWorldAccess.position(
+                        entry.getKey(), block) + " expected "
+                        + entry.getValue().blockStates().get(block) + " but was "
+                        + stored.chunkSection().getBlockState(
+                                block & 15, (block >>> 8) & 15, (block >>> 4) & 15);
+            }
+            Map<Integer, CanonicalNbt> actualBlockEntities = new HashMap<>();
+            for (var blockEntity : blockEntities(
+                    data.blockEntities(), entry.getKey().sectionY()).entrySet()) {
+                actualBlockEntities.put(blockEntity.getKey(),
+                        MinecraftSectionCapture.canonicalBlockEntityNbt(
+                                blockEntity.getValue()));
+            }
+            if (!Map.copyOf(actualBlockEntities).equals(entry.getValue().blockEntities())) {
+                return "block entities differ in " + entry.getKey();
+            }
+        }
+        return null;
+    }
+
     private String mismatch(
             ChunkPos position,
             CompoundTag source,
@@ -466,6 +505,20 @@ final class MinecraftStoredChunkAccess {
             if (!stored.getBlockState(
                     index & 15, (index >>> 8) & 15, (index >>> 4) & 15)
                     .equals(target.blockStates().get(index))) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static int firstMismatchedState(
+            LevelChunkSection stored, SectionBlob target) {
+        Map<BlockState, String> encoded = new java.util.IdentityHashMap<>();
+        for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+            BlockState state = stored.getBlockState(
+                    index & 15, (index >>> 8) & 15, (index >>> 4) & 15);
+            if (!target.blockStates().get(index).equals(encoded.computeIfAbsent(
+                    state, BlockStateParser::serialize))) {
                 return index;
             }
         }

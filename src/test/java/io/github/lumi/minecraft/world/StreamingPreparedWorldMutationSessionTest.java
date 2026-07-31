@@ -34,6 +34,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class StreamingPreparedWorldMutationSessionTest {
+    @Test
+    void boundsPersistedReadbackWindows() {
+        assertEquals(32, MinecraftPersistedBatchVerifier.readBatchEnd(40, 0, 32));
+        assertEquals(40, MinecraftPersistedBatchVerifier.readBatchEnd(40, 32, 32));
+    }
+
     @BeforeAll
     static void bootstrapMinecraft() {
         SharedConstants.tryDetectVersion();
@@ -634,7 +640,7 @@ class StreamingPreparedWorldMutationSessionTest {
                 Set<ChunkCoordinate> alreadyDurable,
                 boolean playerSpawnsIncluded) {
             return persistence(PreparedWorldMutationSession.PersistenceMode.COMPLETE,
-                    target, target, alreadyDurable);
+                    target, target.source(), alreadyDurable);
         }
 
         @Override
@@ -642,13 +648,13 @@ class StreamingPreparedWorldMutationSessionTest {
                 PreparedMinecraftState writeTarget,
                 Set<ChunkCoordinate> alreadyDurable) {
             return persistence(PreparedWorldMutationSession.PersistenceMode.STAGE,
-                    writeTarget, writeTarget, alreadyDurable);
+                    writeTarget, writeTarget.source(), alreadyDurable);
         }
 
         @Override
         public WorldPersistenceSession beginPersistenceCommit(
                 PreparedMinecraftState writeTarget,
-                PreparedMinecraftState verificationTarget,
+                WorldStateApply.State verificationTarget,
                 Set<ChunkCoordinate> alreadyDurable) {
             return persistence(PreparedWorldMutationSession.PersistenceMode.SLAB_END,
                     writeTarget, verificationTarget, alreadyDurable);
@@ -657,11 +663,11 @@ class StreamingPreparedWorldMutationSessionTest {
         private WorldPersistenceSession persistence(
                 PreparedWorldMutationSession.PersistenceMode mode,
                 PreparedMinecraftState writeTarget,
-                PreparedMinecraftState verificationTarget,
+                WorldStateApply.State verificationTarget,
                 Set<ChunkCoordinate> alreadyDurable) {
             persistenceCalls.add(new PersistenceCall(
                     mode, writeTarget.sectionKeys().size(),
-                    verificationTarget.sectionKeys().size(), alreadyDurable));
+                    verificationTarget.sections().size(), alreadyDurable));
             ManualPersistence next = new ManualPersistence();
             persistence.add(next);
             return next;

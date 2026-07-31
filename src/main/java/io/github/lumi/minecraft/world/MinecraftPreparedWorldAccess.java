@@ -55,7 +55,7 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             Set<ChunkCoordinate> alreadyDurable,
             boolean playerSpawnsIncluded) {
         return beginPersistence(
-                target, target, alreadyDurable, playerSpawnsIncluded, true);
+                target, target.source(), alreadyDurable, playerSpawnsIncluded, true);
     }
 
     @Override
@@ -63,13 +63,13 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             PreparedMinecraftState writeTarget,
             Set<ChunkCoordinate> alreadyDurable) {
         return beginPersistence(
-                writeTarget, writeTarget, alreadyDurable, false, false);
+                writeTarget, writeTarget.source(), alreadyDurable, false, false);
     }
 
     @Override
     public WorldPersistenceSession beginPersistenceCommit(
             PreparedMinecraftState writeTarget,
-            PreparedMinecraftState verificationTarget,
+            WorldStateApply.State verificationTarget,
             Set<ChunkCoordinate> alreadyDurable) {
         return beginPersistence(
                 writeTarget, verificationTarget, alreadyDurable, false, true);
@@ -77,7 +77,7 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
 
     private WorldPersistenceSession beginPersistence(
             PreparedMinecraftState writeTarget,
-            PreparedMinecraftState verificationTarget,
+            WorldStateApply.State verificationTarget,
             Set<ChunkCoordinate> alreadyDurable,
             boolean playerSpawnsIncluded,
             boolean forceAndVerify) {
