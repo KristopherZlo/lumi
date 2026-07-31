@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
 import io.github.lumi.storage.repository.BranchRefRepository;
+import io.github.lumi.storage.repository.RefConflictException;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
@@ -43,8 +44,13 @@ public final class BranchRefRestorePublication implements RestorePublication {
 
     @Override
     public void publish(PreparedRestore restore) throws IOException {
-        refs.compareAndSet(restore.expectedRef(), restore.targetCommit());
+        var current = refs.read(restore.expectedRef().name()).orElse(null);
+        if (!restore.expectedRef().equals(current)) {
+            throw new RefConflictException(
+                    "Restore source branch changed before publication");
+        }
         working.ifPresent(clear -> clear.publish(restore));
+        refs.compareAndSet(restore.expectedRef(), restore.targetCommit());
     }
 
     @Override
