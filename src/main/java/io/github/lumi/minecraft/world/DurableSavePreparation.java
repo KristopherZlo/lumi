@@ -11,13 +11,14 @@ import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.function.LongSupplier;
 
-/** Sweeps loaded entity chunks, then waits for the matching origin/index boundary. */
+/** Sweeps loaded entity chunks, then establishes the matching capture boundary. */
 public final class DurableSavePreparation implements SavePreparation {
     private final WorldStateReader reader;
     private final EntityChunkDurabilityGate entities;
     private final MutationDurabilityTracker mutations;
     private final Predicate<HistoryKey> includes;
     private final LongSupplier nanoTime;
+    private final boolean awaitOriginDurability;
 
     public DurableSavePreparation(
             WorldStateReader reader,
@@ -48,11 +49,32 @@ public final class DurableSavePreparation implements SavePreparation {
             MutationDurabilityTracker mutations,
             Predicate<HistoryKey> includes,
             LongSupplier nanoTime) {
+        this(reader, entities, mutations, includes, nanoTime, true);
+    }
+
+    private DurableSavePreparation(
+            WorldStateReader reader,
+            EntityChunkDurabilityGate entities,
+            MutationDurabilityTracker mutations,
+            Predicate<HistoryKey> includes,
+            LongSupplier nanoTime,
+            boolean awaitOriginDurability) {
         this.reader = Objects.requireNonNull(reader, "reader");
         this.entities = Objects.requireNonNull(entities, "entities");
         this.mutations = Objects.requireNonNull(mutations, "mutations");
         this.includes = Objects.requireNonNull(includes, "includes");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
+        this.awaitOriginDurability = awaitOriginDurability;
+    }
+
+    /** The durable checkpoint supersedes pending origins before any world mutation. */
+    public static DurableSavePreparation forReturnPoint(
+            WorldStateReader reader,
+            EntityChunkDurabilityGate entities,
+            MutationDurabilityTracker mutations,
+            Predicate<HistoryKey> includes) {
+        return new DurableSavePreparation(
+                reader, entities, mutations, includes, System::nanoTime, false);
     }
 
     @Override
@@ -84,7 +106,7 @@ public final class DurableSavePreparation implements SavePreparation {
             if (boundary == null) {
                 boundary = mutations.durabilityBoundary();
             }
-            complete = mutations.isDurable(boundary);
+            complete = !awaitOriginDurability || mutations.isDurable(boundary);
             return complete;
         }
 

@@ -65,6 +65,31 @@ class DurableSavePreparationTest {
     }
 
     @Test
+    void returnPointUsesItsCheckpointInsteadOfWaitingForOrigins() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        EntityChunkDurabilityGate entities = new EntityChunkDurabilityGate(mutations);
+        EntityChunkKey key = new EntityChunkKey(2, 3);
+        entities.rememberLoaded(key, entities(1));
+        WorldStateReader reader = new WorldStateReader() {
+            @Override public SectionBlob read(SectionKey ignored) {
+                throw new AssertionError("Preparation reads only entity baselines");
+            }
+            @Override public EntityChunkBlob read(EntityChunkKey ignored) {
+                return entities(2);
+            }
+        };
+        SavePreparation.Session session = DurableSavePreparation.forReturnPoint(
+                reader, entities, mutations, ignored -> true).begin();
+
+        assertTrue(session.prepareUntil(Long.MAX_VALUE));
+        assertEquals(Map.of(key, 1L), session.finish().generations());
+        assertFalse(mutations.canPublish(key));
+    }
+
+    @Test
     void scopedPreparationDoesNotReadUnrelatedEntityChunks() throws Exception {
         ManualExecutor background = new ManualExecutor();
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(

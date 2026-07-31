@@ -532,3 +532,9 @@ journal остаётся в `APPLYING`, пока проверенный и пр�
 
 Это не ослабляет apply/verify/persist/reread, CAS или exact reopen. Из критического пути
 удалены только повторные forced atomic rewrites одного и того же recovery-решения.
+
+Подготовка hidden return-point устанавливает точную generation boundary, но не ждёт старые
+origin/index writes перед capture. Это допустимо только для return-point: до первой мутации
+его полный checkpoint и ref становятся durable, после чего journal ссылается на этот commit
+как на точное направление rollback. Обычный Save по-прежнему ждёт origin/index durability,
+а vanilla publication остаётся закрытой существующим durability gate.

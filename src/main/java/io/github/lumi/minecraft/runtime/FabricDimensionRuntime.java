@@ -833,6 +833,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return scopedSavePreparation(saveScope(request));
     }
 
+    private SavePreparation scopedReturnPointPreparation(SaveRequest request)
+            throws IOException {
+        return scopedReturnPointPreparation(saveScope(request));
+    }
+
     private Predicate<io.github.lumi.domain.model.HistoryKey> saveScope(
             SaveRequest request) throws IOException {
         var workspace = workspaces.require(request.workspaceId());
@@ -863,6 +868,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             Predicate<io.github.lumi.domain.model.HistoryKey> scope) {
         return new ScopedSavePreparation(
                 new DurableSavePreparation(
+                        worldReader, entityDurability, mutations, scope),
+                scope);
+    }
+
+    private SavePreparation scopedReturnPointPreparation(
+            Predicate<io.github.lumi.domain.model.HistoryKey> scope) {
+        return new ScopedSavePreparation(
+                DurableSavePreparation.forReturnPoint(
                         worldReader, entityDurability, mutations, scope),
                 scope);
     }
@@ -927,7 +940,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 workspaceId, Optional.empty(), CommitKind.HIDDEN_RETURN);
         BranchName hiddenRef = new BranchName("hidden/return/" + operationId);
         SaveCaptureOperation checkpoint = createChunkReadySave(
-                returnPoint, scopedSavePreparation(returnPoint),
+                returnPoint, scopedReturnPointPreparation(returnPoint),
                 (request, captured) -> saves.checkpoint(
                         request, captured, hiddenRef), ignored -> { });
         return new ReturnPointRestoreOperation(checkpoint, (saved, progress) -> {
@@ -1220,7 +1233,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 "Checkpoint before Branch Switch", Instant.now(), activeWorkspaceId(),
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
         SaveCaptureOperation checkpoint = createChunkReadySave(
-                checkpointRequest, scopedSavePreparation(checkpointRequest),
+                checkpointRequest, scopedReturnPointPreparation(checkpointRequest),
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
                 ignored -> { });
         return new ReturnPointRestoreOperation(checkpoint, (saved, progress) ->
@@ -1867,7 +1880,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 "Checkpoint before partial Restore", Instant.now(), workspaceId,
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
         SaveCaptureOperation checkpoint = createChunkReadySave(
-                checkpointRequest, savePreparation,
+                checkpointRequest, scopedReturnPointPreparation(ignored -> true),
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
                 ignored -> { });
         var operation = new ReturnPointRestoreOperation(checkpoint, (saved, progress) ->
@@ -1944,7 +1957,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 expected, author,
                 "Checkpoint before zone Restore", Instant.now(), workspace.id(),
                 Optional.of(zone.id()), CommitKind.HIDDEN_RETURN);
-        SavePreparation scoped = scopedSavePreparation(
+        SavePreparation scoped = scopedReturnPointPreparation(
                 key -> workspace.includes(key) && scope.includes(key));
         SaveCaptureOperation checkpoint = createChunkReadySave(
                 checkpointRequest, scoped,
@@ -2110,7 +2123,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 Optional.empty(), CommitKind.HIDDEN_RETURN);
         SaveCaptureOperation checkpoint = createChunkReadySave(
                 checkpointRequest,
-                scopedSavePreparation(pending.generations()::containsKey),
+                scopedReturnPointPreparation(pending.generations()::containsKey),
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
                 ignored -> { });
         var operation = new ReturnPointRestoreOperation(checkpoint, (saved, progress) -> {
