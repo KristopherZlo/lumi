@@ -3,7 +3,10 @@ package io.github.lumi.mixin;
 import io.github.lumi.minecraft.world.SectionLightBatchScheduler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ThreadedLevelLightEngine;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.chunk.LightChunkGetter;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -30,6 +33,46 @@ public abstract class ThreadedLevelLightEngineMixin
         short[] immutable = changedColumns.clone();
         addTask(chunkX, chunkZ, ThreadedLevelLightEngine.TaskType.PRE_UPDATE,
                 () -> checkSection(chunkX, sectionY, chunkZ, immutable));
+    }
+
+    @Override
+    public void lumi$scheduleChunkRelight(LevelChunk chunk) {
+        ChunkPos position = chunk.getPos();
+        chunk.setLightCorrect(false);
+        addTask(position.x, position.z, ThreadedLevelLightEngine.TaskType.PRE_UPDATE,
+                () -> resetAndRelight(chunk, position));
+        addTask(position.x, position.z, ThreadedLevelLightEngine.TaskType.POST_UPDATE,
+                () -> chunk.setLightCorrect(true));
+    }
+
+    private void resetAndRelight(LevelChunk chunk, ChunkPos position) {
+        super.retainData(position, false);
+        super.setLightEnabled(position, false);
+        for (int sectionY = getMinLightSection();
+                sectionY < getMaxLightSection(); sectionY++) {
+            queueSectionData(LightLayer.BLOCK, position, sectionY);
+            queueSectionData(LightLayer.SKY, position, sectionY);
+        }
+        for (int sectionY = levelHeightAccessor.getMinSectionY();
+                sectionY <= levelHeightAccessor.getMaxSectionY(); sectionY++) {
+            super.updateSectionStatus(
+                    net.minecraft.core.SectionPos.of(position, sectionY), true);
+        }
+        for (int index = 0; index < chunk.getSectionsCount(); index++) {
+            if (!chunk.getSections()[index].hasOnlyAir()) {
+                int sectionY = levelHeightAccessor.getSectionYFromSectionIndex(index);
+                super.updateSectionStatus(
+                        net.minecraft.core.SectionPos.of(position, sectionY), false);
+            }
+        }
+        super.setLightEnabled(position, true);
+        super.propagateLightSources(position);
+    }
+
+    private void queueSectionData(
+            LightLayer layer, ChunkPos position, int sectionY) {
+        super.queueSectionData(
+                layer, net.minecraft.core.SectionPos.of(position, sectionY), null);
     }
 
     private void checkSection(

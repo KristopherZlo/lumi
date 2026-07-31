@@ -9,10 +9,11 @@ public final class SectionApplyResult {
     private final SectionKey key;
     private final short[] changedCells;
     private final boolean blockEntitiesChanged;
-    private final boolean lightChanged;
+    private final short[] lightColumns;
+    private final int lightChangeCount;
 
     public SectionApplyResult(SectionKey key, short[] changedCells, int changedCount) {
-        this(key, changedCells, changedCount, false, false);
+        this(key, changedCells, changedCount, false, new short[256]);
     }
 
     public SectionApplyResult(
@@ -20,23 +21,33 @@ public final class SectionApplyResult {
             short[] changedCells,
             int changedCount,
             boolean blockEntitiesChanged) {
-        this(key, changedCells, changedCount, blockEntitiesChanged, false);
+        this(key, changedCells, changedCount, blockEntitiesChanged,
+                new short[256]);
     }
 
-    public SectionApplyResult(
+    SectionApplyResult(
             SectionKey key,
             short[] changedCells,
             int changedCount,
             boolean blockEntitiesChanged,
-            boolean lightChanged) {
+            short[] lightColumns) {
         this.key = Objects.requireNonNull(key, "key");
         Objects.requireNonNull(changedCells, "changedCells");
+        Objects.requireNonNull(lightColumns, "lightColumns");
         if (changedCount < 0 || changedCount > changedCells.length) {
             throw new IllegalArgumentException("Invalid changed cell count");
         }
+        if (lightColumns.length != 256) {
+            throw new IllegalArgumentException("Light columns must contain 256 masks");
+        }
         this.changedCells = Arrays.copyOf(changedCells, changedCount);
         this.blockEntitiesChanged = blockEntitiesChanged;
-        this.lightChanged = lightChanged;
+        this.lightColumns = lightColumns.clone();
+        int checks = 0;
+        for (short mask : this.lightColumns) {
+            checks += Integer.bitCount(mask & 0xffff);
+        }
+        lightChangeCount = checks;
     }
 
     public SectionKey key() {
@@ -52,10 +63,18 @@ public final class SectionApplyResult {
     }
 
     public boolean lightChanged() {
-        return lightChanged;
+        return lightChangeCount != 0;
     }
 
     short[] changedCells() {
         return changedCells;
+    }
+
+    short[] lightColumns() {
+        return lightColumns;
+    }
+
+    int lightChangeCount() {
+        return lightChangeCount;
     }
 }

@@ -19,6 +19,7 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 /** Rewrites a loaded section directly, then repairs derived live-world state once. */
 @SuppressWarnings("deprecation")
 final class MinecraftSectionRewriter {
+    private static final int DENSE_CHUNK_CHANGE_THRESHOLD = 1024;
     private final ServerLevel level;
 
     MinecraftSectionRewriter(ServerLevel level) {
@@ -35,7 +36,7 @@ final class MinecraftSectionRewriter {
         PreparedSectionDelta delta = target.deltaFrom(section);
         if (delta.changedCount() == 0) {
             return new SectionApplyResult(key, delta.changedCells(), 0,
-                    delta.blockEntitiesChanged(), false);
+                    delta.blockEntitiesChanged(), delta.lightColumns());
         }
 
         boolean wasOnlyAir = section.hasOnlyAir();
@@ -52,15 +53,11 @@ final class MinecraftSectionRewriter {
         }
         if (delta.lightChanged()) {
             updateSkyLightSources(chunk, key, delta.lightColumns());
-            ((SectionLightBatchScheduler) level.getLightEngine())
-                    .lumi$scheduleSectionChecks(
-                            key.chunkX(), key.sectionY(), key.chunkZ(),
-                            delta.lightColumns());
         }
         chunk.markUnsaved();
         return new SectionApplyResult(
                 key, delta.changedCells(), delta.changedCount(),
-                delta.blockEntitiesChanged(), delta.lightChanged());
+                delta.blockEntitiesChanged(), delta.lightColumns());
     }
 
     static void markLightChange(short[] updates, int x, int y, int z) {
@@ -106,6 +103,7 @@ final class MinecraftSectionRewriter {
             boolean blockEntitiesChanged) {
         int changedCells = sections.stream()
                 .mapToInt(SectionApplyResult::changedCount).sum();
+        scheduleLighting(chunk, sections);
         if (changedCells == 0 && !blockEntitiesChanged) {
             return ChunkSyncResult.NONE;
         }
@@ -178,7 +176,34 @@ final class MinecraftSectionRewriter {
     }
 
     static boolean useFullChunkPacket(int changedCells, boolean blockEntitiesChanged) {
-        return blockEntitiesChanged || changedCells >= 1024;
+        return blockEntitiesChanged
+                || changedCells >= DENSE_CHUNK_CHANGE_THRESHOLD;
+    }
+
+    static boolean useFullRelight(int lightChanges) {
+        return lightChanges >= DENSE_CHUNK_CHANGE_THRESHOLD;
+    }
+
+    private void scheduleLighting(
+            LevelChunk chunk, List<SectionApplyResult> sections) {
+        int lightChanges = sections.stream()
+                .mapToInt(SectionApplyResult::lightChangeCount).sum();
+        if (lightChanges == 0) {
+            return;
+        }
+        var scheduler = (SectionLightBatchScheduler) level.getLightEngine();
+        if (useFullRelight(lightChanges)) {
+            scheduler.lumi$scheduleChunkRelight(chunk);
+            return;
+        }
+        for (SectionApplyResult section : sections) {
+            if (section.lightChanged()) {
+                SectionKey key = section.key();
+                scheduler.lumi$scheduleSectionChecks(
+                        key.chunkX(), key.sectionY(), key.chunkZ(),
+                        section.lightColumns());
+            }
+        }
     }
 
     private static ClientboundSectionBlocksUpdatePacket sectionPacket(

@@ -23,4 +23,10 @@ class MinecraftSectionRewriterTest {
         assertTrue(MinecraftSectionRewriter.useFullChunkPacket(1024, false));
         assertTrue(MinecraftSectionRewriter.useFullChunkPacket(1, true));
     }
+
+    @Test
+    void selectsNativeFullRelightOnlyForDenseLightChanges() {
+        assertFalse(MinecraftSectionRewriter.useFullRelight(1023));
+        assertTrue(MinecraftSectionRewriter.useFullRelight(1024));
+    }
 }
