@@ -171,6 +171,16 @@ Block-level overlay требует последующего декодирова
 
 ### 5.2. Restore
 
+Примечание об актуальной реализации после зафиксированной в разделе 1 ревизии: глобальный
+двунаправленный preflight по-прежнему декодирует и проверяет target и return до первой
+мутации, но последующая подготовка batch повторно не декодирует уже проверенный base NBT.
+В пределах slab лимит 32 применяется к холодным FULL-загрузкам, а уже resident chunks
+объединяются в одно окно без повторных durability barriers. POI сохраняются только для
+chunks с фактическими POI-изменениями. Ожидание vanilla lighting начинается до persistence:
+chunk snapshots вне радиуса один от relight chunks могут записываться параллельно, но перед
+записью затронутого lighting halo остаётся обязательный barrier. Force, persisted reread,
+точный reopen, return plan и journal publication protocol не изменены.
+
 [RestoreService](../src/main/java/io/github/lumi/domain/service/RestoreService.java) строит двунаправленный план `source ↔ target` только для несовпадающих Merkle leaves. Полный план включает durable entities и respawn points; partial plan исключает entities и spawns. Для частично пересекаемой секции selection выполняет ровно 4096 проверок и формирует новый `SectionBlob`; полностью выбранная секция переиспользует object.
 
 Target и return plan имеют одинаковые множества keys — это constructor invariant [PreparedRestore](../src/main/java/io/github/lumi/domain/service/PreparedRestore.java). Payload загружаются лениво через одну read session на направление; LRU удерживает не более 32 decoded sections на направление.
