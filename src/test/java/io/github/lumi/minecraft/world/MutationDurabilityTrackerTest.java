@@ -44,6 +44,19 @@ class MutationDurabilityTrackerTest {
     }
 
     @Test
+    void awaitsIndexDurabilityOnlyUntilTheOperationDeadline() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
+                new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
+                new WorkingIndexRepository(repositoryRoot), background);
+        var revision = tracker.clearAndRevision(WorkingIndexSnapshot.empty());
+
+        assertFalse(tracker.awaitDurable(revision, System.nanoTime() + 1_000_000L));
+        background.runNext();
+        assertTrue(tracker.awaitDurable(revision, Long.MAX_VALUE));
+    }
+
+    @Test
     void coalescesRepeatedMutationAndBlocksChunkUntilOriginAndLatestGenerationAreDurable()
             throws Exception {
         ManualExecutor background = new ManualExecutor();

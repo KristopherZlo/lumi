@@ -628,7 +628,7 @@ public final class RestoreOperation implements DimensionMutation {
             case VERIFYING -> verifyTarget(deadlineNanos);
             case REPAIRING -> repairTarget(deadlineNanos);
             case PERSISTING -> persistTarget(deadlineNanos);
-            case PUBLISHING -> finishPublication();
+            case PUBLISHING -> finishPublication(deadlineNanos);
             case RETURNING -> returnToPreviousState(deadlineNanos);
             default -> { }
         }
@@ -708,18 +708,18 @@ public final class RestoreOperation implements DimensionMutation {
         }
         if (persisted) {
             journal = journals.advance(journal, OperationPhase.WORLD_PERSISTED);
-            publishTarget();
+            publishTarget(deadlineNanos);
         }
     }
 
-    private void publishTarget() throws IOException {
+    private void publishTarget(long deadlineNanos) throws IOException {
         publication.publish(restore);
         status = RestoreStatus.PUBLISHING;
-        finishPublication();
+        finishPublication(deadlineNanos);
     }
 
-    private void finishPublication() throws IOException {
-        if (!publication.isDurable()) {
+    private void finishPublication(long deadlineNanos) throws IOException {
+        if (!publication.awaitDurable(deadlineNanos)) {
             return;
         }
         stateListener.restored(preparedTarget.source());
@@ -797,7 +797,7 @@ public final class RestoreOperation implements DimensionMutation {
             publication.publishReturn(restore);
             returnPublicationStarted = true;
         }
-        if (!publication.isReturnDurable()) {
+        if (!publication.awaitReturnDurable(deadlineNanos)) {
             return;
         }
         stateListener.returned(preparedReturn.source());

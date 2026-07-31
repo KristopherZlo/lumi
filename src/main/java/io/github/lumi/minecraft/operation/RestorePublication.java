@@ -12,10 +12,18 @@ public interface RestorePublication {
         return true;
     }
 
+    default boolean awaitDurable(long deadlineNanos) throws IOException {
+        return isDurable();
+    }
+
     /** Reconciles durable pending state when target failure verifies the return state. */
     default void publishReturn(PreparedRestore restore) throws IOException { }
 
     default boolean isReturnDurable() {
         return true;
+    }
+
+    default boolean awaitReturnDurable(long deadlineNanos) throws IOException {
+        return isReturnDurable();
     }
 }

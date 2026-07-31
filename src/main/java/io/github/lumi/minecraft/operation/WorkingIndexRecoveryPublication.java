@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
 import java.util.ArrayList;
+import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -43,6 +44,11 @@ public final class WorkingIndexRecoveryPublication implements RestorePublication
     }
 
     @Override
+    public boolean awaitDurable(long deadlineNanos) throws IOException {
+        return awaitAppliedAndDurable(deadlineNanos);
+    }
+
+    @Override
     public void publishReturn(PreparedRestore restore) {
         apply(targetAction == TargetAction.CLEAR
                 ? TargetAction.RESTORE : TargetAction.CLEAR, restore);
@@ -51,6 +57,11 @@ public final class WorkingIndexRecoveryPublication implements RestorePublication
     @Override
     public boolean isReturnDurable() {
         return isAppliedAndDurable();
+    }
+
+    @Override
+    public boolean awaitReturnDurable(long deadlineNanos) throws IOException {
+        return awaitAppliedAndDurable(deadlineNanos);
     }
 
     private void apply(TargetAction action, PreparedRestore restore) {
@@ -74,5 +85,9 @@ public final class WorkingIndexRecoveryPublication implements RestorePublication
 
     private boolean isAppliedAndDurable() {
         return revision != null && mutations.isDurable(revision);
+    }
+
+    private boolean awaitAppliedAndDurable(long deadlineNanos) throws IOException {
+        return revision != null && mutations.awaitDurable(revision, deadlineNanos);
     }
 }

@@ -46,4 +46,9 @@ public final class PendingRestorePublication implements RestorePublication {
     public boolean isDurable() {
         return boundary != null && mutations.isDurable(boundary);
     }
+
+    @Override
+    public boolean awaitDurable(long deadlineNanos) throws IOException {
+        return boundary != null && mutations.awaitDurable(boundary, deadlineNanos);
+    }
 }

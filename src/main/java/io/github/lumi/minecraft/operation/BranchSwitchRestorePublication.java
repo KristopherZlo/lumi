@@ -51,4 +51,10 @@ public final class BranchSwitchRestorePublication implements RestorePublication 
     public boolean isDurable() {
         return working.map(WorkingIndexClearPublication::isDurable).orElse(true);
     }
+
+    @Override
+    public boolean awaitDurable(long deadlineNanos) throws IOException {
+        return working.isEmpty()
+                || working.orElseThrow().awaitDurable(deadlineNanos);
+    }
 }

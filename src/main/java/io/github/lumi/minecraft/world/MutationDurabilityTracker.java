@@ -24,6 +24,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.function.Predicate;
 import java.util.logging.Level;
@@ -469,6 +471,39 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
 
     public synchronized boolean isDurable(IndexRevision revision) {
         return durableIndexRevision >= Objects.requireNonNull(revision, "revision").value();
+    }
+
+    public synchronized boolean awaitDurable(
+            DurabilityBoundary boundary, long deadlineNanos) throws IOException {
+        Objects.requireNonNull(boundary, "boundary");
+        return awaitDurableUntil(() -> isDurable(boundary), deadlineNanos);
+    }
+
+    public synchronized boolean awaitDurable(
+            IndexRevision revision, long deadlineNanos) throws IOException {
+        Objects.requireNonNull(revision, "revision");
+        return awaitDurableUntil(() -> isDurable(revision), deadlineNanos);
+    }
+
+    private boolean awaitDurableUntil(
+            BooleanSupplier durable, long deadlineNanos) throws IOException {
+        while (!durable.getAsBoolean()) {
+            if (deadlineNanos == Long.MAX_VALUE) {
+                return false;
+            }
+            long remaining = deadlineNanos - System.nanoTime();
+            if (remaining <= 0) {
+                return false;
+            }
+            try {
+                TimeUnit.NANOSECONDS.timedWait(this, remaining);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IOException(
+                        "Interrupted while awaiting Lumi durability", interrupted);
+            }
+        }
+        return true;
     }
 
     private synchronized void awaitDurable(IndexRevision revision) throws IOException {

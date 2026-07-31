@@ -182,8 +182,9 @@ chunk snapshots вне радиуса один от relight chunks могут з
 точный reopen, return plan и journal publication protocol не изменены.
 Live apply-session создаётся на server thread только после durable PREPARED journal; поэтому
 resident/player priority больше не требует обратного background-to-server round-trip.
-Готовая фоновая работа может использовать остаток текущего 30 ms operation budget вместо
-ожидания следующего polling tick, но не расширяет deadline и не блокирует lighting futures.
+Фоновая работа и working-index durability могут использовать остаток текущего 30 ms
+operation budget вместо ожидания следующего polling tick, но не расширяют deadline и не
+блокируют lighting futures.
 
 [RestoreService](../src/main/java/io/github/lumi/domain/service/RestoreService.java) строит двунаправленный план `source ↔ target` только для несовпадающих Merkle leaves. Полный план включает durable entities и respawn points; partial plan исключает entities и spawns. Для частично пересекаемой секции selection выполняет ровно 4096 проверок и формирует новый `SectionBlob`; полностью выбранная секция переиспользует object.
 

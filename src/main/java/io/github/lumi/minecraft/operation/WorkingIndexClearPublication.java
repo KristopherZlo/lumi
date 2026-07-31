@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.operation;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
+import java.io.IOException;
 import java.util.Objects;
 
 /** Clears one immutable generation boundary before a Restore journal can close. */
@@ -29,5 +30,10 @@ public final class WorkingIndexClearPublication implements RestorePublication {
     @Override
     public boolean isDurable() {
         return revision != null && mutations.isDurable(revision);
+    }
+
+    @Override
+    public boolean awaitDurable(long deadlineNanos) throws IOException {
+        return revision != null && mutations.awaitDurable(revision, deadlineNanos);
     }
 }
