@@ -3,6 +3,7 @@ package io.github.lumi.minecraft.world;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.minecraft.operation.DeadlineFuture;
 import io.github.lumi.mixin.ChunkMapPersistenceAccessor;
 import io.github.lumi.mixin.EntityStoragePersistenceAccessor;
 import io.github.lumi.mixin.PersistentEntityManagerPersistenceAccessor;
@@ -170,7 +171,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                     case CHUNKS -> saveChunk();
                     case ENTITIES -> saveEntityChunk();
                     case PLAYERS -> savePlayer();
-                    case SYNCHRONIZING -> synchronizeStorage();
+                    case SYNCHRONIZING -> synchronizeStorage(deadlineNanos);
                     case VERIFYING -> verifyPersisted(deadlineNanos);
                     case COMPLETE -> true;
                 };
@@ -313,7 +314,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         return new PlayerTarget(player, expected);
     }
 
-    private boolean synchronizeStorage() throws IOException {
+    private boolean synchronizeStorage(long deadlineNanos) throws IOException {
         if (synchronization == null) {
             var chunkSync = !forceAndVerify
                     || (chunks.isEmpty() && !chunkVerificationRequired)
@@ -332,7 +333,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                     : entityStorage.synchronize(true);
             synchronization = CompletableFuture.allOf(chunkSync, poiSync, entitySync);
         }
-        if (!synchronization.isDone()) {
+        if (!DeadlineFuture.await(synchronization, deadlineNanos)) {
             return false;
         }
         MinecraftPersistenceFuture.join(

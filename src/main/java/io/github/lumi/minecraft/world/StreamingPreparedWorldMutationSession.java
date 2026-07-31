@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.minecraft.operation.DeadlineFuture;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
@@ -94,6 +95,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         this.chunkLoads = Objects.requireNonNull(chunkLoads, "chunkLoads");
         this.resident = Objects.requireNonNull(resident, "resident");
         entityKeys = plan.entityKeys();
+        startSectionPreparation();
     }
 
     @Override
@@ -184,7 +186,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         if (batchStart < plan.sectionKeys().size()) {
             if (slab == null) {
                 startSectionPreparation();
-                if (!preparing.isDone()) {
+                if (!DeadlineFuture.await(preparing, deadlineNanos)) {
                     return false;
                 }
                 slab = claimPrepared();
@@ -293,7 +295,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                         entityStorageCleanupStart, entityStorageCleanupEnd));
                 entityCleanup = world.cleanStoredEntities(entityRemoval);
             }
-            if (!entityCleanup.isDone()) {
+            if (!DeadlineFuture.await(entityCleanup, deadlineNanos)) {
                 return false;
             }
             Set<EntityChunkKey> cleaned;
