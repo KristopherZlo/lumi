@@ -302,11 +302,9 @@ public final class LumiClientNetworking {
                         Objects.requireNonNull(tags, "tags")).encode());
     }
 
-    public UUID restoreZone(UUID zoneId, CommitId target) {
+    public UUID restoreZone(ZoneRestoreArgument argument) {
         return send(HistoryCommandPayload.Kind.ZONE_RESTORE,
-                new ZoneRestoreArgument(
-                        Objects.requireNonNull(zoneId, "zoneId"),
-                        Objects.requireNonNull(target, "target")).encode());
+                Objects.requireNonNull(argument, "argument").encode());
     }
 
     public UUID deleteVersion(CommitId target) {

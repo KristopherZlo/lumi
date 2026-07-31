@@ -723,7 +723,8 @@ public final class LumiServerNetworking {
             case ZONE_RESTORE -> {
                 ZoneRestoreArgument zone = ZoneRestoreArgument.parse(payload.argument());
                 yield runtime.startZoneRestore(
-                        zone.target(), zone.zoneId(), author, terminal);
+                        expected, zone.target(), zone.zoneId(), zone.expectedRevision(),
+                        author, terminal);
             }
             case CLEANUP_INSPECT -> runtime.startGarbageCollection(false, terminal);
             case CLEANUP_APPLY -> runtime.startGarbageCollection(true, terminal);

@@ -1,9 +1,9 @@
 package io.github.lumi.client.ui;
 
 import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.ZoneRestoreArgument;
 import java.util.Objects;
-import java.util.UUID;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -16,7 +16,7 @@ public final class LumiZoneRestoreScreen extends LumiModalScreen {
     private final Screen successParent;
     private final HistorySnapshotPayload.ZoneView zone;
     private final HistorySnapshotPayload.Version version;
-    private final BiConsumer<UUID, io.github.lumi.domain.model.CommitId> restore;
+    private final Consumer<ZoneRestoreArgument> restore;
     private int panelX;
     private int panelY;
     private String error = "";
@@ -26,7 +26,7 @@ public final class LumiZoneRestoreScreen extends LumiModalScreen {
             Screen successParent,
             HistorySnapshotPayload.ZoneView zone,
             HistorySnapshotPayload.Version version,
-            BiConsumer<UUID, io.github.lumi.domain.model.CommitId> restore) {
+            Consumer<ZoneRestoreArgument> restore) {
         super(Component.translatable("luma.action.restore"));
         this.cancelParent = cancelParent;
         this.successParent = successParent;
@@ -52,7 +52,8 @@ public final class LumiZoneRestoreScreen extends LumiModalScreen {
 
     private void restore() {
         try {
-            restore.accept(zone.id(), version.id());
+            restore.accept(new ZoneRestoreArgument(
+                    zone.id(), zone.revision(), version.id()));
             minecraft.setScreen(successParent);
         } catch (RuntimeException failed) {
             error = failed.getMessage() == null

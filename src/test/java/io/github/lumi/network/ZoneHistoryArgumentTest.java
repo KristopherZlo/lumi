@@ -16,7 +16,7 @@ class ZoneHistoryArgumentTest {
         CommitId target = new CommitId(new ObjectId("a".repeat(64)));
         ZoneSaveArgument save = new ZoneSaveArgument(
                 zone, "Clock works", VersionTags.parse("redstone, copper"));
-        ZoneRestoreArgument restore = new ZoneRestoreArgument(zone, target);
+        ZoneRestoreArgument restore = new ZoneRestoreArgument(zone, 7, target);
 
         assertEquals(save, ZoneSaveArgument.parse(save.encode()));
         assertEquals(restore, ZoneRestoreArgument.parse(restore.encode()));
@@ -29,5 +29,9 @@ class ZoneHistoryArgumentTest {
                 () -> new ZoneSaveArgument(zone, " "));
         assertThrows(IllegalArgumentException.class,
                 () -> ZoneRestoreArgument.parse(zone + "\nnot-a-commit"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ZoneRestoreArgument.parse(zone + "\nstale\n" + "a".repeat(64)));
+        assertThrows(IllegalArgumentException.class,
+                () -> ZoneRestoreArgument.parse(zone + "\n07\n" + "a".repeat(64)));
     }
 }

@@ -173,7 +173,7 @@ class LumiPayloadCodecTest {
         }
         HistoryCommandPayload zoneRestore = new HistoryCommandPayload(
                 UUID.randomUUID(), HistoryCommandPayload.Kind.ZONE_RESTORE,
-                new ZoneRestoreArgument(zoneId, id('2')).encode(), id('1'), 42);
+                new ZoneRestoreArgument(zoneId, 7, id('2')).encode(), id('1'), 42);
         assertEquals(zoneRestore, roundTrip(HistoryCommandPayload.CODEC, zoneRestore));
         HistoryCommandPayload deleteVersion = new HistoryCommandPayload(
                 UUID.randomUUID(), HistoryCommandPayload.Kind.DELETE_VERSION,

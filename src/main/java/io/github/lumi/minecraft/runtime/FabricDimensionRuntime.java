@@ -1855,19 +1855,38 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             UUID zoneId,
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        var zone = zones.require(activeWorkspaceId(), zoneId);
+        return startZoneRestore(
+                activeRef(), target, zoneId, zone.revision(), author, terminalObserver);
+    }
+
+    public synchronized DimensionMutation startZoneRestore(
+            BranchRef expected,
+            CommitId target,
+            UUID zoneId,
+            long expectedZoneRevision,
+            CommitAuthor author,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
+        Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(zoneId, "zoneId");
         Objects.requireNonNull(author, "author");
         var operation = new DeferredDimensionMutation(
-                () -> createZoneRestore(target, zoneId, author));
+                () -> {
+                    requireExpectedRef(expected);
+                    requireExpectedZone(zoneId, expectedZoneRevision);
+                },
+                () -> createZoneRestore(expected, target, zoneId, author));
         enqueueForeground(operation, OperationPriority.NORMAL, terminalObserver);
         return operation;
     }
 
     private ReturnPointRestoreOperation createZoneRestore(
-            CommitId target, UUID zoneId, CommitAuthor author) throws IOException {
-        BranchRef expected = activeRef();
+            BranchRef expected,
+            CommitId target,
+            UUID zoneId,
+            CommitAuthor author) throws IOException {
         var workspace = workspaces.active();
         var zone = zones.require(workspace.id(), zoneId);
         ZoneScope scope = new ZoneScope(zone);
@@ -2123,6 +2142,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private void requireExpectedRef(BranchRef expected) throws IOException {
         if (!activeRef().equals(expected)) {
             throw new IOException("History changed while operation was queued");
+        }
+    }
+
+    private void requireExpectedZone(UUID zoneId, long expectedRevision)
+            throws IOException {
+        var zone = zones.require(activeWorkspaceId(), zoneId);
+        if (zone.revision() != expectedRevision) {
+            throw new IOException("Zone changed while operation was queued");
         }
     }
     public UUID activeWorkspaceId() throws IOException { return selectedWorkspaceId; }
