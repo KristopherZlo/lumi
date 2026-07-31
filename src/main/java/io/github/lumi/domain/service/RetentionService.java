@@ -36,13 +36,16 @@ public final class RetentionService {
         if (!isCheckpointRef(publishedRef)) {
             return 0;
         }
+        List<BranchRef> checkpoints = refs.list().stream()
+                .filter(RetentionService::isCheckpointRef)
+                .toList();
+        if (checkpoints.size() <= keep) {
+            return 0;
+        }
         record HiddenRef(BranchRef ref, Instant timestamp) { }
         var hidden = new ArrayList<HiddenRef>();
         var timestamps = new HashMap<CommitId, Instant>();
-        for (BranchRef ref : refs.list()) {
-            if (!isCheckpointRef(ref)) {
-                continue;
-            }
+        for (BranchRef ref : checkpoints) {
             Instant timestamp = timestamps.get(ref.commit());
             if (timestamp == null) {
                 timestamp = commits.read(ref.commit()).timestamp();
