@@ -341,6 +341,34 @@ class RestoreOperationTest {
     }
 
     @Test
+    void skipsOuterVerificationWhenApplyAlreadyPersistedExactly() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('1'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        WorldStateApply world = new TestWorldApply() {
+            @Override public ApplySession begin(PreparedState target) {
+                return new TestApplySession() {
+                    @Override public boolean applyUntil(long deadlineNanos) { return true; }
+                    @Override public Verification verifyUntil(long deadlineNanos) {
+                        throw new AssertionError("Streaming apply must not verify twice");
+                    }
+                    @Override public boolean persistUntil(long deadlineNanos) { return true; }
+                    @Override public boolean repairUntil(long deadlineNanos) { return true; }
+                    @Override public void restartVerification() { }
+                    @Override public boolean applyCompletesPersistence() { return true; }
+                };
+            }
+        };
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(expected, id('2'), Map.of(), Map.of(), Map.of(), Map.of()),
+                world, ignored -> { }, journals, UUID.randomUUID());
+
+        activate(operation, journals);
+
+        assertEquals(RestoreStatus.COMPLETE, operation.tick(Long.MAX_VALUE));
+        assertTrue(journals.read().isEmpty());
+    }
+
+    @Test
     void keepsPublishedRestoreRecoverableUntilRuntimeStateIsReconciled()
             throws IOException {
         var expected = new BranchRef(new BranchName("main"), id('1'), 1);

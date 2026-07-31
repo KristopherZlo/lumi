@@ -654,7 +654,12 @@ public final class RestoreOperation implements DimensionMutation {
         }
         if (applied) {
             journal = journals.advance(journal, OperationPhase.VERIFYING);
-            status = RestoreStatus.VERIFYING;
+            if (targetSession.applyCompletesPersistence()) {
+                status = RestoreStatus.PERSISTING;
+                persistTarget(deadlineNanos);
+            } else {
+                status = RestoreStatus.VERIFYING;
+            }
         }
     }
 

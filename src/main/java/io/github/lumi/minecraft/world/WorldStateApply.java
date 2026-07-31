@@ -98,6 +98,11 @@ public interface WorldStateApply {
 
         void restartVerification();
 
+        /** True when successful apply already includes exact verification and persistence. */
+        default boolean applyCompletesPersistence() {
+            return false;
+        }
+
         default ApplyProgress progress() {
             return new ApplyProgress("apply", 0, 0);
         }

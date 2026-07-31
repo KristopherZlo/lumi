@@ -571,6 +571,11 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         return phase == Phase.COMPLETE;
     }
 
+    @Override
+    public boolean applyCompletesPersistence() {
+        return true;
+    }
+
     @Override public boolean repairUntil(long deadlineNanos) { return true; }
     @Override public void restartVerification() { }
 

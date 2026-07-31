@@ -184,7 +184,8 @@ Live apply-session создаётся на server thread только после
 resident/player priority больше не требует обратного background-to-server round-trip.
 Фоновая работа и working-index durability могут использовать остаток текущего 30 ms
 operation budget вместо ожидания следующего polling tick, но не расширяют deadline и не
-блокируют lighting futures.
+меняют durable barriers. Streaming apply сообщает внешней операции, что exact verification,
+force и persisted reread уже завершены, поэтому второй пустой verify-проход не создаётся.
 
 [RestoreService](../src/main/java/io/github/lumi/domain/service/RestoreService.java) строит двунаправленный план `source ↔ target` только для несовпадающих Merkle leaves. Полный план включает durable entities и respawn points; partial plan исключает entities и spawns. Для частично пересекаемой секции selection выполняет ровно 4096 проверок и формирует новый `SectionBlob`; полностью выбранная секция переиспользует object.
 
