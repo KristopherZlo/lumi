@@ -110,7 +110,8 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
 
         LightState light = assertClientLightRestore(
                 context, server, report, operations, actions,
-                probe.offset(8, 32, 0));
+                new BlockPos(((probe.getX() >> 4) + 1) * 16 - 1,
+                        probe.getY() + 32, probe.getZ()));
 
         int boundaryX = ((probe.getX() >> 4) + 1) << 4;
         Vec3 entityOrigin = new Vec3(
@@ -146,6 +147,13 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
             LumiBehaviorActions actions,
             BlockPos source) throws IOException {
         BlockPos lightProbe = source.east();
+        BlockPos volumeMin = new BlockPos(
+                source.getX() - 15, source.getY(), (source.getZ() >> 4) * 16);
+        BlockPos volumeMax = new BlockPos(
+                source.getX(), source.getY() + 3, volumeMin.getZ() + 15);
+        actions.playerCommand("client_light_volume_bright",
+                "fill " + coordinates(volumeMin) + " " + coordinates(volumeMax)
+                        + " minecraft:stone");
         actions.playerCommand("client_light_source",
                 "setblock " + coordinates(source) + " minecraft:glowstone");
         actions.playerCommand("client_light_probe",
@@ -155,8 +163,9 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         operations.awaitDurability("client_light_bright");
         CommitId brightCommit = operations.save("client-light-bright");
 
-        actions.playerCommand("client_light_removed",
-                "setblock " + coordinates(source) + " minecraft:air");
+        actions.playerCommand("client_light_volume_removed",
+                "fill " + coordinates(volumeMin) + " " + coordinates(volumeMax)
+                        + " minecraft:air");
         awaitBlock(context, server, source, Blocks.AIR);
         int dark = awaitLight(context, server, lightProbe, null);
         if (bright <= dark) {

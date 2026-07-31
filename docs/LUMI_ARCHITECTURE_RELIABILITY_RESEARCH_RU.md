@@ -50,7 +50,7 @@ Lumi ведёт отдельный репозиторий для каждого 
 - durable non-player entities, сгруппированных по chunk и упорядоченных по UUID;
 - canonical player respawn points для полного Restore.
 
-В commit не сохраняются биомы, световые данные, heightmap, POI и scheduled ticks как независимое историческое состояние. При Restore неизменяемые биомы сохраняются из live/vanilla chunk, производные heightmap и POI перестраиваются по изменённым клеткам, а chunk с изменением света публикуется как `lightCorrect=false` для последующего vanilla relight. Поэтому «точность Restore» в этом документе означает равенство принадлежащего Lumi состояния: block states, block entities, durable entities и, для полного Restore, respawn points; она не означает снимок всех подсистем Minecraft.
+В commit не сохраняются биомы, световые данные, heightmap, POI и scheduled ticks как независимое историческое состояние. При Restore неизменяемые биомы сохраняются из live/vanilla chunk, производные heightmap и POI перестраиваются по изменённым клеткам, а для chunk с изменением света Lumi удерживает соседний halo, дожидается vanilla relight и явно синхронизирует итоговый свет с клиентами. Поэтому «точность Restore» в этом документе означает равенство принадлежащего Lumi состояния: block states, block entities, durable entities и, для полного Restore, respawn points; она не означает снимок всех подсистем Minecraft.
 
 Логический oracle состояния задаётся как canonical tuple:
 

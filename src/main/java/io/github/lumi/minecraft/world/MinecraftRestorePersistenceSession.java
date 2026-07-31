@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.game.ClientboundLightUpdatePacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.ProblemReporter;
@@ -170,8 +171,32 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             return false;
         }
         MinecraftPersistenceFuture.join(lighting, "Restore lighting");
+        synchronizeLighting();
         transitionTo(Phase.CHUNKS);
         return true;
+    }
+
+    private void synchronizeLighting() {
+        Set<ChunkCoordinate> synchronizedChunks = new HashSet<>();
+        for (ChunkCoordinate changed : relightChunks) {
+            for (int offsetX = -1; offsetX <= 1; offsetX++) {
+                for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
+                    ChunkCoordinate coordinate = new ChunkCoordinate(
+                            changed.x() + offsetX, changed.z() + offsetZ);
+                    if (!synchronizedChunks.add(coordinate)) {
+                        continue;
+                    }
+                    ChunkPos position = new ChunkPos(coordinate.x(), coordinate.z());
+                    var players = level.getChunkSource().chunkMap.getPlayers(position, false);
+                    if (players.isEmpty()) {
+                        continue;
+                    }
+                    var packet = new ClientboundLightUpdatePacket(
+                            position, level.getLightEngine(), null, null);
+                    players.forEach(player -> player.connection.send(packet));
+                }
+            }
+        }
     }
 
     private boolean saveChunk() throws IOException {

@@ -13,7 +13,6 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 /** Holds a FULL chunk ticket until the requested terrain/entity state is available. */
 public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
-    private static final int RADIUS = 0;
     private static final int MAX_PENDING = 32;
     private static final TicketType LUMI_TICKET =
             new TicketType(
@@ -22,6 +21,7 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
     private final Readiness readiness;
+    private final int ticketRadius;
     private final Map<ChunkCoordinate, CompletableFuture<Void>> pending =
             new LinkedHashMap<>();
 
@@ -34,13 +34,14 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         this.readiness = Objects.requireNonNull(readiness, "readiness");
+        ticketRadius = readiness == Readiness.TERRAIN ? 1 : 0;
     }
 
     @Override
     public CompletableFuture<Void> retain(ChunkCoordinate chunk) {
         boolean ready = terrainReady(chunk);
         level.getChunkSource().addTicketWithRadius(
-                LUMI_TICKET, position(chunk), RADIUS);
+                LUMI_TICKET, position(chunk), ticketRadius);
         if (ready) {
             return CompletableFuture.completedFuture(null);
         }
@@ -100,7 +101,7 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
     public void release(ChunkCoordinate chunk) {
         pending.remove(chunk);
         level.getChunkSource().removeTicketWithRadius(
-                LUMI_TICKET, position(chunk), RADIUS);
+                LUMI_TICKET, position(chunk), ticketRadius);
     }
 
     private static ChunkPos position(ChunkCoordinate chunk) {
