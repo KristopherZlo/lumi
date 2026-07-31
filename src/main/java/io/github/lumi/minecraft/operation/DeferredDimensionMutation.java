@@ -129,6 +129,14 @@ public final class DeferredDimensionMutation implements DimensionMutation {
     @FunctionalInterface
     public interface Activation {
         void validate() throws IOException;
+
+        default Activation and(Activation next) {
+            Objects.requireNonNull(next, "next");
+            return () -> {
+                validate();
+                next.validate();
+            };
+        }
     }
 
     @FunctionalInterface

@@ -8,11 +8,20 @@ import java.util.Optional;
 /** Converts an escaped operation failure into one stable terminal outcome. */
 final class FailureContainedMutation implements DimensionMutation {
     private final DimensionMutation delegate;
+    private DeferredDimensionMutation.Activation activation;
     private Throwable failure;
     private MutationTerminalState failureState;
+    private boolean started;
 
     FailureContainedMutation(DimensionMutation delegate) {
+        this(delegate, () -> { });
+    }
+
+    FailureContainedMutation(
+            DimensionMutation delegate,
+            DeferredDimensionMutation.Activation activation) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.activation = Objects.requireNonNull(activation, "activation");
     }
 
     DimensionMutation source() {
@@ -21,6 +30,13 @@ final class FailureContainedMutation implements DimensionMutation {
 
     DimensionMutation outcome() {
         return failure == null ? delegate : this;
+    }
+
+    void requireActivation(DeferredDimensionMutation.Activation added) {
+        if (started || failure != null) {
+            throw new IllegalStateException("Mutation already crossed its activation boundary");
+        }
+        activation = activation.and(added);
     }
 
     @Override
@@ -33,16 +49,29 @@ final class FailureContainedMutation implements DimensionMutation {
         if (failure != null) {
             return;
         }
+        if (!started) {
+            try {
+                activation.validate();
+                started = true;
+            } catch (IOException | RuntimeException rejected) {
+                fail(rejected, MutationTerminalState.FAILED);
+                return;
+            }
+        }
         try {
             delegate.advance(deadlineNanos);
         } catch (IOException | RuntimeException failed) {
-            failure = failed;
-            failureState = requireFailureState(delegate.unhandledFailureState());
-            try {
-                delegate.close();
-            } catch (IOException closeFailure) {
-                failure.addSuppressed(closeFailure);
-            }
+            fail(failed, requireFailureState(delegate.unhandledFailureState()));
+        }
+    }
+
+    private void fail(Throwable failed, MutationTerminalState state) {
+        failure = failed;
+        failureState = state;
+        try {
+            delegate.close();
+        } catch (IOException closeFailure) {
+            failure.addSuppressed(closeFailure);
         }
     }
 

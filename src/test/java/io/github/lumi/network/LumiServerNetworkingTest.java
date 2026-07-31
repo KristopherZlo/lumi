@@ -77,6 +77,14 @@ class LumiServerNetworkingTest {
     }
 
     @Test
+    void revalidatesPermissionAtMutationActivation() throws Exception {
+        String source = networkingSource();
+
+        assertTrue(source.contains("operations().requireActivation("));
+        assertTrue(source.contains("ticket, () -> requirePermission(player)"));
+    }
+
+    @Test
     void readsZoneOverlaysFromCurrentHistoryWithoutTheMutationGuard() throws Exception {
         String source = networkingSource();
         int overlay = source.indexOf(

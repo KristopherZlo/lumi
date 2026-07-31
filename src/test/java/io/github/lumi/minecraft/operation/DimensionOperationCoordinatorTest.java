@@ -251,6 +251,31 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
+    void rejectsQueuedWorkWhenItsActivationPermissionChanged() throws IOException {
+        var outcomes = new ArrayList<DimensionMutation>();
+        var order = new ArrayList<String>();
+        DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
+                new RecordingFreeze(), () -> 0L, 1L, outcomes::add);
+        coordinator.start(new NamedMutation("active", order, 1));
+        NamedMutation queued = new NamedMutation("queued", order, 1);
+        OperationTicket ticket = coordinator.enqueue(
+                queued, OperationPriority.NORMAL, ignored -> { });
+        coordinator.requireActivation(ticket, () -> {
+            throw new IOException("permission revoked");
+        });
+
+        coordinator.tick();
+        coordinator.tick();
+
+        assertEquals(java.util.List.of("active"), order);
+        assertEquals(2, outcomes.size());
+        assertEquals(MutationTerminalState.FAILED, outcomes.getLast().terminalState());
+        assertEquals("permission revoked",
+                outcomes.getLast().failure().orElseThrow().getMessage());
+        assertTrue(!coordinator.hasActiveOperation());
+    }
+
+    @Test
     void reportsTerminalOutcomeToGlobalAndRequestObserver() throws IOException {
         var global = new ArrayList<DimensionMutation>();
         var request = new ArrayList<DimensionMutation>();

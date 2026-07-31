@@ -105,7 +105,8 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
                 new OperationTicket(UUID.randomUUID()),
                 Objects.requireNonNull(operation, "operation"),
                 Objects.requireNonNull(priority, "priority"),
-                Objects.requireNonNull(operationObserver, "operationObserver"));
+                Objects.requireNonNull(operationObserver, "operationObserver"),
+                () -> { });
         if (active == null && queued.isEmpty()) {
             activate(entry);
             reportEnqueue(entry);
@@ -139,7 +140,8 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
     }
 
     private void activate(QueuedOperation entry) {
-        active = new FailureContainedMutation(entry.operation());
+        active = new FailureContainedMutation(
+                entry.operation(), entry.activation());
         activeTicket = entry.ticket();
         activeObserver = entry.observer();
         freezeReleased = false;
@@ -167,7 +169,8 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         activate(new QueuedOperation(
                 new OperationTicket(UUID.randomUUID()), operation,
                 OperationPriority.URGENT,
-                Objects.requireNonNull(operationObserver, "operationObserver")));
+                Objects.requireNonNull(operationObserver, "operationObserver"),
+                () -> { }));
         lease = existingLease;
     }
 
@@ -297,6 +300,26 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
         }
         return queued.stream().filter(entry -> entry.operation() == operation)
                 .map(QueuedOperation::ticket).findFirst();
+    }
+
+    /** Adds a validation that must still pass before this ticket can mutate. */
+    public synchronized void requireActivation(
+            OperationTicket ticket,
+            DeferredDimensionMutation.Activation activation) {
+        Objects.requireNonNull(ticket, "ticket");
+        Objects.requireNonNull(activation, "activation");
+        if (ticket.equals(activeTicket)) {
+            active.requireActivation(activation);
+            return;
+        }
+        for (int index = 0; index < queued.size(); index++) {
+            QueuedOperation entry = queued.get(index);
+            if (entry.ticket().equals(ticket)) {
+                queued.set(index, entry.withActivation(activation));
+                return;
+            }
+        }
+        throw new IllegalArgumentException("Unknown operation ticket");
     }
 
     public synchronized boolean cancel(OperationTicket ticket) throws IOException {
@@ -563,5 +586,12 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             OperationTicket ticket,
             DimensionMutation operation,
             OperationPriority priority,
-            Consumer<DimensionMutation> observer) { }
+            Consumer<DimensionMutation> observer,
+            DeferredDimensionMutation.Activation activation) {
+        private QueuedOperation withActivation(
+                DeferredDimensionMutation.Activation added) {
+            return new QueuedOperation(
+                    ticket, operation, priority, observer, activation.and(added));
+        }
+    }
 }

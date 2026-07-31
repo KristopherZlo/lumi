@@ -169,11 +169,7 @@ public final class LumiServerNetworking {
                 survivalSettings(player, payload, runtime);
                 return;
             }
-            PermissionDecision permission = LumiMod.serverRuntime().permission(player);
-            if (permission != PermissionDecision.ALLOWED) {
-                reject(player, payload, runtime, permissionMessage(permission));
-                return;
-            }
+            requirePermission(player);
             if (payload.kind() == HistoryCommandPayload.Kind.SNAPSHOT_REFRESH) {
                 sendSnapshot(player, runtime);
                 return;
@@ -452,6 +448,10 @@ public final class LumiServerNetworking {
                         reject(player, payload, runtime, failureMessage(failure));
                         return;
                     }
+                    if (context.server().getPlayerList()
+                            .getPlayer(player.getUUID()) != player) {
+                        return;
+                    }
                     try {
                         HudDisplayMode hudDisplayMode =
                                 runtime.activeWorkspace().settings().hudDisplayMode();
@@ -461,6 +461,8 @@ public final class LumiServerNetworking {
                         OperationTicket ticket = runtime.operations().ticketOf(operation)
                                 .orElseThrow(() -> new IllegalStateException(
                                         "Accepted merge has no queue ticket"));
+                        runtime.operations().requireActivation(
+                                ticket, () -> requirePermission(player));
                         track(player, runtime, payload,
                                 new Started(ticket), hudDisplayMode);
                     } catch (IOException | IllegalArgumentException | IllegalStateException failed) {
@@ -779,6 +781,8 @@ public final class LumiServerNetworking {
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));
+        runtime.operations().requireActivation(
+                ticket, () -> requirePermission(player));
         return new Started(ticket);
     }
 
@@ -918,6 +922,13 @@ public final class LumiServerNetworking {
             case OPERATOR_REQUIRED -> "Lumi requires operator permission";
             case SURVIVAL_OPT_IN_REQUIRED -> "luma.status.survival_disabled";
         };
+    }
+
+    private static void requirePermission(ServerPlayer player) throws IOException {
+        PermissionDecision permission = LumiMod.serverRuntime().permission(player);
+        if (permission != PermissionDecision.ALLOWED) {
+            throw new IOException(permissionMessage(permission));
+        }
     }
 
     private static void reject(
