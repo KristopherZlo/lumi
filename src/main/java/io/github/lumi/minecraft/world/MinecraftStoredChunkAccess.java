@@ -10,7 +10,6 @@ import io.github.lumi.mixin.PersistentEntityManagerPersistenceAccessor;
 import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -34,7 +33,6 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.storage.SerializableChunkData;
 import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 /** Rewrites gated, unloaded chunks through the running world's vanilla I/O worker. */
 final class MinecraftStoredChunkAccess {
@@ -83,7 +81,7 @@ final class MinecraftStoredChunkAccess {
         CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> result =
                 CompletableFuture.allOf(
                         preparing.values().toArray(CompletableFuture[]::new))
-                .thenCompose(ignored -> writeAndVerify(
+                .thenCompose(ignored -> write(
                         preparing, System.nanoTime() - readStarted));
         return result.whenComplete((ignored, failure) -> {
             if (failure != null) {
@@ -123,8 +121,7 @@ final class MinecraftStoredChunkAccess {
                 MinecraftStoredChunkPatcher.Patch patched = patcher.patch(
                         position, stored.orElseThrow(), target);
                 return Preparation.ready(new PreparedWrite(
-                        coordinate, position, target,
-                        patched.tag(), patched.heightmaps()));
+                        coordinate, position, target, patched.tag()));
             } catch (MinecraftStoredChunkPatcher.UnsupportedChunk unsupported) {
                 release(coordinate);
                 return Preparation.fallback(
@@ -257,7 +254,7 @@ final class MinecraftStoredChunkAccess {
         return true;
     }
 
-    private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> writeAndVerify(
+    private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> write(
             Map<ChunkCoordinate, CompletableFuture<Preparation>> preparing,
             long readNanos) {
         Map<ChunkCoordinate, StoredChunkApplyResult> results = new LinkedHashMap<>();
@@ -282,58 +279,18 @@ final class MinecraftStoredChunkAccess {
                         write.position(), write.patched()))
                 .toList();
         return CompletableFuture.allOf(pendingWrites.toArray(CompletableFuture[]::new))
-                .thenCompose(ignored -> synchronizeAndVerify(
+                .thenApply(ignored -> appliedResults(
                         writes, results, readNanos,
                         System.nanoTime() - writeStarted));
     }
 
-    private CompletableFuture<Map<ChunkCoordinate, StoredChunkApplyResult>> synchronizeAndVerify(
+    private Map<ChunkCoordinate, StoredChunkApplyResult> appliedResults(
             List<PreparedWrite> writes,
             Map<ChunkCoordinate, StoredChunkApplyResult> results,
             long readNanos,
             long writeNanos) {
-        phase = "storage sync";
-        long syncStarted = System.nanoTime();
-        return level.getChunkSource().chunkMap.synchronize(true).thenCompose(ignored -> {
-            long syncNanos = System.nanoTime() - syncStarted;
-            phase = "verification";
-            long verifyStarted = System.nanoTime();
-            Map<PreparedWrite, CompletableFuture<java.util.Optional<CompoundTag>>> reads =
-                    new LinkedHashMap<>();
-            for (PreparedWrite write : writes) {
-                reads.put(write, level.getChunkSource().chunkMap.read(write.position()));
-            }
-            return CompletableFuture.allOf(reads.values().toArray(CompletableFuture[]::new))
-                    .thenApplyAsync(done -> verifiedResults(
-                            reads, results, readNanos, writeNanos, syncNanos,
-                            System.nanoTime() - verifyStarted), background);
-        });
-    }
-
-    private Map<ChunkCoordinate, StoredChunkApplyResult> verifiedResults(
-            Map<PreparedWrite, CompletableFuture<java.util.Optional<CompoundTag>>> reads,
-            Map<ChunkCoordinate, StoredChunkApplyResult> results,
-            long readNanos,
-            long writeNanos,
-            long syncNanos,
-            long verifyNanos) {
         boolean first = true;
-        for (var entry : reads.entrySet()) {
-            PreparedWrite write = entry.getKey();
-            try {
-                var stored = entry.getValue().join();
-                String mismatch = stored.isEmpty()
-                        ? "chunk is absent"
-                        : mismatch(write.position(), stored.orElseThrow(),
-                                write.target(), write.heightmaps());
-                if (mismatch != null) {
-                    throw new IOException(
-                            "Stored Restore verification failed for "
-                                    + write.position() + ": " + mismatch);
-                }
-            } catch (IOException failed) {
-                throw new CompletionException(failed);
-            }
+        for (PreparedWrite write : writes) {
             release(write.coordinate());
             long sectionSwaps = 0;
             long changedBlocks = 0;
@@ -353,8 +310,7 @@ final class MinecraftStoredChunkAccess {
             results.put(write.coordinate(), StoredChunkApplyResult.applied(
                     first ? readNanos : 0,
                     first ? writeNanos : 0,
-                    first ? syncNanos : 0,
-                    first ? verifyNanos : 0,
+                    0, 0,
                     sectionSwaps, changedBlocks, lightSections));
             first = false;
         }
@@ -366,8 +322,7 @@ final class MinecraftStoredChunkAccess {
             ChunkCoordinate coordinate,
             ChunkPos position,
             Map<SectionKey, DecodedSection> target,
-            CompoundTag patched,
-            Map<Heightmap.Types, long[]> heightmaps) { }
+            CompoundTag patched) { }
 
     private record Preparation(
             PreparedWrite write,
@@ -383,13 +338,6 @@ final class MinecraftStoredChunkAccess {
 
     String phase() {
         return phase;
-    }
-
-    String mismatch(
-            ChunkPos position,
-            CompoundTag source,
-            Map<SectionKey, DecodedSection> target) throws IOException {
-        return mismatch(position, source, target, null);
     }
 
     String mismatchRaw(
@@ -428,52 +376,6 @@ final class MinecraftStoredChunkAccess {
         return null;
     }
 
-    private String mismatch(
-            ChunkPos position,
-            CompoundTag source,
-            Map<SectionKey, DecodedSection> target,
-            Map<Heightmap.Types, long[]> expectedHeightmaps) throws IOException {
-        SerializableChunkData data = SerializableChunkData.parse(level, containers, source);
-        if (!position.equals(data.chunkPos())) {
-            return "chunk position is " + data.chunkPos();
-        }
-        if (expectedHeightmaps != null
-                && !data.heightmaps().keySet().equals(expectedHeightmaps.keySet())) {
-            return "heightmap types differ";
-        }
-        if (expectedHeightmaps != null) {
-            for (var entry : expectedHeightmaps.entrySet()) {
-                if (!Arrays.equals(entry.getValue(), data.heightmaps().get(entry.getKey()))) {
-                    return "heightmap differs: " + entry.getKey();
-                }
-            }
-        }
-        Map<Integer, SerializableChunkData.SectionData> sections = sectionMap(data);
-        for (var entry : target.entrySet()) {
-            var stored = sections.get(entry.getKey().sectionY());
-            if (stored == null || stored.chunkSection() == null) {
-                return "section is absent: " + entry.getKey();
-            }
-            int block = firstMismatchedState(stored.chunkSection(), entry.getValue());
-            if (block >= 0) {
-                BlockState actual = stored.chunkSection().getBlockState(
-                        block & 15, (block >>> 8) & 15, (block >>> 4) & 15);
-                return "block " + MinecraftPreparedWorldAccess.position(
-                        entry.getKey(), block) + " expected "
-                        + entry.getValue().blockStates().get(block)
-                        + " but was " + actual;
-            }
-            Map<Integer, CompoundTag> actualBlockEntities =
-                    blockEntities(data.blockEntities(), entry.getKey().sectionY());
-            if (!actualBlockEntities.equals(entry.getValue().blockEntities())) {
-                return "block entities differ in " + entry.getKey()
-                        + ": expectedIndexes=" + entry.getValue().blockEntities().keySet()
-                        + ", actualIndexes=" + actualBlockEntities.keySet();
-            }
-        }
-        return null;
-    }
-
     private static Map<Integer, SerializableChunkData.SectionData> sectionMap(
             SerializableChunkData data) {
         Map<Integer, SerializableChunkData.SectionData> sections = new java.util.TreeMap<>();
@@ -497,18 +399,6 @@ final class MinecraftStoredChunkAccess {
                     | (Math.floorMod(z, 16) << 4) | Math.floorMod(x, 16), canonical);
         }
         return Map.copyOf(result);
-    }
-
-    private static int firstMismatchedState(
-            LevelChunkSection stored, DecodedSection target) {
-        for (int index = 0; index < target.blockStates().size(); index++) {
-            if (!stored.getBlockState(
-                    index & 15, (index >>> 8) & 15, (index >>> 4) & 15)
-                    .equals(target.blockStates().get(index))) {
-                return index;
-            }
-        }
-        return -1;
     }
 
     private static int firstMismatchedState(

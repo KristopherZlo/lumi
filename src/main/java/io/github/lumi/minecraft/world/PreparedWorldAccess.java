@@ -69,14 +69,14 @@ public interface PreparedWorldAccess {
 
     WorldPersistenceSession beginPersistence(
             PreparedMinecraftState target,
-            Set<ChunkCoordinate> alreadyDurable,
+            Set<ChunkCoordinate> alreadyStored,
             boolean playerSpawnsIncluded);
 
     /** Stages one verified write window without forcing its backing stores. */
     default WorldPersistenceSession beginPersistenceStage(
             PreparedMinecraftState writeTarget,
-            Set<ChunkCoordinate> alreadyDurable) {
-        return beginPersistence(writeTarget, alreadyDurable, false);
+            Set<ChunkCoordinate> alreadyStored) {
+        return beginPersistence(writeTarget, alreadyStored, false);
     }
 
     /** Writes the last window, then forces and rereads the complete Restore target. */
@@ -85,8 +85,8 @@ public interface PreparedWorldAccess {
             WorldStateApply.State verificationTarget,
             List<SectionKey> verificationSections,
             List<EntityChunkKey> verificationEntities,
-            Set<ChunkCoordinate> alreadyDurable) {
-        return beginPersistence(writeTarget, alreadyDurable, false);
+            Set<ChunkCoordinate> alreadyStored) {
+        return beginPersistence(writeTarget, alreadyStored, false);
     }
 
     List<Integer> blockEntityIndexes(SectionKey key) throws IOException;

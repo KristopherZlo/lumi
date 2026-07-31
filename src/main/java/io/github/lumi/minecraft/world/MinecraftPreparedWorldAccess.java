@@ -52,21 +52,21 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     @Override
     public WorldPersistenceSession beginPersistence(
             PreparedMinecraftState target,
-            Set<ChunkCoordinate> alreadyDurable,
+            Set<ChunkCoordinate> alreadyStored,
             boolean playerSpawnsIncluded) {
         return beginPersistence(
                 target, target.source(), target.sectionKeys(), target.entityKeys(),
-                alreadyDurable, playerSpawnsIncluded, true);
+                alreadyStored, playerSpawnsIncluded, true);
     }
 
     @Override
     public WorldPersistenceSession beginPersistenceStage(
             PreparedMinecraftState writeTarget,
-            Set<ChunkCoordinate> alreadyDurable) {
+            Set<ChunkCoordinate> alreadyStored) {
         return beginPersistence(
                 writeTarget, writeTarget.source(),
                 writeTarget.sectionKeys(), writeTarget.entityKeys(),
-                alreadyDurable, false, false);
+                alreadyStored, false, false);
     }
 
     @Override
@@ -75,11 +75,11 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             WorldStateApply.State verificationTarget,
             List<SectionKey> verificationSections,
             List<EntityChunkKey> verificationEntities,
-            Set<ChunkCoordinate> alreadyDurable) {
+            Set<ChunkCoordinate> alreadyStored) {
         return beginPersistence(
                 writeTarget, verificationTarget,
                 verificationSections, verificationEntities,
-                alreadyDurable, false, true);
+                alreadyStored, false, true);
     }
 
     private WorldPersistenceSession beginPersistence(
@@ -87,13 +87,13 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             WorldStateApply.State verificationTarget,
             List<SectionKey> verificationSections,
             List<EntityChunkKey> verificationEntities,
-            Set<ChunkCoordinate> alreadyDurable,
+            Set<ChunkCoordinate> alreadyStored,
             boolean playerSpawnsIncluded,
             boolean forceAndVerify) {
         return new MinecraftRestorePersistenceSession(
                 level, freeze, background, storedChunks, entities,
                 writeTarget, verificationTarget,
-                verificationSections, verificationEntities, alreadyDurable,
+                verificationSections, verificationEntities, alreadyStored,
                 playerSpawnsIncluded, forceAndVerify);
     }
 

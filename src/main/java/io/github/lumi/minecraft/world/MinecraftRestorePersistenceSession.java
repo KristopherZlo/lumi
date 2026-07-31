@@ -69,7 +69,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             WorldStateApply.State verificationTarget,
             List<SectionKey> verificationSections,
             List<EntityChunkKey> verificationEntities,
-            Set<ChunkCoordinate> alreadyDurable,
+            Set<ChunkCoordinate> alreadyStored,
             boolean savePlayers,
             boolean forceAndVerify) {
         this.level = Objects.requireNonNull(level, "level");
@@ -81,15 +81,15 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         Objects.requireNonNull(verificationTarget, "verificationTarget");
         Objects.requireNonNull(verificationSections, "verificationSections");
         Objects.requireNonNull(verificationEntities, "verificationEntities");
-        Objects.requireNonNull(alreadyDurable, "alreadyDurable");
+        Objects.requireNonNull(alreadyStored, "alreadyStored");
         this.forceAndVerify = forceAndVerify;
 
         Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> grouped =
-                groupedSections(writeTarget, alreadyDurable);
+                groupedSections(writeTarget, alreadyStored);
         Set<ChunkCoordinate> relight = new HashSet<>();
         writeTarget.sectionKeys().forEach(key -> {
             ChunkCoordinate chunk = ChunkCoordinate.from(key);
-            if (!alreadyDurable.contains(chunk)) {
+            if (!alreadyStored.contains(chunk)) {
                 DecodedSection section = writeTarget.sections().get(key);
                 if (!section.hasPreparedDelta() || section.preparedDelta().lightChanged()) {
                     relight.add(chunk);
@@ -123,12 +123,12 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private static Map<ChunkCoordinate, Map<SectionKey, DecodedSection>>
             groupedSections(
                     PreparedMinecraftState target,
-                    Set<ChunkCoordinate> alreadyDurable) {
+                    Set<ChunkCoordinate> alreadyStored) {
         Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> grouped =
                 new LinkedHashMap<>();
         target.sectionKeys().forEach(key -> {
             ChunkCoordinate chunk = ChunkCoordinate.from(key);
-            if (!alreadyDurable.contains(chunk)) {
+            if (!alreadyStored.contains(chunk)) {
                 grouped.computeIfAbsent(chunk, ignored -> new LinkedHashMap<>())
                         .put(key, target.sections().get(key));
             }

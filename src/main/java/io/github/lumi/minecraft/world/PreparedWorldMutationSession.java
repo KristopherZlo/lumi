@@ -28,7 +28,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private final WorldStateApply.State verificationTarget;
     private final List<SectionKey> verificationSections;
     private final List<EntityChunkKey> verificationEntities;
-    private final Set<ChunkCoordinate> alreadyDurable;
+    private final Set<ChunkCoordinate> alreadyStored;
     private final boolean playerSpawnsIncluded;
     private final List<SectionKey> sections;
     private final List<EntityChunkKey> entities;
@@ -83,10 +83,10 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             RestoreApplyMetrics metrics,
             PersistenceMode persistenceMode,
             WorldStateApply.State verificationTarget,
-            Set<ChunkCoordinate> alreadyDurable) {
+            Set<ChunkCoordinate> alreadyStored) {
         this(target, world, nanoTime, chunks, metrics, persistenceMode,
                 verificationTarget, target.sectionKeys(), target.entityKeys(),
-                alreadyDurable);
+                alreadyStored);
     }
 
     PreparedWorldMutationSession(
@@ -99,7 +99,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             WorldStateApply.State verificationTarget,
             List<SectionKey> verificationSections,
             List<EntityChunkKey> verificationEntities,
-            Set<ChunkCoordinate> alreadyDurable) {
+            Set<ChunkCoordinate> alreadyStored) {
         this.target = Objects.requireNonNull(target, "target");
         this.world = Objects.requireNonNull(world, "world");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
@@ -112,8 +112,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 verificationSections, "verificationSections"));
         this.verificationEntities = List.copyOf(Objects.requireNonNull(
                 verificationEntities, "verificationEntities"));
-        this.alreadyDurable = Set.copyOf(Objects.requireNonNull(
-                alreadyDurable, "alreadyDurable"));
+        this.alreadyStored = Set.copyOf(Objects.requireNonNull(
+                alreadyStored, "alreadyStored"));
         this.playerSpawnsIncluded = target.source().playerSpawnsIncluded();
         sections = target.sectionKeys();
         entities = target.entityKeys();
@@ -218,17 +218,17 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             throw new IllegalStateException("Restore batch is not verified");
         }
         if (persistence == null) {
-            Set<ChunkCoordinate> durable = new HashSet<>(alreadyDurable);
-            durable.addAll(storedChunks);
+            Set<ChunkCoordinate> stored = new HashSet<>(alreadyStored);
+            stored.addAll(storedChunks);
             persistence = switch (persistenceMode) {
                 case COMPLETE -> world.beginPersistence(
-                        target, Set.copyOf(durable), playerSpawnsIncluded);
+                        target, Set.copyOf(stored), playerSpawnsIncluded);
                 case STAGE -> world.beginPersistenceStage(
-                        target, Set.copyOf(durable));
+                        target, Set.copyOf(stored));
                 case FINAL -> world.beginPersistenceCommit(
                         target, verificationTarget,
                         verificationSections, verificationEntities,
-                        Set.copyOf(durable));
+                        Set.copyOf(stored));
             };
         }
         boolean complete;
@@ -257,7 +257,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         }
     }
 
-    Set<ChunkCoordinate> durableStoredChunks() {
+    Set<ChunkCoordinate> storedChunkWrites() {
         if (!persistenceComplete) {
             throw new IllegalStateException("Restore batch persistence is incomplete");
         }

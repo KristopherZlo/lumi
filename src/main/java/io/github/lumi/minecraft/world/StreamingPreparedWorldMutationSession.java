@@ -41,7 +41,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private final Executor background;
     private final Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads;
     private final RestoreApplyMetrics metrics = new RestoreApplyMetrics();
-    private final Set<ChunkCoordinate> slabDurable = new HashSet<>();
+    private final Set<ChunkCoordinate> slabStored = new HashSet<>();
     private int batchStart;
     private int batchEnd;
     private int slabEnd;
@@ -138,16 +138,16 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     private boolean prepareNext(long deadlineNanos) throws IOException {
         if (current != null) {
-            Set<ChunkCoordinate> durable = currentKind == BatchKind.SECTIONS
-                    ? current.durableStoredChunks() : Set.of();
+            Set<ChunkCoordinate> stored = currentKind == BatchKind.SECTIONS
+                    ? current.storedChunkWrites() : Set.of();
             current.close();
             current = null;
             if (currentKind == BatchKind.SECTIONS) {
-                slabDurable.addAll(durable);
+                slabStored.addAll(stored);
                 batchStart = batchEnd;
                 if (batchStart == slabEnd) {
                     slab = null;
-                    slabDurable.clear();
+                    slabStored.clear();
                 }
             } else if (currentKind == BatchKind.ENTITIES) {
                 entityBatchStart = entityBatchEnd;
@@ -183,7 +183,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                     window, world, System::nanoTime,
                     chunkLoads.apply(sectionReadiness(window)), metrics,
                     PreparedWorldMutationSession.PersistenceMode.STAGE,
-                    window.source(), Set.copyOf(slabDurable));
+                    window.source(), Set.copyOf(slabStored));
             currentKind = BatchKind.SECTIONS;
             phase = Phase.APPLYING;
             return true;

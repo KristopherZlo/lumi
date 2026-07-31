@@ -695,7 +695,7 @@ class PreparedWorldMutationSessionTest {
 
         @Override public WorldPersistenceSession beginPersistence(
                 PreparedMinecraftState target,
-                Set<ChunkCoordinate> alreadyDurable,
+                Set<ChunkCoordinate> alreadyStored,
                 boolean playerSpawnsIncluded) {
             return persistence(
                     PreparedWorldMutationSession.PersistenceMode.COMPLETE,
@@ -703,7 +703,7 @@ class PreparedWorldMutationSessionTest {
         }
         @Override public WorldPersistenceSession beginPersistenceStage(
                 PreparedMinecraftState target,
-                Set<ChunkCoordinate> alreadyDurable) {
+                Set<ChunkCoordinate> alreadyStored) {
             return persistence(
                     PreparedWorldMutationSession.PersistenceMode.STAGE, false);
         }
@@ -712,7 +712,7 @@ class PreparedWorldMutationSessionTest {
                 WorldStateApply.State verificationTarget,
                 List<SectionKey> verificationSections,
                 List<EntityChunkKey> verificationEntities,
-                Set<ChunkCoordinate> alreadyDurable) {
+                Set<ChunkCoordinate> alreadyStored) {
             return persistence(
                     PreparedWorldMutationSession.PersistenceMode.FINAL, false);
         }

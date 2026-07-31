@@ -226,7 +226,7 @@ class StreamingPreparedWorldMutationSessionTest {
             assertEquals(32,
                     world.persistenceCalls.getFirst().verificationSections());
             assertEquals(Set.of(new ChunkCoordinate(0, 0)),
-                    world.persistenceCalls.getFirst().alreadyDurable());
+                    world.persistenceCalls.getFirst().alreadyStored());
             assertEquals(1, background.submitted);
 
             assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -241,7 +241,7 @@ class StreamingPreparedWorldMutationSessionTest {
             assertEquals(8, stage.verificationSections());
             assertEquals(Set.of(
                     new ChunkCoordinate(0, 0), new ChunkCoordinate(32, 0)),
-                    stage.alreadyDurable());
+                    stage.alreadyStored());
             assertEquals(1, world.persistence.getFirst().closeCalls);
             assertEquals(1, background.submitted);
 
@@ -252,7 +252,7 @@ class StreamingPreparedWorldMutationSessionTest {
             assertEquals(PreparedWorldMutationSession.PersistenceMode.FINAL,
                     commit.mode());
             assertEquals(40, commit.verificationSections());
-            assertTrue(commit.alreadyDurable().isEmpty());
+            assertTrue(commit.alreadyStored().isEmpty());
             assertEquals(1, background.submitted);
             assertEquals(1, world.persistence.getLast().closeCalls);
             assertTrue(session.statistics().batchPreparationNanos() > 0);
@@ -364,7 +364,7 @@ class StreamingPreparedWorldMutationSessionTest {
             assertEquals(PreparedWorldMutationSession.PersistenceMode.FINAL,
                     finalBarrier.mode());
             assertEquals(1_025, finalBarrier.verificationSections());
-            assertTrue(finalBarrier.alreadyDurable().isEmpty());
+            assertTrue(finalBarrier.alreadyStored().isEmpty());
 
             world.persistence.getLast().complete = true;
             assertTrue(session.applyUntil(Long.MAX_VALUE));
@@ -657,18 +657,18 @@ class StreamingPreparedWorldMutationSessionTest {
         @Override
         public WorldPersistenceSession beginPersistence(
                 PreparedMinecraftState target,
-                Set<ChunkCoordinate> alreadyDurable,
+                Set<ChunkCoordinate> alreadyStored,
                 boolean playerSpawnsIncluded) {
             return persistence(PreparedWorldMutationSession.PersistenceMode.COMPLETE,
-                    target, target.source(), alreadyDurable);
+                    target, target.source(), alreadyStored);
         }
 
         @Override
         public WorldPersistenceSession beginPersistenceStage(
                 PreparedMinecraftState writeTarget,
-                Set<ChunkCoordinate> alreadyDurable) {
+                Set<ChunkCoordinate> alreadyStored) {
             return persistence(PreparedWorldMutationSession.PersistenceMode.STAGE,
-                    writeTarget, writeTarget.source(), alreadyDurable);
+                    writeTarget, writeTarget.source(), alreadyStored);
         }
 
         @Override
@@ -677,19 +677,19 @@ class StreamingPreparedWorldMutationSessionTest {
                 WorldStateApply.State verificationTarget,
                 List<SectionKey> verificationSections,
                 List<EntityChunkKey> verificationEntities,
-                Set<ChunkCoordinate> alreadyDurable) {
+                Set<ChunkCoordinate> alreadyStored) {
             return persistence(PreparedWorldMutationSession.PersistenceMode.FINAL,
-                    writeTarget, verificationTarget, alreadyDurable);
+                    writeTarget, verificationTarget, alreadyStored);
         }
 
         private WorldPersistenceSession persistence(
                 PreparedWorldMutationSession.PersistenceMode mode,
                 PreparedMinecraftState writeTarget,
                 WorldStateApply.State verificationTarget,
-                Set<ChunkCoordinate> alreadyDurable) {
+                Set<ChunkCoordinate> alreadyStored) {
             persistenceCalls.add(new PersistenceCall(
                     mode, writeTarget.sectionKeys().size(),
-                    verificationTarget.sections().size(), alreadyDurable));
+                    verificationTarget.sections().size(), alreadyStored));
             ManualPersistence next = new ManualPersistence();
             next.complete = mode == PreparedWorldMutationSession.PersistenceMode.FINAL
                     && completeFinalPersistence;
@@ -794,9 +794,9 @@ class StreamingPreparedWorldMutationSessionTest {
             PreparedWorldMutationSession.PersistenceMode mode,
             int writeSections,
             int verificationSections,
-            Set<ChunkCoordinate> alreadyDurable) {
+            Set<ChunkCoordinate> alreadyStored) {
         private PersistenceCall {
-            alreadyDurable = Set.copyOf(alreadyDurable);
+            alreadyStored = Set.copyOf(alreadyStored);
         }
     }
 
