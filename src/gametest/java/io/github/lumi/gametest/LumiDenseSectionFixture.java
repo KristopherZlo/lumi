@@ -4,6 +4,7 @@ import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.minecraft.world.ChunkLoadGate;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
 import java.io.IOException;
@@ -207,6 +208,9 @@ final class LumiDenseSectionFixture {
                 if (level.getChunkSource().getChunkNow(chunkX, chunkZ) != null
                         || level.getChunkSource().chunkMap
                                 .getUpdatingChunkIfPresent(key) != null
+                        || ((ChunkLoadGate.PendingUnloadAccess)
+                                level.getChunkSource().chunkMap)
+                                .lumi$hasPendingUnload(key)
                         || entities.areEntitiesLoaded(key)) {
                     loaded++;
                 }
