@@ -26,6 +26,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private final RestoreApplyMetrics metrics;
     private final PersistenceMode persistenceMode;
     private final WorldStateApply.State verificationTarget;
+    private final List<SectionKey> verificationSections;
+    private final List<EntityChunkKey> verificationEntities;
     private final Set<ChunkCoordinate> alreadyDurable;
     private final boolean playerSpawnsIncluded;
     private final List<SectionKey> sections;
@@ -69,7 +71,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             ChunkLoadSession chunks,
             RestoreApplyMetrics metrics) {
         this(target, world, nanoTime, chunks, metrics,
-                PersistenceMode.COMPLETE, target.source(), Set.of());
+                PersistenceMode.COMPLETE, target.source(),
+                target.sectionKeys(), target.entityKeys(), Set.of());
     }
 
     PreparedWorldMutationSession(
@@ -81,6 +84,22 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             PersistenceMode persistenceMode,
             WorldStateApply.State verificationTarget,
             Set<ChunkCoordinate> alreadyDurable) {
+        this(target, world, nanoTime, chunks, metrics, persistenceMode,
+                verificationTarget, target.sectionKeys(), target.entityKeys(),
+                alreadyDurable);
+    }
+
+    PreparedWorldMutationSession(
+            PreparedMinecraftState target,
+            PreparedWorldAccess world,
+            LongSupplier nanoTime,
+            ChunkLoadSession chunks,
+            RestoreApplyMetrics metrics,
+            PersistenceMode persistenceMode,
+            WorldStateApply.State verificationTarget,
+            List<SectionKey> verificationSections,
+            List<EntityChunkKey> verificationEntities,
+            Set<ChunkCoordinate> alreadyDurable) {
         this.target = Objects.requireNonNull(target, "target");
         this.world = Objects.requireNonNull(world, "world");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
@@ -89,23 +108,31 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         this.persistenceMode = Objects.requireNonNull(persistenceMode, "persistenceMode");
         this.verificationTarget = Objects.requireNonNull(
                 verificationTarget, "verificationTarget");
+        this.verificationSections = List.copyOf(Objects.requireNonNull(
+                verificationSections, "verificationSections"));
+        this.verificationEntities = List.copyOf(Objects.requireNonNull(
+                verificationEntities, "verificationEntities"));
         this.alreadyDurable = Set.copyOf(Objects.requireNonNull(
                 alreadyDurable, "alreadyDurable"));
         this.playerSpawnsIncluded = target.source().playerSpawnsIncluded();
         sections = target.sectionKeys();
         entities = target.entityKeys();
-        if (persistenceMode != PersistenceMode.COMPLETE
-                && (!entities.isEmpty() || playerSpawnsIncluded
-                || !verificationTarget.entities().isEmpty()
-                || verificationTarget.playerSpawnsIncluded())) {
+        if (persistenceMode == PersistenceMode.FINAL
+                && (!verificationTarget.sections().keySet()
+                        .containsAll(target.source().sections().keySet())
+                || !verificationTarget.entities().keySet()
+                        .containsAll(target.source().entities().keySet()))) {
             throw new IllegalArgumentException(
-                    "Optimized persistence accepts section-only Restore batches");
+                    "Final verification must include the final write window");
         }
-        if (persistenceMode == PersistenceMode.SLAB_END
-                && !verificationTarget.sections().keySet()
-                        .containsAll(target.source().sections().keySet())) {
+        if (this.verificationSections.size() != verificationTarget.sections().size()
+                || !Set.copyOf(this.verificationSections)
+                        .equals(verificationTarget.sections().keySet())
+                || this.verificationEntities.size() != verificationTarget.entities().size()
+                || !Set.copyOf(this.verificationEntities)
+                        .equals(verificationTarget.entities().keySet())) {
             throw new IllegalArgumentException(
-                    "Slab verification must include the final write window");
+                    "Persistence verification order must contain every target key once");
         }
         bulkLoading = chunks != null && fitsBulkWindow(sections, entities);
         storedClassificationComplete = sections.isEmpty();
@@ -198,8 +225,10 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                         target, Set.copyOf(durable), playerSpawnsIncluded);
                 case STAGE -> world.beginPersistenceStage(
                         target, Set.copyOf(durable));
-                case SLAB_END -> world.beginPersistenceCommit(
-                        target, verificationTarget, Set.copyOf(durable));
+                case FINAL -> world.beginPersistenceCommit(
+                        target, verificationTarget,
+                        verificationSections, verificationEntities,
+                        Set.copyOf(durable));
             };
         }
         boolean complete;
@@ -632,5 +661,5 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         FALLBACK
     }
 
-    enum PersistenceMode { COMPLETE, STAGE, SLAB_END }
+    enum PersistenceMode { COMPLETE, STAGE, FINAL }
 }

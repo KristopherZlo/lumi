@@ -1,9 +1,7 @@
 package io.github.lumi.minecraft.world;
 
-import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.PlayerSpawn;
-import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.mixin.ChunkMapPersistenceAccessor;
 import io.github.lumi.mixin.EntityStoragePersistenceAccessor;
@@ -39,7 +37,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
     private final List<ChunkCoordinate> chunks;
-    private final List<ChunkCoordinate> verificationChunks;
+    private final boolean chunkVerificationRequired;
     private final List<EntityChunkKey> entityChunks;
     private final List<PlayerTarget> players;
     private final Set<ChunkCoordinate> relightChunks;
@@ -69,6 +67,8 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             MinecraftEntityChunkCapture entityCapture,
             PreparedMinecraftState writeTarget,
             WorldStateApply.State verificationTarget,
+            List<SectionKey> verificationSections,
+            List<EntityChunkKey> verificationEntities,
             Set<ChunkCoordinate> alreadyDurable,
             boolean savePlayers,
             boolean forceAndVerify) {
@@ -79,13 +79,13 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         Objects.requireNonNull(entityCapture, "entityCapture");
         Objects.requireNonNull(writeTarget, "writeTarget");
         Objects.requireNonNull(verificationTarget, "verificationTarget");
+        Objects.requireNonNull(verificationSections, "verificationSections");
+        Objects.requireNonNull(verificationEntities, "verificationEntities");
         Objects.requireNonNull(alreadyDurable, "alreadyDurable");
         this.forceAndVerify = forceAndVerify;
 
         Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> grouped =
                 groupedSections(writeTarget, alreadyDurable);
-        Map<ChunkCoordinate, Map<SectionKey, SectionBlob>> verification =
-                groupedSections(verificationTarget, alreadyDurable);
         Set<ChunkCoordinate> relight = new HashSet<>();
         writeTarget.sectionKeys().forEach(key -> {
             ChunkCoordinate chunk = ChunkCoordinate.from(key);
@@ -97,29 +97,25 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             }
         });
         chunks = List.copyOf(grouped.keySet());
-        verificationChunks = List.copyOf(verification.keySet());
+        chunkVerificationRequired = !verificationSections.isEmpty();
         relightChunks = Set.copyOf(relight);
-        poiSyncRequired = forceAndVerify && !verificationChunks.isEmpty();
+        poiSyncRequired = forceAndVerify && chunkVerificationRequired;
         entityChunks = writeTarget.entityKeys();
-        List<EntityChunkKey> verificationEntityChunks =
-                List.copyOf(verificationTarget.entities().keySet());
         chunks.forEach(chunk -> pendingSnapshots.merge(chunk, 1, Integer::sum));
         entityChunks.forEach(key -> pendingSnapshots.merge(
                 ChunkCoordinate.from(key), 1, Integer::sum));
-        Map<EntityChunkKey, EntityChunkBlob> entityTargets =
-                verificationTarget.entities();
         players = savePlayers ? level.getServer().getPlayerList().getPlayers().stream()
                 .map(player -> playerTarget(player, writeTarget.source().playerSpawns()))
                 .toList() : List.of();
         entityStorage = entityChunks.isEmpty()
-                && verificationEntityChunks.isEmpty() ? null
+                && verificationEntities.isEmpty() ? null
                 : ((EntityStoragePersistenceAccessor) entityAccess().lumi$permanentStorage())
                         .lumi$simpleRegionStorage();
         verifier = forceAndVerify
                 ? new MinecraftPersistedBatchVerifier(
-                        level, background, storedChunks, entityCapture, verification,
-                        entityTargets, verificationChunks,
-                        verificationEntityChunks, entityStorage)
+                        level, background, storedChunks, entityCapture,
+                        verificationTarget, verificationSections,
+                        verificationEntities, entityStorage)
                 : null;
         phaseStartedNanos = System.nanoTime();
     }
@@ -135,23 +131,6 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             if (!alreadyDurable.contains(chunk)) {
                 grouped.computeIfAbsent(chunk, ignored -> new LinkedHashMap<>())
                         .put(key, target.sections().get(key));
-            }
-        });
-        grouped.replaceAll((ignored, sections) -> Map.copyOf(sections));
-        return grouped;
-    }
-
-    private static Map<ChunkCoordinate, Map<SectionKey, SectionBlob>>
-            groupedSections(
-                    WorldStateApply.State target,
-                    Set<ChunkCoordinate> alreadyDurable) {
-        Map<ChunkCoordinate, Map<SectionKey, SectionBlob>> grouped =
-                new LinkedHashMap<>();
-        target.sections().forEach((key, section) -> {
-            ChunkCoordinate chunk = ChunkCoordinate.from(key);
-            if (!alreadyDurable.contains(chunk)) {
-                grouped.computeIfAbsent(chunk, ignored -> new LinkedHashMap<>())
-                        .put(key, section);
             }
         });
         grouped.replaceAll((ignored, sections) -> Map.copyOf(sections));
@@ -301,7 +280,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private boolean synchronizeStorage() throws IOException {
         if (synchronization == null) {
             var chunkSync = !forceAndVerify
-                    || (chunks.isEmpty() && verificationChunks.isEmpty())
+                    || (chunks.isEmpty() && !chunkVerificationRequired)
                     ? CompletableFuture.completedFuture(null)
                     : level.getChunkSource().chunkMap.synchronize(true);
             var poiManager = level.getChunkSource().getPoiManager();
@@ -312,7 +291,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                     ? CompletableFuture.completedFuture(null)
                     : ((SectionStoragePersistenceAccessor) poiManager)
                             .lumi$simpleRegionStorage().synchronize(true);
-            var entitySync = entityStorage == null
+            var entitySync = !forceAndVerify || entityStorage == null
                     ? CompletableFuture.completedFuture(null)
                     : entityStorage.synchronize(true);
             synchronization = CompletableFuture.allOf(chunkSync, poiSync, entitySync);

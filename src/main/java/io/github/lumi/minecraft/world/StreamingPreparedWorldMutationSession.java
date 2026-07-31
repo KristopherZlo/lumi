@@ -65,6 +65,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private boolean repairAttempted;
     private boolean spawnsStarted;
     private boolean entityCleanupComplete;
+    private boolean finalPersistenceComplete;
     private long lightingStartedNanos;
     private volatile boolean closed;
 
@@ -150,6 +151,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 }
             } else if (currentKind == BatchKind.ENTITIES) {
                 entityBatchStart = entityBatchEnd;
+            } else if (currentKind == BatchKind.FINAL) {
+                finalPersistenceComplete = true;
             }
             currentKind = null;
             repairAttempted = false;
@@ -175,15 +178,12 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 slabEnd = batchStart + slab.sectionKeys().size();
             }
             batchEnd = windowEnd(plan.sectionKeys(), batchStart, slabEnd);
-            boolean lastWindow = batchEnd == slabEnd;
             PreparedMinecraftState window = nextSectionWindow();
             current = new PreparedWorldMutationSession(
                     window, world, System::nanoTime,
                     chunkLoads.apply(sectionReadiness(window)), metrics,
-                    lastWindow
-                            ? PreparedWorldMutationSession.PersistenceMode.SLAB_END
-                            : PreparedWorldMutationSession.PersistenceMode.STAGE,
-                    slab.source(), Set.copyOf(slabDurable));
+                    PreparedWorldMutationSession.PersistenceMode.STAGE,
+                    window.source(), Set.copyOf(slabDurable));
             currentKind = BatchKind.SECTIONS;
             phase = Phase.APPLYING;
             return true;
@@ -198,8 +198,21 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             current = new PreparedWorldMutationSession(
                     new PreparedMinecraftState(source, Map.of(), Map.of()), world,
                     System::nanoTime,
-                    chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN), metrics);
+                    chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN), metrics,
+                    PreparedWorldMutationSession.PersistenceMode.STAGE,
+                    source, Set.of());
             currentKind = BatchKind.SPAWNS;
+            phase = Phase.APPLYING;
+            return true;
+        }
+        if (!finalPersistenceComplete) {
+            var empty = new WorldStateApply.State(Map.of(), Map.of());
+            current = new PreparedWorldMutationSession(
+                    new PreparedMinecraftState(empty, Map.of(), Map.of()), world,
+                    System::nanoTime, null, metrics,
+                    PreparedWorldMutationSession.PersistenceMode.FINAL,
+                    plan.source(), plan.sectionKeys(), plan.entityKeys(), Set.of());
+            currentKind = BatchKind.FINAL;
             phase = Phase.APPLYING;
             return true;
         }
@@ -231,10 +244,12 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     }
 
     private boolean startEntityBatch() {
+        PreparedMinecraftState target = nextEntityBatch();
         current = new PreparedWorldMutationSession(
-                nextEntityBatch(), world, System::nanoTime,
+                target, world, System::nanoTime,
                 chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES),
-                metrics);
+                metrics, PreparedWorldMutationSession.PersistenceMode.STAGE,
+                target.source(), Set.of());
         currentKind = BatchKind.ENTITIES;
         phase = Phase.APPLYING;
         return true;
@@ -606,7 +621,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             WorldStateApply.State base,
             List<SectionKey> order) { }
 
-    private enum BatchKind { SECTIONS, ENTITIES, SPAWNS }
+    private enum BatchKind { SECTIONS, ENTITIES, SPAWNS, FINAL }
     private enum Phase {
         PREPARING, APPLYING, VERIFYING, PERSISTING, REPAIRING, LIGHTING, COMPLETE
     }

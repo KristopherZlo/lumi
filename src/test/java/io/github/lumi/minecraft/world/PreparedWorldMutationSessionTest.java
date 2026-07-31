@@ -571,8 +571,9 @@ class PreparedWorldMutationSessionTest {
                     ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES,
                     ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES), requested);
             assertEquals(List.of(
-                    PreparedWorldMutationSession.PersistenceMode.COMPLETE,
-                    PreparedWorldMutationSession.PersistenceMode.COMPLETE),
+                    PreparedWorldMutationSession.PersistenceMode.STAGE,
+                    PreparedWorldMutationSession.PersistenceMode.STAGE,
+                    PreparedWorldMutationSession.PersistenceMode.FINAL),
                     world.persistenceModes);
 
             world.lightingComplete = true;
@@ -648,7 +649,7 @@ class PreparedWorldMutationSessionTest {
 
         assertEquals(0, world.playerSpawnWrites);
         assertEquals(0, world.playerSpawnMatches);
-        assertEquals(List.of(false), world.persistencePlayerSpawnFlags);
+        assertEquals(List.of(false, false), world.persistencePlayerSpawnFlags);
     }
 
     private static final class FakeWorld implements PreparedWorldAccess {
@@ -696,8 +697,30 @@ class PreparedWorldMutationSessionTest {
                 PreparedMinecraftState target,
                 Set<ChunkCoordinate> alreadyDurable,
                 boolean playerSpawnsIncluded) {
+            return persistence(
+                    PreparedWorldMutationSession.PersistenceMode.COMPLETE,
+                    playerSpawnsIncluded);
+        }
+        @Override public WorldPersistenceSession beginPersistenceStage(
+                PreparedMinecraftState target,
+                Set<ChunkCoordinate> alreadyDurable) {
+            return persistence(
+                    PreparedWorldMutationSession.PersistenceMode.STAGE, false);
+        }
+        @Override public WorldPersistenceSession beginPersistenceCommit(
+                PreparedMinecraftState target,
+                WorldStateApply.State verificationTarget,
+                List<SectionKey> verificationSections,
+                List<EntityChunkKey> verificationEntities,
+                Set<ChunkCoordinate> alreadyDurable) {
+            return persistence(
+                    PreparedWorldMutationSession.PersistenceMode.FINAL, false);
+        }
+        private WorldPersistenceSession persistence(
+                PreparedWorldMutationSession.PersistenceMode mode,
+                boolean playerSpawnsIncluded) {
             persistenceStarts++;
-            persistenceModes.add(PreparedWorldMutationSession.PersistenceMode.COMPLETE);
+            persistenceModes.add(mode);
             persistencePlayerSpawnFlags.add(playerSpawnsIncluded);
             return persistence;
         }

@@ -235,18 +235,24 @@ class StreamingPreparedWorldMutationSessionTest {
             world.persistence.getFirst().complete = true;
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(List.of(32, 8), world.persistenceWindowSizes());
-            PersistenceCall commit = world.persistenceCalls.getLast();
-            assertEquals(PreparedWorldMutationSession.PersistenceMode.SLAB_END,
-                    commit.mode());
-            assertEquals(40, commit.verificationSections());
+            PersistenceCall stage = world.persistenceCalls.getLast();
+            assertEquals(PreparedWorldMutationSession.PersistenceMode.STAGE,
+                    stage.mode());
+            assertEquals(8, stage.verificationSections());
             assertEquals(Set.of(
                     new ChunkCoordinate(0, 0), new ChunkCoordinate(32, 0)),
-                    commit.alreadyDurable());
+                    stage.alreadyDurable());
             assertEquals(1, world.persistence.getFirst().closeCalls);
             assertEquals(1, background.submitted);
 
             world.persistence.getLast().complete = true;
             assertTrue(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(List.of(32, 8, 0), world.persistenceWindowSizes());
+            PersistenceCall commit = world.persistenceCalls.getLast();
+            assertEquals(PreparedWorldMutationSession.PersistenceMode.FINAL,
+                    commit.mode());
+            assertEquals(40, commit.verificationSections());
+            assertTrue(commit.alreadyDurable().isEmpty());
             assertEquals(1, background.submitted);
             assertEquals(1, world.persistence.getLast().closeCalls);
             assertTrue(session.statistics().batchPreparationNanos() > 0);
@@ -318,7 +324,7 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
-    void queuesNextSlabOnlyAfterTheCurrentSlabIsDurable() throws Exception {
+    void stagesSlabsBeforeOneFinalDurabilityBarrier() throws Exception {
         List<SectionKey> keys = new ArrayList<>();
         for (int sectionY = 0; sectionY < 1_025; sectionY++) {
             keys.add(new SectionKey(0, sectionY, 0));
@@ -326,13 +332,14 @@ class StreamingPreparedWorldMutationSessionTest {
         SectionBlob section = stoneSection();
         ControlledExecutor background = new ControlledExecutor();
         FakeWorld world = new FakeWorld(section);
+        world.completeFinalPersistence = false;
 
         try (var session = session(plan(keys, section), world, background)) {
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             background.runNext();
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(List.of(1_024), world.persistenceWindowSizes());
-            assertEquals(PreparedWorldMutationSession.PersistenceMode.SLAB_END,
+            assertEquals(PreparedWorldMutationSession.PersistenceMode.STAGE,
                     world.persistenceCalls.getFirst().mode());
             assertEquals(1, background.submitted);
 
@@ -349,6 +356,18 @@ class StreamingPreparedWorldMutationSessionTest {
             background.runNext();
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(List.of(1_024, 1), world.persistenceWindowSizes());
+
+            world.persistence.getLast().complete = true;
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(List.of(1_024, 1, 0), world.persistenceWindowSizes());
+            PersistenceCall finalBarrier = world.persistenceCalls.getLast();
+            assertEquals(PreparedWorldMutationSession.PersistenceMode.FINAL,
+                    finalBarrier.mode());
+            assertEquals(1_025, finalBarrier.verificationSections());
+            assertTrue(finalBarrier.alreadyDurable().isEmpty());
+
+            world.persistence.getLast().complete = true;
+            assertTrue(session.applyUntil(Long.MAX_VALUE));
         }
     }
 
@@ -616,6 +635,7 @@ class StreamingPreparedWorldMutationSessionTest {
         private int entitySuppressionReleases;
         private Set<EntityChunkKey> suppressedEntityLoads = Set.of();
         private PreparedMinecraftState requestedEntityCleanupTarget;
+        private boolean completeFinalPersistence = true;
 
         private FakeWorld(SectionBlob captured) {
             this.captured = captured;
@@ -655,8 +675,10 @@ class StreamingPreparedWorldMutationSessionTest {
         public WorldPersistenceSession beginPersistenceCommit(
                 PreparedMinecraftState writeTarget,
                 WorldStateApply.State verificationTarget,
+                List<SectionKey> verificationSections,
+                List<EntityChunkKey> verificationEntities,
                 Set<ChunkCoordinate> alreadyDurable) {
-            return persistence(PreparedWorldMutationSession.PersistenceMode.SLAB_END,
+            return persistence(PreparedWorldMutationSession.PersistenceMode.FINAL,
                     writeTarget, verificationTarget, alreadyDurable);
         }
 
@@ -669,6 +691,8 @@ class StreamingPreparedWorldMutationSessionTest {
                     mode, writeTarget.sectionKeys().size(),
                     verificationTarget.sections().size(), alreadyDurable));
             ManualPersistence next = new ManualPersistence();
+            next.complete = mode == PreparedWorldMutationSession.PersistenceMode.FINAL
+                    && completeFinalPersistence;
             persistence.add(next);
             return next;
         }

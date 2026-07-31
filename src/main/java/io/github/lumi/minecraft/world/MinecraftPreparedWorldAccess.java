@@ -55,7 +55,8 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             Set<ChunkCoordinate> alreadyDurable,
             boolean playerSpawnsIncluded) {
         return beginPersistence(
-                target, target.source(), alreadyDurable, playerSpawnsIncluded, true);
+                target, target.source(), target.sectionKeys(), target.entityKeys(),
+                alreadyDurable, playerSpawnsIncluded, true);
     }
 
     @Override
@@ -63,27 +64,36 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             PreparedMinecraftState writeTarget,
             Set<ChunkCoordinate> alreadyDurable) {
         return beginPersistence(
-                writeTarget, writeTarget.source(), alreadyDurable, false, false);
+                writeTarget, writeTarget.source(),
+                writeTarget.sectionKeys(), writeTarget.entityKeys(),
+                alreadyDurable, false, false);
     }
 
     @Override
     public WorldPersistenceSession beginPersistenceCommit(
             PreparedMinecraftState writeTarget,
             WorldStateApply.State verificationTarget,
+            List<SectionKey> verificationSections,
+            List<EntityChunkKey> verificationEntities,
             Set<ChunkCoordinate> alreadyDurable) {
         return beginPersistence(
-                writeTarget, verificationTarget, alreadyDurable, false, true);
+                writeTarget, verificationTarget,
+                verificationSections, verificationEntities,
+                alreadyDurable, false, true);
     }
 
     private WorldPersistenceSession beginPersistence(
             PreparedMinecraftState writeTarget,
             WorldStateApply.State verificationTarget,
+            List<SectionKey> verificationSections,
+            List<EntityChunkKey> verificationEntities,
             Set<ChunkCoordinate> alreadyDurable,
             boolean playerSpawnsIncluded,
             boolean forceAndVerify) {
         return new MinecraftRestorePersistenceSession(
                 level, freeze, background, storedChunks, entities,
-                writeTarget, verificationTarget, alreadyDurable,
+                writeTarget, verificationTarget,
+                verificationSections, verificationEntities, alreadyDurable,
                 playerSpawnsIncluded, forceAndVerify);
     }
 

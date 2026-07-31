@@ -72,17 +72,19 @@ public interface PreparedWorldAccess {
             Set<ChunkCoordinate> alreadyDurable,
             boolean playerSpawnsIncluded);
 
-    /** Stages one section window without the slab's final forced reread. */
+    /** Stages one verified write window without forcing its backing stores. */
     default WorldPersistenceSession beginPersistenceStage(
             PreparedMinecraftState writeTarget,
             Set<ChunkCoordinate> alreadyDurable) {
         return beginPersistence(writeTarget, alreadyDurable, false);
     }
 
-    /** Writes the last window, then forces and rereads the complete section slab. */
+    /** Writes the last window, then forces and rereads the complete Restore target. */
     default WorldPersistenceSession beginPersistenceCommit(
             PreparedMinecraftState writeTarget,
             WorldStateApply.State verificationTarget,
+            List<SectionKey> verificationSections,
+            List<EntityChunkKey> verificationEntities,
             Set<ChunkCoordinate> alreadyDurable) {
         return beginPersistence(writeTarget, alreadyDurable, false);
     }

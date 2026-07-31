@@ -24,15 +24,14 @@ final class MinecraftPersistedBatchVerifier {
     private final Executor background;
     private final MinecraftStoredChunkAccess storedChunks;
     private final MinecraftEntityChunkCapture entityCapture;
-    private final Map<ChunkCoordinate, Map<SectionKey, SectionBlob>> chunkTargets;
-    private final Map<EntityChunkKey, EntityChunkBlob> entityTargets;
-    private final List<ChunkCoordinate> chunks;
+    private final WorldStateApply.State target;
+    private final List<SectionKey> sections;
     private final List<EntityChunkKey> entityChunks;
     private final SimpleRegionStorage entityStorage;
     private CompletableFuture<Void> verification;
-    private int nextChunk;
+    private int nextSection;
     private int nextEntityChunk;
-    private int pendingChunkEnd;
+    private int pendingSectionEnd;
     private int pendingEntityEnd;
     private volatile String phase = "persisted chunk verification";
 
@@ -41,18 +40,16 @@ final class MinecraftPersistedBatchVerifier {
             Executor background,
             MinecraftStoredChunkAccess storedChunks,
             MinecraftEntityChunkCapture entityCapture,
-            Map<ChunkCoordinate, Map<SectionKey, SectionBlob>> chunkTargets,
-            Map<EntityChunkKey, EntityChunkBlob> entityTargets,
-            List<ChunkCoordinate> chunks,
+            WorldStateApply.State target,
+            List<SectionKey> sections,
             List<EntityChunkKey> entityChunks,
             SimpleRegionStorage entityStorage) {
         this.level = Objects.requireNonNull(level, "level");
         this.background = Objects.requireNonNull(background, "background");
         this.storedChunks = Objects.requireNonNull(storedChunks, "storedChunks");
         this.entityCapture = Objects.requireNonNull(entityCapture, "entityCapture");
-        this.chunkTargets = Objects.requireNonNull(chunkTargets, "chunkTargets");
-        this.entityTargets = Objects.requireNonNull(entityTargets, "entityTargets");
-        this.chunks = Objects.requireNonNull(chunks, "chunks");
+        this.target = Objects.requireNonNull(target, "target");
+        this.sections = Objects.requireNonNull(sections, "sections");
         this.entityChunks = Objects.requireNonNull(entityChunks, "entityChunks");
         this.entityStorage = entityStorage;
         if (!entityChunks.isEmpty() && entityStorage == null) {
@@ -63,7 +60,7 @@ final class MinecraftPersistedBatchVerifier {
     boolean advanceUntil(long deadlineNanos) throws IOException {
         while (System.nanoTime() < deadlineNanos) {
             if (verification == null) {
-                if (nextChunk == chunks.size()
+                if (nextSection == sections.size()
                         && nextEntityChunk == entityChunks.size()) {
                     return true;
                 }
@@ -74,22 +71,26 @@ final class MinecraftPersistedBatchVerifier {
             }
             MinecraftPersistenceFuture.join(
                     verification, "Restore persisted verification");
-            nextChunk = pendingChunkEnd;
+            nextSection = pendingSectionEnd;
             nextEntityChunk = pendingEntityEnd;
             verification = null;
         }
-        return nextChunk == chunks.size() && nextEntityChunk == entityChunks.size();
+        return nextSection == sections.size()
+                && nextEntityChunk == entityChunks.size();
     }
 
     private CompletableFuture<Void> beginVerification() {
-        pendingChunkEnd = readBatchEnd(
-                chunks.size(), nextChunk, MAX_PENDING_READS);
-        int remaining = MAX_PENDING_READS - (pendingChunkEnd - nextChunk);
+        pendingSectionEnd = StreamingPreparedWorldMutationSession.windowEnd(
+                sections, nextSection, sections.size());
+        Map<ChunkCoordinate, Map<SectionKey, SectionBlob>> chunkTargets =
+                sectionTargets(nextSection, pendingSectionEnd);
+        int remaining = MAX_PENDING_READS - chunkTargets.size();
         pendingEntityEnd = readBatchEnd(
                 entityChunks.size(), nextEntityChunk, remaining);
         List<CompletableFuture<Void>> pending = new ArrayList<>(MAX_PENDING_READS);
-        for (int index = nextChunk; index < pendingChunkEnd; index++) {
-            ChunkCoordinate chunk = chunks.get(index);
+        for (var entry : chunkTargets.entrySet()) {
+            ChunkCoordinate chunk = entry.getKey();
+            Map<SectionKey, SectionBlob> expected = entry.getValue();
             ChunkPos position = new ChunkPos(chunk.x(), chunk.z());
             pending.add(level.getChunkSource().chunkMap.read(position)
                     .thenApplyAsync(stored -> {
@@ -98,7 +99,7 @@ final class MinecraftPersistedBatchVerifier {
                                     ? "chunk is absent"
                                     : storedChunks.mismatchRaw(
                                             position, stored.orElseThrow(),
-                                            chunkTargets.get(chunk));
+                                            expected);
                             if (mismatch != null) {
                                 throw new IOException(
                                         "Persisted Restore chunk mismatch: "
@@ -112,7 +113,7 @@ final class MinecraftPersistedBatchVerifier {
         }
         for (int index = nextEntityChunk; index < pendingEntityEnd; index++) {
             EntityChunkKey key = entityChunks.get(index);
-            EntityChunkBlob expected = entityTargets.get(key);
+            EntityChunkBlob expected = target.entities().get(key);
             ChunkPos position = new ChunkPos(key.chunkX(), key.chunkZ());
             pending.add(entityStorage.read(position)
                     .thenApplyAsync(stored -> {
@@ -129,10 +130,24 @@ final class MinecraftPersistedBatchVerifier {
         }
         phase = nextEntityChunk == pendingEntityEnd
                 ? "persisted chunk verification"
-                : nextChunk == pendingChunkEnd
+                : nextSection == pendingSectionEnd
                         ? "persisted entity verification"
                         : "persisted chunk/entity verification";
         return CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new));
+    }
+
+    private Map<ChunkCoordinate, Map<SectionKey, SectionBlob>> sectionTargets(
+            int start, int end) {
+        Map<ChunkCoordinate, Map<SectionKey, SectionBlob>> grouped =
+                new java.util.LinkedHashMap<>();
+        for (int index = start; index < end; index++) {
+            SectionKey key = sections.get(index);
+            grouped.computeIfAbsent(
+                    ChunkCoordinate.from(key), ignored -> new java.util.LinkedHashMap<>())
+                    .put(key, target.sections().get(key));
+        }
+        grouped.replaceAll((ignored, value) -> Map.copyOf(value));
+        return Map.copyOf(grouped);
     }
 
     static int readBatchEnd(int total, int start, int capacity) {
