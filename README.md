@@ -65,7 +65,7 @@ the original state remains available from the beginning of its Lumi history.
 | `U` | Open Lumi |
 | `Alt+S` | Save the active workspace or zone |
 | `Alt+Z` / `Alt+Y` | Undo / Redo the latest session action |
-| `R` | Quick Restore unsaved changes to the active version |
+| `Alt+R` | Quick Restore unsaved changes to the active version |
 | `H` | Show or hide the compare highlight |
 | `Alt+I` | Open the hotkey guide |
 | `Alt+1` … `Alt+0` | Switch to an assigned branch |
