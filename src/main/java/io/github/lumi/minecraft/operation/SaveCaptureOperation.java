@@ -19,6 +19,7 @@ import java.util.concurrent.Executor;
 /** Copies visible state while frozen, then publishes it without holding the freeze. */
 public final class SaveCaptureOperation implements DimensionMutation {
     private final SaveRequest request;
+    private final DeferredDimensionMutation.Activation activation;
     private final SavePreparation preparation;
     private final WorldStateCapture capture;
     private final SavePublisher publisher;
@@ -32,6 +33,7 @@ public final class SaveCaptureOperation implements DimensionMutation {
     private SaveOperationStatus status = SaveOperationStatus.PREPARING;
     private SaveResult result;
     private Throwable failure;
+    private boolean activated;
     private boolean resourcesClosed;
     private long startedNanos;
     private volatile String loggedPublicationPhase = "";
@@ -55,7 +57,20 @@ public final class SaveCaptureOperation implements DimensionMutation {
             SavePublisher publisher,
             CapturedGenerationCompletion completion,
             Executor backgroundExecutor) {
+        this(request, () -> { }, preparation, capture, publisher, completion,
+                backgroundExecutor);
+    }
+
+    public SaveCaptureOperation(
+            SaveRequest request,
+            DeferredDimensionMutation.Activation activation,
+            SavePreparation preparation,
+            WorldStateCapture capture,
+            SavePublisher publisher,
+            CapturedGenerationCompletion completion,
+            Executor backgroundExecutor) {
         this.request = Objects.requireNonNull(request, "request");
+        this.activation = Objects.requireNonNull(activation, "activation");
         this.preparation = Objects.requireNonNull(preparation, "preparation");
         this.capture = Objects.requireNonNull(capture, "capture");
         this.publisher = Objects.requireNonNull(publisher, "publisher");
@@ -66,6 +81,9 @@ public final class SaveCaptureOperation implements DimensionMutation {
     @Override
     public void advance(long deadlineNanos) throws IOException {
         startIfNeeded();
+        if (!activate()) {
+            return;
+        }
         if (status == SaveOperationStatus.PREPARING) {
             prepare(deadlineNanos);
         } else if (status == SaveOperationStatus.CAPTURING) {
@@ -146,6 +164,24 @@ public final class SaveCaptureOperation implements DimensionMutation {
 
     public Optional<SaveResult> result() {
         return Optional.ofNullable(result);
+    }
+
+    private boolean activate() {
+        if (activated) {
+            return true;
+        }
+        try {
+            activation.validate();
+            activated = true;
+            return true;
+        } catch (IOException | RuntimeException rejected) {
+            failure = rejected;
+            status = SaveOperationStatus.FAILED;
+            LumiMod.LOGGER.warn(
+                    "Lumi Save rejected at activation after {} ms: {}",
+                    elapsedMillis(), rejected.getMessage());
+            return false;
+        }
     }
 
     public WorkingIndexSnapshot previewGenerations() {

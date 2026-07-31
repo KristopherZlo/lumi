@@ -4,14 +4,18 @@ import io.github.lumi.domain.model.VersionTags;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Zone identity and builder-facing message for a scoped Save. */
-public record ZoneSaveArgument(UUID zoneId, String message, VersionTags tags) {
+/** Immutable zone revision and builder-facing message for a scoped Save. */
+public record ZoneSaveArgument(
+        UUID zoneId, long expectedRevision, String message, VersionTags tags) {
     private static final int MAX_MESSAGE_LENGTH = 256;
 
     public ZoneSaveArgument {
         Objects.requireNonNull(zoneId, "zoneId");
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(tags, "tags");
+        if (expectedRevision < 0) {
+            throw new IllegalArgumentException("Expected zone revision cannot be negative");
+        }
         message = message.trim();
         if (message.isEmpty() || message.length() > MAX_MESSAGE_LENGTH
                 || message.codePoints().anyMatch(Character::isISOControl)) {
@@ -19,22 +23,30 @@ public record ZoneSaveArgument(UUID zoneId, String message, VersionTags tags) {
         }
     }
 
-    public ZoneSaveArgument(UUID zoneId, String message) {
-        this(zoneId, message, VersionTags.empty());
-    }
-
     public String encode() {
-        return zoneId + "\n" + new SaveArgument(message, tags).encode();
+        return zoneId + "\n" + expectedRevision + "\n"
+                + new SaveArgument(message, tags).encode();
     }
 
     public static ZoneSaveArgument parse(String encoded) {
         Objects.requireNonNull(encoded, "encoded");
-        int separator = encoded.indexOf('\n');
-        if (separator < 1) {
+        int first = encoded.indexOf('\n');
+        int second = encoded.indexOf('\n', first + 1);
+        if (first < 1 || second < 0) {
             throw new IllegalArgumentException("Invalid zone Save argument");
         }
-        SaveArgument save = SaveArgument.parse(encoded.substring(separator + 1));
-        return new ZoneSaveArgument(UUID.fromString(encoded.substring(0, separator)),
-                save.message(), save.tags());
+        try {
+            String encodedRevision = encoded.substring(first + 1, second);
+            long revision = Long.parseLong(encodedRevision);
+            if (!encodedRevision.equals(Long.toString(revision))) {
+                throw new IllegalArgumentException("Non-canonical zone Save revision");
+            }
+            SaveArgument save = SaveArgument.parse(encoded.substring(second + 1));
+            return new ZoneSaveArgument(
+                    UUID.fromString(encoded.substring(0, first)), revision,
+                    save.message(), save.tags());
+        } catch (NumberFormatException invalid) {
+            throw new IllegalArgumentException("Invalid zone Save revision", invalid);
+        }
     }
 }

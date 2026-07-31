@@ -15,7 +15,7 @@ class ZoneHistoryArgumentTest {
         UUID zone = new UUID(0, 7);
         CommitId target = new CommitId(new ObjectId("a".repeat(64)));
         ZoneSaveArgument save = new ZoneSaveArgument(
-                zone, "Clock works", VersionTags.parse("redstone, copper"));
+                zone, 7, "Clock works", VersionTags.parse("redstone, copper"));
         ZoneRestoreArgument restore = new ZoneRestoreArgument(zone, 7, target);
 
         assertEquals(save, ZoneSaveArgument.parse(save.encode()));
@@ -26,7 +26,11 @@ class ZoneHistoryArgumentTest {
     void rejectsMissingMessageAndMalformedTarget() {
         UUID zone = new UUID(0, 7);
         assertThrows(IllegalArgumentException.class,
-                () -> new ZoneSaveArgument(zone, " "));
+                () -> new ZoneSaveArgument(zone, 7, " ", VersionTags.empty()));
+        assertThrows(IllegalArgumentException.class,
+                () -> ZoneSaveArgument.parse(zone + "\nstale\nmessage"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ZoneSaveArgument.parse(zone + "\n07\nmessage"));
         assertThrows(IllegalArgumentException.class,
                 () -> ZoneRestoreArgument.parse(zone + "\nnot-a-commit"));
         assertThrows(IllegalArgumentException.class,

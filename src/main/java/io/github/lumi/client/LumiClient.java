@@ -480,9 +480,9 @@ public final class LumiClient implements ClientModInitializer {
                 parent, HISTORY,
                 new SaveScreenController(
                         (message, tags) -> NETWORKING.saveZone(
-                                zone.id(), message, tags),
+                                zone.id(), zone.revision(), message, tags),
                         (message, tags) -> NETWORKING.amendZone(
-                                zone.id(), message, tags)),
+                                zone.id(), zone.revision(), message, tags)),
                 NETWORKING::refreshSnapshot, intent, initialMessage,
                 requestId -> PREVIEW_CAPTURE.request(
                         requestId, HISTORY.state().snapshot().orElseThrow()),

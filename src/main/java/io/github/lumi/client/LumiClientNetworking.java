@@ -269,10 +269,6 @@ public final class LumiClientNetworking {
                 Objects.requireNonNull(zoneId, "zoneId").toString());
     }
 
-    public UUID saveZone(UUID zoneId, String message) {
-        return saveZone(zoneId, message, VersionTags.empty());
-    }
-
     public UUID editActiveZone(boolean add, BlockBox area) {
         return send(HistoryCommandPayload.Kind.ZONE_CELLS,
                 new ZoneCellsArgument(
@@ -286,18 +282,22 @@ public final class LumiClientNetworking {
                         expectedRevision).encode());
     }
 
-    public UUID saveZone(UUID zoneId, String message, VersionTags tags) {
+    public UUID saveZone(
+            UUID zoneId, long expectedRevision, String message, VersionTags tags) {
         return send(HistoryCommandPayload.Kind.ZONE_SAVE,
                 new ZoneSaveArgument(
                         Objects.requireNonNull(zoneId, "zoneId"),
+                        expectedRevision,
                         Objects.requireNonNull(message, "message"),
                         Objects.requireNonNull(tags, "tags")).encode());
     }
 
-    public UUID amendZone(UUID zoneId, String message, VersionTags tags) {
+    public UUID amendZone(
+            UUID zoneId, long expectedRevision, String message, VersionTags tags) {
         return send(HistoryCommandPayload.Kind.ZONE_AMEND,
                 new ZoneSaveArgument(
                         Objects.requireNonNull(zoneId, "zoneId"),
+                        expectedRevision,
                         Objects.requireNonNull(message, "message"),
                         Objects.requireNonNull(tags, "tags")).encode());
     }

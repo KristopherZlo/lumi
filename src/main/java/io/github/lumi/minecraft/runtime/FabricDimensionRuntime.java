@@ -733,8 +733,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     public synchronized SaveCaptureOperation startSave(
             SaveRequest request, Consumer<DimensionMutation> terminalObserver) throws IOException {
+        return startSave(request,
+                () -> requireExpectedRef(request.expectedRef()), terminalObserver);
+    }
+
+    private SaveCaptureOperation startSave(
+            SaveRequest request,
+            DeferredDimensionMutation.Activation activation,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
-        SaveCaptureOperation operation = createSave(request);
+        SaveCaptureOperation operation = createSave(request, activation);
         enqueueForeground(operation, OperationPriority.NORMAL, completed -> {
             if (completed.terminalState()
                     == io.github.lumi.minecraft.operation.MutationTerminalState.SUCCEEDED) {
@@ -755,21 +763,45 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             VersionTags tags,
             boolean amend,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
-        UUID workspaceId = activeWorkspaceId();
-        zones.requireActorActive(workspaceId, zoneId, actor);
-        return startSave(new SaveRequest(
-                expected, author, message, Instant.now(), workspaceId,
-                Optional.of(zoneId), CommitKind.ZONE, tags, amend), terminalObserver);
+        long expectedZoneRevision = zones.require(
+                activeWorkspaceId(), zoneId).revision();
+        return startZoneSave(
+                expected, author, actor, zoneId, expectedZoneRevision,
+                message, tags, amend, terminalObserver);
     }
 
-    private SaveCaptureOperation createSave(SaveRequest request) throws IOException {
+    public synchronized SaveCaptureOperation startZoneSave(
+            BranchRef expected,
+            CommitAuthor author,
+            UUID actor,
+            UUID zoneId,
+            long expectedZoneRevision,
+            String message,
+            VersionTags tags,
+            boolean amend,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        UUID workspaceId = activeWorkspaceId();
+        zones.requireActorActive(workspaceId, zoneId, actor);
+        requireExpectedZone(zoneId, expectedZoneRevision);
+        return startSave(new SaveRequest(
+                expected, author, message, Instant.now(), workspaceId,
+                Optional.of(zoneId), CommitKind.ZONE, tags, amend), () -> {
+                    requireExpectedRef(expected);
+                    requireExpectedZone(zoneId, expectedZoneRevision);
+                    zones.requireActorActive(workspaceId, zoneId, actor);
+                }, terminalObserver);
+    }
+
+    private SaveCaptureOperation createSave(
+            SaveRequest request,
+            DeferredDimensionMutation.Activation activation) throws IOException {
         Predicate<io.github.lumi.domain.model.HistoryKey> scope = saveScope(request);
         if (requiresBuilderChanges(request.kind())
                 && mutations.builderSnapshot(scope).generations().isEmpty()) {
             throw new IOException("luma.save.empty_title");
         }
         return createChunkReadySave(
-                request, scopedSavePreparation(scope), saves, mutations);
+                request, activation, scopedSavePreparation(scope), saves, mutations);
     }
 
     private SaveCaptureOperation createChunkReadySave(
@@ -777,10 +809,21 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             SavePreparation preparation,
             SavePublisher publisher,
             CapturedGenerationCompletion completion) {
+        return createChunkReadySave(
+                request, () -> { }, preparation, publisher, completion);
+    }
+
+    private SaveCaptureOperation createChunkReadySave(
+            SaveRequest request,
+            DeferredDimensionMutation.Activation activation,
+            SavePreparation preparation,
+            SavePublisher publisher,
+            CapturedGenerationCompletion completion) {
         ChunkLoadSession chunks =
                 new ChunkLoadSession(new MinecraftChunkLoadAccess(level, freeze));
         return new SaveCaptureOperation(
                 Objects.requireNonNull(request, "request"),
+                Objects.requireNonNull(activation, "activation"),
                 new ChunkLoadingSavePreparation(preparation, chunks),
                 new BatchedWorldStateCapture(worldReader, chunks::close),
                 publisher, completion, background);

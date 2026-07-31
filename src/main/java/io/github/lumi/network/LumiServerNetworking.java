@@ -727,7 +727,7 @@ public final class LumiServerNetworking {
                 ZoneSaveArgument zone = ZoneSaveArgument.parse(payload.argument());
                 yield runtime.startZoneSave(
                         expected, author, player.getUUID(), zone.zoneId(),
-                        zone.message(), zone.tags(),
+                        zone.expectedRevision(), zone.message(), zone.tags(),
                         payload.kind() == HistoryCommandPayload.Kind.ZONE_AMEND,
                         terminal);
             }

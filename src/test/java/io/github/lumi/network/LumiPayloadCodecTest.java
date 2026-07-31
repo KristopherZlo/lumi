@@ -167,7 +167,8 @@ class LumiPayloadCodecTest {
             HistoryCommandPayload zoneSave = new HistoryCommandPayload(
                     UUID.randomUUID(), kind,
                     new ZoneSaveArgument(
-                            zoneId, "Clock works", VersionTags.parse("redstone")).encode(),
+                            zoneId, 7, "Clock works",
+                            VersionTags.parse("redstone")).encode(),
                     id('1'), 42);
             assertEquals(zoneSave, roundTrip(HistoryCommandPayload.CODEC, zoneSave));
         }

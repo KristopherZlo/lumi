@@ -136,6 +136,26 @@ class SaveCaptureOperationTest {
     }
 
     @Test
+    void rejectsStaleRequestBeforePreparationStarts() throws Exception {
+        WorkingIndexSnapshot clean = WorkingIndexSnapshot.empty();
+        TwoStepPreparation preparation = new TwoStepPreparation(clean);
+        TwoStepCapture world = new TwoStepCapture(new CapturedWorldState(
+                Map.of(), Map.of(), clean, new CommitStatistics(0, 0, 0, 0)));
+        SaveCaptureOperation operation = new SaveCaptureOperation(
+                request(), () -> { throw new java.io.IOException("stale ref"); },
+                preparation, world,
+                (request, state) -> { throw new AssertionError("Must not publish"); },
+                ignored -> { }, Runnable::run);
+
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(SaveOperationStatus.FAILED, operation.status());
+        assertEquals("stale ref", operation.failure().orElseThrow().getMessage());
+        assertEquals(0, preparation.calls);
+        assertEquals(0, world.session.captureCalls);
+    }
+
+    @Test
     void cancelsFrozenCaptureAndClosesOwnedSessions() throws Exception {
         WorkingIndexSnapshot dirty = new WorkingIndexSnapshot(Map.of());
         CapturedWorldState captured = new CapturedWorldState(
