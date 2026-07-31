@@ -41,6 +41,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private final List<EntityChunkKey> entityChunks;
     private final List<PlayerTarget> players;
     private final Set<ChunkCoordinate> relightChunks;
+    private final Set<ChunkCoordinate> poiChunks;
     private final SimpleRegionStorage entityStorage;
     private final MinecraftPersistedBatchVerifier verifier;
     private final boolean poiSyncRequired;
@@ -87,18 +88,25 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> grouped =
                 groupedSections(writeTarget, alreadyStored);
         Set<ChunkCoordinate> relight = new HashSet<>();
+        Set<ChunkCoordinate> poi = new HashSet<>();
         writeTarget.sectionKeys().forEach(key -> {
             ChunkCoordinate chunk = ChunkCoordinate.from(key);
             if (!alreadyStored.contains(chunk)) {
                 DecodedSection section = writeTarget.sections().get(key);
-                if (!section.hasPreparedDelta() || section.preparedDelta().lightChanged()) {
+                PreparedSectionDelta delta = section.hasPreparedDelta()
+                        ? section.preparedDelta() : null;
+                if (delta == null || delta.lightChanged()) {
                     relight.add(chunk);
+                }
+                if (delta == null || delta.poiIndexes().length != 0) {
+                    poi.add(chunk);
                 }
             }
         });
         chunks = List.copyOf(grouped.keySet());
         chunkVerificationRequired = !verificationSections.isEmpty();
         relightChunks = Set.copyOf(relight);
+        poiChunks = Set.copyOf(poi);
         poiSyncRequired = forceAndVerify && chunkVerificationRequired;
         entityChunks = writeTarget.entityKeys();
         chunks.forEach(chunk -> pendingSnapshots.merge(chunk, 1, Integer::sum));
@@ -284,7 +292,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                     ? CompletableFuture.completedFuture(null)
                     : level.getChunkSource().chunkMap.synchronize(true);
             var poiManager = level.getChunkSource().getPoiManager();
-            for (ChunkCoordinate chunk : chunks) {
+            for (ChunkCoordinate chunk : poiChunks) {
                 poiManager.flush(new ChunkPos(chunk.x(), chunk.z()));
             }
             var poiSync = !poiSyncRequired

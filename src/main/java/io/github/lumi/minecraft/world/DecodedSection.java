@@ -95,6 +95,20 @@ public final class DecodedSection {
             MinecraftBlockStateDecoder decoder) throws IOException {
         List<BlockState> beforePalette = decoder.decodePalette(before);
         decoder.validateBlockEntities(before, beforePalette);
+        return prepareAgainst(source, before, beforePalette);
+    }
+
+    DecodedSection prepareAgainstPrevalidated(
+            SectionBlob source,
+            SectionBlob before,
+            MinecraftBlockStateDecoder decoder) throws IOException {
+        return prepareAgainst(source, before, decoder.decodePalette(before));
+    }
+
+    private DecodedSection prepareAgainst(
+            SectionBlob source,
+            SectionBlob before,
+            List<BlockState> beforePalette) {
         return new DecodedSection(
                 palette, paletteIndexes, blockStates, blockEntities, preparedStates,
                 PreparedSectionDelta.between(

@@ -176,7 +176,7 @@ public final class MinecraftRestorePreparation {
                 template = sections.decode(sourceSection);
                 templates.put(sourceSection, template);
             }
-            decoded.put(key, template.prepareAgainst(
+            decoded.put(key, template.prepareAgainstPrevalidated(
                     sourceSection, base.sections().get(key), sections));
         }
         return new PreparedMinecraftState(
