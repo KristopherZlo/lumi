@@ -341,6 +341,24 @@ class RestoreOperationTest {
     }
 
     @Test
+    void startsApplyInTheJournalCreationTickWhenBudgetRemains() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('1'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        TwoStepApply world = new TwoStepApply();
+        RestoreOperation operation = RestoreOperation.start(
+                new PreparedRestore(
+                        expected, id('2'), Map.of(), Map.of(), Map.of(), Map.of()),
+                world, ignored -> { }, journals, UUID.randomUUID());
+
+        assertEquals(RestoreStatus.APPLYING,
+                operation.tick(System.nanoTime() + 1_000_000_000L));
+
+        assertEquals(1, world.session.applyCalls);
+        assertEquals(OperationPhase.APPLYING,
+                journals.read().orElseThrow().phase());
+    }
+
+    @Test
     void skipsOuterVerificationWhenApplyAlreadyPersistedExactly() throws IOException {
         var expected = new BranchRef(new BranchName("main"), id('1'), 1);
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
@@ -391,7 +409,7 @@ class RestoreOperationTest {
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
         assertThrows(IOException.class, () -> operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.PUBLISHING, operation.status());
-        assertEquals(OperationPhase.WORLD_PERSISTED,
+        assertEquals(OperationPhase.APPLYING,
                 journals.read().orElseThrow().phase());
 
         assertEquals(RestoreStatus.COMPLETE, operation.tick(Long.MAX_VALUE));
@@ -412,7 +430,7 @@ class RestoreOperationTest {
         activate(operation, journals);
         assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
         assertEquals(RestoreStatus.PERSISTING, operation.tick(Long.MAX_VALUE));
-        assertEquals(OperationPhase.VERIFYING, journals.read().orElseThrow().phase());
+        assertEquals(OperationPhase.APPLYING, journals.read().orElseThrow().phase());
         assertEquals(0, publications.get());
 
         world.persisted = true;
@@ -630,7 +648,7 @@ class RestoreOperationTest {
         operation.tick(Long.MAX_VALUE);
 
         assertEquals(RestoreStatus.PUBLISHING, operation.status());
-        assertEquals(OperationPhase.WORLD_PERSISTED,
+        assertEquals(OperationPhase.APPLYING,
                 journals.read().orElseThrow().phase());
         publication.durable = true;
         operation.tick(Long.MAX_VALUE);
@@ -676,7 +694,7 @@ class RestoreOperationTest {
         assertThrows(IOException.class, () -> operation.tick(Long.MAX_VALUE));
 
         assertEquals(RestoreStatus.PERSISTING, operation.status());
-        assertEquals(OperationPhase.WORLD_PERSISTED,
+        assertEquals(OperationPhase.APPLYING,
                 journals.read().orElseThrow().phase());
     }
 
@@ -770,7 +788,7 @@ class RestoreOperationTest {
 
         operation.close();
 
-        assertEquals(OperationPhase.VERIFYING, journals.read().orElseThrow().phase());
+        assertEquals(OperationPhase.APPLYING, journals.read().orElseThrow().phase());
     }
 
     @Test

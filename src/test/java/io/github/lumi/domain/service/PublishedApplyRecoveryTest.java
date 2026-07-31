@@ -148,7 +148,7 @@ class PublishedApplyRecoveryTest {
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
         OperationJournal journal = journals.create(new OperationJournal(
                 UUID.randomUUID(), OperationKind.BRANCH_SWITCH,
-                OperationPhase.VERIFYING, operationTarget, Optional.of(captured)));
+                OperationPhase.APPLYING, operationTarget, Optional.of(captured)));
 
         assertTrue(new PublishedApplyRecovery(
                 refs, active, null, working, journals)
@@ -175,7 +175,7 @@ class PublishedApplyRecoveryTest {
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
         OperationJournal journal = journals.create(new OperationJournal(
                 UUID.randomUUID(), OperationKind.RESTORE,
-                OperationPhase.WORLD_PERSISTED,
+                OperationPhase.APPLYING,
                 new OperationTarget(
                         source.name(), source.commit(), source.revision(),
                         Optional.of(target), Optional.of(id('c'))),

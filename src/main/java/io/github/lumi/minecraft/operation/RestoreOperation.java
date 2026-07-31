@@ -620,7 +620,10 @@ public final class RestoreOperation implements DimensionMutation {
             journal = journals.create(journal);
             journalPersisted = true;
             beginTargetSession();
-            return status;
+            if (deadlineNanos == Long.MAX_VALUE
+                    || System.nanoTime() >= deadlineNanos) {
+                return status;
+            }
         }
         beginTargetSession();
         switch (status) {
@@ -653,7 +656,6 @@ public final class RestoreOperation implements DimensionMutation {
             return;
         }
         if (applied) {
-            journal = journals.advance(journal, OperationPhase.VERIFYING);
             if (targetSession.applyCompletesPersistence()) {
                 status = RestoreStatus.PERSISTING;
                 persistTarget(deadlineNanos);
@@ -712,7 +714,6 @@ public final class RestoreOperation implements DimensionMutation {
             return;
         }
         if (persisted) {
-            journal = journals.advance(journal, OperationPhase.WORLD_PERSISTED);
             publishTarget(deadlineNanos);
         }
     }
@@ -728,8 +729,6 @@ public final class RestoreOperation implements DimensionMutation {
             return;
         }
         stateListener.restored(preparedTarget.source());
-        journal = journals.advance(journal, OperationPhase.REF_PUBLISHED);
-        journal = journals.advance(journal, OperationPhase.COMPLETE);
         journals.clear(journal);
         logStatistics("target", targetSession.statistics());
         targetSession.close();
@@ -806,7 +805,6 @@ public final class RestoreOperation implements DimensionMutation {
             return;
         }
         stateListener.returned(preparedReturn.source());
-        journal = journals.advance(journal, OperationPhase.COMPLETE);
         journals.clear(journal);
         logStatistics("safe-return", returnSession.statistics());
         returnSession.close();
