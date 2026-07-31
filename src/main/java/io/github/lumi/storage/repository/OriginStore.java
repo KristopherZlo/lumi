@@ -41,7 +41,7 @@ public final class OriginStore {
     private static final long ENTITY_ENTRY_BYTES = Integer.BYTES + 1L
             + 2L * Integer.BYTES + 32L;
     private final Path originsDirectory;
-    private final Map<RegionCoordinate, Map<HistoryKey, ObjectId>> shardCache =
+    private final Map<RegionCoordinate, CachedShard> shardCache =
             new HashMap<>();
 
     public OriginStore(Path dimensionRepository) {
@@ -89,9 +89,10 @@ public final class OriginStore {
                     throw new IOException("Origin shard entry limit exceeded");
                 }
                 Map<HistoryKey, ObjectId> durable = Map.copyOf(combined);
-                AtomicFileWriter.replace(
-                        shardPath(region.getKey()), encodeShard(region.getKey(), durable));
-                shardCache.put(region.getKey(), durable);
+                byte[] payload = encodeShard(region.getKey(), durable);
+                AtomicFileWriter.replace(shardPath(region.getKey()), payload);
+                shardCache.put(region.getKey(),
+                        new CachedShard(payload.length, durable));
             }
         }
         return added;
@@ -218,17 +219,22 @@ public final class OriginStore {
 
     private Map<HistoryKey, ObjectId> readShard(RegionCoordinate expected)
             throws IOException {
-        Map<HistoryKey, ObjectId> cached = shardCache.get(expected);
-        if (cached != null) {
-            return cached;
-        }
+        CachedShard cached = shardCache.get(expected);
         Path path = shardPath(expected);
-        Map<HistoryKey, ObjectId> entries = Map.of();
-        if (Files.exists(path)) {
-            requireShardSize(path);
-            entries = decodeShard(expected, Files.readAllBytes(path));
+        if (!Files.exists(path)) {
+            if (cached == null) {
+                cached = new CachedShard(0, Map.of());
+                shardCache.put(expected, cached);
+            }
+            return cached.entries();
         }
-        shardCache.put(expected, entries);
+        long bytes = requireShardSize(path);
+        if (cached != null && cached.bytes() == bytes) {
+            return cached.entries();
+        }
+        Map<HistoryKey, ObjectId> entries =
+                decodeShard(expected, Files.readAllBytes(path));
+        shardCache.put(expected, new CachedShard(bytes, entries));
         return entries;
     }
 
@@ -428,7 +434,7 @@ public final class OriginStore {
         }
     }
 
-    private static void requireShardSize(Path file) throws IOException {
+    private static long requireShardSize(Path file) throws IOException {
         BasicFileAttributes attributes = Files.readAttributes(
                 file, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
         if (!attributes.isRegularFile()
@@ -436,9 +442,12 @@ public final class OriginStore {
                 || attributes.size() > MAX_SHARD_BYTES) {
             throw new IOException("Invalid origin shard size: " + file);
         }
+        return attributes.size();
     }
 
     private record OriginEntry(HistoryKey key, ObjectId id) { }
+
+    private record CachedShard(long bytes, Map<HistoryKey, ObjectId> entries) { }
 
     private record RegionCoordinate(int x, int z)
             implements Comparable<RegionCoordinate> {

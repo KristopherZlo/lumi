@@ -98,6 +98,21 @@ class OriginStoreTest {
     }
 
     @Test
+    void cachedReaderSeesOriginsAppendedByAnotherRepositoryInstance()
+            throws IOException {
+        OriginStore reader = new OriginStore(repositoryRoot);
+        OriginStore writer = new OriginStore(repositoryRoot);
+        SectionKey first = new SectionKey(1, 2, 3);
+        SectionKey second = new SectionKey(2, 2, 3);
+
+        assertTrue(reader.read(first).isEmpty());
+        writer.register(first, id("first"));
+        assertEquals(id("first"), reader.read(first).orElseThrow());
+        writer.register(second, id("second"));
+        assertEquals(id("second"), reader.read(second).orElseThrow());
+    }
+
+    @Test
     void keyScanRejectsMalformedCanonicalPathOrPayloadSize() throws IOException {
         OriginStore store = new OriginStore(repositoryRoot);
         store.register(new SectionKey(1, 2, 3), id("section"));
