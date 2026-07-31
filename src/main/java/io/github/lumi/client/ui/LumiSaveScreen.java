@@ -24,7 +24,6 @@ public final class LumiSaveScreen extends LumiModalScreen {
     private final SaveScreenController controller;
     private final Runnable refresh;
     private final SaveScreenController.Intent preferredIntent;
-    private final String initialMessage;
     private final Consumer<UUID> previewCapture;
     private final Consumer<UUID> accepted;
     private final Consumer<String> savedName;
@@ -35,6 +34,8 @@ public final class LumiSaveScreen extends LumiModalScreen {
     private EditBox tags;
     private LumiButton save;
     private LumiButton amend;
+    private String draftMessage;
+    private String draftTags = "";
     private int observedPending = Integer.MIN_VALUE;
     private String error = "";
 
@@ -131,7 +132,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
         this.controller = Objects.requireNonNull(controller, "controller");
         this.refresh = Objects.requireNonNull(refresh, "refresh");
         this.preferredIntent = Objects.requireNonNull(preferredIntent, "preferredIntent");
-        this.initialMessage = Objects.requireNonNull(initialMessage, "initialMessage");
+        this.draftMessage = Objects.requireNonNull(initialMessage, "initialMessage");
         this.previewCapture = Objects.requireNonNull(previewCapture, "previewCapture");
         this.accepted = Objects.requireNonNull(accepted, "accepted");
         this.scope = Objects.requireNonNull(scope, "scope");
@@ -153,8 +154,11 @@ public final class LumiSaveScreen extends LumiModalScreen {
                 layout.width() - 22, scope.nameLabel());
         message.setMaxLength(SaveScreenController.MAX_NAME_LENGTH);
         message.setHint(scope.nameLabel());
-        message.setResponder(value -> setSubmitActive(!value.trim().isEmpty()));
-        message.setValue(initialMessage);
+        message.setResponder(value -> {
+            draftMessage = value;
+            setSubmitActive(!value.trim().isEmpty());
+        });
+        message.setValue(draftMessage);
 
         tags = addTextField(
                 x + 11, y + tagsOffset(layout.height()) - 3,
@@ -162,6 +166,8 @@ public final class LumiSaveScreen extends LumiModalScreen {
                 Component.translatable("luma.history.tags_input"));
         tags.setMaxLength(io.github.lumi.domain.model.VersionTags.MAX_SERIALIZED_LENGTH);
         tags.setHint(Component.translatable("luma.history.tags_input"));
+        tags.setResponder(value -> draftTags = value);
+        tags.setValue(draftTags);
 
         int buttonWidth = Math.max(80, (layout.width() - 18) / 2);
         save = addButton(x + 6, actionY, buttonWidth,
@@ -172,10 +178,10 @@ public final class LumiSaveScreen extends LumiModalScreen {
         amend = addButton(
                 save.getX() + save.getWidth() + 4, actionY, buttonWidth,
                 Component.translatable("luma.action.amend_version"),
-                () -> submit(SaveScreenController.Intent.AMEND),
+                () -> requestSubmit(SaveScreenController.Intent.AMEND),
                 preferredIntent == SaveScreenController.Intent.AMEND
                         ? LumiButton.Kind.PRIMARY : LumiButton.Kind.NORMAL);
-        setSubmitActive(!initialMessage.trim().isEmpty());
+        setSubmitActive(!draftMessage.trim().isEmpty());
         refreshPreview();
     }
 
@@ -214,10 +220,19 @@ public final class LumiSaveScreen extends LumiModalScreen {
     public boolean keyPressed(KeyEvent event) {
         if ((event.key() == InputConstants.KEY_RETURN
                 || event.key() == InputConstants.KEY_NUMPADENTER) && save.active) {
-            submit(preferredIntent);
+            requestSubmit(preferredIntent);
             return true;
         }
         return super.keyPressed(event);
+    }
+
+    private void requestSubmit(SaveScreenController.Intent intent) {
+        if (intent == SaveScreenController.Intent.AMEND) {
+            minecraft.setScreen(new LumiAmendConfirmationScreen(
+                    this, () -> submit(intent)));
+            return;
+        }
+        submit(intent);
     }
 
     private void submit(SaveScreenController.Intent intent) {

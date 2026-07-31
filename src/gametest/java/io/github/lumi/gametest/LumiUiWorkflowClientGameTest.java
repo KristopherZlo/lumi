@@ -1,5 +1,6 @@
 package io.github.lumi.gametest;
 
+import io.github.lumi.client.ui.LumiAmendConfirmationScreen;
 import io.github.lumi.client.ui.LumiBranchScreen;
 import io.github.lumi.client.ui.LumiBranchesScreen;
 import io.github.lumi.client.ui.LumiComparePickerScreen;
@@ -101,8 +102,16 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
         ui.assertFocusedText(LumiSaveScreen.class, "workflow-first");
         ui.assertButtonEventually(
                 LumiSaveScreen.class, "luma.action.amend_version", true);
+        ui.pressUniqueButton(
+                LumiSaveScreen.class, "luma.action.amend_version");
+        context.waitForScreen(LumiAmendConfirmationScreen.class);
+        ui.assertButton(LumiAmendConfirmationScreen.class, "gui.yes", true);
+        ui.assertButton(LumiAmendConfirmationScreen.class, "gui.no", true);
+        ui.pressUniqueButton(LumiAmendConfirmationScreen.class, "gui.no");
+        context.waitForScreen(LumiSaveScreen.class);
+        ui.assertFocusedText(LumiSaveScreen.class, "workflow-first");
         report.event("ui_contract", "amend_prefill", "succeeded", 0, 0,
-                "HIST-02 SAVE-04");
+                "HIST-02 SAVE-04 SAVE-10");
         ui.closeScreen(LumiSaveScreen.class, LumiDashboardScreen.class);
         ui.closeScreen(LumiDashboardScreen.class, null);
     }

@@ -72,6 +72,8 @@
   "luma.action.amend_version": "Remplacer la dernière sauvegarde",
   "luma.action.save_build.tooltip": "Enregistrez les modifications actuelles non enregistrées dans une nouvelle sauvegarde.",
   "luma.action.amend_version.tooltip": "Ajoutez les modifications actuelles non enregistrées à la dernière sauvegarde au lieu d'en créer une nouvelle.",
+  "luma.amend.confirm_title": "Remplacer la dernière sauvegarde ?",
+  "luma.amend.confirm_help": "La dernière sauvegarde sera mise à jour au lieu d'en créer une nouvelle. Continuer ?",
   "luma.action.see_changes.tooltip": "Comparez la dernière sauvegarde avec la version actuelle.",
   "luma.action.quick_rollback.tooltip": "Restaurez la dernière sauvegarde dans le monde.",
   "luma.action.return_before_restore.tooltip": "Revenez à l’état de construction enregistré avant la dernière restauration.",

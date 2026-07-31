@@ -72,6 +72,8 @@
   "luma.action.amend_version": "Ersetzen Sie die letzte Speicherung",
   "luma.action.save_build.tooltip": "Speichern Sie aktuelle, nicht gespeicherte Änderungen als neue Speicherung.",
   "luma.action.amend_version.tooltip": "Fügen Sie aktuelle, nicht gespeicherte Änderungen zum letzten Speicher hinzu, anstatt einen neuen zu erstellen.",
+  "luma.amend.confirm_title": "Letzten Speicherstand ersetzen?",
+  "luma.amend.confirm_help": "Dadurch wird der letzte Speicherstand aktualisiert, statt einen neuen zu erstellen. Fortfahren?",
   "luma.action.see_changes.tooltip": "Vergleichen Sie den letzten Speicherstand mit dem aktuellen Build.",
   "luma.action.quick_rollback.tooltip": "Stellen Sie den neuesten Speicherstand in der Welt wieder her.",
   "luma.action.return_before_restore.tooltip": "Kehren Sie zum vor der letzten Wiederherstellung gespeicherten Build-Status zurück.",

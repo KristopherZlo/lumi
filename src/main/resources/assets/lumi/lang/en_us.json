@@ -87,6 +87,8 @@
   "luma.action.amend_version": "Replace latest",
   "luma.action.save_build.tooltip": "Save current unsaved changes as a new save.",
   "luma.action.amend_version.tooltip": "Add current unsaved changes to the latest save instead of creating a new one.",
+  "luma.amend.confirm_title": "Replace the latest save?",
+  "luma.amend.confirm_help": "This updates the latest save instead of creating a new one. Continue?",
   "luma.action.see_changes.tooltip": "Compare the latest save with the current build.",
   "luma.action.quick_rollback.tooltip": "Restore the latest save into the world.",
   "luma.action.return_before_restore.tooltip": "Return to the build state saved before the last restore.",

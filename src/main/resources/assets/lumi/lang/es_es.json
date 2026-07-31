@@ -72,6 +72,8 @@
   "luma.action.amend_version": "Reemplazar último guardado",
   "luma.action.save_build.tooltip": "Guarde los cambios actuales no guardados como un nuevo guardado.",
   "luma.action.amend_version.tooltip": "Agregue los cambios actuales no guardados al último guardado en lugar de crear uno nuevo.",
+  "luma.amend.confirm_title": "¿Reemplazar el último guardado?",
+  "luma.amend.confirm_help": "Esto actualiza el último guardado en lugar de crear uno nuevo. ¿Continuar?",
   "luma.action.see_changes.tooltip": "Compare el último guardado con la compilación actual.",
   "luma.action.quick_rollback.tooltip": "Restaura la última copia guardada del mundo.",
   "luma.action.return_before_restore.tooltip": "Vuelva al estado de compilación guardado antes de la última restauración.",

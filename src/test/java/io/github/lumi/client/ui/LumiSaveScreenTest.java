@@ -13,9 +13,11 @@ class LumiSaveScreenTest {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiSaveScreen.java"));
 
-        assertTrue(source.contains("message.setValue(initialMessage)"));
+        assertTrue(source.contains("message.setValue(draftMessage)"));
+        assertTrue(source.contains("tags.setValue(draftTags)"));
         assertTrue(source.contains("preferredIntent == SaveScreenController.Intent.AMEND"));
-        assertTrue(source.contains("submit(preferredIntent)"));
+        assertTrue(source.contains("requestSubmit(preferredIntent)"));
+        assertTrue(source.contains("new LumiAmendConfirmationScreen("));
         assertFalse(source.contains("luma.action.refresh_preview"));
         assertTrue(source.contains("submission.requestId().orElseThrow()"));
         assertTrue(source.contains("accepted.accept(requestId)"));

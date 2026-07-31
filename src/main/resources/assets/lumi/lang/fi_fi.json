@@ -72,6 +72,8 @@
   "luma.action.amend_version": "Korvaa viimeisin tallennus",
   "luma.action.save_build.tooltip": "Tallenna nykyiset tallentamattomat muutokset uutena tallennusna.",
   "luma.action.amend_version.tooltip": "Lisää nykyiset tallentamattomat muutokset viimeisimpään tallennustilaan sen sijaan, että luot uuden.",
+  "luma.amend.confirm_title": "Korvataanko viimeisin tallennus?",
+  "luma.amend.confirm_help": "Tämä päivittää viimeisimmän tallennuksen uuden luomisen sijaan. Jatketaanko?",
   "luma.action.see_changes.tooltip": "Vertaa viimeisintä tallennusta nykyiseen koontiversioon.",
   "luma.action.quick_rollback.tooltip": "Palauta uusin tallennus maailmaan.",
   "luma.action.return_before_restore.tooltip": "Palaa ennen viimeistä palautusta tallennettuun rakennustilaan.",
