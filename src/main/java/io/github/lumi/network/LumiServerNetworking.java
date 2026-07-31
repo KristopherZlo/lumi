@@ -680,9 +680,11 @@ public final class LumiServerNetworking {
                         CommitKind.AMEND, save.tags()), terminal);
             }
             case RESTORE -> runtime.startRestore(
-                    new CommitId(new ObjectId(payload.argument())), author, terminal);
+                    expected, new CommitId(new ObjectId(payload.argument())), author,
+                    runtime.activeWorkspace().settings().includeEntitiesOnRestore(), terminal);
             case RESTORE_NO_ENTITIES -> runtime.startRestore(
-                    new CommitId(new ObjectId(payload.argument())), author, false, terminal);
+                    expected, new CommitId(new ObjectId(payload.argument())), author,
+                    false, terminal);
             case RESTORE_AREA -> {
                 PartialRestoreArgument partial = PartialRestoreArgument.parse(payload.argument());
                 yield runtime.startPartialRestore(

@@ -7,6 +7,7 @@ import java.util.Optional;
 
 /** Resolves current refs and scope only when queued work becomes active. */
 public final class DeferredDimensionMutation implements DimensionMutation {
+    private final Activation activation;
     private final Factory factory;
     private final boolean initialFreeze;
     private DimensionMutation delegate;
@@ -14,11 +15,21 @@ public final class DeferredDimensionMutation implements DimensionMutation {
     private boolean cancelled;
 
     public DeferredDimensionMutation(Factory factory) {
-        this(false, factory);
+        this(false, () -> { }, factory);
+    }
+
+    public DeferredDimensionMutation(Activation activation, Factory factory) {
+        this(false, activation, factory);
     }
 
     public DeferredDimensionMutation(boolean initialFreeze, Factory factory) {
+        this(initialFreeze, () -> { }, factory);
+    }
+
+    public DeferredDimensionMutation(
+            boolean initialFreeze, Activation activation, Factory factory) {
         this.initialFreeze = initialFreeze;
+        this.activation = Objects.requireNonNull(activation, "activation");
         this.factory = Objects.requireNonNull(factory, "factory");
     }
 
@@ -34,6 +45,7 @@ public final class DeferredDimensionMutation implements DimensionMutation {
         }
         if (delegate == null) {
             try {
+                activation.validate();
                 delegate = Objects.requireNonNull(factory.create(), "deferred mutation");
             } catch (IOException | RuntimeException failed) {
                 failure = failed;
@@ -112,6 +124,11 @@ public final class DeferredDimensionMutation implements DimensionMutation {
         if (delegate != null) {
             delegate.close();
         }
+    }
+
+    @FunctionalInterface
+    public interface Activation {
+        void validate() throws IOException;
     }
 
     @FunctionalInterface

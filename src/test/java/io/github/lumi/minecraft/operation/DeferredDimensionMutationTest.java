@@ -44,6 +44,25 @@ class DeferredDimensionMutationTest {
     }
 
     @Test
+    void validatesQueuedIntentBeforeCreatingItsDelegate() throws Exception {
+        AtomicInteger creations = new AtomicInteger();
+        IOException conflict = new IOException("history changed while queued");
+        DeferredDimensionMutation deferred = new DeferredDimensionMutation(
+                () -> { throw conflict; },
+                () -> {
+                    creations.incrementAndGet();
+                    return new OneTickMutation();
+                });
+
+        deferred.advance(1);
+
+        assertEquals(0, creations.get());
+        assertEquals(conflict, deferred.failure().orElseThrow());
+        assertEquals(MutationTerminalState.FAILED, deferred.terminalState());
+        assertTrue(deferred.isSafeToRelease());
+    }
+
+    @Test
     void canFreezeBeforeResolvingANoChangeOutcome() throws Exception {
         DeferredDimensionMutation deferred = new DeferredDimensionMutation(
                 true, () -> new NoChangeMutation("luma.status.nothing_to_restore"));

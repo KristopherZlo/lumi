@@ -845,19 +845,33 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             CommitAuthor author,
             boolean includeEntities,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        return startRestore(
+                activeRef(), target, author, includeEntities, terminalObserver);
+    }
+
+    public synchronized DimensionMutation startRestore(
+            BranchRef expected,
+            CommitId target,
+            CommitAuthor author,
+            boolean includeEntities,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
+        Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(author, "author");
         var operation = new DeferredDimensionMutation(
-                () -> createRestore(target, author, includeEntities));
+                () -> requireExpectedRef(expected),
+                () -> createRestore(expected, target, author, includeEntities));
         enqueueForeground(
                 operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
         return operation;
     }
 
     private DimensionMutation createRestore(
-            CommitId target, CommitAuthor author, boolean includeEntities) throws IOException {
-        BranchRef expected = activeRef();
+            BranchRef expected,
+            CommitId target,
+            CommitAuthor author,
+            boolean includeEntities) throws IOException {
         UUID workspaceId = activeWorkspaceId();
         restores.requireTargetInWorkspace(target, workspaceId);
         if (isRestoreNoOp(expected.commit(), target, mutations.hasPendingChanges())) {
@@ -2060,6 +2074,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public SavePreparation savePreparation() { return savePreparation; }
     public BranchRef activeRef() throws IOException {
         return historyViews.activeBranch();
+    }
+
+    private void requireExpectedRef(BranchRef expected) throws IOException {
+        if (!activeRef().equals(expected)) {
+            throw new IOException("History changed while operation was queued");
+        }
     }
     public UUID activeWorkspaceId() throws IOException { return selectedWorkspaceId; }
     public BlockEntityBaselineStore blockEntityBaselines() { return blockEntityBaselines; }
