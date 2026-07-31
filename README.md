@@ -42,9 +42,10 @@ return safely without copying the whole world folder or learning Git.
 - Integrates with normal Minecraft edits and supported WorldEdit and Axiom
   builder workflows.
 
-Lumi is singleplayer-first. Integrated and dedicated servers use the same
-server-authoritative operation path, revision checks, progress reporting, and
-final verification.
+Lumi uses one shared, server-authoritative world model in integrated and
+dedicated servers. Multiple builders can work in the same dimension; its active
+workspace, branch, and mutating history operation are global. Player-specific
+live branches are not virtualized.
 
 ## Quick Start
 
@@ -119,8 +120,10 @@ Lumi data is separate from vanilla chunk data:
 <world>/lumi/history/<dimension>/
 ```
 
-Removing Lumi leaves a normal playable Minecraft world. V2 starts a new history
-and does not import legacy patch-v9 or snapshot-v8 projects.
+A cleanly completed Lumi operation leaves a normal playable Minecraft world.
+If the server stops during Restore, keep Lumi installed until journal recovery
+finishes. Lumi V2 starts a new history and does not import legacy patch-v9 or
+snapshot-v8 projects.
 
 When there is no useful work, Lumi does no history processing. Long operations
 remain incremental and observable, while their working memory is bounded by the
