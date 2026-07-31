@@ -1147,9 +1147,19 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public synchronized DimensionMutation startBranchSwitch(
             BranchName target,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        return startBranchSwitch(activeRef(), target, terminalObserver);
+    }
+
+    public synchronized DimensionMutation startBranchSwitch(
+            BranchRef expected,
+            BranchName target,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
+        Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(target, "target");
-        var operation = new DeferredDimensionMutation(() -> createBranchSwitch(target));
+        var operation = new DeferredDimensionMutation(
+                () -> requireExpectedRef(expected),
+                () -> createBranchSwitch(target));
         enqueueForeground(
                 operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
         return operation;
@@ -1247,9 +1257,18 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public synchronized DimensionMutation startWorkspaceSwitch(
             UUID targetWorkspace,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        return startWorkspaceSwitch(activeRef(), targetWorkspace, terminalObserver);
+    }
+
+    public synchronized DimensionMutation startWorkspaceSwitch(
+            BranchRef expected,
+            UUID targetWorkspace,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
+        Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(targetWorkspace, "targetWorkspace");
         var operation = new DeferredDimensionMutation(
+                () -> requireExpectedRef(expected),
                 () -> createWorkspaceSwitch(targetWorkspace));
         enqueueForeground(
                 operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
@@ -1765,19 +1784,33 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             BlockAreaTarget area,
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        return startPartialRestore(
+                activeRef(), target, area, author, terminalObserver);
+    }
+
+    public synchronized DimensionMutation startPartialRestore(
+            BranchRef expected,
+            CommitId target,
+            BlockAreaTarget area,
+            CommitAuthor author,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
+        Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(area, "area");
         Objects.requireNonNull(author, "author");
         var operation = new DeferredDimensionMutation(
-                () -> createPartialRestore(target, area, author));
+                () -> requireExpectedRef(expected),
+                () -> createPartialRestore(expected, target, area, author));
         enqueueForeground(operation, OperationPriority.NORMAL, terminalObserver);
         return operation;
     }
 
     private ReturnPointRestoreOperation createPartialRestore(
-            CommitId target, BlockAreaTarget area, CommitAuthor author) throws IOException {
-        BranchRef expected = activeRef();
+            BranchRef expected,
+            CommitId target,
+            BlockAreaTarget area,
+            CommitAuthor author) throws IOException {
         UUID workspaceId = activeWorkspaceId();
         restores.requireTargetInWorkspace(target, workspaceId);
         UUID operationId = UUID.randomUUID();
@@ -1877,27 +1910,37 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     public synchronized DimensionMutation startQuickRollback(
             CommitAuthor author,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
+        return startQuickRollback(activeRef(), author, terminalObserver);
+    }
+
+    public synchronized DimensionMutation startQuickRollback(
+            BranchRef expected,
+            CommitAuthor author,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
+        Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(author, "author");
         var context = new AtomicReference<QuickRollbackContext>();
-        var operation = new DeferredDimensionMutation(true, () -> {
-            var workspace = activeWorkspace();
-            Map<HistoryKey, Long> generations = new HashMap<>();
-            mutations.snapshot().generations().forEach((key, generation) -> {
-                if (workspace.includes(key)) {
-                    generations.put(key, generation);
-                }
-            });
-            WorkingIndexSnapshot pending = new WorkingIndexSnapshot(generations);
-            if (pending.generations().isEmpty()) {
-                return new NoChangeMutation("luma.status.nothing_to_restore");
-            }
-            BranchRef expected = activeRef();
-            ReturnPointRestoreOperation rollback =
-                    createQuickRollback(author, pending, expected);
-            context.set(new QuickRollbackContext(expected, rollback));
-            return rollback;
-        });
+        var operation = new DeferredDimensionMutation(
+                true,
+                () -> requireExpectedRef(expected),
+                () -> {
+                    var workspace = activeWorkspace();
+                    Map<HistoryKey, Long> generations = new HashMap<>();
+                    mutations.snapshot().generations().forEach((key, generation) -> {
+                        if (workspace.includes(key)) {
+                            generations.put(key, generation);
+                        }
+                    });
+                    WorkingIndexSnapshot pending = new WorkingIndexSnapshot(generations);
+                    if (pending.generations().isEmpty()) {
+                        return new NoChangeMutation("luma.status.nothing_to_restore");
+                    }
+                    ReturnPointRestoreOperation rollback =
+                            createQuickRollback(author, pending, expected);
+                    context.set(new QuickRollbackContext(expected, rollback));
+                    return rollback;
+                });
         enqueueForeground(operation, OperationPriority.URGENT, completed -> {
             try {
                 if (completed.terminalState()
@@ -1975,7 +2018,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         requireCleanPartialPreview();
         partialRestorePreview = null;
         return createPartialRestore(
-                preview.plan().target(), preview.plan().area(), author);
+                preview.expectedRef(), preview.plan().target(),
+                preview.plan().area(), author);
     }
 
     private void requireCleanPartialPreview() {

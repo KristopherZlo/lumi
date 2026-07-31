@@ -688,17 +688,17 @@ public final class LumiServerNetworking {
             case RESTORE_AREA -> {
                 PartialRestoreArgument partial = PartialRestoreArgument.parse(payload.argument());
                 yield runtime.startPartialRestore(
-                        partial.target(), partial.area(), author, terminal);
+                        expected, partial.target(), partial.area(), author, terminal);
             }
             case RESTORE_AREA_APPLY -> runtime.startPlannedPartialRestore(
                     UUID.fromString(payload.argument()), author, terminal);
-            case QUICK_ROLLBACK -> runtime.startQuickRollback(author, terminal);
+            case QUICK_ROLLBACK -> runtime.startQuickRollback(expected, author, terminal);
             case UNDO -> runtime.startLiveAction(
                     player.getUUID(), LiveActionJournal.Direction.UNDO, terminal);
             case REDO -> runtime.startLiveAction(
                     player.getUUID(), LiveActionJournal.Direction.REDO, terminal);
             case BRANCH_SWITCH -> runtime.startBranchSwitch(
-                    new BranchName(payload.argument()), terminal);
+                    expected, new BranchName(payload.argument()), terminal);
             case BRANCH_CREATE -> runtime.startBranchCreation(
                     new BranchName(payload.argument().trim()), terminal);
             case BRANCH_CREATE_AT -> {
@@ -707,7 +707,7 @@ public final class LumiServerNetworking {
                         branch.name(), branch.startingPoint(), terminal);
             }
             case WORKSPACE_SWITCH -> runtime.startWorkspaceSwitch(
-                    UUID.fromString(payload.argument()), terminal);
+                    expected, UUID.fromString(payload.argument()), terminal);
             case RECOVER_RESUME -> runtime.startRecovery(
                     RecoveryChoice.RESUME_TARGET, terminal);
             case RECOVER_RETURN -> runtime.startRecovery(
