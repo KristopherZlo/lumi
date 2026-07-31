@@ -34,7 +34,7 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
         this.level = Objects.requireNonNull(level, "level");
         this.freeze = Objects.requireNonNull(freeze, "freeze");
         this.readiness = Objects.requireNonNull(readiness, "readiness");
-        ticketRadius = readiness == Readiness.TERRAIN ? 1 : 0;
+        ticketRadius = readiness == Readiness.TERRAIN_WITH_NEIGHBORS ? 1 : 0;
     }
 
     @Override
@@ -88,7 +88,7 @@ public final class MinecraftChunkLoadAccess implements ChunkLoadAccess {
 
     @Override
     public boolean isReady(ChunkCoordinate chunk) {
-        if (readiness == Readiness.TERRAIN) {
+        if (readiness != Readiness.TERRAIN_AND_ENTITIES) {
             return terrainReady(chunk);
         }
         ChunkPos position = position(chunk);

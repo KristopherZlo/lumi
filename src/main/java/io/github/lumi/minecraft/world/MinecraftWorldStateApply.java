@@ -87,7 +87,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         return new PreparedWorldMutationSession(
                 minecraft, world, System::nanoTime,
                 chunkLoads(minecraft.entityKeys().isEmpty()
-                        ? ChunkLoadAccess.Readiness.TERRAIN
+                        ? ChunkLoadAccess.Readiness.TERRAIN_WITH_NEIGHBORS
                         : ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES));
     }
 

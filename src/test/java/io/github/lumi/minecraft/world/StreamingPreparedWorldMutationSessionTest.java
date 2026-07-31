@@ -286,6 +286,32 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
+    void retainsNeighborTerrainOnlyForLightChangingWindows() throws Exception {
+        SectionKey key = new SectionKey(0, 0, 0);
+        SectionBlob target = glowstoneSection();
+        var source = new WorldStateApply.State(Map.of(key, target), Map.of());
+        var base = new WorldStateApply.State(Map.of(key, stoneSection()), Map.of());
+        var plan = new PreparedMinecraftPlanState(
+                source, base, Map.of(), Map.of(), List.of(key), List.of(), Set.of());
+        ControlledExecutor background = new ControlledExecutor();
+        List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
+
+        try (var session = session(
+                plan, new FakeWorld(target), background, readiness -> {
+                    requested.add(readiness);
+                    return new ChunkLoadSession(
+                            new RecordingChunkAccess(), () -> 0L);
+                })) {
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            background.runNext();
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+        }
+
+        assertEquals(List.of(
+                ChunkLoadAccess.Readiness.TERRAIN_WITH_NEIGHBORS), requested);
+    }
+
+    @Test
     void queuesNextSlabOnlyAfterTheCurrentSlabIsDurable() throws Exception {
         List<SectionKey> keys = new ArrayList<>();
         for (int sectionY = 0; sectionY < 1_025; sectionY++) {
@@ -498,6 +524,12 @@ class StreamingPreparedWorldMutationSessionTest {
     private static SectionBlob stoneSection() {
         return new SectionBlob(
                 Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:stone"),
+                Map.of());
+    }
+
+    private static SectionBlob glowstoneSection() {
+        return new SectionBlob(
+                Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:glowstone"),
                 Map.of());
     }
 

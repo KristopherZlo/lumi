@@ -6,6 +6,7 @@ import java.util.concurrent.CompletableFuture;
 public interface ChunkLoadAccess {
     enum Readiness {
         TERRAIN,
+        TERRAIN_WITH_NEIGHBORS,
         TERRAIN_AND_ENTITIES
     }
 

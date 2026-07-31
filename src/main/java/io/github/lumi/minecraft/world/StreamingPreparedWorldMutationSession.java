@@ -176,9 +176,10 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             }
             batchEnd = windowEnd(plan.sectionKeys(), batchStart, slabEnd);
             boolean lastWindow = batchEnd == slabEnd;
+            PreparedMinecraftState window = nextSectionWindow();
             current = new PreparedWorldMutationSession(
-                    nextSectionWindow(), world, System::nanoTime,
-                    chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN), metrics,
+                    window, world, System::nanoTime,
+                    chunkLoads.apply(sectionReadiness(window)), metrics,
                     lastWindow
                             ? PreparedWorldMutationSession.PersistenceMode.SLAB_END
                             : PreparedWorldMutationSession.PersistenceMode.STAGE,
@@ -411,6 +412,16 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         return new PreparedMinecraftState(
                 new WorldStateApply.State(source, Map.of()),
                 sections, Map.of(), keys, List.of());
+    }
+
+    private static ChunkLoadAccess.Readiness sectionReadiness(
+            PreparedMinecraftState window) {
+        boolean needsNeighbors = window.sections().values().stream()
+                .anyMatch(section -> !section.hasPreparedDelta()
+                        || section.preparedDelta().lightChanged());
+        return needsNeighbors
+                ? ChunkLoadAccess.Readiness.TERRAIN_WITH_NEIGHBORS
+                : ChunkLoadAccess.Readiness.TERRAIN;
     }
 
     private PreparedMinecraftState nextEntityBatch() {
