@@ -369,6 +369,13 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         return new Timings(writeNanos, syncNanos, verificationNanos);
     }
 
+    @Override
+    public void close() {
+        if (verifier != null) {
+            verifier.close();
+        }
+    }
+
     private enum Phase {
         LIGHTING, CHUNKS, ENTITIES, PLAYERS, SYNCHRONIZING, VERIFYING, COMPLETE
     }

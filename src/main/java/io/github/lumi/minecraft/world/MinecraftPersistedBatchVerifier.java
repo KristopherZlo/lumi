@@ -16,7 +16,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
 
-/** Rereads one synchronized Restore batch without materializing whole-world state. */
+/** Pipelines bounded reread windows over one synchronized Restore target. */
 final class MinecraftPersistedBatchVerifier {
     private static final int MAX_PENDING_READS =
             StreamingPreparedWorldMutationSession.MAX_CHUNKS;
@@ -31,9 +31,8 @@ final class MinecraftPersistedBatchVerifier {
     private CompletableFuture<Void> verification;
     private int nextSection;
     private int nextEntityChunk;
-    private int pendingSectionEnd;
-    private int pendingEntityEnd;
     private volatile String phase = "persisted chunk verification";
+    private volatile boolean closed;
 
     MinecraftPersistedBatchVerifier(
             ServerLevel level,
@@ -58,35 +57,48 @@ final class MinecraftPersistedBatchVerifier {
     }
 
     boolean advanceUntil(long deadlineNanos) throws IOException {
-        while (System.nanoTime() < deadlineNanos) {
-            if (verification == null) {
-                if (nextSection == sections.size()
-                        && nextEntityChunk == entityChunks.size()) {
-                    return true;
-                }
-                verification = beginVerification();
-            }
-            if (!verification.isDone()) {
+        if (nextSection == sections.size()
+                && nextEntityChunk == entityChunks.size()) {
+            return true;
+        }
+        if (verification == null) {
+            if (System.nanoTime() >= deadlineNanos) {
                 return false;
             }
-            MinecraftPersistenceFuture.join(
-                    verification, "Restore persisted verification");
-            nextSection = pendingSectionEnd;
-            nextEntityChunk = pendingEntityEnd;
-            verification = null;
+            verification = verifyRemaining(nextSection, nextEntityChunk);
         }
+        if (!verification.isDone()) {
+            return false;
+        }
+        MinecraftPersistenceFuture.join(
+                verification, "Restore persisted verification");
         return nextSection == sections.size()
                 && nextEntityChunk == entityChunks.size();
     }
 
-    private CompletableFuture<Void> beginVerification() {
-        pendingSectionEnd = StreamingPreparedWorldMutationSession.windowEnd(
-                sections, nextSection, sections.size());
+    private CompletableFuture<Void> verifyRemaining(
+            int sectionStart, int entityStart) {
+        PendingVerification pending = beginVerification(sectionStart, entityStart);
+        return pending.future().thenComposeAsync(ignored -> {
+            nextSection = pending.sectionEnd();
+            nextEntityChunk = pending.entityEnd();
+            if (closed || (nextSection == sections.size()
+                    && nextEntityChunk == entityChunks.size())) {
+                return CompletableFuture.completedFuture(null);
+            }
+            return verifyRemaining(nextSection, nextEntityChunk);
+        }, background);
+    }
+
+    private PendingVerification beginVerification(
+            int sectionStart, int entityStart) {
+        int sectionEnd = StreamingPreparedWorldMutationSession.windowEnd(
+                sections, sectionStart, sections.size());
         Map<ChunkCoordinate, Map<SectionKey, SectionBlob>> chunkTargets =
-                sectionTargets(nextSection, pendingSectionEnd);
+                sectionTargets(sectionStart, sectionEnd);
         int remaining = MAX_PENDING_READS - chunkTargets.size();
-        pendingEntityEnd = readBatchEnd(
-                entityChunks.size(), nextEntityChunk, remaining);
+        int entityEnd = readBatchEnd(
+                entityChunks.size(), entityStart, remaining);
         List<CompletableFuture<Void>> pending = new ArrayList<>(MAX_PENDING_READS);
         for (var entry : chunkTargets.entrySet()) {
             ChunkCoordinate chunk = entry.getKey();
@@ -111,7 +123,7 @@ final class MinecraftPersistedBatchVerifier {
                         }
                     }, background));
         }
-        for (int index = nextEntityChunk; index < pendingEntityEnd; index++) {
+        for (int index = entityStart; index < entityEnd; index++) {
             EntityChunkKey key = entityChunks.get(index);
             EntityChunkBlob expected = target.entities().get(key);
             ChunkPos position = new ChunkPos(key.chunkX(), key.chunkZ());
@@ -128,12 +140,14 @@ final class MinecraftPersistedBatchVerifier {
                         }
                     }, background));
         }
-        phase = nextEntityChunk == pendingEntityEnd
+        phase = entityStart == entityEnd
                 ? "persisted chunk verification"
-                : nextSection == pendingSectionEnd
+                : sectionStart == sectionEnd
                         ? "persisted entity verification"
                         : "persisted chunk/entity verification";
-        return CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new));
+        return new PendingVerification(
+                sectionEnd, entityEnd,
+                CompletableFuture.allOf(pending.toArray(CompletableFuture[]::new)));
     }
 
     private Map<ChunkCoordinate, Map<SectionKey, SectionBlob>> sectionTargets(
@@ -160,4 +174,16 @@ final class MinecraftPersistedBatchVerifier {
     String phase() {
         return phase;
     }
+
+    void close() {
+        closed = true;
+        if (verification != null) {
+            verification.cancel(false);
+        }
+    }
+
+    private record PendingVerification(
+            int sectionEnd,
+            int entityEnd,
+            CompletableFuture<Void> future) { }
 }
