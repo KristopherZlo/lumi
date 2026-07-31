@@ -144,7 +144,7 @@ public final class LumiOperationHud {
             drawClipped(graphics,
                     action + "+" + binding(client, "key.lumi.open_dashboard")
                             + " history · "
-                            + binding(client, "key.lumi.quick_rollback")
+                            + action + "+" + binding(client, "key.lumi.quick_rollback")
                             + " rollback",
                     x + 6, 48, width - 12, 0xfff0f3f6);
             drawClipped(graphics,

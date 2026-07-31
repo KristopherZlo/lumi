@@ -82,8 +82,8 @@ public final class LumiHotkeys {
             dispatcher.dispatch(HotkeyActionDispatcher.Action.DASHBOARD);
         }
         consume(compare, normalPlay, HotkeyActionDispatcher.Action.COMPARE_OVERLAY);
-        consume(rollback, normalPlay, HotkeyActionDispatcher.Action.QUICK_ROLLBACK);
         boolean canUseChord = normalPlay && altDown;
+        consume(rollback, canUseChord, HotkeyActionDispatcher.Action.QUICK_ROLLBACK);
         consume(save, canUseChord, HotkeyActionDispatcher.Action.SAVE);
         consume(undo, canUseChord, HotkeyActionDispatcher.Action.UNDO);
         consume(redo, canUseChord, HotkeyActionDispatcher.Action.REDO);
@@ -178,7 +178,7 @@ public final class LumiHotkeys {
                         mapping(mappings, "key.lumi.action_modifier"), false),
                 shortcut("luma.hotkeys.quick_rollback",
                         "luma.hotkeys.quick_rollback_help",
-                        mapping(mappings, "key.lumi.quick_rollback"), false),
+                        mapping(mappings, "key.lumi.quick_rollback"), true),
                 shortcut("luma.hotkeys.shortcut_info",
                         "luma.hotkeys.shortcut_info_help",
                         mapping(mappings, "key.lumi.hotkey_info"), true));
