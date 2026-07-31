@@ -26,6 +26,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -298,6 +299,41 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
+    void keepsResidentChunksInOneDurabilityWindow() {
+        List<SectionKey> keys = new ArrayList<>();
+        for (int chunk = 0; chunk < 40; chunk++) {
+            keys.add(new SectionKey(chunk, 0, 0));
+        }
+
+        assertEquals(40, StreamingPreparedWorldMutationSession.windowEnd(
+                keys, 0, keys.size(), ignored -> true));
+    }
+
+    @Test
+    void persistsResidentChunksAsOneWindow() throws Exception {
+        List<SectionKey> keys = new ArrayList<>();
+        for (int chunk = 0; chunk < 40; chunk++) {
+            keys.add(new SectionKey(chunk, 0, 0));
+        }
+        SectionBlob section = stoneSection();
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(section);
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+
+        try (var session = session(
+                plan(keys, section), world, background,
+                ignored -> new ChunkLoadSession(chunks, () -> 0L),
+                ignored -> true)) {
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            background.runNext();
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+
+            assertEquals(List.of(40), world.persistenceWindowSizes());
+            assertEquals(40, chunks.peak);
+        }
+    }
+
+    @Test
     void retainsNeighborTerrainOnlyForLightChangingWindows() throws Exception {
         SectionKey key = new SectionKey(0, 0, 0);
         SectionBlob target = glowstoneSection();
@@ -467,12 +503,21 @@ class StreamingPreparedWorldMutationSessionTest {
             FakeWorld world,
             ControlledExecutor background,
             Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads) {
+        return session(plan, world, background, chunkLoads, ignored -> false);
+    }
+
+    private static StreamingPreparedWorldMutationSession session(
+            PreparedMinecraftPlanState plan,
+            FakeWorld world,
+            ControlledExecutor background,
+            Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads,
+            Predicate<ChunkCoordinate> resident) {
         return new StreamingPreparedWorldMutationSession(
                 plan,
                 new MinecraftRestorePreparation(
                         new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                         new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)),
-                world, background, chunkLoads);
+                world, background, chunkLoads, resident);
     }
 
     private static void startFirstMutation(

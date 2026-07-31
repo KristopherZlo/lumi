@@ -79,7 +79,8 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         if (target instanceof PreparedMinecraftPlanState plan) {
             return new StreamingPreparedWorldMutationSession(
                     plan, preparation, world, background,
-                    this::chunkLoads);
+                    this::chunkLoads, chunk -> level.getChunkSource().getChunkNow(
+                            chunk.x(), chunk.z()) != null);
         }
         if (!(target instanceof PreparedMinecraftState minecraft)) {
             throw new IllegalArgumentException("Restore state was not prepared for Minecraft");

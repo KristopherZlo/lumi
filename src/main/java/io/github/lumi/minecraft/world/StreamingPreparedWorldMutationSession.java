@@ -20,8 +20,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
-/** Decodes an estimated 128 MiB, then applies and persists it in 32-chunk windows. */
+/** Decodes an estimated 128 MiB, then applies it in bounded residency windows. */
 final class StreamingPreparedWorldMutationSession implements WorldStateApply.ApplySession {
     static final int MAX_CHUNKS = 32;
     static final long MAX_ESTIMATED_BYTES = 128L * 1024 * 1024;
@@ -40,6 +41,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private final PreparedWorldAccess world;
     private final Executor background;
     private final Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads;
+    private final Predicate<ChunkCoordinate> resident;
     private final RestoreApplyMetrics metrics = new RestoreApplyMetrics();
     private final Set<ChunkCoordinate> slabStored = new HashSet<>();
     private int batchStart;
@@ -75,11 +77,22 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             PreparedWorldAccess world,
             Executor background,
             Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads) {
+        this(plan, preparation, world, background, chunkLoads, ignored -> false);
+    }
+
+    StreamingPreparedWorldMutationSession(
+            PreparedMinecraftPlanState plan,
+            MinecraftRestorePreparation preparation,
+            PreparedWorldAccess world,
+            Executor background,
+            Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads,
+            Predicate<ChunkCoordinate> resident) {
         this.plan = Objects.requireNonNull(plan, "plan");
         this.preparation = Objects.requireNonNull(preparation, "preparation");
         this.world = Objects.requireNonNull(world, "world");
         this.background = Objects.requireNonNull(background, "background");
         this.chunkLoads = Objects.requireNonNull(chunkLoads, "chunkLoads");
+        this.resident = Objects.requireNonNull(resident, "resident");
         entityKeys = plan.entityKeys();
     }
 
@@ -177,7 +190,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 slab = claimPrepared();
                 slabEnd = batchStart + slab.sectionKeys().size();
             }
-            batchEnd = windowEnd(plan.sectionKeys(), batchStart, slabEnd);
+            batchEnd = windowEnd(
+                    plan.sectionKeys(), batchStart, slabEnd, resident);
             PreparedMinecraftState window = nextSectionWindow();
             current = new PreparedWorldMutationSession(
                     window, world, System::nanoTime,
@@ -486,18 +500,29 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     }
 
     static int windowEnd(List<SectionKey> keys, int start, int limit) {
-        int chunks = 0;
+        return windowEnd(keys, start, limit, ignored -> false);
+    }
+
+    static int windowEnd(
+            List<SectionKey> keys,
+            int start,
+            int limit,
+            Predicate<ChunkCoordinate> resident) {
+        int nonResidentChunks = 0;
         SectionKey previous = null;
         int end = start;
         int boundedLimit = Math.min(keys.size(), limit);
         while (end < boundedLimit) {
             SectionKey key = keys.get(end);
             boolean newChunk = previous == null || !sameChunk(previous, key);
-            if (end > start && newChunk && chunks == MAX_CHUNKS) {
-                break;
-            }
             if (newChunk) {
-                chunks++;
+                boolean loaded = resident.test(ChunkCoordinate.from(key));
+                if (end > start && !loaded && nonResidentChunks == MAX_CHUNKS) {
+                    break;
+                }
+                if (!loaded) {
+                    nonResidentChunks++;
+                }
             }
             previous = key;
             end++;

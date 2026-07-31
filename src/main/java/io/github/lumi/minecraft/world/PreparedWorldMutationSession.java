@@ -134,7 +134,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             throw new IllegalArgumentException(
                     "Persistence verification order must contain every target key once");
         }
-        bulkLoading = chunks != null && fitsBulkWindow(sections, entities);
+        bulkLoading = chunks != null && (persistenceMode == PersistenceMode.STAGE
+                || fitsBulkWindow(sections, entities));
         storedClassificationComplete = sections.isEmpty();
         playerSpawnsVerified = !playerSpawnsIncluded;
         apply = new MutationCursor();
