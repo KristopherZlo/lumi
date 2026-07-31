@@ -11,6 +11,7 @@ import io.github.lumi.mixin.SectionStoragePersistenceAccessor;
 import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,6 +42,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private final List<EntityChunkKey> entityChunks;
     private final List<PlayerTarget> players;
     private final Set<ChunkCoordinate> relightChunks;
+    private final Set<ChunkCoordinate> lightSyncChunks;
     private final Set<ChunkCoordinate> poiChunks;
     private final SimpleRegionStorage entityStorage;
     private final MinecraftPersistedBatchVerifier verifier;
@@ -49,12 +51,14 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private final Map<ChunkCoordinate, Integer> pendingSnapshots =
             new LinkedHashMap<>();
     private final List<ChunkCoordinate> acceptedSnapshots = new ArrayList<>();
+    private final int firstLightAffectedChunk;
     private int nextChunk;
     private int nextEntityChunk;
     private int nextPlayer;
     private CompletableFuture<Void> lighting;
     private CompletableFuture<Void> synchronization;
-    private Phase phase = Phase.LIGHTING;
+    private Phase phase = Phase.CHUNKS;
+    private boolean lightingSynchronized;
     private long phaseStartedNanos;
     private long writeNanos;
     private long syncNanos;
@@ -103,9 +107,20 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                 }
             }
         });
-        chunks = List.copyOf(grouped.keySet());
         chunkVerificationRequired = !verificationSections.isEmpty();
         relightChunks = Set.copyOf(relight);
+        lightSyncChunks = surroundingChunks(relightChunks);
+        List<ChunkCoordinate> orderedChunks = new ArrayList<>(grouped.size());
+        orderedChunks.addAll(grouped.keySet());
+        orderedChunks.sort(Comparator.comparing(lightSyncChunks::contains));
+        int firstAffected = 0;
+        while (firstAffected < orderedChunks.size()
+                && !lightSyncChunks.contains(orderedChunks.get(firstAffected))) {
+            firstAffected++;
+        }
+        firstLightAffectedChunk = firstAffected;
+        chunks = List.copyOf(orderedChunks);
+        lightingSynchronized = relightChunks.isEmpty();
         poiChunks = Set.copyOf(poi);
         poiSyncRequired = forceAndVerify && chunkVerificationRequired;
         entityChunks = writeTarget.entityKeys();
@@ -148,6 +163,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     @Override
     public boolean advanceUntil(long deadlineNanos) throws IOException {
         try {
+            startLighting();
             while (phase != Phase.COMPLETE && System.nanoTime() < deadlineNanos) {
                 boolean advanced = switch (phase) {
                     case LIGHTING -> awaitLighting();
@@ -168,46 +184,58 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         }
     }
 
-    private boolean awaitLighting() throws IOException {
+    private void startLighting() {
         if (lighting == null) {
             lighting = CompletableFuture.allOf(relightChunks.stream()
                     .map(chunk -> level.getChunkSource().getLightEngine()
                             .waitForPendingTasks(chunk.x(), chunk.z()))
                     .toArray(CompletableFuture[]::new));
         }
+    }
+
+    private boolean awaitLighting() throws IOException {
         if (!lighting.isDone()) {
             return false;
         }
         MinecraftPersistenceFuture.join(lighting, "Restore lighting");
         synchronizeLighting();
+        lightingSynchronized = true;
         transitionTo(Phase.CHUNKS);
         return true;
     }
 
     private void synchronizeLighting() {
-        Set<ChunkCoordinate> synchronizedChunks = new HashSet<>();
-        for (ChunkCoordinate changed : relightChunks) {
-            for (int offsetX = -1; offsetX <= 1; offsetX++) {
-                for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
-                    ChunkCoordinate coordinate = new ChunkCoordinate(
-                            changed.x() + offsetX, changed.z() + offsetZ);
-                    if (!synchronizedChunks.add(coordinate)) {
-                        continue;
-                    }
-                    ChunkPos position = new ChunkPos(coordinate.x(), coordinate.z());
-                    var players = level.getChunkSource().chunkMap.getPlayers(position, false);
-                    if (players.isEmpty()) {
-                        continue;
-                    }
-                    var packet = new ClientboundLightUpdatePacket(
-                            position, level.getLightEngine(), null, null);
-                    players.forEach(player -> player.connection.send(packet));
-                }
+        for (ChunkCoordinate coordinate : lightSyncChunks) {
+            ChunkPos position = new ChunkPos(coordinate.x(), coordinate.z());
+            var players = level.getChunkSource().chunkMap.getPlayers(position, false);
+            if (players.isEmpty()) {
+                continue;
             }
+            var packet = new ClientboundLightUpdatePacket(
+                    position, level.getLightEngine(), null, null);
+            players.forEach(player -> player.connection.send(packet));
         }
     }
 
+    private static Set<ChunkCoordinate> surroundingChunks(
+            Set<ChunkCoordinate> chunks) {
+        Set<ChunkCoordinate> surrounding = new HashSet<>();
+        for (ChunkCoordinate chunk : chunks) {
+            for (int offsetX = -1; offsetX <= 1; offsetX++) {
+                for (int offsetZ = -1; offsetZ <= 1; offsetZ++) {
+                    surrounding.add(new ChunkCoordinate(
+                            chunk.x() + offsetX, chunk.z() + offsetZ));
+                }
+            }
+        }
+        return Set.copyOf(surrounding);
+    }
+
     private boolean saveChunk() throws IOException {
+        if (!lightingSynchronized && nextChunk == firstLightAffectedChunk) {
+            transitionTo(Phase.LIGHTING);
+            return true;
+        }
         if (nextChunk == chunks.size()) {
             transitionTo(Phase.ENTITIES);
             return true;
