@@ -134,6 +134,11 @@ final class LumiHistoryBenchmarkScenario {
 
     private void runPlayerScale(LumiUiTestDriver ui) throws IOException {
         PreparedHistory history = preparePlayerScale(ui);
+        if (config.saveOnly()) {
+            report.event("benchmark", "configuration", "succeeded", 0, 0,
+                    config.describe() + ";saves=" + history.commits().size());
+            return;
+        }
         var checks = new LumiBehaviorChecks(context, singleplayer, report);
         List<CommitId> commits = history.commits();
         String restoreBranch = operations.activeBranch().value();

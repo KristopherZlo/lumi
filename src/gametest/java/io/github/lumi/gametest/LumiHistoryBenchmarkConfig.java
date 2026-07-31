@@ -18,7 +18,8 @@ record LumiHistoryBenchmarkConfig(
         long seed,
         ChunkPath chunkPath,
         OperationMode operation,
-        Profile profile) {
+        Profile profile,
+        boolean saveOnly) {
     static final String PREFIX = "lumi.benchmark.";
     static final String ENABLED_PROPERTY = PREFIX + "enabled";
     private static final long MAX_LIVE_FIXTURE_CHUNKS = 1_089;
@@ -46,6 +47,10 @@ record LumiHistoryBenchmarkConfig(
             throw new IllegalArgumentException(
                     "player-scale-30 requires 512x512x16, 30 commits, "
                             + "natural chunks, and restore operation");
+        }
+        if (saveOnly && profile != Profile.PLAYER_SCALE_30) {
+            throw new IllegalArgumentException(
+                    "saveOnly requires player-scale-30");
         }
         if (operation == OperationMode.BRANCH_SWITCH) {
             if (restoreSamples != 3) {
@@ -97,7 +102,8 @@ record LumiHistoryBenchmarkConfig(
             return new LumiHistoryBenchmarkConfig(
                     512, 512, 16, 30, 8, 5,
                     Long.getLong(PREFIX + "seed", 710L),
-                    chunkPath, operation, profile);
+                    chunkPath, operation, profile,
+                    Boolean.getBoolean(PREFIX + "saveOnly"));
         }
         return new LumiHistoryBenchmarkConfig(
                 integer("baseSize", 64),
@@ -111,7 +117,8 @@ record LumiHistoryBenchmarkConfig(
                 Long.getLong(PREFIX + "seed", 710L),
                 chunkPath,
                 operation,
-                profile);
+                profile,
+                false);
     }
 
     void requireRunnableFixture() {
@@ -143,7 +150,8 @@ record LumiHistoryBenchmarkConfig(
         return String.format(Locale.ROOT, "history-benchmark-%dx%dx%d-%d%s%s",
                 baseSize, baseSize, layers, commits,
                 operation.reportSuffix(), chunkPath.reportSuffix()
-                        + profile.reportSuffix());
+                        + profile.reportSuffix()
+                        + (saveOnly ? "-save-only" : ""));
     }
 
     String describe() {
@@ -157,6 +165,7 @@ record LumiHistoryBenchmarkConfig(
                 + ";seed=" + seed
                 + ";chunkPath=" + chunkPath.propertyValue
                 + operation.describeSuffix()
+                + (saveOnly ? ";saveOnly=true" : "")
                 + ";baseBlocks=" + baseBlocks()
                 + (profile == Profile.PLAYER_SCALE_30
                         ? ";changedBlocksRange=1..4194304"
