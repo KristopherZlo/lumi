@@ -66,6 +66,17 @@ class LumiServerNetworkingTest {
     }
 
     @Test
+    void disconnectCancelsOnlyQueuedMutationOwnership() throws Exception {
+        String source = networkingSource();
+        int cleanup = source.indexOf("private static void cleanupPlayer(");
+        int clear = source.indexOf("private static void clearState()", cleanup);
+        String disconnect = source.substring(cleanup, clear);
+
+        assertTrue(disconnect.contains("operations().cancelQueued("));
+        assertFalse(disconnect.contains("operations().cancel("));
+    }
+
+    @Test
     void readsZoneOverlaysFromCurrentHistoryWithoutTheMutationGuard() throws Exception {
         String source = networkingSource();
         int overlay = source.indexOf(

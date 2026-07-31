@@ -316,32 +316,50 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             clearTerminalIfSafe();
             return true;
         }
+        return cancelQueued(ticket);
+    }
+
+    /** Cancels only work that has not acquired dimension ownership. */
+    public synchronized boolean cancelQueued(OperationTicket ticket) throws IOException {
+        Objects.requireNonNull(ticket, "ticket");
         for (int index = 0; index < queued.size(); index++) {
             QueuedOperation entry = queued.get(index);
             if (!entry.ticket().equals(ticket)) {
                 continue;
             }
-            entry.operation().close();
-            DimensionMutation outcome = entry.operation();
-            queued.remove(index);
-            positionObservers.remove(ticket);
-            progressObservers.remove(ticket);
-            freezeObservers.remove(ticket);
-            freezeReleaseObservers.remove(ticket);
-            Consumer<DimensionMutation> ticketObserver =
-                    terminalObservers.remove(ticket);
-            publishedProgress.remove(ticket);
-            if (outcome.isTerminal()) {
-                notifyObserver(terminalObserver, outcome, "global terminal");
-                notifyObserver(entry.observer(), outcome, "request terminal");
-                if (ticketObserver != null) {
-                    notifyObserver(ticketObserver, outcome, "ticket terminal");
-                }
-            }
-            notifyPositions();
+            cancelQueued(index, entry);
             return true;
         }
         return false;
+    }
+
+    private void cancelQueued(int index, QueuedOperation entry) throws IOException {
+        OperationTicket ticket = entry.ticket();
+        queued.remove(index);
+        positionObservers.remove(ticket);
+        progressObservers.remove(ticket);
+        freezeObservers.remove(ticket);
+        freezeReleaseObservers.remove(ticket);
+        Consumer<DimensionMutation> ticketObserver = terminalObservers.remove(ticket);
+        publishedProgress.remove(ticket);
+        IOException closeFailure = null;
+        try {
+            entry.operation().close();
+        } catch (IOException failed) {
+            closeFailure = failed;
+        }
+        DimensionMutation outcome = entry.operation();
+        if (outcome.isTerminal()) {
+            notifyObserver(terminalObserver, outcome, "global terminal");
+            notifyObserver(entry.observer(), outcome, "request terminal");
+            if (ticketObserver != null) {
+                notifyObserver(ticketObserver, outcome, "ticket terminal");
+            }
+        }
+        notifyPositions();
+        if (closeFailure != null) {
+            throw closeFailure;
+        }
     }
 
     public synchronized void observeQueuePosition(

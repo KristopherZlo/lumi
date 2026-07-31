@@ -23,6 +23,7 @@ import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
@@ -475,7 +476,7 @@ public final class LumiServerNetworking {
             Started started,
             HudDisplayMode hudDisplayMode) {
         TICKET_OWNERS.put(started.ticket().id(),
-                new TicketOwner(player.getUUID(), payload.requestId()));
+                new TicketOwner(player.getUUID(), payload.requestId(), runtime));
         LumiMod.LOGGER.info(
                 "Lumi request {} received operation ticket {}",
                 payload.requestId(), started.ticket().id());
@@ -513,9 +514,19 @@ public final class LumiServerNetworking {
         PACKAGE_INSPECTIONS.remove(playerId);
         PENDING_REFRESHES.remove(playerId);
         TICKET_OWNERS.forEach((ticketId, owner) -> {
-            if (owner.playerId().equals(playerId)
-                    && TICKET_OWNERS.remove(ticketId, owner)) {
-                removeBossBar(ticketId);
+            if (!owner.playerId().equals(playerId)) {
+                return;
+            }
+            try {
+                owner.runtime().operations().cancelQueued(new OperationTicket(ticketId));
+            } catch (IOException failed) {
+                LumiMod.LOGGER.error(
+                        "Cannot cancel disconnected player's queued Lumi operation {}",
+                        ticketId, failed);
+            } finally {
+                if (TICKET_OWNERS.remove(ticketId, owner)) {
+                    removeBossBar(ticketId);
+                }
             }
         });
     }
@@ -1084,7 +1095,14 @@ public final class LumiServerNetworking {
     }
 
     private record Started(OperationTicket ticket) { }
-    private record TicketOwner(UUID playerId, UUID requestId) { }
+    private record TicketOwner(
+            UUID playerId, UUID requestId, FabricDimensionRuntime runtime) {
+        private TicketOwner {
+            Objects.requireNonNull(playerId, "playerId");
+            Objects.requireNonNull(requestId, "requestId");
+            Objects.requireNonNull(runtime, "runtime");
+        }
+    }
     private record PendingPackage(
             UUID token,
             String dimensionId,

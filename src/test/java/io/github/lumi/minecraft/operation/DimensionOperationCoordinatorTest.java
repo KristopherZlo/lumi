@@ -80,14 +80,17 @@ class DimensionOperationCoordinatorTest {
         DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
                 new RecordingFreeze(), () -> 0L, 1L,
                 operation -> global.add(operation.terminalState()));
-        coordinator.start(new TwoTickMutation(false));
+        TwoTickMutation activeMutation = new TwoTickMutation(false);
+        coordinator.start(activeMutation);
+        OperationTicket active = coordinator.ticketOf(activeMutation).orElseThrow();
         OperationTicket queued = coordinator.enqueue(
                 new CancellableMutation(), OperationPriority.NORMAL,
                 operation -> request.add(operation.terminalState()));
         coordinator.observeTerminal(
                 queued, operation -> ticket.add(operation.terminalState()));
 
-        assertTrue(coordinator.cancel(queued));
+        assertTrue(!coordinator.cancelQueued(active));
+        assertTrue(coordinator.cancelQueued(queued));
         assertEquals(0, coordinator.queuedCount());
         assertEquals(java.util.List.of(MutationTerminalState.CANCELLED), global);
         assertEquals(java.util.List.of(MutationTerminalState.CANCELLED), request);
