@@ -243,17 +243,15 @@ final class LumiHistoryBenchmarkScenario {
 
     private CommitId measureImmediateSave(String name, int pendingKeys)
             throws IOException {
-        long started = System.nanoTime();
-        CommitId commit = operations.save(name);
-        long elapsed = (System.nanoTime() - started) / 1_000_000;
-        report.event("save_metrics", name, "measured", 0, elapsed,
+        LumiBehaviorOperations.MeasuredSave save = operations.measureSave(name);
+        report.event("save_metrics", name, "measured", 0, save.millis(),
                 "pendingKeys=" + pendingKeys + ";durability=save-owned");
-        if (elapsed > MAX_IMMEDIATE_SAVE_MILLIS) {
-            throw new AssertionError(name + " immediate Save took " + elapsed
+        if (save.millis() > MAX_IMMEDIATE_SAVE_MILLIS) {
+            throw new AssertionError(name + " immediate Save took " + save.millis()
                     + " ms; limit=" + MAX_IMMEDIATE_SAVE_MILLIS
                     + " ms; pendingKeys=" + pendingKeys);
         }
-        return commit;
+        return save.commit();
     }
 
     BranchFixture prepareBranchSwitch(LumiUiTestDriver ui) throws IOException {

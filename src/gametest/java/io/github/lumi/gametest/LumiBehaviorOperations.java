@@ -99,7 +99,17 @@ final class LumiBehaviorOperations {
     }
 
     CommitId save(String name) throws IOException {
-        return runOperation("save_" + name, () -> ui.save(name)).head();
+        return measureSave(name).commit();
+    }
+
+    MeasuredSave measureSave(String name) throws IOException {
+        awaitHistoryReady();
+        long started = System.nanoTime();
+        OperationEventPayload event = awaitOperation(
+                "save_" + name,
+                send("save_" + name, () -> ui.save(name), started),
+                new AtomicReference<>(), started);
+        return new MeasuredSave(event.head(), elapsedMillis(started));
     }
 
     SavedBoundary save(String name, List<BlockBox> areas) throws IOException {
@@ -646,6 +656,8 @@ final class LumiBehaviorOperations {
             Objects.requireNonNull(snapshot, "snapshot");
         }
     }
+
+    record MeasuredSave(CommitId commit, long millis) { }
 
     @FunctionalInterface
     private interface ClientAction { void run(); }

@@ -477,3 +477,17 @@ Failure correctness/crash/idempotence блокирует release независ�
 Архитектура Lumi согласована с задачей безопасной истории строительных изменений: published history immutable, stale publication блокируется CAS, live mutations получают durable origins до vanilla save, Restore публикует указатели только после apply/verify/persist/reread, а недоказанное состояние не выпускается из freeze. Математическая стоимость Save и endpoint Compare определяется разреженной областью изменений; стоимость block-exact Restore дополнительно линейна по числу декодируемых секций и их 4096 cells.
 
 Надёжность старой истории обоснована кодом и unit/integration tests сильнее, чем скорость крупного Restore, но ещё не имеет phase-exhaustive process-crash доказательства. Доступные исторические данные не позволяют объявить release readiness: строгие application/full-time/4-GiB-memory gates не выполнены, статистический idle A/B gate отсутствует, а результаты не воспроизведены для зафиксированной ревизии `9011a1de`. Следующий технический выбор должен оцениваться по уменьшению chunk-readiness и durable sync/reread latency без удаления journal, persisted verification, CAS или bounded-memory ограничений.
+
+## 14. Исправление first-touch Save
+
+Инцидент 2026-07-31 показал Save длительностью 68,182 s. Из них 66,276 s заняло ожидание durable origins для 1 304 ключей. Capture занял 486 ms. Причиной был не объём области Save, а последовательная схема `object + .origin` с отдельным forced atomic file для каждого впервые изменённого ключа. Существующий player-scale benchmark не обнаруживал дефект, потому что явно завершал durability до запуска таймера Save.
+
+Принято минимальное изменение persistence:
+
+- captured origins идут в существующий immutable object `WriteBatch` не более чем по 256 ключей;
+- соответствия `HistoryKey -> ObjectId` публикуются отсортированными атомарно заменяемыми shards по Merkle-region 32×32 chunks;
+- legacy `LOR2` files остаются читаемыми и участвуют в conflict check;
+- working index и vanilla chunk publication остаются заблокированными до успешной публикации всех shards текущей пачки;
+- сбой после object pack и до последнего shard оставляет безопасный orphan/partial durable state; retry использует тот же captured origin и не выполняет повторный capture.
+
+Player-scale scenario теперь запускает каждый из 31 Save без предварительного durability drain. Он пишет `save_metrics` с числом pending keys и применяет неизменяемый gate 6 800 ms к полному UI Save. Unit regression использует 257 разных origins, подтверждает две bounded object batches и повтор после отказа между pack и shard без второго pack или повторного capture.
