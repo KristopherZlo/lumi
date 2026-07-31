@@ -67,16 +67,14 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
             preparation = new PreparedMutationOwnership<>(
                     prepared.thenApply(operation -> operation), DimensionMutation::close);
             phase = Phase.PREPARING_RESTORE;
-            if (preparation.isDone()) {
-                advancePreparation(deadlineNanos);
-            }
+            advancePreparation(deadlineNanos);
         } catch (RuntimeException failed) {
             failure = failed;
         }
     }
 
     private void advancePreparation(long deadlineNanos) throws IOException {
-        if (!preparation.isDone()) {
+        if (!preparation.awaitUntil(deadlineNanos)) {
             return;
         }
         try {

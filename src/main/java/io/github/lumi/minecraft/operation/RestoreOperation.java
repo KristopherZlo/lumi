@@ -32,7 +32,7 @@ public final class RestoreOperation implements DimensionMutation {
     private final WorldStateApply world;
     private final RestorePublication publication;
     private final OperationJournalRepository journals;
-    private final WorldStateApply.ApplySession targetSession;
+    private WorldStateApply.ApplySession targetSession;
     private final WorldStateApply.PreparedState preparedTarget;
     private final WorldStateApply.PreparedState preparedReturn;
     private final RestoreStateListener stateListener;
@@ -49,7 +49,9 @@ public final class RestoreOperation implements DimensionMutation {
     @Override public OperationProgress progress() {
         if (status == RestoreStatus.APPLYING || status == RestoreStatus.REPAIRING
                 || status == RestoreStatus.PERSISTING) {
-            return operationProgress(targetSession.progress(), "Restore: ");
+            return targetSession == null
+                    ? OperationProgress.indeterminate("Restore: starting apply")
+                    : operationProgress(targetSession.progress(), "Restore: ");
         }
         if (status == RestoreStatus.RETURNING && returnSession != null) {
             return operationProgress(returnSession.progress(), "Restore: safe return / ");
@@ -84,7 +86,6 @@ public final class RestoreOperation implements DimensionMutation {
         this.preparedTarget = preparedTarget;
         this.preparedReturn = preparedReturn;
         this.stateListener = stateListener;
-        targetSession = world.begin(preparedTarget);
     }
 
     public static RestoreOperation start(
@@ -618,8 +619,10 @@ public final class RestoreOperation implements DimensionMutation {
         if (!journalPersisted) {
             journal = journals.create(journal);
             journalPersisted = true;
+            beginTargetSession();
             return status;
         }
+        beginTargetSession();
         switch (status) {
             case APPLYING -> applyTarget(deadlineNanos);
             case VERIFYING -> verifyTarget(deadlineNanos);
@@ -630,6 +633,12 @@ public final class RestoreOperation implements DimensionMutation {
             default -> { }
         }
         return status;
+    }
+
+    private void beginTargetSession() {
+        if (targetSession == null) {
+            targetSession = world.begin(preparedTarget);
+        }
     }
 
     private void applyTarget(long deadlineNanos) throws IOException {
@@ -855,6 +864,13 @@ public final class RestoreOperation implements DimensionMutation {
         };
     }
 
+    @Override
+    public MutationTerminalState unhandledFailureState() {
+        return status == RestoreStatus.APPLYING
+                && journal.phase() == OperationPhase.PREPARED
+                ? MutationTerminalState.FAILED : MutationTerminalState.DEGRADED;
+    }
+
     public void cancelBeforeApply() throws IOException {
         if (status != RestoreStatus.APPLYING || journal.phase() != OperationPhase.PREPARED) {
             throw new IllegalStateException("Restore has already started mutating the world");
@@ -865,7 +881,9 @@ public final class RestoreOperation implements DimensionMutation {
             }
             status = RestoreStatus.CANCELLED;
         } finally {
-            targetSession.close();
+            if (targetSession != null) {
+                targetSession.close();
+            }
             restore.close();
         }
     }
@@ -895,7 +913,9 @@ public final class RestoreOperation implements DimensionMutation {
                     && journal.phase() == OperationPhase.PREPARED) {
                 cancelBeforeApply();
             } else {
-                targetSession.close();
+                if (targetSession != null) {
+                    targetSession.close();
+                }
             }
             if (returnSession != null) {
                 returnSession.close();

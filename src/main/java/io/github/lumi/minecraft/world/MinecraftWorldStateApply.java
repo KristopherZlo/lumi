@@ -54,8 +54,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     @Override
     public PreparedState prepare(
             State target, State base, LongConsumer progress) throws IOException {
-        PreparedMinecraftPlanState plan = preparation.preflight(target, base, progress);
-        return prioritize(plan);
+        return preparation.preflight(target, base, progress);
     }
 
     @Override
@@ -67,7 +66,6 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
         targetProgress.accept(0);
         PreparedMinecraftPlanState plan = preparation.preflight(
                 target, returnPoint, targetProgress);
-        plan = prioritize(plan);
         returnProgress.accept(0);
         returnProgress.accept((long) returnPoint.sections().size()
                 + returnPoint.entities().size());
@@ -78,7 +76,7 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     public ApplySession begin(PreparedState target) {
         if (target instanceof PreparedMinecraftPlanState plan) {
             return new StreamingPreparedWorldMutationSession(
-                    plan, preparation, world, background,
+                    prioritize(plan), preparation, world, background,
                     this::chunkLoads, chunk -> level.getChunkSource().getChunkNow(
                             chunk.x(), chunk.z()) != null);
         }

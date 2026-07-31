@@ -670,7 +670,7 @@ class RestoreOperationTest {
     }
 
     @Test
-    void closesPreparedWorldSessionWhenRestoreIsCancelled() throws IOException {
+    void doesNotCreateWorldSessionWhenRestoreIsCancelledBeforeApply() throws IOException {
         var expected = new BranchRef(new BranchName("main"), id('1'), 1);
         OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
         CloseTrackingWorld world = new CloseTrackingWorld();
@@ -680,7 +680,8 @@ class RestoreOperationTest {
 
         operation.cancelBeforeApply();
 
-        assertEquals(1, world.closes);
+        assertEquals(0, world.begins);
+        assertEquals(0, world.closes);
     }
 
     @Test
@@ -692,6 +693,26 @@ class RestoreOperationTest {
                 new PreparedRestore(expected, id('3'), Map.of(), Map.of(), Map.of(), Map.of()),
                 new FailingPreparation(), ignored -> { }, journals, UUID.randomUUID()));
 
+        assertTrue(journals.read().isEmpty());
+    }
+
+    @Test
+    void sessionCreationFailureBeforeApplyClearsJournalAsSafeFailure() throws IOException {
+        var expected = new BranchRef(new BranchName("main"), id('2'), 1);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        WorldStateApply world = new TestWorldApply() {
+            @Override public ApplySession begin(PreparedState target) {
+                throw new IllegalStateException("cannot create cursor");
+            }
+        };
+        var contained = new FailureContainedMutation(RestoreOperation.start(
+                new PreparedRestore(expected, id('3'), Map.of(), Map.of(), Map.of(), Map.of()),
+                world, ignored -> { }, journals, UUID.randomUUID()));
+
+        contained.advance(Long.MAX_VALUE);
+
+        assertEquals(MutationTerminalState.FAILED, contained.terminalState());
+        assertTrue(contained.isSafeToRelease());
         assertTrue(journals.read().isEmpty());
     }
 
@@ -874,9 +895,11 @@ class RestoreOperationTest {
     }
 
     private static final class CloseTrackingWorld implements TestWorldApply {
+        private int begins;
         private int closes;
 
         @Override public ApplySession begin(PreparedState target) {
+            begins++;
             return new TestApplySession() {
                 @Override public boolean applyUntil(long deadlineNanos) { return true; }
                 @Override public Verification verifyUntil(long deadlineNanos) {

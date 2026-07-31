@@ -72,7 +72,11 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
 
     @Override
     public void advance(long deadlineNanos) throws IOException {
-        if (failure != null || cancelled || !preparation.isDone()) {
+        if (failure != null || cancelled) {
+            return;
+        }
+        if (!preparation.isDone() && (!freezeDuringPreparation
+                || !preparation.awaitUntil(deadlineNanos))) {
             return;
         }
         if (delegate == null) {
