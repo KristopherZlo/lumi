@@ -41,9 +41,6 @@ class BackgroundPreparedMutationTest {
 
         future.complete(new TestMutation());
         coordinator.tick();
-        assertEquals(0, freeze.releaseCalls);
-
-        coordinator.tick();
         assertEquals(1, freeze.releaseCalls);
         assertEquals(io.github.lumi.minecraft.world.RestoreApplyStatistics.EMPTY,
                 prepared.restoreStatistics().orElseThrow());

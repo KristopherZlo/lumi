@@ -79,7 +79,9 @@ public final class BackgroundPreparedMutation<T extends DimensionMutation>
             try {
                 delegate = preparation.claim();
                 validation.validate();
-                return;
+                if (!freezeDuringPreparation) {
+                    return;
+                }
             } catch (CompletionException failed) {
                 failure = failed.getCause() == null ? failed : failed.getCause();
                 return;

@@ -903,6 +903,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(author, "author");
         var operation = new DeferredDimensionMutation(
+                true,
                 () -> requireExpectedRef(expected),
                 () -> createRestore(expected, target, author, includeEntities));
         enqueueForeground(
@@ -1201,6 +1202,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(target, "target");
         var operation = new DeferredDimensionMutation(
+                true,
                 () -> requireExpectedRef(expected),
                 () -> createBranchSwitch(target));
         enqueueForeground(
@@ -1261,7 +1263,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         Objects.requireNonNull(name, "name");
-        var operation = new DeferredDimensionMutation(() ->
+        var operation = new DeferredDimensionMutation(true, () ->
                 createAndSwitchBranch(name, startingPoint));
         enqueueForeground(
                 operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
@@ -1311,6 +1313,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(targetWorkspace, "targetWorkspace");
         var operation = new DeferredDimensionMutation(
+                true,
                 () -> requireExpectedRef(expected),
                 () -> createWorkspaceSwitch(targetWorkspace));
         enqueueForeground(
@@ -1774,7 +1777,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             Consumer<DimensionMutation> terminalObserver) throws IOException {
         requireNoRecovery();
         Objects.requireNonNull(plan, "plan");
-        var operation = new DeferredDimensionMutation(() -> createMerge(plan));
+        var operation = new DeferredDimensionMutation(true, () -> createMerge(plan));
         enqueueForeground(
                 operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
         return operation;
@@ -1843,6 +1846,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(area, "area");
         Objects.requireNonNull(author, "author");
         var operation = new DeferredDimensionMutation(
+                true,
                 () -> requireExpectedRef(expected),
                 () -> createPartialRestore(expected, target, area, author));
         enqueueForeground(operation, OperationPriority.NORMAL, terminalObserver);
@@ -1916,6 +1920,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(zoneId, "zoneId");
         Objects.requireNonNull(author, "author");
         var operation = new DeferredDimensionMutation(
+                true,
                 () -> {
                     requireExpectedRef(expected);
                     requireExpectedZone(zoneId, expectedZoneRevision);
@@ -2063,6 +2068,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     "Partial Restore preview is missing; preview again");
         }
         var operation = new DeferredDimensionMutation(
+                true,
                 () -> createPlannedPartialRestore(token, author));
         enqueueForeground(operation, OperationPriority.NORMAL, terminalObserver);
         return operation;

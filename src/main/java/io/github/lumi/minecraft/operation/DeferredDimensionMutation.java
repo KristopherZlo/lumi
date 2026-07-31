@@ -50,7 +50,9 @@ public final class DeferredDimensionMutation implements DimensionMutation {
             } catch (IOException | RuntimeException failed) {
                 failure = failed;
             }
-            return;
+            if (!initialFreeze || failure != null) {
+                return;
+            }
         }
         delegate.advance(deadlineNanos);
     }

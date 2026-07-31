@@ -78,6 +78,18 @@ class DeferredDimensionMutationTest {
     }
 
     @Test
+    void advancesDelegateImmediatelyWhenFreezeWasRequestedBeforeResolution() throws Exception {
+        OneTickMutation delegate = new OneTickMutation();
+        DeferredDimensionMutation deferred = new DeferredDimensionMutation(
+                true, () -> delegate);
+
+        deferred.advance(1);
+
+        assertTrue(deferred.isTerminal());
+        assertEquals(1, delegate.ticks);
+    }
+
+    @Test
     void cancelsBeforeCreatingQueuedDelegate() throws Exception {
         AtomicInteger creations = new AtomicInteger();
         DeferredDimensionMutation deferred = new DeferredDimensionMutation(() -> {
