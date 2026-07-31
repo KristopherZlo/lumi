@@ -69,10 +69,20 @@ class BranchServiceTest {
         branches.completeSwitch(switchPlan);
         assertEquals(created, branches.active());
 
+        var builder = new WorkingIndexSnapshot(Map.of(new SectionKey(1, 0, 0), 2L));
+        var pending = new WorkingIndexRepository.State(builder, builder);
+        working.write(pending);
+        var idea = branches.createAndActivate(
+                new BranchName("active-idea"), created.commit());
+        assertEquals(idea, branches.active());
+        assertEquals(pending, working.readState());
+
         assertThrows(IllegalStateException.class,
-                () -> branches.delete(created.name(), mainWorkspace));
+                () -> branches.delete(idea.name(), mainWorkspace));
+        branches.delete(created.name(), mainWorkspace);
         branches.delete(main.name(), mainWorkspace);
         assertEquals(Optional.empty(), refs.read(main.name()));
+        working.write(WorkingIndexSnapshot.empty());
 
         var source = commits.read(main.commit());
         UUID foreignWorkspace = new UUID(0, 9);

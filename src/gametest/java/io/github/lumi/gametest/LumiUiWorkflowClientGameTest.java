@@ -171,9 +171,10 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
             LumiBehaviorReport report) throws IOException {
         BranchName main = operations.activeBranch();
         BranchName idea = operations.createBranch("workflow-idea").name();
-        if (!operations.activeBranch().equals(main)) {
-            operations.switchBranch("workflow-main", main);
+        if (!operations.activeBranch().equals(idea)) {
+            throw new AssertionError("New branch was not selected");
         }
+        operations.switchBranch("workflow-main", main);
         ui.openTab("luma.tab.variants", LumiBranchesScreen.class);
         ui.assertButtonStates(
                 LumiBranchesScreen.class, "luma.action.variant_switch", 1, 1);

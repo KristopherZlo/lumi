@@ -194,10 +194,11 @@ public final class LumiCommands {
             return 0;
         }
         try {
-            runtime.createBranch(new BranchName(name));
-            source.sendSuccess(() -> Component.literal("Lumi branch created: " + name), false);
+            runtime.startBranchCreation(new BranchName(name), ignored -> { });
+            source.sendSuccess(() -> Component.literal(
+                    "Lumi branch creation started: " + name), false);
             return 1;
-        } catch (IOException | IllegalArgumentException failed) {
+        } catch (IOException | IllegalStateException | IllegalArgumentException failed) {
             source.sendFailure(Component.literal("Lumi branch could not be created: "
                     + failed.getMessage()));
             return 0;

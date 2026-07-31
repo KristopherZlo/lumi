@@ -1174,6 +1174,57 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 }, background));
     }
 
+    public synchronized DimensionMutation startBranchCreation(
+            BranchName name,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        return startBranchCreation(name, Optional.empty(), terminalObserver);
+    }
+
+    public synchronized DimensionMutation startBranchCreation(
+            BranchName name,
+            CommitId startingPoint,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        return startBranchCreation(name, Optional.of(
+                Objects.requireNonNull(startingPoint, "startingPoint")), terminalObserver);
+    }
+
+    private DimensionMutation startBranchCreation(
+            BranchName name,
+            Optional<CommitId> startingPoint,
+            Consumer<DimensionMutation> terminalObserver) throws IOException {
+        requireNoRecovery();
+        Objects.requireNonNull(name, "name");
+        var operation = new DeferredDimensionMutation(() ->
+                createAndSwitchBranch(name, startingPoint));
+        enqueueForeground(
+                operation, OperationPriority.NORMAL, clearingLiveHistory(terminalObserver));
+        return operation;
+    }
+
+    private DimensionMutation createAndSwitchBranch(
+            BranchName name, Optional<CommitId> requestedStartingPoint) throws IOException {
+        CommitId startingPoint = requestedStartingPoint.isPresent()
+                ? requestedStartingPoint.get() : activeRef().commit();
+        UUID workspaceId = activeWorkspaceId();
+        restores.requireTargetInWorkspace(startingPoint, workspaceId);
+        BranchName qualified = WorkspaceService.branchName(workspaceId, name);
+        if (activeRef().commit().equals(startingPoint)) {
+            branches.createAndActivate(qualified, startingPoint);
+            return new NoChangeMutation("luma.status.variant_created");
+        }
+        BranchRef created = branches.create(qualified, startingPoint);
+        try {
+            return createBranchSwitch(created.name());
+        } catch (IOException | RuntimeException failed) {
+            try {
+                branches.delete(created.name(), workspaceId);
+            } catch (IOException cleanup) {
+                failed.addSuppressed(cleanup);
+            }
+            throw failed;
+        }
+    }
+
     public synchronized DimensionMutation startWorkspaceSwitch(
             UUID targetWorkspace) throws IOException {
         return startWorkspaceSwitch(targetWorkspace, ignored -> { });

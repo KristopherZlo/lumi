@@ -196,23 +196,6 @@ public final class LumiServerNetworking {
                 partialRestorePlan(player, runtime, payload, context);
                 return;
             }
-            if (payload.kind() == HistoryCommandPayload.Kind.BRANCH_CREATE) {
-                runtime.createBranch(new BranchName(payload.argument().trim()));
-                sendEvent(player, payload, runtime,
-                        OperationEventPayload.State.SUCCEEDED, "Branch created");
-                broadcastSnapshot(runtime);
-                return;
-            }
-            if (payload.kind() == HistoryCommandPayload.Kind.BRANCH_CREATE_AT) {
-                BranchCreateArgument argument =
-                        BranchCreateArgument.parse(payload.argument());
-                runtime.createBranch(argument.name(), argument.startingPoint());
-                sendEvent(player, payload, runtime,
-                        OperationEventPayload.State.SUCCEEDED,
-                        "luma.status.variant_created");
-                broadcastSnapshot(runtime);
-                return;
-            }
             if (payload.kind() == HistoryCommandPayload.Kind.BRANCH_DELETE) {
                 runtime.deleteBranch(new BranchName(payload.argument()));
                 sendEvent(player, payload, runtime,
@@ -714,6 +697,13 @@ public final class LumiServerNetworking {
                     player.getUUID(), LiveActionJournal.Direction.REDO, terminal);
             case BRANCH_SWITCH -> runtime.startBranchSwitch(
                     new BranchName(payload.argument()), terminal);
+            case BRANCH_CREATE -> runtime.startBranchCreation(
+                    new BranchName(payload.argument().trim()), terminal);
+            case BRANCH_CREATE_AT -> {
+                BranchCreateArgument branch = BranchCreateArgument.parse(payload.argument());
+                yield runtime.startBranchCreation(
+                        branch.name(), branch.startingPoint(), terminal);
+            }
             case WORKSPACE_SWITCH -> runtime.startWorkspaceSwitch(
                     UUID.fromString(payload.argument()), terminal);
             case RECOVER_RESUME -> runtime.startRecovery(
@@ -735,8 +725,6 @@ public final class LumiServerNetworking {
             }
             case CLEANUP_INSPECT -> runtime.startGarbageCollection(false, terminal);
             case CLEANUP_APPLY -> runtime.startGarbageCollection(true, terminal);
-            case BRANCH_CREATE, BRANCH_CREATE_AT -> throw new IllegalStateException(
-                    "Branch creation does not use the mutation queue");
             case BRANCH_DELETE -> throw new IllegalStateException(
                     "Branch deletion does not use the mutation queue");
             case COMPARE, ZONE_COMPARE -> throw new IllegalStateException(
@@ -802,7 +790,7 @@ public final class LumiServerNetworking {
                 .or(() -> operation.completionMessage()
                         .filter(value -> !value.isBlank()))
                 .orElseGet(() -> terminalMessage(operation.terminalState()));
-        message = branchSwitchMessage(payload.kind(), state, message);
+        message = branchOperationMessage(payload.kind(), state, message);
         sendEvent(
                 player, payload.requestId(), runtime, state, message,
                 Optional.empty(), -1, previewBounds(operation),
@@ -810,10 +798,15 @@ public final class LumiServerNetworking {
         deferSnapshotBroadcast(runtime);
     }
 
-    static String branchSwitchMessage(
+    static String branchOperationMessage(
             HistoryCommandPayload.Kind kind,
             OperationEventPayload.State state,
             String message) {
+        if (kind == HistoryCommandPayload.Kind.BRANCH_CREATE
+                || kind == HistoryCommandPayload.Kind.BRANCH_CREATE_AT) {
+            return state == OperationEventPayload.State.SUCCEEDED
+                    ? "luma.status.variant_created" : message;
+        }
         if (kind != HistoryCommandPayload.Kind.BRANCH_SWITCH) return message;
         if (state == OperationEventPayload.State.SUCCEEDED) {
             return "luma.status.variant_switched";

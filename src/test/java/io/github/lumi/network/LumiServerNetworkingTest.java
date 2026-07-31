@@ -78,15 +78,20 @@ class LumiServerNetworkingTest {
     @Test
     void reportsTheActualBranchSwitchOutcome() {
         assertEquals("luma.status.variant_switched",
-                LumiServerNetworking.branchSwitchMessage(
+                LumiServerNetworking.branchOperationMessage(
                         HistoryCommandPayload.Kind.BRANCH_SWITCH,
                         OperationEventPayload.State.SUCCEEDED,
                         "Operation completed"));
         assertEquals("luma.status.variant_switch_requires_saved_draft",
-                LumiServerNetworking.branchSwitchMessage(
+                LumiServerNetworking.branchOperationMessage(
                         HistoryCommandPayload.Kind.BRANCH_SWITCH,
                         OperationEventPayload.State.FAILED,
                         "Branch switch requires no pending builder changes"));
+        assertEquals("luma.status.variant_created",
+                LumiServerNetworking.branchOperationMessage(
+                        HistoryCommandPayload.Kind.BRANCH_CREATE_AT,
+                        OperationEventPayload.State.SUCCEEDED,
+                        "Operation completed"));
     }
 
     @Test

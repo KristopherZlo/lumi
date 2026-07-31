@@ -39,6 +39,32 @@ public final class BranchService {
         return refs.create(name, at);
     }
 
+    /** Creates a branch at the current head and selects it without changing the world. */
+    public BranchRef createAndActivate(BranchName name, CommitId at) throws IOException {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(at, "at");
+        var expectedActive = active.read().orElseThrow(
+                () -> new IOException("Active Lumi branch is missing"));
+        BranchRef source = refs.read(expectedActive.name()).orElseThrow(
+                () -> new IOException("Active Lumi branch ref is missing: "
+                        + expectedActive.name()));
+        if (!source.commit().equals(at)) {
+            throw new RefConflictException("New active branch must start at the current head");
+        }
+        BranchRef created = create(name, at);
+        try {
+            active.compareAndSet(expectedActive, created.name());
+            return created;
+        } catch (IOException | RuntimeException failed) {
+            try {
+                refs.delete(created);
+            } catch (IOException cleanup) {
+                failed.addSuppressed(cleanup);
+            }
+            throw failed;
+        }
+    }
+
     public void delete(BranchName name, UUID workspaceId) throws IOException {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(workspaceId, "workspaceId");
