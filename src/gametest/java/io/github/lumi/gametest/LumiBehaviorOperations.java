@@ -73,6 +73,11 @@ final class LumiBehaviorOperations {
                         .generations().size());
     }
 
+    int pendingKeyCount() {
+        return server.computeOnServer(minecraft ->
+                runtime(minecraft).mutations().snapshot().generations().size());
+    }
+
     void awaitDurability(String name) {
         var boundary = server.computeOnServer(minecraft ->
                 runtime(minecraft).mutations().durabilityBoundary());

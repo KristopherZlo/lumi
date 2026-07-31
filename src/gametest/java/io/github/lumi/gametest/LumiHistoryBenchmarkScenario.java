@@ -20,6 +20,7 @@ final class LumiHistoryBenchmarkScenario {
     private static final int EDIT_TILE_SIZE = 256;
     private static final int STORED_FIXTURE_OFFSET = 2_048;
     private static final int TILES_PER_DURABILITY_BARRIER = 4;
+    private static final long MAX_IMMEDIATE_SAVE_MILLIS = 6_800;
     private static final List<EditSize> PLAYER_SCALE_30 = List.of(
             new EditSize(1, 1, 1),
             new EditSize(2, 1, 1),
@@ -198,8 +199,8 @@ final class LumiHistoryBenchmarkScenario {
                         + describe(baseArea));
 
         fixture.markBaseline("benchmark_initial_marker");
-        operations.awaitDurability("benchmark_initial_world");
-        CommitId initial = operations.save("benchmark-initial");
+        CommitId initial = measureImmediateSave(
+                "benchmark-initial", operations.pendingKeyCount());
         Path repository = operations.repository();
         LumiRepositoryMetrics.Snapshot previous = metrics.capture(repository);
         recordStorage("initial", previous, 0);
@@ -214,7 +215,6 @@ final class LumiHistoryBenchmarkScenario {
             long started = System.nanoTime();
             actions.worldEditRandomVolume(
                     "player_scale_edit_" + suffix, area, index);
-            operations.awaitDurability("player_scale_edit_" + suffix);
             long expectedKeys = sectionCount(area);
             int actualKeys = operations.pendingBuilderKeyCount();
             if (actualKeys != expectedKeys) {
@@ -222,12 +222,13 @@ final class LumiHistoryBenchmarkScenario {
                         + " dirtied " + actualKeys
                         + " history keys; expected " + expectedKeys);
             }
-            report.event("fixture", "player_scale_edit_" + suffix + "_durable",
+            report.event("fixture", "player_scale_edit_" + suffix + "_ready",
                     "succeeded", 0,
                     (System.nanoTime() - started) / 1_000_000,
                     "blocks=" + size.blocks() + ";historyKeys=" + actualKeys
                             + ";area=" + describe(area));
-            commits.add(operations.save("player-scale-" + suffix));
+            commits.add(measureImmediateSave(
+                    "player-scale-" + suffix, operations.pendingKeyCount()));
             if ((index + 1) % config.measureEvery() == 0
                     || index + 1 == PLAYER_SCALE_30.size()) {
                 previous = recordStorage(
@@ -238,6 +239,21 @@ final class LumiHistoryBenchmarkScenario {
         return new PreparedHistory(
                 commits, repository, previous,
                 Optional.empty(), Optional.empty(), Optional.empty());
+    }
+
+    private CommitId measureImmediateSave(String name, int pendingKeys)
+            throws IOException {
+        long started = System.nanoTime();
+        CommitId commit = operations.save(name);
+        long elapsed = (System.nanoTime() - started) / 1_000_000;
+        report.event("save_metrics", name, "measured", 0, elapsed,
+                "pendingKeys=" + pendingKeys + ";durability=save-owned");
+        if (elapsed > MAX_IMMEDIATE_SAVE_MILLIS) {
+            throw new AssertionError(name + " immediate Save took " + elapsed
+                    + " ms; limit=" + MAX_IMMEDIATE_SAVE_MILLIS
+                    + " ms; pendingKeys=" + pendingKeys);
+        }
+        return commit;
     }
 
     BranchFixture prepareBranchSwitch(LumiUiTestDriver ui) throws IOException {
