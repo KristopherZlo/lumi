@@ -43,9 +43,8 @@ public final class BranchSwitchRestorePublication implements RestorePublication 
                 || !restore.targetCommit().equals(plan.target().commit())) {
             throw new IOException("Prepared Restore does not match branch switch plan");
         }
-        branches.validateSwitch(plan);
-        working.ifPresent(clear -> clear.publish(restore));
         branches.completeSwitch(plan);
+        working.ifPresent(clear -> clear.publish(restore));
     }
 
     @Override

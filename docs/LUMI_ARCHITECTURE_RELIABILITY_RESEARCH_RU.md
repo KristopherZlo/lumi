@@ -538,9 +538,3 @@ origin/index writes перед capture. Это допустимо только �
 его полный checkpoint и ref становятся durable, после чего journal ссылается на этот commit
 как на точное направление rollback. Обычный Save по-прежнему ждёт origin/index durability,
 а vanilla publication остаётся закрытой существующим durability gate.
-
-При успешной Restore-публикации source ref сначала повторно валидируется, затем durable clear
-точной working-index boundary запускается перед pointer CAS. Запись index перекрывается с
-атомарной публикацией ref/active branch. Сбой CAS оставляет journal и его generation sidecar,
-поэтому recovery может восстановить boundary при выборе return; stale ref отклоняется ещё до
-запуска clear.
