@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,6 +51,11 @@ public final class LumiServerNetworking {
             new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, ServerBossEvent> BOSS_BARS =
             new ConcurrentHashMap<>();
+    private static final Set<HistoryCommandPayload.Kind> WORLD_SELECTIONS = Set.of(
+            HistoryCommandPayload.Kind.RESTORE,
+            HistoryCommandPayload.Kind.RESTORE_NO_ENTITIES,
+            HistoryCommandPayload.Kind.BRANCH_SWITCH,
+            HistoryCommandPayload.Kind.WORKSPACE_SWITCH);
     private static final CompareCommandHandler COMPARES = new CompareCommandHandler(
             LumiServerNetworking::failureMessage, LumiServerNetworking::send);
     private static final ZoneOverlayCommandHandler ZONE_OVERLAYS =
@@ -477,8 +483,10 @@ public final class LumiServerNetworking {
             HistoryCommandPayload payload,
             Started started,
             HudDisplayMode hudDisplayMode) {
+        cancelOlderWorldSelections(player, runtime, payload.kind());
         TICKET_OWNERS.put(started.ticket().id(),
-                new TicketOwner(player.getUUID(), payload.requestId(), runtime));
+                new TicketOwner(
+                        player.getUUID(), payload.requestId(), runtime, payload.kind()));
         LumiMod.LOGGER.info(
                 "Lumi request {} received operation ticket {}",
                 payload.requestId(), started.ticket().id());
@@ -508,6 +516,36 @@ public final class LumiServerNetworking {
                                 hudDisplayMode, position, progress));
         });
         broadcastSnapshot(runtime);
+    }
+
+    private static void cancelOlderWorldSelections(
+            ServerPlayer player,
+            FabricDimensionRuntime runtime,
+            HistoryCommandPayload.Kind replacement) {
+        if (!isWorldSelection(replacement)) return;
+        TICKET_OWNERS.forEach((ticketId, owner) -> {
+            if (!owner.playerId().equals(player.getUUID())
+                    || owner.runtime() != runtime
+                    || !isWorldSelection(owner.kind())) {
+                return;
+            }
+            try {
+                if (runtime.operations().cancelQueued(new OperationTicket(ticketId))) {
+                    TICKET_OWNERS.remove(ticketId, owner);
+                    removeBossBar(ticketId);
+                    LumiMod.LOGGER.info(
+                            "Lumi queued request {} was superseded by a newer world selection",
+                            owner.requestId());
+                }
+            } catch (IOException failed) {
+                LumiMod.LOGGER.error(
+                        "Cannot cancel superseded queued Lumi operation {}", ticketId, failed);
+            }
+        });
+    }
+
+    static boolean isWorldSelection(HistoryCommandPayload.Kind kind) {
+        return WORLD_SELECTIONS.contains(kind);
     }
 
     private static void cleanupPlayer(UUID playerId) {
@@ -1107,11 +1145,15 @@ public final class LumiServerNetworking {
 
     private record Started(OperationTicket ticket) { }
     private record TicketOwner(
-            UUID playerId, UUID requestId, FabricDimensionRuntime runtime) {
+            UUID playerId,
+            UUID requestId,
+            FabricDimensionRuntime runtime,
+            HistoryCommandPayload.Kind kind) {
         private TicketOwner {
             Objects.requireNonNull(playerId, "playerId");
             Objects.requireNonNull(requestId, "requestId");
             Objects.requireNonNull(runtime, "runtime");
+            Objects.requireNonNull(kind, "kind");
         }
     }
     private record PendingPackage(

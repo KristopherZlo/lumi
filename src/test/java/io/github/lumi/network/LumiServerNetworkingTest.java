@@ -77,6 +77,18 @@ class LumiServerNetworkingTest {
     }
 
     @Test
+    void onlyNewWorldSelectionsSupersedeQueuedWorldSelections() {
+        assertTrue(LumiServerNetworking.isWorldSelection(
+                HistoryCommandPayload.Kind.RESTORE));
+        assertTrue(LumiServerNetworking.isWorldSelection(
+                HistoryCommandPayload.Kind.BRANCH_SWITCH));
+        assertFalse(LumiServerNetworking.isWorldSelection(
+                HistoryCommandPayload.Kind.QUICK_ROLLBACK));
+        assertFalse(LumiServerNetworking.isWorldSelection(
+                HistoryCommandPayload.Kind.ZONE_RESTORE));
+    }
+
+    @Test
     void revalidatesPermissionAtMutationActivation() throws Exception {
         String source = networkingSource();
 
