@@ -44,12 +44,12 @@ final class GarbageCollectionScheduler {
         this.failure = Objects.requireNonNull(failure, "failure");
     }
 
-    void tick(long gameTick, boolean busy) {
+    void tick(long gameTick, boolean operationBusy, boolean pendingChanges) {
         if (running.get() || gameTick < nextTick) {
             return;
         }
         boolean compact = !startupComplete;
-        if (busy) {
+        if (operationBusy || !compact && pendingChanges) {
             nextTick = gameTick + RETRY_TICKS;
             return;
         }

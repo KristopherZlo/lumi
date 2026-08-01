@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 class GarbageCollectionSchedulerTest {
     @Test
-    void schedulesOnlyWhenIdleAndNeverRunsCollectionOnTheTickCaller() {
+    void schedulesMaintenanceOffTickWithPhaseSpecificBusyState() {
         var queued = new ArrayList<Runnable>();
         AtomicInteger compactions = new AtomicInteger();
         AtomicInteger compactedPacks = new AtomicInteger();
@@ -28,23 +28,26 @@ class GarbageCollectionSchedulerTest {
                 },
                 results::add, failures::add);
 
-        scheduler.tick(GarbageCollectionScheduler.STARTUP_COMPACTION_DELAY_TICKS - 1, false);
+        scheduler.tick(GarbageCollectionScheduler.STARTUP_COMPACTION_DELAY_TICKS - 1,
+                false, false);
         assertEquals(0, queued.size());
-        scheduler.tick(GarbageCollectionScheduler.STARTUP_COMPACTION_DELAY_TICKS, true);
+        scheduler.tick(GarbageCollectionScheduler.STARTUP_COMPACTION_DELAY_TICKS,
+                true, true);
         assertEquals(0, queued.size());
         scheduler.tick(GarbageCollectionScheduler.STARTUP_COMPACTION_DELAY_TICKS
-                + GarbageCollectionScheduler.RETRY_TICKS, false);
+                + GarbageCollectionScheduler.RETRY_TICKS, false, true);
         assertEquals(1, queued.size());
         queued.removeFirst().run();
         assertEquals(1, compactions.get());
         assertEquals(7, compactedPacks.get());
 
-        scheduler.tick(GarbageCollectionScheduler.INITIAL_DELAY_TICKS, true);
+        scheduler.tick(GarbageCollectionScheduler.INITIAL_DELAY_TICKS,
+                false, true);
         scheduler.tick(
                 GarbageCollectionScheduler.INITIAL_DELAY_TICKS
                         + GarbageCollectionScheduler.RETRY_TICKS,
-                false);
-        scheduler.tick(Long.MAX_VALUE, false);
+                false, false);
+        scheduler.tick(Long.MAX_VALUE, false, false);
 
         assertEquals(0, collections.get());
         assertEquals(1, queued.size());

@@ -461,11 +461,11 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             mutations.retryFailedWrites();
         }
         scheduleAutoVersion();
-        garbageCollection.tick(level.getGameTime(),
-                recoveryJournal().isPresent()
-                        || operations.hasActiveOperation()
-                        || operations.queuedCount() > 0
-                        || mutations.hasPendingChanges());
+        boolean operationBusy = recoveryJournal().isPresent()
+                || operations.hasActiveOperation()
+                || operations.queuedCount() > 0;
+        garbageCollection.tick(level.getGameTime(), operationBusy,
+                mutations.hasPendingChanges());
     }
 
     private void scheduleAutoVersion() throws IOException {
