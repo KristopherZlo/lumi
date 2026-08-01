@@ -18,7 +18,7 @@ class GarbageCollectionSchedulerTest {
                 0, queued::add,
                 () -> {
                     collections.incrementAndGet();
-                    return new GarbageCollectionResult(2, 3);
+                    return new GarbageCollectionResult(2, 3, 4);
                 },
                 results::add, failures::add);
 
@@ -33,7 +33,7 @@ class GarbageCollectionSchedulerTest {
         assertEquals(1, queued.size());
         queued.removeFirst().run();
         assertEquals(1, collections.get());
-        assertEquals(java.util.List.of(new GarbageCollectionResult(2, 3)), results);
+        assertEquals(java.util.List.of(new GarbageCollectionResult(2, 3, 4)), results);
         assertEquals(java.util.List.of(), failures);
     }
 }

@@ -16,12 +16,14 @@ import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.storage.object.ObjectStore;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -102,6 +104,34 @@ class GarbageCollectorTest {
 
         assertThrows(NoSuchFileException.class, () -> commits.read(commitId));
         assertThrows(NoSuchFileException.class, () -> rawObjects.read(payload));
+    }
+
+    @Test
+    void combinesSmallLivePacksWithoutChangingTheirObjects() throws IOException {
+        ObjectStore objects = new ObjectStore(repositoryRoot.resolve("objects"));
+        OriginStore origins = new OriginStore(repositoryRoot);
+        Map<ObjectId, byte[]> expected = new LinkedHashMap<>();
+        for (int pack = 0; pack < 6; pack++) {
+            try (ObjectStore.WriteBatch batch = objects.beginBatch()) {
+                byte[] payload = ("live-pack-" + pack).getBytes(StandardCharsets.UTF_8);
+                ObjectId id = batch.write(payload);
+                batch.publish();
+                expected.put(id, payload);
+                origins.register(new SectionKey(pack, 0, 0), id);
+            }
+        }
+
+        GarbageCollectionResult result = new GarbageCollector(repositoryRoot)
+                .collect(Set.of(), Instant.EPOCH);
+
+        assertEquals(6, result.compactedPacks());
+        try (var files = Files.list(repositoryRoot.resolve("objects").resolve("packs"))) {
+            assertEquals(1,
+                    files.filter(path -> path.toString().endsWith(".pack")).count());
+        }
+        for (var entry : expected.entrySet()) {
+            assertArrayEquals(entry.getValue(), objects.read(entry.getKey()));
+        }
     }
 
     private void makeObjectsOld(Instant timestamp) throws IOException {

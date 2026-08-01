@@ -30,6 +30,9 @@ public final class ObjectStore {
     private static final int MAX_PAYLOAD_BYTES = 256 * 1024 * 1024;
     private static final int MAX_COMPACTION_OBJECTS = 4_096;
     private static final long MAX_COMPACTION_RAW_BYTES = 64L * 1024 * 1024;
+    private static final int MAX_SOURCE_PACK_OBJECTS = 1_024;
+    private static final long MAX_SOURCE_PACK_BYTES = 8L * 1024 * 1024;
+    private static final long MAX_COMPACTED_PACK_BYTES = 64L * 1024 * 1024;
 
     private final Path objectsDirectory;
     private final Path packsDirectory;
@@ -267,6 +270,68 @@ public final class ObjectStore {
         }
     }
 
+    /** Replaces one bounded group of small immutable packs with one verified pack. */
+    public synchronized int compactSmallPacks() throws IOException {
+        Map<Path, List<PackedObject>> contents = new HashMap<>();
+        refreshPackedObjects().values().forEach(entry ->
+                contents.computeIfAbsent(entry.pack(), ignored -> new ArrayList<>()).add(entry));
+        List<PackContents> candidates = new ArrayList<>();
+        for (var pack : contents.entrySet()) {
+            long bytes = Files.size(pack.getKey());
+            if (pack.getValue().size() <= MAX_SOURCE_PACK_OBJECTS
+                    && bytes <= MAX_SOURCE_PACK_BYTES) {
+                candidates.add(new PackContents(
+                        pack.getKey(), pack.getValue(), bytes,
+                        Files.getLastModifiedTime(pack.getKey())));
+            }
+        }
+        candidates.sort(Comparator.comparingLong(PackContents::bytes)
+                .thenComparing(candidate -> candidate.pack().toString()));
+        List<PackContents> selected = new ArrayList<>();
+        long selectedBytes = 0;
+        int selectedObjects = 0;
+        for (PackContents candidate : candidates) {
+            if (selectedObjects + candidate.entries().size() > MAX_COMPACTION_OBJECTS
+                    || selectedBytes + candidate.bytes() > MAX_COMPACTED_PACK_BYTES) {
+                continue;
+            }
+            selected.add(candidate);
+            selectedObjects += candidate.entries().size();
+            selectedBytes += candidate.bytes();
+        }
+        if (selected.size() < 2) {
+            return 0;
+        }
+
+        Set<ObjectId> expected = new HashSet<>();
+        try (ObjectPack.Reader reader = new ObjectPack.Reader();
+                ObjectPack.Writer writer = ObjectPack.writer(packsDirectory)) {
+            for (PackContents source : selected) {
+                for (PackedObject entry : source.entries().stream()
+                        .sorted(Comparator.comparingLong(PackedObject::offset)).toList()) {
+                    if (!writer.write(reader.read(entry)).equals(entry.id())) {
+                        throw corrupt(entry.id(), "repacked content hash mismatch");
+                    }
+                    expected.add(entry.id());
+                }
+            }
+            ObjectPack.Published replacement = writer.publish();
+            if (!replacement.entries().keySet().equals(expected)) {
+                throw new IOException("Repacked object index does not match its sources");
+            }
+            FileTime newestSource = selected.stream().map(PackContents::modified)
+                    .max(FileTime::compareTo).orElseThrow();
+            Files.setLastModifiedTime(
+                    replacement.entries().values().iterator().next().pack(), newestSource);
+        }
+        for (PackContents source : selected) {
+            Files.delete(indexFor(source.pack()));
+            Files.delete(source.pack());
+        }
+        refreshPackedObjects();
+        return selected.size();
+    }
+
     public WriteBatch beginBatch() throws IOException {
         return new WriteBatch(ObjectPack.writer(packsDirectory));
     }
@@ -475,4 +540,7 @@ public final class ObjectStore {
             return compared != 0 ? compared : Long.compare(offset, other.offset);
         }
     }
+
+    private record PackContents(
+            Path pack, List<PackedObject> entries, long bytes, FileTime modified) { }
 }

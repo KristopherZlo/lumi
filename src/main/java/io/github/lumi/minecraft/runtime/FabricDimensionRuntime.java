@@ -308,11 +308,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 () -> new GarbageCollector(repository).collect(
                         Set.of(), Instant.now().minus(Duration.ofHours(24))),
                 result -> {
-                    if (result.deletedCommits() > 0 || result.deletedObjects() > 0) {
+                    if (result.deletedCommits() > 0 || result.deletedObjects() > 0
+                            || result.compactedPacks() > 0) {
                         LumiMod.LOGGER.info(
-                                "Lumi GC removed {} commits and {} objects from {}",
+                                "Lumi GC removed {} commits and {} objects, compacted {} packs in {}",
                                 result.deletedCommits(), result.deletedObjects(),
-                                level.dimension().identifier());
+                                result.compactedPacks(), level.dimension().identifier());
                     }
                 },
                 failure -> LumiMod.LOGGER.error(
