@@ -313,7 +313,7 @@ Idle tick вызывает coordinator, zone-growth flush, раз в 20 ticks re
 
 `T_ui = t_enqueue - t_ui_start`,
 
-`t_ui_start` фиксируется после установки независимого server tick probe и непосредственно перед измеряемым действием клиента; служебная синхронизация harness не входит в UI latency.
+`t_ui_start` фиксируется после установки независимого server tick probe и непосредственно перед Enter по уже сфокусированной кнопке подтверждения; служебная синхронизация и навигация harness не входят в UI latency.
 
 `T_op = t_terminal - t_enqueue`,
 

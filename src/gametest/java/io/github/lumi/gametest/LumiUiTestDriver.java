@@ -52,8 +52,8 @@ final class LumiUiTestDriver {
         typeIntoFocusedTextBox(LumiDashboardScreen.class, query);
         pressFilteredHistoryAction("luma.action.restore");
         context.waitForScreen(LumiRestoreScreen.class);
-        beforeConfirm.run();
-        pressUniqueButton(LumiRestoreScreen.class, "luma.action.restore");
+        pressButton(
+                LumiRestoreScreen.class, "luma.action.restore", 0, true, beforeConfirm);
         context.waitForScreen(LumiDashboardScreen.class);
         closeScreen(LumiDashboardScreen.class, null);
     }
@@ -453,6 +453,15 @@ final class LumiUiTestDriver {
             String translationKey,
             int index,
             boolean unique) {
+        pressButton(expectedScreen, translationKey, index, unique, () -> { });
+    }
+
+    private void pressButton(
+            Class<? extends Screen> expectedScreen,
+            String translationKey,
+            int index,
+            boolean unique,
+            Runnable beforePress) {
         requireScreen(expectedScreen);
         for (int step = 0; step < MAX_FOCUS_STEPS; step++) {
             ButtonState state = buttonState(expectedScreen, translationKey, index);
@@ -470,6 +479,7 @@ final class LumiUiTestDriver {
                 continue;
             }
             if (state.focused()) {
+                beforePress.run();
                 context.getInput().pressKey(InputConstants.KEY_RETURN);
                 return;
             }
