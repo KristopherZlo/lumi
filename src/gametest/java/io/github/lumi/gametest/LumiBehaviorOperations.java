@@ -174,7 +174,7 @@ final class LumiBehaviorOperations {
     }
 
     void restore(String name, CommitId target) throws IOException {
-        runOperation("restore_" + name, () -> restoreFromUi(target));
+        measureRestore(name, target);
     }
 
     LumiRestoreMeasurement measureRestore(String name, CommitId target)
