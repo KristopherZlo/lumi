@@ -36,9 +36,7 @@ final class ObjectPackIndex {
                     .sorted()
                     .toList()) {
                 for (var entry : read(index).entrySet()) {
-                    if (entries.putIfAbsent(entry.getKey(), entry.getValue()) != null) {
-                        throw new IOException("Duplicate packed object " + entry.getKey());
-                    }
+                    entries.putIfAbsent(entry.getKey(), entry.getValue());
                 }
             }
         }

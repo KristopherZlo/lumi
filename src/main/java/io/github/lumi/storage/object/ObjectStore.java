@@ -207,6 +207,7 @@ public final class ObjectStore {
             for (Path pack : files
                     .filter(path -> path.getFileName().toString().endsWith(".pack"))
                     .filter(path -> !indexed.contains(path))
+                    .filter(path -> !Files.exists(indexFor(path)))
                     .toList()) {
                 if (Files.getLastModifiedTime(pack).toInstant().isBefore(cutoff)) {
                     Files.deleteIfExists(pack);
@@ -438,7 +439,15 @@ public final class ObjectStore {
             Objects.requireNonNull(id, "id");
             PackedObject packed = packedObject(id);
             if (packed != null) {
-                return packs.read(packed);
+                try {
+                    return packs.read(packed);
+                } catch (java.nio.file.NoSuchFileException replacedPack) {
+                    PackedObject refreshed = refreshPackedObjects().get(id);
+                    if (refreshed == null || refreshed.pack().equals(packed.pack())) {
+                        throw replacedPack;
+                    }
+                    return packs.read(refreshed);
+                }
             }
             Path path = pathFor(id);
             try {

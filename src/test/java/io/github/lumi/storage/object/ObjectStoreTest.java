@@ -100,6 +100,11 @@ class ObjectStoreTest {
 
         assertArrayEquals(payload, reader.read(id));
         assertEquals(Set.of(id), reader.listIds());
+        Path originalPack;
+        try (var files = Files.list(tempDir.resolve("packs"))) {
+            originalPack = files.filter(path -> path.toString().endsWith(".pack"))
+                    .findFirst().orElseThrow();
+        }
         try (ObjectStore.WriteBatch batch = reader.beginBatch()) {
             assertEquals(id, batch.write(payload));
             batch.publish();
@@ -107,6 +112,23 @@ class ObjectStoreTest {
         try (var files = Files.walk(tempDir.resolve("packs"))) {
             assertEquals(2, files.filter(Files::isRegularFile).count());
         }
+
+        try (ObjectPack.Writer replacement = ObjectPack.writer(
+                tempDir.resolve("packs"))) {
+            assertEquals(id, replacement.write(payload));
+            replacement.publish();
+        }
+        ObjectStore reopened = new ObjectStore(tempDir);
+        assertArrayEquals(payload, reopened.read(id));
+        reopened.deleteOrphanPacksBefore(java.time.Instant.MAX);
+        try (var files = Files.list(tempDir.resolve("packs"))) {
+            assertEquals(2,
+                    files.filter(path -> path.toString().endsWith(".pack")).count());
+        }
+        Files.delete(indexFor(originalPack));
+        Files.delete(originalPack);
+
+        assertArrayEquals(payload, reader.read(id));
     }
 
     @Test
@@ -248,5 +270,10 @@ class ObjectStoreTest {
     private Path loosePath(ObjectId id) {
         return tempDir.resolve(id.hex().substring(0, 2))
                 .resolve(id.hex().substring(2) + ".lz4");
+    }
+
+    private static Path indexFor(Path pack) {
+        String name = pack.getFileName().toString();
+        return pack.resolveSibling(name.substring(0, name.length() - 5) + ".idx");
     }
 }
