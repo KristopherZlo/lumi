@@ -195,7 +195,8 @@ Target и return plan имеют одинаковые множества keys �
 
 Native preparation выполняется off-thread slabs. Для slab действуют три ограничения:
 
-`sections ≤ 1024`, `estimated_heap ≤ 128 MiB`, `durable_window ≤ 32 chunks`.
+`sections ≤ 1024`, `estimated_heap ≤ 64 MiB/slab` (два pipeline-окна),
+`durable_window ≤ 32 chunks`. Slab с oversized payload не запускает prefetch.
 
 Перед разбиением на окна только уже доступные FULL chunks получают player-distance priority;
 merely-updating holders остаются в region-local порядке холодного I/O. Entity chunks
@@ -298,7 +299,7 @@ Power-loss/faulty-filesystem исследование является отде�
 | operation background pool | 2 threads, queue 256 |
 | durability background pool | 2 threads, queue 256 |
 | server-tick work budget coordinator | 50,000,000 ns |
-| Restore slab | estimate 128 MiB и максимум 1024 sections |
+| Restore slab | два pipeline-окна по estimate 64 MiB и максимум 1024 sections каждое; oversized без prefetch |
 | chunk window / simultaneous vanilla writes / pending FULL loads | 32 |
 | decoded section LRU | 32 на каждое направление |
 | pending preview block positions | 16,384 |
@@ -400,7 +401,7 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 | CAS refs/pointers | stale client/operation не переписывает новый HEAD | требует recovery для crash между world и pointer | оправдано |
 | двунаправленный Restore plan + journal | заранее подготовлен проверяемый return path после apply/verify/persist failure | return также может отказать и оставить `DEGRADED`; память/подготовка примерно для двух направлений | надёжность приоритетнее latency |
 | 32-chunk write windows, slab durability | ограничивает tickets/writes; 64-window в A/B ухудшил sync, app и heap | force и persisted reread остаются на границе slab | лучший из измеренных вариантов, не конечное решение |
-| estimated 128 MiB slab | ограничивает подготовку и переиспользует native decode | не является верхней границей JVM heap; 4 GiB run провалил gate | требует heap-метрики, не только estimate |
+| два estimated 64 MiB slab | перекрывают decode с apply/persist в прежнем суммарном бюджете | estimate не является верхней границей JVM heap; oversized не prefetchится | требует heap-метрики, не только estimate |
 | direct native section replacement | direct apply измеряется десятками/сотнями ms даже на больших endpoint | общая операция всё ещё ограничена loading/persistence | решение эффективно локально |
 | vanilla storage, без собственного world overlay | удаление Lumi оставляет обычный мир; неизвестные vanilla данные сохраняются | whole-world publication не атомарна, recovery зависит от journal | соответствует product constraint |
 | source-wins merge | детерминирован и прост для пользователя | конфликт не разрешается семантически и может скрыть current change | допустимо только при явном preview/confirmation |

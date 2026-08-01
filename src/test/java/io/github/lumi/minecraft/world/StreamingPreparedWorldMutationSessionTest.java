@@ -360,7 +360,7 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
-    void stagesSlabsBeforeOneFinalDurabilityBarrier() throws Exception {
+    void prefetchesNextSlabWhileFirstPersistsBeforeFinalBarrier() throws Exception {
         List<SectionKey> keys = new ArrayList<>();
         for (int sectionY = 0; sectionY < 1_025; sectionY++) {
             keys.add(new SectionKey(0, sectionY, 0));
@@ -377,20 +377,20 @@ class StreamingPreparedWorldMutationSessionTest {
             assertEquals(List.of(1_024), world.persistenceWindowSizes());
             assertEquals(PreparedWorldMutationSession.PersistenceMode.STAGE,
                     world.persistenceCalls.getFirst().mode());
-            assertEquals(1, background.submitted);
+            assertEquals(2, background.submitted);
+            assertEquals(1, background.pending());
+
+            background.runNext();
 
             assertFalse(session.applyUntil(Long.MAX_VALUE));
-            assertEquals(1, background.submitted);
+            assertEquals(2, background.submitted);
+            assertEquals(0, background.pending());
 
             world.persistence.getFirst().complete = true;
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(2, background.submitted);
-            assertEquals(1, background.pending());
+            assertEquals(0, background.pending());
             assertEquals(1, world.persistence.getFirst().closeCalls);
-            assertEquals(List.of(1_024), world.persistenceWindowSizes());
-
-            background.runNext();
-            assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(List.of(1_024, 1), world.persistenceWindowSizes());
 
             world.persistence.getLast().complete = true;

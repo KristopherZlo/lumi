@@ -23,10 +23,12 @@ import java.util.concurrent.Executor;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-/** Decodes an estimated 128 MiB, then applies it in bounded residency windows. */
+/** Double-buffers estimated 64 MiB slabs and applies bounded residency windows. */
 final class StreamingPreparedWorldMutationSession implements WorldStateApply.ApplySession {
     static final int MAX_CHUNKS = 32;
-    static final long MAX_ESTIMATED_BYTES = 128L * 1024 * 1024;
+    static final long MAX_ESTIMATED_BYTES = 64L * 1024 * 1024;
+    private static final long MAX_OVERSIZED_ESTIMATED_BYTES =
+            2 * MAX_ESTIMATED_BYTES;
     static final int MAX_SECTIONS_PER_SLAB = 1_024;
     private static final long RAW_SECTION_BYTES = 32L * 1024;
     private static final long NATIVE_SECTION_BYTES = 96L * 1024;
@@ -53,7 +55,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private int entityCleanupCount;
     private int entityStorageCleanupStart;
     private int entityStorageCleanupEnd;
-    private CompletableFuture<PreparedMinecraftState> preparing;
+    private CompletableFuture<PreparedSlab> preparing;
     private CompletableFuture<Set<EntityChunkKey>> entityCleanup;
     private DimensionFreeze.Lease entityLoadSuppression;
     private PreparedMinecraftState entityRemoval;
@@ -185,12 +187,15 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         cleanupEntityIds = null;
         if (batchStart < plan.sectionKeys().size()) {
             if (slab == null) {
-                startSectionPreparation();
                 if (!DeadlineFuture.await(preparing, deadlineNanos)) {
                     return false;
                 }
-                slab = claimPrepared();
+                PreparedSlab prepared = claimPrepared();
+                slab = prepared.state();
                 slabEnd = batchStart + slab.sectionKeys().size();
+                if (prepared.prefetchAllowed()) {
+                    startSectionPreparation();
+                }
             }
             batchEnd = windowEnd(
                     plan.sectionKeys(), batchStart, slabEnd, resident);
@@ -237,18 +242,19 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     }
 
     private void startSectionPreparation() {
-        if (slab != null || preparing != null
-                || batchStart >= plan.sectionKeys().size()) {
+        int start = slab == null ? batchStart : slabEnd;
+        if (preparing != null || start >= plan.sectionKeys().size()) {
             return;
         }
-        int start = batchStart;
         preparing = CompletableFuture.supplyAsync(() -> {
             long started = System.nanoTime();
             try {
                 Batch batch = loadBatch(start);
-                return preparation.preparePreflightedBatch(
+                PreparedMinecraftState state = preparation.preparePreflightedBatch(
                         batch.target(), batch.base(), batch.order(),
                         () -> closed);
+                return new PreparedSlab(
+                        state, batch.estimatedBytes() <= MAX_ESTIMATED_BYTES);
             } catch (UncheckedIOException failed) {
                 throw new CompletionException(failed.getCause());
             } catch (IOException failed) {
@@ -360,8 +366,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 Map.of(), decoded, List.of(), keys);
     }
 
-    private PreparedMinecraftState claimPrepared() throws IOException {
-        CompletableFuture<PreparedMinecraftState> pending = preparing;
+    private PreparedSlab claimPrepared() throws IOException {
+        CompletableFuture<PreparedSlab> pending = preparing;
         preparing = null;
         try {
             return pending.join();
@@ -384,13 +390,14 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         Map<SectionBlob, Boolean> rawSections = new IdentityHashMap<>();
         Map<SectionBlob, Boolean> nativeSections = new IdentityHashMap<>();
         long estimatedBytes = TRANSIENT_PREPARATION_BYTES;
+        long byteLimit = MAX_ESTIMATED_BYTES;
         int limit = (int) Math.min(
                 keys.size(), (long) start + MAX_SECTIONS_PER_SLAB);
         for (int index = start; index < limit; index++) {
             if (closed) {
                 throw new CancellationException("Restore preparation was cancelled");
             }
-            if (!target.isEmpty() && estimatedBytes >= MAX_ESTIMATED_BYTES) {
+            if (!target.isEmpty() && estimatedBytes >= byteLimit) {
                 break;
             }
             SectionKey key = keys.get(index);
@@ -414,7 +421,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                         additionalBytes, estimatedNativeBytes(targetSection));
             }
             if (!target.isEmpty()
-                    && additionalBytes > MAX_ESTIMATED_BYTES - estimatedBytes) {
+                    && additionalBytes > byteLimit - estimatedBytes) {
                 break;
             }
             target.put(key, targetSection);
@@ -424,11 +431,14 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             rawSections.put(baseSection, Boolean.TRUE);
             nativeSections.put(targetSection, Boolean.TRUE);
             estimatedBytes = addEstimated(estimatedBytes, additionalBytes);
+            if (target.size() == 1 && estimatedBytes > MAX_ESTIMATED_BYTES) {
+                byteLimit = MAX_OVERSIZED_ESTIMATED_BYTES;
+            }
         }
         return new Batch(
                 new WorldStateApply.State(target, Map.of()),
                 new WorldStateApply.State(base, Map.of()),
-                order);
+                order, estimatedBytes);
     }
 
     private PreparedMinecraftState nextSectionWindow() {
@@ -651,7 +661,12 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private record Batch(
             WorldStateApply.State target,
             WorldStateApply.State base,
-            List<SectionKey> order) { }
+            List<SectionKey> order,
+            long estimatedBytes) { }
+
+    private record PreparedSlab(
+            PreparedMinecraftState state,
+            boolean prefetchAllowed) { }
 
     private enum BatchKind { SECTIONS, ENTITIES, SPAWNS, FINAL }
     private enum Phase {
