@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -22,6 +23,7 @@ public final class RetentionService {
             "hidden/rollback/");
     private final CommitRepository commits;
     private final BranchRefRepository refs;
+    private final HashMap<CommitId, Instant> timestamps = new HashMap<>();
 
     public RetentionService(CommitRepository commits, BranchRefRepository refs) {
         this.commits = Objects.requireNonNull(commits, "commits");
@@ -44,7 +46,9 @@ public final class RetentionService {
         }
         record HiddenRef(BranchRef ref, Instant timestamp) { }
         var hidden = new ArrayList<HiddenRef>();
-        var timestamps = new HashMap<CommitId, Instant>();
+        var currentCommits = new HashSet<CommitId>();
+        checkpoints.forEach(ref -> currentCommits.add(ref.commit()));
+        timestamps.keySet().retainAll(currentCommits);
         for (BranchRef ref : checkpoints) {
             Instant timestamp = timestamps.get(ref.commit());
             if (timestamp == null) {
