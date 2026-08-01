@@ -167,8 +167,8 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             startLighting();
             while (phase != Phase.COMPLETE && System.nanoTime() < deadlineNanos) {
                 boolean advanced = switch (phase) {
-                    case LIGHTING -> awaitLighting();
-                    case CHUNKS -> saveChunk();
+                    case LIGHTING -> awaitLighting(deadlineNanos);
+                    case CHUNKS -> saveChunk(deadlineNanos);
                     case ENTITIES -> saveEntityChunk();
                     case PLAYERS -> savePlayer();
                     case SYNCHRONIZING -> synchronizeStorage(deadlineNanos);
@@ -194,8 +194,8 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         }
     }
 
-    private boolean awaitLighting() throws IOException {
-        if (!lighting.isDone()) {
+    private boolean awaitLighting(long deadlineNanos) throws IOException {
+        if (!DeadlineFuture.await(lighting, deadlineNanos)) {
             return false;
         }
         MinecraftPersistenceFuture.join(lighting, "Restore lighting");
@@ -232,7 +232,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         return Set.copyOf(surrounding);
     }
 
-    private boolean saveChunk() throws IOException {
+    private boolean saveChunk(long deadlineNanos) throws IOException {
         if (!lightingSynchronized && nextChunk == firstLightAffectedChunk) {
             transitionTo(Phase.LIGHTING);
             return true;
@@ -242,7 +242,8 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             return true;
         }
         var chunkMap = (ChunkMapPersistenceAccessor) level.getChunkSource().chunkMap;
-        if (chunkMap.lumi$activeChunkWrites().get() >= MAX_PENDING_CHUNK_WRITES) {
+        if (!DeadlineFuture.await(() -> chunkMap.lumi$activeChunkWrites().get()
+                < MAX_PENDING_CHUNK_WRITES, deadlineNanos)) {
             return false;
         }
         ChunkCoordinate coordinate = chunks.get(nextChunk);

@@ -198,6 +198,11 @@ Native preparation выполняется off-thread slabs. Для slab дейс
 `sections ≤ 1024`, `estimated_heap ≤ 64 MiB/slab` (два pipeline-окна),
 `durable_window ≤ 32 chunks`. Slab с oversized payload не запускает prefetch.
 
+Chunk-readiness и lighting futures, а также backpressure лимита 32 активных chunk
+writes используют остаток текущего 50-ms tick budget вместо безусловной потери
+следующего 20-Hz poll. Если background work не завершился в budget, операция
+продолжает обычный incremental fallback.
+
 Перед разбиением на окна только уже доступные FULL chunks получают player-distance priority;
 merely-updating holders остаются в region-local порядке холодного I/O. Entity chunks
 детерминированно группируются по ближайшему к игроку region и локальному индексу файла,
