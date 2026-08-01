@@ -233,8 +233,8 @@ final class LumiBehaviorOperations {
             UUID requestId = send(name, () -> action.run(() -> {
                 heapBefore[0] = usedHeap(jvm);
                 peakHeap[0] = heapBefore[0];
-                uiStarted.set(System.nanoTime());
                 tickProbe.set(server.computeOnServer(LumiServerTickProbe::open));
+                uiStarted.set(System.nanoTime());
             }), uiStarted::get);
             if (uiStarted.get() == 0) {
                 throw new AssertionError(
