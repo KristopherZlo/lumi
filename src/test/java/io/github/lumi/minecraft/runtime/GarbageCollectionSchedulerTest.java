@@ -11,16 +11,33 @@ class GarbageCollectionSchedulerTest {
     @Test
     void schedulesOnlyWhenIdleAndNeverRunsCollectionOnTheTickCaller() {
         var queued = new ArrayList<Runnable>();
+        AtomicInteger compactions = new AtomicInteger();
+        AtomicInteger compactedPacks = new AtomicInteger();
         AtomicInteger collections = new AtomicInteger();
         var results = new ArrayList<GarbageCollectionResult>();
         var failures = new ArrayList<Throwable>();
         GarbageCollectionScheduler scheduler = new GarbageCollectionScheduler(
                 0, queued::add,
                 () -> {
+                    compactions.incrementAndGet();
+                    return 7;
+                }, compactedPacks::set,
+                () -> {
                     collections.incrementAndGet();
                     return new GarbageCollectionResult(2, 3, 4);
                 },
                 results::add, failures::add);
+
+        scheduler.tick(GarbageCollectionScheduler.STARTUP_COMPACTION_DELAY_TICKS - 1, false);
+        assertEquals(0, queued.size());
+        scheduler.tick(GarbageCollectionScheduler.STARTUP_COMPACTION_DELAY_TICKS, true);
+        assertEquals(0, queued.size());
+        scheduler.tick(GarbageCollectionScheduler.STARTUP_COMPACTION_DELAY_TICKS
+                + GarbageCollectionScheduler.RETRY_TICKS, false);
+        assertEquals(1, queued.size());
+        queued.removeFirst().run();
+        assertEquals(1, compactions.get());
+        assertEquals(7, compactedPacks.get());
 
         scheduler.tick(GarbageCollectionScheduler.INITIAL_DELAY_TICKS, true);
         scheduler.tick(

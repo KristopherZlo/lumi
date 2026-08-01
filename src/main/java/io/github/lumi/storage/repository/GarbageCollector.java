@@ -49,13 +49,18 @@ public final class GarbageCollector {
             deletedCommits++;
         }
         objects.compactLoose(plan.compactableObjects());
+        int compactedPacks = compactPacks();
+        return new GarbageCollectionResult(
+                deletedCommits, deletedObjects, compactedPacks);
+    }
+
+    public int compactPacks() throws IOException {
         int compactedPacks = 0;
         int compacted;
         while ((compacted = objects.compactSmallPacks()) > 0) {
             compactedPacks += compacted;
         }
-        return new GarbageCollectionResult(
-                deletedCommits, deletedObjects, compactedPacks);
+        return compactedPacks;
     }
 
     private Plan plan(Set<CommitId> retainedCommits, Instant deleteBefore)

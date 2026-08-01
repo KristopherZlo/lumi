@@ -305,6 +305,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 background, zones, this::activeWorkspaceId);
         garbageCollection = new GarbageCollectionScheduler(
                 level.getGameTime(), background,
+                () -> new GarbageCollector(repository).compactPacks(),
+                compacted -> {
+                    if (compacted > 0) {
+                        LumiMod.LOGGER.info(
+                                "Lumi startup maintenance compacted {} packs in {}",
+                                compacted, level.dimension().identifier());
+                    }
+                },
                 () -> new GarbageCollector(repository).collect(
                         Set.of(), Instant.now().minus(Duration.ofHours(24))),
                 result -> {
