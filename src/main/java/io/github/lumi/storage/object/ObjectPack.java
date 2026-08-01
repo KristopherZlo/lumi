@@ -212,8 +212,8 @@ final class ObjectPack {
         Published publish() throws IOException {
             requireOpen();
             if (entries.isEmpty()) {
-                published = true;
                 close();
+                published = true;
                 return new Published(Map.of());
             }
             writeInt(channel, 4, entries.size());

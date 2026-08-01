@@ -278,18 +278,32 @@ public final class ObjectStore {
     }
 
     private void verifyExisting(ObjectId id, byte[] expected) throws IOException {
-        if (!Arrays.equals(expected, read(id))) {
+        try (ReadSession session = beginReadSession()) {
+            verifyExisting(id, expected, session);
+        }
+    }
+
+    private void verifyExisting(ObjectId id, byte[] expected, ReadSession session)
+            throws IOException {
+        if (!Arrays.equals(expected, session.read(id))) {
             throw corrupt(id, "SHA-256 collision");
         }
     }
 
     private boolean verifyExistingIfPresent(ObjectId id, byte[] expected)
             throws IOException {
+        try (ReadSession session = beginReadSession()) {
+            return verifyExistingIfPresent(id, expected, session);
+        }
+    }
+
+    private boolean verifyExistingIfPresent(
+            ObjectId id, byte[] expected, ReadSession session) throws IOException {
         if (!Files.exists(pathFor(id)) && packedObject(id) == null) {
             return false;
         }
         try {
-            verifyExisting(id, expected);
+            verifyExisting(id, expected, session);
             return true;
         } catch (java.nio.file.NoSuchFileException removedPack) {
             refreshPackedObjects();
@@ -384,6 +398,7 @@ public final class ObjectStore {
 
     public final class WriteBatch implements AutoCloseable {
         private final ObjectPack.Writer writer;
+        private final ReadSession existingObjects = beginReadSession();
         private boolean published;
 
         private WriteBatch(ObjectPack.Writer writer) {
@@ -393,7 +408,7 @@ public final class ObjectStore {
         public ObjectId write(byte[] canonicalPayload) throws IOException {
             Objects.requireNonNull(canonicalPayload, "canonicalPayload");
             ObjectId id = ObjectId.hash(canonicalPayload);
-            if (verifyExistingIfPresent(id, canonicalPayload)) {
+            if (verifyExistingIfPresent(id, canonicalPayload, existingObjects)) {
                 return id;
             }
             return writer.write(canonicalPayload);
@@ -410,7 +425,9 @@ public final class ObjectStore {
 
         @Override
         public void close() throws IOException {
-            writer.close();
+            try (writer; existingObjects) {
+                // Both resources belong to this batch.
+            }
         }
     }
 

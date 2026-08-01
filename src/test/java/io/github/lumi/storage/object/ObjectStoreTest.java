@@ -105,7 +105,7 @@ class ObjectStoreTest {
             batch.publish();
         }
         try (var files = Files.walk(tempDir.resolve("packs"))) {
-            assertEquals(1, files.filter(path -> path.toString().endsWith(".pack")).count());
+            assertEquals(2, files.filter(Files::isRegularFile).count());
         }
     }
 
