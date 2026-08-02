@@ -5,8 +5,8 @@ import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
-/** Transfers one asynchronously prepared mutation or closes it after its owner shuts down. */
-final class PreparedMutationOwnership<T extends DimensionMutation> {
+/** Transfers one asynchronous artifact or cleans it after its owner shuts down. */
+final class PreparedMutationOwnership<T> {
     private final CompletableFuture<T> preparation;
     private final Cleanup<T> cleanup;
     private boolean claimed;

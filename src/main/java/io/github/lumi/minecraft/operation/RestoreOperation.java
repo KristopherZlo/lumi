@@ -76,6 +76,7 @@ public final class RestoreOperation implements DimensionMutation {
             boolean journalPersisted,
             WorldStateApply.PreparedState preparedTarget,
             WorldStateApply.PreparedState preparedReturn,
+            WorldStateApply.ApplySession targetSession,
             RestoreStateListener stateListener) {
         this.restore = restore;
         this.world = world;
@@ -85,6 +86,7 @@ public final class RestoreOperation implements DimensionMutation {
         this.journalPersisted = journalPersisted;
         this.preparedTarget = preparedTarget;
         this.preparedReturn = preparedReturn;
+        this.targetSession = targetSession;
         this.stateListener = stateListener;
     }
 
@@ -141,6 +143,32 @@ public final class RestoreOperation implements DimensionMutation {
     }
 
     public static RestoreOperation startBranchSwitch(
+            PrewarmedRestore prewarmed,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            BranchSwitchPlan plan,
+            CommitId returnPoint,
+            WorkingIndexSnapshot capturedGenerations,
+            Consumer<OperationProgress> progress) throws IOException {
+        Objects.requireNonNull(prewarmed, "prewarmed");
+        PreparedRestore restore = prewarmed.restore();
+        Objects.requireNonNull(plan, "plan");
+        if (!restore.expectedRef().equals(plan.source())
+                || !restore.targetCommit().equals(plan.target().commit())) {
+            prewarmed.close();
+            throw new IOException("Prewarmed Restore does not match branch switch plan");
+        }
+        return startPrewarmed(
+                prewarmed, world, publication, journals, operationId,
+                stateListener, OperationKind.BRANCH_SWITCH,
+                branchSwitchTarget(plan, returnPoint),
+                Optional.of(capturedGenerations));
+    }
+
+    public static RestoreOperation startBranchSwitch(
             PreparedRestore restore,
             WorldStateApply world,
             RestorePublication publication,
@@ -190,15 +218,20 @@ public final class RestoreOperation implements DimensionMutation {
                 || !restore.targetCommit().equals(plan.target().commit())) {
             throw new IOException("Prepared Restore does not match branch switch plan");
         }
-        OperationTarget target = new OperationTarget(
+        return start(restore, world, publication, journals, operationId,
+                stateListener, OperationKind.BRANCH_SWITCH,
+                branchSwitchTarget(plan, returnPoint),
+                capturedGenerations, progress);
+    }
+
+    private static OperationTarget branchSwitchTarget(
+            BranchSwitchPlan plan, CommitId returnPoint) {
+        return new OperationTarget(
                 plan.source().name(), plan.source().commit(), plan.source().revision(),
                 Optional.of(plan.target().commit()), Optional.of(returnPoint),
                 Optional.of(new BranchSwitchTarget(
                         plan.target().name(), plan.target().revision(),
                         plan.expectedActive().revision())));
-        return start(restore, world, publication, journals, operationId,
-                stateListener, OperationKind.BRANCH_SWITCH, target,
-                capturedGenerations, progress);
     }
 
     public static RestoreOperation startWorkspaceSwitch(
@@ -393,6 +426,28 @@ public final class RestoreOperation implements DimensionMutation {
                 Optional.of(capturedGenerations), progress);
     }
 
+    public static RestoreOperation startCheckpointed(
+            PrewarmedRestore prewarmed,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            CommitId returnPoint,
+            WorkingIndexSnapshot capturedGenerations) throws IOException {
+        PreparedRestore restore = Objects.requireNonNull(
+                prewarmed, "prewarmed").restore();
+        OperationTarget target = new OperationTarget(
+                restore.expectedRef().name(), restore.expectedRef().commit(),
+                restore.expectedRef().revision(), Optional.of(restore.targetCommit()),
+                Optional.of(Objects.requireNonNull(returnPoint, "returnPoint")));
+        return startPrewarmed(
+                prewarmed, world, publication, journals, operationId,
+                stateListener, OperationKind.RESTORE, target,
+                Optional.of(Objects.requireNonNull(
+                        capturedGenerations, "capturedGenerations")));
+    }
+
     public static RestoreOperation startQuickRollback(
             PreparedRestore restore,
             WorldStateApply world,
@@ -554,7 +609,48 @@ public final class RestoreOperation implements DimensionMutation {
                 Objects.requireNonNull(capturedGenerations, "capturedGenerations"));
         return new RestoreOperation(
                 restore, world, publication, journals, journal, false,
-                prepared.target(), prepared.returnPoint(), stateListener);
+                prepared.target(), prepared.returnPoint(), null, stateListener);
+    }
+
+    static PrewarmedRestore prewarm(
+            PreparedRestore restore,
+            WorldStateApply world,
+            Consumer<OperationProgress> progress) throws IOException {
+        WorldStateApply.PreparedStates prepared = prepareWorldStates(
+                restore, world, targetState(restore), returnState(restore), progress);
+        try {
+            return new PrewarmedRestore(
+                    restore, prepared, world.begin(prepared.target()));
+        } catch (RuntimeException failed) {
+            restore.close();
+            throw failed;
+        }
+    }
+
+    private static RestoreOperation startPrewarmed(
+            PrewarmedRestore prewarmed,
+            WorldStateApply world,
+            RestorePublication publication,
+            OperationJournalRepository journals,
+            UUID operationId,
+            RestoreStateListener stateListener,
+            OperationKind kind,
+            OperationTarget target,
+            Optional<WorkingIndexSnapshot> capturedGenerations) throws IOException {
+        Objects.requireNonNull(world, "world");
+        Objects.requireNonNull(publication, "publication");
+        Objects.requireNonNull(journals, "journals");
+        Objects.requireNonNull(stateListener, "stateListener");
+        PreparedRestore restore = prewarmed.restore();
+        OperationJournal journal = new OperationJournal(
+                Objects.requireNonNull(operationId, "operationId"),
+                Objects.requireNonNull(kind, "kind"), OperationPhase.PREPARED,
+                Objects.requireNonNull(target, "target"),
+                Objects.requireNonNull(capturedGenerations, "capturedGenerations"));
+        return new RestoreOperation(
+                restore, world, publication, journals, journal, false,
+                prewarmed.states().target(), prewarmed.states().returnPoint(),
+                prewarmed.targetSession(), stateListener);
     }
 
     private static RestoreOperation prepare(
@@ -575,7 +671,7 @@ public final class RestoreOperation implements DimensionMutation {
                 restore, world, targetState, returnState, progress);
         return new RestoreOperation(
                 restore, world, publication, journals, journal, true,
-                prepared.target(), prepared.returnPoint(), stateListener);
+                prepared.target(), prepared.returnPoint(), null, stateListener);
     }
 
     private static WorldStateApply.PreparedStates prepareWorldStates(
@@ -636,6 +732,26 @@ public final class RestoreOperation implements DimensionMutation {
             default -> { }
         }
         return status;
+    }
+
+    public record PrewarmedRestore(
+            PreparedRestore restore,
+            WorldStateApply.PreparedStates states,
+            WorldStateApply.ApplySession targetSession) implements AutoCloseable {
+        public PrewarmedRestore {
+            Objects.requireNonNull(restore, "restore");
+            Objects.requireNonNull(states, "states");
+            Objects.requireNonNull(targetSession, "targetSession");
+        }
+
+        @Override
+        public void close() throws IOException {
+            try {
+                targetSession.close();
+            } finally {
+                restore.close();
+            }
+        }
     }
 
     private void beginTargetSession() {

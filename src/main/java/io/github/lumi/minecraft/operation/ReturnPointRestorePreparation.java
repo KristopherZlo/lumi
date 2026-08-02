@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.service.BlockOnlyRestoreService;
 import io.github.lumi.domain.service.ForwardHistoryService;
+import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.domain.service.SaveResult;
 import io.github.lumi.minecraft.world.WorldStateApply;
@@ -72,6 +73,58 @@ public final class ReturnPointRestorePreparation {
             Consumer<OperationProgress> progress) {
         return CompletableFuture.supplyAsync(() -> {
             try {
+                return prepareNow(
+                        source, checkpoint, target, operationId,
+                        publication, progress);
+            } catch (IOException failed) {
+                throw new CompletionException(failed);
+            }
+        }, background);
+    }
+
+    public RestorePrewarm prewarmCheckpoint(
+            BranchRef source,
+            CommitId target,
+            Consumer<OperationProgress> progress) {
+        Objects.requireNonNull(source, "source");
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(progress, "progress");
+        CompletableFuture<RestoreOperation.PrewarmedRestore> future =
+                CompletableFuture.supplyAsync(() -> {
+                    try {
+                        requireSource(source);
+                        PreparedRestore restore = restores.prepare(
+                                source, source.commit(), target,
+                                value -> publishProgress(
+                                        progress, "Restore prewarm: comparing", value));
+                        return RestoreOperation.prewarm(restore, world, progress);
+                    } catch (IOException failed) {
+                        throw new CompletionException(failed);
+                    }
+                }, background);
+        return new RestorePrewarm(source, target, restores, future);
+    }
+
+    public CompletableFuture<RestoreOperation> prepareCheckpoint(
+            BranchRef source,
+            SaveResult checkpoint,
+            CommitId target,
+            UUID operationId,
+            RestorePublication publication,
+            Consumer<OperationProgress> progress,
+            RestorePrewarm prewarm) {
+        Objects.requireNonNull(prewarm, "prewarm");
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                requireSource(source);
+                var prepared = prewarm.claim(checkpoint);
+                if (prepared.isPresent()) {
+                    forwardHistory.retain(source);
+                    return RestoreOperation.startCheckpointed(
+                            prepared.orElseThrow(), world, publication, journals,
+                            operationId, stateListener, checkpoint.commitId(),
+                            checkpoint.capturedGenerations());
+                }
                 return prepareNow(
                         source, checkpoint, target, operationId,
                         publication, progress);

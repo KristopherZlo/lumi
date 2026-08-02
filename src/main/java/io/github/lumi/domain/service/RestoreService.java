@@ -69,6 +69,13 @@ public final class RestoreService {
         }
     }
 
+    public boolean hasSameWorldState(CommitId left, CommitId right) throws IOException {
+        Commit leftCommit = commits.read(Objects.requireNonNull(left, "left"));
+        Commit rightCommit = commits.read(Objects.requireNonNull(right, "right"));
+        return leftCommit.tree().equals(rightCommit.tree())
+                && leftCommit.playerSpawns().equals(rightCommit.playerSpawns());
+    }
+
     public PreparedRestore prepare(BranchRef currentRef, CommitId targetCommit) throws IOException {
         return prepare(currentRef, currentRef.commit(), targetCommit,
                 null, false, true, null, NO_PROGRESS);

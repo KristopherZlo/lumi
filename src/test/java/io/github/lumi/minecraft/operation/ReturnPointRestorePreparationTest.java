@@ -10,6 +10,7 @@ import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
+import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.BlockOnlyRestoreService;
@@ -97,6 +98,61 @@ class ReturnPointRestorePreparationTest {
         assertTrue(stale.getCause() instanceof java.io.IOException);
     }
 
+    @Test
+    void reusesPrewarmedWorldPlanForAnEquivalentCheckpoint() throws Exception {
+        WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
+        CommitRepository commits = new CommitRepository(repositoryRoot);
+        BranchRefRepository refs = new BranchRefRepository(repositoryRoot);
+        OperationJournalRepository journals = new OperationJournalRepository(repositoryRoot);
+        var tree = objects.write(new DimensionTree(Map.of()));
+        var target = commits.write(commit(tree, List.of(), CommitKind.MANUAL));
+        var current = commits.write(commit(tree, List.of(target), CommitKind.MANUAL));
+        var source = refs.create(new BranchName("main"), current);
+        var checkpoint = commits.write(
+                commit(tree, List.of(current), CommitKind.HIDDEN_RETURN));
+        var saved = new SaveResult(
+                checkpoint,
+                refs.create(new BranchName("hidden/return/prewarm"), checkpoint),
+                WorkingIndexSnapshot.empty());
+        CountingWorldApply world = new CountingWorldApply();
+        ReturnPointRestorePreparation preparation = new ReturnPointRestorePreparation(
+                new RestoreService(objects, commits, new OriginStore(repositoryRoot)),
+                new BlockOnlyRestoreService(
+                        objects, commits, new OriginStore(repositoryRoot)),
+                world, refs, journals, new ForwardHistoryService(commits, refs),
+                Runnable::run);
+        RestorePrewarm prewarm = preparation.prewarmCheckpoint(
+                source, target, ignored -> { });
+
+        RestoreOperation operation = preparation.prepareCheckpoint(
+                source, saved, target, UUID.randomUUID(),
+                new BranchRefRestorePublication(refs), ignored -> { }, prewarm).join();
+
+        assertEquals(2, world.prepareCalls);
+        assertEquals(1, world.beginCalls);
+        operation.close();
+
+        var changedCheckpoint = commits.write(new Commit(
+                tree, List.of(current), new CommitAuthor(new UUID(0, 0), "Lumi"),
+                "Return", Instant.EPOCH, new UUID(1, 1), Optional.empty(),
+                CommitKind.HIDDEN_RETURN, new CommitStatistics(0, 0, 0, 0),
+                Map.of(new UUID(9, 9), new PlayerSpawn(1, 2, 3, 0, 0, false))));
+        var changedSave = new SaveResult(
+                changedCheckpoint,
+                refs.create(new BranchName("hidden/return/stale"), changedCheckpoint),
+                WorkingIndexSnapshot.empty());
+        RestorePrewarm stale = preparation.prewarmCheckpoint(
+                source, target, ignored -> { });
+
+        RestoreOperation fallback = preparation.prepareCheckpoint(
+                source, changedSave, target, UUID.randomUUID(),
+                new BranchRefRestorePublication(refs), ignored -> { }, stale).join();
+
+        assertEquals(6, world.prepareCalls);
+        assertEquals(2, world.beginCalls);
+        fallback.close();
+    }
+
     private static Commit commit(
             io.github.lumi.domain.model.ObjectId tree,
             List<io.github.lumi.domain.model.CommitId> parents,
@@ -119,6 +175,21 @@ class ReturnPointRestorePreparationTest {
                 @Override public boolean repairUntil(long deadlineNanos) { return true; }
                 @Override public void restartVerification() { }
             };
+        }
+    }
+
+    private static final class CountingWorldApply implements WorldStateApply {
+        private int prepareCalls;
+        private int beginCalls;
+
+        @Override public PreparedState prepare(State target) {
+            prepareCalls++;
+            return new Prepared(target);
+        }
+
+        @Override public ApplySession begin(PreparedState target) {
+            beginCalls++;
+            return new NoOpWorldApply().begin(target);
         }
     }
 
