@@ -73,12 +73,14 @@ class DimensionOperationCoordinatorTest {
     }
 
     @Test
-    void queuedOperationCanBeCancelledBeforeItStarts() throws Exception {
+    void disconnectedBuilderLosesOnlyQueuedWorkWhileActiveBuilderFinishes()
+            throws Exception {
         var global = new ArrayList<MutationTerminalState>();
         var request = new ArrayList<MutationTerminalState>();
         var ticket = new ArrayList<MutationTerminalState>();
+        RecordingFreeze freeze = new RecordingFreeze();
         DimensionOperationCoordinator coordinator = new DimensionOperationCoordinator(
-                new RecordingFreeze(), () -> 0L, 1L,
+                freeze, () -> 0L, 1L,
                 operation -> global.add(operation.terminalState()));
         TwoTickMutation activeMutation = new TwoTickMutation(false);
         coordinator.start(activeMutation);
@@ -96,6 +98,15 @@ class DimensionOperationCoordinatorTest {
         assertEquals(java.util.List.of(MutationTerminalState.CANCELLED), request);
         assertEquals(java.util.List.of(MutationTerminalState.CANCELLED), ticket);
         assertTrue(!coordinator.cancel(queued));
+
+        coordinator.tick();
+        coordinator.tick();
+
+        assertEquals(java.util.List.of(
+                MutationTerminalState.CANCELLED,
+                MutationTerminalState.SUCCEEDED), global);
+        assertEquals(1, freeze.releaseCalls);
+        assertTrue(!coordinator.hasActiveOperation());
     }
 
     @Test
