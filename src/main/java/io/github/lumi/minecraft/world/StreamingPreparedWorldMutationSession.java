@@ -48,6 +48,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private final Predicate<ChunkCoordinate> resident;
     private final RestoreApplyMetrics metrics = new RestoreApplyMetrics();
     private final Set<ChunkCoordinate> slabStored = new HashSet<>();
+    private final Set<ChunkCoordinate> poiChunks = new HashSet<>();
     private int batchStart;
     private int batchEnd;
     private int slabEnd;
@@ -233,6 +234,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                         plan.sectionKeys(), batchStart, slabEnd, resident);
             }
             PreparedMinecraftState window = nextSectionWindow();
+            poiChunks.addAll(window.persistencePoiChunks(Set.of()));
             ChunkLoadSession windowChunks = prewarmedChunks == null
                     ? chunkLoads.apply(sectionReadiness(window))
                     : prewarmedChunks;
@@ -269,7 +271,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                     new PreparedMinecraftState(empty, Map.of(), Map.of()), world,
                     System::nanoTime, null, metrics,
                     PreparedWorldMutationSession.PersistenceMode.FINAL,
-                    plan.source(), plan.sectionKeys(), plan.entityKeys(), Set.of());
+                    plan.source(), plan.sectionKeys(), plan.entityKeys(), Set.of(),
+                    Set.copyOf(poiChunks));
             currentKind = BatchKind.FINAL;
             phase = Phase.APPLYING;
             return true;

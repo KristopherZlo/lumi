@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionKey;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,5 +39,21 @@ public record PreparedMinecraftState(
                 || !Set.copyOf(entityKeys).equals(entities.keySet())) {
             throw new IllegalArgumentException("Prepared key order must contain every key once");
         }
+    }
+
+    Set<ChunkCoordinate> persistencePoiChunks(Set<ChunkCoordinate> alreadyStored) {
+        Set<ChunkCoordinate> chunks = new HashSet<>();
+        for (SectionKey key : sectionKeys) {
+            ChunkCoordinate chunk = ChunkCoordinate.from(key);
+            if (alreadyStored.contains(chunk)) {
+                continue;
+            }
+            DecodedSection section = sections.get(key);
+            if (!section.hasPreparedDelta()
+                    || section.preparedDelta().poiIndexes().length != 0) {
+                chunks.add(chunk);
+            }
+        }
+        return Set.copyOf(chunks);
     }
 }

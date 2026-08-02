@@ -29,6 +29,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private final List<SectionKey> verificationSections;
     private final List<EntityChunkKey> verificationEntities;
     private final Set<ChunkCoordinate> alreadyStored;
+    private final Set<ChunkCoordinate> finalPoiChunks;
     private final boolean playerSpawnsIncluded;
     private final List<SectionKey> sections;
     private final List<EntityChunkKey> entities;
@@ -100,6 +101,23 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             List<SectionKey> verificationSections,
             List<EntityChunkKey> verificationEntities,
             Set<ChunkCoordinate> alreadyStored) {
+        this(target, world, nanoTime, chunks, metrics, persistenceMode,
+                verificationTarget, verificationSections, verificationEntities,
+                alreadyStored, Set.of());
+    }
+
+    PreparedWorldMutationSession(
+            PreparedMinecraftState target,
+            PreparedWorldAccess world,
+            LongSupplier nanoTime,
+            ChunkLoadSession chunks,
+            RestoreApplyMetrics metrics,
+            PersistenceMode persistenceMode,
+            WorldStateApply.State verificationTarget,
+            List<SectionKey> verificationSections,
+            List<EntityChunkKey> verificationEntities,
+            Set<ChunkCoordinate> alreadyStored,
+            Set<ChunkCoordinate> finalPoiChunks) {
         this.target = Objects.requireNonNull(target, "target");
         this.world = Objects.requireNonNull(world, "world");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
@@ -114,6 +132,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 verificationEntities, "verificationEntities"));
         this.alreadyStored = Set.copyOf(Objects.requireNonNull(
                 alreadyStored, "alreadyStored"));
+        this.finalPoiChunks = Set.copyOf(Objects.requireNonNull(
+                finalPoiChunks, "finalPoiChunks"));
         this.playerSpawnsIncluded = target.source().playerSpawnsIncluded();
         sections = target.sectionKeys();
         entities = target.entityKeys();
@@ -229,7 +249,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 case FINAL -> world.beginPersistenceCommit(
                         target, verificationTarget,
                         verificationSections, verificationEntities,
-                        Set.copyOf(stored));
+                        Set.copyOf(stored), finalPoiChunks);
             };
         }
         boolean complete;

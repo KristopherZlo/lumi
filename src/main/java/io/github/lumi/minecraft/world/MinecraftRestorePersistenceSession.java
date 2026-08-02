@@ -82,6 +82,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             List<SectionKey> verificationSections,
             List<EntityChunkKey> verificationEntities,
             Set<ChunkCoordinate> alreadyStored,
+            Set<ChunkCoordinate> poiChunks,
             boolean savePlayers,
             boolean forceAndVerify) {
         this.level = Objects.requireNonNull(level, "level");
@@ -94,12 +95,12 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         Objects.requireNonNull(verificationSections, "verificationSections");
         Objects.requireNonNull(verificationEntities, "verificationEntities");
         Objects.requireNonNull(alreadyStored, "alreadyStored");
+        this.poiChunks = Set.copyOf(Objects.requireNonNull(poiChunks, "poiChunks"));
         this.forceAndVerify = forceAndVerify;
 
         Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> grouped =
                 groupedSections(writeTarget, alreadyStored);
         Set<ChunkCoordinate> relight = new HashSet<>();
-        Set<ChunkCoordinate> poi = new HashSet<>();
         writeTarget.sectionKeys().forEach(key -> {
             ChunkCoordinate chunk = ChunkCoordinate.from(key);
             if (!alreadyStored.contains(chunk)) {
@@ -108,9 +109,6 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                         ? section.preparedDelta() : null;
                 if (delta == null || delta.lightChanged()) {
                     relight.add(chunk);
-                }
-                if (delta == null || delta.poiIndexes().length != 0) {
-                    poi.add(chunk);
                 }
             }
         });
@@ -133,7 +131,6 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         firstLightAffectedChunk = firstAffected;
         chunks = List.copyOf(orderedChunks);
         lightingSynchronized = relightChunks.isEmpty();
-        poiChunks = Set.copyOf(poi);
         entityChunks = writeTarget.entityKeys();
         chunks.forEach(chunk -> pendingSnapshots.merge(chunk, 1, Integer::sum));
         entityChunks.forEach(key -> pendingSnapshots.merge(
@@ -343,10 +340,12 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                 prepared.add(MinecraftRegionStorageSynchronizer.prepare(
                         level.getChunkSource().chunkMap,
                         chunkVerificationChunks));
+            }
+            if (!poiChunks.isEmpty()) {
                 prepared.add(MinecraftRegionStorageSynchronizer.prepare(
                         ((SectionStoragePersistenceAccessor) poiManager)
                                 .lumi$simpleRegionStorage(),
-                        chunkVerificationChunks));
+                        poiChunks));
             }
             if (entityStorage != null && !entityVerificationChunks.isEmpty()) {
                 prepared.add(MinecraftRegionStorageSynchronizer.prepare(

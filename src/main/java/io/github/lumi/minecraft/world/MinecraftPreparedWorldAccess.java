@@ -56,7 +56,8 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             boolean playerSpawnsIncluded) {
         return beginPersistence(
                 target, target.source(), target.sectionKeys(), target.entityKeys(),
-                alreadyStored, playerSpawnsIncluded, true);
+                alreadyStored, target.persistencePoiChunks(alreadyStored),
+                playerSpawnsIncluded, true);
     }
 
     @Override
@@ -66,7 +67,8 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
         return beginPersistence(
                 writeTarget, writeTarget.source(),
                 writeTarget.sectionKeys(), writeTarget.entityKeys(),
-                alreadyStored, false, false);
+                alreadyStored, writeTarget.persistencePoiChunks(alreadyStored),
+                false, false);
     }
 
     @Override
@@ -75,11 +77,12 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             WorldStateApply.State verificationTarget,
             List<SectionKey> verificationSections,
             List<EntityChunkKey> verificationEntities,
-            Set<ChunkCoordinate> alreadyStored) {
+            Set<ChunkCoordinate> alreadyStored,
+            Set<ChunkCoordinate> poiChunks) {
         return beginPersistence(
                 writeTarget, verificationTarget,
                 verificationSections, verificationEntities,
-                alreadyStored, false, true);
+                alreadyStored, poiChunks, false, true);
     }
 
     private WorldPersistenceSession beginPersistence(
@@ -88,13 +91,14 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
             List<SectionKey> verificationSections,
             List<EntityChunkKey> verificationEntities,
             Set<ChunkCoordinate> alreadyStored,
+            Set<ChunkCoordinate> poiChunks,
             boolean playerSpawnsIncluded,
             boolean forceAndVerify) {
         return new MinecraftRestorePersistenceSession(
                 level, freeze, background, storedChunks, entities,
                 writeTarget, verificationTarget,
                 verificationSections, verificationEntities, alreadyStored,
-                playerSpawnsIncluded, forceAndVerify);
+                poiChunks, playerSpawnsIncluded, forceAndVerify);
     }
 
     @Override

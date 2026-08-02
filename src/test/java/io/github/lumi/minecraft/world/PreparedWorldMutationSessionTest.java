@@ -717,7 +717,8 @@ class PreparedWorldMutationSessionTest {
                 WorldStateApply.State verificationTarget,
                 List<SectionKey> verificationSections,
                 List<EntityChunkKey> verificationEntities,
-                Set<ChunkCoordinate> alreadyStored) {
+                Set<ChunkCoordinate> alreadyStored,
+                Set<ChunkCoordinate> poiChunks) {
             return persistence(
                     PreparedWorldMutationSession.PersistenceMode.FINAL, false);
         }

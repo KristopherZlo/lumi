@@ -262,6 +262,38 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
+    void finalBarrierCarriesOnlyChunksWithPoiChanges() throws Exception {
+        SectionKey poiKey = new SectionKey(2, 0, 0);
+        SectionKey plainKey = new SectionKey(3, 0, 0);
+        SectionBlob base = stoneSection();
+        var poiStates = new ArrayList<>(base.blockStates());
+        poiStates.set(0, "minecraft:lectern");
+        SectionBlob poi = new SectionBlob(poiStates, Map.of());
+        var target = new WorldStateApply.State(
+                Map.of(poiKey, poi, plainKey, poi), Map.of());
+        var source = new WorldStateApply.State(
+                Map.of(poiKey, base, plainKey, poi), Map.of());
+        var plan = new PreparedMinecraftPlanState(
+                target, source, Map.of(), Map.of(),
+                List.of(poiKey, plainKey), List.of(), Set.of());
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(poi);
+
+        try (var session = session(plan, world, background)) {
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            background.runNext();
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            world.persistence.getFirst().complete = true;
+
+            assertTrue(session.applyUntil(Long.MAX_VALUE));
+            PersistenceCall commit = world.persistenceCalls.getLast();
+            assertEquals(PreparedWorldMutationSession.PersistenceMode.FINAL,
+                    commit.mode());
+            assertEquals(Set.of(ChunkCoordinate.from(poiKey)), commit.poiChunks());
+        }
+    }
+
+    @Test
     void releasesFirstWindowTicketsBeforeRetainingTheSecondWindow() throws Exception {
         List<SectionKey> keys = new ArrayList<>();
         for (int chunk = 0; chunk < 129; chunk++) {
@@ -775,9 +807,10 @@ class StreamingPreparedWorldMutationSessionTest {
                 WorldStateApply.State verificationTarget,
                 List<SectionKey> verificationSections,
                 List<EntityChunkKey> verificationEntities,
-                Set<ChunkCoordinate> alreadyStored) {
+                Set<ChunkCoordinate> alreadyStored,
+                Set<ChunkCoordinate> poiChunks) {
             return persistence(PreparedWorldMutationSession.PersistenceMode.FINAL,
-                    writeTarget, verificationTarget, alreadyStored);
+                    writeTarget, verificationTarget, alreadyStored, poiChunks);
         }
 
         private WorldPersistenceSession persistence(
@@ -785,9 +818,19 @@ class StreamingPreparedWorldMutationSessionTest {
                 PreparedMinecraftState writeTarget,
                 WorldStateApply.State verificationTarget,
                 Set<ChunkCoordinate> alreadyStored) {
+            return persistence(
+                    mode, writeTarget, verificationTarget, alreadyStored, Set.of());
+        }
+
+        private WorldPersistenceSession persistence(
+                PreparedWorldMutationSession.PersistenceMode mode,
+                PreparedMinecraftState writeTarget,
+                WorldStateApply.State verificationTarget,
+                Set<ChunkCoordinate> alreadyStored,
+                Set<ChunkCoordinate> poiChunks) {
             persistenceCalls.add(new PersistenceCall(
                     mode, writeTarget.sectionKeys().size(),
-                    verificationTarget.sections().size(), alreadyStored));
+                    verificationTarget.sections().size(), alreadyStored, poiChunks));
             ManualPersistence next = new ManualPersistence();
             next.complete = mode == PreparedWorldMutationSession.PersistenceMode.FINAL
                     && completeFinalPersistence;
@@ -892,9 +935,11 @@ class StreamingPreparedWorldMutationSessionTest {
             PreparedWorldMutationSession.PersistenceMode mode,
             int writeSections,
             int verificationSections,
-            Set<ChunkCoordinate> alreadyStored) {
+            Set<ChunkCoordinate> alreadyStored,
+            Set<ChunkCoordinate> poiChunks) {
         private PersistenceCall {
             alreadyStored = Set.copyOf(alreadyStored);
+            poiChunks = Set.copyOf(poiChunks);
         }
     }
 

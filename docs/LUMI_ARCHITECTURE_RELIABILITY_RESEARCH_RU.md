@@ -578,3 +578,7 @@ branch ref, revision и удаление journal, затем выполняет 
 Полная матрица из восьми producer/verifier задач прошла за 6 min 11 s. Дополнительно прошли
 850 unit tests, интегрированный zone/entity exact Restore и existing-world branch-switch с
 persisted UUID audit и чистым reopen.
+
+Финальный POI barrier использует объединение только тех chunk, где prepared section delta
+меняет зарегистрированный POI. Неизвестный delta по-прежнему выбирает консервативный chunk-wide
+scope, а недоступные storage accessors сохраняют глобальный vanilla forced-sync fallback.
