@@ -100,7 +100,8 @@ public final class ClientOperationDiagnostics {
         phase(text, "loaded-apply", statistics.loadedApplyNanos());
         phase(text, "storage-read", statistics.storageReadNanos());
         phase(text, "storage-write", statistics.storageWriteNanos());
-        phase(text, "storage-sync", statistics.storageSyncNanos());
+        phase(text, "storage-barrier", statistics.storageSyncNanos());
+        phase(text, "storage-force", statistics.storageForceNanos());
         phase(text, "lighting", statistics.lightingNanos());
         phase(text, "verification", statistics.verificationNanos());
         text.append("\nworld changed-blocks=").append(statistics.changedBlocks())

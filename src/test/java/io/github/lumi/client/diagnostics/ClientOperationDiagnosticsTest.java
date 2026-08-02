@@ -37,6 +37,7 @@ class ClientOperationDiagnosticsTest {
         assertTrue(text.contains("phase Restore: preflight=20 ms"));
         assertTrue(text.contains("restore accuracy=exact (verified)"));
         assertTrue(text.contains("restore-phase lighting=7 ms"));
+        assertTrue(text.contains("restore-phase storage-force=8 ms"));
         assertTrue(text.contains("changed-blocks=4096"));
         var copy = assertInstanceOf(
                 ClickEvent.CopyToClipboard.class,
@@ -85,7 +86,7 @@ class ClientOperationDiagnosticsTest {
                 Optional.of(new RestoreStatisticsPayload(
                         8, 2, 4096, 11,
                         millis(1), millis(7), millis(2), millis(3),
-                        millis(4), millis(5), millis(6), millis(8))));
+                        millis(4), millis(5), millis(6), millis(8), millis(9))));
     }
 
     private static long millis(long value) {

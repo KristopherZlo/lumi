@@ -183,6 +183,9 @@ chunk snapshots вне радиуса один от relight chunks могут з
 записью затронутого lighting halo остаётся обязательный barrier. Финальный storage barrier
 по-прежнему ждёт все поставленные vanilla writes, но physical force выполняет только для
 region-файлов target chunk/POI/entity, а не для всего открытого кэша каждого `IOWorker`.
+Если scoped accessor недоступен, операция явно возвращается к vanilla global
+`synchronize(true)` и пишет warning; успех не публикуется без force. Метрики отдельно
+показывают enqueue write, ожидание write barrier, physical force и persisted verification.
 Persisted reread, точный reopen, return plan и journal publication protocol не изменены.
 Для full Restore один bounded intent-prewarm может заранее построить immutable
 source-to-target plan, выполнить двунаправленный preflight и запустить подготовку двух
@@ -335,7 +338,7 @@ Idle tick вызывает coordinator, zone-growth flush, раз в 20 ticks re
 
 `T_op = t_terminal - t_enqueue`,
 
-`T_app = T_loaded_apply + T_storage_write + T_storage_sync`,
+`T_app = T_loaded_apply + T_lighting + T_storage_write + T_storage_barrier + T_storage_force`,
 
 `M_extra = max_t(used_heap(t)) - used_heap_before`,
 

@@ -383,16 +383,19 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
 
     private static boolean fitsBulkWindow(
             List<SectionKey> sections, List<EntityChunkKey> entities) {
+        int maxChunks = entities.isEmpty()
+                ? StreamingPreparedWorldMutationSession.MAX_CHUNKS
+                : StreamingPreparedWorldMutationSession.MAX_ENTITY_CHUNKS;
         Set<ChunkCoordinate> chunks = new HashSet<>();
         for (HistoryKey key : sections) {
             if (chunks.add(ChunkCoordinate.from(key))
-                    && chunks.size() > StreamingPreparedWorldMutationSession.MAX_CHUNKS) {
+                    && chunks.size() > maxChunks) {
                 return false;
             }
         }
         for (HistoryKey key : entities) {
             if (chunks.add(ChunkCoordinate.from(key))
-                    && chunks.size() > StreamingPreparedWorldMutationSession.MAX_CHUNKS) {
+                    && chunks.size() > maxChunks) {
                 return false;
             }
         }

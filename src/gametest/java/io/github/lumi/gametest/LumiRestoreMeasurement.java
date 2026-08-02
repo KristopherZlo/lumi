@@ -29,8 +29,10 @@ record LumiRestoreMeasurement(
 
     long applicationNanos() {
         return apply.loadedApplyNanos()
+                + apply.lightingNanos()
                 + apply.storageWriteNanos()
-                + apply.storageSyncNanos();
+                + apply.storageSyncNanos()
+                + apply.storageForceNanos();
     }
 
     String chunkPath() {
@@ -72,7 +74,10 @@ record LumiRestoreMeasurement(
                 + ";loadedApplyMs=" + millis(apply.loadedApplyNanos())
                 + ";storageReadMs=" + millis(apply.storageReadNanos())
                 + ";storageWriteMs=" + millis(apply.storageWriteNanos())
-                + ";storageSyncMs=" + millis(apply.storageSyncNanos())
+                + ";storageSyncMs=" + millis(
+                        apply.storageSyncNanos() + apply.storageForceNanos())
+                + ";storageBarrierMs=" + millis(apply.storageSyncNanos())
+                + ";storageForceMs=" + millis(apply.storageForceNanos())
                 + ";verificationMs=" + millis(apply.verificationNanos());
     }
 

@@ -26,7 +26,7 @@ import java.util.function.Predicate;
 /** Double-buffers estimated 64 MiB slabs and applies bounded residency windows. */
 final class StreamingPreparedWorldMutationSession implements WorldStateApply.ApplySession {
     static final int MAX_CHUNKS = 128;
-    private static final int MAX_ENTITY_CHUNKS = 32;
+    static final int MAX_ENTITY_CHUNKS = 32;
     static final long MAX_ESTIMATED_BYTES = 64L * 1024 * 1024;
     private static final long MAX_OVERSIZED_ESTIMATED_BYTES =
             2 * MAX_ESTIMATED_BYTES;

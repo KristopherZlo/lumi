@@ -59,11 +59,16 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private int nextPlayer;
     private CompletableFuture<Void> lighting;
     private CompletableFuture<Void> synchronization;
+    private CompletableFuture<Void> forcing;
+    private List<MinecraftRegionStorageSynchronizer.Synchronization>
+            storageSynchronizations = List.of();
     private Phase phase = Phase.CHUNKS;
     private boolean lightingSynchronized;
     private long phaseStartedNanos;
+    private long lightingNanos;
     private long writeNanos;
     private long syncNanos;
+    private long forceNanos;
     private long verificationNanos;
 
     MinecraftRestorePersistenceSession(
@@ -177,6 +182,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                     case ENTITIES -> saveEntityChunk();
                     case PLAYERS -> savePlayer();
                     case SYNCHRONIZING -> synchronizeStorage(deadlineNanos);
+                    case FORCING -> forceStorage(deadlineNanos);
                     case VERIFYING -> verifyPersisted(deadlineNanos);
                     case COMPLETE -> true;
                 };
@@ -322,34 +328,54 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
 
     private boolean synchronizeStorage(long deadlineNanos) throws IOException {
         if (synchronization == null) {
-            var chunkSync = !forceAndVerify || chunkVerificationChunks.isEmpty()
-                    ? CompletableFuture.completedFuture(null)
-                    : MinecraftRegionStorageSynchronizer.synchronize(
-                            level.getChunkSource().chunkMap,
-                            chunkVerificationChunks);
             var poiManager = level.getChunkSource().getPoiManager();
             for (ChunkCoordinate chunk : poiChunks) {
                 poiManager.flush(new ChunkPos(chunk.x(), chunk.z()));
             }
-            var poiSync = !forceAndVerify || chunkVerificationChunks.isEmpty()
-                    ? CompletableFuture.completedFuture(null)
-                    : MinecraftRegionStorageSynchronizer.synchronize(
-                            ((SectionStoragePersistenceAccessor) poiManager)
-                                    .lumi$simpleRegionStorage(),
-                            chunkVerificationChunks);
-            var entitySync = !forceAndVerify || entityStorage == null
-                    || entityVerificationChunks.isEmpty()
-                    ? CompletableFuture.completedFuture(null)
-                    : MinecraftRegionStorageSynchronizer.synchronize(
-                            entityStorage, entityVerificationChunks);
-            synchronization = CompletableFuture.allOf(chunkSync, poiSync, entitySync);
+            if (!forceAndVerify) {
+                transitionTo(Phase.COMPLETE);
+                return true;
+            }
+            List<MinecraftRegionStorageSynchronizer.Synchronization> prepared =
+                    new ArrayList<>(3);
+            if (!chunkVerificationChunks.isEmpty()) {
+                prepared.add(MinecraftRegionStorageSynchronizer.prepare(
+                        level.getChunkSource().chunkMap,
+                        chunkVerificationChunks));
+                prepared.add(MinecraftRegionStorageSynchronizer.prepare(
+                        ((SectionStoragePersistenceAccessor) poiManager)
+                                .lumi$simpleRegionStorage(),
+                        chunkVerificationChunks));
+            }
+            if (entityStorage != null && !entityVerificationChunks.isEmpty()) {
+                prepared.add(MinecraftRegionStorageSynchronizer.prepare(
+                        entityStorage, entityVerificationChunks));
+            }
+            storageSynchronizations = List.copyOf(prepared);
+            synchronization = CompletableFuture.allOf(storageSynchronizations.stream()
+                    .map(MinecraftRegionStorageSynchronizer.Synchronization::writeBarrier)
+                    .toArray(CompletableFuture[]::new));
         }
         if (!DeadlineFuture.await(synchronization, deadlineNanos)) {
             return false;
         }
         MinecraftPersistenceFuture.join(
                 synchronization, "Restore storage synchronization");
-        transitionTo(forceAndVerify ? Phase.VERIFYING : Phase.COMPLETE);
+        transitionTo(Phase.FORCING);
+        return true;
+    }
+
+    private boolean forceStorage(long deadlineNanos) throws IOException {
+        if (forcing == null) {
+            forcing = CompletableFuture.allOf(storageSynchronizations.stream()
+                    .map(MinecraftRegionStorageSynchronizer.Synchronization::forceAffected)
+                    .toArray(CompletableFuture[]::new));
+        }
+        if (!DeadlineFuture.await(forcing, deadlineNanos)) {
+            return false;
+        }
+        MinecraftPersistenceFuture.join(forcing, "Restore affected-region force");
+        transitionTo(Phase.VERIFYING);
         return true;
     }
 
@@ -364,7 +390,9 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         long now = System.nanoTime();
         long elapsed = Math.max(0, now - phaseStartedNanos);
         switch (phase) {
-            case LIGHTING, SYNCHRONIZING -> syncNanos += elapsed;
+            case LIGHTING -> lightingNanos += elapsed;
+            case SYNCHRONIZING -> syncNanos += elapsed;
+            case FORCING -> forceNanos += elapsed;
             case CHUNKS, ENTITIES, PLAYERS -> writeNanos += elapsed;
             case VERIFYING -> verificationNanos += elapsed;
             case COMPLETE -> { }
@@ -406,7 +434,8 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             case CHUNKS -> "persisting loaded chunks";
             case ENTITIES -> "persisting entities";
             case PLAYERS -> "persisting players";
-            case SYNCHRONIZING -> "storage sync";
+            case SYNCHRONIZING -> "waiting for storage writes";
+            case FORCING -> "forcing affected regions";
             case VERIFYING -> verifier.phase();
             case COMPLETE -> "verification";
         };
@@ -414,7 +443,9 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
 
     @Override
     public Timings timings() {
-        return new Timings(writeNanos, syncNanos, verificationNanos);
+        return new Timings(
+                writeNanos, lightingNanos, syncNanos, forceNanos,
+                verificationNanos);
     }
 
     @Override
@@ -425,7 +456,8 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     }
 
     private enum Phase {
-        LIGHTING, CHUNKS, ENTITIES, PLAYERS, SYNCHRONIZING, VERIFYING, COMPLETE
+        LIGHTING, CHUNKS, ENTITIES, PLAYERS, SYNCHRONIZING, FORCING,
+        VERIFYING, COMPLETE
     }
     private record PlayerTarget(ServerPlayer player, ServerPlayer.RespawnConfig expected) { }
 }

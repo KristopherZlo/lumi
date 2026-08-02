@@ -17,11 +17,17 @@ public interface WorldPersistenceSession extends AutoCloseable {
     default void close() { }
 
     /** Wall time spent writing, synchronizing and optionally rereading one Restore stage. */
-    record Timings(long writeNanos, long syncNanos, long verificationNanos) {
-        public static final Timings EMPTY = new Timings(0, 0, 0);
+    record Timings(
+            long writeNanos,
+            long lightingNanos,
+            long syncNanos,
+            long forceNanos,
+            long verificationNanos) {
+        public static final Timings EMPTY = new Timings(0, 0, 0, 0, 0);
 
         public Timings {
-            if (writeNanos < 0 || syncNanos < 0 || verificationNanos < 0) {
+            if (writeNanos < 0 || lightingNanos < 0 || syncNanos < 0
+                    || forceNanos < 0 || verificationNanos < 0) {
                 throw new IllegalArgumentException("Persistence timings must be non-negative");
             }
         }

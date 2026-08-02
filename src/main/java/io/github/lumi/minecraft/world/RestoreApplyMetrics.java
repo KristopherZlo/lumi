@@ -23,6 +23,7 @@ final class RestoreApplyMetrics {
     private final LongAdder storageReadNanos = new LongAdder();
     private final LongAdder storageWriteNanos = new LongAdder();
     private final LongAdder storageSyncNanos = new LongAdder();
+    private final LongAdder storageForceNanos = new LongAdder();
     private final LongAdder verificationNanos = new LongAdder();
 
     RestoreApplyMetrics() {
@@ -74,8 +75,10 @@ final class RestoreApplyMetrics {
     void verification(long nanos) { verificationNanos.add(nanos); }
 
     void persistence(WorldPersistenceSession.Timings timings) {
+        lightingNanos.add(timings.lightingNanos());
         storageWriteNanos.add(timings.writeNanos());
         storageSyncNanos.add(timings.syncNanos());
+        storageForceNanos.add(timings.forceNanos());
         verificationNanos.add(timings.verificationNanos());
     }
 
@@ -90,6 +93,7 @@ final class RestoreApplyMetrics {
                 sectionPackets.sum(), packetPayloadBytes.sum(),
                 batchPreparationNanos.sum(), lightingNanos.sum(),
                 chunkLoadNanos.sum(), loadedApplyNanos.sum(), storageReadNanos.sum(),
-                storageWriteNanos.sum(), storageSyncNanos.sum(), verificationNanos.sum());
+                storageWriteNanos.sum(), storageSyncNanos.sum(),
+                storageForceNanos.sum(), verificationNanos.sum());
     }
 }

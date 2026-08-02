@@ -20,6 +20,7 @@ public record RestoreApplyStatistics(
         long storageReadNanos,
         long storageWriteNanos,
         long storageSyncNanos,
+        long storageForceNanos,
         long verificationNanos) {
     public RestoreApplyStatistics {
         storedFallbacks = Map.copyOf(storedFallbacks);
@@ -27,7 +28,8 @@ public record RestoreApplyStatistics(
                 loadedChunks, storedChunks, sectionSwaps, changedBlocks, lightSections,
                 fullChunkPackets, sectionPackets, packetPayloadBytes,
                 batchPreparationNanos, lightingNanos, chunkLoadNanos, loadedApplyNanos,
-                storageReadNanos, storageWriteNanos, storageSyncNanos, verificationNanos}) {
+                storageReadNanos, storageWriteNanos, storageSyncNanos,
+                storageForceNanos, verificationNanos}) {
             if (value < 0) {
                 throw new IllegalArgumentException("Restore statistics cannot be negative");
             }
@@ -35,5 +37,5 @@ public record RestoreApplyStatistics(
     }
 
     public static final RestoreApplyStatistics EMPTY = new RestoreApplyStatistics(
-            0, 0, Map.of(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            0, 0, Map.of(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }

@@ -937,7 +937,8 @@ public final class RestoreOperation implements DimensionMutation {
                         + "fullChunkPackets={}, sectionPackets={}, packetPayloadBytes={}, "
                         + "batchPreparationMs={}, lightingMs={}, chunkLoadMs={}, "
                         + "loadedApplyMs={}, storageReadMs={}, "
-                        + "storageWriteMs={}, storageSyncMs={}, verificationMs={}",
+                        + "storageWriteMs={}, storageBarrierMs={}, "
+                        + "storageForceMs={}, verificationMs={}",
                 endpoint, statistics.loadedChunks(), statistics.storedChunks(),
                 statistics.storedFallbacks(),
                 statistics.sectionSwaps(), statistics.changedBlocks(),
@@ -947,7 +948,9 @@ public final class RestoreOperation implements DimensionMutation {
                 millis(statistics.lightingNanos()),
                 millis(statistics.chunkLoadNanos()), millis(statistics.loadedApplyNanos()),
                 millis(statistics.storageReadNanos()), millis(statistics.storageWriteNanos()),
-                millis(statistics.storageSyncNanos()), millis(statistics.verificationNanos()));
+                millis(statistics.storageSyncNanos()),
+                millis(statistics.storageForceNanos()),
+                millis(statistics.verificationNanos()));
     }
 
     private static long millis(long nanos) {

@@ -155,7 +155,8 @@ class PreparedWorldMutationSessionTest {
         assertEquals(1, access.active);
         assertEquals(List.of(), access.released);
         ManualPersistence persistence = new ManualPersistence();
-        persistence.timings = new WorldPersistenceSession.Timings(5, 7, 11);
+        persistence.timings = new WorldPersistenceSession.Timings(
+                5, 13, 7, 9, 11);
         world.persistence = persistence;
         assertFalse(session.persistUntil(Long.MAX_VALUE));
         assertEquals(1, access.active);
@@ -165,7 +166,9 @@ class PreparedWorldMutationSessionTest {
         persistence.complete = true;
         assertTrue(session.persistUntil(Long.MAX_VALUE));
         assertEquals(5, session.statistics().storageWriteNanos());
+        assertEquals(13, session.statistics().lightingNanos());
         assertEquals(7, session.statistics().storageSyncNanos());
+        assertEquals(9, session.statistics().storageForceNanos());
         assertEquals(11, session.statistics().verificationNanos());
         assertTrue(session.persistUntil(Long.MAX_VALUE));
         assertEquals(5, session.statistics().storageWriteNanos());
@@ -484,13 +487,15 @@ class PreparedWorldMutationSessionTest {
         assertEquals(1, session.statistics().storageReadNanos());
         assertEquals(2, session.statistics().storageWriteNanos());
         assertEquals(3, session.statistics().storageSyncNanos());
+        assertEquals(0, session.statistics().storageForceNanos());
         assertEquals(4, session.statistics().verificationNanos());
         assertEquals(WorldStateApply.Verification.VERIFIED,
                 session.verifyUntil(Long.MAX_VALUE));
     }
 
     @Test
-    void groupsStoredWritesIntoWindowsOfThirtyTwoChunks() throws Exception {
+    void groupsStoredWritesIntoWindowsOfOneHundredTwentyEightChunks()
+            throws Exception {
         SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
         DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
@@ -498,7 +503,7 @@ class PreparedWorldMutationSessionTest {
         Map<SectionKey, SectionBlob> persistent = new LinkedHashMap<>();
         Map<SectionKey, DecodedSection> prepared = new LinkedHashMap<>();
         List<SectionKey> order = new ArrayList<>();
-        for (int chunkX = 0; chunkX < 40; chunkX++) {
+        for (int chunkX = 0; chunkX < 129; chunkX++) {
             SectionKey key = new SectionKey(chunkX, 0, 0);
             persistent.put(key, source);
             prepared.put(key, decoded);
@@ -515,8 +520,8 @@ class PreparedWorldMutationSessionTest {
 
         assertTrue(session.applyUntil(Long.MAX_VALUE));
         assertEquals(2, world.storedBatches);
-        assertEquals(32, world.maxStoredBatch);
-        assertEquals(40, session.statistics().storedChunks());
+        assertEquals(128, world.maxStoredBatch);
+        assertEquals(129, session.statistics().storedChunks());
     }
 
     @Test

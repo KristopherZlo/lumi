@@ -17,13 +17,14 @@ public record RestoreStatisticsPayload(
         long storageReadNanos,
         long storageWriteNanos,
         long storageSyncNanos,
+        long storageForceNanos,
         long verificationNanos) {
     public RestoreStatisticsPayload {
         for (long value : new long[] {
                 loadedChunks, storedChunks, changedBlocks, lightSections,
                 batchPreparationNanos, lightingNanos, chunkLoadNanos,
                 loadedApplyNanos, storageReadNanos, storageWriteNanos,
-                storageSyncNanos, verificationNanos}) {
+                storageSyncNanos, storageForceNanos, verificationNanos}) {
             if (value < 0) {
                 throw new IllegalArgumentException(
                         "Restore statistics cannot be negative");
@@ -39,7 +40,8 @@ public record RestoreStatisticsPayload(
                 statistics.batchPreparationNanos(), statistics.lightingNanos(),
                 statistics.chunkLoadNanos(), statistics.loadedApplyNanos(),
                 statistics.storageReadNanos(), statistics.storageWriteNanos(),
-                statistics.storageSyncNanos(), statistics.verificationNanos());
+                statistics.storageSyncNanos(), statistics.storageForceNanos(),
+                statistics.verificationNanos());
     }
 
     void write(FriendlyByteBuf buffer) {
@@ -54,6 +56,7 @@ public record RestoreStatisticsPayload(
         buffer.writeVarLong(storageReadNanos);
         buffer.writeVarLong(storageWriteNanos);
         buffer.writeVarLong(storageSyncNanos);
+        buffer.writeVarLong(storageForceNanos);
         buffer.writeVarLong(verificationNanos);
     }
 
@@ -64,6 +67,7 @@ public record RestoreStatisticsPayload(
                 buffer.readVarLong(), buffer.readVarLong(),
                 buffer.readVarLong(), buffer.readVarLong(),
                 buffer.readVarLong(), buffer.readVarLong(),
-                buffer.readVarLong(), buffer.readVarLong());
+                buffer.readVarLong(), buffer.readVarLong(),
+                buffer.readVarLong());
     }
 }

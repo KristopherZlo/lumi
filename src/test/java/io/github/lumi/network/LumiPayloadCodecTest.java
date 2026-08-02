@@ -396,7 +396,8 @@ class LumiPayloadCodecTest {
                 Optional.of(RestoreStatisticsPayload.from(
                         new RestoreApplyStatistics(
                                 7, 5, java.util.Map.of(), 9, 4096, 3,
-                                2, 4, 8192, 10, 11, 12, 13, 14, 15, 16, 17))));
+                                2, 4, 8192, 10, 11, 12, 13, 14, 15, 16, 17,
+                                18))));
 
         assertEquals(snapshot, roundTrip(HistorySnapshotPayload.CODEC, snapshot));
         assertEquals(event, roundTrip(OperationEventPayload.CODEC, event));
