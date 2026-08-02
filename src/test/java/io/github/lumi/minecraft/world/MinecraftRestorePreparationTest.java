@@ -212,6 +212,40 @@ class MinecraftRestorePreparationTest {
     }
 
     @Test
+    void composesFreshReturnDeltaWithoutRevalidatingThePrewarmedPlan() throws Exception {
+        SectionKey existing = new SectionKey(0, 0, 0);
+        SectionKey fresh = new SectionKey(1, 0, 0);
+        var target = new WorldStateApply.State(
+                Map.of(existing, section("minecraft:air")), Map.of());
+        var intermediate = new WorldStateApply.State(
+                Map.of(existing, section("minecraft:stone")), Map.of());
+        var deltaTarget = new WorldStateApply.State(Map.of(
+                existing, section("minecraft:stone"),
+                fresh, section("minecraft:dirt")), Map.of());
+        var checkpoint = new WorldStateApply.State(Map.of(
+                existing, section("minecraft:gold_block"),
+                fresh, section("minecraft:gold_block")), Map.of());
+        var exactTarget = new WorldStateApply.State(Map.of(
+                existing, target.sections().get(existing),
+                fresh, deltaTarget.sections().get(fresh)), Map.of());
+        var preparation = new MinecraftRestorePreparation(
+                new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
+                new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
+        PreparedMinecraftPlanState following = preparation.preflight(
+                target, intermediate, ignored -> { });
+        PreparedMinecraftPlanState preceding = preparation.preflight(
+                deltaTarget, checkpoint, ignored -> { });
+
+        PreparedMinecraftPlanState composed = following.composeAfter(
+                preceding, exactTarget, checkpoint);
+
+        assertEquals(exactTarget, composed.source());
+        assertEquals(checkpoint, composed.base());
+        assertEquals(List.of(existing, fresh), composed.sectionKeys());
+        assertEquals(checkpoint, composed.reversed().source());
+    }
+
+    @Test
     void preflightsAllPlannedEntityIdentitiesForBothRestoreDirections() throws Exception {
         EntityChunkKey oldKey = new EntityChunkKey(1, 2);
         EntityChunkKey targetKey = new EntityChunkKey(2, 2);
@@ -321,7 +355,11 @@ class MinecraftRestorePreparationTest {
     }
 
     private static SectionBlob airSection() {
+        return section("minecraft:air");
+    }
+
+    private static SectionBlob section(String state) {
         return new SectionBlob(new ArrayList<>(Collections.nCopies(
-                SectionBlob.BLOCK_COUNT, "minecraft:air")), Map.of());
+                SectionBlob.BLOCK_COUNT, state)), Map.of());
     }
 }

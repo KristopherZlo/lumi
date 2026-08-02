@@ -50,6 +50,16 @@ public interface WorldStateApply {
         return prepare(Objects.requireNonNull(source, "source"));
     }
 
+    default PreparedStates composePrepared(
+            PreparedStates following,
+            PreparedStates preceding,
+            State target,
+            State returnPoint) throws IOException {
+        Objects.requireNonNull(following, "following");
+        Objects.requireNonNull(preceding, "preceding");
+        return prepareBoth(target, returnPoint, ignored -> { }, ignored -> { });
+    }
+
     /** Creates cursors only. World mutation starts with {@link ApplySession#applyUntil(long)}. */
     ApplySession begin(PreparedState target);
 

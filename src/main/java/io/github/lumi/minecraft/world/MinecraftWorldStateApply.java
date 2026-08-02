@@ -81,6 +81,22 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     }
 
     @Override
+    public PreparedStates composePrepared(
+            PreparedStates following,
+            PreparedStates preceding,
+            State target,
+            State returnPoint) throws IOException {
+        if (following.target() instanceof PreparedMinecraftPlanState followingPlan
+                && preceding.target() instanceof PreparedMinecraftPlanState precedingPlan) {
+            PreparedMinecraftPlanState composed = followingPlan.composeAfter(
+                    precedingPlan, target, returnPoint);
+            return new PreparedStates(composed, composed.reversed());
+        }
+        return WorldStateApply.super.composePrepared(
+                following, preceding, target, returnPoint);
+    }
+
+    @Override
     public ApplySession begin(PreparedState target) {
         if (target instanceof PreparedMinecraftPlanState plan) {
             return new StreamingPreparedWorldMutationSession(

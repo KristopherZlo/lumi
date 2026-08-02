@@ -183,7 +183,7 @@ public final class MinecraftRestorePreparation {
                 source, decoded, Map.of(), order, List.of());
     }
 
-    private static List<SectionKey> orderedSections(Set<SectionKey> keys) {
+    static List<SectionKey> orderedSections(Set<SectionKey> keys) {
         return keys.stream()
                 .sorted(Comparator.comparingInt(SectionKey::chunkX)
                         .thenComparingInt(SectionKey::chunkZ)
@@ -191,7 +191,7 @@ public final class MinecraftRestorePreparation {
                 .toList();
     }
 
-    private static Set<UUID> cleanupEntityIds(
+    static Set<UUID> cleanupEntityIds(
             Map<EntityChunkKey, EntityChunkBlob> target,
             Map<EntityChunkKey, EntityChunkBlob> base) {
         Set<UUID> ids = new HashSet<>();

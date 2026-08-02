@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionKey;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -49,9 +50,44 @@ record PreparedMinecraftPlanState(
                 sectionKeys, entityKeys, cleanupEntityIds);
     }
 
+    PreparedMinecraftPlanState composeAfter(
+            PreparedMinecraftPlanState preceding,
+            WorldStateApply.State target,
+            WorldStateApply.State returnPoint) {
+        Objects.requireNonNull(preceding, "preceding");
+        Set<EntityChunkKey> entityKeys = target.entities().keySet();
+        Map<EntityChunkKey, DecodedEntityChunk> targetEntities = compose(
+                entityKeys, entities, preceding.entities);
+        Map<EntityChunkKey, DecodedEntityChunk> returnEntities = compose(
+                entityKeys, preceding.baseEntities, baseEntities);
+        var normalizedTarget = new WorldStateApply.State(
+                target.sections(), compose(
+                        entityKeys, source.entities(), preceding.source.entities()),
+                target.playerSpawns(), target.playerSpawnsIncluded());
+        var normalizedReturn = new WorldStateApply.State(
+                returnPoint.sections(),
+                compose(entityKeys, preceding.base.entities(), base.entities()),
+                returnPoint.playerSpawns(), returnPoint.playerSpawnsIncluded());
+        return new PreparedMinecraftPlanState(
+                normalizedTarget, normalizedReturn, targetEntities, returnEntities,
+                MinecraftRestorePreparation.orderedSections(
+                        target.sections().keySet()),
+                List.copyOf(targetEntities.keySet()),
+                MinecraftRestorePreparation.cleanupEntityIds(
+                        normalizedTarget.entities(), normalizedReturn.entities()));
+    }
+
     PreparedMinecraftPlanState reversed() {
         return new PreparedMinecraftPlanState(
                 base, source, baseEntities, entities, sectionKeys, entityKeys,
                 cleanupEntityIds);
+    }
+
+    private static <K, V> Map<K, V> compose(
+            Set<K> keys, Map<K, V> primary, Map<K, V> fallback) {
+        Map<K, V> composed = new LinkedHashMap<>();
+        keys.forEach(key -> composed.put(
+                key, primary.containsKey(key) ? primary.get(key) : fallback.get(key)));
+        return Map.copyOf(composed);
     }
 }
