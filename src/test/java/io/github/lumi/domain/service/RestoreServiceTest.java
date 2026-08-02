@@ -173,6 +173,14 @@ class RestoreServiceTest {
                         currentRef, checkpoint, target);
         assertEquals("minecraft:gold_block", fullFromCheckpoint.returnSections()
                 .get(new SectionKey(0, 0, 0)).blockStates().get(0));
+
+        RestoreService restores = new RestoreService(
+                objects, commits, new OriginStore(repositoryRoot));
+        PreparedRestore composed = restores.prepare(currentRef, current, target)
+                .composeAfter(restores.prepare(currentRef, checkpoint, current));
+        assertEquals(fullFromCheckpoint.sections(), composed.sections());
+        assertEquals(fullFromCheckpoint.returnSections(), composed.returnSections());
+        composed.close();
     }
 
     @Test

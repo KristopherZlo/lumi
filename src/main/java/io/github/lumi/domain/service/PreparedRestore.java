@@ -4,14 +4,18 @@ import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
-import io.github.lumi.domain.model.PlayerSpawn;
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.io.Closeable;
-import java.io.IOException;
 
 public record PreparedRestore(
         BranchRef expectedRef,
@@ -69,6 +73,47 @@ public record PreparedRestore(
                 returnSpawns, true);
     }
 
+    /**
+     * Composes {@code preceding: checkpoint -> expectedRef} with this
+     * {@code expectedRef -> target} plan. The returned plan owns both inputs.
+     */
+    public PreparedRestore composeAfter(PreparedRestore preceding) throws IOException {
+        Objects.requireNonNull(preceding, "preceding");
+        if (!expectedRef.equals(preceding.expectedRef)
+                || !expectedRef.commit().equals(preceding.targetCommit)
+                || restorePlayerSpawns != preceding.restorePlayerSpawns) {
+            throw new IllegalArgumentException("Restore plans do not share an intermediate state");
+        }
+        try {
+            requireSameIntermediate(returnSections, preceding.sections);
+            requireSameIntermediate(returnEntities, preceding.entities);
+            if (!returnPlayerSpawns.equals(preceding.playerSpawns)) {
+                throw new IllegalArgumentException(
+                        "Restore player spawns do not share an intermediate state");
+            }
+            List<SectionKey> sectionKeys = composedKeys(
+                    sections, preceding.returnSections);
+            Map<EntityChunkKey, EntityChunkBlob> targetEntities = new HashMap<>();
+            Map<EntityChunkKey, EntityChunkBlob> returnEntities = new HashMap<>();
+            for (EntityChunkKey key : composedKeys(entities, preceding.returnEntities)) {
+                targetEntities.put(key, entities.containsKey(key)
+                        ? entities.get(key) : preceding.entities.get(key));
+                returnEntities.put(key, preceding.returnEntities.containsKey(key)
+                        ? preceding.returnEntities.get(key) : this.returnEntities.get(key));
+            }
+            return new PreparedRestore(
+                    expectedRef, targetCommit,
+                    RestorePlanMap.compose(sectionKeys, sections, preceding.sections),
+                    targetEntities,
+                    RestorePlanMap.compose(
+                            sectionKeys, preceding.returnSections, returnSections),
+                    returnEntities, playerSpawns, preceding.returnPlayerSpawns,
+                    restorePlayerSpawns);
+        } catch (UncheckedIOException failed) {
+            throw failed.getCause();
+        }
+    }
+
     public PreparedRestore materialize() throws IOException {
         return new PreparedRestore(
                 expectedRef, targetCommit,
@@ -90,15 +135,30 @@ public record PreparedRestore(
         return values;
     }
 
-    @Override
-    public void close() throws IOException {
-        try (Closeable target = closeable(sections);
-                Closeable checkpoint = closeable(returnSections)) {
-            // try-with-resources preserves both close failures.
+    private static <K, V> void requireSameIntermediate(
+            Map<K, V> left, Map<K, V> right) {
+        for (K key : right.keySet()) {
+            if (left.containsKey(key) && !left.get(key).equals(right.get(key))) {
+                throw new IllegalArgumentException(
+                        "Restore plans disagree at their intermediate state: " + key);
+            }
         }
     }
 
-    private static Closeable closeable(Map<?, ?> values) {
-        return values instanceof Closeable closeable ? closeable : () -> { };
+    private static <K, V> List<K> composedKeys(
+            Map<K, V> target, Map<K, V> returnPoint) {
+        var keys = new LinkedHashSet<K>(target.keySet());
+        keys.addAll(returnPoint.keySet());
+        keys.removeIf(key -> target.containsKey(key) && returnPoint.containsKey(key)
+                && target.get(key).equals(returnPoint.get(key)));
+        return List.copyOf(keys);
+    }
+
+    @Override
+    public void close() throws IOException {
+        try (Closeable target = RestorePlanMap.closeable(sections);
+                Closeable checkpoint = RestorePlanMap.closeable(returnSections)) {
+            // try-with-resources preserves both close failures.
+        }
     }
 }

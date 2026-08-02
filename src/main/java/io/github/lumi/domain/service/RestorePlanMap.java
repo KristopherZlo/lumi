@@ -38,6 +38,15 @@ public final class RestorePlanMap<K, V> extends AbstractMap<K, V>
         this.resource = resource;
     }
 
+    static <K, V> RestorePlanMap<K, V> compose(
+            Collection<K> keys, Map<K, V> primary, Map<K, V> fallback) {
+        Objects.requireNonNull(primary, "primary");
+        Objects.requireNonNull(fallback, "fallback");
+        return new RestorePlanMap<>(keys,
+                key -> read(primary.containsKey(key) ? primary : fallback, key),
+                () -> close(primary, fallback));
+    }
+
     @Override public int size() { return keys.size(); }
     @Override public boolean containsKey(Object key) { return keys.contains(key); }
     @Override public Set<K> keySet() { return keys; }
@@ -85,5 +94,24 @@ public final class RestorePlanMap<K, V> extends AbstractMap<K, V>
                 }
             };
         }
+    }
+
+    private static <K, V> V read(Map<K, V> source, K key) throws IOException {
+        try {
+            return source.get(key);
+        } catch (UncheckedIOException failed) {
+            throw failed.getCause();
+        }
+    }
+
+    private static void close(Map<?, ?> first, Map<?, ?> second) throws IOException {
+        try (Closeable primary = closeable(first);
+                Closeable fallback = closeable(second)) {
+            // try-with-resources preserves both close failures.
+        }
+    }
+
+    static Closeable closeable(Map<?, ?> values) {
+        return values instanceof Closeable closeable ? closeable : () -> { };
     }
 }
