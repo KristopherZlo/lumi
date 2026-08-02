@@ -361,6 +361,35 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
+    void prewarmsAndTransfersTheFirstChunkWindowWithoutWorldMutation()
+            throws Exception {
+        SectionKey key = new SectionKey(0, 0, 0);
+        SectionBlob section = stoneSection();
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(section);
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
+
+        try (var session = session(
+                plan(List.of(key), section), world, background, readiness -> {
+                    requested.add(readiness);
+                    return new ChunkLoadSession(chunks, () -> 0L);
+                })) {
+            assertFalse(session.prewarmUntil(0));
+            background.runNext();
+            assertTrue(session.prewarmUntil(Long.MAX_VALUE));
+            assertEquals(1, chunks.active);
+            assertTrue(world.persistence.isEmpty());
+
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(1, chunks.peak);
+            assertEquals(1, requested.size());
+            assertEquals(List.of(1), world.persistenceWindowSizes());
+        }
+        assertEquals(0, chunks.active);
+    }
+
+    @Test
     void prefetchesNextSlabWhileFirstPersistsBeforeFinalBarrier() throws Exception {
         List<SectionKey> keys = new ArrayList<>();
         for (int sectionY = 0; sectionY < 1_025; sectionY++) {

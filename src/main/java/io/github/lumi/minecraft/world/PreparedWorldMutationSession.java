@@ -356,7 +356,9 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 return true;
             }
             bulkLoadStartedNanos = nanoTime.getAsLong();
-            chunks.retain(required);
+            if (!chunks.containsAll(required)) {
+                chunks.retain(required);
+            }
             bulkRetained = true;
         }
         if (!chunks.loadUntil(deadlineNanos)) {

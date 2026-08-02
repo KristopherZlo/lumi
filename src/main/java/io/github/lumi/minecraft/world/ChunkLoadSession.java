@@ -74,6 +74,7 @@ public final class ChunkLoadSession implements AutoCloseable {
             if (!access.isReady(current.getKey())) {
                 return false;
             }
+            ready.add(current.getKey());
             current = null;
             completed++;
         }
@@ -150,6 +151,16 @@ public final class ChunkLoadSession implements AutoCloseable {
 
     public int totalChunks() {
         return retained.size();
+    }
+
+    public boolean containsAll(Iterable<? extends HistoryKey> keys) {
+        Objects.requireNonNull(keys, "keys");
+        for (HistoryKey key : keys) {
+            if (!retained.containsKey(ChunkCoordinate.from(key))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void requireRetainable() {

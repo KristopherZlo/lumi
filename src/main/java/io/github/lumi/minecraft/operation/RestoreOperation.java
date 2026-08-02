@@ -744,6 +744,10 @@ public final class RestoreOperation implements DimensionMutation {
             Objects.requireNonNull(targetSession, "targetSession");
         }
 
+        public boolean prewarmUntil(long deadlineNanos) throws IOException {
+            return targetSession.prewarmUntil(deadlineNanos);
+        }
+
         @Override
         public void close() throws IOException {
             try {

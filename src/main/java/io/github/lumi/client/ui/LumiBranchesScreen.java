@@ -2,8 +2,11 @@ package io.github.lumi.client.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.onboarding.ClientContextualHelpHint;
+import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.network.HistorySnapshotPayload;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -28,6 +31,7 @@ public final class LumiBranchesScreen extends LumiPageScreen {
     private final Consumer<String> merge;
     private final Consumer<String> openHistory;
     private final Consumer<String> switcher;
+    private final Consumer<CommitId> prewarm;
     private final Consumer<String> deleter;
     private final Consumer<HistorySnapshotPayload.Branch> bindSlot;
     private final Function<HistorySnapshotPayload.Branch, String> bindingLabel;
@@ -37,6 +41,8 @@ public final class LumiBranchesScreen extends LumiPageScreen {
     private int scroll;
     private int contentOffset;
     private String error = "";
+    private final Map<LumiButton, CommitId> switchTargets = new LinkedHashMap<>();
+    private CommitId prewarmedTarget;
 
     public LumiBranchesScreen(
             Screen parent,
@@ -46,6 +52,7 @@ public final class LumiBranchesScreen extends LumiPageScreen {
             Consumer<String> merge,
             Consumer<String> openHistory,
             Consumer<String> switcher,
+            Consumer<CommitId> prewarm,
             Consumer<String> deleter,
             Consumer<HistorySnapshotPayload.Branch> bindSlot,
             Function<HistorySnapshotPayload.Branch, String> bindingLabel) {
@@ -61,6 +68,7 @@ public final class LumiBranchesScreen extends LumiPageScreen {
         this.merge = Objects.requireNonNull(merge, "merge");
         this.openHistory = Objects.requireNonNull(openHistory, "openHistory");
         this.switcher = Objects.requireNonNull(switcher, "switcher");
+        this.prewarm = Objects.requireNonNull(prewarm, "prewarm");
         this.deleter = Objects.requireNonNull(deleter, "deleter");
         this.bindSlot = Objects.requireNonNull(bindSlot, "bindSlot");
         this.bindingLabel = Objects.requireNonNull(bindingLabel, "bindingLabel");
@@ -69,6 +77,7 @@ public final class LumiBranchesScreen extends LumiPageScreen {
     @Override
     protected void init() {
         beginScreenInit();
+        switchTargets.clear();
         LumiPageLayout shell = pageLayout();
         layout = new LumiModalLayout(
                 shell.contentX(), shell.windowY(),
@@ -103,6 +112,11 @@ public final class LumiBranchesScreen extends LumiPageScreen {
                     + (index - start) * rowStride(layout.width());
             addBranchActions(branch, rowY);
         }
+        List<HistorySnapshotPayload.Branch> inactive = branches.stream()
+                .filter(branch -> !branch.active()).toList();
+        if (inactive.size() == 1) {
+            prewarm(inactive.getFirst().head());
+        }
     }
 
     private void addBranchActions(
@@ -129,6 +143,9 @@ public final class LumiBranchesScreen extends LumiPageScreen {
                     Component.translatable("luma.action.variant_switch"),
                     () -> switchBranch(branch.name()), LumiButton.Kind.PRIMARY);
         switchButton.active = !branch.active();
+        if (switchButton.active) {
+            switchTargets.put(switchButton, branch.head());
+        }
         addIconButton(switchX + iconStride, actionY, "folder",
                     Component.translatable("luma.action.open_history"),
                     () -> openHistory.accept(branch.name()),
@@ -227,6 +244,9 @@ public final class LumiBranchesScreen extends LumiPageScreen {
                     layout.y() + layout.height() - 44, LumiTheme.DANGER);
         }
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
+        switchTargets.entrySet().stream()
+                .filter(entry -> entry.getKey().isHovered())
+                .findFirst().ifPresent(entry -> prewarm(entry.getValue()));
         } finally {
             endScaledRender(graphics);
         }
@@ -234,6 +254,13 @@ public final class LumiBranchesScreen extends LumiPageScreen {
 
     private int visibleRows() {
         return visibleRows(layout.height(), contentOffset, layout.width());
+    }
+
+    private void prewarm(CommitId target) {
+        if (!target.equals(prewarmedTarget)) {
+            prewarm.accept(target);
+            prewarmedTarget = target;
+        }
     }
 
     static int inlineBranchNameWidth(int layoutWidth) {

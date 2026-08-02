@@ -192,8 +192,10 @@ source-to-target plan, выполнить двунаправленный preflig
 64-MiB slabs. Runtime хранит не более одного такого плана на dimension. После hidden
 return-point Save план используется только при равенстве Merkle tree и player spawns
 исходного и checkpoint commits; stale-план закрывается, после чего выполняется обычная
-точная подготовка от checkpoint. Созданный заранее apply-session не загружает chunks и не
-мутирует мир: первый `applyUntil` всё равно вызывается только после durable PREPARED journal.
+точная подготовка от checkpoint. После декодирования первой slab intent может на server thread
+заранее удержать и загрузить её первое bounded chunk-окно. Тот же `ChunkLoadSession` передаётся
+apply только после durable PREPARED journal; до журнала блоки, entities и vanilla storage не
+изменяются. Отмена или stale revalidation освобождает все tickets.
 Если intent отсутствует, branch switch запускает ту же подготовку параллельно hidden Save.
 Фоновая работа и working-index durability могут использовать остаток текущего 30 ms
 operation budget вместо ожидания следующего polling tick, но не расширяют deadline и не

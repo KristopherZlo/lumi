@@ -65,6 +65,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private List<EntityChunkKey> entityRemovalKeys;
     private List<EntityChunkKey> entityKeys;
     private PreparedMinecraftState slab;
+    private ChunkLoadSession prewarmedChunks;
     private PreparedWorldMutationSession current;
     private BatchKind currentKind;
     private Phase phase = Phase.PREPARING;
@@ -82,6 +83,34 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             Executor background,
             Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads) {
         this(plan, preparation, world, background, chunkLoads, ignored -> false);
+    }
+
+    @Override
+    public boolean prewarmUntil(long deadlineNanos) throws IOException {
+        if (closed || current != null || batchStart > 0
+                || plan.sectionKeys().isEmpty()) {
+            return true;
+        }
+        if (slab == null) {
+            if (!DeadlineFuture.await(preparing, deadlineNanos)) {
+                return false;
+            }
+            PreparedSlab prepared = claimPrepared();
+            slab = prepared.state();
+            slabEnd = prepared.end();
+            preparing = prepared.next();
+            if (preparing == null && prepared.prefetchAllowed()) {
+                startSectionPreparation(false);
+            }
+        }
+        if (prewarmedChunks == null) {
+            batchEnd = windowEnd(
+                    plan.sectionKeys(), batchStart, slabEnd, resident);
+            PreparedMinecraftState window = nextSectionWindow();
+            prewarmedChunks = chunkLoads.apply(sectionReadiness(window));
+            prewarmedChunks.retain(window.sectionKeys());
+        }
+        return prewarmedChunks.loadUntil(deadlineNanos);
     }
 
     StreamingPreparedWorldMutationSession(
@@ -199,12 +228,18 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                     startSectionPreparation(false);
                 }
             }
-            batchEnd = windowEnd(
-                    plan.sectionKeys(), batchStart, slabEnd, resident);
+            if (prewarmedChunks == null) {
+                batchEnd = windowEnd(
+                        plan.sectionKeys(), batchStart, slabEnd, resident);
+            }
             PreparedMinecraftState window = nextSectionWindow();
+            ChunkLoadSession windowChunks = prewarmedChunks == null
+                    ? chunkLoads.apply(sectionReadiness(window))
+                    : prewarmedChunks;
+            prewarmedChunks = null;
             current = new PreparedWorldMutationSession(
                     window, world, System::nanoTime,
-                    chunkLoads.apply(sectionReadiness(window)), metrics,
+                    windowChunks, metrics,
                     PreparedWorldMutationSession.PersistenceMode.STAGE,
                     window.source(), Set.copyOf(slabStored));
             currentKind = BatchKind.SECTIONS;
@@ -670,6 +705,10 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             } else {
                 closeFailure.addSuppressed(failed);
             }
+        }
+        if (prewarmedChunks != null) {
+            prewarmedChunks.close();
+            prewarmedChunks = null;
         }
         if (closeFailure != null) {
             throw closeFailure;

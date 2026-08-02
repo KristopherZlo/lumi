@@ -408,6 +408,7 @@ public final class LumiClient implements ClientModInitializer {
                     }
                 },
                 NETWORKING::switchBranch,
+                NETWORKING::prewarmRestore,
                 NETWORKING::deleteBranch,
                 branch -> client.setScreen(new LumiBranchSlotScreen(
                         client.screen, snapshot, branch, BRANCH_SLOTS,

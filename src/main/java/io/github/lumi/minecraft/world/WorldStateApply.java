@@ -88,6 +88,11 @@ public interface WorldStateApply {
     }
 
     interface ApplySession extends AutoCloseable {
+        /** Advances non-mutating readiness work before the operation owns the world. */
+        default boolean prewarmUntil(long deadlineNanos) throws IOException {
+            return true;
+        }
+
         boolean applyUntil(long deadlineNanos) throws IOException;
 
         Verification verifyUntil(long deadlineNanos) throws IOException;

@@ -150,6 +150,7 @@ import net.minecraft.world.level.storage.LevelResource;
 
 /** Server-authoritative Lumi state owned by one loaded Minecraft dimension. */
 public final class FabricDimensionRuntime implements AutoCloseable {
+    private static final long RESTORE_PREWARM_TICK_NANOS = 10_000_000L;
     private static final long AUTO_VERSION_INTERVAL_TICKS = 6_000;
     private static final long DURABILITY_RETRY_INTERVAL_TICKS = 20;
     private static final CommitAuthor AUTO_AUTHOR =
@@ -459,6 +460,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         } finally {
             zoneGrowth.flush();
         }
+        advanceRestorePrewarm();
         if (level.getGameTime() % DURABILITY_RETRY_INTERVAL_TICKS == 0) {
             mutations.retryFailedWrites();
         }
@@ -746,6 +748,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             SaveRequest request, Consumer<DimensionMutation> terminalObserver) throws IOException {
         return startSave(request,
                 () -> requireExpectedRef(request.expectedRef()), terminalObserver);
+    }
+
+    private synchronized void advanceRestorePrewarm() {
+        if (restorePrewarm == null) {
+            return;
+        }
+        try {
+            restorePrewarm.advanceUntil(
+                    System.nanoTime() + RESTORE_PREWARM_TICK_NANOS);
+        } catch (IOException | RuntimeException failed) {
+            LumiMod.LOGGER.warn(
+                    "Lumi Restore chunk prewarm failed; using exact fallback", failed);
+            closeRestorePrewarm();
+        }
     }
 
     private SaveCaptureOperation startSave(

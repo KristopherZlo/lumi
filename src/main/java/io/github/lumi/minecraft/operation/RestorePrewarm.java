@@ -56,6 +56,21 @@ public final class RestorePrewarm implements AutoCloseable {
         }
     }
 
+    public boolean advanceUntil(long deadlineNanos) throws IOException {
+        if (!future.isDone()) {
+            return false;
+        }
+        try {
+            return future.join().prewarmUntil(deadlineNanos);
+        } catch (CompletionException failed) {
+            Throwable cause = failed.getCause() == null ? failed : failed.getCause();
+            if (cause instanceof IOException io) {
+                throw io;
+            }
+            throw new IOException("Cannot prewarm Restore chunks", cause);
+        }
+    }
+
     @Override
     public void close() {
         try {
