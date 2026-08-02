@@ -566,3 +566,9 @@ origin/index writes перед capture. Это допустимо только �
 его полный checkpoint и ref становятся durable, после чего journal ссылается на этот commit
 как на точное направление rollback. Обычный Save по-прежнему ждёт origin/index durability,
 а vanilla publication остаётся закрытой существующим durability gate.
+
+Process-level проверка Restore запускается задачей `runRestoreCrashMatrix`. Для фаз
+`write`, `barrier`, `force` и `verify` отдельный producer создаёт настоящий мир, начинает
+Restore и завершает JVM через `Runtime.halt` только после durable marker. Новый JVM открывает
+тот же мир, подтверждает frozen recovery, завершает target, проверяет блоки, UUID сущности,
+branch ref, revision и удаление journal, затем выполняет ещё один чистый exact reopen.

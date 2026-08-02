@@ -82,7 +82,18 @@ tasks.named('runClientGameTest') {
                 || name == 'lumi.gametest.operationTimeoutTicks'
                 || name == 'lumi.gametest.firstMinuteOnly'
                 || name == 'lumi.gametest.suite'
+                || name.toString().startsWith('lumi.gametest.restoreCrash')
     }.each { name, value -> systemProperty name.toString(), value }
+    if (System.getProperty('lumi.gametest.restoreCrashMode') == 'produce') {
+        ignoreExitValue = true
+        doLast {
+            def marker = file(System.getProperty(
+                    'lumi.gametest.restoreCrashMarker', ''))
+            if (!marker.isFile()) {
+                throw new GradleException('Restore crash cutpoint was not reached')
+            }
+        }
+    }
     def benchmarkHeap = System.getProperty('lumi.benchmark.heap')
     if (benchmarkHeap != null && !benchmarkHeap.isBlank()) {
         jvmArgs "-Xmx${benchmarkHeap}"
@@ -112,6 +123,56 @@ tasks.named('runClientGameTest') {
             }
         }
     }
+}
+
+tasks.named('deleteGameTestRunDir') {
+    onlyIf { System.getProperty('lumi.gametest.restoreCrashMode') != 'verify' }
+}
+
+def restoreCrashPhases = ['write', 'barrier', 'force', 'verify']
+def restoreCrashVerifiers = []
+def previousRestoreCrashVerifier = null
+restoreCrashPhases.each { phase ->
+    def suffix = phase.capitalize()
+    def marker = layout.buildDirectory.file(
+            "reports/lumi-crash-matrix/${phase}.marker").get().asFile
+    def launcher = file(System.getProperty('os.name').toLowerCase().contains('windows')
+            ? 'gradlew.bat' : 'gradlew')
+    def producer = tasks.register("runRestoreCrash${suffix}Producer", Exec) {
+        group = 'verification'
+        description = "Crashes a Minecraft process after Restore ${phase}"
+        if (previousRestoreCrashVerifier != null) {
+            mustRunAfter(previousRestoreCrashVerifier)
+        }
+        doFirst {
+            delete(layout.buildDirectory.dir('run/clientGameTest'))
+            delete(marker)
+        }
+        commandLine launcher,
+                '-Dlumi.gametest.suite=RESTORE_CRASH',
+                '-Dlumi.gametest.restoreCrashMode=produce',
+                "-Dlumi.gametest.restoreCrashPhase=${phase}",
+                "-Dlumi.gametest.restoreCrashMarker=${marker.absolutePath}",
+                'runClientGameTest', '--no-daemon'
+    }
+    def verifier = tasks.register("runRestoreCrash${suffix}Verifier", Exec) {
+        group = 'verification'
+        description = "Recovers and reopens the Restore ${phase} crash world"
+        dependsOn(producer)
+        commandLine launcher,
+                '-Dlumi.gametest.suite=RESTORE_CRASH',
+                '-Dlumi.gametest.restoreCrashMode=verify',
+                "-Dlumi.gametest.restoreCrashExpectedPhase=${phase}",
+                'runClientGameTest', '--no-daemon'
+    }
+    restoreCrashVerifiers.add(verifier)
+    previousRestoreCrashVerifier = verifier
+}
+
+tasks.register('runRestoreCrashMatrix') {
+    group = 'verification'
+    description = 'Runs real process crashes at Restore persistence cutpoints'
+    dependsOn(restoreCrashVerifiers)
 }
 
 dependencies {
