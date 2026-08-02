@@ -44,6 +44,12 @@ public interface WorldStateApply {
         return new PreparedStates(preparedTarget, preparedReturn);
     }
 
+    default PreparedState replacePreparedSource(
+            PreparedState prepared, State source) throws IOException {
+        Objects.requireNonNull(prepared, "prepared");
+        return prepare(Objects.requireNonNull(source, "source"));
+    }
+
     /** Creates cursors only. World mutation starts with {@link ApplySession#applyUntil(long)}. */
     ApplySession begin(PreparedState target);
 

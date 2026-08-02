@@ -73,6 +73,14 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     }
 
     @Override
+    public PreparedState replacePreparedSource(
+            PreparedState prepared, State source) throws IOException {
+        return prepared instanceof PreparedMinecraftPlanState plan
+                ? plan.withSource(source)
+                : WorldStateApply.super.replacePreparedSource(prepared, source);
+    }
+
+    @Override
     public ApplySession begin(PreparedState target) {
         if (target instanceof PreparedMinecraftPlanState plan) {
             return new StreamingPreparedWorldMutationSession(

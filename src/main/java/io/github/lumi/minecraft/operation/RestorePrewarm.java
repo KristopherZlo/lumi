@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.service.RestoreService;
 import io.github.lumi.domain.service.SaveResult;
+import io.github.lumi.minecraft.world.WorldStateApply;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
@@ -38,16 +39,25 @@ public final class RestorePrewarm implements AutoCloseable {
     }
 
     public Optional<RestoreOperation.PrewarmedRestore> claim(
-            SaveResult returnPoint) throws IOException {
+            SaveResult returnPoint, WorldStateApply world) throws IOException {
         Objects.requireNonNull(returnPoint, "returnPoint");
-        if (!restores.hasSameWorldState(
-                source.commit(), returnPoint.commitId())) {
+        var returnSpawns = restores.playerSpawnsWhenTreeMatches(
+                source.commit(), returnPoint.commitId());
+        if (returnSpawns.isEmpty()) {
             close();
             return Optional.empty();
         }
         try {
-            future.join();
-            return Optional.of(ownership.claim());
+            RestoreOperation.PrewarmedRestore warmed = future.join();
+            RestoreOperation.PrewarmedRestore adjusted =
+                    warmed.withReturnPlayerSpawns(
+                            Objects.requireNonNull(world, "world"),
+                            returnSpawns.orElseThrow());
+            ownership.claim();
+            return Optional.of(adjusted);
+        } catch (IOException failed) {
+            close();
+            throw failed;
         } catch (CompletionException | IllegalStateException failed) {
             close();
             Throwable cause = failed.getCause() == null ? failed : failed.getCause();

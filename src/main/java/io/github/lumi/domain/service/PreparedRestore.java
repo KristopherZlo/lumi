@@ -58,6 +58,17 @@ public record PreparedRestore(
                 + (restorePlayerSpawns ? playerSpawns.size() : 0);
     }
 
+    public PreparedRestore withReturnPlayerSpawns(
+            Map<UUID, PlayerSpawn> returnSpawns) {
+        if (!restorePlayerSpawns) {
+            return this;
+        }
+        return new PreparedRestore(
+                expectedRef, targetCommit, sections, entities,
+                returnSections, returnEntities, playerSpawns,
+                returnSpawns, true);
+    }
+
     public PreparedRestore materialize() throws IOException {
         return new PreparedRestore(
                 expectedRef, targetCommit,

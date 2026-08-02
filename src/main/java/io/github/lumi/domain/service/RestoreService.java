@@ -11,6 +11,7 @@ import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.PartialRestorePlan;
 import io.github.lumi.domain.model.RegionCoordinate;
 import io.github.lumi.domain.model.RegionTree;
@@ -69,11 +70,13 @@ public final class RestoreService {
         }
     }
 
-    public boolean hasSameWorldState(CommitId left, CommitId right) throws IOException {
+    public Optional<Map<UUID, PlayerSpawn>>
+            playerSpawnsWhenTreeMatches(CommitId left, CommitId right)
+            throws IOException {
         Commit leftCommit = commits.read(Objects.requireNonNull(left, "left"));
         Commit rightCommit = commits.read(Objects.requireNonNull(right, "right"));
         return leftCommit.tree().equals(rightCommit.tree())
-                && leftCommit.playerSpawns().equals(rightCommit.playerSpawns());
+                ? Optional.of(rightCommit.playerSpawns()) : Optional.empty();
     }
 
     public PreparedRestore prepare(BranchRef currentRef, CommitId targetCommit) throws IOException {

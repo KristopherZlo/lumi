@@ -190,9 +190,11 @@ Persisted reread, точный reopen, return plan и journal publication protoc
 Для full Restore один bounded intent-prewarm может заранее построить immutable
 source-to-target plan, выполнить двунаправленный preflight и запустить подготовку двух
 64-MiB slabs. Runtime хранит не более одного такого плана на dimension. После hidden
-return-point Save план используется только при равенстве Merkle tree и player spawns
-исходного и checkpoint commits; stale-план закрывается, после чего выполняется обычная
-точная подготовка от checkpoint. После декодирования первой slab intent может на server thread
+return-point Save план используется только при равенстве Merkle tree исходного и checkpoint
+commits. Актуальные player spawns берутся из durable checkpoint и подменяют только подготовленный
+return state; поэтому безопасный возврат остаётся точным, даже если позиция respawn изменилась.
+При различии tree stale-план закрывается и выполняется обычная точная подготовка от checkpoint.
+После декодирования первой slab intent может на server thread
 заранее удержать и загрузить её первое bounded chunk-окно. Тот же `ChunkLoadSession` передаётся
 apply только после durable PREPARED journal; до журнала блоки, entities и vanilla storage не
 изменяются. Отмена или stale revalidation освобождает все tickets.

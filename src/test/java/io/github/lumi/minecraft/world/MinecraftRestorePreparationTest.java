@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.PlayerSpawn;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
@@ -203,6 +204,11 @@ class MinecraftRestorePreparationTest {
         assertEquals(source, plan.source());
         assertEquals(base, plan.reversed().source());
         assertEquals(Map.of(), plan.entities());
+        var replacement = new WorldStateApply.State(
+                base.sections(), base.entities(),
+                Map.of(UUID.randomUUID(), new PlayerSpawn(
+                        1, 2, 3, 0, 0, false)), true);
+        assertEquals(replacement, plan.reversed().withSource(replacement).source());
     }
 
     @Test

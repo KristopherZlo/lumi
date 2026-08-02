@@ -150,8 +150,11 @@ class ReturnPointRestorePreparationTest {
                 source, changedSave, target, UUID.randomUUID(),
                 new BranchRefRestorePublication(refs), ignored -> { }, stale).join();
 
-        assertEquals(6, world.prepareCalls);
+        assertEquals(5, world.prepareCalls);
         assertEquals(2, world.beginCalls);
+        assertEquals(
+                Map.of(new UUID(9, 9), new PlayerSpawn(1, 2, 3, 0, 0, false)),
+                world.prepared.getLast().playerSpawns());
         fallback.close();
     }
 
@@ -183,9 +186,11 @@ class ReturnPointRestorePreparationTest {
     private static final class CountingWorldApply implements WorldStateApply {
         private int prepareCalls;
         private int beginCalls;
+        private final List<State> prepared = new ArrayList<>();
 
         @Override public PreparedState prepare(State target) {
             prepareCalls++;
+            prepared.add(target);
             return new Prepared(target);
         }
 

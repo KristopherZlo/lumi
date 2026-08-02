@@ -117,7 +117,7 @@ public final class ReturnPointRestorePreparation {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 requireSource(source);
-                var prepared = prewarm.claim(checkpoint);
+                var prepared = prewarm.claim(checkpoint, world);
                 if (prepared.isPresent()) {
                     forwardHistory.retain(source);
                     return RestoreOperation.startCheckpointed(

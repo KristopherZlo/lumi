@@ -43,6 +43,12 @@ record PreparedMinecraftPlanState(
                 orderedSections, orderedEntities, cleanupEntityIds);
     }
 
+    PreparedMinecraftPlanState withSource(WorldStateApply.State replacement) {
+        return new PreparedMinecraftPlanState(
+                replacement, base, entities, baseEntities,
+                sectionKeys, entityKeys, cleanupEntityIds);
+    }
+
     PreparedMinecraftPlanState reversed() {
         return new PreparedMinecraftPlanState(
                 base, source, baseEntities, entities, sectionKeys, entityKeys,

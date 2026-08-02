@@ -20,6 +20,7 @@ import io.github.lumi.minecraft.world.RestoreApplyStatistics;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.OperationJournalRepository;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -746,6 +747,25 @@ public final class RestoreOperation implements DimensionMutation {
 
         public boolean prewarmUntil(long deadlineNanos) throws IOException {
             return targetSession.prewarmUntil(deadlineNanos);
+        }
+
+        PrewarmedRestore withReturnPlayerSpawns(
+                WorldStateApply world,
+                Map<UUID, io.github.lumi.domain.model.PlayerSpawn> playerSpawns)
+                throws IOException {
+            if (!restore.restorePlayerSpawns()
+                    || restore.returnPlayerSpawns().equals(playerSpawns)) {
+                return this;
+            }
+            WorldStateApply.State current = states.returnPoint().source();
+            WorldStateApply.State replacement = new WorldStateApply.State(
+                    current.sections(), current.entities(), playerSpawns, true);
+            return new PrewarmedRestore(
+                    restore.withReturnPlayerSpawns(playerSpawns),
+                    new WorldStateApply.PreparedStates(
+                            states.target(), world.replacePreparedSource(
+                                    states.returnPoint(), replacement)),
+                    targetSession);
         }
 
         @Override

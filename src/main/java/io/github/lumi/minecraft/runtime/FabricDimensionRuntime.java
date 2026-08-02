@@ -1298,7 +1298,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         var publication = new BranchSwitchRestorePublication(
                                 branches, plan, mutations,
                                 saved.capturedGenerations());
-                        var warmed = prewarm.claim(saved);
+                        var warmed = prewarm.claim(saved, worldApply);
                         if (warmed.isPresent()) {
                             return RestoreOperation.startBranchSwitch(
                                     warmed.orElseThrow(), worldApply, publication,
