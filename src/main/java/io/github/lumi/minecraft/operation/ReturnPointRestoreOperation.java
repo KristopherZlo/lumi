@@ -14,6 +14,7 @@ import java.util.function.Consumer;
 public final class ReturnPointRestoreOperation implements DimensionMutation {
     private final SaveCaptureOperation returnPointSave;
     private final RestorePreparation restorePreparation;
+    private RestorePrewarm prewarm;
     private final AtomicReference<OperationProgress> preparationProgress =
             new AtomicReference<>(OperationProgress.indeterminate(
                     "Restore: reading saved state"));
@@ -27,7 +28,15 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
     public ReturnPointRestoreOperation(
             SaveCaptureOperation returnPointSave,
             RestorePreparation restorePreparation) {
+        this(returnPointSave, null, restorePreparation);
+    }
+
+    public ReturnPointRestoreOperation(
+            SaveCaptureOperation returnPointSave,
+            RestorePrewarm prewarm,
+            RestorePreparation restorePreparation) {
         this.returnPointSave = Objects.requireNonNull(returnPointSave, "returnPointSave");
+        this.prewarm = prewarm;
         this.restorePreparation = Objects.requireNonNull(restorePreparation, "restorePreparation");
     }
 
@@ -56,6 +65,7 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
         }
         if (returnPointSave.failure().isPresent()) {
             failure = returnPointSave.failure().orElseThrow();
+            releasePrewarm();
             return;
         }
         returnPoint = returnPointSave.result().orElseThrow(
@@ -70,6 +80,7 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
             advancePreparation(deadlineNanos);
         } catch (RuntimeException failed) {
             failure = failed;
+            releasePrewarm();
         }
     }
 
@@ -79,10 +90,12 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
         }
         try {
             restore = preparation.claim();
+            releasePrewarm();
             phase = Phase.RESTORING;
             restore.advance(deadlineNanos);
         } catch (CompletionException failed) {
             failure = failed.getCause() == null ? failed : failed.getCause();
+            releasePrewarm();
         }
     }
 
@@ -144,12 +157,16 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
             case RESTORING -> restore.cancel();
         };
         cancelled = accepted;
+        if (accepted) {
+            releasePrewarm();
+        }
         return accepted;
     }
 
     @Override
     public void close() throws IOException {
         returnPointSave.close();
+        releasePrewarm();
         if (restore != null) {
             restore.close();
         } else if (preparation != null) {
@@ -173,6 +190,13 @@ public final class ReturnPointRestoreOperation implements DimensionMutation {
         CompletableFuture<? extends DimensionMutation> prepare(
                 SaveResult returnPoint,
                 Consumer<OperationProgress> progress);
+    }
+
+    private void releasePrewarm() {
+        if (prewarm != null) {
+            prewarm.close();
+            prewarm = null;
+        }
     }
 
     @Override public Optional<RestoreApplyStatistics> restoreStatistics() {

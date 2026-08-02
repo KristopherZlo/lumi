@@ -182,6 +182,11 @@ public final class LumiClientNetworking {
                 Objects.requireNonNull(target, "target").hex());
     }
 
+    public UUID prewarmRestore(CommitId target) {
+        return send(HistoryCommandPayload.Kind.RESTORE_PREWARM,
+                Objects.requireNonNull(target, "target").hex());
+    }
+
     public UUID restoreWithoutEntities(CommitId target) {
         return send(HistoryCommandPayload.Kind.RESTORE_NO_ENTITIES,
                 Objects.requireNonNull(target, "target").hex());

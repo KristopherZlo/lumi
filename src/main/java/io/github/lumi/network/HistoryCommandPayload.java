@@ -38,7 +38,8 @@ public record HistoryCommandPayload(
         if (kind == Kind.SAVE || kind == Kind.AMEND) {
             SaveArgument.parse(argument);
         }
-        if (kind == Kind.RESTORE || kind == Kind.RESTORE_NO_ENTITIES) {
+        if (kind == Kind.RESTORE || kind == Kind.RESTORE_NO_ENTITIES
+                || kind == Kind.RESTORE_PREWARM) {
             new ObjectId(argument);
         }
         if (kind == Kind.RESTORE_AREA || kind == Kind.RESTORE_AREA_PLAN) {
@@ -171,7 +172,7 @@ public record HistoryCommandPayload(
         BRANCH_CREATE_AT(34), CLEANUP_INSPECT(35), CLEANUP_APPLY(36),
         ZONE_AMEND(37), RESTORE_AREA_PLAN(38), RESTORE_AREA_APPLY(39),
         ZONE_CELLS(40), ZONE_DELETE(41), ZONE_OVERLAY(42),
-        SURVIVAL_STATUS(43), SURVIVAL_SETTINGS(44);
+        SURVIVAL_STATUS(43), SURVIVAL_SETTINGS(44), RESTORE_PREWARM(45);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

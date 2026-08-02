@@ -17,6 +17,7 @@ import io.github.lumi.minecraft.operation.PendingStatisticsOperation;
 import io.github.lumi.minecraft.operation.OperationPriority;
 import io.github.lumi.minecraft.operation.OperationProgress;
 import io.github.lumi.minecraft.operation.RestoreOperation;
+import io.github.lumi.minecraft.operation.RestorePrewarm;
 import io.github.lumi.minecraft.operation.RestorePublication;
 import io.github.lumi.minecraft.operation.SaveCaptureOperation;
 import io.github.lumi.minecraft.operation.ReturnPointRestoreOperation;
@@ -202,6 +203,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     private final MinecraftEntityChunkCapture entityCapture = new MinecraftEntityChunkCapture();
     private OperationJournal pendingRecovery;
     private PartialRestorePreview partialRestorePreview;
+    private RestorePrewarm restorePrewarm;
     private io.github.lumi.minecraft.world.DimensionFreeze.Lease recoveryLease;
     private volatile UUID selectedWorkspaceId;
     private final AtomicBoolean autoVersionScheduled = new AtomicBoolean();
@@ -914,6 +916,20 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 activeRef(), target, author, includeEntities, terminalObserver);
     }
 
+    public synchronized void prewarmRestore(
+            BranchRef expected, CommitId target) throws IOException {
+        requireNoRecovery();
+        requireExpectedRef(Objects.requireNonNull(expected, "expected"));
+        Objects.requireNonNull(target, "target");
+        restores.requireTargetInWorkspace(target, activeWorkspaceId());
+        if (restorePrewarm != null && restorePrewarm.matches(expected, target)) {
+            return;
+        }
+        closeRestorePrewarm();
+        restorePrewarm = returnPointRestores.prewarmCheckpoint(
+                expected, target, ignored -> { });
+    }
+
     public synchronized DimensionMutation startRestore(
             BranchRef expected,
             CommitId target,
@@ -952,18 +968,23 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 returnPoint, scopedReturnPointPreparation(returnPoint),
                 (request, captured) -> saves.checkpoint(
                         request, captured, hiddenRef), ignored -> { });
-        return new ReturnPointRestoreOperation(checkpoint, (saved, progress) -> {
+        RestorePrewarm prewarm = includeEntities
+                ? takeOrStartRestorePrewarm(expected, target) : null;
+        ReturnPointRestoreOperation.RestorePreparation preparation = (saved, progress) -> {
             var publication = new BranchRefRestorePublication(
                     refs, mutations, saved.capturedGenerations());
             return includeEntities
                     ? returnPointRestores.prepareCheckpoint(
                             expected, saved, target, operationId,
-                            publication, progress)
+                            publication, progress, prewarm)
                     : returnPointRestores.prepareBlockOnlyCheckpoint(
                             expected, saved, target, author,
                             returnPoint.timestamp(), operationId,
                             publication, progress);
-        });
+        };
+        return prewarm == null
+                ? new ReturnPointRestoreOperation(checkpoint, preparation)
+                : new ReturnPointRestoreOperation(checkpoint, prewarm, preparation);
     }
 
     public synchronized DimensionMutation startLiveAction(
@@ -1245,24 +1266,54 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 checkpointRequest, scopedReturnPointPreparation(checkpointRequest),
                 (request, captured) -> saves.checkpoint(request, captured, hidden),
                 ignored -> { });
-        return new ReturnPointRestoreOperation(checkpoint, (saved, progress) ->
+        RestorePrewarm prewarm = takeOrStartRestorePrewarm(
+                plan.source(), plan.target().commit());
+        return new ReturnPointRestoreOperation(checkpoint, prewarm, (saved, progress) ->
                 CompletableFuture.supplyAsync(() -> {
                     try {
                         branches.validateSwitch(plan);
-                        var prepared = restores.prepare(
-                                plan.source(), saved.commitId(), plan.target().commit(),
-                                value -> publishRestoreDiffProgress(progress, value));
+                        var publication = new BranchSwitchRestorePublication(
+                                branches, plan, mutations,
+                                saved.capturedGenerations());
+                        var warmed = prewarm.claim(saved);
+                        if (warmed.isPresent()) {
+                            return RestoreOperation.startBranchSwitch(
+                                    warmed.orElseThrow(), worldApply, publication,
+                                    journals, operationId, restoreStateListener, plan,
+                                    saved.commitId(), saved.capturedGenerations(), progress);
+                        }
+                        PreparedRestore prepared = restores.prepare(
+                                plan.source(), saved.commitId(),
+                                plan.target().commit(), value ->
+                                        publishRestoreDiffProgress(progress, value));
                         return RestoreOperation.startBranchSwitch(
-                                prepared, worldApply,
-                                new BranchSwitchRestorePublication(
-                                        branches, plan, mutations,
-                                        saved.capturedGenerations()),
+                                prepared, worldApply, publication,
                                 journals, operationId, restoreStateListener, plan,
                                 saved.commitId(), saved.capturedGenerations(), progress);
                     } catch (IOException failed) {
                         throw new CompletionException(failed);
                     }
                 }, background));
+    }
+
+    private RestorePrewarm takeOrStartRestorePrewarm(
+            BranchRef source, CommitId target) {
+        RestorePrewarm selected = restorePrewarm;
+        restorePrewarm = null;
+        if (selected != null && selected.matches(source, target)) {
+            return selected;
+        }
+        if (selected != null) {
+            selected.close();
+        }
+        return returnPointRestores.prewarmCheckpoint(source, target, ignored -> { });
+    }
+
+    private void closeRestorePrewarm() {
+        if (restorePrewarm != null) {
+            restorePrewarm.close();
+            restorePrewarm = null;
+        }
     }
 
     public synchronized DimensionMutation startBranchCreation(
@@ -2235,6 +2286,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        closeRestorePrewarm();
         zoneGrowth.flush();
         try {
             operations.close();

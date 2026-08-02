@@ -182,8 +182,14 @@ chunks с фактическими POI-изменениями. Ожидание 
 chunk snapshots вне радиуса один от relight chunks могут записываться параллельно, но перед
 записью затронутого lighting halo остаётся обязательный barrier. Force, persisted reread,
 точный reopen, return plan и journal publication protocol не изменены.
-Live apply-session создаётся на server thread только после durable PREPARED journal; поэтому
-resident/player priority больше не требует обратного background-to-server round-trip.
+Для full Restore один bounded intent-prewarm может заранее построить immutable
+source-to-target plan, выполнить двунаправленный preflight и запустить подготовку первой
+64-MiB slab. Runtime хранит не более одного такого плана на dimension. После hidden
+return-point Save план используется только при равенстве Merkle tree и player spawns
+исходного и checkpoint commits; stale-план закрывается, после чего выполняется обычная
+точная подготовка от checkpoint. Созданный заранее apply-session не загружает chunks и не
+мутирует мир: первый `applyUntil` всё равно вызывается только после durable PREPARED journal.
+Если intent отсутствует, branch switch запускает ту же подготовку параллельно hidden Save.
 Фоновая работа и working-index durability могут использовать остаток текущего 30 ms
 operation budget вместо ожидания следующего polling tick, но не расширяют deadline и не
 меняют durable barriers. Streaming apply сообщает внешней операции, что exact verification,

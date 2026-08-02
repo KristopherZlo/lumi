@@ -561,6 +561,9 @@ public final class LumiClient implements ClientModInitializer {
                 .findFirst()
                 .map(HistorySnapshotPayload.WorkspaceView::includeEntitiesOnRestore)
                 .orElse(true);
+        if (includeEntities) {
+            NETWORKING.prewarmRestore(version.id());
+        }
         Minecraft.getInstance().setScreen(new LumiRestoreScreen(
                 parent, version.id(), version.message(),
                 includeEntities

@@ -195,6 +195,11 @@ public final class LumiServerNetworking {
                 reject(player, payload, runtime, "History changed; refresh and try again");
                 return;
             }
+            if (payload.kind() == HistoryCommandPayload.Kind.RESTORE_PREWARM) {
+                runtime.prewarmRestore(
+                        actual, new CommitId(new ObjectId(payload.argument())));
+                return;
+            }
             if (payload.kind() == HistoryCommandPayload.Kind.RESTORE_AREA_PLAN) {
                 partialRestorePlan(player, runtime, payload, context);
                 return;
@@ -816,6 +821,8 @@ public final class LumiServerNetworking {
                             "Survival settings do not use the mutation queue");
             case RESTORE_AREA_PLAN -> throw new IllegalStateException(
                     "Partial Restore planning does not use the mutation queue");
+            case RESTORE_PREWARM -> throw new IllegalStateException(
+                    "Restore prewarm does not use the mutation queue");
         };
         OperationTicket ticket = runtime.operations().ticketOf(operation).orElseThrow(
                 () -> new IllegalStateException("Accepted operation has no queue ticket"));

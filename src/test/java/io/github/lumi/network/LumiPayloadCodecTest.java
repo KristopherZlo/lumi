@@ -280,6 +280,11 @@ class LumiPayloadCodecTest {
                 id('3').hex(), id('2'), 43);
         assertEquals(restoreWithoutEntities,
                 roundTrip(HistoryCommandPayload.CODEC, restoreWithoutEntities));
+        HistoryCommandPayload prewarmRestore = new HistoryCommandPayload(
+                UUID.randomUUID(), HistoryCommandPayload.Kind.RESTORE_PREWARM,
+                id('3').hex(), id('1'), 42);
+        assertEquals(prewarmRestore,
+                roundTrip(HistoryCommandPayload.CODEC, prewarmRestore));
         var partial = new PartialRestoreArgument(
                 id('3'), new io.github.lumi.domain.model.BlockAreaTarget(
                         new io.github.lumi.domain.model.BlockBox(1, 2, 3, 4, 5, 6), true));
