@@ -138,11 +138,12 @@ restoreCrashPhases.each { phase ->
             "reports/lumi-crash-matrix/${phase}.marker").get().asFile
     def launcher = file(System.getProperty('os.name').toLowerCase().contains('windows')
             ? 'gradlew.bat' : 'gradlew')
+    def predecessor = previousRestoreCrashVerifier
     def producer = tasks.register("runRestoreCrash${suffix}Producer", Exec) {
         group = 'verification'
         description = "Crashes a Minecraft process after Restore ${phase}"
-        if (previousRestoreCrashVerifier != null) {
-            mustRunAfter(previousRestoreCrashVerifier)
+        if (predecessor != null) {
+            mustRunAfter(predecessor)
         }
         doFirst {
             delete(layout.buildDirectory.dir('run/clientGameTest'))
