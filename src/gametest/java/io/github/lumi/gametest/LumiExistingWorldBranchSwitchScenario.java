@@ -47,6 +47,7 @@ final class LumiExistingWorldBranchSwitchScenario {
             throw new IllegalArgumentException(
                     "Both branch-switch endpoints must be builder-visible");
         }
+        operations.save("existing_benchmark_boundary");
 
         BranchRef initial = operations.createBranch(
                 "benchmark-existing-initial", endpoints.get(0));
