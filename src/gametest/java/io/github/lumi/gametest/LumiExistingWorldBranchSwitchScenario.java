@@ -69,19 +69,23 @@ final class LumiExistingWorldBranchSwitchScenario {
         ui.awaitHistory();
         assertEndpoint("reopened_latest", fixture.latest());
 
-        measure("cold-latest-to-initial", fixture.initial());
+        measure("cold-latest-to-initial", fixture.initial(), false);
         operations.switchBranch(
                 "prime-initial-to-latest", fixture.latest().name());
         assertEndpoint("prime_initial_to_latest", fixture.latest());
-        measure("warm-latest-to-initial", fixture.initial());
-        measure("warm-initial-to-latest", fixture.latest());
+        measure("warm-latest-to-initial", fixture.initial(), true);
+        measure("warm-initial-to-latest", fixture.latest(), true);
         auditPersistedEntityUuids();
 
         report.event("benchmark", "existing_world_branch_switch", "succeeded",
                 0, 0, "restores=3");
     }
 
-    private void measure(String name, BranchRef endpoint) throws IOException {
+    private void measure(
+            String name, BranchRef endpoint, boolean prewarm) throws IOException {
+        if (prewarm) {
+            operations.prewarmRestore(name, endpoint.commit());
+        }
         LumiRestoreMeasurement measurement =
                 operations.measureBranchSwitch(name, endpoint.name());
         report.event("restore_metrics", name, "measured", 0,

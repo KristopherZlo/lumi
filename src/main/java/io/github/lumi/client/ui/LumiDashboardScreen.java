@@ -52,6 +52,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
     private final Runnable quickRollback;
     private final Consumer<HistorySnapshotPayload.Version> openDetails;
     private final Consumer<HistorySnapshotPayload.Version> openRestore;
+    private final Consumer<CommitId> prewarmRestore;
     private final Consumer<HistorySnapshotPayload.Version> createBranch;
     private final BiConsumer<CommitId, VersionTags> updateTags;
     private final Consumer<VersionCompareController.Target> openCompare;
@@ -105,6 +106,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
             Runnable quickRollback,
             Consumer<HistorySnapshotPayload.Version> openDetails,
             Consumer<HistorySnapshotPayload.Version> openRestore,
+            Consumer<CommitId> prewarmRestore,
             Consumer<HistorySnapshotPayload.Version> createBranch,
             BiConsumer<CommitId, VersionTags> updateTags,
             Consumer<VersionCompareController.Target> openCompare,
@@ -134,6 +136,8 @@ public final class LumiDashboardScreen extends LumiPageScreen {
         this.quickRollback = Objects.requireNonNull(quickRollback, "quickRollback");
         this.openDetails = Objects.requireNonNull(openDetails, "openDetails");
         this.openRestore = Objects.requireNonNull(openRestore, "openRestore");
+        this.prewarmRestore = Objects.requireNonNull(
+                prewarmRestore, "prewarmRestore");
         this.createBranch = Objects.requireNonNull(createBranch, "createBranch");
         this.updateTags = Objects.requireNonNull(updateTags, "updateTags");
         this.openCompare = Objects.requireNonNull(openCompare, "openCompare");
@@ -371,6 +375,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                     snapshot, historyPages, requestPage);
         }
         pagedHistory.selectBranch(branch);
+        prewarmHistoryBranch(branch);
         historyScroll = 0;
         minecraft.setScreen(this);
     }
@@ -419,8 +424,17 @@ public final class LumiDashboardScreen extends LumiPageScreen {
 
     private void selectHistoryBranch(String branch) {
         pagedHistory.selectBranch(branch);
+        prewarmHistoryBranch(branch);
         historyScroll = 0;
         rebuildWidgets();
+    }
+
+    private void prewarmHistoryBranch(String branch) {
+        snapshot.branches().stream()
+                .filter(candidate -> !candidate.active()
+                        && candidate.name().equals(branch))
+                .findFirst().ifPresent(candidate ->
+                        prewarmRestore.accept(candidate.head()));
     }
 
     private void editTags(HistorySnapshotPayload.Version version) {

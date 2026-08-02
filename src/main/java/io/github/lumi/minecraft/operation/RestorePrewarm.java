@@ -18,6 +18,7 @@ public final class RestorePrewarm implements AutoCloseable {
     private final RestoreService restores;
     private final CompletableFuture<RestoreOperation.PrewarmedRestore> future;
     private final PreparedMutationOwnership<RestoreOperation.PrewarmedRestore> ownership;
+    private boolean ready;
 
     RestorePrewarm(
             BranchRef source,
@@ -61,7 +62,8 @@ public final class RestorePrewarm implements AutoCloseable {
             return false;
         }
         try {
-            return future.join().prewarmUntil(deadlineNanos);
+            ready = future.join().prewarmUntil(deadlineNanos);
+            return ready;
         } catch (CompletionException failed) {
             Throwable cause = failed.getCause() == null ? failed : failed.getCause();
             if (cause instanceof IOException io) {
@@ -69,6 +71,10 @@ public final class RestorePrewarm implements AutoCloseable {
             }
             throw new IOException("Cannot prewarm Restore chunks", cause);
         }
+    }
+
+    public boolean isReady() {
+        return ready;
     }
 
     @Override

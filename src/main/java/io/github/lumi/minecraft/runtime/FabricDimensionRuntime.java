@@ -946,6 +946,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 expected, target, ignored -> { });
     }
 
+    public synchronized boolean isRestorePrewarmed(
+            BranchRef expected, CommitId target) {
+        return restorePrewarm != null
+                && restorePrewarm.matches(expected, target)
+                && restorePrewarm.isReady();
+    }
+
     public synchronized DimensionMutation startRestore(
             BranchRef expected,
             CommitId target,

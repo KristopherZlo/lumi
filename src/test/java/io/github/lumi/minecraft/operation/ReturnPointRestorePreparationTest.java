@@ -123,6 +123,8 @@ class ReturnPointRestorePreparationTest {
                 Runnable::run);
         RestorePrewarm prewarm = preparation.prewarmCheckpoint(
                 source, target, ignored -> { });
+        assertTrue(prewarm.advanceUntil(Long.MAX_VALUE));
+        assertTrue(prewarm.isReady());
 
         RestoreOperation operation = preparation.prepareCheckpoint(
                 source, saved, target, UUID.randomUUID(),

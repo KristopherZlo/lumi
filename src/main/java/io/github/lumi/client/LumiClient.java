@@ -253,6 +253,7 @@ public final class LumiClient implements ClientModInitializer {
                 NETWORKING::quickRollback,
                 version -> openVersionDetails(client.screen, version),
                 version -> openRestore(client.screen, version),
+                NETWORKING::prewarmRestore,
                 version -> openBranchAt(client.screen, version),
                 NETWORKING::updateVersionTags,
                 LumiClient::showCompareChanges,

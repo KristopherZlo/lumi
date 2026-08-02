@@ -34,6 +34,7 @@ import net.minecraft.server.MinecraftServer;
 final class LumiBehaviorOperations {
     private static final int OPERATION_TIMEOUT_TICKS = Integer.getInteger(
             "lumi.gametest.operationTimeoutTicks", 12_000);
+    private static final int PREWARM_TIMEOUT_TICKS = 1_200;
 
     private final ClientGameTestContext context;
     private final TestServerContext server;
@@ -196,6 +197,30 @@ final class LumiBehaviorOperations {
         awaitSnapshot(snapshot -> snapshot.branchName().equals(target.value()),
                 "active branch " + target.value());
         return measurement;
+    }
+
+    void prewarmRestore(String name, CommitId target) throws IOException {
+        server.computeOnServer(minecraft -> {
+            FabricDimensionRuntime runtime = runtime(minecraft);
+            runtime.prewarmRestore(runtime.activeRef(), target);
+            return null;
+        });
+        int ticks = 0;
+        while (ticks < PREWARM_TIMEOUT_TICKS) {
+            boolean ready = server.computeOnServer(minecraft -> {
+                FabricDimensionRuntime runtime = runtime(minecraft);
+                return runtime.isRestorePrewarmed(runtime.activeRef(), target);
+            });
+            if (ready) {
+                report.event("prewarm", name, "ready", ticks, 0,
+                        "target=" + target.hex());
+                return;
+            }
+            context.waitTick();
+            ticks++;
+        }
+        throw new AssertionError(name + " did not prewarm within "
+                + PREWARM_TIMEOUT_TICKS + " ticks");
     }
 
     private LumiRestoreMeasurement measureMutation(
