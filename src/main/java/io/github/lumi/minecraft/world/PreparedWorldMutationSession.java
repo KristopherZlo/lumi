@@ -45,6 +45,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private boolean persistenceMeasured;
     private boolean persistenceComplete;
     private final Set<ChunkCoordinate> storedChunks = new HashSet<>();
+    private final Set<ChunkCoordinate> residentStoredChunks = new HashSet<>();
+    private Set<ChunkCoordinate> confirmedResidentStoredChunks;
     private final Map<ChunkCoordinate, Long> loadStarts = new LinkedHashMap<>();
     private boolean storedClassificationComplete;
     private boolean bulkRetained;
@@ -239,8 +241,12 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             throw new IllegalStateException("Restore batch is not verified");
         }
         if (persistence == null) {
+            if (confirmedResidentStoredChunks == null) {
+                confirmedResidentStoredChunks = Set.copyOf(
+                        world.confirmResidentChunkWrites(residentStoredChunks));
+            }
             Set<ChunkCoordinate> stored = new HashSet<>(alreadyStored);
-            stored.addAll(storedChunks);
+            stored.addAll(directlyStoredChunks());
             persistence = switch (persistenceMode) {
                 case COMPLETE -> world.beginPersistence(
                         target, Set.copyOf(stored), playerSpawnsIncluded);
@@ -282,7 +288,15 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         if (!persistenceComplete) {
             throw new IllegalStateException("Restore batch persistence is incomplete");
         }
-        return Set.copyOf(storedChunks);
+        return directlyStoredChunks();
+    }
+
+    private Set<ChunkCoordinate> directlyStoredChunks() {
+        Set<ChunkCoordinate> stored = new HashSet<>(storedChunks);
+        if (confirmedResidentStoredChunks != null) {
+            stored.addAll(confirmedResidentStoredChunks);
+        }
+        return Set.copyOf(stored);
     }
 
     @Override
@@ -525,6 +539,8 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 metrics.storedChunk(result);
                 if (result.applied()) {
                     storedChunks.add(chunk);
+                } else if (result.stagedResident()) {
+                    residentStoredChunks.add(chunk);
                 }
             });
             return tryStoredChunk();

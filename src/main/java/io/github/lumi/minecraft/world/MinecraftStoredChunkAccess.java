@@ -107,7 +107,8 @@ final class MinecraftStoredChunkAccess {
                     Preparation.fallback(StoredChunkApplyResult.Outcome.UNSUPPORTED_DELTA));
         }
         ChunkPos position = new ChunkPos(coordinate.x(), coordinate.z());
-        if (!acquire(coordinate, position)) {
+        boolean resident = !acquire(coordinate, position);
+        if (resident && !isCleanResident(coordinate)) {
             return CompletableFuture.completedFuture(
                     Preparation.fallback(StoredChunkApplyResult.Outcome.RESIDENT));
         }
@@ -121,12 +122,17 @@ final class MinecraftStoredChunkAccess {
                 MinecraftStoredChunkPatcher.Patch patched = patcher.patch(
                         position, stored.orElseThrow(), target);
                 return Preparation.ready(new PreparedWrite(
-                        coordinate, position, target, patched.tag()));
+                        coordinate, position, target, patched.tag(), resident));
             } catch (MinecraftStoredChunkPatcher.UnsupportedChunk unsupported) {
                 release(coordinate);
                 return Preparation.fallback(
                         StoredChunkApplyResult.Outcome.UNSUPPORTED_STORAGE);
             } catch (IOException failed) {
+                release(coordinate);
+                if (resident) {
+                    return Preparation.fallback(
+                            StoredChunkApplyResult.Outcome.UNSUPPORTED_STORAGE);
+                }
                 throw new CompletionException(failed);
             }
         }, background);
@@ -288,6 +294,12 @@ final class MinecraftStoredChunkAccess {
                         System.nanoTime() - writeStarted));
     }
 
+    private boolean isCleanResident(ChunkCoordinate coordinate) {
+        var chunk = level.getChunkSource().getChunkNow(
+                coordinate.x(), coordinate.z());
+        return chunk != null && !chunk.isUnsaved();
+    }
+
     private Map<ChunkCoordinate, StoredChunkApplyResult> appliedResults(
             List<PreparedWrite> writes,
             Map<ChunkCoordinate, StoredChunkApplyResult> results,
@@ -311,11 +323,13 @@ final class MinecraftStoredChunkAccess {
                     lightSections++;
                 }
             }
-            results.put(write.coordinate(), StoredChunkApplyResult.applied(
-                    first ? readNanos : 0,
-                    first ? writeNanos : 0,
-                    0, 0,
-                    sectionSwaps, changedBlocks, lightSections));
+            long read = first ? readNanos : 0;
+            long written = first ? writeNanos : 0;
+            results.put(write.coordinate(), write.resident()
+                    ? StoredChunkApplyResult.stagedResident(read, written)
+                    : StoredChunkApplyResult.applied(
+                            read, written, 0, 0,
+                            sectionSwaps, changedBlocks, lightSections));
             first = false;
         }
         phase = "loaded apply";
@@ -326,7 +340,8 @@ final class MinecraftStoredChunkAccess {
             ChunkCoordinate coordinate,
             ChunkPos position,
             Map<SectionKey, DecodedSection> target,
-            CompoundTag patched) { }
+            CompoundTag patched,
+            boolean resident) { }
 
     private record Preparation(
             PreparedWrite write,

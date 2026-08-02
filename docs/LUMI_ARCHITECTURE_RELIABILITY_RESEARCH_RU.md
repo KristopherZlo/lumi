@@ -601,3 +601,10 @@ Durability pipeline запускает force каждого chunk/POI/entity sto
 reread начинается параллельно оставшемуся хвосту force. Freeze и terminal `complete` всё равно
 ждут оба результата. Для недоступного scoped accessor тот же pipeline использует vanilla
 `synchronize(true)`, поэтому overlap не ослабляет global-save fallback.
+
+Resident fast path используется только для loaded chunk, который до первой Restore mutation
+не имел vanilla unsaved state, не меняет entities/POI и имеет поддерживаемый prepared delta.
+Raw patch записывается через vanilla chunk I/O, затем live chunk применяется и проверяется как
+раньше. После verification успешный `tryMarkSaved` исключает только повторный full serialization;
+live relight, affected-region force и exact disk reread остаются обязательными. Dirty, missing,
+unsupported или неподтверждённый chunk автоматически проходит обычный `ChunkMap.save`.

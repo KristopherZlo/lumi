@@ -147,6 +147,20 @@ public final class MinecraftPreparedWorldAccess implements PreparedWorldAccess {
     }
 
     @Override
+    public Set<ChunkCoordinate> confirmResidentChunkWrites(
+            Set<ChunkCoordinate> candidates) {
+        Set<ChunkCoordinate> confirmed = new java.util.HashSet<>();
+        for (ChunkCoordinate candidate : candidates) {
+            LevelChunk chunk = level.getChunkSource().getChunkNow(
+                    candidate.x(), candidate.z());
+            if (chunk != null && (!chunk.isUnsaved() || chunk.tryMarkSaved())) {
+                confirmed.add(candidate);
+            }
+        }
+        return Set.copyOf(confirmed);
+    }
+
+    @Override
     public DimensionFreeze.Lease suppressEntityLoads(Set<EntityChunkKey> keys) {
         DimensionFreeze.Lease suppression = freeze.suppressEntityLoads(keys);
         return () -> {
