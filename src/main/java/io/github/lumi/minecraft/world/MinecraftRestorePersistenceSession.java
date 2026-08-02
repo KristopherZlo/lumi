@@ -269,6 +269,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         }
         nextChunk++;
         acceptSnapshot(coordinate);
+        RestoreCrashInjection.hit(RestoreCrashInjection.Cutpoint.WRITE);
         return true;
     }
 
@@ -361,6 +362,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         }
         MinecraftPersistenceFuture.join(
                 synchronization, "Restore storage synchronization");
+        RestoreCrashInjection.hit(RestoreCrashInjection.Cutpoint.BARRIER);
         transitionTo(Phase.FORCING);
         return true;
     }
@@ -375,12 +377,14 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             return false;
         }
         MinecraftPersistenceFuture.join(forcing, "Restore affected-region force");
+        RestoreCrashInjection.hit(RestoreCrashInjection.Cutpoint.FORCE);
         transitionTo(Phase.VERIFYING);
         return true;
     }
 
     private boolean verifyPersisted(long deadlineNanos) throws IOException {
         if (verifier.advanceUntil(deadlineNanos)) {
+            RestoreCrashInjection.hit(RestoreCrashInjection.Cutpoint.VERIFY);
             transitionTo(Phase.COMPLETE);
         }
         return phase == Phase.COMPLETE;

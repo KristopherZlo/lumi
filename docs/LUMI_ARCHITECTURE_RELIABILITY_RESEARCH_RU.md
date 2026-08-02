@@ -288,6 +288,7 @@ durably restored world на crash boundary и проходит recovery UI;
 ### 6.1. Обязательная fault-injection матрица
 
 Fault test должен завершать отдельный Minecraft/JVM process, а не только выбрасывать catchable exception. Для каждого cutpoint сохраняются exit code, последние durable logs, hashes repository/world до и после, journal/ref/pointer bytes и оба post-restart oracle.
+Restore persistence предоставляет opt-in process cutpoints после первого staged write, write barrier, affected-region force и exact persisted verification. Без явных `lumi.gametest.restoreCrash*` JVM properties этот код выполняет только одно сравнение строки и не меняет production flow.
 
 | Операция | Обязательные cutpoints |
 | --- | --- |
