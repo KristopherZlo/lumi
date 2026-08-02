@@ -13,6 +13,7 @@
     "ChunkMapLoadGateMixin",
     "CommandsMixin",
     "EntityStoragePersistenceAccessor",
+    "IOWorkerPersistenceAccessor",
     "EntityMixin",
     "EntityStorageMixin",
     "LevelChunkMixin",
@@ -24,6 +25,7 @@
     "PersistentEntityManagerPersistenceAccessor",
     "PistonMovingBlockEntityMixin",
     "PlayerListPersistenceAccessor",
+    "RegionFileStoragePersistenceAccessor",
     "SectionStoragePersistenceAccessor",
     "ServerPlayerGameModeMixin",
     "ServerChunkCacheAccessor",
@@ -31,6 +33,7 @@
     "ServerLevelMixin",
     "ServerGamePacketListenerImplMixin",
     "ServerLevelEntityManagerAccessor",
+    "SimpleRegionStoragePersistenceAccessor",
     "ThreadedLevelLightEngineMixin",
     "TransientCarrierEntityMixin"
   ],

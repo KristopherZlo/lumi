@@ -54,4 +54,20 @@ class MinecraftWorldStateApplyTest {
                                 negativeRegionStart, earlyRow),
                         List.of(new ChunkCoordinate(0, 0))));
     }
+
+    @Test
+    void selectsEachAffectedRegionFileOnceAcrossSignedChunkCoordinates() {
+        assertEquals(Set.of(
+                        new ChunkCoordinate(-64, -32),
+                        new ChunkCoordinate(-32, -32),
+                        new ChunkCoordinate(0, 0),
+                        new ChunkCoordinate(32, 0)),
+                MinecraftRegionStorageSynchronizer.regionFiles(List.of(
+                        new ChunkCoordinate(-33, -1),
+                        new ChunkCoordinate(-32, -32),
+                        new ChunkCoordinate(-1, -1),
+                        new ChunkCoordinate(0, 0),
+                        new ChunkCoordinate(31, 31),
+                        new ChunkCoordinate(32, 0))));
+    }
 }

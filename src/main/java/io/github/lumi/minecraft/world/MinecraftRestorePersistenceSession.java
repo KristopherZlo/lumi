@@ -21,6 +21,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundLightUpdatePacket;
 import net.minecraft.server.level.ServerLevel;
@@ -39,15 +40,15 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private final ServerLevel level;
     private final DimensionFreezeState freeze;
     private final List<ChunkCoordinate> chunks;
-    private final boolean chunkVerificationRequired;
+    private final Set<ChunkCoordinate> chunkVerificationChunks;
     private final List<EntityChunkKey> entityChunks;
     private final List<PlayerTarget> players;
     private final Set<ChunkCoordinate> relightChunks;
     private final Set<ChunkCoordinate> lightSyncChunks;
     private final Set<ChunkCoordinate> poiChunks;
+    private final Set<ChunkCoordinate> entityVerificationChunks;
     private final SimpleRegionStorage entityStorage;
     private final MinecraftPersistedBatchVerifier verifier;
-    private final boolean poiSyncRequired;
     private final boolean forceAndVerify;
     private final Map<ChunkCoordinate, Integer> pendingSnapshots =
             new LinkedHashMap<>();
@@ -108,7 +109,12 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                 }
             }
         });
-        chunkVerificationRequired = !verificationSections.isEmpty();
+        chunkVerificationChunks = verificationSections.stream()
+                .map(ChunkCoordinate::from)
+                .collect(Collectors.toUnmodifiableSet());
+        entityVerificationChunks = verificationEntities.stream()
+                .map(ChunkCoordinate::from)
+                .collect(Collectors.toUnmodifiableSet());
         relightChunks = Set.copyOf(relight);
         lightSyncChunks = surroundingChunks(relightChunks);
         List<ChunkCoordinate> orderedChunks = new ArrayList<>(grouped.size());
@@ -123,7 +129,6 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         chunks = List.copyOf(orderedChunks);
         lightingSynchronized = relightChunks.isEmpty();
         poiChunks = Set.copyOf(poi);
-        poiSyncRequired = forceAndVerify && chunkVerificationRequired;
         entityChunks = writeTarget.entityKeys();
         chunks.forEach(chunk -> pendingSnapshots.merge(chunk, 1, Integer::sum));
         entityChunks.forEach(key -> pendingSnapshots.merge(
@@ -317,21 +322,26 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
 
     private boolean synchronizeStorage(long deadlineNanos) throws IOException {
         if (synchronization == null) {
-            var chunkSync = !forceAndVerify
-                    || (chunks.isEmpty() && !chunkVerificationRequired)
+            var chunkSync = !forceAndVerify || chunkVerificationChunks.isEmpty()
                     ? CompletableFuture.completedFuture(null)
-                    : level.getChunkSource().chunkMap.synchronize(true);
+                    : MinecraftRegionStorageSynchronizer.synchronize(
+                            level.getChunkSource().chunkMap,
+                            chunkVerificationChunks);
             var poiManager = level.getChunkSource().getPoiManager();
             for (ChunkCoordinate chunk : poiChunks) {
                 poiManager.flush(new ChunkPos(chunk.x(), chunk.z()));
             }
-            var poiSync = !poiSyncRequired
+            var poiSync = !forceAndVerify || chunkVerificationChunks.isEmpty()
                     ? CompletableFuture.completedFuture(null)
-                    : ((SectionStoragePersistenceAccessor) poiManager)
-                            .lumi$simpleRegionStorage().synchronize(true);
+                    : MinecraftRegionStorageSynchronizer.synchronize(
+                            ((SectionStoragePersistenceAccessor) poiManager)
+                                    .lumi$simpleRegionStorage(),
+                            chunkVerificationChunks);
             var entitySync = !forceAndVerify || entityStorage == null
+                    || entityVerificationChunks.isEmpty()
                     ? CompletableFuture.completedFuture(null)
-                    : entityStorage.synchronize(true);
+                    : MinecraftRegionStorageSynchronizer.synchronize(
+                            entityStorage, entityVerificationChunks);
             synchronization = CompletableFuture.allOf(chunkSync, poiSync, entitySync);
         }
         if (!DeadlineFuture.await(synchronization, deadlineNanos)) {

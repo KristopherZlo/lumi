@@ -186,7 +186,11 @@ final class MinecraftStoredChunkAccess {
                 CompletableFuture.allOf(writes.toArray(CompletableFuture[]::new))
                         .thenCompose(ignored -> {
                             phase = "storage sync";
-                            return storage.synchronize(true);
+                            return MinecraftRegionStorageSynchronizer.synchronize(
+                                    storage,
+                                    acquired.keySet().stream()
+                                            .map(ChunkCoordinate::from)
+                                            .toList());
                         })
                         .thenCompose(ignored -> verifyEntities(
                                 storage, target, acquired.keySet(), fullyGated));

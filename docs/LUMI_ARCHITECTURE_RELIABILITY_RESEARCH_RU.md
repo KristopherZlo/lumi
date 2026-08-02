@@ -180,8 +180,10 @@ Block-level overlay требует последующего декодирова
 объединяются в одно окно без повторных durability barriers. POI сохраняются только для
 chunks с фактическими POI-изменениями. Ожидание vanilla lighting начинается до persistence:
 chunk snapshots вне радиуса один от relight chunks могут записываться параллельно, но перед
-записью затронутого lighting halo остаётся обязательный barrier. Force, persisted reread,
-точный reopen, return plan и journal publication protocol не изменены.
+записью затронутого lighting halo остаётся обязательный barrier. Финальный storage barrier
+по-прежнему ждёт все поставленные vanilla writes, но physical force выполняет только для
+region-файлов target chunk/POI/entity, а не для всего открытого кэша каждого `IOWorker`.
+Persisted reread, точный reopen, return plan и journal publication protocol не изменены.
 Для full Restore один bounded intent-prewarm может заранее построить immutable
 source-to-target plan, выполнить двунаправленный preflight и запустить подготовку первой
 64-MiB slab. Runtime хранит не более одного такого плана на dimension. После hidden
@@ -223,8 +225,9 @@ snapshot его FULL ticket уже может быть освобождён; for
 следующий 32-chunk batch; его mutation и persistence начинаются лишь после durability
 текущего batch. Lookahead заполняется инкрементально только внутри текущего tick deadline;
 сумма текущих и lookahead tickets никогда не превышает 32.
-Последнее окно slab один раз выполняет force/sync накопленных
-chunk/POI writes и reread всего slab. После всех окон завершается lighting; затем journal
+Финальный barrier один раз ждёт накопленные chunk/POI/entity writes, на том же
+последовательном `IOWorker` форсирует затронутые region-файлы и выполняет reread всего
+target. После всех окон завершается lighting; затем journal
 получает `WORLD_PERSISTED`, и только после этого публикуется ref/pointer. Основной автомат
 [RestoreOperation](../src/main/java/io/github/lumi/minecraft/operation/RestoreOperation.java):
 
