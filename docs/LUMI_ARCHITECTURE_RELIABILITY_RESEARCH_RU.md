@@ -397,6 +397,7 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 | fresh-JVM cold Merkle-read A/B, 2026-07-30 | median diff 2.882→2.482 s (`-13.9%`); median total 11.231→10.265 s (`-8.6%`); candidate heap 134,870,016–235,813,672 B | baseline содержит пять runs, candidate — три; все candidate runs восстановили точный digest |
 | existing-world branch switch, 2026-08-02 | baseline click→complete 5.853/5.214/6.065 s, median 5.853 s; 128-window candidate 5.095/4.257/4.104 s, median 4.257 s | одинаковые endpoints и isolated world copy; 256-window median 4.505 s и 50-ms budget median 4.359 s были хуже; три samples — engineering evidence, не release statistics |
 | final scoped-force confirmation, 2026-08-02 | click→complete 6.188/5.005/5.101 s, median 5.101 s; median preparation 620 ms, chunk readiness 1.626 s, application 1.034 s, persisted verification 577 ms | report `20260802-101411-history-benchmark-existing-world-branch-switch`; exact reopen, entity UUID and runtime-health gates passed, but the 1.5–2.2 s target was not met and the earlier 4.257 s candidate was not reproduced by the final implementation |
+| completed-plan rerun, 2026-08-02 | click→complete 5.711/4.602/4.806 s, median 4.806 s; median preparation 607 ms, chunk readiness 1.753 s, application 961 ms, write 497 ms, force 32 ms, persisted verification 571 ms | report `20260802-131943-history-benchmark-existing-world-branch-switch`; exact reopen, entity UUID and runtime-health gates passed. During the 18-tick intent window the live world changed by 2–9 sections and 14–25 entity chunks, so exact tree revalidation correctly selected the cold fallback. Relative to the final 5.101 s confirmation this is `1.06×`, not the target `3–4×` |
 
 По последней зафиксированной исторической серии release-gate не пройден: natural result 9.937 s превышает 3 s, application около 3.317 s превышает 750 ms, а 4 GiB run превышает 1 GiB extra heap. Снижение требований не является техническим улучшением; измерения указывают на chunk readiness, vanilla write/sync и persisted verification как на доминирующие области, а не на direct section swap.
 
@@ -574,3 +575,6 @@ Process-level проверка Restore запускается задачей `ru
 Restore и завершает JVM через `Runtime.halt` только после durable marker. Новый JVM открывает
 тот же мир, подтверждает frozen recovery, завершает target, проверяет блоки, UUID сущности,
 branch ref, revision и удаление journal, затем выполняет ещё один чистый exact reopen.
+Полная матрица из восьми producer/verifier задач прошла за 6 min 11 s. Дополнительно прошли
+850 unit tests, интегрированный zone/entity exact Restore и existing-world branch-switch с
+persisted UUID audit и чистым reopen.
