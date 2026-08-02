@@ -582,3 +582,9 @@ persisted UUID audit и чистым reopen.
 Финальный POI barrier использует объединение только тех chunk, где prepared section delta
 меняет зарегистрированный POI. Неизвестный delta по-прежнему выбирает консервативный chunk-wide
 scope, а недоступные storage accessors сохраняют глобальный vanilla forced-sync fallback.
+
+Terminal metrics Restore теперь показывают фактические chunk, POI и entity write submissions,
+а также число затронутых region files каждого storage. Эти счётчики отделяют полезную durability
+работу от apply и verification. Активация prewarm пишет явный hit или miss; при miss используется
+точный cold-restore path. Scoped force по-прежнему переходит на глобальный vanilla forced save,
+если необходимый доступ к Minecraft storage недоступен.

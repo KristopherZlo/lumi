@@ -8,6 +8,12 @@ import net.minecraft.network.FriendlyByteBuf;
 public record RestoreStatisticsPayload(
         long loadedChunks,
         long storedChunks,
+        long chunkWrites,
+        long poiWrites,
+        long entityWrites,
+        long chunkRegions,
+        long poiRegions,
+        long entityRegions,
         long changedBlocks,
         long lightSections,
         long batchPreparationNanos,
@@ -21,7 +27,8 @@ public record RestoreStatisticsPayload(
         long verificationNanos) {
     public RestoreStatisticsPayload {
         for (long value : new long[] {
-                loadedChunks, storedChunks, changedBlocks, lightSections,
+                loadedChunks, storedChunks, chunkWrites, poiWrites, entityWrites,
+                chunkRegions, poiRegions, entityRegions, changedBlocks, lightSections,
                 batchPreparationNanos, lightingNanos, chunkLoadNanos,
                 loadedApplyNanos, storageReadNanos, storageWriteNanos,
                 storageSyncNanos, storageForceNanos, verificationNanos}) {
@@ -36,6 +43,9 @@ public record RestoreStatisticsPayload(
         Objects.requireNonNull(statistics, "statistics");
         return new RestoreStatisticsPayload(
                 statistics.loadedChunks(), statistics.storedChunks(),
+                statistics.chunkWrites(), statistics.poiWrites(),
+                statistics.entityWrites(), statistics.chunkRegions(),
+                statistics.poiRegions(), statistics.entityRegions(),
                 statistics.changedBlocks(), statistics.lightSections(),
                 statistics.batchPreparationNanos(), statistics.lightingNanos(),
                 statistics.chunkLoadNanos(), statistics.loadedApplyNanos(),
@@ -47,6 +57,12 @@ public record RestoreStatisticsPayload(
     void write(FriendlyByteBuf buffer) {
         buffer.writeVarLong(loadedChunks);
         buffer.writeVarLong(storedChunks);
+        buffer.writeVarLong(chunkWrites);
+        buffer.writeVarLong(poiWrites);
+        buffer.writeVarLong(entityWrites);
+        buffer.writeVarLong(chunkRegions);
+        buffer.writeVarLong(poiRegions);
+        buffer.writeVarLong(entityRegions);
         buffer.writeVarLong(changedBlocks);
         buffer.writeVarLong(lightSections);
         buffer.writeVarLong(batchPreparationNanos);
@@ -62,6 +78,9 @@ public record RestoreStatisticsPayload(
 
     static RestoreStatisticsPayload read(FriendlyByteBuf buffer) {
         return new RestoreStatisticsPayload(
+                buffer.readVarLong(), buffer.readVarLong(),
+                buffer.readVarLong(), buffer.readVarLong(),
+                buffer.readVarLong(), buffer.readVarLong(),
                 buffer.readVarLong(), buffer.readVarLong(),
                 buffer.readVarLong(), buffer.readVarLong(),
                 buffer.readVarLong(), buffer.readVarLong(),

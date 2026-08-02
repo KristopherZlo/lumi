@@ -44,6 +44,10 @@ public final class RestorePrewarm implements AutoCloseable {
         var returnSpawns = restores.playerSpawnsWhenTreeMatches(
                 source.commit(), returnPoint.commitId());
         if (returnSpawns.isEmpty()) {
+            LumiMod.LOGGER.info(
+                    "Lumi Restore prewarm miss: source={}, return={}, target={}; "
+                            + "using exact fallback",
+                    source.commit(), returnPoint.commitId(), target);
             close();
             return Optional.empty();
         }
@@ -54,6 +58,9 @@ public final class RestorePrewarm implements AutoCloseable {
                             Objects.requireNonNull(world, "world"),
                             returnSpawns.orElseThrow());
             ownership.claim();
+            LumiMod.LOGGER.info(
+                    "Lumi Restore prewarm hit: source={}, return={}, target={}",
+                    source.commit(), returnPoint.commitId(), target);
             return Optional.of(adjusted);
         } catch (IOException failed) {
             close();

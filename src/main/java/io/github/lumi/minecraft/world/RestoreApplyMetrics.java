@@ -25,6 +25,12 @@ final class RestoreApplyMetrics {
     private final LongAdder storageSyncNanos = new LongAdder();
     private final LongAdder storageForceNanos = new LongAdder();
     private final LongAdder verificationNanos = new LongAdder();
+    private final LongAdder chunkWrites = new LongAdder();
+    private final LongAdder poiWrites = new LongAdder();
+    private final LongAdder entityWrites = new LongAdder();
+    private final LongAdder chunkRegions = new LongAdder();
+    private final LongAdder poiRegions = new LongAdder();
+    private final LongAdder entityRegions = new LongAdder();
 
     RestoreApplyMetrics() {
         for (StoredChunkApplyResult.Outcome outcome
@@ -74,12 +80,20 @@ final class RestoreApplyMetrics {
     void loadedApply(long nanos) { loadedApplyNanos.add(nanos); }
     void verification(long nanos) { verificationNanos.add(nanos); }
 
-    void persistence(WorldPersistenceSession.Timings timings) {
+    void persistence(
+            WorldPersistenceSession.Timings timings,
+            WorldPersistenceSession.Scope scope) {
         lightingNanos.add(timings.lightingNanos());
         storageWriteNanos.add(timings.writeNanos());
         storageSyncNanos.add(timings.syncNanos());
         storageForceNanos.add(timings.forceNanos());
         verificationNanos.add(timings.verificationNanos());
+        chunkWrites.add(scope.chunkWrites());
+        poiWrites.add(scope.poiWrites());
+        entityWrites.add(scope.entityWrites());
+        chunkRegions.add(scope.chunkRegions());
+        poiRegions.add(scope.poiRegions());
+        entityRegions.add(scope.entityRegions());
     }
 
     RestoreApplyStatistics snapshot() {
@@ -94,6 +108,8 @@ final class RestoreApplyMetrics {
                 batchPreparationNanos.sum(), lightingNanos.sum(),
                 chunkLoadNanos.sum(), loadedApplyNanos.sum(), storageReadNanos.sum(),
                 storageWriteNanos.sum(), storageSyncNanos.sum(),
-                storageForceNanos.sum(), verificationNanos.sum());
+                storageForceNanos.sum(), verificationNanos.sum(),
+                chunkWrites.sum(), poiWrites.sum(), entityWrites.sum(),
+                chunkRegions.sum(), poiRegions.sum(), entityRegions.sum());
     }
 }

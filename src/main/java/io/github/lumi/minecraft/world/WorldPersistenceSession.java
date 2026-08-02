@@ -13,6 +13,7 @@ public interface WorldPersistenceSession extends AutoCloseable {
     default List<ChunkCoordinate> drainAcceptedSnapshotChunks() { return List.of(); }
     default String phase() { return "persistence"; }
     default Timings timings() { return Timings.EMPTY; }
+    default Scope scope() { return Scope.EMPTY; }
     @Override
     default void close() { }
 
@@ -29,6 +30,24 @@ public interface WorldPersistenceSession extends AutoCloseable {
             if (writeNanos < 0 || lightingNanos < 0 || syncNanos < 0
                     || forceNanos < 0 || verificationNanos < 0) {
                 throw new IllegalArgumentException("Persistence timings must be non-negative");
+            }
+        }
+    }
+
+    /** Actual write submissions and affected region files for one persistence stage. */
+    record Scope(
+            long chunkWrites,
+            long poiWrites,
+            long entityWrites,
+            long chunkRegions,
+            long poiRegions,
+            long entityRegions) {
+        public static final Scope EMPTY = new Scope(0, 0, 0, 0, 0, 0);
+
+        public Scope {
+            if (chunkWrites < 0 || poiWrites < 0 || entityWrites < 0
+                    || chunkRegions < 0 || poiRegions < 0 || entityRegions < 0) {
+                throw new IllegalArgumentException("Persistence scope must be non-negative");
             }
         }
     }

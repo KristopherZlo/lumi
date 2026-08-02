@@ -39,6 +39,7 @@ class ClientOperationDiagnosticsTest {
         assertTrue(text.contains("restore-phase lighting=7 ms"));
         assertTrue(text.contains("restore-phase storage-force=8 ms"));
         assertTrue(text.contains("changed-blocks=4096"));
+        assertTrue(text.contains("durability writes chunk=12 poi=3 entity=2"));
         var copy = assertInstanceOf(
                 ClickEvent.CopyToClipboard.class,
                 report.getSiblings().getLast().getStyle().getClickEvent());
@@ -84,7 +85,7 @@ class ClientOperationDiagnosticsTest {
                 OperationEventPayload.State.SUCCEEDED, "Restored", id(), 4,
                 Optional.empty(), -1, Optional.empty(), Optional.empty(),
                 Optional.of(new RestoreStatisticsPayload(
-                        8, 2, 4096, 11,
+                        8, 2, 12, 3, 2, 4, 1, 1, 4096, 11,
                         millis(1), millis(7), millis(2), millis(3),
                         millis(4), millis(5), millis(6), millis(8), millis(9))));
     }

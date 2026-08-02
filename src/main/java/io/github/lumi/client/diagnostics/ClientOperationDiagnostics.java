@@ -108,6 +108,12 @@ public final class ClientOperationDiagnostics {
                 .append(" light-sections=").append(statistics.lightSections())
                 .append(" loaded-chunks=").append(statistics.loadedChunks())
                 .append(" stored-chunks=").append(statistics.storedChunks());
+        text.append("\ndurability writes chunk=").append(statistics.chunkWrites())
+                .append(" poi=").append(statistics.poiWrites())
+                .append(" entity=").append(statistics.entityWrites())
+                .append(" regions chunk=").append(statistics.chunkRegions())
+                .append(" poi=").append(statistics.poiRegions())
+                .append(" entity=").append(statistics.entityRegions());
     }
 
     private static void phase(StringBuilder text, String name, long nanos) {

@@ -397,7 +397,7 @@ class LumiPayloadCodecTest {
                         new RestoreApplyStatistics(
                                 7, 5, java.util.Map.of(), 9, 4096, 3,
                                 2, 4, 8192, 10, 11, 12, 13, 14, 15, 16, 17,
-                                18))));
+                                18, 19, 20, 21, 22, 23, 24))));
 
         assertEquals(snapshot, roundTrip(HistorySnapshotPayload.CODEC, snapshot));
         assertEquals(event, roundTrip(OperationEventPayload.CODEC, event));
@@ -405,6 +405,8 @@ class LumiPayloadCodecTest {
                 event.previewBounds().orElseThrow());
         assertEquals(4096,
                 event.restoreStatistics().orElseThrow().changedBlocks());
+        assertEquals(22,
+                event.restoreStatistics().orElseThrow().chunkRegions());
         OperationEventPayload progress = new OperationEventPayload(
                 UUID.randomUUID(), "minecraft:overworld",
                 OperationEventPayload.State.PROGRESS, "Restore: applying", id('b'), 8,

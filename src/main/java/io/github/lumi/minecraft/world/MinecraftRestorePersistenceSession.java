@@ -50,6 +50,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     private final SimpleRegionStorage entityStorage;
     private final MinecraftPersistedBatchVerifier verifier;
     private final boolean forceAndVerify;
+    private final Scope scope;
     private final Map<ChunkCoordinate, Integer> pendingSnapshots =
             new LinkedHashMap<>();
     private final List<ChunkCoordinate> acceptedSnapshots = new ArrayList<>();
@@ -132,6 +133,11 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         chunks = List.copyOf(orderedChunks);
         lightingSynchronized = relightChunks.isEmpty();
         entityChunks = writeTarget.entityKeys();
+        scope = new Scope(
+                chunks.size(), this.poiChunks.size(), entityChunks.size(),
+                forceAndVerify ? regions(chunkVerificationChunks) : 0,
+                forceAndVerify ? regions(this.poiChunks) : 0,
+                forceAndVerify ? regions(entityVerificationChunks) : 0);
         chunks.forEach(chunk -> pendingSnapshots.merge(chunk, 1, Integer::sum));
         entityChunks.forEach(key -> pendingSnapshots.merge(
                 ChunkCoordinate.from(key), 1, Integer::sum));
@@ -449,6 +455,15 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         return new Timings(
                 writeNanos, lightingNanos, syncNanos, forceNanos,
                 verificationNanos);
+    }
+
+    @Override
+    public Scope scope() {
+        return scope;
+    }
+
+    private static int regions(Set<ChunkCoordinate> chunks) {
+        return MinecraftRegionStorageSynchronizer.regionFiles(chunks).size();
     }
 
     @Override

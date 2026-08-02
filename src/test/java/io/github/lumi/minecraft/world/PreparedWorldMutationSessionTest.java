@@ -157,6 +157,7 @@ class PreparedWorldMutationSessionTest {
         ManualPersistence persistence = new ManualPersistence();
         persistence.timings = new WorldPersistenceSession.Timings(
                 5, 13, 7, 9, 11);
+        persistence.scope = new WorldPersistenceSession.Scope(2, 3, 4, 5, 6, 7);
         world.persistence = persistence;
         assertFalse(session.persistUntil(Long.MAX_VALUE));
         assertEquals(1, access.active);
@@ -170,6 +171,12 @@ class PreparedWorldMutationSessionTest {
         assertEquals(7, session.statistics().storageSyncNanos());
         assertEquals(9, session.statistics().storageForceNanos());
         assertEquals(11, session.statistics().verificationNanos());
+        assertEquals(2, session.statistics().chunkWrites());
+        assertEquals(3, session.statistics().poiWrites());
+        assertEquals(4, session.statistics().entityWrites());
+        assertEquals(5, session.statistics().chunkRegions());
+        assertEquals(6, session.statistics().poiRegions());
+        assertEquals(7, session.statistics().entityRegions());
         assertTrue(session.persistUntil(Long.MAX_VALUE));
         assertEquals(5, session.statistics().storageWriteNanos());
         assertEquals(0, access.active);
@@ -808,6 +815,7 @@ class PreparedWorldMutationSessionTest {
         private List<ChunkCoordinate> accepted = List.of();
         private IOException failure;
         private Timings timings = Timings.EMPTY;
+        private Scope scope = Scope.EMPTY;
         private int closeCalls;
         @Override public boolean advanceUntil(long deadlineNanos) throws IOException {
             if (failure != null) {
@@ -821,6 +829,7 @@ class PreparedWorldMutationSessionTest {
             return drained;
         }
         @Override public Timings timings() { return timings; }
+        @Override public Scope scope() { return scope; }
         @Override public void close() { closeCalls++; }
     }
 

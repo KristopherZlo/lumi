@@ -265,7 +265,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
         }
         releaseAcceptedSnapshots();
         if (complete && !persistenceMeasured) {
-            metrics.persistence(persistence.timings());
+            metrics.persistence(persistence.timings(), persistence.scope());
             persistenceMeasured = true;
         }
         persistenceComplete = complete;
