@@ -373,13 +373,12 @@ class StreamingPreparedWorldMutationSessionTest {
         try (var session = session(plan(keys, section), world, background)) {
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             background.runNext();
+            assertEquals(2, background.submitted);
+            assertEquals(1, background.pending());
             assertFalse(session.applyUntil(Long.MAX_VALUE));
             assertEquals(List.of(1_024), world.persistenceWindowSizes());
             assertEquals(PreparedWorldMutationSession.PersistenceMode.STAGE,
                     world.persistenceCalls.getFirst().mode());
-            assertEquals(2, background.submitted);
-            assertEquals(1, background.pending());
-
             background.runNext();
 
             assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -465,7 +464,7 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
-    void closeCancelsQueuedPreparationWithoutReadingThePlan() throws Exception {
+    void closeCancelsQueuedPreparationAndPrewarmedLookahead() throws Exception {
         SectionKey key = new SectionKey(0, 0, 0);
         SectionBlob section = stoneSection();
         AtomicInteger reads = new AtomicInteger();
@@ -489,6 +488,30 @@ class StreamingPreparedWorldMutationSessionTest {
 
         assertEquals(0, reads.get());
         assertFalse(session.applyUntil(Long.MAX_VALUE));
+
+        List<SectionKey> keys = new ArrayList<>();
+        for (int sectionY = 0; sectionY < 1_025; sectionY++) {
+            keys.add(new SectionKey(0, sectionY, 0));
+        }
+        AtomicInteger prefetchedReads = new AtomicInteger();
+        Map<SectionKey, SectionBlob> lazySections = new RestorePlanMap<>(
+                Set.copyOf(keys), ignored -> {
+                    prefetchedReads.incrementAndGet();
+                    return section;
+                });
+        var lazyState = new WorldStateApply.State(lazySections, Map.of());
+        var lazyPlan = new PreparedMinecraftPlanState(
+                lazyState, lazyState, Map.of(), Map.of(), keys, List.of(), Set.of());
+        ControlledExecutor queued = new ControlledExecutor();
+        var prefetched = session(lazyPlan, new FakeWorld(section), queued);
+
+        queued.runNext();
+        assertEquals(2_048, prefetchedReads.get());
+        assertEquals(1, queued.pending());
+        prefetched.close();
+        queued.runNext();
+
+        assertEquals(2_048, prefetchedReads.get());
     }
 
     private static StreamingPreparedWorldMutationSession session(

@@ -185,8 +185,8 @@ chunk snapshots вне радиуса один от relight chunks могут з
 region-файлов target chunk/POI/entity, а не для всего открытого кэша каждого `IOWorker`.
 Persisted reread, точный reopen, return plan и journal publication protocol не изменены.
 Для full Restore один bounded intent-prewarm может заранее построить immutable
-source-to-target plan, выполнить двунаправленный preflight и запустить подготовку первой
-64-MiB slab. Runtime хранит не более одного такого плана на dimension. После hidden
+source-to-target plan, выполнить двунаправленный preflight и запустить подготовку двух
+64-MiB slabs. Runtime хранит не более одного такого плана на dimension. После hidden
 return-point Save план используется только при равенстве Merkle tree и player spawns
 исходного и checkpoint commits; stale-план закрывается, после чего выполняется обычная
 точная подготовка от checkpoint. Созданный заранее apply-session не загружает chunks и не

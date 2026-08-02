@@ -97,7 +97,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         this.chunkLoads = Objects.requireNonNull(chunkLoads, "chunkLoads");
         this.resident = Objects.requireNonNull(resident, "resident");
         entityKeys = plan.entityKeys();
-        startSectionPreparation();
+        startSectionPreparation(true);
     }
 
     @Override
@@ -174,7 +174,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             currentKind = null;
             repairAttempted = false;
         }
-        startSectionPreparation();
+        startSectionPreparation(false);
         if (!prepareEntityCleanup(deadlineNanos)) {
             return false;
         }
@@ -192,9 +192,10 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 }
                 PreparedSlab prepared = claimPrepared();
                 slab = prepared.state();
-                slabEnd = batchStart + slab.sectionKeys().size();
-                if (prepared.prefetchAllowed()) {
-                    startSectionPreparation();
+                slabEnd = prepared.end();
+                preparing = prepared.next();
+                if (preparing == null && prepared.prefetchAllowed()) {
+                    startSectionPreparation(false);
                 }
             }
             batchEnd = windowEnd(
@@ -241,12 +242,17 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         return true;
     }
 
-    private void startSectionPreparation() {
+    private void startSectionPreparation(boolean warmNext) {
         int start = slab == null ? batchStart : slabEnd;
         if (preparing != null || start >= plan.sectionKeys().size()) {
             return;
         }
-        preparing = CompletableFuture.supplyAsync(() -> {
+        preparing = prepareSlab(start, warmNext);
+    }
+
+    private CompletableFuture<PreparedSlab> prepareSlab(
+            int start, boolean warmNext) {
+        return CompletableFuture.supplyAsync(() -> {
             long started = System.nanoTime();
             try {
                 Batch batch = loadBatch(start);
@@ -254,7 +260,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                         batch.target(), batch.base(), batch.order(),
                         () -> closed);
                 return new PreparedSlab(
-                        state, batch.estimatedBytes() <= MAX_ESTIMATED_BYTES);
+                        state, start + state.sectionKeys().size(),
+                        batch.estimatedBytes() <= MAX_ESTIMATED_BYTES, null);
             } catch (UncheckedIOException failed) {
                 throw new CompletionException(failed.getCause());
             } catch (IOException failed) {
@@ -262,7 +269,15 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             } finally {
                 metrics.batchPreparation(Math.max(0, System.nanoTime() - started));
             }
-        }, background);
+        }, background).thenApply(prepared -> {
+            if (!closed && warmNext && prepared.prefetchAllowed()
+                    && prepared.end() < plan.sectionKeys().size()) {
+                return new PreparedSlab(
+                        prepared.state(), prepared.end(), true,
+                        prepareSlab(prepared.end(), false));
+            }
+            return prepared;
+        });
     }
 
     private boolean startEntityBatch() {
@@ -622,8 +637,14 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         }
         closed = true;
         if (preparing != null) {
-            preparing.cancel(false);
+            CompletableFuture<PreparedSlab> pending = preparing;
             preparing = null;
+            pending.thenAccept(prepared -> {
+                if (prepared.next() != null) {
+                    prepared.next().cancel(false);
+                }
+            });
+            pending.cancel(false);
         }
         entityCleanup = null;
         entityRemoval = null;
@@ -666,7 +687,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     private record PreparedSlab(
             PreparedMinecraftState state,
-            boolean prefetchAllowed) { }
+            int end,
+            boolean prefetchAllowed,
+            CompletableFuture<PreparedSlab> next) { }
 
     private enum BatchKind { SECTIONS, ENTITIES, SPAWNS, FINAL }
     private enum Phase {
