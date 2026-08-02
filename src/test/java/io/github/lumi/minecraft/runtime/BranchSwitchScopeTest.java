@@ -14,7 +14,9 @@ class BranchSwitchScopeTest {
 
         assertTrue(source.contains("hidden/branch-switch/"));
         assertTrue(source.contains(
-                "plan.source(), saved.commitId(), plan.target().commit()"));
+                "plan.source(), plan.target().commit()"));
+        assertTrue(source.contains("prewarm.claim(saved)"));
+        assertTrue(source.contains("plan.source(), saved.commitId(),"));
         assertTrue(source.contains("new BranchSwitchRestorePublication("));
         assertTrue(source.contains(
                 "saved.commitId(), saved.capturedGenerations()"));
