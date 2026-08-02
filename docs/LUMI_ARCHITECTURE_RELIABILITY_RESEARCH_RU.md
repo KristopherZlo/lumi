@@ -176,7 +176,7 @@ Block-level overlay требует последующего декодирова
 Примечание об актуальной реализации после зафиксированной в разделе 1 ревизии: глобальный
 двунаправленный preflight по-прежнему декодирует и проверяет target и return до первой
 мутации, но последующая подготовка batch повторно не декодирует уже проверенный base NBT.
-В пределах slab лимит 32 применяется к холодным FULL-загрузкам, а уже resident chunks
+В пределах slab лимит 128 применяется к холодным FULL-загрузкам, а уже resident chunks
 объединяются в одно окно без повторных durability barriers. POI сохраняются только для
 chunks с фактическими POI-изменениями. Ожидание vanilla lighting начинается до persistence:
 chunk snapshots вне радиуса один от relight chunks могут записываться параллельно, но перед
@@ -204,10 +204,10 @@ Target и return plan имеют одинаковые множества keys �
 Native preparation выполняется off-thread slabs. Для slab действуют три ограничения:
 
 `sections ≤ 1024`, `estimated_heap ≤ 64 MiB/slab` (два pipeline-окна),
-`durable_window ≤ 32 chunks`. Slab с oversized payload не запускает prefetch.
+`durable_window ≤ 128 chunks`. Slab с oversized payload не запускает prefetch.
 
-Chunk-readiness и lighting futures, а также backpressure лимита 32 активных chunk
-writes используют остаток текущего 50-ms tick budget вместо безусловной потери
+Chunk-readiness и lighting futures, а также backpressure лимита 128 активных chunk
+writes используют остаток текущего 30-ms tick budget вместо безусловной потери
 следующего 20-Hz poll. Если background work не завершился в budget, операция
 продолжает обычный incremental fallback.
 
@@ -314,7 +314,8 @@ Power-loss/faulty-filesystem исследование является отде�
 | durability background pool | 2 threads, queue 256 |
 | server-tick work budget coordinator | 50,000,000 ns |
 | Restore slab | два pipeline-окна по estimate 64 MiB и максимум 1024 sections каждое; oversized без prefetch |
-| chunk window / simultaneous vanilla writes / pending FULL loads | 32 |
+| chunk window / simultaneous vanilla writes | 128 |
+| pending FULL load activation / legacy entity batch | 32 |
 | decoded section LRU | 32 на каждое направление |
 | pending preview block positions | 16,384 |
 | working-index keys | 1,000,000 |
@@ -386,6 +387,7 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 | real player world, 31 versions | Restore 48.021/10.883/18.556 s; chunk load 41.541/7.936/14.688 s; max tick 35/21/5 ms | latency доминируется readiness chunks |
 | heavy real endpoint, 940+940 sections | preparation 5.258 s; total 108.758 s; chunk load 96.651 s; live apply 157 ms; max tick 46 ms | два bottleneck: immutable decode и последовательная readiness |
 | fresh-JVM cold Merkle-read A/B, 2026-07-30 | median diff 2.882→2.482 s (`-13.9%`); median total 11.231→10.265 s (`-8.6%`); candidate heap 134,870,016–235,813,672 B | baseline содержит пять runs, candidate — три; все candidate runs восстановили точный digest |
+| existing-world branch switch, 2026-08-02 | baseline click→complete 5.853/5.214/6.065 s, median 5.853 s; 128-window candidate 5.095/4.257/4.104 s, median 4.257 s | одинаковые endpoints и isolated world copy; 256-window median 4.505 s и 50-ms budget median 4.359 s были хуже; три samples — engineering evidence, не release statistics |
 
 По последней зафиксированной исторической серии release-gate не пройден: natural result 9.937 s превышает 3 s, application около 3.317 s превышает 750 ms, а 4 GiB run превышает 1 GiB extra heap. Снижение требований не является техническим улучшением; измерения указывают на chunk readiness, vanilla write/sync и persisted verification как на доминирующие области, а не на direct section swap.
 
@@ -414,7 +416,7 @@ Gate использует upper median `sorted[n/2]`, максимум по `T_o
 | origin + generation working index до vanilla publication | сохраняет pre-mutation endpoint и не теряет late mutation | background writes, tickets и save gate добавляют сложность | критично для надёжности |
 | CAS refs/pointers | stale client/operation не переписывает новый HEAD | требует recovery для crash между world и pointer | оправдано |
 | двунаправленный Restore plan + journal | заранее подготовлен проверяемый return path после apply/verify/persist failure | return также может отказать и оставить `DEGRADED`; память/подготовка примерно для двух направлений | надёжность приоритетнее latency |
-| 32-chunk write windows, slab durability | ограничивает tickets/writes; 64-window в A/B ухудшил sync, app и heap | force и persisted reread остаются на границе slab | лучший из измеренных вариантов, не конечное решение |
+| 128-chunk write windows, slab durability | сокращает число load/write/readback волн; 256-window в A/B ухудшил sync и медиану | force и persisted reread остаются на границе slab | лучший из измеренных вариантов 32/128/256 |
 | два estimated 64 MiB slab | перекрывают decode с apply/persist в прежнем суммарном бюджете | estimate не является верхней границей JVM heap; oversized не prefetchится | требует heap-метрики, не только estimate |
 | direct native section replacement | direct apply измеряется десятками/сотнями ms даже на больших endpoint | общая операция всё ещё ограничена loading/persistence | решение эффективно локально |
 | vanilla storage, без собственного world overlay | удаление Lumi оставляет обычный мир; неизвестные vanilla данные сохраняются | whole-world publication не атомарна, recovery зависит от journal | соответствует product constraint |

@@ -48,16 +48,16 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
-    void boundsOneDurabilityWindowToThirtyTwoChunks() {
+    void boundsOneDurabilityWindowToOneHundredTwentyEightChunks() {
         List<SectionKey> keys = new ArrayList<>();
-        for (int chunk = 0; chunk < 40; chunk++) {
+        for (int chunk = 0; chunk < 129; chunk++) {
             keys.add(new SectionKey(chunk, 0, 0));
         }
 
-        assertEquals(32, StreamingPreparedWorldMutationSession.windowEnd(
+        assertEquals(128, StreamingPreparedWorldMutationSession.windowEnd(
                 keys, 0, keys.size()));
-        assertEquals(40, StreamingPreparedWorldMutationSession.windowEnd(
-                keys, 32, keys.size()));
+        assertEquals(129, StreamingPreparedWorldMutationSession.windowEnd(
+                keys, 128, keys.size()));
     }
 
     @Test
@@ -204,16 +204,17 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
-    void preparesFortyChunksOnceAndPersistsTwoWindows() throws Exception {
+    void preparesOneHundredTwentyNineChunksOnceAndPersistsTwoWindows()
+            throws Exception {
         List<SectionKey> keys = new ArrayList<>();
-        for (int chunk = 0; chunk < 40; chunk++) {
+        for (int chunk = 0; chunk < 129; chunk++) {
             keys.add(new SectionKey(chunk, 0, 0));
         }
         SectionBlob section = stoneSection();
         ControlledExecutor background = new ControlledExecutor();
         FakeWorld world = new FakeWorld(section);
         world.directlyStored = Set.of(
-                new ChunkCoordinate(0, 0), new ChunkCoordinate(32, 0));
+                new ChunkCoordinate(0, 0), new ChunkCoordinate(128, 0));
 
         try (var session = session(plan(keys, section), world, background)) {
             assertFalse(session.applyUntil(Long.MAX_VALUE));
@@ -221,10 +222,10 @@ class StreamingPreparedWorldMutationSessionTest {
 
             background.runNext();
             assertFalse(session.applyUntil(Long.MAX_VALUE));
-            assertEquals(List.of(32), world.persistenceWindowSizes());
+            assertEquals(List.of(128), world.persistenceWindowSizes());
             assertEquals(PreparedWorldMutationSession.PersistenceMode.STAGE,
                     world.persistenceCalls.getFirst().mode());
-            assertEquals(32,
+            assertEquals(128,
                     world.persistenceCalls.getFirst().verificationSections());
             assertEquals(Set.of(new ChunkCoordinate(0, 0)),
                     world.persistenceCalls.getFirst().alreadyStored());
@@ -235,24 +236,24 @@ class StreamingPreparedWorldMutationSessionTest {
 
             world.persistence.getFirst().complete = true;
             assertFalse(session.applyUntil(Long.MAX_VALUE));
-            assertEquals(List.of(32, 8), world.persistenceWindowSizes());
+            assertEquals(List.of(128, 1), world.persistenceWindowSizes());
             PersistenceCall stage = world.persistenceCalls.getLast();
             assertEquals(PreparedWorldMutationSession.PersistenceMode.STAGE,
                     stage.mode());
-            assertEquals(8, stage.verificationSections());
+            assertEquals(1, stage.verificationSections());
             assertEquals(Set.of(
-                    new ChunkCoordinate(0, 0), new ChunkCoordinate(32, 0)),
+                    new ChunkCoordinate(0, 0), new ChunkCoordinate(128, 0)),
                     stage.alreadyStored());
             assertEquals(1, world.persistence.getFirst().closeCalls);
             assertEquals(1, background.submitted);
 
             world.persistence.getLast().complete = true;
             assertTrue(session.applyUntil(Long.MAX_VALUE));
-            assertEquals(List.of(32, 8, 0), world.persistenceWindowSizes());
+            assertEquals(List.of(128, 1, 0), world.persistenceWindowSizes());
             PersistenceCall commit = world.persistenceCalls.getLast();
             assertEquals(PreparedWorldMutationSession.PersistenceMode.FINAL,
                     commit.mode());
-            assertEquals(40, commit.verificationSections());
+            assertEquals(129, commit.verificationSections());
             assertTrue(commit.alreadyStored().isEmpty());
             assertEquals(1, background.submitted);
             assertEquals(1, world.persistence.getLast().closeCalls);
@@ -263,7 +264,7 @@ class StreamingPreparedWorldMutationSessionTest {
     @Test
     void releasesFirstWindowTicketsBeforeRetainingTheSecondWindow() throws Exception {
         List<SectionKey> keys = new ArrayList<>();
-        for (int chunk = 0; chunk < 40; chunk++) {
+        for (int chunk = 0; chunk < 129; chunk++) {
             keys.add(new SectionKey(chunk, 0, 0));
         }
         SectionBlob section = stoneSection();
@@ -281,15 +282,15 @@ class StreamingPreparedWorldMutationSessionTest {
             assertEquals(0, chunks.active);
             background.runNext();
             assertFalse(session.applyUntil(Long.MAX_VALUE));
-            assertEquals(32, chunks.active);
+            assertEquals(128, chunks.active);
             assertEquals(List.of(ChunkLoadAccess.Readiness.TERRAIN), requested);
 
             world.persistence.getFirst().complete = true;
             assertFalse(session.applyUntil(Long.MAX_VALUE));
 
-            assertEquals(8, chunks.active);
-            assertEquals(0, chunks.activeBeforeRetain.get(32));
-            assertEquals(32, chunks.peak);
+            assertEquals(1, chunks.active);
+            assertEquals(0, chunks.activeBeforeRetain.get(128));
+            assertEquals(128, chunks.peak);
             assertEquals(List.of(
                     ChunkLoadAccess.Readiness.TERRAIN,
                     ChunkLoadAccess.Readiness.TERRAIN), requested);
