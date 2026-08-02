@@ -588,3 +588,10 @@ Terminal metrics Restore теперь показывают фактически�
 работу от apply и verification. Активация prewarm пишет явный hit или miss; при miss используется
 точный cold-restore path. Scoped force по-прежнему переходит на глобальный vanilla forced save,
 если необходимый доступ к Minecraft storage недоступен.
+
+Если hidden return-point после нажатия Restore отличается от выбранного ранее HEAD,
+prewarm больше не отбрасывает всю подготовку. Он строит bounded delta `checkpoint -> HEAD`,
+композирует его с уже проверенным планом `HEAD -> target` и переиспользует native preflight
+неизменившейся части. Совпадение промежуточного состояния проверяется до передачи владения.
+При ошибке, несовместимом plan или недоступном native composition весь incremental state
+закрывается, после чего запускается обычный exact cold Restore.

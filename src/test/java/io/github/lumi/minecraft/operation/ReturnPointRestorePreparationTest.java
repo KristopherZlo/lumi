@@ -5,12 +5,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BranchName;
+import io.github.lumi.domain.model.ChunkInRegion;
+import io.github.lumi.domain.model.ChunkTree;
 import io.github.lumi.domain.model.Commit;
 import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.DimensionTree;
 import io.github.lumi.domain.model.PlayerSpawn;
+import io.github.lumi.domain.model.RegionCoordinate;
+import io.github.lumi.domain.model.RegionTree;
+import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.service.BlockOnlyRestoreService;
@@ -26,6 +31,7 @@ import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -115,10 +121,10 @@ class ReturnPointRestorePreparationTest {
                 refs.create(new BranchName("hidden/return/prewarm"), checkpoint),
                 WorkingIndexSnapshot.empty());
         CountingWorldApply world = new CountingWorldApply();
+        OriginStore origins = new OriginStore(repositoryRoot);
         ReturnPointRestorePreparation preparation = new ReturnPointRestorePreparation(
-                new RestoreService(objects, commits, new OriginStore(repositoryRoot)),
-                new BlockOnlyRestoreService(
-                        objects, commits, new OriginStore(repositoryRoot)),
+                new RestoreService(objects, commits, origins),
+                new BlockOnlyRestoreService(objects, commits, origins),
                 world, refs, journals, new ForwardHistoryService(commits, refs),
                 Runnable::run);
         RestorePrewarm prewarm = preparation.prewarmCheckpoint(
@@ -156,6 +162,51 @@ class ReturnPointRestorePreparationTest {
                 Map.of(new UUID(9, 9), new PlayerSpawn(1, 2, 3, 0, 0, false)),
                 world.prepared.getLast().playerSpawns());
         fallback.close();
+
+        SectionKey freshKey = new SectionKey(0, 0, 0);
+        var air = objects.write(section("minecraft:air"));
+        origins.register(freshKey, air);
+        var stone = objects.write(section("minecraft:stone"));
+        var chunk = objects.write(new ChunkTree(
+                Map.of(0, stone), Optional.empty()));
+        var region = objects.write(new RegionTree(
+                Map.of(new ChunkInRegion(0, 0), chunk)));
+        var changedTree = objects.write(new DimensionTree(
+                Map.of(new RegionCoordinate(0, 0), region)));
+        var freshCheckpoint = commits.write(
+                commit(changedTree, List.of(current), CommitKind.HIDDEN_RETURN));
+        var freshSave = new SaveResult(
+                freshCheckpoint,
+                refs.create(new BranchName("hidden/return/fresh"), freshCheckpoint),
+                WorkingIndexSnapshot.empty());
+        int beginBeforeIncremental = world.beginCalls;
+        RestorePrewarm incremental = preparation.prewarmCheckpoint(
+                source, target, ignored -> { });
+
+        RestoreOperation incrementallyPrepared = preparation.prepareCheckpoint(
+                source, freshSave, target, UUID.randomUUID(),
+                new BranchRefRestorePublication(refs), ignored -> { }, incremental).join();
+
+        assertEquals(1, world.composeCalls);
+        assertEquals(beginBeforeIncremental + 2, world.beginCalls);
+        assertEquals("minecraft:stone", world.prepared.getLast().sections()
+                .get(freshKey).blockStates().getFirst());
+        incrementallyPrepared.close();
+
+        world.failComposition = true;
+        int beginBeforeFallback = world.beginCalls;
+        int prepareBeforeFallback = world.prepareCalls;
+        RestorePrewarm brokenIncremental = preparation.prewarmCheckpoint(
+                source, target, ignored -> { });
+        RestoreOperation exactFallback = preparation.prepareCheckpoint(
+                source, freshSave, target, UUID.randomUUID(),
+                new BranchRefRestorePublication(refs), ignored -> { },
+                brokenIncremental).join();
+
+        assertEquals(2, world.composeCalls);
+        assertEquals(prepareBeforeFallback + 6, world.prepareCalls);
+        assertEquals(beginBeforeFallback + 1, world.beginCalls);
+        exactFallback.close();
     }
 
     private static Commit commit(
@@ -166,6 +217,11 @@ class ReturnPointRestorePreparationTest {
                 tree, parents, new CommitAuthor(new UUID(0, 0), "Lumi"),
                 "Return", Instant.EPOCH, new UUID(1, 1), Optional.empty(), kind,
                 new CommitStatistics(0, 0, 0, 0));
+    }
+
+    private static SectionBlob section(String state) {
+        return new SectionBlob(new ArrayList<>(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, state)), Map.of());
     }
 
     private static final class NoOpWorldApply implements WorldStateApply {
@@ -186,6 +242,8 @@ class ReturnPointRestorePreparationTest {
     private static final class CountingWorldApply implements WorldStateApply {
         private int prepareCalls;
         private int beginCalls;
+        private int composeCalls;
+        private boolean failComposition;
         private final List<State> prepared = new ArrayList<>();
 
         @Override public PreparedState prepare(State target) {
@@ -197,6 +255,20 @@ class ReturnPointRestorePreparationTest {
         @Override public ApplySession begin(PreparedState target) {
             beginCalls++;
             return new NoOpWorldApply().begin(target);
+        }
+
+        @Override
+        public PreparedStates composePrepared(
+                PreparedStates following,
+                PreparedStates preceding,
+                State target,
+                State returnPoint) throws java.io.IOException {
+            composeCalls++;
+            if (failComposition) {
+                throw new java.io.IOException("incremental composition unavailable");
+            }
+            return WorldStateApply.super.composePrepared(
+                    following, preceding, target, returnPoint);
         }
     }
 

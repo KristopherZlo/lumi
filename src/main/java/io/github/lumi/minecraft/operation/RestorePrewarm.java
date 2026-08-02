@@ -44,33 +44,73 @@ public final class RestorePrewarm implements AutoCloseable {
         var returnSpawns = restores.playerSpawnsWhenTreeMatches(
                 source.commit(), returnPoint.commitId());
         if (returnSpawns.isEmpty()) {
-            LumiMod.LOGGER.info(
-                    "Lumi Restore prewarm miss: source={}, return={}, target={}; "
-                            + "using exact fallback",
-                    source.commit(), returnPoint.commitId(), target);
-            close();
-            return Optional.empty();
+            return claimChangedReturnPoint(returnPoint, world);
         }
+        RestoreOperation.PrewarmedRestore warmed = null;
         try {
-            RestoreOperation.PrewarmedRestore warmed = future.join();
+            warmed = claimPrepared();
             RestoreOperation.PrewarmedRestore adjusted =
                     warmed.withReturnPlayerSpawns(
                             Objects.requireNonNull(world, "world"),
                             returnSpawns.orElseThrow());
-            ownership.claim();
+            warmed = adjusted;
             LumiMod.LOGGER.info(
                     "Lumi Restore prewarm hit: source={}, return={}, target={}",
                     source.commit(), returnPoint.commitId(), target);
             return Optional.of(adjusted);
         } catch (IOException failed) {
-            close();
+            closeClaimed(warmed, failed);
             throw failed;
-        } catch (CompletionException | IllegalStateException failed) {
-            close();
+        } catch (RuntimeException failed) {
+            closeClaimed(warmed, failed);
             Throwable cause = failed.getCause() == null ? failed : failed.getCause();
             LumiMod.LOGGER.warn(
                     "Lumi Restore prewarm failed; using exact fallback", cause);
             return Optional.empty();
+        }
+    }
+
+    private Optional<RestoreOperation.PrewarmedRestore> claimChangedReturnPoint(
+            SaveResult returnPoint, WorldStateApply world) {
+        RestoreOperation.PrewarmedRestore warmed = null;
+        try {
+            warmed = claimPrepared();
+            var delta = restores.prepare(
+                    source, returnPoint.commitId(), source.commit());
+            RestoreOperation.PrewarmedRestore adjusted = warmed.composeAfter(
+                    delta, Objects.requireNonNull(world, "world"));
+            warmed = adjusted;
+            LumiMod.LOGGER.info(
+                    "Lumi Restore prewarm incremental hit: source={}, return={}, target={}, "
+                            + "freshChanges={}",
+                    source.commit(), returnPoint.commitId(), target,
+                    delta.changeCount());
+            return Optional.of(adjusted);
+        } catch (IOException | RuntimeException failed) {
+            closeClaimed(warmed, failed);
+            Throwable cause = failed.getCause() == null ? failed : failed.getCause();
+            LumiMod.LOGGER.warn(
+                    "Lumi Restore incremental prewarm missed; using exact fallback",
+                    cause);
+            return Optional.empty();
+        }
+    }
+
+    private RestoreOperation.PrewarmedRestore claimPrepared() {
+        future.join();
+        return ownership.claim();
+    }
+
+    private void closeClaimed(
+            RestoreOperation.PrewarmedRestore warmed, Throwable failure) {
+        if (warmed == null) {
+            close();
+            return;
+        }
+        try {
+            warmed.close();
+        } catch (IOException closeFailure) {
+            failure.addSuppressed(closeFailure);
         }
     }
 

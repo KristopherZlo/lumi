@@ -768,6 +768,34 @@ public final class RestoreOperation implements DimensionMutation {
                     targetSession);
         }
 
+        PrewarmedRestore composeAfter(
+                PreparedRestore preceding, WorldStateApply world) throws IOException {
+            Objects.requireNonNull(preceding, "preceding");
+            Objects.requireNonNull(world, "world");
+            PreparedRestore composed = null;
+            try {
+                targetSession.close();
+                WorldStateApply.PreparedStates precedingStates = prepareWorldStates(
+                        preceding, world, targetState(preceding),
+                        returnState(preceding), ignored -> { });
+                composed = restore.composeAfter(preceding);
+                WorldStateApply.State target = targetState(composed);
+                WorldStateApply.State returnPoint = returnState(composed);
+                WorldStateApply.PreparedStates composedStates = world.composePrepared(
+                        states, precedingStates, target, returnPoint);
+                return new PrewarmedRestore(
+                        composed, composedStates, world.begin(composedStates.target()));
+            } catch (IOException | RuntimeException failed) {
+                PreparedRestore cleanup = composed == null ? preceding : composed;
+                try {
+                    cleanup.close();
+                } catch (IOException closeFailure) {
+                    failed.addSuppressed(closeFailure);
+                }
+                throw failed;
+            }
+        }
+
         @Override
         public void close() throws IOException {
             try {
