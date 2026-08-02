@@ -1,11 +1,15 @@
 package io.github.lumi.minecraft.world;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionKey;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class MinecraftWorldStateApplyTest {
@@ -69,5 +73,25 @@ class MinecraftWorldStateApplyTest {
                         new ChunkCoordinate(0, 0),
                         new ChunkCoordinate(31, 31),
                         new ChunkCoordinate(32, 0))));
+    }
+
+    @Test
+    void forcesEachStorageAsSoonAsItsOwnWriteBarrierCompletes() {
+        CompletableFuture<Void> barrier = new CompletableFuture<>();
+        CompletableFuture<Void> force = new CompletableFuture<>();
+        AtomicInteger forceCalls = new AtomicInteger();
+        var synchronization = new MinecraftRegionStorageSynchronizer.Synchronization(
+                barrier, () -> {
+                    forceCalls.incrementAndGet();
+                    return force;
+                });
+
+        CompletableFuture<Void> complete = synchronization.complete();
+        assertEquals(0, forceCalls.get());
+        barrier.complete(null);
+        assertEquals(1, forceCalls.get());
+        assertFalse(complete.isDone());
+        force.complete(null);
+        assertTrue(complete.isDone());
     }
 }

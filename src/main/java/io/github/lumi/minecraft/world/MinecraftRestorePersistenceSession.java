@@ -361,6 +361,9 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
             synchronization = CompletableFuture.allOf(storageSynchronizations.stream()
                     .map(MinecraftRegionStorageSynchronizer.Synchronization::writeBarrier)
                     .toArray(CompletableFuture[]::new));
+            forcing = CompletableFuture.allOf(storageSynchronizations.stream()
+                    .map(MinecraftRegionStorageSynchronizer.Synchronization::complete)
+                    .toArray(CompletableFuture[]::new));
         }
         if (!DeadlineFuture.await(synchronization, deadlineNanos)) {
             return false;
@@ -373,11 +376,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
     }
 
     private boolean forceStorage(long deadlineNanos) throws IOException {
-        if (forcing == null) {
-            forcing = CompletableFuture.allOf(storageSynchronizations.stream()
-                    .map(MinecraftRegionStorageSynchronizer.Synchronization::forceAffected)
-                    .toArray(CompletableFuture[]::new));
-        }
+        verifier.start();
         if (!DeadlineFuture.await(forcing, deadlineNanos)) {
             return false;
         }

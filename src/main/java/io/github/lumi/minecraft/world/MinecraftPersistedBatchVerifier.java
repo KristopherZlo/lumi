@@ -66,7 +66,7 @@ final class MinecraftPersistedBatchVerifier {
             if (System.nanoTime() >= deadlineNanos) {
                 return false;
             }
-            verification = verifyRemaining(nextSection, nextEntityChunk);
+            start();
         }
         if (!DeadlineFuture.await(verification, deadlineNanos)) {
             return false;
@@ -75,6 +75,13 @@ final class MinecraftPersistedBatchVerifier {
                 verification, "Restore persisted verification");
         return nextSection == sections.size()
                 && nextEntityChunk == entityChunks.size();
+    }
+
+    void start() {
+        if (verification == null && (nextSection < sections.size()
+                || nextEntityChunk < entityChunks.size())) {
+            verification = verifyRemaining(nextSection, nextEntityChunk);
+        }
     }
 
     private CompletableFuture<Void> verifyRemaining(

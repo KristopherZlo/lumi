@@ -89,7 +89,7 @@ final class MinecraftRegionStorageSynchronizer {
         private final Supplier<CompletableFuture<Void>> force;
         private CompletableFuture<Void> forcing;
 
-        private Synchronization(
+        Synchronization(
                 CompletableFuture<Void> writeBarrier,
                 Supplier<CompletableFuture<Void>> force) {
             this.writeBarrier = writeBarrier;
@@ -100,7 +100,7 @@ final class MinecraftRegionStorageSynchronizer {
             return writeBarrier;
         }
 
-        CompletableFuture<Void> forceAffected() {
+        private CompletableFuture<Void> forceAffected() {
             if (forcing == null) {
                 forcing = force.get();
             }

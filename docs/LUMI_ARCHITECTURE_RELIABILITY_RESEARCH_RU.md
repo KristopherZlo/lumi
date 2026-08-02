@@ -595,3 +595,9 @@ prewarm больше не отбрасывает всю подготовку. О
 неизменившейся части. Совпадение промежуточного состояния проверяется до передачи владения.
 При ошибке, несовместимом plan или недоступном native composition весь incremental state
 закрывается, после чего запускается обычный exact cold Restore.
+
+Durability pipeline запускает force каждого chunk/POI/entity storage сразу после его
+собственного write barrier, не ожидая более медленные storage. После общего barrier exact
+reread начинается параллельно оставшемуся хвосту force. Freeze и terminal `complete` всё равно
+ждут оба результата. Для недоступного scoped accessor тот же pipeline использует vanilla
+`synchronize(true)`, поэтому overlap не ослабляет global-save fallback.
