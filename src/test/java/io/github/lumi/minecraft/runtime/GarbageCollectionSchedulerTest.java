@@ -19,7 +19,9 @@ class GarbageCollectionSchedulerTest {
         GarbageCollectionScheduler scheduler = new GarbageCollectionScheduler(
                 0, queued::add,
                 () -> {
-                    compactions.incrementAndGet();
+                    if (compactions.incrementAndGet() == 1) {
+                        throw new java.io.IOException("retry compaction");
+                    }
                     return 7;
                 }, compactedPacks::set,
                 () -> {
@@ -39,14 +41,23 @@ class GarbageCollectionSchedulerTest {
         assertEquals(1, queued.size());
         queued.removeFirst().run();
         assertEquals(1, compactions.get());
-        assertEquals(7, compactedPacks.get());
+        assertEquals(0, compactedPacks.get());
+        assertEquals(1, failures.size());
 
         scheduler.tick(GarbageCollectionScheduler.INITIAL_DELAY_TICKS,
                 false, true);
+        assertEquals(1, queued.size());
+        queued.removeFirst().run();
+        assertEquals(2, compactions.get());
+        assertEquals(7, compactedPacks.get());
+
         scheduler.tick(
                 GarbageCollectionScheduler.INITIAL_DELAY_TICKS
-                        + GarbageCollectionScheduler.RETRY_TICKS,
+                        + GarbageCollectionScheduler.RETRY_TICKS - 1,
                 false, false);
+        assertEquals(0, queued.size());
+        scheduler.tick(GarbageCollectionScheduler.INITIAL_DELAY_TICKS
+                + GarbageCollectionScheduler.RETRY_TICKS, false, false);
         scheduler.tick(Long.MAX_VALUE, false, false);
 
         assertEquals(0, collections.get());
@@ -54,6 +65,6 @@ class GarbageCollectionSchedulerTest {
         queued.removeFirst().run();
         assertEquals(1, collections.get());
         assertEquals(java.util.List.of(new GarbageCollectionResult(2, 3, 4)), results);
-        assertEquals(java.util.List.of(), failures);
+        assertEquals("retry compaction", failures.getFirst().getMessage());
     }
 }

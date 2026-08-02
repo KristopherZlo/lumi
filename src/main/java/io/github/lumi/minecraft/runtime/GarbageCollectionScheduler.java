@@ -84,10 +84,10 @@ final class GarbageCollectionScheduler {
             Callable<T> task, Consumer<T> succeeded, Runnable completion) {
         try {
             succeeded.accept(task.call());
+            completion.run();
         } catch (Exception failed) {
             failure.accept(failed);
         } finally {
-            completion.run();
             running.set(false);
         }
     }
