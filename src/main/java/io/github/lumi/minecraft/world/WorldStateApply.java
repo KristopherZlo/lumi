@@ -63,8 +63,27 @@ public interface WorldStateApply {
     /** Creates cursors only. World mutation starts with {@link ApplySession#applyUntil(long)}. */
     ApplySession begin(PreparedState target);
 
+    /** Stops stale preparation while preserving only reusable, non-world state. */
+    default PrewarmHandoff suspendPrewarm(ApplySession session) {
+        Objects.requireNonNull(session, "session").close();
+        return PrewarmHandoff.NONE;
+    }
+
+    /** Creates a session and consumes an optional prewarm handoff. */
+    default ApplySession begin(PreparedState target, PrewarmHandoff handoff) {
+        Objects.requireNonNull(handoff, "handoff").close();
+        return begin(target);
+    }
+
     interface PreparedState {
         State source();
+    }
+
+    interface PrewarmHandoff extends AutoCloseable {
+        PrewarmHandoff NONE = () -> { };
+
+        @Override
+        void close();
     }
 
     record PreparedStates(PreparedState target, PreparedState returnPoint) {

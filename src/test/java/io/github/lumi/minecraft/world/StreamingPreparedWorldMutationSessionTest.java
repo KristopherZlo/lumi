@@ -422,6 +422,40 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
+    void handsPrewarmedChunkWindowToRecomposedSession() throws Exception {
+        SectionKey key = new SectionKey(0, 0, 0);
+        SectionBlob section = stoneSection();
+        PreparedMinecraftPlanState plan = plan(List.of(key), section);
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(section);
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
+        Function<ChunkLoadAccess.Readiness, ChunkLoadSession> loads = readiness -> {
+            requested.add(readiness);
+            return new ChunkLoadSession(chunks, () -> 0L);
+        };
+
+        StreamingPreparedWorldMutationSession original = session(
+                plan, world, background, loads);
+        assertFalse(original.prewarmUntil(0));
+        background.runNext();
+        assertTrue(original.prewarmUntil(Long.MAX_VALUE));
+
+        WorldStateApply.PrewarmHandoff handoff = original.suspendPrewarm();
+        assertEquals(1, chunks.active);
+        try (var recomposed = session(
+                plan, world, background, loads, ignored -> false, handoff)) {
+            background.runNext();
+            startFirstMutation(recomposed, world);
+
+            assertEquals(1, chunks.peak);
+            assertEquals(1, requested.size());
+            assertEquals(List.of(1), world.persistenceWindowSizes());
+        }
+        assertEquals(0, chunks.active);
+    }
+
+    @Test
     void prefetchesNextSlabWhileFirstPersistsBeforeFinalBarrier() throws Exception {
         List<SectionKey> keys = new ArrayList<>();
         for (int sectionY = 0; sectionY < 1_025; sectionY++) {
@@ -597,12 +631,23 @@ class StreamingPreparedWorldMutationSessionTest {
             ControlledExecutor background,
             Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads,
             Predicate<ChunkCoordinate> resident) {
+        return session(plan, world, background, chunkLoads, resident,
+                WorldStateApply.PrewarmHandoff.NONE);
+    }
+
+    private static StreamingPreparedWorldMutationSession session(
+            PreparedMinecraftPlanState plan,
+            FakeWorld world,
+            ControlledExecutor background,
+            Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads,
+            Predicate<ChunkCoordinate> resident,
+            WorldStateApply.PrewarmHandoff handoff) {
         return new StreamingPreparedWorldMutationSession(
                 plan,
                 new MinecraftRestorePreparation(
                         new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                         new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)),
-                world, background, chunkLoads, resident);
+                world, background, chunkLoads, resident, handoff);
     }
 
     private static void startFirstMutation(

@@ -773,8 +773,9 @@ public final class RestoreOperation implements DimensionMutation {
             Objects.requireNonNull(preceding, "preceding");
             Objects.requireNonNull(world, "world");
             PreparedRestore composed = null;
+            WorldStateApply.PrewarmHandoff handoff = null;
             try {
-                targetSession.close();
+                handoff = world.suspendPrewarm(targetSession);
                 WorldStateApply.PreparedStates precedingStates = prepareWorldStates(
                         preceding, world, targetState(preceding),
                         returnState(preceding), ignored -> { });
@@ -783,9 +784,14 @@ public final class RestoreOperation implements DimensionMutation {
                 WorldStateApply.State returnPoint = returnState(composed);
                 WorldStateApply.PreparedStates composedStates = world.composePrepared(
                         states, precedingStates, target, returnPoint);
-                return new PrewarmedRestore(
-                        composed, composedStates, world.begin(composedStates.target()));
+                WorldStateApply.ApplySession composedSession = world.begin(
+                        composedStates.target(), handoff);
+                handoff = null;
+                return new PrewarmedRestore(composed, composedStates, composedSession);
             } catch (IOException | RuntimeException failed) {
+                if (handoff != null) {
+                    handoff.close();
+                }
                 PreparedRestore cleanup = composed == null ? preceding : composed;
                 try {
                     cleanup.close();

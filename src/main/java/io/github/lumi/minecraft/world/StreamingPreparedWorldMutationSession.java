@@ -67,6 +67,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private List<EntityChunkKey> entityKeys;
     private PreparedMinecraftState slab;
     private ChunkLoadSession prewarmedChunks;
+    private ChunkLoadAccess.Readiness prewarmedReadiness;
     private PreparedWorldMutationSession current;
     private BatchKind currentKind;
     private Phase phase = Phase.PREPARING;
@@ -108,7 +109,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             batchEnd = windowEnd(
                     plan.sectionKeys(), batchStart, slabEnd, resident);
             PreparedMinecraftState window = nextSectionWindow();
-            prewarmedChunks = chunkLoads.apply(sectionReadiness(window));
+            prewarmedReadiness = sectionReadiness(window);
+            prewarmedChunks = chunkLoads.apply(prewarmedReadiness);
             prewarmedChunks.retain(window.sectionKeys());
         }
         return prewarmedChunks.loadUntil(deadlineNanos);
@@ -121,14 +123,35 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             Executor background,
             Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads,
             Predicate<ChunkCoordinate> resident) {
+        this(plan, preparation, world, background, chunkLoads, resident,
+                WorldStateApply.PrewarmHandoff.NONE);
+    }
+
+    StreamingPreparedWorldMutationSession(
+            PreparedMinecraftPlanState plan,
+            MinecraftRestorePreparation preparation,
+            PreparedWorldAccess world,
+            Executor background,
+            Function<ChunkLoadAccess.Readiness, ChunkLoadSession> chunkLoads,
+            Predicate<ChunkCoordinate> resident,
+            WorldStateApply.PrewarmHandoff handoff) {
         this.plan = Objects.requireNonNull(plan, "plan");
         this.preparation = Objects.requireNonNull(preparation, "preparation");
         this.world = Objects.requireNonNull(world, "world");
         this.background = Objects.requireNonNull(background, "background");
         this.chunkLoads = Objects.requireNonNull(chunkLoads, "chunkLoads");
         this.resident = Objects.requireNonNull(resident, "resident");
+        ChunkPrewarm transferred = handoff instanceof ChunkPrewarm prewarm
+                ? prewarm : null;
+        if (transferred == null) {
+            Objects.requireNonNull(handoff, "handoff").close();
+        }
         entityKeys = plan.entityKeys();
         startSectionPreparation(true);
+        if (transferred != null) {
+            prewarmedChunks = transferred.claim();
+            prewarmedReadiness = transferred.readiness();
+        }
     }
 
     @Override
@@ -229,16 +252,23 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                     startSectionPreparation(false);
                 }
             }
-            if (prewarmedChunks == null) {
+            if (batchEnd <= batchStart) {
                 batchEnd = windowEnd(
                         plan.sectionKeys(), batchStart, slabEnd, resident);
             }
             PreparedMinecraftState window = nextSectionWindow();
             poiChunks.addAll(window.persistencePoiChunks(Set.of()));
-            ChunkLoadSession windowChunks = prewarmedChunks == null
-                    ? chunkLoads.apply(sectionReadiness(window))
-                    : prewarmedChunks;
+            ChunkLoadAccess.Readiness readiness = sectionReadiness(window);
+            if (prewarmedChunks != null
+                    && (prewarmedReadiness != readiness
+                    || !prewarmedChunks.containsAll(window.sectionKeys()))) {
+                prewarmedChunks.close();
+                prewarmedChunks = null;
+            }
+            ChunkLoadSession windowChunks = prewarmedChunks != null
+                    ? prewarmedChunks : chunkLoads.apply(readiness);
             prewarmedChunks = null;
+            prewarmedReadiness = null;
             current = new PreparedWorldMutationSession(
                     window, world, System::nanoTime,
                     windowChunks, metrics,
@@ -712,9 +742,24 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         if (prewarmedChunks != null) {
             prewarmedChunks.close();
             prewarmedChunks = null;
+            prewarmedReadiness = null;
         }
         if (closeFailure != null) {
             throw closeFailure;
+        }
+    }
+
+    WorldStateApply.PrewarmHandoff suspendPrewarm() {
+        ChunkPrewarm handoff = new ChunkPrewarm(
+                prewarmedChunks, prewarmedReadiness);
+        prewarmedChunks = null;
+        prewarmedReadiness = null;
+        try {
+            close();
+            return handoff;
+        } catch (RuntimeException failed) {
+            handoff.close();
+            throw failed;
         }
     }
 
@@ -733,6 +778,35 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             int end,
             boolean prefetchAllowed,
             CompletableFuture<PreparedSlab> next) { }
+
+    private static final class ChunkPrewarm implements WorldStateApply.PrewarmHandoff {
+        private ChunkLoadSession chunks;
+        private final ChunkLoadAccess.Readiness readiness;
+
+        private ChunkPrewarm(
+                ChunkLoadSession chunks, ChunkLoadAccess.Readiness readiness) {
+            this.chunks = chunks;
+            this.readiness = readiness;
+        }
+
+        private ChunkLoadSession claim() {
+            ChunkLoadSession claimed = chunks;
+            chunks = null;
+            return claimed;
+        }
+
+        private ChunkLoadAccess.Readiness readiness() {
+            return readiness;
+        }
+
+        @Override
+        public void close() {
+            if (chunks != null) {
+                chunks.close();
+                chunks = null;
+            }
+        }
+    }
 
     private enum BatchKind { SECTIONS, ENTITIES, SPAWNS, FINAL }
     private enum Phase {

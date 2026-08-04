@@ -98,12 +98,31 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
 
     @Override
     public ApplySession begin(PreparedState target) {
-        if (target instanceof PreparedMinecraftPlanState plan) {
-            return new StreamingPreparedWorldMutationSession(
-                    prioritize(plan), preparation, world, background,
-                    this::chunkLoads, chunk -> level.getChunkSource().getChunkNow(
-                            chunk.x(), chunk.z()) != null);
+        return begin(target, PrewarmHandoff.NONE);
+    }
+
+    @Override
+    public PrewarmHandoff suspendPrewarm(ApplySession session) {
+        if (session instanceof StreamingPreparedWorldMutationSession streaming) {
+            return streaming.suspendPrewarm();
         }
+        return WorldStateApply.super.suspendPrewarm(session);
+    }
+
+    @Override
+    public ApplySession begin(PreparedState target, PrewarmHandoff handoff) {
+        if (target instanceof PreparedMinecraftPlanState plan) {
+            try {
+                return new StreamingPreparedWorldMutationSession(
+                        prioritize(plan), preparation, world, background,
+                        this::chunkLoads, chunk -> level.getChunkSource().getChunkNow(
+                                chunk.x(), chunk.z()) != null, handoff);
+            } catch (RuntimeException failed) {
+                handoff.close();
+                throw failed;
+            }
+        }
+        handoff.close();
         if (!(target instanceof PreparedMinecraftState minecraft)) {
             throw new IllegalArgumentException("Restore state was not prepared for Minecraft");
         }
