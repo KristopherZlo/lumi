@@ -608,3 +608,7 @@ Raw patch записывается через vanilla chunk I/O, затем live
 раньше. После verification успешный `tryMarkSaved` исключает только повторный full serialization;
 live relight, affected-region force и exact disk reread остаются обязательными. Dirty, missing,
 unsupported или неподтверждённый chunk автоматически проходит обычный `ChunkMap.save`.
+
+Existing-world branch benchmark выполняет boundary Save только при наличии pending builder
+changes. Для clean copy текущий durable HEAD уже является точной границей; попытка создать
+пустой Save правильно блокируется продуктовым UI и не должна ломать измерительный harness.
