@@ -60,20 +60,18 @@ final class RestoreApplyMetrics {
     }
 
     void storedChunk(StoredChunkApplyResult result) {
-        if (!result.stored()) {
+        if (!result.applied()) {
             storedFallbacks.get(result.outcome()).increment();
             return;
         }
         storedChunks.increment();
+        sectionSwaps.add(result.sectionSwaps());
+        changedBlocks.add(result.changedBlocks());
+        lightSections.add(result.lightSections());
         storageReadNanos.add(result.readNanos());
         storageWriteNanos.add(result.writeNanos());
         storageSyncNanos.add(result.syncNanos());
         verificationNanos.add(result.verifyNanos());
-        if (result.applied()) {
-            sectionSwaps.add(result.sectionSwaps());
-            changedBlocks.add(result.changedBlocks());
-            lightSections.add(result.lightSections());
-        }
     }
 
     void chunkLoad(long nanos) { chunkLoadNanos.add(nanos); }

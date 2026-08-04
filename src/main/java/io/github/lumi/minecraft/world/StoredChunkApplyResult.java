@@ -31,14 +31,6 @@ public record StoredChunkApplyResult(
         return outcome == Outcome.APPLIED;
     }
 
-    public boolean stagedResident() {
-        return outcome == Outcome.STAGED_RESIDENT;
-    }
-
-    public boolean stored() {
-        return applied() || stagedResident();
-    }
-
     public static StoredChunkApplyResult applied(
             long readNanos, long writeNanos, long syncNanos, long verifyNanos) {
         return applied(readNanos, writeNanos, syncNanos, verifyNanos, 0, 0, 0);
@@ -53,22 +45,14 @@ public record StoredChunkApplyResult(
     }
 
     public static StoredChunkApplyResult fallback(Outcome outcome) {
-        if (outcome == Outcome.APPLIED || outcome == Outcome.STAGED_RESIDENT) {
-            throw new IllegalArgumentException("Stored outcome is not a fallback");
+        if (outcome == Outcome.APPLIED) {
+            throw new IllegalArgumentException("Applied is not a fallback outcome");
         }
         return new StoredChunkApplyResult(outcome, 0, 0, 0, 0, 0, 0, 0);
     }
 
-    public static StoredChunkApplyResult stagedResident(
-            long readNanos, long writeNanos) {
-        return new StoredChunkApplyResult(
-                Outcome.STAGED_RESIDENT, 0, 0, 0,
-                readNanos, writeNanos, 0, 0);
-    }
-
     public enum Outcome {
         APPLIED,
-        STAGED_RESIDENT,
         UNAVAILABLE,
         ENTITY_CHANGES,
         UNSUPPORTED_DELTA,

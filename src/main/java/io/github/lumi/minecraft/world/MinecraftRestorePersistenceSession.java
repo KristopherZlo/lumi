@@ -104,7 +104,7 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
         Set<ChunkCoordinate> relight = new HashSet<>();
         writeTarget.sectionKeys().forEach(key -> {
             ChunkCoordinate chunk = ChunkCoordinate.from(key);
-            if (!alreadyStored.contains(chunk) || isResident(chunk)) {
+            if (!alreadyStored.contains(chunk)) {
                 DecodedSection section = writeTarget.sections().get(key);
                 PreparedSectionDelta delta = section.hasPreparedDelta()
                         ? section.preparedDelta() : null;
@@ -155,10 +155,6 @@ final class MinecraftRestorePersistenceSession implements WorldPersistenceSessio
                         verificationEntities, entityStorage)
                 : null;
         phaseStartedNanos = System.nanoTime();
-    }
-
-    private boolean isResident(ChunkCoordinate chunk) {
-        return level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) != null;
     }
 
     private static Map<ChunkCoordinate, Map<SectionKey, DecodedSection>>

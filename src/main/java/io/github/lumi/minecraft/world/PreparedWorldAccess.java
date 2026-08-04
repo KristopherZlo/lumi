@@ -56,12 +56,6 @@ public interface PreparedWorldAccess {
         return CompletableFuture.completedFuture(Set.of());
     }
 
-    /** Confirms direct resident writes; rejected chunks use vanilla save. */
-    default Set<ChunkCoordinate> confirmResidentChunkWrites(
-            Set<ChunkCoordinate> candidates) {
-        return Set.of();
-    }
-
     /** Prevents queued legacy payloads for these chunks from entering the live index. */
     DimensionFreeze.Lease suppressEntityLoads(Set<EntityChunkKey> keys);
 

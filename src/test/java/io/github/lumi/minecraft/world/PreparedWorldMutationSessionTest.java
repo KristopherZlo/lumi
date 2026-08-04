@@ -501,50 +501,6 @@ class PreparedWorldMutationSessionTest {
     }
 
     @Test
-    void appliesCleanResidentChunkLiveButSkipsItsVanillaSaveAfterDirectWrite()
-            throws Exception {
-        SectionKey key = new SectionKey(1, 2, 3);
-        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
-                SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
-        DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
-                .decode(source);
-        PreparedMinecraftState target = new PreparedMinecraftState(
-                new WorldStateApply.State(Map.of(key, source), Map.of()),
-                Map.of(key, decoded), Map.of());
-        FakeWorld world = new FakeWorld(new AtomicLong(), source);
-        world.storedResult = StoredChunkApplyResult.stagedResident(5, 7);
-        world.confirmResidentWrites = true;
-        var session = new PreparedWorldMutationSession(
-                target, world, () -> 0L,
-                new ChunkLoadSession(new ImmediateChunkAccess(), () -> 0L));
-
-        assertTrue(session.applyUntil(Long.MAX_VALUE));
-        assertEquals(1, world.sectionWrites);
-        assertEquals(WorldStateApply.Verification.VERIFIED,
-                session.verifyUntil(Long.MAX_VALUE));
-        assertTrue(session.persistUntil(Long.MAX_VALUE));
-
-        assertEquals(Set.of(ChunkCoordinate.from(key)), world.lastPersistenceStored);
-        assertEquals(1, session.statistics().storedChunks());
-        assertEquals(1, session.statistics().loadedChunks());
-        assertEquals(Map.of(), session.statistics().storedFallbacks());
-        assertEquals(5, session.statistics().storageReadNanos());
-        assertEquals(7, session.statistics().storageWriteNanos());
-        session.close();
-
-        FakeWorld fallback = new FakeWorld(new AtomicLong(), source);
-        fallback.storedResult = StoredChunkApplyResult.stagedResident(5, 7);
-        var fallbackSession = new PreparedWorldMutationSession(
-                target, fallback, () -> 0L,
-                new ChunkLoadSession(new ImmediateChunkAccess(), () -> 0L));
-        assertTrue(fallbackSession.applyUntil(Long.MAX_VALUE));
-        assertEquals(WorldStateApply.Verification.VERIFIED,
-                fallbackSession.verifyUntil(Long.MAX_VALUE));
-        assertTrue(fallbackSession.persistUntil(Long.MAX_VALUE));
-        assertEquals(Set.of(), fallback.lastPersistenceStored);
-    }
-
-    @Test
     void groupsStoredWritesIntoWindowsOfOneHundredTwentyEightChunks()
             throws Exception {
         SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
@@ -732,8 +688,6 @@ class PreparedWorldMutationSessionTest {
         private int playerSpawnWrites;
         private int playerSpawnMatches;
         private boolean lightingComplete = true;
-        private boolean confirmResidentWrites;
-        private Set<ChunkCoordinate> lastPersistenceStored = Set.of();
         private int lightingChecks;
         private final List<Boolean> persistencePlayerSpawnFlags = new ArrayList<>();
         private final List<PreparedWorldMutationSession.PersistenceMode> persistenceModes =
@@ -755,7 +709,6 @@ class PreparedWorldMutationSessionTest {
                 PreparedMinecraftState target,
                 Set<ChunkCoordinate> alreadyStored,
                 boolean playerSpawnsIncluded) {
-            lastPersistenceStored = Set.copyOf(alreadyStored);
             return persistence(
                     PreparedWorldMutationSession.PersistenceMode.COMPLETE,
                     playerSpawnsIncluded);
@@ -763,7 +716,6 @@ class PreparedWorldMutationSessionTest {
         @Override public WorldPersistenceSession beginPersistenceStage(
                 PreparedMinecraftState target,
                 Set<ChunkCoordinate> alreadyStored) {
-            lastPersistenceStored = Set.copyOf(alreadyStored);
             return persistence(
                     PreparedWorldMutationSession.PersistenceMode.STAGE, false);
         }
@@ -774,7 +726,6 @@ class PreparedWorldMutationSessionTest {
                 List<EntityChunkKey> verificationEntities,
                 Set<ChunkCoordinate> alreadyStored,
                 Set<ChunkCoordinate> poiChunks) {
-            lastPersistenceStored = Set.copyOf(alreadyStored);
             return persistence(
                     PreparedWorldMutationSession.PersistenceMode.FINAL, false);
         }
@@ -789,10 +740,6 @@ class PreparedWorldMutationSessionTest {
         @Override public boolean finishLighting() {
             lightingChecks++;
             return lightingComplete;
-        }
-        @Override public Set<ChunkCoordinate> confirmResidentChunkWrites(
-                Set<ChunkCoordinate> candidates) {
-            return confirmResidentWrites ? Set.copyOf(candidates) : Set.of();
         }
         @Override public ChunkSyncResult finishChunk(
                 ChunkCoordinate chunk,
