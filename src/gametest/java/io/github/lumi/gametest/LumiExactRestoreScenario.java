@@ -54,23 +54,10 @@ final class LumiExactRestoreScenario {
         switchAndAssert("branch_d_to_b", branchB.name(), b);
         switchAndAssert("branch_b_to_d", branchD.name(), d);
 
-        unloadStored("mixed_d_to_c");
-        LumiRestoreMeasurement mixed = operations.measureRestore(
-                "mixed_d_to_c", c.commit());
-        recordChunkPath("mixed_d_to_c", mixed);
-        assertEndpointMetadata("mixed_d_to_c", c, branchD.name());
-        LumiRestoreMeasurement mixedReverse =
-                operations.measureRestore("mixed_c_to_d", d.commit());
-        recordChunkPath("mixed_c_to_d", mixedReverse);
-        assertRoundTripPath("mixed", mixed, mixedReverse, true);
-        assertEndpoint("mixed_c_to_d", d, branchD.name());
-        restoreAndAssert("loaded_d_to_b_final", b, branchD.name());
-
         checks.finish();
         report.event("gate", "exact_restore", "succeeded", 0, 0,
-                "endpoints=4;blocks=262144;loaded=true;stored=true;"
-                        + "mixed=true;branchSwitch=true");
-        return new PreparedExact(b, c, branchD.name());
+                "endpoints=4;blocks=262144;loaded=true;branchSwitch=true");
+        return new PreparedExact(b, c, d, branchD.name());
     }
 
     void verifyReopened(PreparedExact prepared) throws IOException {
@@ -78,28 +65,42 @@ final class LumiExactRestoreScenario {
         LumiUiTestDriver ui = new LumiUiTestDriver(context);
         ui.completeOnboardingIfShown();
         ui.awaitHistory();
-        // A full snapshot loads the far stored fixture and makes vanilla retain it
-        // for up to ten minutes. Verify loaded metadata first, then exercise the
-        // still-cold region and finish with one full exact snapshot.
         assertEndpointMetadata(
-                "reopened_b", prepared.target(), prepared.branch());
-        unloadStored("reopened_stored_b_to_c");
+                "reopened_d", prepared.endpointD(), prepared.branch());
+        LumiRestoreMeasurement mixed = operations.measureRestore(
+                "reopened_mixed_d_to_c", prepared.endpointC().commit());
+        assertChunkPath("reopened_mixed_d_to_c", mixed, true, true);
+        assertEndpointMetadata(
+                "reopened_mixed_d_to_c",
+                prepared.endpointC(), prepared.branch());
+        LumiRestoreMeasurement mixedReverse = operations.measureRestore(
+                "reopened_mixed_c_to_d", prepared.endpointD().commit());
+        assertChunkPath("reopened_mixed_c_to_d", mixedReverse, true, true);
+        assertEndpointMetadata(
+                "reopened_mixed_c_to_d",
+                prepared.endpointD(), prepared.branch());
+        LumiRestoreMeasurement loaded = operations.measureRestore(
+                "reopened_loaded_d_to_b", prepared.endpointB().commit());
+        assertChunkPath("reopened_loaded_d_to_b", loaded, true, false);
+        assertEndpointMetadata(
+                "reopened_loaded_d_to_b",
+                prepared.endpointB(), prepared.branch());
         LumiRestoreMeasurement stored = operations.measureRestore(
-                "reopened_stored_b_to_c", prepared.current().commit());
-        recordChunkPath("reopened_stored_b_to_c", stored);
+                "reopened_stored_b_to_c", prepared.endpointC().commit());
+        assertChunkPath("reopened_stored_b_to_c", stored, false, true);
         assertEndpointMetadata(
                 "reopened_stored_b_to_c",
-                prepared.current(), prepared.branch());
+                prepared.endpointC(), prepared.branch());
         LumiRestoreMeasurement storedReverse = operations.measureRestore(
-                "reopened_stored_c_to_b", prepared.target().commit());
-        recordChunkPath("reopened_stored_c_to_b", storedReverse);
-        assertRoundTripPath("stored", stored, storedReverse, false);
+                "reopened_stored_c_to_b", prepared.endpointB().commit());
+        assertChunkPath(
+                "reopened_stored_c_to_b", storedReverse, false, true);
         assertEndpoint(
                 "reopened_stored_c_to_b",
-                prepared.target(), prepared.branch());
+                prepared.endpointB(), prepared.branch());
         checks.finish();
         report.event("gate", "exact_restore_reopen", "succeeded", 0, 0,
-                "reopenedMetadata=true;storedRoundTrip=true;exact=true");
+                "mixed=true;stored=true;exact=true");
     }
 
     private Endpoint createEndpoint(String name, Runnable mutation)
@@ -148,20 +149,6 @@ final class LumiExactRestoreScenario {
         recordChunkPath(name, measurement);
     }
 
-    private void assertRoundTripPath(
-            String name,
-            LumiRestoreMeasurement forward,
-            LumiRestoreMeasurement reverse,
-            boolean loaded) {
-        boolean matched = java.util.stream.Stream.of(forward, reverse)
-                .anyMatch(measurement ->
-                        measurement.apply().storedChunks() > 0
-                                && (!loaded
-                                || measurement.apply().loadedChunks() > 0));
-        checks.assertValue(name + "_round_trip_path",
-                Boolean.toString(matched), "true");
-    }
-
     private void recordChunkPath(
             String name, LumiRestoreMeasurement measurement) {
         report.event("path", name, "verified", 0, 0,
@@ -203,10 +190,6 @@ final class LumiExactRestoreScenario {
         assertRuntimeReleased(name);
     }
 
-    private void unloadStored(String name) {
-        fixture.awaitStoredUnloaded(name);
-    }
-
     private void assertRuntimeReleased(String name) {
         checks.waitUntil(name + "_runtime_idle", IDLE_TIMEOUT_TICKS,
                 () -> singleplayer.getServer().computeOnServer(server -> {
@@ -240,12 +223,14 @@ final class LumiExactRestoreScenario {
     }
 
     record PreparedExact(
-            Endpoint target,
-            Endpoint current,
+            Endpoint endpointB,
+            Endpoint endpointC,
+            Endpoint endpointD,
             BranchName branch) {
         PreparedExact {
-            Objects.requireNonNull(target, "target");
-            Objects.requireNonNull(current, "current");
+            Objects.requireNonNull(endpointB, "endpointB");
+            Objects.requireNonNull(endpointC, "endpointC");
+            Objects.requireNonNull(endpointD, "endpointD");
             Objects.requireNonNull(branch, "branch");
         }
     }
