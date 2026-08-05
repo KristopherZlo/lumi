@@ -122,7 +122,8 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
         operations.awaitDurability("first_minute_entity_origin");
         CommitId entityOriginSave =
                 operations.save("first-minute-entity-origin");
-        moveDurableEntity(server, movedEntity, entityMoved);
+        actions.moveDurableEntity(
+                "first_minute_move_entity", movedEntity, entityMoved);
         operations.awaitDurability("first_minute_entity_moved");
         operations.save("first-minute-entity-moved");
         operations.restore("first-minute-entity-origin", entityOriginSave);
@@ -285,30 +286,6 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
                 }
                 player.teleportTo(position.x, position.y, position.z);
                 return entity.getUUID();
-            }
-        });
-    }
-
-    private static void moveDurableEntity(
-            TestServerContext server, UUID id, Vec3 position) {
-        server.runOnServer(minecraft -> {
-            var player = minecraft.getPlayerList().getPlayers().getFirst();
-            var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
-            Entity entity = Objects.requireNonNull(
-                    player.level().getEntityInAnyDimension(id));
-            try (var ignored = DirectLiveActionContext.open(
-                    runtime.liveActions(), player.getUUID())) {
-                var pending = runtime.liveEntities().begin(entity).orElseThrow(
-                        () -> new AssertionError(
-                                "Could not capture the cross-chunk entity move"));
-                entity.setPos(position);
-                if (!runtime.liveEntities().finish(pending)) {
-                    throw new AssertionError(
-                            "Cross-chunk entity move was not captured");
-                }
-            } catch (IOException failed) {
-                throw new AssertionError(
-                        "Could not record the cross-chunk entity move", failed);
             }
         });
     }

@@ -235,6 +235,44 @@ final class LumiBehaviorActions {
         }));
     }
 
+    void moveDurableEntity(String name, UUID id, Vec3 position) {
+        timed(name, () -> server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
+            Entity entity = entity(player.level(), id, Entity.class);
+            try (var ignored = DirectLiveActionContext.open(
+                    runtime.liveActions(), player.getUUID())) {
+                var pending = runtime.liveEntities().begin(entity).orElseThrow(
+                        () -> new AssertionError(
+                                "Could not capture durable entity move " + id));
+                entity.setPos(position);
+                require(runtime.liveEntities().finish(pending),
+                        "Durable entity move did not change " + id);
+            }
+        }));
+    }
+
+    void attachPassenger(String name, UUID vehicleId, UUID passengerId) {
+        timed(name, () -> server.runOnServer(minecraft -> {
+            ServerPlayer player = player(minecraft);
+            var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
+            Entity vehicle = entity(player.level(), vehicleId, Entity.class);
+            Entity passenger = entity(player.level(), passengerId, Entity.class);
+            try (var ignored = DirectLiveActionContext.open(
+                    runtime.liveActions(), player.getUUID())) {
+                var vehicleBefore = runtime.liveEntities().begin(vehicle).orElseThrow();
+                var passengerBefore =
+                        runtime.liveEntities().begin(passenger).orElseThrow();
+                require(passenger.startRiding(vehicle, true, true),
+                        "Could not attach passenger " + passengerId);
+                require(runtime.liveEntities().finish(passengerBefore),
+                        "Passenger root did not change " + passengerId);
+                require(runtime.liveEntities().finish(vehicleBefore),
+                        "Vehicle graph did not change " + vehicleId);
+            }
+        }));
+    }
+
     void equipArmorStands(List<UUID> stands, long seed) {
         timed("equip_armor_stands", () -> server.runOnServer(minecraft -> {
             ServerPlayer player = player(minecraft);
