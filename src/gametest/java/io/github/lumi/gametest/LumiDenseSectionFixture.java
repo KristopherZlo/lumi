@@ -86,6 +86,8 @@ final class LumiDenseSectionFixture {
 
     void awaitUnloaded(String name, BlockBox area) {
         long started = System.nanoTime();
+        server.runOnServer(minecraft ->
+                minecraft.saveEverything(false, true, false));
         int stableTicks = 0;
         for (int ticks = 0; ticks < UNLOAD_TIMEOUT_TICKS; ticks++) {
             int loaded = server.computeOnServer(minecraft -> loadedChunks(
