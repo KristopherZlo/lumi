@@ -23,6 +23,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
     private final PreparedWorldAccess world;
     private final LongSupplier nanoTime;
     private final ChunkLoadSession chunks;
+    private final boolean closeChunks;
     private final RestoreApplyMetrics metrics;
     private final PersistenceMode persistenceMode;
     private final WorldStateApply.State verificationTarget;
@@ -86,8 +87,22 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             WorldStateApply.State verificationTarget,
             Set<ChunkCoordinate> alreadyStored) {
         this(target, world, nanoTime, chunks, metrics, persistenceMode,
+                verificationTarget, alreadyStored, true);
+    }
+
+    PreparedWorldMutationSession(
+            PreparedMinecraftState target,
+            PreparedWorldAccess world,
+            LongSupplier nanoTime,
+            ChunkLoadSession chunks,
+            RestoreApplyMetrics metrics,
+            PersistenceMode persistenceMode,
+            WorldStateApply.State verificationTarget,
+            Set<ChunkCoordinate> alreadyStored,
+            boolean closeChunks) {
+        this(target, world, nanoTime, chunks, metrics, persistenceMode,
                 verificationTarget, target.sectionKeys(), target.entityKeys(),
-                alreadyStored);
+                alreadyStored, Set.of(), closeChunks);
     }
 
     PreparedWorldMutationSession(
@@ -118,10 +133,29 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
             List<EntityChunkKey> verificationEntities,
             Set<ChunkCoordinate> alreadyStored,
             Set<ChunkCoordinate> finalPoiChunks) {
+        this(target, world, nanoTime, chunks, metrics, persistenceMode,
+                verificationTarget, verificationSections, verificationEntities,
+                alreadyStored, finalPoiChunks, true);
+    }
+
+    PreparedWorldMutationSession(
+            PreparedMinecraftState target,
+            PreparedWorldAccess world,
+            LongSupplier nanoTime,
+            ChunkLoadSession chunks,
+            RestoreApplyMetrics metrics,
+            PersistenceMode persistenceMode,
+            WorldStateApply.State verificationTarget,
+            List<SectionKey> verificationSections,
+            List<EntityChunkKey> verificationEntities,
+            Set<ChunkCoordinate> alreadyStored,
+            Set<ChunkCoordinate> finalPoiChunks,
+            boolean closeChunks) {
         this.target = Objects.requireNonNull(target, "target");
         this.world = Objects.requireNonNull(world, "world");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         this.chunks = chunks;
+        this.closeChunks = closeChunks;
         this.metrics = Objects.requireNonNull(metrics, "metrics");
         this.persistenceMode = Objects.requireNonNull(persistenceMode, "persistenceMode");
         this.verificationTarget = Objects.requireNonNull(
@@ -322,7 +356,7 @@ public final class PreparedWorldMutationSession implements WorldStateApply.Apply
                 persistence.close();
             }
         } finally {
-            if (chunks != null) {
+            if (closeChunks && chunks != null) {
                 chunks.close();
             }
         }

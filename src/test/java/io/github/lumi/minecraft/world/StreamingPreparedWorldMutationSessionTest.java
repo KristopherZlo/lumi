@@ -424,8 +424,11 @@ class StreamingPreparedWorldMutationSessionTest {
     @Test
     void handsPrewarmedChunkWindowToRecomposedSession() throws Exception {
         SectionKey key = new SectionKey(0, 0, 0);
+        SectionKey freshKey = new SectionKey(1, 0, 0);
         SectionBlob section = stoneSection();
-        PreparedMinecraftPlanState plan = plan(List.of(key), section);
+        PreparedMinecraftPlanState originalPlan = plan(List.of(key), section);
+        PreparedMinecraftPlanState recomposedPlan = plan(
+                List.of(key, freshKey), section);
         ControlledExecutor background = new ControlledExecutor();
         FakeWorld world = new FakeWorld(section);
         RecordingChunkAccess chunks = new RecordingChunkAccess();
@@ -436,7 +439,7 @@ class StreamingPreparedWorldMutationSessionTest {
         };
 
         StreamingPreparedWorldMutationSession original = session(
-                plan, world, background, loads);
+                originalPlan, world, background, loads);
         assertFalse(original.prewarmUntil(0));
         background.runNext();
         assertTrue(original.prewarmUntil(Long.MAX_VALUE));
@@ -444,13 +447,47 @@ class StreamingPreparedWorldMutationSessionTest {
         WorldStateApply.PrewarmHandoff handoff = original.suspendPrewarm();
         assertEquals(1, chunks.active);
         try (var recomposed = session(
-                plan, world, background, loads, ignored -> false, handoff)) {
+                recomposedPlan, world, background, loads,
+                ignored -> false, handoff)) {
             background.runNext();
             startFirstMutation(recomposed, world);
 
-            assertEquals(1, chunks.peak);
+            assertEquals(2, chunks.peak);
             assertEquals(1, requested.size());
-            assertEquals(List.of(1), world.persistenceWindowSizes());
+            assertEquals(List.of(2), world.persistenceWindowSizes());
+        }
+        assertEquals(0, chunks.active);
+    }
+
+    @Test
+    void discardsIncompleteChunkHandoffBeforeRecomposition() throws Exception {
+        SectionKey key = new SectionKey(0, 0, 0);
+        SectionBlob section = stoneSection();
+        PreparedMinecraftPlanState plan = plan(List.of(key), section);
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(section);
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        CompletableFuture<Void> loading = new CompletableFuture<>();
+        chunks.loads.put(ChunkCoordinate.from(key), loading);
+        AtomicInteger sessions = new AtomicInteger();
+        Function<ChunkLoadAccess.Readiness, ChunkLoadSession> loads = ignored -> {
+            sessions.incrementAndGet();
+            return new ChunkLoadSession(chunks, () -> 0L);
+        };
+
+        StreamingPreparedWorldMutationSession original = session(
+                plan, world, background, loads);
+        background.runNext();
+        assertFalse(original.prewarmUntil(1));
+        assertEquals(1, chunks.active);
+        WorldStateApply.PrewarmHandoff handoff = original.suspendPrewarm();
+        loading.complete(null);
+
+        try (var recomposed = session(
+                plan, world, background, loads, ignored -> false, handoff)) {
+            background.runNext();
+            startFirstMutation(recomposed, world);
+            assertEquals(2, sessions.get());
         }
         assertEquals(0, chunks.active);
     }

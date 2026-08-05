@@ -26,6 +26,7 @@ public final class ChunkLoadSession implements AutoCloseable {
     private Map.Entry<ChunkCoordinate, CompletableFuture<Void>> current;
     private int completed;
     private boolean loadingStarted;
+    private boolean fullyLoaded;
     private boolean windowed;
     private boolean closed;
 
@@ -58,9 +59,14 @@ public final class ChunkLoadSession implements AutoCloseable {
             }
             if (current == null) {
                 if (!loading.hasNext()) {
+                    fullyLoaded = true;
                     return true;
                 }
                 current = loading.next();
+            }
+            if (ready.contains(current.getKey())) {
+                current = null;
+                continue;
             }
             if (!DeadlineFuture.await(current.getValue(), deadlineNanos)) {
                 return false;
@@ -163,12 +169,22 @@ public final class ChunkLoadSession implements AutoCloseable {
         return true;
     }
 
+    boolean canRetain() {
+        return !closed && !windowed && (!loadingStarted || fullyLoaded);
+    }
+
     private void requireRetainable() {
         if (closed) {
             throw new IllegalStateException("Chunk load session is closed");
         }
-        if (loadingStarted) {
+        if (loadingStarted && !fullyLoaded) {
             throw new IllegalStateException("Cannot add chunks after loading started");
+        }
+        if (fullyLoaded) {
+            loadingStarted = false;
+            fullyLoaded = false;
+            loading = null;
+            current = null;
         }
     }
 

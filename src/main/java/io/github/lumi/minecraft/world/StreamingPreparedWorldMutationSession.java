@@ -27,6 +27,7 @@ import java.util.function.Predicate;
 final class StreamingPreparedWorldMutationSession implements WorldStateApply.ApplySession {
     static final int MAX_CHUNKS = 128;
     static final int MAX_ENTITY_CHUNKS = 32;
+    static final int MAX_PREWARM_CHUNKS = 1_024;
     static final long MAX_ESTIMATED_BYTES = 64L * 1024 * 1024;
     private static final long MAX_OVERSIZED_ESTIMATED_BYTES =
             2 * MAX_ESTIMATED_BYTES;
@@ -68,6 +69,8 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private PreparedMinecraftState slab;
     private ChunkLoadSession prewarmedChunks;
     private ChunkLoadAccess.Readiness prewarmedReadiness;
+    private List<SectionKey> currentChunkKeys = List.of();
+    private boolean currentUsesPrewarmedChunks;
     private PreparedWorldMutationSession current;
     private BatchKind currentKind;
     private Phase phase = Phase.PREPARING;
@@ -109,9 +112,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             batchEnd = windowEnd(
                     plan.sectionKeys(), batchStart, slabEnd, resident);
             PreparedMinecraftState window = nextSectionWindow();
-            prewarmedReadiness = sectionReadiness(window);
+            prewarmedReadiness = ChunkLoadAccess.Readiness.TERRAIN_WITH_NEIGHBORS;
             prewarmedChunks = chunkLoads.apply(prewarmedReadiness);
-            prewarmedChunks.retain(window.sectionKeys());
+            prewarmedChunks.retain(prewarmKeys(window));
         }
         return prewarmedChunks.loadUntil(deadlineNanos);
     }
@@ -213,6 +216,11 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                     ? current.storedChunkWrites() : Set.of();
             current.close();
             current = null;
+            if (currentUsesPrewarmedChunks) {
+                releaseChunks(prewarmedChunks, currentChunkKeys);
+                currentUsesPrewarmedChunks = false;
+                currentChunkKeys = List.of();
+            }
             if (currentKind == BatchKind.SECTIONS) {
                 slabStored.addAll(stored);
                 batchStart = batchEnd;
@@ -260,20 +268,23 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             poiChunks.addAll(window.persistencePoiChunks(Set.of()));
             ChunkLoadAccess.Readiness readiness = sectionReadiness(window);
             if (prewarmedChunks != null
-                    && (prewarmedReadiness != readiness
-                    || !prewarmedChunks.containsAll(window.sectionKeys()))) {
+                    && (!supports(prewarmedReadiness, readiness)
+                    || !prewarmedChunks.canRetain())) {
                 prewarmedChunks.close();
                 prewarmedChunks = null;
+                prewarmedReadiness = null;
             }
             ChunkLoadSession windowChunks = prewarmedChunks != null
                     ? prewarmedChunks : chunkLoads.apply(readiness);
-            prewarmedChunks = null;
-            prewarmedReadiness = null;
+            currentUsesPrewarmedChunks = prewarmedChunks != null;
+            currentChunkKeys = currentUsesPrewarmedChunks
+                    ? window.sectionKeys() : List.of();
             current = new PreparedWorldMutationSession(
                     window, world, System::nanoTime,
                     windowChunks, metrics,
                     PreparedWorldMutationSession.PersistenceMode.STAGE,
-                    window.source(), Set.copyOf(slabStored));
+                    window.source(), Set.copyOf(slabStored),
+                    !currentUsesPrewarmedChunks);
             currentKind = BatchKind.SECTIONS;
             phase = Phase.APPLYING;
             return true;
@@ -537,6 +548,42 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         return new PreparedMinecraftState(
                 new WorldStateApply.State(source, Map.of()),
                 sections, Map.of(), keys, List.of());
+    }
+
+    private List<SectionKey> prewarmKeys(PreparedMinecraftState firstWindow) {
+        Map<ChunkCoordinate, SectionKey> keys = new LinkedHashMap<>();
+        for (SectionKey key : firstWindow.sectionKeys()) {
+            keys.putIfAbsent(ChunkCoordinate.from(key), key);
+        }
+        for (SectionKey key : plan.sectionKeys()) {
+            if (keys.size() == MAX_PREWARM_CHUNKS) {
+                break;
+            }
+            ChunkCoordinate chunk = ChunkCoordinate.from(key);
+            if (!keys.containsKey(chunk) && resident.test(chunk)) {
+                keys.putIfAbsent(chunk, key);
+            }
+        }
+        return List.copyOf(keys.values());
+    }
+
+    private static boolean supports(
+            ChunkLoadAccess.Readiness available,
+            ChunkLoadAccess.Readiness required) {
+        return available == required
+                || available == ChunkLoadAccess.Readiness.TERRAIN_WITH_NEIGHBORS
+                && required == ChunkLoadAccess.Readiness.TERRAIN;
+    }
+
+    private static void releaseChunks(
+            ChunkLoadSession chunks, List<SectionKey> keys) {
+        Set<ChunkCoordinate> released = new HashSet<>();
+        for (SectionKey key : keys) {
+            ChunkCoordinate chunk = ChunkCoordinate.from(key);
+            if (released.add(chunk)) {
+                chunks.release(chunk);
+            }
+        }
     }
 
     private static ChunkLoadAccess.Readiness sectionReadiness(
