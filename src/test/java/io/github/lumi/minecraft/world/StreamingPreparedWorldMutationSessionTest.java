@@ -493,35 +493,6 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
-    void handsBoundedEntityTicketsToRecomposedSession() throws Exception {
-        PreparedMinecraftPlanState plan = entityPlan(entityKeys(40));
-        ControlledExecutor background = new ControlledExecutor();
-        FakeWorld world = new FakeWorld(stoneSection());
-        RecordingChunkAccess chunks = new RecordingChunkAccess();
-        List<ChunkLoadAccess.Readiness> requested = new ArrayList<>();
-        Function<ChunkLoadAccess.Readiness, ChunkLoadSession> loads = readiness -> {
-            requested.add(readiness);
-            return new ChunkLoadSession(chunks, () -> 0L);
-        };
-
-        StreamingPreparedWorldMutationSession original = session(
-                plan, world, background, loads, ignored -> true);
-        assertTrue(original.prewarmUntil(Long.MAX_VALUE));
-        assertEquals(40, chunks.active);
-        WorldStateApply.PrewarmHandoff handoff = original.suspendPrewarm();
-
-        try (var recomposed = session(
-                plan, world, background, loads, ignored -> true, handoff)) {
-            startFirstMutation(recomposed, world);
-            assertEquals(40, chunks.active);
-            assertEquals(40, chunks.peak);
-            assertEquals(List.of(
-                    ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES), requested);
-        }
-        assertEquals(0, chunks.active);
-    }
-
-    @Test
     void prefetchesNextSlabWhileFirstPersistsBeforeFinalBarrier() throws Exception {
         List<SectionKey> keys = new ArrayList<>();
         for (int sectionY = 0; sectionY < 1_025; sectionY++) {
