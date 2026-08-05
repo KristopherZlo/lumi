@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.minecraft.operation.DeadlineFuture;
@@ -28,6 +29,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     static final int MAX_CHUNKS = 128;
     static final int MAX_ENTITY_CHUNKS = 32;
     static final int MAX_PREWARM_CHUNKS = 1_024;
+    static final int MAX_PREWARM_ENTITY_CHUNKS = 256;
     static final long MAX_ESTIMATED_BYTES = 64L * 1024 * 1024;
     private static final long MAX_OVERSIZED_ESTIMATED_BYTES =
             2 * MAX_ESTIMATED_BYTES;
@@ -69,8 +71,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private PreparedMinecraftState slab;
     private ChunkLoadSession prewarmedChunks;
     private ChunkLoadAccess.Readiness prewarmedReadiness;
-    private List<SectionKey> currentChunkKeys = List.of();
-    private boolean currentUsesPrewarmedChunks;
+    private ChunkLoadSession prewarmedEntityChunks;
+    private ChunkLoadSession currentBorrowedChunks;
+    private List<? extends HistoryKey> currentChunkKeys = List.of();
     private PreparedWorldMutationSession current;
     private BatchKind currentKind;
     private Phase phase = Phase.PREPARING;
@@ -92,11 +95,10 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     @Override
     public boolean prewarmUntil(long deadlineNanos) throws IOException {
-        if (closed || current != null || batchStart > 0
-                || plan.sectionKeys().isEmpty()) {
+        if (closed || current != null || batchStart > 0) {
             return true;
         }
-        if (slab == null) {
+        if (!plan.sectionKeys().isEmpty() && slab == null) {
             if (!DeadlineFuture.await(preparing, deadlineNanos)) {
                 return false;
             }
@@ -108,7 +110,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 startSectionPreparation(false);
             }
         }
-        if (prewarmedChunks == null) {
+        if (!plan.sectionKeys().isEmpty() && prewarmedChunks == null) {
             batchEnd = windowEnd(
                     plan.sectionKeys(), batchStart, slabEnd, resident);
             PreparedMinecraftState window = nextSectionWindow();
@@ -116,7 +118,19 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             prewarmedChunks = chunkLoads.apply(prewarmedReadiness);
             prewarmedChunks.retain(prewarmKeys(window));
         }
-        return prewarmedChunks.loadUntil(deadlineNanos);
+        if (prewarmedChunks != null
+                && !prewarmedChunks.loadUntil(deadlineNanos)) {
+            return false;
+        }
+        if (plan.entityKeys().isEmpty()) {
+            return true;
+        }
+        if (prewarmedEntityChunks == null) {
+            prewarmedEntityChunks = chunkLoads.apply(
+                    ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES);
+            prewarmedEntityChunks.retain(prewarmEntityKeys());
+        }
+        return prewarmedEntityChunks.loadUntil(deadlineNanos);
     }
 
     StreamingPreparedWorldMutationSession(
@@ -152,8 +166,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         entityKeys = plan.entityKeys();
         startSectionPreparation(true);
         if (transferred != null) {
-            prewarmedChunks = transferred.claim();
+            prewarmedChunks = transferred.claimSections();
             prewarmedReadiness = transferred.readiness();
+            prewarmedEntityChunks = transferred.claimEntities();
         }
     }
 
@@ -216,9 +231,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                     ? current.storedChunkWrites() : Set.of();
             current.close();
             current = null;
-            if (currentUsesPrewarmedChunks) {
-                releaseChunks(prewarmedChunks, currentChunkKeys);
-                currentUsesPrewarmedChunks = false;
+            if (currentBorrowedChunks != null) {
+                releaseChunks(currentBorrowedChunks, currentChunkKeys);
+                currentBorrowedChunks = null;
                 currentChunkKeys = List.of();
             }
             if (currentKind == BatchKind.SECTIONS) {
@@ -276,15 +291,15 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             }
             ChunkLoadSession windowChunks = prewarmedChunks != null
                     ? prewarmedChunks : chunkLoads.apply(readiness);
-            currentUsesPrewarmedChunks = prewarmedChunks != null;
-            currentChunkKeys = currentUsesPrewarmedChunks
+            currentBorrowedChunks = prewarmedChunks;
+            currentChunkKeys = currentBorrowedChunks != null
                     ? window.sectionKeys() : List.of();
             current = new PreparedWorldMutationSession(
                     window, world, System::nanoTime,
                     windowChunks, metrics,
                     PreparedWorldMutationSession.PersistenceMode.STAGE,
                     window.source(), Set.copyOf(slabStored),
-                    !currentUsesPrewarmedChunks);
+                    currentBorrowedChunks == null);
             currentKind = BatchKind.SECTIONS;
             phase = Phase.APPLYING;
             return true;
@@ -362,11 +377,22 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     private boolean startEntityBatch() {
         PreparedMinecraftState target = nextEntityBatch();
+        if (prewarmedEntityChunks != null
+                && !prewarmedEntityChunks.canRetain()) {
+            prewarmedEntityChunks.close();
+            prewarmedEntityChunks = null;
+        }
+        ChunkLoadSession entityChunks = prewarmedEntityChunks != null
+                ? prewarmedEntityChunks
+                : chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES);
+        currentBorrowedChunks = prewarmedEntityChunks;
+        currentChunkKeys = currentBorrowedChunks != null
+                ? target.entityKeys() : List.of();
         current = new PreparedWorldMutationSession(
                 target, world, System::nanoTime,
-                chunkLoads.apply(ChunkLoadAccess.Readiness.TERRAIN_AND_ENTITIES),
+                entityChunks,
                 metrics, PreparedWorldMutationSession.PersistenceMode.STAGE,
-                target.source(), Set.of());
+                target.source(), Set.of(), currentBorrowedChunks == null);
         currentKind = BatchKind.ENTITIES;
         phase = Phase.APPLYING;
         return true;
@@ -567,6 +593,24 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
         return List.copyOf(keys.values());
     }
 
+    private List<EntityChunkKey> prewarmEntityKeys() {
+        Map<ChunkCoordinate, EntityChunkKey> keys = new LinkedHashMap<>();
+        int firstBatchEnd = entityBatchEnd(plan.entityKeys().size(), 0);
+        for (EntityChunkKey key : plan.entityKeys().subList(0, firstBatchEnd)) {
+            keys.putIfAbsent(ChunkCoordinate.from(key), key);
+        }
+        for (EntityChunkKey key : plan.entityKeys()) {
+            if (keys.size() == MAX_PREWARM_ENTITY_CHUNKS) {
+                break;
+            }
+            ChunkCoordinate chunk = ChunkCoordinate.from(key);
+            if (!keys.containsKey(chunk) && resident.test(chunk)) {
+                keys.put(chunk, key);
+            }
+        }
+        return List.copyOf(keys.values());
+    }
+
     private static boolean supports(
             ChunkLoadAccess.Readiness available,
             ChunkLoadAccess.Readiness required) {
@@ -576,9 +620,9 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     }
 
     private static void releaseChunks(
-            ChunkLoadSession chunks, List<SectionKey> keys) {
+            ChunkLoadSession chunks, List<? extends HistoryKey> keys) {
         Set<ChunkCoordinate> released = new HashSet<>();
-        for (SectionKey key : keys) {
+        for (HistoryKey key : keys) {
             ChunkCoordinate chunk = ChunkCoordinate.from(key);
             if (released.add(chunk)) {
                 chunks.release(chunk);
@@ -786,11 +830,11 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
                 closeFailure.addSuppressed(failed);
             }
         }
-        if (prewarmedChunks != null) {
-            prewarmedChunks.close();
-            prewarmedChunks = null;
-            prewarmedReadiness = null;
-        }
+        closeFailure = closeChunkLoads(prewarmedChunks, closeFailure);
+        prewarmedChunks = null;
+        prewarmedReadiness = null;
+        closeFailure = closeChunkLoads(prewarmedEntityChunks, closeFailure);
+        prewarmedEntityChunks = null;
         if (closeFailure != null) {
             throw closeFailure;
         }
@@ -798,9 +842,10 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
     WorldStateApply.PrewarmHandoff suspendPrewarm() {
         ChunkPrewarm handoff = new ChunkPrewarm(
-                prewarmedChunks, prewarmedReadiness);
+                prewarmedChunks, prewarmedReadiness, prewarmedEntityChunks);
         prewarmedChunks = null;
         prewarmedReadiness = null;
+        prewarmedEntityChunks = null;
         try {
             close();
             return handoff;
@@ -808,6 +853,22 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             handoff.close();
             throw failed;
         }
+    }
+
+    private static RuntimeException closeChunkLoads(
+            ChunkLoadSession chunks, RuntimeException failure) {
+        if (chunks == null) {
+            return failure;
+        }
+        try {
+            chunks.close();
+        } catch (RuntimeException closeFailure) {
+            if (failure == null) {
+                return closeFailure;
+            }
+            failure.addSuppressed(closeFailure);
+        }
+        return failure;
     }
 
     static boolean sameChunk(SectionKey left, SectionKey right) {
@@ -827,18 +888,28 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             CompletableFuture<PreparedSlab> next) { }
 
     private static final class ChunkPrewarm implements WorldStateApply.PrewarmHandoff {
-        private ChunkLoadSession chunks;
+        private ChunkLoadSession sections;
         private final ChunkLoadAccess.Readiness readiness;
+        private ChunkLoadSession entities;
 
         private ChunkPrewarm(
-                ChunkLoadSession chunks, ChunkLoadAccess.Readiness readiness) {
-            this.chunks = chunks;
+                ChunkLoadSession sections,
+                ChunkLoadAccess.Readiness readiness,
+                ChunkLoadSession entities) {
+            this.sections = sections;
             this.readiness = readiness;
+            this.entities = entities;
         }
 
-        private ChunkLoadSession claim() {
-            ChunkLoadSession claimed = chunks;
-            chunks = null;
+        private ChunkLoadSession claimSections() {
+            ChunkLoadSession claimed = sections;
+            sections = null;
+            return claimed;
+        }
+
+        private ChunkLoadSession claimEntities() {
+            ChunkLoadSession claimed = entities;
+            entities = null;
             return claimed;
         }
 
@@ -848,9 +919,12 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
 
         @Override
         public void close() {
-            if (chunks != null) {
-                chunks.close();
-                chunks = null;
+            RuntimeException failure = closeChunkLoads(sections, null);
+            sections = null;
+            failure = closeChunkLoads(entities, failure);
+            entities = null;
+            if (failure != null) {
+                throw failure;
             }
         }
     }
