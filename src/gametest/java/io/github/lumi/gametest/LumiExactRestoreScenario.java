@@ -88,14 +88,14 @@ final class LumiExactRestoreScenario {
                 prepared.endpointB(), prepared.branchB());
         LumiRestoreMeasurement stored = operations.measureBranchSwitch(
                 "reopened_stored_b_to_c", prepared.branchC());
-        assertChunkPath("reopened_stored_b_to_c", stored, false, true);
+        assertChunkPath("reopened_stored_b_to_c", stored, true, true);
         assertEndpointMetadata(
                 "reopened_stored_b_to_c",
                 prepared.endpointC(), prepared.branchC());
         LumiRestoreMeasurement storedReverse = operations.measureBranchSwitch(
                 "reopened_stored_c_to_b", prepared.branchB());
         assertChunkPath(
-                "reopened_stored_c_to_b", storedReverse, false, true);
+                "reopened_stored_c_to_b", storedReverse, true, true);
         assertEndpoint(
                 "reopened_stored_c_to_b",
                 prepared.endpointB(), prepared.branchB());
