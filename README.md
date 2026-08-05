@@ -165,7 +165,7 @@ Run them directly with `.\gradlew.bat runGameTest --no-daemon`.
 Pass `-Dfabric-api.gametest.filter=<test-id>` before `runGameTest` to run one
 server GameTest without starting the full suite.
 Client GameTests run all current suites by default. Select `SMOKE`, `UI`,
-`RECOVERY`, or `BENCHMARK` with
+`RECOVERY`, `EXACT`, or `BENCHMARK` with
 `-Dlumi.gametest.suite=<name> runClientGameTest --no-daemon`.
 Restore benchmark `totalMs` starts immediately before the final UI
 confirmation and ends at the durable terminal event. `queueMs` and `serverMs`

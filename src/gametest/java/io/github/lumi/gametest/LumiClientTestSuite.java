@@ -9,6 +9,7 @@ enum LumiClientTestSuite {
     UI,
     RECOVERY,
     RESTORE_CRASH,
+    EXACT,
     BENCHMARK;
 
     private static final String PROPERTY = "lumi.gametest.suite";
