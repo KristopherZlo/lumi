@@ -36,7 +36,7 @@ public final class ObjectStore {
 
     private final Path objectsDirectory;
     private final Path packsDirectory;
-    private final LZ4Factory lz4 = LZ4Factory.fastestInstance();
+    private final LZ4Factory lz4 = LZ4Factory.safeInstance();
     private Map<ObjectId, PackedObject> packedObjects;
 
     public ObjectStore(Path objectsDirectory) {

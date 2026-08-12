@@ -27,7 +27,7 @@ final class ObjectPack {
     private static final int MAX_OBJECTS = 1_000_000;
     private static final int MAX_PAYLOAD_BYTES = 256 * 1024 * 1024;
     private static final int MAX_COMPRESSED_BYTES = MAX_PAYLOAD_BYTES + 1024 * 1024;
-    private static final LZ4Factory LZ4 = LZ4Factory.fastestInstance();
+    private static final LZ4Factory LZ4 = LZ4Factory.safeInstance();
 
     private ObjectPack() {
     }
