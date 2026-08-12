@@ -187,7 +187,7 @@ final class ObjectPack {
             ObjectId id = ObjectId.hash(payload);
             PackedObject existing = entries.get(id);
             if (existing != null) {
-                if (!Arrays.equals(payload, read(channel, existing, false))) {
+                if (!Arrays.equals(payload, ObjectPack.read(channel, existing, false))) {
                     throw corrupt(temporary, "SHA-256 collision");
                 }
                 return id;
@@ -207,6 +207,12 @@ final class ObjectPack {
             entries.put(id, new PackedObject(
                     id, temporary, offset, payload.length, compressed.length));
             return id;
+        }
+
+        byte[] read(ObjectId id) throws IOException {
+            requireOpen();
+            PackedObject entry = entries.get(Objects.requireNonNull(id, "id"));
+            return entry == null ? null : ObjectPack.read(channel, entry, false);
         }
 
         Published publish() throws IOException {
@@ -229,7 +235,7 @@ final class ObjectPack {
                     id, pack, entry.offset(), entry.rawLength(), entry.compressedLength())));
             try (FileChannel reopened = FileChannel.open(pack, StandardOpenOption.READ)) {
                 for (PackedObject entry : finalEntries.values()) {
-                    read(reopened, entry, true);
+                    ObjectPack.read(reopened, entry, true);
                 }
             }
 

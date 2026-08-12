@@ -29,7 +29,7 @@ public final class WorldObjectGraph {
 
     public Snapshot scan(
             ObjectId root,
-            WorldObjectRepository.ReadSession reader) throws IOException {
+            WorldObjectRepository.Reader reader) throws IOException {
         Objects.requireNonNull(root, "root");
         Objects.requireNonNull(reader, "reader");
         Set<ObjectId> reachable = new HashSet<>();

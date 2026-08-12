@@ -13,8 +13,11 @@ import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.storage.packageformat.LumiPackageArchive;
+import io.github.lumi.storage.packageformat.LumiPackageManifest;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.MerkleTreeEditor;
@@ -25,6 +28,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -163,6 +167,58 @@ class ImportExportServiceTest {
                 new CommitAuthor(new UUID(0, 23), "Importer"), Instant.EPOCH));
         assertEquals(objectsBefore, objectFileCount(targetRepository));
         assertTrue(refs.read(new BranchName("import/replaced")).isEmpty());
+    }
+
+    @Test
+    void rejectsUnreachablePackageObjectsWithoutPublishingThem() throws Exception {
+        Path sourceRepository = directory.resolve("unreachable-source");
+        WorldObjectRepository sourceObjects =
+                new WorldObjectRepository(sourceRepository);
+        CommitId source = packageWithSection(
+                sourceRepository, "minecraft:stone", "Looks normal");
+        CommitRepository sourceCommits = new CommitRepository(sourceRepository);
+        Path archive = directory.resolve("unreachable.lumi");
+        var sourceService = new ImportExportService(
+                "minecraft:overworld", sourceRepository);
+        var exported = sourceService.export(source, archive, false);
+        byte[] unreachable = "unreachable attacker payload".getBytes(
+                java.nio.charset.StandardCharsets.UTF_8);
+        ObjectId unreachableId = ObjectId.hash(unreachable);
+        Map<ObjectId, Integer> inventory = new HashMap<>(
+                exported.manifest().objects());
+        inventory.put(unreachableId, unreachable.length);
+        var forged = new LumiPackageManifest(
+                exported.manifest().dimensionId(), source,
+                exported.manifest().commitBytes(), inventory);
+        new LumiPackageArchive().write(
+                archive, forged, sourceCommits.readCanonical(source),
+                id -> id.equals(unreachableId)
+                        ? unreachable : sourceObjects.readCanonical(id),
+                Optional.empty());
+
+        Path targetRepository = directory.resolve("unreachable-target");
+        WorldObjectRepository targetObjects =
+                new WorldObjectRepository(targetRepository);
+        ObjectId baseTree = new MerkleTreeEditor(targetObjects).update(
+                Optional.empty(), Map.of());
+        CommitRepository targetCommits = new CommitRepository(targetRepository);
+        CommitId baseCommit = targetCommits.write(new Commit(
+                baseTree, List.of(), new CommitAuthor(new UUID(0, 30), "Target"),
+                "Base", Instant.EPOCH, new UUID(0, 31), Optional.empty(),
+                CommitKind.MANUAL, new CommitStatistics(0, 0, 0, 0)));
+        BranchRefRepository refs = new BranchRefRepository(targetRepository);
+        var main = refs.create(new BranchName("main"), baseCommit);
+        ImportExportService target = new ImportExportService(
+                "minecraft:overworld", targetRepository);
+        var inspection = target.inspect(archive);
+        long objectsBefore = objectFileCount(targetRepository);
+
+        assertThrows(java.io.IOException.class, () -> target.importPackage(
+                archive, inspection, main, new BranchName("import/unreachable"),
+                new CommitAuthor(new UUID(0, 32), "Importer"), Instant.EPOCH));
+
+        assertEquals(objectsBefore, objectFileCount(targetRepository));
+        assertTrue(refs.read(new BranchName("import/unreachable")).isEmpty());
     }
 
     @Test

@@ -480,6 +480,12 @@ public final class ObjectStore {
             return writer.write(canonicalPayload);
         }
 
+        public byte[] read(ObjectId id) throws IOException {
+            Objects.requireNonNull(id, "id");
+            byte[] staged = writer.read(id);
+            return staged == null ? existingObjects.read(id) : staged;
+        }
+
         public void publish() throws IOException {
             if (published) {
                 throw new IllegalStateException("Object batch is already published");

@@ -73,7 +73,7 @@ public final class ImportExportService {
     }
 
     public PackageInspection inspect(Path source) throws IOException {
-        return readPackage(source, false, null).inspection();
+        return readPackage(source, null, (id, payload) -> { }).inspection();
     }
 
     public synchronized ImportResult importPackage(
@@ -95,16 +95,27 @@ public final class ImportExportService {
         if (refs.read(target).isPresent()) {
             throw new RefConflictException("Import branch already exists: " + target);
         }
-        PackageRead actual = readPackage(
-                source, true, expected.manifest());
-        if (!actual.inspection().equals(expected)) {
-            throw new IOException("Lumi package changed after confirmation");
-        }
-        var importedTree = graph.scan(actual.inspection().source().tree());
         Commit localBase = commits.read(base.commit());
-        ObjectId tree = trees.update(
-                Optional.of(localBase.tree()), importedTree.leaves());
-        CommitStatistics statistics = statistics(importedTree.leaves());
+        PackageRead actual;
+        ObjectId tree;
+        CommitStatistics statistics;
+        try (WorldObjectRepository.WriteBatch batch = objects.beginBatch()) {
+            actual = readPackage(
+                    source, expected.manifest(), batch::writeCanonical);
+            if (!actual.inspection().equals(expected)) {
+                throw new IOException("Lumi package changed after confirmation");
+            }
+            var importedTree = graph.scan(actual.inspection().source().tree(), batch);
+            if (!actual.inspection().manifest().objects().keySet()
+                    .equals(importedTree.reachable())) {
+                throw new IOException(
+                        "Lumi package object inventory does not match its commit tree");
+            }
+            statistics = statistics(importedTree.leaves(), batch);
+            tree = trees.update(
+                    Optional.of(localBase.tree()), importedTree.leaves(), batch);
+            batch.publish();
+        }
         CommitId commit = commits.write(new Commit(
                 tree, List.of(base.commit()), author,
                 actual.inspection().source().message(),
@@ -120,8 +131,9 @@ public final class ImportExportService {
 
     private PackageRead readPackage(
             Path source,
-            boolean persistObjects,
-            LumiPackageManifest expected) throws IOException {
+            LumiPackageManifest expected,
+            CanonicalObjectConsumer importedObjects) throws IOException {
+        Objects.requireNonNull(importedObjects, "importedObjects");
         Commit[] decoded = new Commit[1];
         byte[][] preview = new byte[1][];
         LumiPackageManifest manifest = archive.read(
@@ -133,9 +145,7 @@ public final class ImportExportService {
 
             @Override
             public void object(ObjectId id, byte[] payload) throws IOException {
-                if (persistObjects) {
-                    objects.writeCanonical(id, payload);
-                }
+                importedObjects.accept(id, payload);
             }
 
             @Override
@@ -156,18 +166,21 @@ public final class ImportExportService {
         }
     }
 
-    private CommitStatistics statistics(Map<io.github.lumi.domain.model.HistoryKey, ObjectId> leaves)
+    private CommitStatistics statistics(
+            Map<io.github.lumi.domain.model.HistoryKey, ObjectId> leaves,
+            WorldObjectRepository.Reader reader)
             throws IOException {
         int sections = 0;
         int entityChunks = 0;
         int entities = 0;
         for (var entry : leaves.entrySet()) {
             if (entry.getKey() instanceof SectionKey) {
+                reader.readSection(entry.getValue());
                 sections = Math.incrementExact(sections);
             } else if (entry.getKey() instanceof EntityChunkKey) {
                 entityChunks = Math.incrementExact(entityChunks);
                 entities = Math.addExact(
-                        entities, objects.readEntities(entry.getValue()).entities().size());
+                        entities, reader.readEntities(entry.getValue()).entities().size());
             }
         }
         return new CommitStatistics(
@@ -204,5 +217,10 @@ public final class ImportExportService {
             Objects.requireNonNull(inspection, "inspection");
             preview = Objects.requireNonNull(preview, "preview");
         }
+    }
+
+    @FunctionalInterface
+    private interface CanonicalObjectConsumer {
+        void accept(ObjectId id, byte[] payload) throws IOException;
     }
 }

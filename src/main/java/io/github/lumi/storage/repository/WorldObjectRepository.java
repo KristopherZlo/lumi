@@ -119,7 +119,15 @@ public final class WorldObjectRepository {
         return store.physicalReadOrder(ids);
     }
 
-    public final class WriteBatch implements AutoCloseable {
+    public interface Reader {
+        SectionBlob readSection(ObjectId id) throws IOException;
+        EntityChunkBlob readEntities(ObjectId id) throws IOException;
+        ChunkTree readChunk(ObjectId id) throws IOException;
+        RegionTree readRegion(ObjectId id) throws IOException;
+        DimensionTree readDimension(ObjectId id) throws IOException;
+    }
+
+    public final class WriteBatch implements Reader, AutoCloseable {
         private final ObjectStore.WriteBatch batch;
 
         private WriteBatch(ObjectStore.WriteBatch batch) {
@@ -171,6 +179,41 @@ public final class WorldObjectRepository {
             return batch.write(merkleCodec.encode(dimension));
         }
 
+        public ObjectId writeCanonical(ObjectId expected, byte[] payload)
+                throws IOException {
+            Objects.requireNonNull(expected, "expected");
+            Objects.requireNonNull(payload, "payload");
+            if (!ObjectId.hash(payload).equals(expected)) {
+                throw new IOException("Object payload hash does not match package manifest");
+            }
+            return batch.write(payload);
+        }
+
+        @Override
+        public SectionBlob readSection(ObjectId id) throws IOException {
+            return sectionCodec.decode(batch.read(id));
+        }
+
+        @Override
+        public EntityChunkBlob readEntities(ObjectId id) throws IOException {
+            return entityCodec.decode(batch.read(id));
+        }
+
+        @Override
+        public ChunkTree readChunk(ObjectId id) throws IOException {
+            return merkleCodec.decodeChunk(batch.read(id));
+        }
+
+        @Override
+        public RegionTree readRegion(ObjectId id) throws IOException {
+            return merkleCodec.decodeRegion(batch.read(id));
+        }
+
+        @Override
+        public DimensionTree readDimension(ObjectId id) throws IOException {
+            return merkleCodec.decodeDimension(batch.read(id));
+        }
+
         public void publish() throws IOException {
             batch.publish();
         }
@@ -181,7 +224,7 @@ public final class WorldObjectRepository {
         }
     }
 
-    public final class ReadSession implements Closeable {
+    public final class ReadSession implements Reader, Closeable {
         private final ObjectStore.ReadSession objects;
 
         private ReadSession(ObjectStore.ReadSession objects) {
