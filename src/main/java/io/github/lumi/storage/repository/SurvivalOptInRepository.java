@@ -17,6 +17,8 @@ import java.util.UUID;
 public final class SurvivalOptInRepository implements SurvivalOptInStore {
     private static final int MAGIC = 0x4c535032; // LSP2
     private static final int MAX_PLAYERS = 100_000;
+    private static final int MAX_FILE_BYTES =
+            2 * Integer.BYTES + MAX_PLAYERS * 2 * Long.BYTES;
     private final Path file;
 
     public SurvivalOptInRepository(Path worldRoot) {
@@ -47,7 +49,7 @@ public final class SurvivalOptInRepository implements SurvivalOptInStore {
         if (!Files.exists(file)) {
             return Collections.emptySet();
         }
-        byte[] content = Files.readAllBytes(file);
+        byte[] content = RepositoryFileReader.read(file, MAX_FILE_BYTES);
         try (var input = new DataInputStream(new ByteArrayInputStream(content))) {
             if (input.readInt() != MAGIC) {
                 throw new IOException("Invalid Survival opt-in magic");

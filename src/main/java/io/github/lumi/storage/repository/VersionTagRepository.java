@@ -40,7 +40,7 @@ public final class VersionTagRepository {
         if (size < Integer.BYTES + 32 + 1 || size > MAX_FILE_BYTES) {
             throw new IOException("Invalid Lumi version tag file size: " + size);
         }
-        return decode(expected, Files.readAllBytes(file));
+        return decode(expected, RepositoryFileReader.read(file, MAX_FILE_BYTES));
     }
 
     public synchronized void replace(CommitId commit, VersionTags tags) throws IOException {

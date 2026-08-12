@@ -25,6 +25,10 @@ public final class ZoneRepository {
     private static final int MAX_NAME_BYTES = 1_024;
     private static final int MAX_CELLS = 1_000_000;
     private static final int MAX_ACTORS = 10_000;
+    private static final int MAX_FILE_BYTES =
+            5 * Integer.BYTES + 2 * 2 * Long.BYTES + MAX_NAME_BYTES
+                    + MAX_CELLS * 3 * Integer.BYTES
+                    + MAX_ACTORS * 2 * Long.BYTES + Long.BYTES;
     private static final Comparator<SectionKey> CELL_ORDER = Comparator
             .comparingInt(SectionKey::chunkX)
             .thenComparingInt(SectionKey::chunkZ)
@@ -69,7 +73,7 @@ public final class ZoneRepository {
         if (!Files.exists(file)) {
             return Optional.empty();
         }
-        Zone zone = decode(Files.readAllBytes(file));
+        Zone zone = decode(RepositoryFileReader.read(file, MAX_FILE_BYTES));
         if (!zone.workspaceId().equals(workspaceId) || !zone.id().equals(zoneId)) {
             throw new IOException("Zone file identity does not match its path");
         }
@@ -84,7 +88,7 @@ public final class ZoneRepository {
         ArrayList<Zone> zones = new ArrayList<>();
         try (var files = Files.newDirectoryStream(directory, "*.zone")) {
             for (Path file : files) {
-                zones.add(decode(Files.readAllBytes(file)));
+                zones.add(decode(RepositoryFileReader.read(file, MAX_FILE_BYTES)));
             }
         }
         if (zones.stream().anyMatch(zone -> !zone.workspaceId().equals(workspaceId))) {

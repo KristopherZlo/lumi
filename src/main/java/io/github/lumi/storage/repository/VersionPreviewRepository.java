@@ -31,7 +31,7 @@ public final class VersionPreviewRepository {
         if (size < 1 || size > MAX_PREVIEW_BYTES) {
             throw new IOException("Invalid Lumi preview size: " + size);
         }
-        byte[] png = Files.readAllBytes(path);
+        byte[] png = RepositoryFileReader.read(path, MAX_PREVIEW_BYTES);
         validate(png);
         return Optional.of(png);
     }

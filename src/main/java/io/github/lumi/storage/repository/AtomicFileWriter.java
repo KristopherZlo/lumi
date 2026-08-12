@@ -34,7 +34,8 @@ final class AtomicFileWriter {
             } catch (AtomicMoveNotSupportedException unsupported) {
                 throw new IOException("Repository requires atomic moves: " + target, unsupported);
             }
-            if (!Arrays.equals(content, Files.readAllBytes(target))) {
+            if (!Arrays.equals(content,
+                    RepositoryFileReader.read(target, content.length))) {
                 throw new IOException("Atomic file verification failed: " + target);
             }
         } finally {
@@ -58,7 +59,8 @@ final class AtomicFileWriter {
             } catch (AtomicMoveNotSupportedException unsupported) {
                 throw new IOException("Repository requires atomic moves: " + target, unsupported);
             }
-            if (!Arrays.equals(content, Files.readAllBytes(target))) {
+            if (!Arrays.equals(content,
+                    RepositoryFileReader.read(target, content.length))) {
                 throw new IOException("Create-once file verification failed: " + target);
             }
             return true;

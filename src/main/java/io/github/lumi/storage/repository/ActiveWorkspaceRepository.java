@@ -15,6 +15,7 @@ import java.util.UUID;
 /** Atomic revisioned selector kept separate from immutable workspace metadata. */
 public final class ActiveWorkspaceRepository {
     private static final int MAGIC = 0x4C574132;
+    private static final int FILE_BYTES = Integer.BYTES + 3 * Long.BYTES;
     private final Path pointer;
 
     public ActiveWorkspaceRepository(Path dimensionRepository) {
@@ -49,7 +50,8 @@ public final class ActiveWorkspaceRepository {
 
     public synchronized Optional<ActiveWorkspace> read() throws IOException {
         return Files.exists(pointer)
-                ? Optional.of(decode(Files.readAllBytes(pointer))) : Optional.empty();
+                ? Optional.of(decode(RepositoryFileReader.read(pointer, FILE_BYTES)))
+                : Optional.empty();
     }
 
     private static byte[] encode(ActiveWorkspace workspace) throws IOException {

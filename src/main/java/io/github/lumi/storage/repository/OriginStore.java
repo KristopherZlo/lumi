@@ -162,7 +162,8 @@ public final class OriginStore {
                     .filter(path -> path.getFileName().toString().endsWith(".origin")).toList()) {
                 HistoryKey key = keyFromPath(file);
                 OriginEntry entry = new OriginEntry(
-                        key, decode(key, Files.readAllBytes(file)));
+                        key, decode(key, RepositoryFileReader.read(
+                                file, (int) SECTION_ENTRY_BYTES)));
                 if (origins.put(entry.key(), entry.id()) != null) {
                     throw new IOException("Duplicate origin entry for " + entry.key());
                 }
@@ -174,7 +175,8 @@ public final class OriginStore {
     private Optional<ObjectId> readLegacy(HistoryKey key) throws IOException {
         Path path = legacyPath(key);
         return Files.exists(path)
-                ? Optional.of(decode(key, Files.readAllBytes(path)))
+                ? Optional.of(decode(key, RepositoryFileReader.read(
+                        path, (int) SECTION_ENTRY_BYTES)))
                 : Optional.empty();
     }
 
@@ -233,7 +235,8 @@ public final class OriginStore {
             return cached.entries();
         }
         Map<HistoryKey, ObjectId> entries =
-                decodeShard(expected, Files.readAllBytes(path));
+                decodeShard(expected, RepositoryFileReader.read(
+                        path, (int) MAX_SHARD_BYTES));
         shardCache.put(expected, new CachedShard(bytes, entries));
         return entries;
     }

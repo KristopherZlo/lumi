@@ -40,7 +40,8 @@ public final class VersionDisplayNameRepository {
         if (size <= HEADER_BYTES || size > HEADER_BYTES + MAX_NAME_BYTES) {
             throw new IOException("Invalid Lumi version name file size: " + size);
         }
-        return Optional.of(decode(expected, Files.readAllBytes(file)));
+        return Optional.of(decode(expected, RepositoryFileReader.read(
+                file, HEADER_BYTES + MAX_NAME_BYTES)));
     }
 
     public synchronized void replace(CommitId commit, VersionDisplayName name)

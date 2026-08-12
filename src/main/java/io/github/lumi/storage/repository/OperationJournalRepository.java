@@ -39,6 +39,7 @@ public final class OperationJournalRepository {
     private static final int MAGIC = 0x4C4F4A32;
     private static final int GENERATIONS_MAGIC = 0x4C4F4731;
     private static final int MAX_NAME_BYTES = 1024;
+    private static final int MAX_JOURNAL_BYTES = 4 * 1024;
     private static final int MAX_GENERATION_KEYS = 1_000_000;
     private static final Comparator<HistoryKey> KEY_ORDER = Comparator
             .comparingInt(OperationJournalRepository::keyKind)
@@ -95,7 +96,8 @@ public final class OperationJournalRepository {
 
     public synchronized Optional<OperationJournal> read() throws IOException {
         return Files.exists(journalFile)
-                ? Optional.of(decode(Files.readAllBytes(journalFile)))
+                ? Optional.of(decode(RepositoryFileReader.read(
+                        journalFile, MAX_JOURNAL_BYTES)))
                 : Optional.empty();
     }
 
@@ -195,7 +197,7 @@ public final class OperationJournalRepository {
         if (!Files.exists(journalFile)) {
             throw new JournalConflictException("Active operation journal is missing");
         }
-        return decode(Files.readAllBytes(journalFile),
+        return decode(RepositoryFileReader.read(journalFile, MAX_JOURNAL_BYTES),
                 expected.capturedGenerations().orElse(null));
     }
 

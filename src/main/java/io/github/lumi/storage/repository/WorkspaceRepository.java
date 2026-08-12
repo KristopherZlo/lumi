@@ -23,6 +23,9 @@ import java.util.UUID;
 public final class WorkspaceRepository {
     private static final int MAGIC = 0x4C575332;
     private static final int MAX_NAME_BYTES = 4096;
+    private static final int MAX_FILE_BYTES =
+            Integer.BYTES + 2 * Long.BYTES + Integer.BYTES + MAX_NAME_BYTES
+                    + 1 + 6 * Integer.BYTES + 5;
     private final Path directory;
 
     public WorkspaceRepository(Path dimensionRepository) {
@@ -61,7 +64,8 @@ public final class WorkspaceRepository {
         if (!Files.exists(path)) {
             return Optional.empty();
         }
-        Workspace workspace = decode(Files.readAllBytes(path));
+        Workspace workspace = decode(
+                RepositoryFileReader.read(path, MAX_FILE_BYTES));
         if (!workspace.id().equals(id)) {
             throw new IOException("Workspace filename and payload disagree: " + path);
         }
@@ -77,7 +81,8 @@ public final class WorkspaceRepository {
             for (Path file : files.filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".workspace"))
                     .toList()) {
-                workspaces.add(decode(Files.readAllBytes(file)));
+                workspaces.add(decode(
+                        RepositoryFileReader.read(file, MAX_FILE_BYTES)));
             }
         }
         workspaces.sort(Comparator.comparing(workspace -> workspace.id().toString()));

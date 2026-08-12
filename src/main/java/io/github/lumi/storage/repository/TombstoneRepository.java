@@ -25,6 +25,9 @@ import java.util.UUID;
 public final class TombstoneRepository {
     private static final int MAGIC = 0x4C544D32;
     private static final int MAX_NAME_BYTES = 4096;
+    private static final int MAX_FILE_BYTES =
+            Integer.BYTES + 32 + 2 * Long.BYTES + Integer.BYTES
+                    + MAX_NAME_BYTES + Long.BYTES + Integer.BYTES;
     private final Path directory;
 
     public TombstoneRepository(Path dimensionRepository) {
@@ -53,7 +56,8 @@ public final class TombstoneRepository {
         if (!Files.exists(file)) {
             return Optional.empty();
         }
-        CommitTombstone tombstone = decode(Files.readAllBytes(file));
+        CommitTombstone tombstone = decode(
+                RepositoryFileReader.read(file, MAX_FILE_BYTES));
         if (!tombstone.commit().equals(commit)) {
             throw new IOException("Tombstone filename and payload disagree: " + file);
         }
@@ -73,7 +77,8 @@ public final class TombstoneRepository {
             for (Path file : files.filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".tomb"))
                     .toList()) {
-                CommitTombstone tombstone = decode(Files.readAllBytes(file));
+                CommitTombstone tombstone = decode(
+                        RepositoryFileReader.read(file, MAX_FILE_BYTES));
                 if (!path(tombstone.commit()).equals(file)) {
                     throw new IOException("Tombstone filename and payload disagree: " + file);
                 }

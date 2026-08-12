@@ -21,6 +21,8 @@ import java.util.List;
 public final class BranchRefRepository {
     private static final int MAGIC = 0x4C524632;
     private static final int MAX_NAME_BYTES = 1024;
+    private static final int MAX_FILE_BYTES =
+            2 * Integer.BYTES + MAX_NAME_BYTES + 32 + Long.BYTES;
     private final Path headsDirectory;
 
     public BranchRefRepository(Path dimensionRepository) {
@@ -66,7 +68,7 @@ public final class BranchRefRepository {
         if (!Files.exists(path)) {
             return Optional.empty();
         }
-        BranchRef ref = decode(Files.readAllBytes(path));
+        BranchRef ref = decode(RepositoryFileReader.read(path, MAX_FILE_BYTES));
         if (!ref.name().equals(name)) {
             throw new IOException("Ref filename and payload disagree: " + path);
         }
@@ -81,7 +83,7 @@ public final class BranchRefRepository {
             var refs = new java.util.ArrayList<BranchRef>();
             for (Path file : files.filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(".ref")).toList()) {
-                BranchRef ref = decode(Files.readAllBytes(file));
+                BranchRef ref = decode(RepositoryFileReader.read(file, MAX_FILE_BYTES));
                 if (!path(ref.name()).equals(file)) {
                     throw new IOException("Ref filename and payload disagree: " + file);
                 }

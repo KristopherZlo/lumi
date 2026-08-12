@@ -2,9 +2,12 @@ package io.github.lumi.storage.repository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.ActiveBranch;
 import io.github.lumi.domain.model.BranchName;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,5 +36,17 @@ class ActiveBranchRepositoryTest {
 
         assertThrows(RefConflictException.class,
                 () -> repository.create(new BranchName("other")));
+    }
+
+    @Test
+    void rejectsOversizedWorldMetadataBeforeDecodingIt() throws Exception {
+        Path pointer = repositoryRoot.resolve("refs").resolve("active.bin");
+        Files.createDirectories(pointer.getParent());
+        Files.write(pointer, new byte[2 * 1024]);
+
+        IOException failure = assertThrows(IOException.class,
+                () -> new ActiveBranchRepository(repositoryRoot).read());
+
+        assertTrue(failure.getMessage().contains("exceeds"));
     }
 }

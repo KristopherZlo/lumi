@@ -21,6 +21,8 @@ public final class WorkingIndexRepository {
     private static final int MAGIC_V2 = 0x4C574932;
     private static final int MAGIC_V3 = 0x4C574933;
     private static final int MAX_KEYS = 1_000_000;
+    private static final int MAX_FILE_BYTES = 2 * Integer.BYTES
+            + MAX_KEYS * (1 + 3 * Integer.BYTES + 2 * Long.BYTES);
     private static final Comparator<HistoryKey> KEY_ORDER = Comparator
             .comparingInt(WorkingIndexRepository::kind)
             .thenComparingInt(WorkingIndexRepository::chunkX)
@@ -87,7 +89,8 @@ public final class WorkingIndexRepository {
             return new State(WorkingIndexSnapshot.empty(), WorkingIndexSnapshot.empty());
         }
         try (DataInputStream input = new DataInputStream(
-                new ByteArrayInputStream(Files.readAllBytes(indexFile)))) {
+                new ByteArrayInputStream(RepositoryFileReader.read(
+                        indexFile, MAX_FILE_BYTES)))) {
             int magic = input.readInt();
             if (magic != MAGIC_V2 && magic != MAGIC_V3) {
                 throw new IOException("Not a Lumi V2 working index");

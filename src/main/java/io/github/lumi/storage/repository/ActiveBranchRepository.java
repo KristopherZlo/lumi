@@ -17,6 +17,8 @@ import java.util.Optional;
 public final class ActiveBranchRepository {
     private static final int MAGIC = 0x4C414232;
     private static final int MAX_NAME_BYTES = 1024;
+    private static final int MAX_FILE_BYTES =
+            2 * Integer.BYTES + MAX_NAME_BYTES + Long.BYTES;
     private final Path pointerFile;
 
     public ActiveBranchRepository(Path dimensionRepository) {
@@ -50,7 +52,8 @@ public final class ActiveBranchRepository {
 
     public synchronized Optional<ActiveBranch> read() throws IOException {
         return Files.exists(pointerFile)
-                ? Optional.of(decode(Files.readAllBytes(pointerFile)))
+                ? Optional.of(decode(RepositoryFileReader.read(
+                        pointerFile, MAX_FILE_BYTES)))
                 : Optional.empty();
     }
 
