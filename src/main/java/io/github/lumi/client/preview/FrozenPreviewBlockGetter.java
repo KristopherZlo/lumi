@@ -15,10 +15,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.level.material.FluidState;
 
-/** Immutable commit block states with neutral light and live directional shading. */
+/** Immutable commit block states with neutral light and live environmental tint. */
 final class FrozenPreviewBlockGetter implements BlockAndTintGetter {
     private static final int PREVIEW_LIGHT = 15;
-    private static final int NEUTRAL_TINT = 0xffffff;
     private final BlockAndTintGetter lighting;
     private final Map<SectionKey, DecodedSection> sections;
 
@@ -53,7 +52,7 @@ final class FrozenPreviewBlockGetter implements BlockAndTintGetter {
     }
 
     @Override public int getBlockTint(BlockPos position, ColorResolver resolver) {
-        return NEUTRAL_TINT;
+        return lighting.getBlockTint(position, resolver);
     }
 
     @Override public int getBrightness(LightLayer layer, BlockPos position) {

@@ -31,12 +31,13 @@ class FrozenPreviewBlockGetterTest {
     }
 
     @Test
-    void immutablePreviewUsesNeutralLightingOutsideLoadedChunks() throws Exception {
+    void immutablePreviewUsesBiomeTintAndNeutralLighting() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/preview/FrozenPreviewBlockGetter.java"));
 
         assertTrue(source.contains("PREVIEW_LIGHT = 15"));
-        assertTrue(source.contains("NEUTRAL_TINT = 0xffffff"));
+        assertTrue(source.contains(
+                "return lighting.getBlockTint(position, resolver);"));
         assertTrue(source.contains("return PREVIEW_LIGHT;"));
         assertTrue(source.contains("return true;"));
     }
