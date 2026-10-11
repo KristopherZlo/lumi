@@ -106,4 +106,3 @@ concurrent compilation can replace classes while another task is using them.
 
 Recorded commands, measurements and outstanding gates are in
 [the regression results](reliability-regression-results.md).
-
