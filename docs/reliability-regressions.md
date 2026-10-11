@@ -8,8 +8,8 @@ a publication is active.
 
 The maintenance monitor covers only one loose-file deletion or one pack/index
 deletion pair. Reachability scanning, compression, publication and compaction do
-not hold it. Ordinary world capture and server ticks do not acquire a publication
-lease; the background data-persistence path owns that lease. Ref, commit,
+not hold it. Mutation capture does not acquire a publication lease; the background
+object/origin persistence path owns that lease. Ref, commit,
 tombstone and origin metadata publication also invalidates a pending sweep.
 
 `RepositoryMaintenanceTest` checks cross-instance identity, dimension isolation,
@@ -94,4 +94,16 @@ Component timings do not replace real Minecraft Save/Restore, full server-tick,
 idle A/B, multi-client or crash measurements. Allocation counts cover the measured
 thread, not retained world heap. No absolute component-time gate is inferred from
 one machine. The existing GameTest performance gates remain unchanged.
+
+An enabled native benchmark selects the `BENCHMARK` suite when no explicit
+suite is configured. An explicit suite still takes precedence. This restores
+the documented isolation of benchmark heaps and scenarios. Older revisions
+require an explicit `-Dlumi.gametest.suite=BENCHMARK` to obtain that isolation;
+their default `ALL` also starts other client scenarios after the benchmark.
+Report a failure there separately from the benchmark measurements.
+Run Gradle tasks sequentially within one checkout;
+concurrent compilation can replace classes while another task is using them.
+
+Recorded commands, measurements and outstanding gates are in
+[the regression results](reliability-regression-results.md).
 

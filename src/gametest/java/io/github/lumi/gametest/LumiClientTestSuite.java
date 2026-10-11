@@ -22,6 +22,7 @@ enum LumiClientTestSuite {
     private static LumiClientTestSuite selected() {
         String configured = System.getProperty(PROPERTY, "").trim();
         if (configured.isEmpty()) {
+            if (LumiHistoryBenchmarkConfig.enabled()) return BENCHMARK;
             return Boolean.getBoolean("lumi.gametest.firstMinuteOnly")
                     ? SMOKE : ALL;
         }
