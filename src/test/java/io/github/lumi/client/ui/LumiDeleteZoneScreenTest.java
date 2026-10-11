@@ -18,5 +18,6 @@ class LumiDeleteZoneScreenTest {
                 "delete.accept(zone.id(), zone.revision())"));
         assertTrue(source.contains("luma.zones.delete_help"));
         assertTrue(source.contains("LumiButton.Kind.DANGER"));
+        assertTrue(source.contains("confirmation.setHint(Component.literal(zone.name()))"));
     }
 }

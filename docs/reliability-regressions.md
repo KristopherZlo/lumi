@@ -61,3 +61,11 @@ release conditions remain per dimension. Controlled-clock tests cover the
 aggregate allowance, rotation and failure isolation. Real complete server ticks
 remain subject to the existing 50-ms GameTest gate, including vanilla work.
 
+## Typed danger confirmations
+
+Zone deletion shows the exact zone name as its input hint. Merge keeps the two
+commit previews and requires the exact displayed source-branch name before its
+button or Enter action can submit. The responsive panel reserves a separate
+input row above the footer. The client GameTest driver verifies that Merge is
+disabled before typing and enabled after an exact match.
+

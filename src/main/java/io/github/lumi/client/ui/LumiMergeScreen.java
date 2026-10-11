@@ -2,11 +2,14 @@ package io.github.lumi.client.ui;
 
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.network.HistorySnapshotPayload;
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 
@@ -25,6 +28,8 @@ public final class LumiMergeScreen extends LumiModalScreen {
     private final ClientVersionPreviewStore previews;
     private final Consumer<String> merge;
     private HistorySnapshotPayload.Branch pendingSource;
+    private EditBox confirmation;
+    private LumiButton submit;
     private String error = "";
     private int panelX;
     private int panelY;
@@ -90,9 +95,17 @@ public final class LumiMergeScreen extends LumiModalScreen {
     }
 
     private void addConfirmation() {
+        String previous = confirmation == null ? "" : confirmation.getValue();
+        confirmation = addTextField(panelX + 20,
+                panelY + confirmationInputOffset(panelHeight), panelWidth - 40,
+                Component.translatable("luma.ideas.merge_confirm_input_help"));
+        confirmation.setMaxLength(256);
+        confirmation.setHint(Component.literal(shortName(pendingSource.name())));
+        confirmation.setValue(previous);
+        confirmation.setResponder(ignored -> updateSubmit());
         int buttonWidth = (panelWidth - 48) / 2;
         int actionY = panelY + actionOffset(panelHeight);
-        addButton(panelX + 20, actionY, buttonWidth,
+        submit = addButton(panelX + 20, actionY, buttonWidth,
                 Component.translatable("luma.action.merge_into_current"),
                 () -> submit(pendingSource.name()),
                 LumiButton.Kind.PRIMARY);
@@ -100,18 +113,34 @@ public final class LumiMergeScreen extends LumiModalScreen {
                 actionY, buttonWidth,
                 Component.translatable("luma.action.cancel"), () -> {
                     pendingSource = null;
+                    confirmation = null;
                     error = "";
                     rebuildWidgets();
                 }, LumiButton.Kind.NORMAL);
+        updateSubmit();
+        setInitialFocus(confirmation);
+        confirmation.setFocused(true);
+    }
+
+    private void updateSubmit() {
+        if (submit != null) {
+            submit.active = pendingSource != null && confirmation != null
+                    && confirmationMatches(pendingSource.name(), confirmation.getValue());
+        }
     }
 
     private void preview(HistorySnapshotPayload.Branch source) {
         pendingSource = source;
+        confirmation = null;
         error = "";
         rebuildWidgets();
     }
 
     private void submit(String source) {
+        if (confirmation == null || !confirmationMatches(source, confirmation.getValue())) {
+            error = "luma.ideas.merge_confirm_input_help";
+            return;
+        }
         try {
             merge.accept(source);
             minecraft.setScreen(parent);
@@ -119,6 +148,17 @@ public final class LumiMergeScreen extends LumiModalScreen {
             error = failed.getMessage() == null
                     ? "Lumi merge could not start" : failed.getMessage();
         }
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (pendingSource != null && submit != null && submit.active
+                && (event.key() == InputConstants.KEY_RETURN
+                || event.key() == InputConstants.KEY_NUMPADENTER)) {
+            submit(pendingSource.name());
+            return true;
+        }
+        return super.keyPressed(event);
     }
 
     @Override
@@ -205,25 +245,18 @@ public final class LumiMergeScreen extends LumiModalScreen {
                 panelX + panelWidth / 2,
                 previewY + previewHeight / 2 - 4,
                 LumiTheme.ACCENT);
-        int actionY = panelY + actionOffset(panelHeight);
         graphics.drawCenteredString(
                 font,
                 font.plainSubstrByWidth(
-                        Component.translatable(
+                        (!error.isEmpty() ? errorText(error) : Component.translatable(
                                 "luma.merge.confirm_source",
-                                shortName(pendingSource.name())).getString(),
+                                shortName(pendingSource.name()))).getString(),
                         Math.max(1, panelWidth - 40)),
                 width / 2,
                 Math.min(
-                        panelY + confirmationTextOffset(
-                                panelHeight, !error.isEmpty()),
+                        panelY + confirmationTextOffset(panelHeight),
                         previewY + previewHeight + 18),
-                LumiTheme.TEXT);
-        if (!error.isEmpty()) {
-            graphics.drawCenteredString(
-                    font, errorText(error), width / 2, actionY - 13,
-                    LumiTheme.DANGER);
-        }
+                error.isEmpty() ? LumiTheme.TEXT : LumiTheme.DANGER);
     }
 
     private void drawPreview(
@@ -318,12 +351,19 @@ public final class LumiMergeScreen extends LumiModalScreen {
 
     static int previewHeight(int panelHeight) {
         return Math.min(72,
-                Math.max(32, actionOffset(panelHeight) - 109));
+                Math.max(1, confirmationInputOffset(panelHeight) - 102));
     }
 
-    static int confirmationTextOffset(
-            int panelHeight, boolean errorVisible) {
-        return actionOffset(panelHeight) - (errorVisible ? 24 : 14);
+    static int confirmationInputOffset(int panelHeight) {
+        return actionOffset(panelHeight) - 30;
+    }
+
+    static int confirmationTextOffset(int panelHeight) {
+        return confirmationInputOffset(panelHeight) - 14;
+    }
+
+    static boolean confirmationMatches(String source, String input) {
+        return shortName(source).equals(input);
     }
 
     private static String shortName(String name) {

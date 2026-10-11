@@ -39,8 +39,12 @@ class LumiResponsiveModalLayoutTest {
                     <= layout.width());
             assertTrue(LumiMergeScreen.previewHeight(layout.height()) > 0);
             assertTrue(LumiMergeScreen.confirmationTextOffset(
-                    layout.height(), true) + 9
-                    <= LumiMergeScreen.actionOffset(layout.height()) - 13);
+                    layout.height()) + 9
+                    <= LumiMergeScreen.confirmationInputOffset(layout.height()));
+            assertTrue(66 + LumiMergeScreen.previewHeight(layout.height()) + 14
+                    <= LumiMergeScreen.confirmationTextOffset(layout.height()));
+            assertTrue(LumiMergeScreen.confirmationInputOffset(layout.height()) + 18
+                    <= LumiMergeScreen.actionOffset(layout.height()) - 4);
         }
     }
 

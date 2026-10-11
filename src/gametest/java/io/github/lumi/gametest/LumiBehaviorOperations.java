@@ -503,7 +503,8 @@ final class LumiBehaviorOperations {
                     + source.value());
         }
 
-        ui.merge(sourceButton);
+        String value = source.value();
+        ui.merge(sourceButton, value.substring(value.lastIndexOf('/') + 1));
     }
 
     private void awaitSnapshot(

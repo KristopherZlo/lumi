@@ -1,12 +1,22 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class LumiMergeScreenTest {
+    @Test
+    void confirmationRequiresTheExactDisplayedSourceName() {
+        assertFalse(LumiMergeScreen.confirmationMatches("workspace/123/Castle", ""));
+        assertFalse(LumiMergeScreen.confirmationMatches("workspace/123/Castle", "castle"));
+        assertFalse(LumiMergeScreen.confirmationMatches("workspace/123/Castle", "Castle "));
+        assertFalse(LumiMergeScreen.confirmationMatches("workspace/123/Castle", "main"));
+        assertTrue(LumiMergeScreen.confirmationMatches("workspace/123/Castle", "Castle"));
+        assertTrue(LumiMergeScreen.confirmationMatches("Башня", "Башня"));
+    }
     @Test
     void requiresAnIsometricSourceTargetPreviewBeforeMerge() throws Exception {
         String source = Files.readString(Path.of(

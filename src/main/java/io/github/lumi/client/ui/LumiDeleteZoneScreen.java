@@ -48,7 +48,7 @@ public final class LumiDeleteZoneScreen extends LumiModalScreen {
                 panelX + 20, panelY + 80, panelWidth - 40,
                 Component.translatable("luma.zones.delete_input"));
         confirmation.setMaxLength(256);
-        confirmation.setHint(Component.translatable("luma.zones.delete_input"));
+        confirmation.setHint(Component.literal(zone.name()));
         confirmation.setResponder(ignored -> updateSubmit());
         int buttonWidth = (panelWidth - 48) / 2;
         submit = addButton(

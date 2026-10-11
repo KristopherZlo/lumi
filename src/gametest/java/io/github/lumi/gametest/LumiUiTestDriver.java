@@ -88,11 +88,14 @@ final class LumiUiTestDriver {
         closeScreen(LumiDashboardScreen.class, null);
     }
 
-    void merge(int sourceButton) {
+    void merge(int sourceButton, String sourceName) {
         openBranches();
         pressUniqueButton(LumiBranchesScreen.class, "luma.action.merge_into_current");
         context.waitForScreen(LumiMergeScreen.class);
         pressButton(LumiMergeScreen.class, "luma.action.preview", sourceButton, false);
+        assertButton(LumiMergeScreen.class, "luma.action.merge_into_current", false);
+        typeIntoFocusedTextBox(LumiMergeScreen.class, sourceName);
+        assertButton(LumiMergeScreen.class, "luma.action.merge_into_current", true);
         pressUniqueButton(LumiMergeScreen.class, "luma.action.merge_into_current");
         context.waitForScreen(LumiBranchesScreen.class);
         closeBranches();
