@@ -486,15 +486,11 @@ final class LumiBehaviorOperations {
         int sourceButton = context.computeOnClient(client -> {
             List<HistorySnapshotPayload.Branch> branches = LumiClient.history()
                     .state().snapshot().orElseThrow().branches();
-            int inactive = 0;
-            for (HistorySnapshotPayload.Branch branch : branches) {
-                if (branch.active()) {
-                    continue;
+            for (int row = 0; row < branches.size(); row++) {
+                HistorySnapshotPayload.Branch branch = branches.get(row);
+                if (!branch.active() && branch.name().equals(source.value())) {
+                    return row;
                 }
-                if (branch.name().equals(source.value())) {
-                    return inactive;
-                }
-                inactive++;
             }
             return -1;
         });

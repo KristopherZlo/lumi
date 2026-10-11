@@ -29,7 +29,8 @@ class OriginBatchPerformanceTest {
     @ValueSource(ints = {32, 256})
     void measuresFirstTouchCaptureThroughDurableOriginAndIndex(int sections) throws Exception {
         // Identical air origins model deduplication during ordinary new building.
-        var air = new SectionBlob(Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:air"), Map.of());
+        var states = Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:air");
+        var air = new SectionBlob(states, Map.of());
         var samples = new PerformanceSamples("durable-air-origins-" + sections, sections);
         for (int sample = -1; sample < 7; sample++) {
             var queue = new BackgroundQueue();
@@ -39,7 +40,8 @@ class OriginBatchPerformanceTest {
             var tracker = MutationDurabilityTracker.open(objects, new OriginStore(repository), index, queue);
             PerformanceSamples.Work work = () -> {
                 for (int section = 0; section < sections; section++) {
-                    tracker.registerSectionMutation(new SectionKey(section, 0, 0), () -> air);
+                    tracker.registerSectionMutation(new SectionKey(section, 0, 0),
+                            () -> new SectionBlob(states, Map.of()));
                 }
                 assertTrue(queue.size() <= 2, "First-touch work must remain coalesced");
                 assertFalse(tracker.canPublishChunk(0, 0));

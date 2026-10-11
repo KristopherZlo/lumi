@@ -67,7 +67,14 @@ Zone deletion shows the exact zone name as its input hint. Merge keeps the two
 commit previews and requires the exact displayed source-branch name before its
 button or Enter action can submit. The responsive panel reserves a separate
 input row above the footer. The client GameTest driver verifies that Merge is
-disabled before typing and enabled after an exact match.
+disabled before typing and enabled after an exact match. The UI workflow then
+changes a common stone block to emerald on the source and gold on the destination,
+submits Merge through the typed confirmation, and checks that emerald wins the
+conflict while the unchanged deepslate block survives.
+This fixture uses vanilla tick freeze during its Merge phase so ambient movement
+cannot dirty the workspace while the confirmation is open; it resumes simulation
+in `finally`. Lumi's operation processing and dimension freeze still run. The
+production clean-workspace Merge requirement is unchanged.
 
 ## Opt-in performance checks
 
@@ -78,8 +85,9 @@ are written to `build/reports/lumi-regressions/`. Idle polling compares 1,000 fr
 metadata reads with 1,000 cached polls in nine paired samples after warmup. Its
 JFR control must observe actual repository reads; cached polling must perform
 none and have a lower median. Durable first-touch batches use 32 and 256 air
-sections, one warmup and seven measured fresh repositories. They include capture,
-object publication, origin registration and working-index durability, then reread
+sections, one warmup and seven measured fresh repositories. They include new
+section-payload construction, mutation registration, object publication, origin
+registration and working-index durability, then reread
 every origin and check exact payloads and chunk publication eligibility.
 
 Component timings do not replace real Minecraft Save/Restore, full server-tick,

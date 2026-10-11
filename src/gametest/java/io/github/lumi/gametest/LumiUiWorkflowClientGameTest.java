@@ -21,8 +21,10 @@ import java.io.IOException;
 import java.util.List;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
+import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 
 /** In-game contract for dirty, saved, multi-version, and multi-branch controls. */
 @SuppressWarnings("UnstableApiUsage")
@@ -53,14 +55,44 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
                 CommitId secondSave = operations.save("workflow-second");
 
                 verifyVersionDetails(test, ui, secondSave, report);
-                verifyBranches(test, ui, operations, report);
+                BranchName idea = verifyBranches(test, ui, operations, report);
                 verifyCompare(ui, report);
                 verifyZones(test, ui, report);
 
+                verifyTypedMerge(world, operations, actions, idea, first, second);
+
                 report.event("ui_contract", "stateful_workflow", "succeeded",
-                        0, 0, "SAVE HIST DETAIL RESTORE BRANCH COMPARE ZONE; first="
+                        0, 0, "SAVE HIST DETAIL RESTORE BRANCH COMPARE ZONE MERGE; first="
                                 + firstSave.hex() + ";second=" + secondSave.hex());
             });
+        }
+    }
+
+    private static void verifyTypedMerge(
+            TestSingleplayerContext world, LumiBehaviorOperations operations,
+            LumiBehaviorActions actions, BranchName idea, BlockPos first, BlockPos second)
+            throws IOException {
+        world.getServer().runOnServer(server -> server.tickRateManager().setFrozen(true));
+        try {
+            BranchName destination = operations.activeBranch();
+            operations.switchBranch("workflow-merge-source", idea);
+            actions.destroyBlocks("ui_merge_source_break", List.of(first));
+            actions.placeBlocks("ui_merge_source", Items.EMERALD_BLOCK, List.of(first));
+            operations.save("workflow-merge-source");
+            operations.switchBranch("workflow-merge-main", destination);
+            actions.destroyBlocks("ui_merge_target_break", List.of(first));
+            actions.placeBlocks("ui_merge_target", Items.GOLD_BLOCK, List.of(first));
+            operations.save("workflow-merge-target");
+            operations.merge("workflow-confirmed", idea);
+            world.getServer().runOnServer(server -> {
+                var level = server.getPlayerList().getPlayers().getFirst().level();
+                if (!level.getBlockState(first).is(Blocks.EMERALD_BLOCK)
+                        || !level.getBlockState(second).is(Blocks.DEEPSLATE)) {
+                    throw new AssertionError("Typed Merge did not keep source-wins conflict behavior");
+                }
+            });
+        } finally {
+            world.getServer().runOnServer(server -> server.tickRateManager().setFrozen(false));
         }
     }
 
@@ -164,7 +196,7 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
         ui.closeScreen(LumiDashboardScreen.class, null);
     }
 
-    private static void verifyBranches(
+    private static BranchName verifyBranches(
             ClientGameTestContext context,
             LumiUiTestDriver ui,
             LumiBehaviorOperations operations,
@@ -206,6 +238,9 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
         ui.assertButton(LumiMergeScreen.class, "luma.action.preview", true);
         ui.pressUniqueButton(LumiMergeScreen.class, "luma.action.preview");
         ui.assertButton(
+                LumiMergeScreen.class, "luma.action.merge_into_current", false);
+        ui.typeIntoFocusedTextBox(LumiMergeScreen.class, shortName(idea.value()));
+        ui.assertButton(
                 LumiMergeScreen.class, "luma.action.merge_into_current", true);
         ui.assertButton(LumiMergeScreen.class, "luma.action.cancel", true);
         report.event("ui_contract", "branch_controls", "succeeded", 0, 0,
@@ -213,6 +248,7 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
         ui.closeScreen(LumiMergeScreen.class, LumiBranchesScreen.class);
         ui.closeScreen(LumiBranchesScreen.class, LumiDashboardScreen.class);
         ui.closeScreen(LumiDashboardScreen.class, null);
+        return idea;
     }
 
     private static void verifyCompare(
