@@ -225,7 +225,7 @@ tasks.named('test', Test) {
 }
 
 tasks.register('regressionPerformanceTest', Test) {
-    description = 'Measures idle polling, origin durability and native palette capture.'
+    description = 'Measures idle polling, origin durability, native palette capture and overlapping zone shells.'
     group = 'verification'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath

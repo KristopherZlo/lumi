@@ -34,15 +34,28 @@ public final class ZoneShellPlanner {
     }
 
     public final class Session {
-        private final Set<UnitFace> claimed = new HashSet<>();
+        private Set<UnitFace> firstFaces;
+        private Set<UnitFace> claimed;
 
         public List<ZoneShellFace> plan(Set<SectionKey> occupiedCells, Collection<SectionKey> visibleCells) {
-            return planFaces(occupiedCells, visibleCells, claimed);
+            return planFaces(occupiedCells, visibleCells, this);
+        }
+
+        private void claim(Set<UnitFace> faces) {
+            if (firstFaces == null) {
+                firstFaces = faces;
+                return;
+            }
+            if (claimed == null) {
+                claimed = new HashSet<>(firstFaces);
+                firstFaces = Set.of();
+            }
+            faces.removeIf(face -> !claimed.add(face));
         }
     }
 
     private List<ZoneShellFace> planFaces(Set<SectionKey> occupied,
-            Collection<SectionKey> visibleCells, Set<UnitFace> claimed) {
+            Collection<SectionKey> visibleCells, Session ownership) {
         if (occupied == null || occupied.isEmpty()
                 || visibleCells == null || visibleCells.isEmpty()) {
             return List.of();
@@ -57,7 +70,7 @@ public final class ZoneShellPlanner {
                 collect(cell, occupied, exposed);
             }
         }
-        if (claimed != null) exposed.removeIf(face -> !claimed.add(face));
+        if (ownership != null) ownership.claim(exposed);
         return merge(exposed);
     }
 

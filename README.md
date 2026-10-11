@@ -184,6 +184,9 @@ Client GameTests run all current suites by default. Select `SMOKE`, `UI`,
 `RECOVERY`, `EXACT`, or `BENCHMARK` with
 `-Dlumi.gametest.suite=<name> runClientGameTest --no-daemon`.
 
+Zone and selection fixes, regression coverage, and paired shell measurements
+are recorded in [the interaction verification report](docs/zone-interaction-fixes.md).
+
 Restore benchmark `totalMs` starts before the final UI confirmation and ends at
 the durable terminal event. `queueMs` and `serverMs` split that interval. Apply
 metrics separate background preparation, loaded and stored apply, lighting, and

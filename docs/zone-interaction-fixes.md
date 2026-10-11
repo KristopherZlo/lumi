@@ -76,7 +76,7 @@ counts retain their existing meaning; an entity-dirty column is a conservative
 pending signal, not an exact entity-difference count. A regression test verifies
 entity-only scope attribution, including the existing whole-column behavior.
 The statistics wire response adds this set; client and server must use the
-same Lumi version.
+same Lumi build.
 
 The client associates statistics with the zone revisions present when the
 request began. Resizing, adding, or deleting zones triggers a replacement even
@@ -128,6 +128,24 @@ Oppositely oriented boundaries of adjacent zones retain their separate sides.
 The existing 64-zone, 65,536-visible-cell, and distance budgets still apply.
 Claimed faces are bounded by visible cells. Queries reuse immutable occupied
 sets instead of copying whole zone volumes and do no new render-frame work.
+The first zone reuses its exposed-face set; the shared ownership index is
+allocated only when another zone is processed. The allocation gate covers both
+single-zone and overlapping-zone queries.
 Regression tests cover identical and partial overlaps, priority, and focus.
 Paired performance workloads compare preparation time and allocation for one
 and 64 coincident zones of 1,024 cells, with raw samples and percentiles.
+
+The final paired component measurements on 2026-10-11 used Java 21.0.6, one
+reported processor, ten warmup pairs, and nine alternating measured pairs.
+
+| Zones | Independent p50/p95 (ms) | Owned p50/p95 (ms) | Independent/owned allocated bytes |
+| --- | --- | --- | --- |
+| 1 | 1.426 / 1.462 | 1.397 / 1.407 | 571,712 / 530,672 |
+| 64 | 67.896 / 69.171 | 60.730 / 62.177 | 36,571,136 / 19,801,272 |
+
+The single-zone timing difference is too small to claim a meaningful speedup;
+allocation fell by 7.2%. For 64 identical zones, allocation fell by 45.9%,
+median preparation time fell by 10.6%, and the response contains six rectangles
+instead of 384 while preserving all zone metadata. These are component
+measurements, not an FPS or server-tick improvement claim. Raw samples are in
+`build/reports/lumi-regressions/zone-shell-{independent,owned}-{1,64}.csv`.

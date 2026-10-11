@@ -35,15 +35,15 @@ class ZoneShellPerformanceTest {
             assertEquals(6L, faces);
             return faces;
         };
-        for (int sample = -2; sample < 9; sample++) {
+        for (int sample = -10; sample < 9; sample++) {
             if (sample < 0) { original.run(); owned.run(); }
             else if (sample % 2 == 0) { before.measure(original); after.measure(owned); }
             else { after.measure(owned); before.measure(original); }
         }
         before.write(); after.write();
-        if (zones == 64 && before.medianAllocatedBytes() >= 0) {
+        if (before.medianAllocatedBytes() >= 0) {
             assertTrue(after.medianAllocatedBytes() < before.medianAllocatedBytes(),
-                    "Shared-face preparation must allocate less than independent overlapping shells");
+                    "Shell preparation must allocate less for both one zone and overlapping zones");
         }
     }
 }
