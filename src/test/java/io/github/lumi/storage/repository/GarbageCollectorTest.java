@@ -15,6 +15,7 @@ import io.github.lumi.domain.model.CommitTombstone;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.storage.object.ObjectStore;
+import io.github.lumi.storage.RepositoryMaintenance;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -35,6 +36,57 @@ import org.junit.jupiter.api.io.TempDir;
 class GarbageCollectorTest {
     @TempDir
     Path repositoryRoot;
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void staleSweepPreservesOldObjectReusedByNewDurableOrigin(boolean packed) throws Exception {
+        ObjectStore raw = new ObjectStore(repositoryRoot.resolve("objects"));
+        byte[] payload = {42};
+        ObjectId reused;
+        if (packed) {
+            try (var batch = raw.beginBatch()) {
+                reused = batch.write(payload);
+                batch.publish();
+            }
+        } else {
+            reused = raw.write(payload);
+        }
+        ObjectId orphan = raw.write(new byte[] {43});
+        Instant cutoff = Instant.now().minus(Duration.ofHours(24));
+        makeObjectsOld(cutoff.minus(Duration.ofDays(1)));
+        var maintenance = RepositoryMaintenance.forRepository(repositoryRoot);
+        var sweep = maintenance.beginSweep();
+        var key = new SectionKey(4, 0, 4);
+        try (var publication = new WorldObjectRepository(repositoryRoot).beginPublication()) {
+            try (var batch = raw.beginBatch()) {
+                assertEquals(reused, batch.write(payload));
+                batch.publish();
+            }
+            new OriginStore(repositoryRoot).register(key, reused);
+        }
+
+        assertEquals(0, raw.deleteAll(Set.of(reused, orphan), sweep));
+        assertArrayEquals(payload, new ObjectStore(repositoryRoot.resolve("objects"))
+                .read(new OriginStore(repositoryRoot).read(key).orElseThrow()));
+        var result = new GarbageCollector(repositoryRoot).collect(Set.of(), cutoff);
+        assertEquals(1, result.deletedObjects());
+        assertThrows(NoSuchFileException.class, () -> raw.read(orphan));
+        assertArrayEquals(payload, raw.read(reused));
+    }
+
+    @Test
+    void collectionDoesNotScanOrDeleteDuringAnUnfinishedPublication() throws Exception {
+        ObjectStore raw = new ObjectStore(repositoryRoot.resolve("objects"));
+        ObjectId id = raw.write(new byte[] {44});
+        makeObjectsOld(Instant.EPOCH);
+        try (var publication = new WorldObjectRepository(repositoryRoot).beginPublication()) {
+            assertEquals(new GarbageCollectionResult(0, 0, 0),
+                    new GarbageCollector(repositoryRoot).collect(Set.of(), Instant.now()));
+            assertArrayEquals(new byte[] {44}, raw.read(id));
+        }
+        assertEquals(1, new GarbageCollector(repositoryRoot)
+                .collect(Set.of(), Instant.now()).deletedObjects());
+    }
 
     @Test
     void removesOnlyOldUnreachableData() throws IOException {

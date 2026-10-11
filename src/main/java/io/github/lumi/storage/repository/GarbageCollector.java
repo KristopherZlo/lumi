@@ -2,6 +2,7 @@ package io.github.lumi.storage.repository;
 
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.storage.RepositoryMaintenance;
 import io.github.lumi.storage.object.ObjectStore;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -19,9 +20,11 @@ public final class GarbageCollector {
     private final BranchRefRepository refs;
     private final OriginStore origins;
     private final TombstoneRepository tombstones;
+    private final RepositoryMaintenance maintenance;
 
     public GarbageCollector(Path dimensionRepository) {
         Objects.requireNonNull(dimensionRepository, "dimensionRepository");
+        maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
         objects = new ObjectStore(dimensionRepository.resolve("objects"));
         commits = new ObjectStore(dimensionRepository.resolve("commits"));
         worldGraph = new WorldObjectGraph(new WorldObjectRepository(dimensionRepository));
@@ -40,16 +43,19 @@ public final class GarbageCollector {
 
     public GarbageCollectionResult collect(
             Set<CommitId> retainedCommits, Instant deleteBefore) throws IOException {
+        Objects.requireNonNull(retainedCommits, "retainedCommits");
+        Objects.requireNonNull(deleteBefore, "deleteBefore");
+        var sweep = maintenance.beginSweep();
+        if (!sweep.isCurrent()) return new GarbageCollectionResult(0, 0, 0);
         Plan plan = plan(retainedCommits, deleteBefore);
-        int deletedObjects = objects.deleteAll(plan.objects());
-        objects.deleteOrphanPacksBefore(deleteBefore);
-        int deletedCommits = 0;
-        for (ObjectId id : plan.commits()) {
-            commits.delete(id);
-            deletedCommits++;
+        int deletedObjects = objects.deleteAll(plan.objects(), sweep);
+        objects.deleteOrphanPacksBefore(deleteBefore, sweep);
+        int deletedCommits = commits.deleteAll(plan.commits(), sweep);
+        int compactedPacks = 0;
+        if (sweep.isCurrent()) {
+            objects.compactLoose(plan.compactableObjects());
+            compactedPacks = compactPacks();
         }
-        objects.compactLoose(plan.compactableObjects());
-        int compactedPacks = compactPacks();
         return new GarbageCollectionResult(
                 deletedCommits, deletedObjects, compactedPacks);
     }

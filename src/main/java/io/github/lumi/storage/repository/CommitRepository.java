@@ -2,6 +2,7 @@ package io.github.lumi.storage.repository;
 
 import io.github.lumi.domain.model.Commit;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.storage.RepositoryMaintenance;
 import io.github.lumi.storage.object.CommitCodec;
 import io.github.lumi.storage.object.ObjectStore;
 import java.io.IOException;
@@ -10,15 +11,19 @@ import java.util.Objects;
 
 public final class CommitRepository {
     private final ObjectStore store;
+    private final RepositoryMaintenance maintenance;
     private final CommitCodec codec = new CommitCodec();
 
     public CommitRepository(Path dimensionRepository) {
         Objects.requireNonNull(dimensionRepository, "dimensionRepository");
+        maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
         this.store = new ObjectStore(dimensionRepository.resolve("commits"));
     }
 
     public CommitId write(Commit commit) throws IOException {
-        return new CommitId(store.write(codec.encode(commit)));
+        try (var publication = maintenance.beginPublication()) {
+            return new CommitId(store.write(codec.encode(commit)));
+        }
     }
 
     public Commit read(CommitId id) throws IOException {
@@ -39,6 +44,8 @@ public final class CommitRepository {
         if (!actual.equals(expected)) {
             throw new IOException("Commit payload hash does not match package manifest");
         }
-        return new CommitId(store.write(payload));
+        try (var publication = maintenance.beginPublication()) {
+            return new CommitId(store.write(payload));
+        }
     }
 }

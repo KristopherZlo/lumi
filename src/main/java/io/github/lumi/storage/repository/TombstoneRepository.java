@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.CommitAuthor;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitTombstone;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.storage.RepositoryMaintenance;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -29,14 +30,22 @@ public final class TombstoneRepository {
             Integer.BYTES + 32 + 2 * Long.BYTES + Integer.BYTES
                     + MAX_NAME_BYTES + Long.BYTES + Integer.BYTES;
     private final Path directory;
+    private final RepositoryMaintenance maintenance;
 
     public TombstoneRepository(Path dimensionRepository) {
+        maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
         directory = Objects.requireNonNull(dimensionRepository, "dimensionRepository")
                 .resolve("tombstones");
     }
 
     public synchronized CommitTombstone create(CommitTombstone tombstone)
             throws IOException {
+        try (var publication = maintenance.beginPublication()) {
+            return createMarker(tombstone);
+        }
+    }
+
+    private CommitTombstone createMarker(CommitTombstone tombstone) throws IOException {
         Objects.requireNonNull(tombstone, "tombstone");
         Optional<CommitTombstone> existing = read(tombstone.commit());
         if (existing.isPresent()) {

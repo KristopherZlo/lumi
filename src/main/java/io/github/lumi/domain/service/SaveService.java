@@ -69,6 +69,15 @@ public final class SaveService implements SavePublisher {
             CapturedWorldState captured,
             Consumer<SavePublicationProgress> progress,
             SavePublicationCompletion completion) throws IOException {
+        try (var publication = objects.beginPublication()) {
+            return publishSave(request, captured, progress, completion);
+        }
+    }
+
+    private SaveResult publishSave(
+            SaveRequest request, CapturedWorldState captured,
+            Consumer<SavePublicationProgress> progress,
+            SavePublicationCompletion completion) throws IOException {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(captured, "captured");
         Objects.requireNonNull(progress, "progress");
@@ -128,6 +137,14 @@ public final class SaveService implements SavePublisher {
     }
 
     public SaveResult checkpoint(
+            SaveRequest request, CapturedWorldState captured, BranchName hiddenRef)
+            throws IOException {
+        try (var publication = objects.beginPublication()) {
+            return publishCheckpoint(request, captured, hiddenRef);
+        }
+    }
+
+    private SaveResult publishCheckpoint(
             SaveRequest request, CapturedWorldState captured, BranchName hiddenRef)
             throws IOException {
         Objects.requireNonNull(request, "request");

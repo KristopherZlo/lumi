@@ -24,6 +24,8 @@ import io.github.lumi.storage.repository.RefConflictException;
 import io.github.lumi.storage.repository.VersionTagRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import io.github.lumi.storage.object.ObjectStore;
+import io.github.lumi.storage.RepositoryMaintenance;
+import io.github.lumi.storage.repository.GarbageCollector;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -68,7 +70,19 @@ class SaveServiceTest {
                 initialRef, author(), "Tower", Instant.parse("2026-07-15T12:00:00Z"),
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
                 Optional.empty(), CommitKind.MANUAL,
-                VersionTags.parse("#tower, stone")), captured, progress::add,
+                VersionTags.parse("#tower, stone")), captured, value -> {
+                    progress.add(value);
+                    if (value.phase().equals("Save: writing commit")) {
+                        assertTrue(!RepositoryMaintenance.forRepository(repositoryRoot)
+                                .beginSweep().isCurrent());
+                        try {
+                            assertEquals(0, new GarbageCollector(repositoryRoot)
+                                    .collect(java.util.Set.of(), Instant.now()).deletedObjects());
+                        } catch (IOException failed) {
+                            throw new java.io.UncheckedIOException(failed);
+                        }
+                    }
+                },
                 boundary -> {
                     var journal = journals.read().orElseThrow();
                     assertEquals(io.github.lumi.domain.model.OperationPhase.REF_PUBLISHED,

@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.BranchName;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.storage.RepositoryMaintenance;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -24,13 +25,21 @@ public final class BranchRefRepository {
     private static final int MAX_FILE_BYTES =
             2 * Integer.BYTES + MAX_NAME_BYTES + 32 + Long.BYTES;
     private final Path headsDirectory;
+    private final RepositoryMaintenance maintenance;
 
     public BranchRefRepository(Path dimensionRepository) {
+        maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
         headsDirectory = Objects.requireNonNull(dimensionRepository, "dimensionRepository")
                 .resolve("refs").resolve("heads");
     }
 
     public synchronized BranchRef create(BranchName name, CommitId commit) throws IOException {
+        try (var publication = maintenance.beginPublication()) {
+            return createRef(name, commit);
+        }
+    }
+
+    private BranchRef createRef(BranchName name, CommitId commit) throws IOException {
         Path path = path(name);
         if (Files.exists(path)) {
             throw new RefConflictException("Branch already exists: " + name);
@@ -41,6 +50,12 @@ public final class BranchRefRepository {
     }
 
     public synchronized BranchRef compareAndSet(BranchRef expected, CommitId update) throws IOException {
+        try (var publication = maintenance.beginPublication()) {
+            return advanceRef(expected, update);
+        }
+    }
+
+    private BranchRef advanceRef(BranchRef expected, CommitId update) throws IOException {
         Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(update, "update");
         BranchRef current = read(expected.name()).orElseThrow(

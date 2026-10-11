@@ -591,7 +591,9 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 entities.put(entity.key(), entity.payload());
             }
         }
-        origins.registerAll(objects.writeCaptured(sections, entities));
+        try (var publication = objects.beginPublication()) {
+            origins.registerAll(objects.writeCaptured(sections, entities));
+        }
     }
 
     private void writeIndexUntilCurrent() {

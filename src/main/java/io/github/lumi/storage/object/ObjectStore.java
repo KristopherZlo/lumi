@@ -1,6 +1,7 @@
 package io.github.lumi.storage.object;
 
 import io.github.lumi.domain.model.ObjectId;
+import io.github.lumi.storage.RepositoryMaintenance;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -171,13 +172,18 @@ public final class ObjectStore {
     }
 
     public synchronized int deleteAll(Set<ObjectId> candidates) throws IOException {
+        return deleteAll(candidates, null);
+    }
+
+    public synchronized int deleteAll(
+            Set<ObjectId> candidates, RepositoryMaintenance.Sweep sweep) throws IOException {
         Objects.requireNonNull(candidates, "candidates");
         refreshPackedObjects();
-        int deleted = 0;
+        int[] deleted = {0};
         for (ObjectId id : candidates) {
-            if (Files.deleteIfExists(pathFor(id))) {
-                deleted++;
-            }
+            if (!deleteIfCurrent(sweep, () -> {
+                if (Files.deleteIfExists(pathFor(id))) deleted[0]++;
+            })) return deleted[0];
         }
 
         Map<Path, Set<ObjectId>> contents = new HashMap<>();
@@ -188,17 +194,32 @@ public final class ObjectStore {
             if (!candidates.containsAll(pack.getValue())) {
                 continue;
             }
-            Files.deleteIfExists(indexFor(pack.getKey()));
-            Files.deleteIfExists(pack.getKey());
+            if (!deleteIfCurrent(sweep, () -> {
+                Files.deleteIfExists(indexFor(pack.getKey()));
+                Files.deleteIfExists(pack.getKey());
+            })) break;
             pack.getValue().forEach(retained::remove);
-            deleted += pack.getValue().size();
+            deleted[0] += pack.getValue().size();
         }
         packedObjects = Map.copyOf(retained);
-        return deleted;
+        return deleted[0];
+    }
+
+    private static boolean deleteIfCurrent(
+            RepositoryMaintenance.Sweep sweep,
+            RepositoryMaintenance.Deletion deletion) throws IOException {
+        if (sweep != null) return sweep.deleteIfCurrent(deletion);
+        deletion.run();
+        return true;
     }
 
     public synchronized void deleteOrphanPacksBefore(java.time.Instant cutoff)
             throws IOException {
+        deleteOrphanPacksBefore(cutoff, null);
+    }
+
+    public synchronized void deleteOrphanPacksBefore(
+            java.time.Instant cutoff, RepositoryMaintenance.Sweep sweep) throws IOException {
         Objects.requireNonNull(cutoff, "cutoff");
         refreshPackedObjects();
         if (!Files.exists(packsDirectory)) {
@@ -213,7 +234,7 @@ public final class ObjectStore {
                     .filter(path -> !Files.exists(indexFor(path)))
                     .toList()) {
                 if (Files.getLastModifiedTime(pack).toInstant().isBefore(cutoff)) {
-                    Files.deleteIfExists(pack);
+                    if (!deleteIfCurrent(sweep, () -> Files.deleteIfExists(pack))) return;
                 }
             }
         }

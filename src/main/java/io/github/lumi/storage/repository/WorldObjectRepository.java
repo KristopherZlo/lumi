@@ -9,6 +9,7 @@ import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.RegionTree;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.storage.RepositoryMaintenance;
 import io.github.lumi.storage.object.EntityChunkBlobCodec;
 import io.github.lumi.storage.object.MerkleNodeCodec;
 import io.github.lumi.storage.object.ObjectStore;
@@ -31,17 +32,24 @@ import java.util.function.LongConsumer;
 
 public final class WorldObjectRepository {
     private final ObjectStore store;
+    private final RepositoryMaintenance maintenance;
     private final SectionBlobCodec sectionCodec = new SectionBlobCodec();
     private final EntityChunkBlobCodec entityCodec = new EntityChunkBlobCodec();
     private final MerkleNodeCodec merkleCodec = new MerkleNodeCodec();
 
     public WorldObjectRepository(Path dimensionRepository) {
         Objects.requireNonNull(dimensionRepository, "dimensionRepository");
+        maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
         store = new ObjectStore(dimensionRepository.resolve("objects"));
     }
 
     public ObjectId write(SectionBlob section) throws IOException {
         return store.write(sectionCodec.encode(section));
+    }
+
+    /** Hold until reused objects have a durable origin or commit root. */
+    public RepositoryMaintenance.Publication beginPublication() {
+        return maintenance.beginPublication();
     }
 
     public ObjectId write(EntityChunkBlob entities) throws IOException {

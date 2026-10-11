@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.HistoryKey;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.storage.RepositoryMaintenance;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -41,10 +42,12 @@ public final class OriginStore {
     private static final long ENTITY_ENTRY_BYTES = Integer.BYTES + 1L
             + 2L * Integer.BYTES + 32L;
     private final Path originsDirectory;
+    private final RepositoryMaintenance maintenance;
     private final Map<RegionCoordinate, CachedShard> shardCache =
             new HashMap<>();
 
     public OriginStore(Path dimensionRepository) {
+        maintenance = RepositoryMaintenance.forRepository(dimensionRepository);
         originsDirectory = Objects.requireNonNull(dimensionRepository, "dimensionRepository").resolve("origins");
     }
 
@@ -55,6 +58,13 @@ public final class OriginStore {
     }
 
     public synchronized int registerAll(
+            Map<? extends HistoryKey, ObjectId> registrations) throws IOException {
+        try (var publication = maintenance.beginPublication()) {
+            return persistRegistrations(registrations);
+        }
+    }
+
+    private int persistRegistrations(
             Map<? extends HistoryKey, ObjectId> registrations) throws IOException {
         Objects.requireNonNull(registrations, "registrations");
         Map<RegionCoordinate, Map<HistoryKey, ObjectId>> byRegion = new TreeMap<>();
