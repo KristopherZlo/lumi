@@ -78,6 +78,11 @@ selection history shows a message. Put the sword away to undo or redo world edit
 
 You can change all key bindings in Minecraft controls.
 
+Zone Save, Amend, and See Changes use the zone's current pending state. Changes
+elsewhere in the workspace do not enable these controls. They show a reason
+while statistics load or the zone is clean; entity-only edits remain savable.
+Zone See Changes displays only points inside that zone.
+
 ## Install
 
 1. Download a release-candidate build from

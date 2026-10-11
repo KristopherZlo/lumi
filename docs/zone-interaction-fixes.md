@@ -74,6 +74,18 @@ if the builder generation did not change. Save eligibility uses only fresh
 zone statistics and preserves the entity-pending signal. Existing workspace
 counter display can still retain its last number during recalculation.
 
+### Zone Save form
+
+The Save controller revalidates zone eligibility before sending either Save
+or a confirmed Amend. The form updates availability when statistics arrive,
+even if the pending-key count stays unchanged. Submission uses the latest
+observed zone revision. A clean zone and pending calculation have distinct
+messages; entity-only pending work remains savable. Amend retains its existing
+requirement for a saved zone version. Workspace Save keeps its existing gate.
+The zone dashboard uses the same availability model and refreshes its controls
+from the current page snapshot. Changes outside the zone cannot enable its
+Save, Amend, or See Changes controls.
+
 ### Zone preview protocol
 
 The separate zone preview response carries request, dimension, workspace,

@@ -191,10 +191,17 @@ public final class LumiSaveScreen extends LumiModalScreen {
         observedPending = pending;
         boolean hasChanges = pending > 0;
         if (save != null) {
-            save.active = active && hasChanges;
+            save.active = active && hasChanges
+                    && controller.unavailableReason(SaveScreenController.Intent.SAVE).isEmpty();
         }
         if (amend != null) {
-            amend.active = active && hasChanges;
+            amend.active = active && hasChanges
+                    && controller.unavailableReason(SaveScreenController.Intent.AMEND).isEmpty();
+        }
+        if (scope == Scope.ZONE && save != null) {
+            save.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable(
+                    controller.unavailableReason(SaveScreenController.Intent.SAVE).isEmpty()
+                            ? "luma.zones.save_help" : controller.unavailableReason(SaveScreenController.Intent.SAVE))));
         }
     }
 
@@ -203,7 +210,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
         super.tick();
         int pending = history.state().snapshot()
                 .map(snapshot -> snapshot.pendingKeys()).orElse(0);
-        if (pending != observedPending && message != null) {
+        if ((pending != observedPending || scope == Scope.ZONE) && message != null) {
             setSubmitActive(!message.getValue().trim().isEmpty());
         }
     }
@@ -219,7 +226,8 @@ public final class LumiSaveScreen extends LumiModalScreen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         if ((event.key() == InputConstants.KEY_RETURN
-                || event.key() == InputConstants.KEY_NUMPADENTER) && save.active) {
+                || event.key() == InputConstants.KEY_NUMPADENTER)
+                && (preferredIntent == SaveScreenController.Intent.AMEND ? amend.active : save.active)) {
             requestSubmit(preferredIntent);
             return true;
         }
@@ -360,6 +368,11 @@ public final class LumiSaveScreen extends LumiModalScreen {
                             "luma.dashboard.pending_calculating");
         }
         long total = pending.orElseThrow();
+        if (scope == Scope.ZONE && total == 0
+                && controller.unavailableReason(SaveScreenController.Intent.SAVE).isEmpty()) {
+            return Component.translatable("luma.zones.pending_entities");
+        }
+        if (scope == Scope.ZONE && total == 0) return Component.translatable("luma.zones.pending_clean");
         return total == 0
                 ? Component.translatable("luma.dashboard.pending_clean")
                 : Component.translatable(

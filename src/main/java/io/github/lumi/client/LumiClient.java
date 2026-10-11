@@ -55,6 +55,7 @@ import io.github.lumi.client.ui.SaveScreenController;
 import io.github.lumi.client.ui.PackageScreenController;
 import io.github.lumi.client.ui.ZoneScreenController;
 import io.github.lumi.client.ui.ZoneHistoryActions;
+import io.github.lumi.client.ui.ZoneSaveAvailability;
 import io.github.lumi.client.ui.VersionCompareController;
 import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.domain.model.PendingChangeStatistics;
@@ -487,15 +488,39 @@ public final class LumiClient implements ClientModInitializer {
                 parent, HISTORY,
                 new SaveScreenController(
                         (message, tags) -> NETWORKING.saveZone(
-                                zone.id(), zone.revision(), message, tags),
+                                zone.id(), currentZone(zone.id()).revision(), message, tags),
                         (message, tags) -> NETWORKING.amendZone(
-                                zone.id(), zone.revision(), message, tags)),
+                                zone.id(), currentZone(zone.id()).revision(), message, tags),
+                        action -> zoneSaveAvailability(zone.id()).reason(action)),
                 NETWORKING::refreshSnapshot, intent, initialMessage,
                 requestId -> PREVIEW_CAPTURE.request(
                         requestId, HISTORY.state().snapshot().orElseThrow()),
                 ignored -> { }, LumiSaveScreen.Scope.ZONE,
                 FALLING_PLAYER::triggerIfPlayerName,
-                () -> pendingBlocks(result -> result.zones().get(zone.id()))));
+                () -> zonePendingBlocks(zone.id())));
+    }
+
+    private static HistorySnapshotPayload.ZoneView currentZone(UUID zoneId) {
+        return HISTORY.state().snapshot().orElseThrow().zones().stream()
+                .filter(zone -> zone.id().equals(zoneId)).findFirst()
+                .orElseThrow(() -> new IllegalStateException("Zone no longer exists"));
+    }
+
+    private static ZoneSaveAvailability zoneSaveAvailability(UUID zoneId) {
+        var snapshot = HISTORY.state().snapshot().orElse(null);
+        if (snapshot != null && snapshot.pendingKeys() > 0 && PENDING_STATISTICS.needsRequest(snapshot)) {
+            NETWORKING.requestPendingStatistics();
+        }
+        return ZoneSaveAvailability.inspect(snapshot, zoneId, PENDING_STATISTICS);
+    }
+
+    private static OptionalLong zonePendingBlocks(UUID zoneId) {
+        var snapshot = HISTORY.state().snapshot().orElse(null);
+        if (snapshot == null) return OptionalLong.empty();
+        if (snapshot.pendingKeys() == 0) return OptionalLong.of(0);
+        return PENDING_STATISTICS.zoneResult(snapshot, zoneId)
+                .map(value -> OptionalLong.of(value.zones().getOrDefault(zoneId, PendingChangeStatistics.NONE).total()))
+                .orElseGet(OptionalLong::empty);
     }
 
     private static OptionalLong pendingBlocks(

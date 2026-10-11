@@ -49,6 +49,10 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     private List<HistorySnapshotPayload.Branch> zoneBranches = List.of();
     private Optional<HistorySnapshotPayload.Version> latestVersion = Optional.empty();
     private long latestMetadataRevision = -1;
+    private LumiButton save;
+    private LumiButton amend;
+    private LumiButton changes;
+    private LumiButton leave;
 
     public LumiZoneDetailsScreen(
             Screen parent,
@@ -89,6 +93,8 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     public void tick() {
         super.tick();
         zoneHistory.tick();
+        requestPendingStatistics();
+        updateWorkspaceActions();
         HistoryPagePayload latest = zoneHistory.page().orElse(null);
         if (!Objects.equals(renderedPage, latest)) {
             focusSearchAfterInit = search != null && search.isFocused();
@@ -129,32 +135,46 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
         int maximumTextWidth = Math.max(0,
                 (available - LumiDashboardScreen.ICON_BUTTON_WIDTH * 2
                         - LumiDashboardScreen.CONTROL_GAP * 3) / 2);
-        LumiButton save = addContentButton(
+        save = addContentButton(
                 x, geometry.actionY(), maximumTextWidth,
                 Component.translatable("luma.zones.save_button"), openSave,
                 LumiButton.Kind.PRIMARY);
-        save.active = zone.active();
         x += save.getWidth() + LumiDashboardScreen.CONTROL_GAP;
-        LumiButton amend = addContentButton(
+        amend = addContentButton(
                 x, geometry.actionY(), maximumTextWidth,
                 Component.translatable("luma.action.amend_version"), openAmend,
                 LumiButton.Kind.NORMAL);
-        amend.active = zone.active() && !zone.versions().isEmpty();
         x += amend.getWidth() + LumiDashboardScreen.CONTROL_GAP;
-        LumiButton changes = addIconButton(
+        changes = addIconButton(
                 x, geometry.actionY(), "see-changes",
                 Component.translatable("luma.action.see_changes"), () -> {
                     showChanges.run();
                     minecraft.setScreen(null);
                 }, LumiButton.Kind.NORMAL);
-        changes.active = zone.active();
-        LumiButton leave = addIconButton(
+        leave = addIconButton(
                 x + LumiDashboardScreen.ICON_BUTTON_WIDTH
                         + LumiDashboardScreen.CONTROL_GAP,
                 geometry.actionY(), "leave",
                 Component.translatable("luma.zones.leave"), this::leaveZone,
                 LumiButton.Kind.DANGER);
-        leave.active = zone.active();
+        updateWorkspaceActions();
+    }
+
+    private void updateWorkspaceActions() {
+        if (save == null) return;
+        var current = pageSession().snapshot().orElse(null);
+        var availability = ZoneSaveAvailability.inspect(current, zone.id(), pendingStatistics);
+        save.active = availability.saveReason().isEmpty();
+        amend.active = availability.amendReason().isEmpty();
+        changes.active = save.active;
+        save.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable(
+                save.active ? "luma.zones.save_help" : availability.saveReason())));
+        amend.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable(
+                amend.active ? "luma.action.amend_version" : availability.amendReason())));
+        changes.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable(
+                changes.active ? "luma.action.see_changes" : availability.saveReason())));
+        leave.active = current != null && current.zones().stream()
+                .anyMatch(value -> value.id().equals(zone.id()) && value.active());
     }
 
     private void leaveZone() {
@@ -343,7 +363,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
             renderPageHeader(
                     graphics, layout.contentX(), layout.windowY(),
                     layout.contentWidth(), title,
-                    Component.translatable(zone.active()
+                    Component.translatable(leave != null && leave.active
                             ? "luma.zones.details_active"
                             : "luma.zones.details_inactive"));
             renderWorkspace(graphics, render.mouseX(), render.mouseY());
@@ -375,7 +395,11 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
             Component status = statistics
                     .<Component>map(PendingStatisticsText::summary)
                     .orElseGet(() -> Component.translatable(
-                            "luma.zones.save_help"));
+                            "luma.dashboard.pending_calculating"));
+            if (statistics.isPresent() && statistics.orElseThrow().total() == 0) {
+                status = Component.translatable(save.active
+                        ? "luma.zones.pending_entities" : "luma.zones.pending_clean");
+            }
             graphics.drawString(font, status,
                     x + LumiDashboardScreen.PANEL_PADDING,
                     layout.bodyY() + statusOffset,
@@ -452,19 +476,17 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     }
 
     private void requestPendingStatistics() {
-        if (snapshot.pendingKeys() > 0
-                && pendingStatistics.result(snapshot).isEmpty()
-                && !pendingStatistics.pending(snapshot)) {
-            requestPendingStatistics.run();
-        }
+        pageSession().snapshot().filter(current -> current.pendingKeys() > 0
+                && pendingStatistics.needsRequest(current))
+                .ifPresent(ignored -> requestPendingStatistics.run());
     }
 
     private Optional<io.github.lumi.domain.model.PendingChangeStatistics>
             zoneStatistics() {
-        return pendingStatistics.result(snapshot)
-                .filter(result -> result.error().isEmpty())
-                .map(result -> result.zones().get(zone.id()))
-                .filter(Objects::nonNull);
+        return pageSession().snapshot().flatMap(current -> current.pendingKeys() == 0
+                ? Optional.of(io.github.lumi.domain.model.PendingChangeStatistics.NONE)
+                : pendingStatistics.zoneResult(current, zone.id())
+                        .map(result -> result.zones().get(zone.id())));
     }
 
     @Override

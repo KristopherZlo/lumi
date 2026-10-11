@@ -1,6 +1,7 @@
 package io.github.lumi.client.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -55,5 +56,22 @@ class SaveScreenControllerTest {
 
         assertEquals(false, result.accepted());
         assertEquals("History is not synchronized", result.error());
+    }
+
+    @Test
+    void revalidatesScopeBeforeSendingSaveOrConfirmedAmend() {
+        var calls = new ArrayList<String>();
+        var reason = new java.util.concurrent.atomic.AtomicReference<>("luma.dashboard.pending_calculating");
+        var controller = new SaveScreenController((message, tags) -> {
+            calls.add("save"); return UUID.randomUUID();
+        }, (message, tags) -> {
+            calls.add("amend"); return UUID.randomUUID();
+        }, ignored -> reason.get());
+        assertFalse(controller.submit("Build", SaveScreenController.Intent.SAVE).accepted());
+        reason.set("");
+        assertTrue(controller.submit("Build", SaveScreenController.Intent.SAVE).accepted());
+        reason.set("luma.zones.pending_clean");
+        assertFalse(controller.submit("Build", SaveScreenController.Intent.AMEND).accepted());
+        assertEquals(java.util.List.of("save"), calls);
     }
 }
