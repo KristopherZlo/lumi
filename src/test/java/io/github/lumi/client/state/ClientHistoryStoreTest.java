@@ -15,6 +15,27 @@ import org.junit.jupiter.api.Test;
 
 class ClientHistoryStoreTest {
     @Test
+    void queuedProgressCannotRollBackOrSpeculativelyAdvanceThePublishedHead() {
+        var store = new ClientHistoryStore();
+        store.accept(new HistorySnapshotPayload("minecraft:overworld", id('2'), 4, 0, false));
+        var request = UUID.randomUUID();
+        store.accept(new OperationEventPayload(request, "minecraft:overworld",
+                OperationEventPayload.State.ACCEPTED, "Queued", id('1'), 3));
+        store.accept(new OperationEventPayload(request, "minecraft:overworld",
+                OperationEventPayload.State.PROGRESS, "Publishing", id('3'), 5,
+                Optional.of(UUID.randomUUID()), 0,
+                Optional.of(OperationProgress.indeterminate("Publishing"))));
+        assertEquals(id('2'), store.state().snapshot().orElseThrow().head());
+        assertEquals(4, store.state().snapshot().orElseThrow().revision());
+        org.junit.jupiter.api.Assertions.assertTrue(store.state().snapshot().orElseThrow().operationActive());
+        store.accept(new OperationEventPayload(request, "minecraft:overworld",
+                OperationEventPayload.State.SUCCEEDED, "Complete", id('3'), 5));
+        assertEquals(id('3'), store.state().snapshot().orElseThrow().head());
+        assertEquals(5, store.state().snapshot().orElseThrow().revision());
+        assertFalse(store.state().snapshot().orElseThrow().operationActive());
+    }
+
+    @Test
     void appliesCorrelatedEventsWithoutMutatingServerOwnedHistory() {
         ClientHistoryStore store = new ClientHistoryStore();
         BlockBox pendingBounds = new BlockBox(0, 16, 32, 15, 31, 47);

@@ -31,8 +31,11 @@ public final class ClientHistoryStore {
         while (events.size() > MAX_EVENTS) {
             events.remove(events.keySet().iterator().next());
         }
+        boolean interim = event.state() == OperationEventPayload.State.ACCEPTED
+                || event.state() == OperationEventPayload.State.PROGRESS;
         snapshot = new HistorySnapshotPayload(
-                snapshot.dimensionId(), event.head(), event.revision(), snapshot.pendingKeys(),
+                snapshot.dimensionId(), interim ? snapshot.head() : event.head(),
+                interim ? snapshot.revision() : event.revision(), snapshot.pendingKeys(),
                 snapshot.pendingRevision(), snapshot.pendingBlocks(),
                 snapshot.pendingBounds(),
                 events.values().stream().anyMatch(value ->

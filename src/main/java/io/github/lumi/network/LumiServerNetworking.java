@@ -1076,21 +1076,16 @@ public final class LumiServerNetworking {
             HudDisplayMode hudDisplayMode,
             int queuePosition,
             OperationProgress progress) {
-        try {
-            BranchRef head = runtime.activeRef();
-            send(player, new OperationEventPayload(
-                    request.requestId(), dimension(runtime),
-                    OperationEventPayload.State.PROGRESS, progress.phase(),
-                    head.commit(), head.revision(), Optional.of(ticket.id()),
-                    queuePosition, Optional.of(progress)));
-            if (usesBossBar(hudDisplayMode)) {
-                ServerBossEvent boss = bossBar(player, ticket, queuePosition);
-                boss.setName(Component.literal(progress.phase()));
-                boss.setProgress((float) progress.fraction().orElse(0.0));
-                boss.setVisible(queuePosition == 0);
-            }
-        } catch (IOException failed) {
-            LumiMod.LOGGER.error("Cannot publish Lumi operation progress", failed);
+        send(player, new OperationEventPayload(
+                request.requestId(), dimension(runtime),
+                OperationEventPayload.State.PROGRESS, progress.phase(),
+                request.expectedCommit(), request.expectedRevision(), Optional.of(ticket.id()),
+                queuePosition, Optional.of(progress)));
+        if (usesBossBar(hudDisplayMode)) {
+            ServerBossEvent boss = bossBar(player, ticket, queuePosition);
+            boss.setName(Component.literal(progress.phase()));
+            boss.setProgress((float) progress.fraction().orElse(0.0));
+            boss.setVisible(queuePosition == 0);
         }
     }
 

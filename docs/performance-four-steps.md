@@ -31,6 +31,14 @@ The regression controls every journal/publication/cleanup task and verifies
 that world apply and freeze release cannot cross an unfinished write. A blocked
 writer test measures a 5 ms tick wait independently of disk speed.
 
+Native JFR validation exposed an indirect tick wait: progress feedback reread
+the branch ref while its worker held the repository monitor across `force`.
+Progress now carries the immutable request context without repository I/O.
+Accepted/progress events update activity and progress only; client history keeps
+its latest published head until a terminal event or authoritative snapshot.
+Authority checks and activation/ref validation continue to use fresh reads.
+The client regression covers both stale queued refs and speculative future refs.
+
 ## Save metadata reads
 
 Pack entry headers and compressed payloads are read in one contiguous buffer.
