@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "io.github.lumi.gametest.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["InteractionTimingMixin"],
+  "injectors": {"defaultRequire": 1}
+}

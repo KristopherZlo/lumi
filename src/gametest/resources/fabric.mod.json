@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "name": "Lumi Game Tests",
   "environment": "*",
+  "mixins": ["lumi-gametest.mixins.json"],
   "entrypoints": {
     "fabric-client-gametest": [
       "io.github.lumi.gametest.LumiFirstMinuteClientGameTest",
