@@ -54,3 +54,12 @@ Tests exhaust real selection history in both directions and verify that putting
 the sword away restores world Undo without consuming the local history.
 
 Other slices and final check results will be recorded as they complete.
+
+### Zone preview protocol
+
+The separate zone preview response carries request, dimension, workspace,
+head/ref revision, zone revision, and pending revision. It caps coordinates at
+512 and carries no geometry on failure. This keeps the shared history snapshot
+workspace-scoped. Codec and scope tests check round trips, negative coordinates,
+invalid revisions, and response bounds. The protocol is being wired into the
+existing command and overlay paths in the next slice.
