@@ -6,7 +6,11 @@ import java.io.IOException;
 /** Publishes durable history selection only after a Restore verifies exactly. */
 @FunctionalInterface
 public interface RestorePublication {
+    /** Runs on the persistence worker; must not touch live Minecraft state. */
     void publish(PreparedRestore restore) throws IOException;
+
+    /** Installs server-owned runtime selection after publication is durable. */
+    default void installed() throws IOException { }
 
     default boolean isDurable() {
         return true;

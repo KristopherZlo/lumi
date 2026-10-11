@@ -1832,9 +1832,13 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private RestorePublication workspaceSwitchPublication(WorkspaceSwitchPlan plan) {
         var publication = new WorkspaceSwitchRestorePublication(branches, workspaces, plan);
-        return restore -> {
-            publication.publish(restore);
-            selectedWorkspaceId = plan.targetWorkspace();
+        return new RestorePublication() {
+            @Override public void publish(PreparedRestore restore) throws IOException {
+                publication.publish(restore);
+            }
+            @Override public void installed() {
+                selectedWorkspaceId = plan.targetWorkspace();
+            }
         };
     }
 

@@ -879,7 +879,54 @@ class RestoreOperationTest {
         @Override public void returned(WorldStateApply.State state) { returned++; }
     }
 
-    private static final class ImmediatelyVerified implements TestWorldApply {
+    @Test
+    void backgroundPersistenceKeepsOwnershipUntilJournalCleanup() throws IOException {
+        var writes = new java.util.ArrayDeque<Runnable>();
+        var world = new ImmediatelyVerified() {
+            @Override public java.util.concurrent.Executor persistenceExecutor() {
+                return writes::add;
+            }
+        };
+        var expected = new BranchRef(new BranchName("main"), id('1'), 1);
+        var journals = new OperationJournalRepository(repositoryRoot);
+        var published = new AtomicInteger();
+        var installed = new AtomicInteger();
+        var operation = RestoreOperation.start(new PreparedRestore(
+                expected, id('2'), Map.of(), Map.of(), Map.of(), Map.of()), world,
+                new RestorePublication() {
+                    @Override public void publish(PreparedRestore restore) {
+                        published.incrementAndGet();
+                    }
+                    @Override public void installed() { installed.incrementAndGet(); }
+                }, journals, UUID.randomUUID());
+
+        operation.tick(Long.MAX_VALUE);
+        assertTrue(journals.read().isEmpty());
+        assertFalse(operation.cancel());
+        assertEquals(1, writes.size());
+        writes.remove().run();
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+        assertEquals(OperationPhase.PREPARED, journals.read().orElseThrow().phase());
+        assertFalse(operation.cancel());
+        writes.remove().run();
+        assertEquals(RestoreStatus.VERIFYING, operation.tick(Long.MAX_VALUE));
+        operation.tick(Long.MAX_VALUE);
+        assertEquals(0, published.get());
+        writes.remove().run();
+        assertEquals(RestoreStatus.PUBLISHING, operation.tick(Long.MAX_VALUE));
+        assertEquals(1, installed.get());
+        assertFalse(operation.isSafeToRelease());
+        assertEquals(OperationPhase.APPLYING, journals.read().orElseThrow().phase());
+        assertEquals(RestoreStatus.PUBLISHING, operation.tick(Long.MAX_VALUE));
+        assertEquals(1, installed.get());
+        writes.remove().run();
+        assertEquals(RestoreStatus.COMPLETE, operation.tick(Long.MAX_VALUE));
+        assertTrue(journals.read().isEmpty());
+        assertTrue(operation.isSafeToRelease());
+    }
+
+    private static class ImmediatelyVerified implements TestWorldApply {
         @Override public ApplySession begin(PreparedState target) {
             return new TestApplySession() {
                 @Override public boolean applyUntil(long deadlineNanos) { return true; }

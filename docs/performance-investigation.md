@@ -5,6 +5,9 @@ Investigated on 2026-10-11, against production commit `8e2f9776f`, Minecraft
 The only code addition is optional JFR instrumentation in the GameTest tick
 probe. This report complements [the regression results](reliability-regression-results.md).
 
+The subsequently authorized implementation is tracked in
+[Four performance changes](performance-four-steps.md).
+
 ## Evidence and limits
 
 The investigation followed `modules.md`, the Save/Restore/persistence owners,

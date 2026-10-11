@@ -14,6 +14,11 @@ import java.util.function.LongConsumer;
 
 /** Server-thread port for bounded application of already decoded world state. */
 public interface WorldStateApply {
+    /** Executor for operation persistence; production adapters must supply a worker. */
+    default java.util.concurrent.Executor persistenceExecutor() {
+        return Runnable::run;
+    }
+
     /**
      * Called off-thread. Implementations must validate every persistent
      * representation here; bounded native decoding may continue off-thread

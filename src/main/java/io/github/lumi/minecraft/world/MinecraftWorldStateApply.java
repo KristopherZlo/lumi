@@ -42,6 +42,11 @@ public final class MinecraftWorldStateApply implements WorldStateApply {
     }
 
     @Override
+    public Executor persistenceExecutor() {
+        return background;
+    }
+
+    @Override
     public PreparedState prepare(State target) throws IOException {
         return preparation.prepare(target);
     }

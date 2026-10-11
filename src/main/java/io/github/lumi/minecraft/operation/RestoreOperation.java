@@ -33,6 +33,7 @@ public final class RestoreOperation implements DimensionMutation {
     private final WorldStateApply world;
     private final RestorePublication publication;
     private final OperationJournalRepository journals;
+    private final RestorePersistence persistence;
     private WorldStateApply.ApplySession targetSession;
     private final WorldStateApply.PreparedState preparedTarget;
     private final WorldStateApply.PreparedState preparedReturn;
@@ -45,6 +46,9 @@ public final class RestoreOperation implements DimensionMutation {
     private boolean returnRepairAttempted;
     private boolean returnPublicationStarted;
     private boolean journalPersisted;
+    private boolean applyJournalStarted;
+    private boolean runtimeInstalled;
+    private boolean degradationPending;
     private ReturnPhase returnPhase;
 
     @Override public OperationProgress progress() {
@@ -83,6 +87,7 @@ public final class RestoreOperation implements DimensionMutation {
         this.world = world;
         this.publication = publication;
         this.journals = journals;
+        this.persistence = new RestorePersistence(world.persistenceExecutor());
         this.journal = journal;
         this.journalPersisted = journalPersisted;
         this.preparedTarget = preparedTarget;
@@ -713,8 +718,16 @@ public final class RestoreOperation implements DimensionMutation {
     }
 
     public RestoreStatus tick(long deadlineNanos) throws IOException {
+        if (degradationPending) {
+            finishDegradation(deadlineNanos);
+            return status;
+        }
         if (!journalPersisted) {
-            journal = journals.create(journal);
+            OperationJournal expected = journal;
+            if (!persistence.await(RestorePersistence.Step.CREATE,
+                    () -> journals.create(expected), deadlineNanos)) {
+                return status;
+            }
             journalPersisted = true;
             beginTargetSession();
             if (deadlineNanos == Long.MAX_VALUE
@@ -820,7 +833,11 @@ public final class RestoreOperation implements DimensionMutation {
 
     private void applyTarget(long deadlineNanos) throws IOException {
         if (journal.phase() == OperationPhase.PREPARED) {
-            journal = journals.advance(journal, OperationPhase.APPLYING);
+            applyJournalStarted = true;
+            if (!advanceJournal(RestorePersistence.Step.APPLY,
+                    OperationPhase.APPLYING, deadlineNanos)) {
+                return;
+            }
         }
         final boolean applied;
         try {
@@ -893,7 +910,10 @@ public final class RestoreOperation implements DimensionMutation {
     }
 
     private void publishTarget(long deadlineNanos) throws IOException {
-        publication.publish(restore);
+        if (!persistence.await(RestorePersistence.Step.PUBLISH,
+                () -> publication.publish(restore), deadlineNanos)) {
+            return;
+        }
         status = RestoreStatus.PUBLISHING;
         finishPublication(deadlineNanos);
     }
@@ -902,8 +922,14 @@ public final class RestoreOperation implements DimensionMutation {
         if (!publication.awaitDurable(deadlineNanos)) {
             return;
         }
-        stateListener.restored(preparedTarget.source());
-        journals.clear(journal);
+        if (!runtimeInstalled) {
+            publication.installed();
+            stateListener.restored(preparedTarget.source());
+            runtimeInstalled = true;
+        }
+        if (!clearJournal(deadlineNanos)) {
+            return;
+        }
         logStatistics("target", targetSession.statistics());
         targetSession.close();
         status = RestoreStatus.COMPLETE;
@@ -912,10 +938,9 @@ public final class RestoreOperation implements DimensionMutation {
 
     private void beginReturn() throws IOException {
         targetSession.close();
-        journal = journals.advance(journal, OperationPhase.ROLLING_BACK);
-        returnSession = world.begin(preparedReturn);
-        returnPhase = ReturnPhase.APPLYING;
+        returnPhase = ReturnPhase.JOURNAL;
         status = RestoreStatus.RETURNING;
+        prepareReturn(Long.MAX_VALUE);
     }
 
     private void beginReturnAfter(IOException targetFailure) throws IOException {
@@ -930,6 +955,9 @@ public final class RestoreOperation implements DimensionMutation {
 
     private void returnToPreviousState(long deadlineNanos) throws IOException {
         try {
+            if (returnPhase == ReturnPhase.JOURNAL && !prepareReturn(deadlineNanos)) {
+                return;
+            }
             if (returnPhase == ReturnPhase.APPLYING && returnSession.applyUntil(deadlineNanos)) {
                 returnPhase = ReturnPhase.VERIFYING;
             } else if (returnPhase == ReturnPhase.VERIFYING) {
@@ -943,8 +971,8 @@ public final class RestoreOperation implements DimensionMutation {
                                 "Restore return state still mismatched after repair");
                         mismatch.addSuppressed(failure);
                         failure = mismatch;
-                        journal = journals.advance(journal, OperationPhase.DEGRADED);
-                        status = RestoreStatus.DEGRADED;
+                        degradationPending = true;
+                        finishDegradation(deadlineNanos);
                     } else {
                         returnRepairAttempted = true;
                         returnPhase = ReturnPhase.REPAIRING;
@@ -962,8 +990,8 @@ public final class RestoreOperation implements DimensionMutation {
                 returnFailure.addSuppressed(failure);
             }
             failure = returnFailure;
-            journal = journals.advance(journal, OperationPhase.DEGRADED);
-            status = RestoreStatus.DEGRADED;
+            degradationPending = true;
+            finishDegradation(deadlineNanos);
         }
     }
 
@@ -972,14 +1000,22 @@ public final class RestoreOperation implements DimensionMutation {
             return;
         }
         if (!returnPublicationStarted) {
-            publication.publishReturn(restore);
+            if (!persistence.await(RestorePersistence.Step.PUBLISH_RETURN,
+                    () -> publication.publishReturn(restore), deadlineNanos)) {
+                return;
+            }
             returnPublicationStarted = true;
         }
         if (!publication.awaitReturnDurable(deadlineNanos)) {
             return;
         }
-        stateListener.returned(preparedReturn.source());
-        journals.clear(journal);
+        if (!runtimeInstalled) {
+            stateListener.returned(preparedReturn.source());
+            runtimeInstalled = true;
+        }
+        if (!clearJournal(deadlineNanos)) {
+            return;
+        }
         logStatistics("safe-return", returnSession.statistics());
         returnSession.close();
         status = RestoreStatus.RETURNED;
@@ -1052,17 +1088,20 @@ public final class RestoreOperation implements DimensionMutation {
     @Override
     public MutationTerminalState unhandledFailureState() {
         return status == RestoreStatus.APPLYING
+                && !applyJournalStarted
                 && journal.phase() == OperationPhase.PREPARED
                 ? MutationTerminalState.FAILED : MutationTerminalState.DEGRADED;
     }
 
     public void cancelBeforeApply() throws IOException {
-        if (status != RestoreStatus.APPLYING || journal.phase() != OperationPhase.PREPARED) {
+        if (status != RestoreStatus.APPLYING || applyJournalStarted
+                || persistence.isPending() || journal.phase() != OperationPhase.PREPARED) {
             throw new IllegalStateException("Restore has already started mutating the world");
         }
         try {
             if (journalPersisted) {
-                journals.clear(journal);
+                clearJournal(Long.MAX_VALUE);
+                persistence.drain();
             }
             status = RestoreStatus.CANCELLED;
         } finally {
@@ -1084,6 +1123,7 @@ public final class RestoreOperation implements DimensionMutation {
     @Override
     public boolean cancel() throws IOException {
         if (status != RestoreStatus.APPLYING
+                || applyJournalStarted || persistence.isPending() || journalPersisted
                 || journal.phase() != OperationPhase.PREPARED) {
             return false;
         }
@@ -1093,8 +1133,11 @@ public final class RestoreOperation implements DimensionMutation {
 
     @Override
     public void close() throws IOException {
+        boolean writerOwned = persistence.isPending();
+        persistence.drain();
         try (PreparedRestore ignored = restore) {
             if (status == RestoreStatus.APPLYING
+                    && !writerOwned && !applyJournalStarted
                     && journal.phase() == OperationPhase.PREPARED) {
                 cancelBeforeApply();
             } else {
@@ -1128,9 +1171,44 @@ public final class RestoreOperation implements DimensionMutation {
     }
 
     private enum ReturnPhase {
+        JOURNAL,
         APPLYING,
         VERIFYING,
         PERSISTING,
         REPAIRING
+    }
+
+    private boolean advanceJournal(RestorePersistence.Step step,
+            OperationPhase phase, long deadline) throws IOException {
+        OperationJournal expected = journal;
+        if (!persistence.await(step, () -> journals.advance(expected, phase), deadline)) {
+            return false;
+        }
+        journal = expected.withPhase(phase);
+        return true;
+    }
+
+    private boolean clearJournal(long deadline) throws IOException {
+        OperationJournal expected = journal;
+        return persistence.await(RestorePersistence.Step.CLEAR,
+                () -> journals.clear(expected), deadline);
+    }
+
+    private boolean prepareReturn(long deadline) throws IOException {
+        if (!advanceJournal(RestorePersistence.Step.RETURN,
+                OperationPhase.ROLLING_BACK, deadline)) {
+            return false;
+        }
+        returnSession = world.begin(preparedReturn);
+        returnPhase = ReturnPhase.APPLYING;
+        return true;
+    }
+
+    private void finishDegradation(long deadline) throws IOException {
+        if (advanceJournal(RestorePersistence.Step.DEGRADE,
+                OperationPhase.DEGRADED, deadline)) {
+            degradationPending = false;
+            status = RestoreStatus.DEGRADED;
+        }
     }
 }
