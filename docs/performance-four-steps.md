@@ -41,6 +41,20 @@ verified immutable chunk trees, with ceilings of 256 nodes and 4096 child
 references. Oversized nodes bypass the cache; failures are never cached. Restore
 verification readers remain fresh. No extra parallel decoding tasks are added.
 
+## Working-index coalescing
+
+Production groups ordinary index scheduling for up to 50 ms using a delayed
+executor, without sleeping on a persistence worker. The writer still snapshots
+the newest complete working/builder state and verifies durable origins before
+each atomic forced write. Only one writer owns the index.
+
+A Save/Restore durability boundary, captured-generation clear, recovery tracking,
+explicit durability wait or blocked vanilla publication bypasses the delay.
+Urgency survives an origin that has not finished yet. An already queued timer
+cannot dispatch the same writer again after an urgent flush. Chunk retention
+and publication gates still require the actual durable generations, not timer
+completion. Existing synchronous/test adapters retain zero-delay scheduling.
+
 ## Verification
 
 After the Restore slice, the targeted Restore/publication tests and

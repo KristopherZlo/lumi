@@ -41,6 +41,8 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private final OriginStore origins;
     private final WorkingIndexRepository indexRepository;
     private final Executor background;
+    private final IndexWriteScheduler indexWrites;
+    private final boolean coalescesIndexWrites;
     private final ChunkDurabilityRetention chunkRetention;
     private final WorkingIndex working;
     private final Set<HistoryKey> durableOrigins;
@@ -57,6 +59,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private long indexRevision;
     private long builderRevision;
     private long durableIndexRevision;
+    private long requestedIndexRevision;
     private boolean originWriterScheduled;
     private boolean indexWriterScheduled;
 
@@ -67,11 +70,14 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             Executor background,
             ChunkDurabilityRetention chunkRetention,
             WorkingIndexRepository.State persisted,
-            Set<HistoryKey> durableOrigins) {
+            Set<HistoryKey> durableOrigins,
+            long coalesceMillis) {
         this.objects = objects;
         this.origins = origins;
         this.indexRepository = indexRepository;
         this.background = background;
+        this.indexWrites = new IndexWriteScheduler(background, coalesceMillis);
+        this.coalescesIndexWrites = coalesceMillis > 0;
         this.chunkRetention = chunkRetention;
         working = new WorkingIndex(persisted.working());
         this.durableOrigins = new HashSet<>(durableOrigins);
@@ -97,6 +103,14 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
             WorkingIndexRepository indexRepository,
             Executor background,
             ChunkDurabilityRetention chunkRetention) throws IOException {
+        return open(objects, origins, indexRepository, background, chunkRetention, 0);
+    }
+
+    /** Production may coalesce ordinary generations; explicit durability bypasses the delay. */
+    public static MutationDurabilityTracker open(
+            WorldObjectRepository objects, OriginStore origins,
+            WorkingIndexRepository indexRepository, Executor background,
+            ChunkDurabilityRetention chunkRetention, long coalesceMillis) throws IOException {
         Objects.requireNonNull(objects, "objects");
         Objects.requireNonNull(origins, "origins");
         Objects.requireNonNull(indexRepository, "indexRepository");
@@ -104,7 +118,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         Objects.requireNonNull(chunkRetention, "chunkRetention");
         return new MutationDurabilityTracker(
                 objects, origins, indexRepository, background, chunkRetention,
-                indexRepository.readState(), origins.keys());
+                indexRepository.readState(), origins.keys(), coalesceMillis);
     }
 
     public long registerSectionMutation(SectionKey key, Supplier<SectionBlob> preMutationCapture) {
@@ -177,10 +191,12 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     }
 
     public synchronized boolean canPublishChunk(int chunkX, int chunkZ) {
+        if (blockedChunks.containsKey(new ChunkCoordinate(chunkX, chunkZ))) requestIndexDurability();
         return !blockedChunks.containsKey(new ChunkCoordinate(chunkX, chunkZ));
     }
 
     public synchronized boolean canPublish(HistoryKey key) {
+        if (publicationRequirements.containsKey(key)) requestIndexDurability();
         return !publicationRequirements.containsKey(Objects.requireNonNull(key, "key"));
     }
 
@@ -218,6 +234,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
 
     /** Captures one atomic working/builder/index revision for preparation durability. */
     public synchronized DurabilityBoundary durabilityBoundary() {
+        requestIndexDurability();
         return new DurabilityBoundary(
                 working.snapshot(), new WorkingIndexSnapshot(builderGenerations),
                 new IndexRevision(indexRevision));
@@ -227,6 +244,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     public synchronized DurabilityBoundary durabilityBoundary(
             WorkingIndexSnapshot captured) {
         Objects.requireNonNull(captured, "captured");
+        requestIndexDurability();
         Map<HistoryKey, Long> builders = new LinkedHashMap<>();
         builderGenerations.forEach((key, generation) -> {
             Long capturedGeneration = captured.generations().get(key);
@@ -403,12 +421,14 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 builderRevision++;
             }
             revision = new IndexRevision(indexRevision);
+            requestedIndexRevision = indexRevision;
             scheduleIndex = !indexWriterScheduled;
             indexWriterScheduled = true;
         }
         if (scheduleIndex) {
             scheduleIndexWriter();
         }
+        indexWrites.flush();
         return revision;
     }
 
@@ -434,12 +454,14 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 builderRevision++;
             }
             revision = new IndexRevision(indexRevision);
+            requestedIndexRevision = indexRevision;
             scheduleIndex = !indexWriterScheduled;
             indexWriterScheduled = true;
         }
         if (scheduleIndex) {
             scheduleIndexWriter();
         }
+        indexWrites.flush();
         return revision;
     }
 
@@ -465,12 +487,14 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                 builderRevision++;
             }
             revision = new IndexRevision(indexRevision);
+            requestedIndexRevision = indexRevision;
             scheduleIndex = !indexWriterScheduled;
             indexWriterScheduled = true;
         }
         if (scheduleIndex) {
             scheduleIndexWriter();
         }
+        indexWrites.flush();
         return revision;
     }
 
@@ -492,6 +516,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
 
     private boolean awaitDurableUntil(
             BooleanSupplier durable, long deadlineNanos) throws IOException {
+        requestIndexDurability();
         while (!durable.getAsBoolean()) {
             if (deadlineNanos == Long.MAX_VALUE) {
                 return false;
@@ -512,6 +537,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     }
 
     private synchronized void awaitDurable(IndexRevision revision) throws IOException {
+        requestIndexDurability();
         while (!isDurable(revision)) {
             try {
                 wait();
@@ -636,6 +662,10 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                     return;
                 }
             }
+            if (coalescesIndexWrites) {
+                scheduleIndexWriter();
+                return;
+            }
         }
     }
 
@@ -652,13 +682,26 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
 
     private void scheduleIndexWriter() {
         try {
-            background.execute(this::writeIndexUntilCurrent);
+            boolean urgent;
+            synchronized (this) { urgent = requestedIndexRevision > durableIndexRevision; }
+            indexWrites.schedule(this::writeIndexUntilCurrent, rejected -> {
+                synchronized (this) { indexWriterScheduled = false; }
+                LOGGER.log(Level.SEVERE, "Failed to schedule Lumi working index persistence", rejected);
+            }, urgent);
+            synchronized (this) {
+                if (requestedIndexRevision > durableIndexRevision) indexWrites.flush();
+            }
         } catch (RuntimeException rejected) {
             synchronized (this) {
                 indexWriterScheduled = false;
             }
             LOGGER.log(Level.SEVERE, "Failed to schedule Lumi working index persistence", rejected);
         }
+    }
+
+    private void requestIndexDurability() {
+        requestedIndexRevision = indexRevision;
+        indexWrites.flush();
     }
 
     private void releaseSatisfied(HistoryKey key) {

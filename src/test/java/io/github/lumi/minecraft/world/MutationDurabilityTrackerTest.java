@@ -33,6 +33,29 @@ class MutationDurabilityTrackerTest {
     Path repositoryRoot;
 
     @Test
+    void urgentCaptureAndClearBypassCoalescingWithoutPublishingLaterGenerations() throws Exception {
+        var background = new ManualExecutor();
+        var index = new WorkingIndexRepository(repositoryRoot);
+        var tracker = MutationDurabilityTracker.open(new WorldObjectRepository(repositoryRoot),
+                new OriginStore(repositoryRoot), index, background, ChunkDurabilityRetention.NONE, 60_000);
+        var key = new SectionKey(0, 0, 0);
+        tracker.registerSectionMutation(key, MutationDurabilityTrackerTest::airSection);
+        var boundary = tracker.durabilityBoundary();
+        while (background.size() > 0) background.runNext();
+        assertTrue(tracker.isDurable(boundary));
+        var captured = tracker.snapshot();
+        tracker.markTrackedSection(key);
+        assertEquals(0, background.size());
+        var clear = tracker.clearAndRevision(captured);
+        assertEquals(1, background.size());
+        assertFalse(tracker.isDurable(clear));
+        background.runNext();
+        assertTrue(tracker.isDurable(clear));
+        assertEquals(2L, index.read().generations().get(key));
+        assertTrue(tracker.canPublishChunk(0, 0));
+    }
+
+    @Test
     void failedFirstCaptureCanRetryWithoutLosingItsOriginOrBlockingTheChunk() throws Exception {
         ManualExecutor background = new ManualExecutor();
         var origins = new OriginStore(repositoryRoot);

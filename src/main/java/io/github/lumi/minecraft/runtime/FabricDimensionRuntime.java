@@ -375,7 +375,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         var recoveryLease = interrupted.isPresent() ? freeze.acquire() : null;
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
                 objects, origins, working, durabilityBackground,
-                new MinecraftChunkDurabilityRetention(level));
+                new MinecraftChunkDurabilityRetention(level), 50);
         var branches = new BranchService(commits, refs, active, working);
         var trees = new MerkleTreeEditor(objects);
         var restoreService = new RestoreService(
