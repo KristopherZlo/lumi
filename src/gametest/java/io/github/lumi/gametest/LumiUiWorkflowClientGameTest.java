@@ -37,6 +37,7 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
             LumiClientBehaviorWorld.run(
                     context, "ui-workflow", (test, world, report) -> {
                 LumiUiTestDriver ui = new LumiUiTestDriver(test);
+                var zoneContract = new LumiZoneUiContract(test, world, ui);
                 LumiBehaviorActions actions = new LumiBehaviorActions(
                         world.getServer(), report);
                 LumiBehaviorOperations operations = new LumiBehaviorOperations(
@@ -46,6 +47,7 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
 
                 BlockPos first = actions.surfacePosition(2, 2);
                 actions.placeBlocks("ui_dirty_first", Items.STONE, List.of(first));
+                zoneContract.verifySwordHistory(first);
                 verifyDirtySaveForm(test, ui, report);
                 CommitId firstSave = operations.save("workflow-first");
 
@@ -57,7 +59,10 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
                 verifyVersionDetails(test, ui, secondSave, report);
                 BranchName idea = verifyBranches(test, ui, operations, report);
                 verifyCompare(ui, report);
-                verifyZones(test, ui, report);
+                actions.placeBlocks("ui_zone_outside", Items.STONE,
+                        List.of(actions.surfacePosition(4, 2)));
+                verifyZones(test, ui, zoneContract, report);
+                operations.save("workflow-zone-outside");
 
                 verifyTypedMerge(world, operations, actions, idea, first, second);
 
@@ -271,6 +276,7 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
     private static void verifyZones(
             ClientGameTestContext context,
             LumiUiTestDriver ui,
+            LumiZoneUiContract zoneContract,
             LumiBehaviorReport report) {
         String name = "workflow-zone";
         ui.openTab("luma.tab.zones", LumiZonesScreen.class);
@@ -283,22 +289,24 @@ public final class LumiUiWorkflowClientGameTest implements FabricClientGameTest 
 
         ui.pressUniqueButton(LumiDashboardScreen.class, "luma.tab.zones");
         context.waitForScreen(LumiZoneDetailsScreen.class);
-        ui.assertButton(LumiZoneDetailsScreen.class, "luma.zones.save_button", true);
+        ui.assertButton(LumiZoneDetailsScreen.class, "luma.zones.save_button", false);
         ui.assertButton(
                 LumiZoneDetailsScreen.class, "luma.action.amend_version", false);
         ui.assertButton(
-                LumiZoneDetailsScreen.class, "luma.action.see_changes", true);
+                LumiZoneDetailsScreen.class, "luma.action.see_changes", false);
         ui.assertButton(LumiZoneDetailsScreen.class, "luma.zones.leave", true);
         ui.assertButton(LumiZoneDetailsScreen.class,
                 "luma.history.view_cards", true);
         ui.assertButton(LumiZoneDetailsScreen.class,
                 "luma.history.view_graph", true);
+        zoneContract.awaitIdle();
         ui.pressUniqueButton(LumiZoneDetailsScreen.class, "luma.zones.leave");
         context.waitForScreen(LumiZonesScreen.class);
         ui.awaitZone(name, false);
         ui.assertButtonEventually(LumiZonesScreen.class, "luma.zones.enter", true);
         ui.assertButton(LumiZonesScreen.class, "luma.action.open_details", true);
         ui.assertButton(LumiZonesScreen.class, "luma.zones.delete", true);
+        zoneContract.verifyEnterRefusalAndRetry(name);
 
         ui.pressUniqueButton(LumiZonesScreen.class, "luma.zones.delete");
         context.waitForScreen(LumiDeleteZoneScreen.class);

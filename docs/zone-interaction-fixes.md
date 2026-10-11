@@ -53,6 +53,15 @@ when empty. Without the tool, the same chord keeps its world-action behavior.
 Tests exhaust real selection history in both directions and verify that putting
 the sword away restores world Undo without consuming the local history.
 
+The native UI workflow also exercises exhausted sword history using registered
+hotkeys while real pending world edits exist. A test-only read-only operation
+holds the coordinator long enough to produce an actual server refusal for
+Enter; the same screen must then allow a successful retry. The hold always
+releases in cleanup and introduces no production coordinator behavior.
+The workflow creates pending workspace edits before opening a clean zone, so
+disabled zone actions are checked while the workspace itself remains dirty.
+Both native UI scenarios passed with these checks on 2026-10-11.
+
 Statistics failures keep Save disabled and expose the failure in its tooltip.
 Reopening the page or Save form retries once; screen ticks do not retry failures.
 
