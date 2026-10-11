@@ -76,6 +76,7 @@ public final class ZoneService {
     public synchronized Zone setActorActive(
             UUID workspaceId, UUID zoneId, UUID actor, boolean enabled) throws IOException {
         Objects.requireNonNull(actor, "actor");
+        Zone current = require(workspaceId, zoneId);
         if (enabled) {
             for (Zone candidate : list(workspaceId)) {
                 if (candidate.id().equals(zoneId)
@@ -88,7 +89,6 @@ public final class ZoneService {
                         candidate, candidate.cells(), remaining));
             }
         }
-        Zone current = require(workspaceId, zoneId);
         var actors = new HashSet<>(current.activeActors());
         if (!(enabled ? actors.add(actor) : actors.remove(actor))) {
             return current;

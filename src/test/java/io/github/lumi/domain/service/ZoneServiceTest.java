@@ -8,6 +8,8 @@ import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.storage.repository.ZoneRepository;
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.io.IOException;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -121,5 +123,55 @@ class ZoneServiceTest {
         service.delete(workspace, zone.id(), 0);
 
         assertTrue(service.list(workspace).isEmpty());
+    }
+
+    @Test
+    void rejectedEnterOfDeletedTargetPreservesTheOldFocusAndRevision() throws Exception {
+        var service = new ZoneService(new ZoneRepository(repositoryRoot));
+        UUID workspace = new UUID(0, 1);
+        UUID actor = new UUID(0, 2);
+        var old = service.createActive(new UUID(0, 3), workspace, "Old", actor);
+        var target = service.create(new UUID(0, 4), workspace, "Target", 0, Set.of());
+        service.delete(workspace, target.id(), target.revision());
+
+        assertThrows(IOException.class,
+                () -> service.setActorActive(workspace, target.id(), actor, true));
+
+        assertEquals(old, service.require(workspace, old.id()));
+    }
+
+    @Test
+    void unreadableEnterTargetPreservesTheOldFocus() throws Exception {
+        var service = new ZoneService(new ZoneRepository(repositoryRoot));
+        UUID workspace = new UUID(0, 1);
+        UUID actor = new UUID(0, 2);
+        var old = service.createActive(new UUID(0, 3), workspace, "Old", actor);
+        var target = service.create(new UUID(0, 4), workspace, "Target", 0, Set.of());
+        Files.write(repositoryRoot.resolve("workspaces").resolve(workspace.toString())
+                .resolve("zones").resolve(target.id() + ".zone"), new byte[] {1});
+
+        assertThrows(IOException.class,
+                () -> service.setActorActive(workspace, target.id(), actor, true));
+
+        assertEquals(old, service.require(workspace, old.id()));
+    }
+
+    @Test
+    void successfulEnterRetainsOtherActorsAndOnlyAdvancesChangedZones() throws Exception {
+        var service = new ZoneService(new ZoneRepository(repositoryRoot));
+        UUID workspace = new UUID(0, 1);
+        UUID actor = new UUID(0, 2);
+        UUID other = new UUID(0, 5);
+        var old = service.createActive(new UUID(0, 3), workspace, "Old", actor);
+        service.setActorActive(workspace, old.id(), other, true);
+        var target = service.create(new UUID(0, 4), workspace, "Target", 0, Set.of());
+
+        service.setActorActive(workspace, target.id(), actor, true);
+
+        assertEquals(Set.of(other), service.require(workspace, old.id()).activeActors());
+        var entered = service.require(workspace, target.id());
+        assertEquals(Set.of(actor), entered.activeActors());
+        assertEquals(1, entered.revision());
+        assertEquals(entered, service.setActorActive(workspace, target.id(), actor, true));
     }
 }
