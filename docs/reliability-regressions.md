@@ -32,3 +32,12 @@ A capture exception removes only the unfinished origin reservation and is
 rethrown. A successful retry still captures the pre-mutation origin and keeps
 vanilla publication blocked until both origin and working-index writes are
 durable. Tests cover a section I/O exception and a rejected entity capture.
+
+## Preview completion
+
+Unsupported integrated capture, synchronous worker rejection, asynchronous build
+failure and queue eviction all end the commit's loading state. Eviction also
+cancels the pending build. Dedicated-server previews retain the existing missing
+preview placeholder; no world-state transport or rendering behavior is added.
+`IsometricPreviewCoordinatorTest` exercises those paths with controlled builds.
+

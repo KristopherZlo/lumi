@@ -6,7 +6,6 @@ import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.network.HistorySnapshotPayload;
 import io.github.lumi.network.OperationEventPayload;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -26,8 +25,8 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
     private final ClientVersionPreviewStore store;
     private final CommitPreviewSnapshotReader snapshots =
             new CommitPreviewSnapshotReader();
-    private final PreviewRenderMeshBuilder meshes =
-            new PreviewRenderMeshBuilder();
+    private PreviewRenderMeshBuilder meshes;
+    private final PreviewBuild builds;
     private final PreviewBoundsLimiter boundsLimiter =
             new PreviewBoundsLimiter();
     private TexturedPreviewCaptureService capture;
@@ -45,6 +44,12 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
 
     IsometricPreviewCoordinator(ClientVersionPreviewStore store) {
         this.store = Objects.requireNonNull(store, "store");
+        builds = this::buildMesh;
+    }
+
+    IsometricPreviewCoordinator(ClientVersionPreviewStore store, PreviewBuild builds) {
+        this.store = Objects.requireNonNull(store, "store");
+        this.builds = Objects.requireNonNull(builds, "builds");
     }
 
     synchronized void request(
@@ -63,11 +68,7 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
                 snapshot.pendingBounds(),
                 null, null, null, null));
         while (pending.size() > MAX_PENDING) {
-            Iterator<UUID> iterator = pending.keySet().iterator();
-            UUID oldest = iterator.next();
-            Pending removed = pending.get(oldest);
-            iterator.remove();
-            closeCapture(oldest, removed);
+            discard(pending.keySet().iterator().next());
         }
     }
 
@@ -145,25 +146,46 @@ final class IsometricPreviewCoordinator implements AutoCloseable {
 
     private void startBuild(
             UUID requestId, Pending item, CommitId target) {
+        pending.put(requestId, item.withTarget(target, null));
+        try {
+            var build = builds.prepare(item.dimensionId(), target, item.bounds());
+            if (build.isEmpty()) {
+                discard(requestId);
+            } else {
+                pending.put(requestId, item.withTarget(target, build.orElseThrow()));
+            }
+        } catch (RuntimeException failed) {
+            discard(requestId);
+            LumiMod.LOGGER.warn("Failed to prepare immutable Lumi preview", failed);
+        }
+    }
+
+    private Optional<CompletableFuture<PreviewRenderMesh>> buildMesh(
+            String dimensionId, CommitId target, BlockBox bounds) {
         Minecraft client = Minecraft.getInstance();
         var server = client.getSingleplayerServer();
         var level = client.level;
         if (server == null || level == null) {
-            discard(requestId);
-            return;
+            return Optional.empty();
         }
+        if (meshes == null) meshes = new PreviewRenderMeshBuilder();
         CompletableFuture<PreviewRenderMesh> build =
                 CompletableFuture.supplyAsync(() -> {
                     try {
                         return snapshots.read(
-                                server, level, item.dimensionId(),
-                                target, item.bounds());
+                                server, level, dimensionId, target, bounds);
                     } catch (Exception failed) {
                         throw new CompletionException(failed);
                     }
                 }, worker).thenCompose(frozen ->
-                        meshes.scheduleBuild(frozen, item.bounds(), worker));
-        pending.put(requestId, item.withTarget(target, build));
+                        meshes.scheduleBuild(frozen, bounds, worker));
+        return Optional.of(build);
+    }
+
+    @FunctionalInterface
+    interface PreviewBuild {
+        Optional<CompletableFuture<PreviewRenderMesh>> prepare(
+                String dimensionId, CommitId target, BlockBox bounds);
     }
 
     private void discard(UUID requestId) {

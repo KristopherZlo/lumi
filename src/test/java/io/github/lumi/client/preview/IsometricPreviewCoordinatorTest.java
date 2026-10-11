@@ -1,6 +1,17 @@
 package io.github.lumi.client.preview;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
+import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.network.HistorySnapshotPayload;
+import io.github.lumi.network.OperationEventPayload;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,7 +24,7 @@ class IsometricPreviewCoordinatorTest {
                 "src/main/java/io/github/lumi/client/preview/IsometricPreviewCoordinator.java"));
 
         assertTrue(source.contains("MAX_PENDING = 4"));
-        assertTrue(source.contains("closeCapture(oldest, removed)"));
+        assertTrue(source.contains("discard(pending.keySet().iterator().next())"));
         assertTrue(source.contains("case SUCCEEDED"));
         assertTrue(source.contains("event.previewBounds()"));
         assertTrue(source.contains(".or(item::previewBounds)"));
@@ -25,5 +36,81 @@ class IsometricPreviewCoordinatorTest {
         assertTrue(source.contains("if (capture != null) capture.close()"));
         assertTrue(source.contains("store.save(item.dimensionId(), target, image)"));
         assertTrue(source.contains("worker.shutdownNow()"));
+    }
+
+    @Test
+    void unavailableIntegratedCaptureClearsTheLoadingFlag() {
+        var store = new ClientVersionPreviewStore();
+        try (var coordinator = new IsometricPreviewCoordinator(store,
+                (dimension, commit, bounds) -> Optional.empty())) {
+            UUID request = UUID.randomUUID();
+            CommitId target = commit(1);
+            coordinator.request(request, snapshot());
+            coordinator.accept(success(request, target));
+            assertFalse(store.isLoading("minecraft:overworld", target));
+        }
+    }
+
+    @Test
+    void evictionClearsLoadingAndCancelsTheEvictedBuild() {
+        var store = new ClientVersionPreviewStore();
+        var futures = new ArrayList<CompletableFuture<PreviewRenderMesh>>();
+        try (var coordinator = new IsometricPreviewCoordinator(store,
+                (dimension, commit, bounds) -> {
+                    var future = new CompletableFuture<PreviewRenderMesh>();
+                    futures.add(future);
+                    return Optional.of(future);
+                })) {
+            for (int index = 1; index <= IsometricPreviewCoordinator.MAX_PENDING + 1; index++) {
+                UUID request = UUID.randomUUID();
+                coordinator.request(request, snapshot());
+                coordinator.accept(success(request, commit(index)));
+            }
+            assertFalse(store.isLoading("minecraft:overworld", commit(1)));
+            assertTrue(futures.getFirst().isCancelled());
+            assertTrue(store.isLoading("minecraft:overworld", commit(2)));
+            coordinator.clear();
+            assertTrue(futures.stream().allMatch(CompletableFuture::isCancelled));
+            assertFalse(store.isLoading("minecraft:overworld", commit(2)));
+        }
+    }
+
+    @Test
+    void rejectedBuildAndAsynchronousFailureClearLoading() {
+        var store = new ClientVersionPreviewStore();
+        try (var rejected = new IsometricPreviewCoordinator(store,
+                (dimension, commit, bounds) -> {
+                    throw new java.util.concurrent.RejectedExecutionException("worker closed");
+                })) {
+            UUID request = UUID.randomUUID();
+            rejected.request(request, snapshot());
+            rejected.accept(success(request, commit(1)));
+            assertFalse(store.isLoading("minecraft:overworld", commit(1)));
+        }
+        try (var failed = new IsometricPreviewCoordinator(store,
+                (dimension, commit, bounds) -> Optional.of(
+                        CompletableFuture.failedFuture(new IllegalStateException("mesh"))))) {
+            UUID request = UUID.randomUUID();
+            failed.request(request, snapshot());
+            failed.accept(success(request, commit(2)));
+            failed.tick();
+            assertFalse(store.isLoading("minecraft:overworld", commit(2)));
+        }
+    }
+
+    private static CommitId commit(int value) {
+        return CommitId.hash(new byte[] {(byte) value});
+    }
+
+    private static HistorySnapshotPayload snapshot() {
+        return new HistorySnapshotPayload("minecraft:overworld", commit(0), 0, 1, 0,
+                List.of(), Optional.of(new BlockBox(0, 0, 0, 15, 15, 15)), false, false,
+                new UUID(0, 1), "Default", "main", List.of(), List.of(), List.of(),
+                List.of(), List.of());
+    }
+
+    private static OperationEventPayload success(UUID request, CommitId target) {
+        return new OperationEventPayload(request, "minecraft:overworld",
+                OperationEventPayload.State.SUCCEEDED, "saved", target, 1);
     }
 }
