@@ -30,6 +30,8 @@ final class FabricServerSession implements AutoCloseable {
     private final LumiPermissionService permissions;
     private final ExecutorService operationBackground;
     private final ExecutorService durabilityBackground;
+    private final ServerTickWorkScheduler<FabricDimensionRuntime> tickWork =
+            new ServerTickWorkScheduler<>();
     private final LoadedDimensionRegistry<ServerLevel, FabricDimensionRuntime> dimensions =
             new LoadedDimensionRegistry<>();
 
@@ -64,21 +66,7 @@ final class FabricServerSession implements AutoCloseable {
         if (tickingServer != server) {
             throw new IllegalArgumentException("Tick belongs to another Minecraft server");
         }
-        IOException failure = null;
-        for (FabricDimensionRuntime runtime : dimensions.loadedValues()) {
-            try {
-                runtime.tick();
-            } catch (IOException dimensionFailure) {
-                if (failure == null) {
-                    failure = dimensionFailure;
-                } else {
-                    failure.addSuppressed(dimensionFailure);
-                }
-            }
-        }
-        if (failure != null) {
-            throw failure;
-        }
+        tickWork.tick(dimensions.loadedValues(), FabricDimensionRuntime::tick);
     }
 
     void unload(ServerLevel level) throws Exception {

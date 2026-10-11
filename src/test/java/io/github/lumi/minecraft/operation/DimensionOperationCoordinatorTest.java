@@ -11,6 +11,36 @@ import org.junit.jupiter.api.Test;
 
 class DimensionOperationCoordinatorTest {
     @Test
+    void sharedDeadlinePreventsASecondDimensionFromReceivingAnotherFullBudget() throws Exception {
+        var clock = new java.util.concurrent.atomic.AtomicLong();
+        var firstFreeze = new RecordingFreeze();
+        var secondFreeze = new RecordingFreeze();
+        var first = new DimensionOperationCoordinator(firstFreeze, clock::get, 30_000_000L);
+        var second = new DimensionOperationCoordinator(secondFreeze, clock::get, 30_000_000L);
+        var advances = new int[2];
+        for (int index = 0; index < 2; index++) {
+            int dimension = index;
+            (index == 0 ? first : second).start(new DimensionMutation() {
+                @Override public void advance(long deadline) {
+                    advances[dimension]++;
+                    clock.set(deadline);
+                }
+                @Override public boolean isTerminal() { return false; }
+                @Override public boolean isSafeToRelease() { return false; }
+            });
+        }
+        first.tick(30_000_000L);
+        second.tick(30_000_000L);
+        assertEquals(30_000_000L, clock.get());
+        assertEquals(1, advances[0]);
+        assertEquals(0, advances[1]);
+        assertEquals(0, secondFreeze.acquireCalls);
+        second.tick(60_000_000L);
+        first.tick(60_000_000L);
+        assertEquals(1, advances[1]);
+        assertEquals(1, advances[0]);
+    }
+    @Test
     void acquiresAtTickBoundaryHonorsBudgetAndReleasesSafeTerminalOperation() throws IOException {
         RecordingFreeze freeze = new RecordingFreeze();
         TwoTickMutation mutation = new TwoTickMutation(false);

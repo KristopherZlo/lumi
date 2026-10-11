@@ -455,12 +455,16 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     public void tick() throws IOException {
+        tick(Long.MAX_VALUE);
+    }
+
+    public void tick(long deadlineNanos) throws IOException {
         try {
-            operations.tick();
+            operations.tick(deadlineNanos);
         } finally {
             zoneGrowth.flush();
         }
-        advanceRestorePrewarm();
+        advanceRestorePrewarm(deadlineNanos);
         if (level.getGameTime() % DURABILITY_RETRY_INTERVAL_TICKS == 0) {
             mutations.retryFailedWrites();
         }
@@ -750,13 +754,14 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 () -> requireExpectedRef(request.expectedRef()), terminalObserver);
     }
 
-    private synchronized void advanceRestorePrewarm() {
-        if (restorePrewarm == null) {
+    private synchronized void advanceRestorePrewarm(long deadlineNanos) {
+        long now = System.nanoTime();
+        if (restorePrewarm == null || now >= deadlineNanos) {
             return;
         }
         try {
             restorePrewarm.advanceUntil(
-                    System.nanoTime() + RESTORE_PREWARM_TICK_NANOS);
+                    Math.min(deadlineNanos, now + RESTORE_PREWARM_TICK_NANOS));
         } catch (IOException | RuntimeException failed) {
             LumiMod.LOGGER.warn(
                     "Lumi Restore chunk prewarm failed; using exact fallback", failed);

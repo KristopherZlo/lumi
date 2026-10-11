@@ -175,6 +175,10 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
     }
 
     public synchronized void tick() throws IOException {
+        tick(Long.MAX_VALUE);
+    }
+
+    public synchronized void tick(long sharedDeadlineNanos) throws IOException {
         if (active == null) {
             activateNext();
         }
@@ -188,6 +192,7 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             clearTerminalIfSafe();
             return;
         }
+        if (nanoTime.getAsLong() >= sharedDeadlineNanos) return;
         if (lease == null && !freezeReleased && active.requiresFreeze()) {
             lease = Objects.requireNonNull(freeze.acquire(), "freeze lease");
         }
@@ -195,9 +200,10 @@ public final class DimensionOperationCoordinator implements AutoCloseable {
             reportFreezeStart();
         }
         long start = nanoTime.getAsLong();
+        if (start >= sharedDeadlineNanos) return;
         long deadline = start > Long.MAX_VALUE - tickBudgetNanos
                 ? Long.MAX_VALUE : start + tickBudgetNanos;
-        active.advance(deadline);
+        active.advance(Math.min(deadline, sharedDeadlineNanos));
         notifyProgress();
         reportTerminal();
         releaseFreezeIfSafe();

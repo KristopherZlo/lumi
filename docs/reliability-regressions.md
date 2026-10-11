@@ -50,3 +50,14 @@ before ticks begin. Authority, scope and expected-ref validation still use the
 existing fresh repository reads. Live external edits to workspace files are not
 a settings-publication API.
 
+## Shared server work budget
+
+The server session supplies one 30-ms deadline to all loaded dimensions and
+rotates which dimension starts each tick. Mutation work and Restore intent
+prewarm share that deadline; per-dimension operation limits still apply. All
+dimensions retain their housekeeping and terminal processing when the work
+budget is exhausted. Freeze ownership, queued activation validation and durable
+release conditions remain per dimension. Controlled-clock tests cover the
+aggregate allowance, rotation and failure isolation. Real complete server ticks
+remain subject to the existing 50-ms GameTest gate, including vanilla work.
+
