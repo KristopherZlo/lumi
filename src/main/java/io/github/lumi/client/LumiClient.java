@@ -165,13 +165,14 @@ public final class LumiClient implements ClientModInitializer {
                                 LumiHotkeys.shortcuts(client.options.keyMappings)));
                     }
 
+                    @Override public boolean selectionToolHeld() {
+                        return LumiSelectionTool.held(Minecraft.getInstance());
+                    }
                     @Override public boolean undoSelection() {
-                        return LumiSelectionTool.held(Minecraft.getInstance())
-                                && SELECTION.undo();
+                        return SELECTION.undo();
                     }
                     @Override public boolean redoSelection() {
-                        return LumiSelectionTool.held(Minecraft.getInstance())
-                                && SELECTION.redo();
+                        return SELECTION.redo();
                     }
                     @Override public void undo() {
                         trackOnboardingOperation(

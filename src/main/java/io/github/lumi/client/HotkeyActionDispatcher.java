@@ -37,15 +37,17 @@ public final class HotkeyActionDispatcher {
                 case SAVE -> actions.openSave();
                 case HOTKEYS -> actions.openHotkeys();
                 case UNDO -> {
-                    if (actions.undoSelection()) {
-                        feedback.accept("luma.selection.undo");
+                    if (actions.selectionToolHeld()) {
+                        feedback.accept(actions.undoSelection()
+                                ? "luma.selection.undo" : "luma.selection.no_undo");
                     } else {
                         actions.undo();
                     }
                 }
                 case REDO -> {
-                    if (actions.redoSelection()) {
-                        feedback.accept("luma.selection.redo");
+                    if (actions.selectionToolHeld()) {
+                        feedback.accept(actions.redoSelection()
+                                ? "luma.selection.redo" : "luma.selection.no_redo");
                     } else {
                         actions.redo();
                     }
@@ -91,6 +93,7 @@ public final class HotkeyActionDispatcher {
         void openDashboard();
         void openSave();
         void openHotkeys();
+        boolean selectionToolHeld();
         boolean undoSelection();
         boolean redoSelection();
         void undo();

@@ -73,6 +73,9 @@ version preserves the original state from the start of Lumi history.
 | Hold `Alt` | Preview pending work and use Lumi action shortcuts |
 | Wooden sword | Select restore bounds and edit active-zone cells |
 
+While holding the wooden sword, Undo/Redo affects only your selection. An empty
+selection history shows a message. Put the sword away to undo or redo world edits.
+
 You can change all key bindings in Minecraft controls.
 
 ## Install

@@ -44,4 +44,13 @@ also releases the wait. The screen only coordinates the controller and widgets.
 Regression tests cover refusal and retry, unrelated events, delayed activation,
 context loss, and local send failure.
 
+### Sword Undo/Redo
+
+The dispatcher distinguishes a held selection tool from an exhausted local
+history. Holding a wooden sword in either hand routes Undo/Redo exclusively
+to the scoped selection history and uses the existing no-undo/no-redo messages
+when empty. Without the tool, the same chord keeps its world-action behavior.
+Tests exhaust real selection history in both directions and verify that putting
+the sword away restores world Undo without consuming the local history.
+
 Other slices and final check results will be recorded as they complete.

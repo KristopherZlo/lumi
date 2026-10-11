@@ -3,6 +3,8 @@ package io.github.lumi.client;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.ArrayList;
+import io.github.lumi.client.state.ClientSelection;
+import io.github.lumi.domain.model.BlockPosition;
 import org.junit.jupiter.api.Test;
 
 class HotkeyActionDispatcherTest {
@@ -15,6 +17,7 @@ class HotkeyActionDispatcherTest {
                     @Override public void openDashboard() { calls.add("dashboard"); }
                     @Override public void openSave() { calls.add("save"); }
                     @Override public void openHotkeys() { calls.add("hotkeys"); }
+                    @Override public boolean selectionToolHeld() { return false; }
                     @Override public boolean undoSelection() { return false; }
                     @Override public boolean redoSelection() { return false; }
                     @Override public void undo() { calls.add("undo"); }
@@ -52,6 +55,7 @@ class HotkeyActionDispatcherTest {
                     @Override public void openDashboard() { }
                     @Override public void openSave() { }
                     @Override public void openHotkeys() { }
+                    @Override public boolean selectionToolHeld() { return true; }
                     @Override public boolean undoSelection() { return true; }
                     @Override public boolean redoSelection() { return true; }
                     @Override public void undo() { calls.add("world-undo"); }
@@ -88,12 +92,49 @@ class HotkeyActionDispatcherTest {
     }
 
     private static HotkeyActionDispatcher.Actions actions(ArrayList<String> calls) {
+        return actions(calls, false, new ClientSelection());
+    }
+
+    @Test
+    void exhaustedSelectionHistoryNeverInvokesWorldUndoOrRedoWithTheSwordHeld() {
+        var calls = new ArrayList<String>();
+        var statuses = new ArrayList<String>();
+        var selection = new ClientSelection();
+        selection.setFirst(new BlockPosition(1, 2, 3));
+        var dispatcher = new HotkeyActionDispatcher(actions(calls, true, selection), statuses::add);
+
+        dispatcher.dispatch(HotkeyActionDispatcher.Action.UNDO);
+        dispatcher.dispatch(HotkeyActionDispatcher.Action.UNDO);
+        dispatcher.dispatch(HotkeyActionDispatcher.Action.REDO);
+        dispatcher.dispatch(HotkeyActionDispatcher.Action.REDO);
+
+        assertEquals(java.util.List.of(), calls);
+        assertEquals(java.util.List.of("luma.selection.undo", "luma.selection.no_undo",
+                "luma.selection.redo", "luma.selection.no_redo"), statuses);
+    }
+
+    @Test
+    void releasingTheSwordReturnsUndoToTheWorldWithoutConsumingSelectionHistory() {
+        var calls = new ArrayList<String>();
+        var selection = new ClientSelection();
+        selection.setFirst(new BlockPosition(1, 2, 3));
+        var dispatcher = new HotkeyActionDispatcher(actions(calls, false, selection), ignored -> { });
+
+        dispatcher.dispatch(HotkeyActionDispatcher.Action.UNDO);
+
+        assertEquals(java.util.List.of("undo"), calls);
+        assertEquals(true, selection.undo());
+    }
+
+    private static HotkeyActionDispatcher.Actions actions(
+            ArrayList<String> calls, boolean toolHeld, ClientSelection selection) {
         return new HotkeyActionDispatcher.Actions() {
             @Override public void openDashboard() { calls.add("dashboard"); }
             @Override public void openSave() { calls.add("save"); }
             @Override public void openHotkeys() { calls.add("hotkeys"); }
-            @Override public boolean undoSelection() { return false; }
-            @Override public boolean redoSelection() { return false; }
+            @Override public boolean selectionToolHeld() { return toolHeld; }
+            @Override public boolean undoSelection() { return selection.undo(); }
+            @Override public boolean redoSelection() { return selection.redo(); }
             @Override public void undo() { calls.add("undo"); }
             @Override public void redo() { calls.add("redo"); }
             @Override public String toggleCompareOverlay() { return "compare"; }
