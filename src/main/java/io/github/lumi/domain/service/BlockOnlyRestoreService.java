@@ -48,6 +48,14 @@ public final class BlockOnlyRestoreService {
             Instant timestamp,
             Consumer<RestoreService.PreparationProgress> progress)
             throws IOException {
+        try (var publication = objects.beginPublication()) {
+            return composeCommit(checkpoint, target, author, timestamp, progress);
+        }
+    }
+
+    private CommitId composeCommit(
+            CommitId checkpoint, CommitId target, CommitAuthor author, Instant timestamp,
+            Consumer<RestoreService.PreparationProgress> progress) throws IOException {
         Objects.requireNonNull(checkpoint, "checkpoint");
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(author, "author");

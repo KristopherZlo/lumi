@@ -42,6 +42,12 @@ public final class DimensionHistoryInitializer {
     }
 
     public synchronized BranchRef initialize(UUID workspaceId) throws IOException {
+        try (var publication = objects.beginPublication()) {
+            return initializeHistory(workspaceId);
+        }
+    }
+
+    private BranchRef initializeHistory(UUID workspaceId) throws IOException {
         Objects.requireNonNull(workspaceId, "workspaceId");
         Optional<BranchRef> existing = refs.read(MAIN);
         if (existing.isPresent()) {

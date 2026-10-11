@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.EntityChunkBlob;
+import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.BlockPosition;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
@@ -29,6 +31,47 @@ import org.junit.jupiter.api.io.TempDir;
 class MutationDurabilityTrackerTest {
     @TempDir
     Path repositoryRoot;
+
+    @Test
+    void failedFirstCaptureCanRetryWithoutLosingItsOriginOrBlockingTheChunk() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        var origins = new OriginStore(repositoryRoot);
+        var tracker = MutationDurabilityTracker.open(new WorldObjectRepository(repositoryRoot),
+                origins, new WorkingIndexRepository(repositoryRoot), background);
+        SectionKey key = new SectionKey(1, 0, 1);
+        assertThrows(java.io.UncheckedIOException.class, () ->
+                tracker.registerSectionMutation(key, () -> {
+                    throw new java.io.UncheckedIOException(new java.io.IOException("capture"));
+                }));
+        assertTrue(tracker.needsOrigin(key));
+        assertTrue(tracker.snapshot().generations().isEmpty());
+        assertEquals(0, background.size());
+        AtomicInteger retries = new AtomicInteger();
+        tracker.registerSectionMutation(key, () -> {
+            retries.incrementAndGet();
+            return airSection();
+        });
+        assertFalse(tracker.canPublishChunk(1, 1));
+        while (background.size() > 0) background.runNext();
+        assertEquals(1, retries.get());
+        assertTrue(new OriginStore(repositoryRoot).read(key).isPresent());
+        assertTrue(tracker.canPublishChunk(1, 1));
+    }
+
+    @Test
+    void rejectedNullEntityCaptureDoesNotSuppressTheNextCapture() throws Exception {
+        ManualExecutor background = new ManualExecutor();
+        var tracker = MutationDurabilityTracker.open(new WorldObjectRepository(repositoryRoot),
+                new OriginStore(repositoryRoot), new WorkingIndexRepository(repositoryRoot), background);
+        var key = new EntityChunkKey(2, 2);
+        assertThrows(NullPointerException.class, () ->
+                tracker.registerEntityMutation(key, () -> null));
+        assertTrue(tracker.needsOrigin(key));
+        tracker.registerEntityMutation(key, () -> new EntityChunkBlob(List.of()));
+        while (background.size() > 0) background.runNext();
+        assertTrue(new OriginStore(repositoryRoot).read(key).isPresent());
+        assertTrue(tracker.canPublishChunk(2, 2));
+    }
 
     @Test
     void completingEmptyBoundaryDoesNotScheduleIndexWrite() throws Exception {

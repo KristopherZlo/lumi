@@ -22,3 +22,13 @@ persistence holds it through both the object batch and origin-shard publication.
 A superseded GC stops deleting and reports any removals already completed; a
 later scheduled pass recomputes reachability. The 24-hour retention cutoff still
 applies. Compaction retains its existing publish-before-delete protocol.
+Merge preparation, import, block-only Restore composition and Initial history
+creation hold the same lease until their durable commit is available. They keep
+the original object hashes, parent links, validation and publication order.
+
+## Failed origin capture
+
+A capture exception removes only the unfinished origin reservation and is
+rethrown. A successful retry still captures the pre-mutation origin and keeps
+vanilla publication blocked until both origin and working-index writes are
+durable. Tests cover a section I/O exception and a rejected entity capture.

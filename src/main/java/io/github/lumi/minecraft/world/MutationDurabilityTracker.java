@@ -142,10 +142,15 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         long generation;
         synchronized (this) {
             if (!durableOrigins.contains(key) && pendingOrigins.add(key)) {
-                PendingOrigin origin =
-                        Objects.requireNonNull(capture.get(), "captured origin");
-                if (!origin.key().equals(key)) {
-                    throw new IllegalArgumentException("Captured origin key does not match");
+                PendingOrigin origin;
+                try {
+                    origin = Objects.requireNonNull(capture.get(), "captured origin");
+                    if (!origin.key().equals(key)) {
+                        throw new IllegalArgumentException("Captured origin key does not match");
+                    }
+                } catch (RuntimeException | Error failed) {
+                    pendingOrigins.remove(key);
+                    throw failed;
                 }
                 originWrites.add(origin);
                 scheduleOrigins = !originWriterScheduled;

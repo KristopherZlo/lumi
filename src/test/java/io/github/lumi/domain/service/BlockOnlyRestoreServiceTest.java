@@ -24,6 +24,7 @@ import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.storage.repository.CommitRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.WorldObjectRepository;
+import io.github.lumi.storage.RepositoryMaintenance;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
@@ -51,7 +52,11 @@ class BlockOnlyRestoreServiceTest {
                 objects, commits, new OriginStore(repositoryRoot));
 
         CommitId result = service.compose(
-                checkpoint, target, author(), Instant.EPOCH, ignored -> { });
+                checkpoint, target, author(), Instant.EPOCH, ignored -> {
+                    org.junit.jupiter.api.Assertions.assertFalse(
+                            RepositoryMaintenance.forRepository(repositoryRoot)
+                                    .beginSweep().isCurrent());
+                });
 
         Commit composite = commits.read(result);
         ChunkTree chunk = chunk(objects, composite);

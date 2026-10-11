@@ -83,6 +83,14 @@ public final class ImportExportService {
             BranchName target,
             CommitAuthor author,
             Instant timestamp) throws IOException {
+        try (var publication = objects.beginPublication()) {
+            return publishImport(source, expected, base, target, author, timestamp);
+        }
+    }
+
+    private ImportResult publishImport(
+            Path source, PackageInspection expected, BranchRef base,
+            BranchName target, CommitAuthor author, Instant timestamp) throws IOException {
         Objects.requireNonNull(expected, "expected");
         Objects.requireNonNull(base, "base");
         Objects.requireNonNull(target, "target");

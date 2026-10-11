@@ -48,6 +48,12 @@ public final class MergeService {
     }
 
     public Result prepare(Request request) throws IOException {
+        try (var publication = objects.beginPublication()) {
+            return prepareCommit(request);
+        }
+    }
+
+    private Result prepareCommit(Request request) throws IOException {
         Objects.requireNonNull(request, "request");
         Commit currentCommit = commits.read(request.current.commit());
         Commit sourceCommit = commits.read(request.source.commit());
