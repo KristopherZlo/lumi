@@ -10,6 +10,7 @@ public final class LumiInteractionTiming implements AutoCloseable {
     private final AtomicLong clientAttempts = new AtomicLong();
     private final AtomicLong clientUses = new AtomicLong();
     private final AtomicLong serverPackets = new AtomicLong();
+    private volatile String clientResult = "not returned";
     private volatile long handlerStarted;
     private volatile long handlerFinished;
 
@@ -38,6 +39,12 @@ public final class LumiInteractionTiming implements AutoCloseable {
     long clientAttempts() { return clientAttempts.get(); }
     long clientUses() { return clientUses.get(); }
     long serverPackets() { return serverPackets.get(); }
+    String clientResult() { return clientResult; }
+
+    public static void recordClientResult(Object result) {
+        var timing = active;
+        if (timing != null) timing.clientResult = String.valueOf(result);
+    }
 
     public static void recordClientAttempt() {
         var timing = active;

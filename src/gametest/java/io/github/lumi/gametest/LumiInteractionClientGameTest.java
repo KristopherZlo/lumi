@@ -9,9 +9,11 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.storage.loot.BuiltInLootTables;
 
 /** First/repeated mouse interactions at world, section, Save and Restore boundaries. */
 @SuppressWarnings("UnstableApiUsage")
@@ -22,7 +24,8 @@ public final class LumiInteractionClientGameTest implements FabricClientGameTest
         if (!LumiClientTestSuite.includes(LumiClientTestSuite.INTERACTION)
                 || LumiHistoryBenchmarkConfig.enabled()) return;
         boolean windowActive = context.computeOnClient(client -> client.isWindowActive());
-        try (var ignored = LumiUiScaleTestScope.readableViewport()) {
+        try (var ignored = LumiUiScaleTestScope.readableViewport();
+                var ordinary = new LumiOrdinaryInteractionScope(context)) {
             LumiClientBehaviorWorld.runWithReopen(context, "interaction-latency",
                     this::exercise, this::reopened);
         } finally {
@@ -45,14 +48,28 @@ public final class LumiInteractionClientGameTest implements FabricClientGameTest
                 for (int offset : new int[] {0, 64}) {
                     for (int index = 0; index < 3; index++) {
                         BlockPos position = start.offset(offset + index * 16, 0, 0);
+                        if (index == 1) position = nextSection(position);
                         player.level().setBlockAndUpdate(position.below(), Blocks.STONE.defaultBlockState());
+                        if (index == 1) {
+                            if (!player.level().getBlockState(position).isAir()
+                                    || !runtime.mutations().needsOrigin(
+                                            io.github.lumi.minecraft.world.MinecraftSectionCapture.key(position))) {
+                                throw new AssertionError("First placement section was already touched");
+                            }
+                            continue;
+                        }
                         player.level().setBlockAndUpdate(position.above(), Blocks.AIR.defaultBlockState());
                         player.level().setBlockAndUpdate(position, switch (index) {
                             case 0 -> Blocks.CHEST.defaultBlockState();
-                            case 1 -> Blocks.STONE.defaultBlockState();
                             default -> Blocks.LEVER.defaultBlockState()
                                     .setValue(BlockStateProperties.ATTACH_FACE, AttachFace.FLOOR);
                         });
+                        if (index == 0) {
+                            var chest = (ChestBlockEntity) player.level().getBlockEntity(position);
+                            chest.setLootTable(BuiltInLootTables.SIMPLE_DUNGEON);
+                            chest.setLootTableSeed(710L);
+                            chest.setChanged();
+                        }
                     }
                 }
             }
@@ -89,7 +106,11 @@ public final class LumiInteractionClientGameTest implements FabricClientGameTest
     }
 
     private static void runPhase(LumiInteractionTestDriver driver, String phase, BlockPos start) {
-        driver.exercise(phase, start, start.offset(16, 0, 0), start.offset(32, 0, 0));
+        driver.exercise(phase, start, nextSection(start.offset(16, 0, 0)), start.offset(32, 0, 0));
+    }
+
+    private static BlockPos nextSection(BlockPos position) {
+        return position.atY(((position.getY() >> 4) + 1) << 4);
     }
 
     private void changeMarker(TestSingleplayerContext world, BlockState state) {
