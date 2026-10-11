@@ -53,7 +53,8 @@ when empty. Without the tool, the same chord keeps its world-action behavior.
 Tests exhaust real selection history in both directions and verify that putting
 the sword away restores world Undo without consuming the local history.
 
-Other slices and final check results will be recorded as they complete.
+Statistics failures keep Save disabled and expose the failure in its tooltip.
+Reopening the page or Save form retries once; screen ticks do not retry failures.
 
 ### Entity-only zone changes
 
@@ -102,8 +103,9 @@ failed or superseded requests cannot publish geometry. Preview requests remain
 read-only and do not enter the mutation queue or freeze a dimension.
 
 The client stores the selected zone preview separately from workspace pending
-points. Waiting, failure, and stale zone/pending revisions display no zonal
-geometry and never substitute workspace coordinates. History context changes
+points. Only a successful result matching the current scope and pending revision
+can display geometry; waiting or failed requests never substitute workspace
+coordinates. History context changes
 or leaving the zone clear the selection. Workspace See Changes explicitly
 selects the workspace path; Action refresh retains a valid chosen zone.
 

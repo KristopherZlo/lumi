@@ -84,6 +84,12 @@ public final class ClientPendingStatisticsStore {
         resultZoneRevisions = Map.of();
     }
 
+    /** Reopening a page retries a failure once, without a tick-time retry loop. */
+    public synchronized boolean needsRequestOnOpen(HistorySnapshotPayload snapshot) {
+        return needsRequest(snapshot) || (!pending(snapshot)
+                && result(snapshot).filter(value -> !value.error().isEmpty()).isPresent());
+    }
+
     public synchronized Optional<PendingStatisticsPayload> zoneResult(HistorySnapshotPayload snapshot, UUID zoneId) {
         return result(snapshot).filter(value -> value.error().isEmpty()
                 && value.pendingRevision() == snapshot.pendingRevision()

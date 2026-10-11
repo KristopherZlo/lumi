@@ -93,7 +93,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
     public void tick() {
         super.tick();
         zoneHistory.tick();
-        requestPendingStatistics();
+        requestPendingStatistics(false);
         updateWorkspaceActions();
         HistoryPagePayload latest = zoneHistory.page().orElse(null);
         if (!Objects.equals(renderedPage, latest)) {
@@ -116,7 +116,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                 layout.bodyY(), layout.bodyHeight(), layout.bodyWidth(), 0,
                 latestCreated().isPresent());
         commitCards = new LumiCommitCard(font, previews, snapshot.dimensionId());
-        requestPendingStatistics();
+        requestPendingStatistics(true);
         addWorkspaceActions();
         renderedPage = zoneHistory.page().orElse(null);
         latestCreated().filter(ignored -> geometry.latestVisible())
@@ -475,9 +475,10 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                 mouseX, mouseY);
     }
 
-    private void requestPendingStatistics() {
+    private void requestPendingStatistics(boolean reopening) {
         pageSession().snapshot().filter(current -> current.pendingKeys() > 0
-                && pendingStatistics.needsRequest(current))
+                && (reopening ? pendingStatistics.needsRequestOnOpen(current)
+                        : pendingStatistics.needsRequest(current)))
                 .ifPresent(ignored -> requestPendingStatistics.run());
     }
 

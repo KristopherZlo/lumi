@@ -31,6 +31,21 @@ class ZoneSaveAvailabilityTest {
     }
 
     @Test
+    void exposesAStatisticsFailureAndRetriesOnceWhenReopened() {
+        var snapshot = snapshot(true, 1);
+        UUID request = UUID.randomUUID();
+        statistics.begin(request, snapshot);
+        statistics.accept(new PendingStatisticsPayload(request, snapshot.dimensionId(), workspace,
+                snapshot.head(), 0, 1, PendingChangeStatistics.NONE, Map.of(), "Capture unavailable"));
+        assertEquals("Capture unavailable", availability(snapshot).saveReason());
+        assertEquals(false, statistics.needsRequest(snapshot));
+        assertEquals(true, statistics.needsRequestOnOpen(snapshot));
+        statistics.begin(UUID.randomUUID(), snapshot);
+        assertEquals(false, statistics.needsRequestOnOpen(snapshot));
+        assertEquals("luma.dashboard.pending_calculating", availability(snapshot).saveReason());
+    }
+
+    @Test
     void entityOnlyChangesAllowSaveWhileAmendStillRequiresAZoneVersion() {
         var snapshot = snapshot(true, 1);
         accept(snapshot, PendingChangeStatistics.NONE, Set.of(zone));

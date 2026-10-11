@@ -484,6 +484,9 @@ public final class LumiClient implements ClientModInitializer {
             HistorySnapshotPayload.ZoneView zone,
             SaveScreenController.Intent intent,
             String initialMessage) {
+        HISTORY.state().snapshot().filter(snapshot -> snapshot.pendingKeys() > 0
+                && PENDING_STATISTICS.needsRequestOnOpen(snapshot))
+                .ifPresent(ignored -> NETWORKING.requestPendingStatistics());
         Minecraft.getInstance().setScreen(new LumiSaveScreen(
                 parent, HISTORY,
                 new SaveScreenController(

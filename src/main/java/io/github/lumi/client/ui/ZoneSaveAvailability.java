@@ -16,7 +16,13 @@ public record ZoneSaveAvailability(String saveReason, String amendReason) {
         var zone = snapshot.zones().stream().filter(value -> value.id().equals(zoneId)).findFirst();
         if (zone.isEmpty() || !zone.orElseThrow().active()) return blocked("luma.zones.details_inactive");
         var changed = statistics.zoneHasChanges(snapshot, zoneId);
-        if (changed.isEmpty()) return blocked("luma.dashboard.pending_calculating");
+        if (changed.isEmpty()) {
+            String reason = statistics.pending(snapshot) ? "luma.dashboard.pending_calculating"
+                    : statistics.result(snapshot).filter(value -> !value.error().isEmpty()
+                            && value.pendingRevision() == snapshot.pendingRevision())
+                            .map(value -> value.error()).orElse("luma.dashboard.pending_calculating");
+            return blocked(reason);
+        }
         if (!changed.orElseThrow()) return blocked("luma.zones.pending_clean");
         return new ZoneSaveAvailability("", zone.orElseThrow().versions().isEmpty()
                 ? "luma.zones.history_empty" : "");
