@@ -180,12 +180,14 @@ To run one server GameTest, add
 `-Dfabric-api.gametest.filter=<test-id>` before `runGameTest`. This skips the
 full suite.
 
-Client GameTests run all current suites by default. Select `SMOKE`, `UI`,
+Client GameTests run all current suites by default. Select `SMOKE`, `UI`, `INTERACTION`,
 `RECOVERY`, `EXACT`, or `BENCHMARK` with
 `-Dlumi.gametest.suite=<name> runClientGameTest --no-daemon`.
 
 Zone and selection fixes, regression coverage, and paired shell measurements
 are recorded in [the interaction verification report](docs/zone-interaction-fixes.md).
+Single-click container, block and lever timing is described in
+[the latency test guide](docs/interaction-latency-tests.md).
 
 Restore benchmark `totalMs` starts before the final UI confirmation and ends at
 the durable terminal event. `queueMs` and `serverMs` split that interval. Apply

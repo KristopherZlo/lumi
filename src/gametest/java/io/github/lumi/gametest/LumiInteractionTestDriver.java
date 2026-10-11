@@ -87,9 +87,27 @@ final class LumiInteractionTestDriver {
                     io.github.lumi.minecraft.world.MinecraftSectionCapture.key(target));
         });
         try (var timing = LumiInteractionTiming.open()) {
+            report.event("interaction_input", phase + "_" + action + "_" + repetition,
+                    "ready", 0, 0, clientInputState() + server.computeOnServer(minecraft ->
+                            ";clientLoaded=" + player(minecraft).connection.hasClientLoaded()));
             long started = System.nanoTime();
-            context.getInput().pressMouse(button);
-            int serverTicks = awaitServer(serverResult);
+            context.getInput().holdMouseFor(button, 1);
+            int serverTicks;
+            try {
+                serverTicks = awaitServer(serverResult);
+            } catch (AssertionError failed) {
+                String state = clientInputState();
+                state += server.computeOnServer(minecraft -> ";serverPlayer=" + player(minecraft).position()
+                        + ";clientLoaded=" + player(minecraft).connection.hasClientLoaded()
+                        + ";inRange=" + player(minecraft).isWithinBlockInteractionRange(target, 1.0)
+                        + ";serverBlock=" + player(minecraft).level().getBlockState(target));
+                report.event("interaction", phase + "_" + action + "_" + repetition,
+                        "failed", 200, (System.nanoTime() - started) / 1_000_000,
+                        "presses=1;clientAttempts=" + timing.clientAttempts()
+                                + ";clientUses=" + timing.clientUses() + ";serverPackets=" + timing.serverPackets()
+                                + ";handlerCalls=" + timing.calls() + ";" + state);
+                throw new AssertionError(phase + " " + action + " did not apply; " + state, failed);
+            }
             long serverNanos = System.nanoTime() - started;
             int clientTicks = awaitClient(clientResult);
             long clientNanos = System.nanoTime() - started;
@@ -99,7 +117,8 @@ final class LumiInteractionTestDriver {
             }
             report.event("interaction", phase + "_" + action + "_" + repetition,
                     "succeeded", serverTicks + clientTicks, clientNanos / 1_000_000,
-                    "presses=1;first=" + (repetition == 0) + ";originNeeded=" + originNeeded
+                    "presses=1;clientAttempts=" + timing.clientAttempts()
+                            + ";first=" + (repetition == 0) + ";originNeeded=" + originNeeded
                             + ";serverObservedMs=" + millis(serverNanos)
                             + ";clientObservedMs=" + millis(clientNanos)
                             + ";handlerStartMs=" + millis(timing.handlerStarted() - started)
@@ -109,7 +128,22 @@ final class LumiInteractionTestDriver {
         }
     }
 
+    private String clientInputState() {
+        return context.computeOnClient(client -> "screen=" + client.screen
+                + ";mouseGrabbed=" + client.mouseHandler.isMouseGrabbed()
+                + ";windowActive=" + client.isWindowActive()
+                + ";useBound=" + client.options.keyUse.saveString()
+                + ";hit=" + client.hitResult.getType()
+                + ";target=" + (client.hitResult instanceof BlockHitResult hit ? hit.getBlockPos() : "entity")
+                + ";handsBusy=" + client.player.isHandsBusy()
+                + ";usingItem=" + client.player.isUsingItem()
+                + ";destroying=" + client.gameMode.isDestroying()
+                + ";axiomEditor=" + com.moulberry.axiom.editor.EditorUI.isActive()
+                + ";axiomMenu=" + com.moulberry.axiom.ContextMenuManager.getInstance().isActive());
+    }
+
     private void aim(BlockPos target, Item item) {
+        new LumiUiTestDriver(context).completeOnboardingIfShown();
         server.runOnServer(minecraft -> {
             var player = player(minecraft);
             player.teleportTo(target.getX() + 0.5, target.getY() + 1.0, target.getZ() + 3.0);
@@ -125,11 +159,26 @@ final class LumiInteractionTestDriver {
                 && (item == Items.AIR ? client.player.getMainHandItem().isEmpty()
                         : client.player.getMainHandItem().is(item)));
         context.runOnClient(client -> client.player.lookAt(
-                EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(target)));
+                EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(target).add(0, -0.25, 0)));
         // Vanilla right-click cooldown must expire before a new independent press.
         context.waitTicks(6);
-        awaitClient(client -> client.screen == null && client.hitResult instanceof BlockHitResult hit
-                && hit.getBlockPos().equals(target));
+        for (int tick = 0; tick < 200; tick++) {
+            // Initial history may deliver onboarding after the teleport packet.
+            new LumiUiTestDriver(context).completeOnboardingIfShown();
+            context.runOnClient(client -> {
+                // A background GameTest window otherwise consumes its first click to grab the mouse.
+                if (client.screen == null) {
+                    client.setWindowActive(true);
+                    client.mouseHandler.grabMouse();
+                }
+            });
+            if (context.computeOnClient(client -> client.screen == null
+                    && client.mouseHandler.isMouseGrabbed()
+                    && client.hitResult instanceof BlockHitResult hit
+                    && hit.getBlockPos().equals(target))) return;
+            context.waitTick();
+        }
+        throw new AssertionError("Camera did not target " + target);
     }
 
     private int awaitServer(Predicate<ServerPlayer> predicate) {
@@ -141,7 +190,15 @@ final class LumiInteractionTestDriver {
     }
 
     private int awaitClient(Predicate<Minecraft> predicate) {
-        return context.waitFor(predicate, 200);
+        try {
+            return context.waitFor(predicate, 200);
+        } catch (AssertionError failed) {
+            String state = context.computeOnClient(client -> "screen=" + client.screen
+                    + ";hit=" + client.hitResult + ";player=" + client.player.position()
+                    + ";hand=" + client.player.getMainHandItem()
+                    + ";yaw=" + client.player.getYRot() + ";pitch=" + client.player.getXRot());
+            throw new AssertionError("Client interaction condition timed out; " + state, failed);
+        }
     }
 
     private static ServerPlayer player(net.minecraft.server.MinecraftServer server) {
