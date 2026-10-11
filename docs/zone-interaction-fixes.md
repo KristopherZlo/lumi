@@ -149,3 +149,41 @@ median preparation time fell by 10.6%, and the response contains six rectangles
 instead of 384 while preserving all zone metadata. These are component
 measurements, not an FPS or server-tick improvement claim. Raw samples are in
 `build/reports/lumi-regressions/zone-shell-{independent,owned}-{1,64}.csv`.
+
+## Final verification
+
+All final checks passed on 2026-10-11:
+
+- Production, unit-test, and client/server GameTest compilation.
+- All 923 unit tests and nine performance cases, with no failures or errors.
+- The mod JAR build; server GameTests ran separately and all 35 required tests
+  passed, including both redstone recovery matrices and WorldEdit/Axiom cases.
+- Both native UI scenarios, including exhausted sword history, refused Enter
+  and retry, and a clean zone while pending workspace changes exist elsewhere.
+- The first-minute native client gate: real block/entity packets, Save,
+  entity Undo/Redo, connected-client relighting, cross-chunk entity Restore,
+  durability, runtime health, and exact checks after reopening the same world.
+
+Verification ran sequentially with one Gradle worker and one reported JVM
+processor. Heap limits were 768 MiB for Gradle, 512 MiB for JUnit, and 1 GiB
+for native GameTests. JDK 21 was selected explicitly and Gradle toolchain
+auto-detection was disabled. These are local verification limits, not changes
+to Lumi's production settings or latency guarantees.
+
+Reproduce the checks from a JDK 21 checkout:
+
+```powershell
+.\gradlew.bat --max-workers=1 test regressionPerformanceTest build --no-daemon
+.\gradlew.bat --max-workers=1 "-Dlumi.gametest.suite=ui" runClientGameTest --no-daemon
+.\gradlew.bat --max-workers=1 "-Dlumi.gametest.firstMinuteOnly=true" runClientGameTest --no-daemon
+```
+
+Final logs are under `build/reports/lumi-ui-audit/`: the
+`final-unit-performance-build`, `native-ui-resume-v3`, `native-server-final`,
+and `native-smoke-final` logs. Native world-state and operation reports are
+under `build/reports/lumi-behavior/`.
+
+The full process-crash matrix, repeated vanilla/Lumi idle A/B runs,
+multi-client conflict/disconnect matrix, and large native history benchmarks
+were not repeated for this interaction change. This report does not establish
+complete release readiness or a universal Save/Restore speedup.
