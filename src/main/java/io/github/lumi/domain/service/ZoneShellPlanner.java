@@ -25,11 +25,28 @@ public final class ZoneShellPlanner {
     public List<ZoneShellFace> plan(
             Collection<SectionKey> occupiedCells,
             Collection<SectionKey> visibleCells) {
-        if (occupiedCells == null || occupiedCells.isEmpty()
+        return planFaces(occupiedCells == null ? Set.of() : new HashSet<>(occupiedCells), visibleCells, null);
+    }
+
+    /** One bounded query owns coincident unit faces before rectangle merging. */
+    public Session session() {
+        return new Session();
+    }
+
+    public final class Session {
+        private final Set<UnitFace> claimed = new HashSet<>();
+
+        public List<ZoneShellFace> plan(Set<SectionKey> occupiedCells, Collection<SectionKey> visibleCells) {
+            return planFaces(occupiedCells, visibleCells, claimed);
+        }
+    }
+
+    private List<ZoneShellFace> planFaces(Set<SectionKey> occupied,
+            Collection<SectionKey> visibleCells, Set<UnitFace> claimed) {
+        if (occupied == null || occupied.isEmpty()
                 || visibleCells == null || visibleCells.isEmpty()) {
             return List.of();
         }
-        Set<SectionKey> occupied = new HashSet<>(occupiedCells);
         Set<UnitFace> exposed = new TreeSet<>(Comparator
                 .comparing(UnitFace::side)
                 .thenComparingInt(UnitFace::plane)
@@ -40,6 +57,7 @@ public final class ZoneShellPlanner {
                 collect(cell, occupied, exposed);
             }
         }
+        if (claimed != null) exposed.removeIf(face -> !claimed.add(face));
         return merge(exposed);
     }
 

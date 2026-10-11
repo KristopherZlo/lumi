@@ -44,6 +44,7 @@ final class DimensionZoneOverlayQueries {
             try {
                 UUID workspace = currentWorkspace.read();
                 List<Zone> available = zones.list(workspace).stream()
+                        .sorted(Comparator.comparing(Zone::id))
                         .limit(MAX_ZONES).toList();
                 Zone active = available.stream()
                         .filter(zone -> zone.activeActors().contains(actor))
@@ -56,12 +57,17 @@ final class DimensionZoneOverlayQueries {
                         ? available
                         : active != null ? List.of(active)
                         : entered != null ? List.of(entered) : List.of();
+                selected = selected.stream().sorted(Comparator
+                        .comparing((Zone zone) -> zone != active)
+                        .thenComparing(zone -> zone != entered)
+                        .thenComparing(Zone::id)).toList();
+                var ownership = shells.session();
                 int perZone = MAX_VISIBLE_CELLS
                         / Math.max(1, selected.size());
                 List<ZoneShellSnapshot.ZoneShell> result = selected.stream()
                         .map(zone -> shell(
                                 zone, center, perZone,
-                                zone == active, zone == entered))
+                                zone == active, zone == entered, ownership))
                         .toList();
                 return new ZoneShellSnapshot(workspace, result);
             } catch (IOException failed) {
@@ -75,14 +81,15 @@ final class DimensionZoneOverlayQueries {
             SectionKey center,
             int maximum,
             boolean active,
-            boolean entered) {
+            boolean entered,
+            ZoneShellPlanner.Session ownership) {
         Set<SectionKey> occupied = zone.cells().isEmpty() && active
                 ? Set.of(center) : zone.cells();
         Set<SectionKey> visible = nearest(
                 occupied, center, maximum);
         return new ZoneShellSnapshot.ZoneShell(
                 zone.id(), zone.name(), zone.color(), zone.revision(),
-                active, entered, shells.plan(occupied, visible));
+                active, entered, ownership.plan(occupied, visible));
     }
 
     private static Set<SectionKey> nearest(

@@ -92,8 +92,8 @@ The separate zone preview response carries request, dimension, workspace,
 head/ref revision, zone revision, and pending revision. It caps coordinates at
 512 and carries no geometry on failure. This keeps the shared history snapshot
 workspace-scoped. Codec and scope tests check round trips, negative coordinates,
-invalid revisions, and response bounds. The protocol is being wired into the
-existing command and overlay paths.
+invalid revisions, and response bounds. The protocol uses the existing command
+and overlay paths.
 
 The server prepares zone-filtered preview coordinates on its background
 executor. The zone predicate is applied before the 512-point cap. It checks
@@ -106,3 +106,17 @@ points. Waiting, failure, and stale zone/pending revisions display no zonal
 geometry and never substitute workspace coordinates. History context changes
 or leaving the zone clear the selection. Workspace See Changes explicitly
 selects the workspace path; Action refresh retains a valid chosen zone.
+
+### Overlapping shell ownership
+
+Each background query claims coincident oriented unit faces before rectangle
+merging. Active focus wins, followed by the zone containing the player and then
+stable UUID order. Fully overlapping zones retain their metadata but share one
+visible shell; each zone's exclusive faces and focused-mode shell remain intact.
+Oppositely oriented boundaries of adjacent zones retain their separate sides.
+The existing 64-zone, 65,536-visible-cell, and distance budgets still apply.
+Claimed faces are bounded by visible cells. Queries reuse immutable occupied
+sets instead of copying whole zone volumes and do no new render-frame work.
+Regression tests cover identical and partial overlaps, priority, and focus.
+Paired performance workloads compare preparation time and allocation for one
+and 64 coincident zones of 1,024 cells, with raw samples and percentiles.

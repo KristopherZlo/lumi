@@ -17,6 +17,32 @@ class DimensionZoneOverlayQueriesTest {
     @TempDir Path repository;
 
     @Test
+    void activeZoneOwnsCoincidentGeometryAndFocusedModeKeepsItsFullShell() throws Exception {
+        UUID workspace = new UUID(0, 1);
+        UUID actor = new UUID(0, 2);
+        var center = new SectionKey(0, 0, 0);
+        var zones = new ZoneService(new ZoneRepository(repository));
+        UUID other = new UUID(0, 3);
+        UUID active = new UUID(0, 9);
+        zones.create(other, workspace, "Other", 1, Set.of(center));
+        zones.create(active, workspace, "Active", 2, Set.of(center));
+        zones.setActorActive(workspace, active, actor, true);
+        var queries = new DimensionZoneOverlayQueries(Runnable::run, zones, () -> workspace);
+        var all = queries.query(actor, center, true).join();
+        assertEquals(2, all.zones().size());
+        assertEquals(active, all.zones().getFirst().id());
+        assertEquals(6, all.zones().getFirst().faces().size());
+        assertEquals(0, all.zones().getLast().faces().size());
+        assertEquals(6, queries.query(actor, center, false).join().zones().getFirst().faces().size());
+        zones.setActorActive(workspace, active, actor, false);
+        var unselected = queries.query(actor, center, true).join();
+        assertEquals(other, unselected.zones().getFirst().id());
+        assertTrue(unselected.zones().getFirst().entered());
+        assertEquals(6, unselected.zones().getFirst().faces().size());
+        assertEquals(0, unselected.zones().getLast().faces().size());
+    }
+
+    @Test
     void previewsAnEmptyActiveZoneAtThePlayersCell() throws Exception {
         UUID workspace = new UUID(0, 1);
         UUID actor = new UUID(0, 2);
