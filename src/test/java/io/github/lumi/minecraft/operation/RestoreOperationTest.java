@@ -926,6 +926,40 @@ class RestoreOperationTest {
         assertTrue(operation.isSafeToRelease());
     }
 
+    @Test
+    void shutdownClosesPlanAndSessionWhenOwnedPublicationFails() throws IOException {
+        var writes = new java.util.ArrayDeque<Runnable>();
+        var closes = new AtomicInteger();
+        var world = new ImmediatelyVerified() {
+            @Override public java.util.concurrent.Executor persistenceExecutor() { return writes::add; }
+            @Override public ApplySession begin(PreparedState target) {
+                return new TestApplySession() {
+                    @Override public boolean applyUntil(long deadline) { return true; }
+                    @Override public Verification verifyUntil(long deadline) { return Verification.VERIFIED; }
+                    @Override public boolean repairUntil(long deadline) { return true; }
+                    @Override public void restartVerification() { }
+                    @Override public void close() { closes.incrementAndGet(); }
+                };
+            }
+        };
+        var restore = lazyRestore();
+        var journals = new OperationJournalRepository(repositoryRoot);
+        var operation = RestoreOperation.start(restore, world,
+                ignored -> { throw new IOException("Failed publication"); }, journals, UUID.randomUUID());
+        operation.tick(Long.MAX_VALUE);
+        writes.remove().run();
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+        writes.remove().run();
+        operation.tick(Long.MAX_VALUE);
+        operation.tick(Long.MAX_VALUE);
+        writes.remove().run();
+        assertThrows(IOException.class, operation::close);
+        assertEquals(1, closes.get());
+        assertPlanClosed(restore);
+        assertEquals(OperationPhase.APPLYING, journals.read().orElseThrow().phase());
+    }
+
     private static class ImmediatelyVerified implements TestWorldApply {
         @Override public ApplySession begin(PreparedState target) {
             return new TestApplySession() {

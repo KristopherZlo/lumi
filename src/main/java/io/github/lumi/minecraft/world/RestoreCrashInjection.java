@@ -10,14 +10,14 @@ import java.nio.file.StandardOpenOption;
 import java.util.Locale;
 
 /** Opt-in process-crash cutpoints used only by the release recovery matrix. */
-final class RestoreCrashInjection {
+public final class RestoreCrashInjection {
     static final String PHASE_PROPERTY = "lumi.gametest.restoreCrashPhase";
     static final String MARKER_PROPERTY = "lumi.gametest.restoreCrashMarker";
     static final int EXIT_CODE = 86;
 
     private RestoreCrashInjection() { }
 
-    static void hit(Cutpoint cutpoint) {
+    public static void hit(Cutpoint cutpoint) {
         String selected = System.getProperty(PHASE_PROPERTY, "");
         if (!cutpoint.name().toLowerCase(Locale.ROOT).equals(selected)) {
             return;
@@ -40,5 +40,5 @@ final class RestoreCrashInjection {
         Runtime.getRuntime().halt(EXIT_CODE);
     }
 
-    enum Cutpoint { WRITE, BARRIER, FORCE, VERIFY }
+    public enum Cutpoint { PREPARED, APPLYING, WRITE, BARRIER, FORCE, VERIFY, PUBLICATION, CLEANUP }
 }

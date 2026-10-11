@@ -120,13 +120,19 @@ public final class LumiRestoreCrashClientGameTest implements FabricClientGameTes
                 context, Path.of(metadata.getProperty("world")));
         try (TestSingleplayerContext recovered = save.open()) {
             context.runOnClient(client -> client.options.pauseOnLostFocus = false);
-            context.waitForScreen(LumiRecoveryScreen.class);
-            FabricDimensionRuntime runtime = runtime(recovered.getServer());
-            require(runtime.freeze().isFrozen(),
-                    "Interrupted Restore did not freeze on reopen");
-            awaitRecovery(context, recovered.getServer());
-            context.setScreen(() -> null);
-            context.waitForScreen(null);
+            if (expectedPhase.equals("cleanup")) {
+                new LumiUiTestDriver(context).awaitHistory();
+                require(!(context.computeOnClient(client -> client.screen) instanceof LumiRecoveryScreen),
+                        "Durably completed Restore displayed recovery UI");
+            } else {
+                context.waitForScreen(LumiRecoveryScreen.class);
+                FabricDimensionRuntime runtime = runtime(recovered.getServer());
+                require(runtime.freeze().isFrozen(),
+                        "Interrupted Restore did not freeze on reopen");
+                awaitRecovery(context, recovered.getServer());
+                context.setScreen(() -> null);
+                context.waitForScreen(null);
+            }
             assertTarget(recovered.getServer(), metadata);
         }
         try (TestSingleplayerContext reopened = save.open()) {

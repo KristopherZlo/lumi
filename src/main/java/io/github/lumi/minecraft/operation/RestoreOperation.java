@@ -17,6 +17,7 @@ import io.github.lumi.domain.model.ZoneRestoreTarget;
 import io.github.lumi.domain.service.PreparedRestore;
 import io.github.lumi.minecraft.world.WorldStateApply;
 import io.github.lumi.minecraft.world.RestoreApplyStatistics;
+import io.github.lumi.minecraft.world.RestoreCrashInjection;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.OperationJournalRepository;
 import java.io.IOException;
@@ -725,7 +726,10 @@ public final class RestoreOperation implements DimensionMutation {
         if (!journalPersisted) {
             OperationJournal expected = journal;
             if (!persistence.await(RestorePersistence.Step.CREATE,
-                    () -> journals.create(expected), deadlineNanos)) {
+                    () -> {
+                        journals.create(expected);
+                        RestoreCrashInjection.hit(RestoreCrashInjection.Cutpoint.PREPARED);
+                    }, deadlineNanos)) {
                 return status;
             }
             journalPersisted = true;
@@ -922,6 +926,7 @@ public final class RestoreOperation implements DimensionMutation {
         if (!publication.awaitDurable(deadlineNanos)) {
             return;
         }
+        RestoreCrashInjection.hit(RestoreCrashInjection.Cutpoint.PUBLICATION);
         if (!runtimeInstalled) {
             publication.installed();
             stateListener.restored(preparedTarget.source());
@@ -1134,19 +1139,19 @@ public final class RestoreOperation implements DimensionMutation {
     @Override
     public void close() throws IOException {
         boolean writerOwned = persistence.isPending();
-        persistence.drain();
         try (PreparedRestore ignored = restore) {
-            if (status == RestoreStatus.APPLYING
-                    && !writerOwned && !applyJournalStarted
-                    && journal.phase() == OperationPhase.PREPARED) {
-                cancelBeforeApply();
-            } else {
-                if (targetSession != null) {
-                    targetSession.close();
+            boolean closeTarget = true;
+            try {
+                persistence.drain();
+                if (status == RestoreStatus.APPLYING
+                        && !writerOwned && !applyJournalStarted
+                        && journal.phase() == OperationPhase.PREPARED) {
+                    closeTarget = false;
+                    cancelBeforeApply();
                 }
-            }
-            if (returnSession != null) {
-                returnSession.close();
+            } finally {
+                if (closeTarget && targetSession != null) targetSession.close();
+                if (returnSession != null) returnSession.close();
             }
         }
     }
@@ -1181,7 +1186,12 @@ public final class RestoreOperation implements DimensionMutation {
     private boolean advanceJournal(RestorePersistence.Step step,
             OperationPhase phase, long deadline) throws IOException {
         OperationJournal expected = journal;
-        if (!persistence.await(step, () -> journals.advance(expected, phase), deadline)) {
+        if (!persistence.await(step, () -> {
+            journals.advance(expected, phase);
+            if (phase == OperationPhase.APPLYING) {
+                RestoreCrashInjection.hit(RestoreCrashInjection.Cutpoint.APPLYING);
+            }
+        }, deadline)) {
             return false;
         }
         journal = expected.withPhase(phase);
@@ -1191,7 +1201,10 @@ public final class RestoreOperation implements DimensionMutation {
     private boolean clearJournal(long deadline) throws IOException {
         OperationJournal expected = journal;
         return persistence.await(RestorePersistence.Step.CLEAR,
-                () -> journals.clear(expected), deadline);
+                () -> {
+                    journals.clear(expected);
+                    RestoreCrashInjection.hit(RestoreCrashInjection.Cutpoint.CLEANUP);
+                }, deadline);
     }
 
     private boolean prepareReturn(long deadline) throws IOException {

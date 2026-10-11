@@ -129,7 +129,7 @@ tasks.named('deleteGameTestRunDir') {
     onlyIf { System.getProperty('lumi.gametest.restoreCrashMode') != 'verify' }
 }
 
-def restoreCrashPhases = ['write', 'barrier', 'force', 'verify']
+def restoreCrashPhases = ['prepared', 'applying', 'write', 'barrier', 'force', 'verify', 'publication', 'cleanup']
 def restoreCrashVerifiers = []
 def previousRestoreCrashVerifier = null
 restoreCrashPhases.each { phase ->
@@ -225,7 +225,7 @@ tasks.named('test', Test) {
 }
 
 tasks.register('regressionPerformanceTest', Test) {
-    description = 'Measures idle metadata polling and durable origin batches.'
+    description = 'Measures idle polling, origin durability and native palette capture.'
     group = 'verification'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath

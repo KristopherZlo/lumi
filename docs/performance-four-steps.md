@@ -24,6 +24,8 @@ in `installed`, which runs on the server thread after durable publication.
 Once a persistence task owns activation, cancellation is refused rather than
 abandoning an in-flight journal. Shutdown joins the owned writer before closing
 the prepared plan and leaves unfinished durable journals for recovery.
+Shutdown also closes the prepared plan and native sessions when joining a failed
+publication; the durable recovery journal is retained. This has a regression test.
 
 The regression controls every journal/publication/cleanup task and verifies
 that world apply and freeze release cannot cross an unfinished write. A blocked
@@ -75,3 +77,9 @@ immutability, stale native entries and lock release after failure.
 After the Restore slice, the targeted Restore/publication tests and
 `compileGametestJava` passed. Native measurements and real crash results will
 be recorded here after all four slices are implemented.
+
+The real-process crash matrix now includes `prepared`, `applying`, `publication`
+and `cleanup` in addition to `write`, `barrier`, `force` and `verify`. Reopening
+before cleanup must freeze for recovery; reopening after cleanup must show the
+exact published target without a recovery dialog. Each verifier reopens again
+to check world/entity/ref state and absence of an active journal or freeze.
