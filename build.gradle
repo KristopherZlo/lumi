@@ -220,6 +220,21 @@ tasks.withType(Test).configureEach {
     useJUnitPlatform()
 }
 
+tasks.named('test', Test) {
+    useJUnitPlatform { excludeTags 'performance' }
+}
+
+tasks.register('regressionPerformanceTest', Test) {
+    description = 'Measures idle metadata polling and durable origin batches.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'performance' }
+    systemProperty 'lumi.regression.reportDir',
+            layout.buildDirectory.dir('reports/lumi-regressions').get().asFile.absolutePath
+    outputs.upToDateWhen { false }
+}
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(21)
     sourceCompatibility = JavaVersion.VERSION_21

@@ -69,3 +69,21 @@ button or Enter action can submit. The responsive panel reserves a separate
 input row above the footer. The client GameTest driver verifies that Merge is
 disabled before typing and enabled after an exact match.
 
+## Opt-in performance checks
+
+Run `gradlew regressionPerformanceTest --no-daemon` in a quiet environment. This
+task always measures again; ordinary `test` excludes the `performance` tag. Raw
+samples, p50/p95 batch times, calling-thread allocation counts and JFR recordings
+are written to `build/reports/lumi-regressions/`. Idle polling compares 1,000 fresh
+metadata reads with 1,000 cached polls in nine paired samples after warmup. Its
+JFR control must observe actual repository reads; cached polling must perform
+none and have a lower median. Durable first-touch batches use 32 and 256 air
+sections, one warmup and seven measured fresh repositories. They include capture,
+object publication, origin registration and working-index durability, then reread
+every origin and check exact payloads and chunk publication eligibility.
+
+Component timings do not replace real Minecraft Save/Restore, full server-tick,
+idle A/B, multi-client or crash measurements. Allocation counts cover the measured
+thread, not retained world heap. No absolute component-time gate is inferred from
+one machine. The existing GameTest performance gates remain unchanged.
+
