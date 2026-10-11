@@ -69,3 +69,9 @@ Raw evidence: `build/reports/lumi-ui-audit/interaction-native-v19.log` and
 `build/reports/lumi-behavior/20261011-152209-interaction-latency/events.jsonl`.
 Normal observation samples were near 100 ms under the synchronized GameTest
 tick/poll schedule; those clocks must not be read as 100 ms of Lumi CPU work.
+
+Final verification also passed 923 unit tests and nine performance regression
+tests, recompiled the GameTest sources, and built `remapJar`. Inspection of
+`lumi-0.2.0-rc.1.jar` found no GameTest classes or timing mixins. Production
+sources and persistence behavior were unchanged. Verification log:
+`build/reports/lumi-ui-audit/interaction-final-verification.log`.
