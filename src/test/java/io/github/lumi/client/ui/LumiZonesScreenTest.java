@@ -75,9 +75,8 @@ class LumiZonesScreenTest {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiZonesScreen.java"));
 
-        assertTrue(source.contains("pendingEnterZone = zone.id()"));
-        assertTrue(source.contains("zone.id().equals(pendingEnterZone)"));
-        assertTrue(source.contains("&& zone.active()"));
-        assertTrue(source.contains("openDetails.accept(entered.orElseThrow())"));
+        assertTrue(source.contains("entry.poll(state)"));
+        assertTrue(source.contains("enterButton.active = !entry.pending()"));
+        assertTrue(source.contains("openDetails.accept(update.entered().orElseThrow())"));
     }
 }

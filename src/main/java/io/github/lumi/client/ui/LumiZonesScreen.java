@@ -7,6 +7,7 @@ import io.github.lumi.network.HistorySnapshotPayload;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -24,7 +25,7 @@ public final class LumiZonesScreen extends LumiPageScreen {
     private final Consumer<HistorySnapshotPayload.ZoneView> delete;
     private final Supplier<Component> overlayLabel;
     private final Runnable cycleOverlay;
-    private final Consumer<UUID> enter;
+    private final ZoneEntryController entry;
     private final Consumer<UUID> leave;
     private final LumiZoneColor zoneColors = new LumiZoneColor();
     private HistorySnapshotPayload snapshot;
@@ -41,7 +42,6 @@ public final class LumiZonesScreen extends LumiPageScreen {
     private int rowHeight;
     private int rowStride;
     private int scroll;
-    private UUID pendingEnterZone;
     private String error = "";
 
     public LumiZonesScreen(
@@ -52,7 +52,7 @@ public final class LumiZonesScreen extends LumiPageScreen {
             Consumer<HistorySnapshotPayload.ZoneView> delete,
             Supplier<Component> overlayLabel,
             Runnable cycleOverlay,
-            Consumer<UUID> enter,
+            Function<UUID, UUID> enter,
             Consumer<UUID> leave) {
         super(parent, Component.translatable("luma.tab.zones"), ProjectTab.ZONES);
         this.history = Objects.requireNonNull(history, "history");
@@ -63,27 +63,22 @@ public final class LumiZonesScreen extends LumiPageScreen {
                 overlayLabel, "overlayLabel");
         this.cycleOverlay = Objects.requireNonNull(
                 cycleOverlay, "cycleOverlay");
-        this.enter = Objects.requireNonNull(enter, "enter");
+        this.entry = new ZoneEntryController(enter);
         this.leave = Objects.requireNonNull(leave, "leave");
     }
 
     @Override
     public void tick() {
         super.tick();
-        HistorySnapshotPayload latest =
-                history.state().snapshot().orElse(null);
-        if (pendingEnterZone != null && latest != null) {
-            var entered = latest.zones().stream()
-                    .filter(zone -> zone.id().equals(pendingEnterZone)
-                            && zone.active())
-                    .findFirst();
-            if (entered.isPresent()) {
-                pendingEnterZone = null;
-                openDetails.accept(entered.orElseThrow());
-                return;
-            }
+        var state = history.state();
+        HistorySnapshotPayload latest = state.snapshot().orElse(null);
+        var update = entry.poll(state);
+        if (update.entered().isPresent()) {
+            openDetails.accept(update.entered().orElseThrow());
+            return;
         }
-        if (!Objects.equals(snapshot, latest)) {
+        if (update.changed()) error = update.error();
+        if (update.changed() || !Objects.equals(snapshot, latest)) {
             rebuildWidgets();
         }
     }
@@ -159,7 +154,7 @@ public final class LumiZonesScreen extends LumiPageScreen {
                     () -> select(zone), zone.active()
                             ? LumiButton.Kind.DANGER
                             : LumiButton.Kind.PRIMARY);
-            enterButton.active = pendingEnterZone == null;
+            enterButton.active = !entry.pending();
         }
     }
 
@@ -185,11 +180,10 @@ public final class LumiZonesScreen extends LumiPageScreen {
                 onClose();
                 return;
             }
-            enter.accept(zone.id());
-            pendingEnterZone = zone.id();
+            entry.begin(Objects.requireNonNull(snapshot, "snapshot"), zone.id());
+            error = "";
             rebuildWidgets();
         } catch (RuntimeException failed) {
-            pendingEnterZone = null;
             error = failed.getMessage() == null
                     ? "Lumi zone could not be updated" : failed.getMessage();
         }

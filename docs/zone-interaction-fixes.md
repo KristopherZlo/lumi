@@ -34,4 +34,14 @@ an unreadable target, and successful switching while preserving other actors.
 This is a validation-order fix, not a new multi-file transaction guarantee:
 the existing per-file atomic zone persistence remains in use.
 
+### Correlated Enter UI
+
+`ZoneEntryController` owns one pending request, its target, and its context.
+Matching terminal failures release the wait and expose the server message;
+unrelated events do not. Successful navigation still waits for an authoritative
+snapshot with the target active. Disconnect or a workspace/dimension change
+also releases the wait. The screen only coordinates the controller and widgets.
+Regression tests cover refusal and retry, unrelated events, delayed activation,
+context loss, and local send failure.
+
 Other slices and final check results will be recorded as they complete.
