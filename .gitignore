@@ -5,6 +5,7 @@ build/
 run/
 logs/
 out/
+/bin/
 .tmp/
 .worktrees/
 structures/
