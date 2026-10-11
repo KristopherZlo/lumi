@@ -106,3 +106,13 @@ concurrent compilation can replace classes while another task is using them.
 
 Recorded commands, measurements and outstanding gates are in
 [the regression results](reliability-regression-results.md).
+
+For cause analysis, set `-Dlumi.benchmark.trace=true` while recording the native
+client GameTest JVM with JFR. `LumiServerTickProbe` emits `lumi.ServerTick` spans
+only while a measured Restore lease is open. Its Fabric phase precedes Lumi's
+START_SERVER_TICK listener so spans include operation work as well as vanilla
+tick work. The existing Minecraft complete-tick counter still owns the 50-ms
+gate. Save-only recordings use ordinary JFR CPU, allocation and file events.
+Tracing is disabled by default and exists only in the GameTest source set.
+See [the performance investigation](performance-investigation.md) for commands,
+confirmed causes, previous accepted/reverted attempts and proposed experiments.
