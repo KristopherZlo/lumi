@@ -101,6 +101,36 @@ class ClientPendingStatisticsStoreTest {
                 new PendingChangeStatistics(3, 2, 1), Map.of(), "");
     }
 
+    @Test
+    void zoneSaveNeedsFreshScopeStatisticsAndRetainsEntityOnlyChanges() {
+        var store = new ClientPendingStatisticsStore();
+        UUID zone = new UUID(0, 10);
+        var base = snapshot('1', 2, 4);
+        var initial = withZone(base, zone, 0);
+        UUID request = new UUID(0, 11);
+        store.begin(request, initial);
+        assertTrue(store.zoneHasChanges(initial, zone).isEmpty());
+        store.accept(new PendingStatisticsPayload(request, initial.dimensionId(), WORKSPACE,
+                initial.head(), 2, 4, new PendingChangeStatistics(1, 0, 0),
+                Map.of(zone, PendingChangeStatistics.NONE), ""));
+        org.junit.jupiter.api.Assertions.assertEquals(java.util.Optional.of(false), store.zoneHasChanges(initial, zone));
+        var resized = withZone(base, zone, 1);
+        assertTrue(store.zoneHasChanges(resized, zone).isEmpty());
+        assertTrue(store.needsRequest(resized));
+        store.begin(request, resized);
+        store.accept(new PendingStatisticsPayload(request, resized.dimensionId(), WORKSPACE,
+                resized.head(), 2, 4, PendingChangeStatistics.NONE,
+                Map.of(zone, PendingChangeStatistics.NONE), java.util.Set.of(zone), ""));
+        org.junit.jupiter.api.Assertions.assertEquals(java.util.Optional.of(true), store.zoneHasChanges(resized, zone));
+    }
+
+    private static HistorySnapshotPayload withZone(HistorySnapshotPayload base, UUID zone, long revision) {
+        return new HistorySnapshotPayload(base.dimensionId(), base.head(), base.revision(), 1,
+                base.pendingRevision(), List.of(), java.util.Optional.empty(), false, false, WORKSPACE,
+                "Build", "main", List.of(), List.of(), List.of(),
+                List.of(new HistorySnapshotPayload.ZoneView(zone, "Zone", 0, 1, revision, true)), List.of());
+    }
+
     private static HistorySnapshotPayload snapshot(char head, long revision) {
         return snapshot(head, revision, 0);
     }

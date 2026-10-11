@@ -85,7 +85,7 @@ final class PendingStatisticsCommandHandler {
         results.send(player, new PendingStatisticsPayload(
                 request.requestId(), request.dimensionId(),
                 request.workspaceId(), request.head(), request.revision(),
-                request.pendingRevision(), result.workspace(), result.zones(), ""));
+                request.pendingRevision(), result.workspace(), result.zones(), result.zonesWithPendingEntities(), ""));
     }
 
     @FunctionalInterface

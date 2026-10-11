@@ -25,7 +25,7 @@ class PendingStatisticsProtocolTest {
         var result = new PendingStatisticsPayload(
                 requestId, "minecraft:overworld", workspaceId, head, 4, 9,
                 new PendingChangeStatistics(10, 2, 7),
-                Map.of(zoneId, new PendingChangeStatistics(3, 1, 2)), "");
+                Map.of(zoneId, new PendingChangeStatistics(3, 1, 2)), java.util.Set.of(zoneId), "");
 
         assertEquals(request, roundTrip(
                 PendingStatisticsRequestPayload.CODEC, request));

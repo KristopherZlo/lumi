@@ -6,6 +6,8 @@ import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.PendingChangeStatistics;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.UUID;
 import net.minecraft.network.FriendlyByteBuf;
@@ -23,6 +25,7 @@ public record PendingStatisticsPayload(
         long pendingRevision,
         PendingChangeStatistics workspace,
         Map<UUID, PendingChangeStatistics> zones,
+        Set<UUID> zonesWithPendingEntities,
         String error) implements CustomPacketPayload {
     private static final int MAX_DIMENSION_BYTES = 256;
     private static final int MAX_ERROR_BYTES = 1024;
@@ -42,12 +45,14 @@ public record PendingStatisticsPayload(
         Objects.requireNonNull(head, "head");
         Objects.requireNonNull(workspace, "workspace");
         zones = Map.copyOf(Objects.requireNonNull(zones, "zones"));
+        zonesWithPendingEntities = Set.copyOf(Objects.requireNonNull(zonesWithPendingEntities, "zonesWithPendingEntities"));
         Objects.requireNonNull(error, "error");
         if (dimensionId.isBlank()
                 || dimensionId.getBytes(java.nio.charset.StandardCharsets.UTF_8)
                         .length > MAX_DIMENSION_BYTES
                 || revision < 0 || pendingRevision < 0
                 || zones.size() > MAX_ZONES
+                || !zones.keySet().containsAll(zonesWithPendingEntities)
                 || error.getBytes(java.nio.charset.StandardCharsets.UTF_8)
                         .length > MAX_ERROR_BYTES
                 || !error.isEmpty()
@@ -56,6 +61,12 @@ public record PendingStatisticsPayload(
             throw new IllegalArgumentException(
                     "Invalid pending statistics result");
         }
+    }
+
+    public PendingStatisticsPayload(UUID requestId, String dimensionId, UUID workspaceId,
+            CommitId head, long revision, long pendingRevision, PendingChangeStatistics workspace,
+            Map<UUID, PendingChangeStatistics> zones, String error) {
+        this(requestId, dimensionId, workspaceId, head, revision, pendingRevision, workspace, zones, Set.of(), error);
     }
 
     public static PendingStatisticsPayload failure(
@@ -83,6 +94,8 @@ public record PendingStatisticsPayload(
                     writeStatistics(buffer, entry.getValue());
                 });
         buffer.writeUtf(error, MAX_ERROR_BYTES);
+        buffer.writeVarInt(zonesWithPendingEntities.size());
+        zonesWithPendingEntities.stream().sorted().forEach(buffer::writeUUID);
     }
 
     private static PendingStatisticsPayload read(FriendlyByteBuf buffer) {
@@ -106,9 +119,16 @@ public record PendingStatisticsPayload(
                         "Duplicate pending statistics zone");
             }
         }
+        String error = buffer.readUtf(MAX_ERROR_BYTES);
+        int entityZones = buffer.readVarInt();
+        if (entityZones < 0 || entityZones > count) throw new IllegalArgumentException("Invalid entity scope count");
+        var withEntities = new HashSet<UUID>();
+        for (int index = 0; index < entityZones; index++) {
+            if (!withEntities.add(buffer.readUUID())) throw new IllegalArgumentException("Duplicate entity scope");
+        }
         return new PendingStatisticsPayload(
                 request, dimension, workspaceId, head, revision, pendingRevision,
-                workspace, zones, buffer.readUtf(MAX_ERROR_BYTES));
+                workspace, zones, withEntities, error);
     }
 
     private static void writeStatistics(

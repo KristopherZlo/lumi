@@ -163,10 +163,15 @@ public final class PendingChangeStatisticsService {
 
     public record Result(
             PendingChangeStatistics workspace,
-            Map<UUID, PendingChangeStatistics> zones) {
+            Map<UUID, PendingChangeStatistics> zones,
+            Set<UUID> zonesWithPendingEntities) {
+        public Result(PendingChangeStatistics workspace, Map<UUID, PendingChangeStatistics> zones) {
+            this(workspace, zones, Set.of());
+        }
         public Result {
             Objects.requireNonNull(workspace, "workspace");
             zones = Map.copyOf(Objects.requireNonNull(zones, "zones"));
+            zonesWithPendingEntities = Set.copyOf(Objects.requireNonNull(zonesWithPendingEntities, "zonesWithPendingEntities"));
         }
     }
 }

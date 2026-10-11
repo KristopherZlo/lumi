@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.model.Zone;
 import io.github.lumi.domain.service.PendingChangeStatisticsService;
+import io.github.lumi.domain.service.PendingEntityZoneScopes;
 import io.github.lumi.minecraft.world.WorldStateReader;
 import io.github.lumi.minecraft.world.ChunkLoadSession;
 import java.io.IOException;
@@ -38,6 +39,7 @@ public final class PendingStatisticsOperation implements DimensionMutation {
     private final ChunkLoadSession chunks;
     private final Map<SectionKey, SectionBlob> captured = new HashMap<>();
     private final AtomicBoolean cancelled = new AtomicBoolean();
+    private final PendingEntityZoneScopes entityScopes = new PendingEntityZoneScopes();
     private int next;
     private CompletableFuture<PendingChangeStatisticsService.Result> future;
     private PendingChangeStatisticsService.Result result;
@@ -185,7 +187,9 @@ public final class PendingStatisticsOperation implements DimensionMutation {
     private PendingChangeStatisticsService.Result calculate(
             Map<SectionKey, SectionBlob> snapshot) {
         try {
-            return calculator.calculate(head, snapshot, zones, cancelled::get);
+            var blocks = calculator.calculate(head, snapshot, zones, cancelled::get);
+            return new PendingChangeStatisticsService.Result(blocks.workspace(), blocks.zones(),
+                    entityScopes.find(boundary, zones));
         } catch (IOException failed) {
             throw new CompletionException(failed);
         }

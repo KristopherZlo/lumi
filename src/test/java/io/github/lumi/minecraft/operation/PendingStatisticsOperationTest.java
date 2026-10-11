@@ -176,6 +176,26 @@ class PendingStatisticsOperationTest {
         return reader(() -> { });
     }
 
+    @Test
+    void entityOnlyChangesKeepTheirExactZoneColumnsWithoutReadingEntityBlobs() throws Exception {
+        var boundary = new WorkingIndexSnapshot(Map.of(new io.github.lumi.domain.model.EntityChunkKey(-1, 2), 1L));
+        var included = new io.github.lumi.domain.model.Zone(new java.util.UUID(0, 1),
+                new java.util.UUID(0, 3), "Included", 0, java.util.Set.of(new SectionKey(-1, 40, 2)), java.util.Set.of());
+        var outside = new io.github.lumi.domain.model.Zone(new java.util.UUID(0, 2),
+                included.workspaceId(), "Outside", 0, java.util.Set.of(new SectionKey(0, 40, 2)), java.util.Set.of());
+        var operation = new PendingStatisticsOperation(HEAD, boundary, List.of(included, outside), reader(),
+                () -> boundary, () -> true, (head, sections, zones, cancelled) ->
+                        new PendingChangeStatisticsService.Result(PendingChangeStatistics.NONE,
+                                Map.of(included.id(), PendingChangeStatistics.NONE, outside.id(), PendingChangeStatistics.NONE)),
+                Runnable::run, System::nanoTime);
+
+        operation.advance(Long.MAX_VALUE);
+        operation.advance(Long.MAX_VALUE);
+
+        assertEquals(java.util.Set.of(included.id()), operation.result().orElseThrow().zonesWithPendingEntities());
+        assertEquals(PendingChangeStatistics.NONE, operation.result().orElseThrow().workspace());
+    }
+
     private static WorldStateReader reader(Runnable beforeRead) {
         return new WorldStateReader() {
             @Override

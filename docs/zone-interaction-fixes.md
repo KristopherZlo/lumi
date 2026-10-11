@@ -55,6 +55,25 @@ the sword away restores world Undo without consuming the local history.
 
 Other slices and final check results will be recorded as they complete.
 
+### Entity-only zone changes
+
+Exact block counts alone cannot gate a zone Save: armor stands and other
+entity-only builder edits must remain savable. Pending statistics now also
+carry a bounded set of zones containing builder-dirty entity columns. Column
+attribution runs off-thread through the existing ZoneScope contract and does
+not add entity blob capture or decoding to the statistics tick path. Block
+counts retain their existing meaning; an entity-dirty column is a conservative
+pending signal, not an exact entity-difference count. A regression test verifies
+entity-only scope attribution, including the existing whole-column behavior.
+The statistics wire response adds this set; client and server must use the
+same Lumi version.
+
+The client associates statistics with the zone revisions present when the
+request began. Resizing, adding, or deleting zones triggers a replacement even
+if the builder generation did not change. Save eligibility uses only fresh
+zone statistics and preserves the entity-pending signal. Existing workspace
+counter display can still retain its last number during recalculation.
+
 ### Zone preview protocol
 
 The separate zone preview response carries request, dimension, workspace,
