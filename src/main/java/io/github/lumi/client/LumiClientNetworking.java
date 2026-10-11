@@ -5,6 +5,7 @@ import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientHistoryPageStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientZoneOverlayStore;
+import io.github.lumi.client.state.ClientZonePendingPreviewStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
 import io.github.lumi.client.state.ClientSurvivalSettingsStore;
 import io.github.lumi.domain.model.BranchName;
@@ -41,6 +42,8 @@ import io.github.lumi.network.ZoneOverlayPayload;
 import io.github.lumi.network.ZoneCompareArgument;
 import io.github.lumi.network.ZoneRestoreArgument;
 import io.github.lumi.network.ZoneSaveArgument;
+import io.github.lumi.network.ZonePendingPreviewArgument;
+import io.github.lumi.network.ZonePendingPreviewPayload;
 import io.github.lumi.network.WorkspaceCreateArgument;
 import io.github.lumi.network.WorkspaceSettingsArgument;
 import io.github.lumi.network.VersionTagsArgument;
@@ -60,6 +63,7 @@ public final class LumiClientNetworking {
     private final ClientHistoryPageStore historyPages;
     private final ClientCompareStore comparisons;
     private final ClientZoneOverlayStore zoneOverlays;
+    private final ClientZonePendingPreviewStore zonePreviews;
     private final ClientPendingStatisticsStore pendingStatistics;
     private final ClientSurvivalSettingsStore survivalSettings;
     private final Consumer<HistorySnapshotPayload> snapshotListener;
@@ -68,6 +72,7 @@ public final class LumiClientNetworking {
     private final Consumer<PackageInspectionPayload> packageListener;
     private final Consumer<CleanupResultPayload> cleanupListener;
     private final Consumer<PartialRestorePlanPayload> partialRestoreListener;
+    private final Consumer<ZonePendingPreviewPayload> zonePreviewListener;
     private final Map<UUID, MetadataEdit> metadataEdits = new HashMap<>();
 
     public LumiClientNetworking(
@@ -75,6 +80,7 @@ public final class LumiClientNetworking {
             ClientHistoryPageStore historyPages,
             ClientCompareStore comparisons,
             ClientZoneOverlayStore zoneOverlays,
+            ClientZonePendingPreviewStore zonePreviews,
             ClientPendingStatisticsStore pendingStatistics,
             ClientSurvivalSettingsStore survivalSettings,
             Consumer<HistorySnapshotPayload> snapshotListener,
@@ -82,11 +88,13 @@ public final class LumiClientNetworking {
             Consumer<CompareResultPayload> compareListener,
             Consumer<PackageInspectionPayload> packageListener,
             Consumer<CleanupResultPayload> cleanupListener,
-            Consumer<PartialRestorePlanPayload> partialRestoreListener) {
+            Consumer<PartialRestorePlanPayload> partialRestoreListener,
+            Consumer<ZonePendingPreviewPayload> zonePreviewListener) {
         this.history = Objects.requireNonNull(history, "history");
         this.historyPages = Objects.requireNonNull(historyPages, "historyPages");
         this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
         this.zoneOverlays = Objects.requireNonNull(zoneOverlays, "zoneOverlays");
+        this.zonePreviews = Objects.requireNonNull(zonePreviews, "zonePreviews");
         this.pendingStatistics = Objects.requireNonNull(
                 pendingStatistics, "pendingStatistics");
         this.survivalSettings = Objects.requireNonNull(
@@ -98,6 +106,7 @@ public final class LumiClientNetworking {
         this.cleanupListener = Objects.requireNonNull(cleanupListener, "cleanupListener");
         this.partialRestoreListener = Objects.requireNonNull(
                 partialRestoreListener, "partialRestoreListener");
+        this.zonePreviewListener = Objects.requireNonNull(zonePreviewListener, "zonePreviewListener");
     }
 
     public void register() {
@@ -111,6 +120,7 @@ public final class LumiClientNetworking {
                 OperationEventPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> {
                             history.accept(payload);
+                            zonePreviews.reject(payload);
                             acceptMetadataEdit(payload);
                             eventListener.accept(payload);
                         }));
@@ -144,6 +154,13 @@ public final class LumiClientNetworking {
         ClientPlayNetworking.registerGlobalReceiver(
                 ZoneOverlayPayload.TYPE, (payload, context) ->
                         context.client().execute(() -> zoneOverlays.accept(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(ZonePendingPreviewPayload.TYPE, (payload, context) ->
+                context.client().execute(() -> {
+                    if (zonePreviews.accept(payload) && zonePreviews.currentZone(
+                            history.state().snapshot().orElse(null)).isPresent()) {
+                        zonePreviewListener.accept(payload);
+                    }
+                }));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             history.clear();
             historyPages.clear();
@@ -152,6 +169,7 @@ public final class LumiClientNetworking {
             survivalSettings.clear();
             comparisons.clear();
             zoneOverlays.clear();
+            zonePreviews.clear();
         });
     }
 
@@ -439,6 +457,20 @@ public final class LumiClientNetworking {
 
     public UUID refreshSnapshot() {
         return send(HistoryCommandPayload.Kind.SNAPSHOT_REFRESH, "");
+    }
+
+    public UUID requestZonePendingPreview(HistorySnapshotPayload.ZoneView zone) {
+        if (!ClientPlayNetworking.canSend(HistoryCommandPayload.TYPE)) {
+            throw new IllegalStateException("The connected server does not support Lumi history");
+        }
+        var snapshot = history.state().snapshot().orElseThrow();
+        var current = snapshot.zones().stream().filter(value -> value.id().equals(zone.id()) && value.active())
+                .findFirst().orElseThrow(() -> new IllegalStateException("Enter the zone before previewing"));
+        UUID request = UUID.randomUUID();
+        zonePreviews.begin(request, snapshot, current);
+        sendCommand(request, HistoryCommandPayload.Kind.ZONE_PENDING_PREVIEW,
+                new ZonePendingPreviewArgument(current.id(), current.revision()).encode(), snapshot);
+        return request;
     }
 
     public UUID requestSurvivalSettings() {

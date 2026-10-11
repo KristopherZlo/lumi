@@ -2,6 +2,7 @@ package io.github.lumi.client;
 
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientCompareStore;
+import io.github.lumi.client.state.ClientZonePendingPreviewStore;
 import java.util.Objects;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
@@ -18,6 +19,7 @@ public final class LumiPendingChangeOverlay {
     private static final double MAX_DISTANCE_SQUARED = 256.0 * 256.0;
     private final ClientHistoryStore history;
     private final ClientCompareStore comparisons;
+    private final ClientZonePendingPreviewStore zonePreviews;
     private final PendingPreviewRefreshController refresh;
     private final LumiCompareOverlayRenderer compareOverlay =
             new LumiCompareOverlayRenderer();
@@ -25,9 +27,11 @@ public final class LumiPendingChangeOverlay {
     public LumiPendingChangeOverlay(
             ClientHistoryStore history,
             ClientCompareStore comparisons,
+            ClientZonePendingPreviewStore zonePreviews,
             Runnable refresh) {
         this.history = Objects.requireNonNull(history, "history");
         this.comparisons = Objects.requireNonNull(comparisons, "comparisons");
+        this.zonePreviews = Objects.requireNonNull(zonePreviews, "zonePreviews");
         this.refresh = new PendingPreviewRefreshController(refresh);
     }
 
@@ -37,6 +41,8 @@ public final class LumiPendingChangeOverlay {
     }
 
     private void tick(Minecraft client) {
+        if (zonePreviews.hasScope() && zonePreviews.currentZone(
+                history.state().snapshot().orElse(null)).isEmpty()) zonePreviews.clear();
         boolean actionDown = actionDown(client);
         refresh.tick(actionDown, client.player != null && client.screen == null
                 && history.state().snapshot().isPresent());
@@ -46,8 +52,11 @@ public final class LumiPendingChangeOverlay {
         Minecraft client = Minecraft.getInstance();
         var snapshot = history.state().snapshot().orElse(null);
         var comparison = comparisons.visibleChanges();
+        var pendingBlocks = snapshot == null
+                ? java.util.List.<io.github.lumi.network.HistorySnapshotPayload.PendingBlock>of()
+                : zonePreviews.hasScope() ? zonePreviews.blocks(snapshot) : snapshot.pendingBlocks();
         boolean showPending = snapshot != null && client.screen == null
-                && actionDown(client) && !snapshot.pendingBlocks().isEmpty();
+                && actionDown(client) && !pendingBlocks.isEmpty();
         if (client.player == null || (!showPending
                 && comparison.isEmpty())) {
             return;
@@ -55,7 +64,7 @@ public final class LumiPendingChangeOverlay {
         var camera = context.worldState().cameraRenderState.pos;
         var lines = context.consumers().getBuffer(RenderTypes.linesTranslucent());
         if (showPending) {
-            for (var block : snapshot.pendingBlocks()) {
+            for (var block : pendingBlocks) {
                 renderBlock(
                         context, lines, camera,
                         block.x(), block.y(), block.z(),

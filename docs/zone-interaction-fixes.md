@@ -69,3 +69,9 @@ executor. The zone predicate is applied before the 512-point cap. It checks
 zone revision around preparation and history/pending context before sending;
 failed or superseded requests cannot publish geometry. Preview requests remain
 read-only and do not enter the mutation queue or freeze a dimension.
+
+The client stores the selected zone preview separately from workspace pending
+points. Waiting, failure, and stale zone/pending revisions display no zonal
+geometry and never substitute workspace coordinates. History context changes
+or leaving the zone clear the selection. Workspace See Changes explicitly
+selects the workspace path; Action refresh retains a valid chosen zone.

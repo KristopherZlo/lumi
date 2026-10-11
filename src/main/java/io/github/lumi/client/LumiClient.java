@@ -13,6 +13,7 @@ import io.github.lumi.client.state.ClientBranchSlotStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientSelection;
 import io.github.lumi.client.state.ClientZoneOverlayStore;
+import io.github.lumi.client.state.ClientZonePendingPreviewStore;
 import io.github.lumi.client.preview.ClientVersionPreviewCapture;
 import io.github.lumi.client.preview.ClientVersionPreviewStore;
 import io.github.lumi.client.onboarding.ClientOnboardingWorldStep;
@@ -94,6 +95,7 @@ public final class LumiClient implements ClientModInitializer {
     private static final ClientSelection SELECTION = new ClientSelection();
     private static final ClientZoneOverlayStore ZONE_OVERLAYS =
             new ClientZoneOverlayStore();
+    private static final ClientZonePendingPreviewStore ZONE_PREVIEWS = new ClientZonePendingPreviewStore();
     private static final ClientPendingStatisticsStore PENDING_STATISTICS =
             new ClientPendingStatisticsStore();
     private static final ClientNotificationStore NOTIFICATIONS =
@@ -120,14 +122,15 @@ public final class LumiClient implements ClientModInitializer {
     private static OnboardingController activeOnboarding;
     private static final LumiClientNetworking NETWORKING =
             new LumiClientNetworking(
-                    HISTORY, HISTORY_PAGES, COMPARISONS, ZONE_OVERLAYS,
+                    HISTORY, HISTORY_PAGES, COMPARISONS, ZONE_OVERLAYS, ZONE_PREVIEWS,
                     PENDING_STATISTICS, SURVIVAL_SETTINGS,
                     LumiClient::acceptSnapshot,
                     LumiClient::acceptOperationEvent,
                     LumiClient::acceptCompareResult,
                     LumiClient::showPackageInspection,
                     LumiClient::showCleanupResult,
-                    LumiClient::showPartialRestorePlan);
+                    LumiClient::showPartialRestorePlan,
+                    LumiClient::acceptZonePendingPreview);
     private static final ClientOnboardingWorldStep ONBOARDING_WORLD =
             new ClientOnboardingWorldStep(
                     HISTORY, NETWORKING::refreshSnapshot);
@@ -219,7 +222,7 @@ public final class LumiClient implements ClientModInitializer {
         new LumiOperationHud(
                 HISTORY, PENDING_STATISTICS, NOTIFICATIONS).register();
         new LumiPendingChangeOverlay(
-                HISTORY, COMPARISONS, NETWORKING::refreshSnapshot).register();
+                HISTORY, COMPARISONS, ZONE_PREVIEWS, LumiClient::refreshPendingPreview).register();
         ONBOARDING_WORLD.register();
         LumiMod.LOGGER.info("Lumi V2 client initialized");
     }
@@ -247,6 +250,7 @@ public final class LumiClient implements ClientModInitializer {
                         NETWORKING::requestSurvivalSettings,
                         NETWORKING::updateSurvivalSettings)),
                 () -> {
+                    ZONE_PREVIEWS.clear();
                     NETWORKING.refreshSnapshot();
                     showFeedback("luma.hotkeys.pending_preview_help");
                     client.setScreen(null);
@@ -659,7 +663,7 @@ public final class LumiClient implements ClientModInitializer {
                                         snapshot.dimensionId(),
                                         zone.versions().getFirst()).message()),
                 () -> {
-                    NETWORKING.refreshSnapshot();
+                    NETWORKING.requestZonePendingPreview(zone);
                     showFeedback("luma.hotkeys.pending_preview_help");
                 }, () -> NETWORKING.leaveZone(zone.id())));
     }
@@ -832,6 +836,21 @@ public final class LumiClient implements ClientModInitializer {
                     : "luma.status.compare_ready",
                     empty ? ChatFormatting.YELLOW : ChatFormatting.GREEN);
         }
+    }
+
+    private static void refreshPendingPreview() {
+        var snapshot = HISTORY.state().snapshot().orElse(null);
+        var zone = ZONE_PREVIEWS.currentZone(snapshot);
+        if (zone.isPresent()) {
+            NETWORKING.requestZonePendingPreview(zone.orElseThrow());
+        } else {
+            ZONE_PREVIEWS.clear();
+            NETWORKING.refreshSnapshot();
+        }
+    }
+
+    private static void acceptZonePendingPreview(io.github.lumi.network.ZonePendingPreviewPayload result) {
+        if (!result.error().isEmpty()) showFeedback(result.error(), ChatFormatting.RED);
     }
 
     private static void showCleanupResult(CleanupResultPayload result) {
