@@ -15,10 +15,10 @@
   <img alt="GPL 3.0" src="https://img.shields.io/badge/License-GPL%203.0-2EA043?style=for-the-badge" />
 </p>
 
-Lumi is durable world history for Minecraft builders.
+Lumi keeps durable world history for Minecraft builders.
 
-Save a good moment, explore another idea on a branch, compare the result, and
-return safely without copying the whole world folder or learning Git.
+Save a good moment. Test another idea on a branch. Compare the result, then
+return without copying the world or learning Git.
 
 > [!WARNING]
 > Lumi 0.2.0 is a release candidate. Keep normal backups of worlds you care about.
@@ -27,20 +27,20 @@ return safely without copying the whole world folder or learning Git.
 
 - Saves named versions of visible blocks, block entities, durable non-player
   entities, and player respawn positions.
-- Creates branches for experiments without duplicating stored world data.
-- Compares any two saved versions and highlights added, removed, and changed
-  blocks in the world.
-- Restores a whole version, a wooden-sword selection, or everything outside the
-  selection.
-- Keeps workspaces and colored work zones as lightweight views over one shared
-  dimension history.
-- Provides session Undo/Redo and Quick Restore for unsaved builder changes.
-- Supports safe Amend, branch merge, soft-deleted history, tags, renaming,
-  search, and isometric save previews.
-- Imports and exports portable Lumi packages after inspection and confirmation.
-- Recovers interrupted operations without sacrificing previously valid history.
+- Creates branches for experiments without copying stored world data.
+- Compares two saved versions and highlights added, removed, and changed blocks.
+- Restores a complete version, a wooden-sword selection, or everything outside
+  the selection.
+- Shows workspaces and colored work zones as views of one shared dimension
+  history.
+- Gives builders session Undo/Redo and Quick Restore for unsaved changes.
+- Supports safe Amend, branch merge, tags, renaming, search, and isometric save
+  previews.
+- Keeps soft-deleted history available for recovery.
+- Imports and exports portable Lumi packages after you inspect and confirm them.
+- Recovers interrupted operations and keeps earlier valid history safe.
 - Integrates with normal Minecraft edits and supported WorldEdit and Axiom
-  builder workflows.
+  workflows.
 
 Lumi uses one shared, server-authoritative world model in integrated and
 dedicated servers. Multiple builders can work in the same dimension; its active
@@ -50,14 +50,14 @@ live branches are not virtualized.
 ## Quick Start
 
 1. Install Lumi and Fabric API for Minecraft `1.21.11`.
-2. Enter a world and follow the first-run builder tour.
+2. Open a world and follow the first-run builder tour.
 3. Make a few changes and press `Alt+S` to save them.
 4. Press `U` to open Lumi and browse the new version.
-5. Create a branch before trying a risky idea, then compare or restore when you
-   are ready.
+5. Create a branch before you test a risky idea.
+6. Compare the result or restore an earlier version.
 
-Every initialized dimension starts with one protected **Initial** version, so
-the original state remains available from the beginning of its Lumi history.
+Each initialized dimension starts with one protected **Initial** version. This
+version preserves the original state from the start of Lumi history.
 
 ## Default Controls
 
@@ -70,16 +70,16 @@ the original state remains available from the beginning of its Lumi history.
 | `H` | Show or hide the compare highlight |
 | `Alt+I` | Open the hotkey guide |
 | `Alt+1` … `Alt+0` | Switch to an assigned branch |
-| Hold `Alt` | Preview pending work and enable Lumi action shortcuts |
+| Hold `Alt` | Preview pending work and use Lumi action shortcuts |
 | Wooden sword | Select restore bounds and edit active-zone cells |
 
-All key bindings are remappable in Minecraft controls.
+You can change all key bindings in Minecraft controls.
 
 ## Install
 
-Download a release-candidate build from
-[GitHub Releases](https://github.com/KristopherZlo/lumi/releases) and place it
-in the `mods` folder together with Fabric API.
+1. Download a release-candidate build from
+   [GitHub Releases](https://github.com/KristopherZlo/lumi/releases).
+2. Put Lumi and Fabric API in the `mods` folder.
 
 | Requirement | Version |
 | --- | --- |
@@ -88,31 +88,34 @@ in the `mods` folder together with Fabric API.
 | Fabric API | `0.141.3+1.21.11` or newer compatible release |
 | Java | `21` |
 
-For a dedicated server, install Lumi on the server and on clients that use its
-screens and overlays. Server actions require operator permission; Survival-mode
-access must also be enabled in Lumi settings.
+For a dedicated server, install Lumi on the server. Also install it on clients
+that use Lumi screens and overlays. Server actions require operator permission.
+Lumi settings must also allow access from Survival mode.
 
-WorldEdit and Axiom are optional. Lumi does not require either mod for ordinary
+WorldEdit and Axiom are optional. Lumi does not require these mods for ordinary
 play.
 
 ## Reliability
 
-Lumi stores only the state needed for exact recovery. Save captures the visible
-world boundary; Restore prepares heavy work away from the server tick, applies
-bounded batches, persists them through Minecraft storage, and reads the result
-back before reporting success. Restore and live Undo/Redo drain lighting for all
-affected loaded chunks as their final world-application stage.
-Verified Restore and direct Axiom edits also rebase session block-entity
-baselines before later Undo/Redo can use them. Restore rebuilds those runtime
-baselines from loaded chunks without reopening its lazy history payloads on the
-server tick.
-Restore deterministically repairs legacy entity UUIDs duplicated across saved
-chunks, while new frozen Save captures reject that impossible state.
+Lumi stores only the state that exact recovery needs. Save captures the visible
+world boundary. Restore prepares large tasks outside the server tick.
 
-Published history uses immutable content-addressed objects, sparse Merkle trees,
-hash-verified LZ4 packs, atomic refs, and operation journals. A failed or
-interrupted operation keeps the last valid history intact and offers a safe
-recovery path.
+Restore applies bounded batches. It persists these batches through Minecraft
+storage and reads the result before it reports success. Restore and live
+Undo/Redo drain lighting in all affected loaded chunks before they finish.
+
+After a verified Restore or direct Axiom edit, Lumi rebases session block-entity
+baselines. Later Undo/Redo operations use these new baselines.
+
+Restore repairs duplicate legacy entity UUIDs across saved chunks in a
+deterministic way. A new frozen Save rejects this invalid state.
+
+Lumi stores published history in immutable, content-addressed objects and sparse
+Merkle trees. It uses hash-verified LZ4 packs, atomic refs, and operation
+journals.
+
+A failed or interrupted operation keeps the last valid history intact. Lumi
+then offers a safe recovery path.
 
 Lumi data is separate from vanilla chunk data:
 
@@ -125,25 +128,26 @@ If the server stops during Restore, keep Lumi installed until journal recovery
 finishes. Lumi V2 starts a new history and does not import legacy patch-v9 or
 snapshot-v8 projects.
 
-When there is no useful work, Lumi does no history processing. Long operations
-remain incremental and observable, while their working memory is bounded by the
-current batch instead of the entire world. Restore reuses one immutable object
-pack channel at a time instead of reopening it for every section, and decodes
-repeated Merkle chunk nodes once per compared region in physical pack order.
-Outdated pending-work statistics are cancelled without reporting a history error,
-and never delay a confirmed Save, Restore, or undo action.
-History search waits four client ticks after the last keystroke before requesting
-a page, while initial loads, paging, branch changes, and invalidations stay immediate.
-Zone overlays likewise wait for a stable player cell and history revision before
-requesting a new shell.
+When Lumi has no useful work, it does not process history. Long operations
+remain incremental and report progress. Working memory stays bounded by the
+current batch instead of the full world.
+
+During Restore, Lumi reuses one immutable object-pack channel at a time. It does
+not reopen a channel for every section. It also decodes repeated Merkle chunk
+nodes once per compared region in physical pack order.
+
+Outdated pending-work statistics do not report a history error or delay a
+confirmed Save, Restore, or Undo action. History search waits four client ticks
+after the last keystroke before it requests a page. Zone overlays wait for a
+stable player cell and history revision before they request a new shell.
 
 A newer full Restore, branch switch, or workspace switch replaces only the same
 player's older queued world selection. Active work and other builders are not
 cancelled.
 
-The opt-in developer mode in Lumi settings prints observed operation timings,
-exact Restore apply phases and verification status in chat; every terminal
-report, including failures, has a copy action.
+The optional developer mode in Lumi settings prints operation times, exact
+Restore phases, and verification status in chat. Each terminal report, including
+a failure, has a copy action.
 
 ## For Developers
 
@@ -155,27 +159,28 @@ Use JDK 21.
 .\gradlew.bat runClient --no-daemon
 ```
 
-`build` compiles the mod and runs its unit and server GameTest suites.
-The bundled redstone GameTests place both Rube Goldberg machines on the ground,
-press their stone buttons as a nearby player, and verify exact block,
-block-entity, entity, and player-respawn results after Quick Restore, Restore,
-and Undo at
-2 ticks and every 5 ticks through 40 or 245 ticks.
-Run them directly with `.\gradlew.bat runGameTest --no-daemon`.
-Pass `-Dfabric-api.gametest.filter=<test-id>` before `runGameTest` to run one
-server GameTest without starting the full suite.
+`build` compiles the mod. It also runs the unit tests and server GameTest suites.
+
+The bundled redstone GameTests place two Rube Goldberg machines on the ground.
+A nearby player presses each stone button. The tests verify exact block,
+block-entity, and entity state after Quick Restore, Restore, and Undo.
+
+Checks run at 2 ticks, then every 5 ticks through 40 or 245 ticks. Run the tests
+with `.\gradlew.bat runGameTest --no-daemon`.
+
+To run one server GameTest, add
+`-Dfabric-api.gametest.filter=<test-id>` before `runGameTest`. This skips the
+full suite.
+
 Client GameTests run all current suites by default. Select `SMOKE`, `UI`,
 `RECOVERY`, `EXACT`, or `BENCHMARK` with
 `-Dlumi.gametest.suite=<name> runClientGameTest --no-daemon`.
-Restore benchmark `totalMs` starts immediately before the final UI
-confirmation and ends at the durable terminal event. `queueMs` and `serverMs`
-split that same interval; performance gates report every failed budget together.
-Apply metrics cover loaded and stored changes and separate background batch
-preparation from lighting drain time.
-The tick gate reads Minecraft's completed full-tick timings. Lumi gives
-incremental operations 30 ms of the 50 ms limit so vanilla work keeps headroom.
-The fresh-JVM cold benchmark rejects latency, tick, heap, application, workload,
-or exactness regressions instead of accepting a small or already-warm sample.
+
+Restore benchmark `totalMs` starts before the final UI confirmation and ends at
+the durable terminal event. `queueMs` and `serverMs` split that interval. Apply
+metrics separate background preparation, loaded and stored apply, lighting, and
+verification. The cold benchmark rejects latency, tick, heap, workload, and
+exactness regressions.
 
 The code is split by responsibility:
 
