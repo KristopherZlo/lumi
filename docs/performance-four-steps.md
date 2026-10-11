@@ -29,6 +29,18 @@ The regression controls every journal/publication/cleanup task and verifies
 that world apply and freeze release cannot cross an unfinished write. A blocked
 writer test measures a 5 ms tick wait independently of disk speed.
 
+## Save metadata reads
+
+Pack entry headers and compressed payloads are read in one contiguous buffer.
+Indexed lengths are bounded before allocation, and entry lengths, LZ4 output,
+content hashes, EOF and pack headers retain their validation.
+
+Save sorts changed chunk metadata by the existing physical pack order one region
+at a time (at most 1024 chunks). A Save-local LRU reuses only successfully
+verified immutable chunk trees, with ceilings of 256 nodes and 4096 child
+references. Oversized nodes bypass the cache; failures are never cached. Restore
+verification readers remain fresh. No extra parallel decoding tasks are added.
+
 ## Verification
 
 After the Restore slice, the targeted Restore/publication tests and

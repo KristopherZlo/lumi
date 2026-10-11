@@ -2,6 +2,7 @@ package io.github.lumi.storage.object;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.ObjectId;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +18,29 @@ import org.junit.jupiter.api.io.TempDir;
 class ObjectPackTest {
     @TempDir
     Path tempDir;
+
+    @Test
+    void contiguousReadsRejectUntrustedLengthsTruncationAndHeaderMismatch() throws Exception {
+        ObjectPack.Published published;
+        try (var writer = ObjectPack.writer(tempDir)) {
+            writer.write("payload".getBytes(StandardCharsets.UTF_8));
+            published = writer.publish();
+        }
+        var entry = published.entries().values().iterator().next();
+        try (var reader = new ObjectPack.Reader()) {
+            assertThrows(CorruptObjectException.class, () -> reader.read(new PackedObject(
+                    entry.id(), entry.pack(), entry.offset(), entry.rawLength(), Integer.MAX_VALUE)));
+            assertThrows(CorruptObjectException.class, () -> reader.read(new PackedObject(
+                    entry.id(), entry.pack(), entry.offset(), -1, entry.compressedLength())));
+            byte[] original = Files.readAllBytes(entry.pack());
+            byte[] corrupted = original.clone();
+            corrupted[(int) entry.offset()] ^= 1;
+            Files.write(entry.pack(), corrupted);
+            assertThrows(CorruptObjectException.class, () -> reader.read(entry));
+            Files.write(entry.pack(), java.util.Arrays.copyOf(original, original.length - 1));
+            assertThrows(java.io.IOException.class, () -> reader.read(entry));
+        }
+    }
 
     @Test
     void publishesManyVerifiedObjectsWithOnePackAndOneIndex() throws Exception {

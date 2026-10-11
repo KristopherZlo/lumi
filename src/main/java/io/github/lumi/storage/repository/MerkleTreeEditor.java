@@ -11,6 +11,9 @@ import io.github.lumi.domain.model.RegionTree;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -58,6 +61,7 @@ public final class MerkleTreeEditor {
             return baseRoot.orElseThrow();
         }
         try (var reader = objects.beginReadSession()) {
+            var chunkReader = new CachedChunkTreeReader(reader::readChunk);
             DimensionTree base = baseRoot.isPresent()
                     ? reader.readDimension(baseRoot.orElseThrow())
                     : new DimensionTree(Map.of());
@@ -74,9 +78,9 @@ public final class MerkleTreeEditor {
                         ? reader.readRegion(regions.get(regionChange.getKey()))
                         : new RegionTree(Map.of());
                 Map<ChunkInRegion, ObjectId> chunks = new HashMap<>(oldRegion.chunks());
-                for (var chunkChange : regionChange.getValue().entrySet()) {
+                for (var chunkChange : orderedChanges(regionChange.getValue(), chunks)) {
                     ChunkTree oldChunk = chunks.containsKey(chunkChange.getKey())
-                            ? reader.readChunk(chunks.get(chunkChange.getKey()))
+                            ? chunkReader.read(chunks.get(chunkChange.getKey()))
                             : new ChunkTree(Map.of(), Optional.empty());
                     Map<Integer, ObjectId> sections = new HashMap<>(oldChunk.sections());
                     Optional<ObjectId> entities = oldChunk.entities();
@@ -98,6 +102,26 @@ public final class MerkleTreeEditor {
             progress.accept(++completed, total);
             return root;
         }
+    }
+
+    /** At most one region (1024 chunks) is sorted; no extra decode workers are added. */
+    private java.util.List<Map.Entry<ChunkInRegion, Map<HistoryKey, ObjectId>>> orderedChanges(
+            Map<ChunkInRegion, Map<HistoryKey, ObjectId>> changes,
+            Map<ChunkInRegion, ObjectId> chunks) throws IOException {
+        var ids = new HashSet<ObjectId>();
+        changes.keySet().forEach(chunk -> {
+            ObjectId id = chunks.get(chunk);
+            if (id != null) ids.add(id);
+        });
+        var positions = new HashMap<ObjectId, Integer>();
+        var ordered = objects.physicalReadOrder(ids);
+        for (int index = 0; index < ordered.size(); index++) {
+            positions.put(ordered.get(index), index);
+        }
+        var result = new ArrayList<>(changes.entrySet());
+        result.sort(Comparator.comparingInt(
+                entry -> positions.getOrDefault(chunks.get(entry.getKey()), Integer.MAX_VALUE)));
+        return result;
     }
 
     private static Map<RegionCoordinate, Map<ChunkInRegion, Map<HistoryKey, ObjectId>>> group(

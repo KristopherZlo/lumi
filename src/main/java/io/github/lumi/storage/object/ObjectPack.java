@@ -61,7 +61,13 @@ final class ObjectPack {
 
     private static byte[] readEntry(FileChannel channel, PackedObject entry)
             throws IOException {
-        ByteBuffer header = ByteBuffer.allocate(ENTRY_HEADER_BYTES);
+        // The immutable index supplies the read size, but is still untrusted input.
+        if (entry.rawLength() < 0 || entry.rawLength() > MAX_PAYLOAD_BYTES
+                || entry.compressedLength() < 0
+                || entry.compressedLength() > MAX_COMPRESSED_BYTES) {
+            throw corrupt(entry.pack(), "invalid indexed object length");
+        }
+        ByteBuffer header = ByteBuffer.allocate(ENTRY_HEADER_BYTES + entry.compressedLength());
         readFully(channel, header, entry.offset());
         header.flip();
         byte[] hash = new byte[32];
@@ -76,12 +82,10 @@ final class ObjectPack {
                 || compressedLength < 0 || compressedLength > MAX_COMPRESSED_BYTES) {
             throw corrupt(entry.pack(), "invalid object entry");
         }
-        ByteBuffer compressed = ByteBuffer.allocate(compressedLength);
-        readFully(channel, compressed, entry.offset() + ENTRY_HEADER_BYTES);
         byte[] payload = new byte[rawLength];
         try {
             int restored = LZ4.safeDecompressor().decompress(
-                    compressed.array(), 0, compressedLength,
+                    header.array(), ENTRY_HEADER_BYTES, compressedLength,
                     payload, 0, rawLength);
             if (restored != rawLength) {
                 throw corrupt(entry.pack(), "unexpected uncompressed length");
