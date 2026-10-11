@@ -7,6 +7,49 @@ import org.junit.jupiter.api.Test;
 
 class IndexWriteSchedulerTest {
     @Test
+    void shutdownConsumesPendingTimerAndLaterWritesWithoutWorkerSubmission() {
+        var timers = new ArrayDeque<Runnable>();
+        var writes = new AtomicInteger();
+        var scheduler = new IndexWriteScheduler(command -> fail("Worker pool must not receive shutdown writes"),
+                timers::add);
+        scheduler.schedule(writes::incrementAndGet, rejected -> fail(rejected), false);
+        scheduler.stop();
+        assertEquals(1, writes.get());
+        timers.remove().run();
+        scheduler.schedule(writes::incrementAndGet, rejected -> fail(rejected), false);
+        assertEquals(2, writes.get());
+        assertTrue(timers.isEmpty());
+    }
+
+    @Test
+    void shutdownWaitsForClaimedDispatchBeforeTheWorkerPoolCanClose() throws Exception {
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var stopped = new java.util.concurrent.CountDownLatch(1);
+        var workers = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
+        var scheduler = new IndexWriteScheduler(command -> {
+            entered.countDown();
+            try { release.await(); }
+            catch (InterruptedException failure) { throw new IllegalStateException(failure); }
+            workers.add(command);
+        }, Runnable::run);
+        var producer = new Thread(() -> scheduler.schedule(() -> { }, rejected -> fail(rejected), false));
+        var closer = new Thread(() -> { scheduler.stop(); stopped.countDown(); });
+        producer.start();
+        try {
+            assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            closer.start();
+            assertFalse(stopped.await(10, java.util.concurrent.TimeUnit.MILLISECONDS));
+        } finally {
+            release.countDown();
+            producer.join(5000);
+            closer.join(5000);
+        }
+        assertEquals(0, stopped.getCount());
+        assertEquals(1, workers.size());
+    }
+
+    @Test
     void urgentBoundaryConsumesTheDelayedTicketExactlyOnce() {
         var timers = new ArrayDeque<Runnable>();
         var workers = new ArrayDeque<Runnable>();

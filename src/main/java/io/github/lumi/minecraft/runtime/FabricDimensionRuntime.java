@@ -2318,6 +2318,15 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        try {
+            closeRuntimeState();
+        } finally {
+            mutations.flushForShutdown();
+        }
+        // Repository state has no open handles; background work is owned by the server session.
+    }
+
+    private void closeRuntimeState() throws IOException {
         closeRestorePrewarm();
         zoneGrowth.flush();
         try {
@@ -2335,7 +2344,6 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 liveActions.clear();
             }
         }
-        // Repository state has no open handles; background work is owned by the server session.
     }
 
     private record AutoVersionFingerprint(

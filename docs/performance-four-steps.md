@@ -68,6 +68,14 @@ cannot dispatch the same writer again after an urgent flush. Chunk retention
 and publication gates still require the actual durable generations, not timer
 completion. Existing synchronous/test adapters retain zero-delay scheduling.
 
+Shutdown takes ownership of pending timer dispatch before the server session
+closes its durability worker. If a timer has already claimed dispatch, shutdown
+waits until its worker submission finishes. Subsequent index writes stay with the
+closing caller or an already-owned origin worker, without a new delayed task or
+submission to a closing pool. Origin validation and forced writes still apply.
+Regressions cover the claimed-dispatch race and final generation/origin durability
+after the executor stops accepting tasks.
+
 An opt-in performance regression records actual `jdk.FileForce` events for a
 32-mutation burst, comparing immediate and production 50 ms scheduling in three
 fresh repositories. It requires fewer forced writes and rereads generation 33

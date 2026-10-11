@@ -62,6 +62,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
     private long requestedIndexRevision;
     private boolean originWriterScheduled;
     private boolean indexWriterScheduled;
+    private volatile boolean stopping;
 
     private MutationDurabilityTracker(
             WorldObjectRepository objects,
@@ -549,6 +550,16 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
         }
     }
 
+    /** Flushes delayed dispatch before the server session drains its durability worker. */
+    public void flushForShutdown() {
+        synchronized (this) {
+            stopping = true;
+            requestedIndexRevision = indexRevision;
+        }
+        indexWrites.stop();
+        retryFailedWrites();
+    }
+
     /** Requeues failed durability work; the runtime calls this with a one-second backoff. */
     public void retryFailedWrites() {
         boolean scheduleOrigins;
@@ -662,7 +673,7 @@ public final class MutationDurabilityTracker implements CapturedGenerationComple
                     return;
                 }
             }
-            if (coalescesIndexWrites) {
+            if (coalescesIndexWrites && !stopping) {
                 scheduleIndexWriter();
                 return;
             }

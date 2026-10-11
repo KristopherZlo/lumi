@@ -33,6 +33,22 @@ class MutationDurabilityTrackerTest {
     Path repositoryRoot;
 
     @Test
+    void shutdownFlushesDelayedIndexAndOriginsAfterTheExecutorStopsAcceptingTasks() throws Exception {
+        var background = new ManualExecutor();
+        var index = new WorkingIndexRepository(repositoryRoot);
+        var tracker = MutationDurabilityTracker.open(new WorldObjectRepository(repositoryRoot),
+                new OriginStore(repositoryRoot), index, background, ChunkDurabilityRetention.NONE, 60_000);
+        var key = new SectionKey(0, 0, 0);
+        tracker.registerSectionMutation(key, MutationDurabilityTrackerTest::airSection);
+        tracker.flushForShutdown();
+        background.acceptsTasks = false;
+        while (background.size() > 0) background.runNext();
+        assertEquals(1L, index.read().generations().get(key));
+        assertTrue(tracker.canPublishChunk(0, 0));
+        assertTrue(new OriginStore(repositoryRoot).read(key).isPresent());
+    }
+
+    @Test
     void urgentCaptureAndClearBypassCoalescingWithoutPublishingLaterGenerations() throws Exception {
         var background = new ManualExecutor();
         var index = new WorkingIndexRepository(repositoryRoot);
@@ -588,7 +604,11 @@ class MutationDurabilityTrackerTest {
 
     private static final class ManualExecutor implements Executor {
         private final Queue<Runnable> tasks = new ArrayDeque<>();
-        @Override public void execute(Runnable command) { tasks.add(command); }
+        private boolean acceptsTasks = true;
+        @Override public void execute(Runnable command) {
+            if (!acceptsTasks) throw new java.util.concurrent.RejectedExecutionException("Shutdown");
+            tasks.add(command);
+        }
         private int size() { return tasks.size(); }
         private void runNext() { tasks.remove().run(); }
         private void runLast() {
