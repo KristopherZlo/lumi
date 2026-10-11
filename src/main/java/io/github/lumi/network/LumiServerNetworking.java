@@ -70,6 +70,9 @@ public final class LumiServerNetworking {
             new PendingStatisticsCommandHandler(
                     LumiServerNetworking::failureMessage,
                     LumiServerNetworking::send);
+    private static final ZonePendingPreviewCommandHandler ZONE_PENDING_PREVIEWS =
+            new ZonePendingPreviewCommandHandler(
+                    LumiServerNetworking::failureMessage, LumiServerNetworking::send);
     private static final ConcurrentHashMap<UUID, PendingPackage> PACKAGE_INSPECTIONS =
             new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<UUID, PendingRefresh> PENDING_REFRESHES =
@@ -107,6 +110,8 @@ public final class LumiServerNetworking {
                 HistoryPagePayload.TYPE, HistoryPagePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 PendingStatisticsPayload.TYPE, PendingStatisticsPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(
+                ZonePendingPreviewPayload.TYPE, ZonePendingPreviewPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(
                 SurvivalSettingsPayload.TYPE, SurvivalSettingsPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(
@@ -198,6 +203,10 @@ public final class LumiServerNetworking {
             if (payload.kind() == HistoryCommandPayload.Kind.RESTORE_PREWARM) {
                 runtime.prewarmRestore(
                         actual, new CommitId(new ObjectId(payload.argument())));
+                return;
+            }
+            if (payload.kind() == HistoryCommandPayload.Kind.ZONE_PENDING_PREVIEW) {
+                ZONE_PENDING_PREVIEWS.start(player, runtime, payload, context);
                 return;
             }
             if (payload.kind() == HistoryCommandPayload.Kind.RESTORE_AREA_PLAN) {
@@ -556,6 +565,7 @@ public final class LumiServerNetworking {
     private static void cleanupPlayer(UUID playerId) {
         COMPARES.cleanupPlayer(playerId);
         ZONE_OVERLAYS.cleanupPlayer(playerId);
+        ZONE_PENDING_PREVIEWS.cleanupPlayer(playerId);
         PACKAGE_INSPECTIONS.remove(playerId);
         PENDING_REFRESHES.remove(playerId);
         TICKET_OWNERS.forEach((ticketId, owner) -> {
@@ -579,6 +589,7 @@ public final class LumiServerNetworking {
     private static void clearState() {
         COMPARES.clear();
         ZONE_OVERLAYS.clear();
+        ZONE_PENDING_PREVIEWS.clear();
         BOSS_BARS.keySet().forEach(LumiServerNetworking::removeBossBar);
         TICKET_OWNERS.clear();
         PACKAGE_INSPECTIONS.clear();
@@ -795,7 +806,7 @@ public final class LumiServerNetworking {
             case ZONE_CREATE, ZONE_ENTER, ZONE_LEAVE, ZONE_CELLS, ZONE_DELETE ->
                     throw new IllegalStateException(
                     "Zone metadata does not use the mutation queue");
-            case ZONE_OVERLAY -> throw new IllegalStateException(
+            case ZONE_OVERLAY, ZONE_PENDING_PREVIEW -> throw new IllegalStateException(
                     "Zone overlay queries do not use the mutation queue");
             case DELETE_VERSION -> throw new IllegalStateException(
                     "Version deletion does not use the mutation queue");

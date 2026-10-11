@@ -261,6 +261,28 @@ class MutationDurabilityTrackerTest {
     }
 
     @Test
+    void zoneFilterRunsBeforeThePreviewLimitEvenWithMoreRecentOutsideEdits() throws Exception {
+        var tracker = MutationDurabilityTracker.open(new WorldObjectRepository(repositoryRoot),
+                new OriginStore(repositoryRoot), new WorkingIndexRepository(repositoryRoot), command -> { });
+        SectionKey inside = new SectionKey(-2, 0, 0);
+        long generation = tracker.registerSectionMutation(inside, MutationDurabilityTrackerTest::airSection);
+        BlockPosition olderInside = new BlockPosition(-17, 2, 3);
+        tracker.recordBuilderBlockMutation(olderInside, generation);
+        for (int x = 0; x < 600; x++) {
+            SectionKey outside = new SectionKey(x, 0, 0);
+            long newer = tracker.registerSectionMutation(outside, MutationDurabilityTrackerTest::airSection);
+            tracker.recordBuilderBlockMutation(new BlockPosition(x * 16, 2, 3), newer);
+        }
+        var zone = new io.github.lumi.domain.model.Zone(new java.util.UUID(0, 1),
+                new java.util.UUID(0, 2), "Zone", 0, java.util.Set.of(inside), java.util.Set.of());
+        var scope = new io.github.lumi.domain.service.ZoneScope(zone);
+
+        assertEquals(512, tracker.preview(ignored -> true, 512).blocks().size());
+        assertEquals(List.of(olderInside), tracker.preview(scope::includes, 512).blocks());
+        assertEquals(1, tracker.preview(scope::includes, 512).totalKeys());
+    }
+
+    @Test
     void pendingRevisionTracksOnlyBuilderRelevantMutations() throws Exception {
         MutationDurabilityTracker tracker = MutationDurabilityTracker.open(
                 new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),

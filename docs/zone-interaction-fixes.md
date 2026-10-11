@@ -62,4 +62,10 @@ head/ref revision, zone revision, and pending revision. It caps coordinates at
 512 and carries no geometry on failure. This keeps the shared history snapshot
 workspace-scoped. Codec and scope tests check round trips, negative coordinates,
 invalid revisions, and response bounds. The protocol is being wired into the
-existing command and overlay paths in the next slice.
+existing command and overlay paths.
+
+The server prepares zone-filtered preview coordinates on its background
+executor. The zone predicate is applied before the 512-point cap. It checks
+zone revision around preparation and history/pending context before sending;
+failed or superseded requests cannot publish geometry. Preview requests remain
+read-only and do not enter the mutation queue or freeze a dimension.

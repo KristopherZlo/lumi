@@ -75,6 +75,9 @@ public record HistoryCommandPayload(
         if (kind == Kind.ZONE_OVERLAY) {
             ZoneOverlayArgument.parse(argument);
         }
+        if (kind == Kind.ZONE_PENDING_PREVIEW) {
+            ZonePendingPreviewArgument.parse(argument);
+        }
         if (kind == Kind.ZONE_ENTER || kind == Kind.ZONE_LEAVE) {
             UUID.fromString(argument);
         }
@@ -172,7 +175,7 @@ public record HistoryCommandPayload(
         BRANCH_CREATE_AT(34), CLEANUP_INSPECT(35), CLEANUP_APPLY(36),
         ZONE_AMEND(37), RESTORE_AREA_PLAN(38), RESTORE_AREA_APPLY(39),
         ZONE_CELLS(40), ZONE_DELETE(41), ZONE_OVERLAY(42),
-        SURVIVAL_STATUS(43), SURVIVAL_SETTINGS(44), RESTORE_PREWARM(45);
+        SURVIVAL_STATUS(43), SURVIVAL_SETTINGS(44), RESTORE_PREWARM(45), ZONE_PENDING_PREVIEW(46);
         private final int code;
         Kind(int code) { this.code = code; }
         private static Kind fromCode(int code) {

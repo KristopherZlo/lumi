@@ -1538,6 +1538,28 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return mutations.pendingRevision();
     }
 
+    public CompletableFuture<io.github.lumi.domain.model.WorkingIndexPreview> zonePendingPreview(
+            UUID workspaceId, UUID zoneId, long expectedZoneRevision, int maximumBlocks) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                var workspace = workspaces.require(workspaceId);
+                var zone = zones.require(workspaceId, zoneId);
+                if (zone.revision() != expectedZoneRevision) {
+                    throw new IOException("Zone changed; reopen it before previewing");
+                }
+                var scope = new ZoneScope(zone);
+                var preview = mutations.preview(
+                        key -> workspace.includes(key) && scope.includes(key), maximumBlocks);
+                if (zones.require(workspaceId, zoneId).revision() != expectedZoneRevision) {
+                    throw new IOException("Zone changed while its preview was prepared");
+                }
+                return preview;
+            } catch (IOException failed) {
+                throw new java.util.concurrent.CompletionException(failed);
+            }
+        }, background);
+    }
+
     public synchronized PendingStatisticsOperation startPendingStatistics(
             BranchRef expected,
             Consumer<DimensionMutation> terminalObserver) throws IOException {
