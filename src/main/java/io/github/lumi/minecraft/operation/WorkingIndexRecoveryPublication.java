@@ -34,6 +34,18 @@ public final class WorkingIndexRecoveryPublication implements RestorePublication
     }
 
     @Override
+    public void persist(PreparedRestore restore) { }
+
+    @Override
+    public void finishOnServer(PreparedRestore restore) { publish(restore); }
+
+    @Override
+    public void persistReturn(PreparedRestore restore) { }
+
+    @Override
+    public void finishReturnOnServer(PreparedRestore restore) { publishReturn(restore); }
+
+    @Override
     public void publish(PreparedRestore restore) {
         apply(targetAction, restore);
     }

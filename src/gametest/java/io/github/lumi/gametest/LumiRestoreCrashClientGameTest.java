@@ -120,7 +120,7 @@ public final class LumiRestoreCrashClientGameTest implements FabricClientGameTes
                 context, Path.of(metadata.getProperty("world")));
         try (TestSingleplayerContext recovered = save.open()) {
             context.runOnClient(client -> client.options.pauseOnLostFocus = false);
-            if (expectedPhase.equals("cleanup")) {
+            if (expectedPhase.equals("cleanup") || expectedPhase.equals("publication")) {
                 new LumiUiTestDriver(context).awaitHistory();
                 require(!(context.computeOnClient(client -> client.screen) instanceof LumiRecoveryScreen),
                         "Durably completed Restore displayed recovery UI");

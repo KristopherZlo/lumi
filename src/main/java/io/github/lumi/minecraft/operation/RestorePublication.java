@@ -6,8 +6,14 @@ import java.io.IOException;
 /** Publishes durable history selection only after a Restore verifies exactly. */
 @FunctionalInterface
 public interface RestorePublication {
-    /** Runs on the persistence worker; must not touch live Minecraft state. */
+    /** Synchronous standalone publication, retained for repository callers. */
     void publish(PreparedRestore restore) throws IOException;
+
+    /** Worker phase; implementations with server-owned tracking must split publication. */
+    default void persist(PreparedRestore restore) throws IOException { publish(restore); }
+
+    /** Server phase after file publication, before waiting for index durability. */
+    default void finishOnServer(PreparedRestore restore) throws IOException { }
 
     /** Installs server-owned runtime selection after publication is durable. */
     default void installed() throws IOException { }
@@ -22,6 +28,10 @@ public interface RestorePublication {
 
     /** Reconciles durable pending state when target failure verifies the return state. */
     default void publishReturn(PreparedRestore restore) throws IOException { }
+
+    default void persistReturn(PreparedRestore restore) throws IOException { publishReturn(restore); }
+
+    default void finishReturnOnServer(PreparedRestore restore) throws IOException { }
 
     default boolean isReturnDurable() {
         return true;

@@ -20,6 +20,12 @@ public final class PendingRestorePublication implements RestorePublication {
     }
 
     @Override
+    public void persist(PreparedRestore restore) { }
+
+    @Override
+    public void finishOnServer(PreparedRestore restore) throws IOException { publish(restore); }
+
+    @Override
     public void publish(PreparedRestore restore) throws IOException {
         if (boundary != null) {
             throw new IllegalStateException("Pending Restore was already published");

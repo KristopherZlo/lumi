@@ -43,7 +43,15 @@ public final class BranchRefRestorePublication implements RestorePublication {
 
     @Override
     public void publish(PreparedRestore restore) throws IOException {
+        persist(restore);
+        finishOnServer(restore);
+    }
+
+    @Override public void persist(PreparedRestore restore) throws IOException {
         refs.compareAndSet(restore.expectedRef(), restore.targetCommit());
+    }
+
+    @Override public void finishOnServer(PreparedRestore restore) {
         working.ifPresent(clear -> clear.publish(restore));
     }
 

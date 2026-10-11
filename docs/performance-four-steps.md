@@ -18,9 +18,12 @@ remains frozen until cleanup completes. Safe return and degraded journals use
 the same worker. A tick may await the worker only through its remaining
 deadline. Slow `force` calls therefore cannot extend that deadline.
 
-`RestorePublication.publish` and `publishReturn` must use immutable prepared
-state and thread-safe repositories/tracking. Minecraft runtime selection belongs
-in `installed`, which runs on the server thread after durable publication.
+`RestorePublication.persist` and `persistReturn` run on the worker and must use
+immutable prepared state and thread-safe repositories. Generation tracking and
+chunk retention run in `finishOnServer` / `finishReturnOnServer`, before waiting
+for index durability. Minecraft runtime selection belongs in `installed`, which
+runs on the server thread after durable publication. Standalone synchronous
+`publish` / `publishReturn` calls retain their original behavior for callers.
 Once a persistence task owns activation, cancellation is refused rather than
 abandoning an in-flight journal. Shutdown joins the owned writer before closing
 the prepared plan and leaves unfinished durable journals for recovery.
@@ -65,6 +68,11 @@ cannot dispatch the same writer again after an urgent flush. Chunk retention
 and publication gates still require the actual durable generations, not timer
 completion. Existing synchronous/test adapters retain zero-delay scheduling.
 
+An opt-in performance regression records actual `jdk.FileForce` events for a
+32-mutation burst, comparing immediate and production 50 ms scheduling in three
+fresh repositories. It requires fewer forced writes and rereads generation 33
+from disk after an urgent boundary, checking that vanilla publication is allowed.
+
 ## Native palette capture
 
 `MinecraftSectionPaletteCapture` holds the existing section lock while copying
@@ -88,6 +96,13 @@ be recorded here after all four slices are implemented.
 
 The real-process crash matrix now includes `prepared`, `applying`, `publication`
 and `cleanup` in addition to `write`, `barrier`, `force` and `verify`. Reopening
-before cleanup must freeze for recovery; reopening after cleanup must show the
-exact published target without a recovery dialog. Each verifier reopens again
+before ref publication must freeze for recovery. Once the verified target ref is
+durable, the existing `PublishedApplyRecovery` proof finalizes cleanup during
+startup; both publication/cleanup crashes must show the exact target without a
+recovery dialog. Each verifier reopens again
 to check world/entity/ref state and absence of an active journal or freeze.
+
+The first server-suite run exposed server-only chunk retention in checkpoint
+Undo publication. File persistence and server-side generation tracking were
+split without relaxing that guard. A real-worker regression covers pending and
+checkpoint tracking; the rerun passed all 35 required server GameTests.

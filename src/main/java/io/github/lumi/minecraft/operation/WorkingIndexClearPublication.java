@@ -20,6 +20,12 @@ public final class WorkingIndexClearPublication implements RestorePublication {
     }
 
     @Override
+    public void persist(PreparedRestore restore) { }
+
+    @Override
+    public void finishOnServer(PreparedRestore restore) { publish(restore); }
+
+    @Override
     public void publish(PreparedRestore ignored) {
         if (revision != null) {
             throw new IllegalStateException("Working-index boundary was already published");

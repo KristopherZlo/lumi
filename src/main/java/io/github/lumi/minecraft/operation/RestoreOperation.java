@@ -46,6 +46,8 @@ public final class RestoreOperation implements DimensionMutation {
     private boolean targetRepairAttempted;
     private boolean returnRepairAttempted;
     private boolean returnPublicationStarted;
+    private boolean targetPublicationPersisted;
+    private boolean returnPublicationPersisted;
     private boolean journalPersisted;
     private boolean applyJournalStarted;
     private boolean runtimeInstalled;
@@ -914,10 +916,14 @@ public final class RestoreOperation implements DimensionMutation {
     }
 
     private void publishTarget(long deadlineNanos) throws IOException {
-        if (!persistence.await(RestorePersistence.Step.PUBLISH,
-                () -> publication.publish(restore), deadlineNanos)) {
-            return;
+        if (!targetPublicationPersisted) {
+            if (!persistence.await(RestorePersistence.Step.PUBLISH,
+                    () -> publication.persist(restore), deadlineNanos)) {
+                return;
+            }
+            targetPublicationPersisted = true;
         }
+        publication.finishOnServer(restore);
         status = RestoreStatus.PUBLISHING;
         finishPublication(deadlineNanos);
     }
@@ -1005,10 +1011,14 @@ public final class RestoreOperation implements DimensionMutation {
             return;
         }
         if (!returnPublicationStarted) {
-            if (!persistence.await(RestorePersistence.Step.PUBLISH_RETURN,
-                    () -> publication.publishReturn(restore), deadlineNanos)) {
-                return;
+            if (!returnPublicationPersisted) {
+                if (!persistence.await(RestorePersistence.Step.PUBLISH_RETURN,
+                        () -> publication.persistReturn(restore), deadlineNanos)) {
+                    return;
+                }
+                returnPublicationPersisted = true;
             }
+            publication.finishReturnOnServer(restore);
             returnPublicationStarted = true;
         }
         if (!publication.awaitReturnDurable(deadlineNanos)) {
