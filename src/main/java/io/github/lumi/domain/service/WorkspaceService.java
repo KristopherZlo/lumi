@@ -29,6 +29,7 @@ public final class WorkspaceService {
     private final ActiveWorkspaceRepository active;
     private final CommitRepository commits;
     private final BranchRefRepository refs;
+    private volatile WorkspaceSettings cachedSettings;
 
     public WorkspaceService(
             WorkspaceRepository workspaces,
@@ -78,10 +79,18 @@ public final class WorkspaceService {
         return new Creation(workspace, initial);
     }
 
-    public Workspace active() throws IOException {
+    public synchronized Workspace active() throws IOException {
         var selected = active.read().orElseThrow(
                 () -> new IOException("Active workspace is missing"));
-        return require(selected.id());
+        Workspace workspace = require(selected.id());
+        cachedSettings = workspace.settings();
+        return workspace;
+    }
+
+    /** Runtime polling only; operation validation still rereads active metadata. */
+    public WorkspaceSettings cachedActiveSettings() throws IOException {
+        WorkspaceSettings current = cachedSettings;
+        return current == null ? active().settings() : current;
     }
 
     public synchronized Workspace updateActiveSettings(WorkspaceSettings settings)
@@ -91,8 +100,10 @@ public final class WorkspaceService {
         if (current.settings().equals(settings)) {
             return current;
         }
-        return workspaces.replace(current, new Workspace(
+        Workspace updated = workspaces.replace(current, new Workspace(
                 current.id(), current.name(), current.bounds(), settings));
+        cachedSettings = updated.settings();
+        return updated;
     }
 
     public List<Workspace> list() throws IOException {
@@ -127,20 +138,22 @@ public final class WorkspaceService {
         return new WorkspaceSwitchPlan(expected, target.id(), branch);
     }
 
-    public void completeSwitchIdempotent(WorkspaceSwitchPlan plan) throws IOException {
+    public synchronized void completeSwitchIdempotent(WorkspaceSwitchPlan plan) throws IOException {
         Objects.requireNonNull(plan, "plan");
-        require(plan.targetWorkspace());
+        Workspace target = require(plan.targetWorkspace());
         var selected = active.read().orElseThrow(
                 () -> new RefConflictException("Active workspace no longer exists"));
         var published = new io.github.lumi.domain.model.ActiveWorkspace(
                 plan.targetWorkspace(), Math.addExact(plan.expectedActive().revision(), 1));
         if (selected.equals(published)) {
+            cachedSettings = target.settings();
             return;
         }
         if (!selected.equals(plan.expectedActive())) {
             throw new RefConflictException("Active workspace changed during switch");
         }
         active.compareAndSet(plan.expectedActive(), plan.targetWorkspace());
+        cachedSettings = target.settings();
     }
 
     public void validateSwitch(WorkspaceSwitchPlan plan) throws IOException {

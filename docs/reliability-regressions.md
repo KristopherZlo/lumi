@@ -41,3 +41,12 @@ cancels the pending build. Dedicated-server previews retain the existing missing
 preview placeholder; no world-state transport or rendering behavior is added.
 `IsometricPreviewCoordinatorTest` exercises those paths with controlled builds.
 
+## Idle automatic-version polling
+
+The runtime reads a volatile immutable settings snapshot for its automatic-version
+check. Settings publication and idempotent workspace switches refresh that
+snapshot. Startup reads current metadata, including any completed recovery,
+before ticks begin. Authority, scope and expected-ref validation still use the
+existing fresh repository reads. Live external edits to workspace files are not
+a settings-publication API.
+

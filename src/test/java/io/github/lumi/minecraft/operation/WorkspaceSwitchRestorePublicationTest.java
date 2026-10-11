@@ -45,17 +45,22 @@ class WorkspaceSwitchRestorePublicationTest {
         UUID targetId = new UUID(0, 2);
         var created = workspaces.create(
                 targetId, "Castle", Optional.empty(),
-                io.github.lumi.domain.model.WorkspaceSettings.defaults(), main,
+                new io.github.lumi.domain.model.WorkspaceSettings(true, true, true,
+                        io.github.lumi.domain.model.HudDisplayMode.GUI, true), main,
                 new CommitAuthor(new UUID(0, 3), "Builder"), Instant.EPOCH);
         var branchPlan = branches.prepareSwitch(created.main().name());
         var plan = workspaces.prepareSwitch(targetId, branchPlan);
         var restore = new PreparedRestore(
                 main, created.main().commit(), Map.of(), Map.of(), Map.of(), Map.of());
         branches.completeSwitch(branchPlan);
+        org.junit.jupiter.api.Assertions.assertFalse(
+                workspaces.cachedActiveSettings().automaticVersionsEnabled());
 
         new WorkspaceSwitchRestorePublication(branches, workspaces, plan).publish(restore);
 
         assertEquals(created.main(), branches.active());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                workspaces.cachedActiveSettings().automaticVersionsEnabled());
         assertEquals(targetId, workspaces.active().id());
         new WorkspaceSwitchRestorePublication(branches, workspaces, plan).publish(restore);
     }

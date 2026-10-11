@@ -69,9 +69,35 @@ class WorkspaceServiceTest {
 
         WorkspaceSettings updated = new WorkspaceSettings(false, false);
         assertEquals(updated, service.updateActiveSettings(updated).settings());
+        assertEquals(updated, service.cachedActiveSettings());
         assertEquals(updated,
                 new WorkspaceRepository(repositoryRoot)
                         .read(projectId).orElseThrow().settings());
+    }
+
+    @Test
+    void cachedPollingAvoidsMetadataReadsButOperationReadsStillValidateStorage() throws Exception {
+        var workspaces = new WorkspaceRepository(repositoryRoot);
+        var active = new ActiveWorkspaceRepository(repositoryRoot);
+        var service = new WorkspaceService(workspaces, active,
+                new CommitRepository(repositoryRoot), new BranchRefRepository(repositoryRoot));
+        service.initializeDefault(new UUID(0, 8));
+        assertEquals(WorkspaceSettings.defaults(), service.cachedActiveSettings());
+        Path metadata = repositoryRoot.resolve("workspaces");
+        Path moved = repositoryRoot.resolve("temporarily-unavailable-workspaces");
+        java.nio.file.Files.move(metadata, moved);
+        try {
+            for (int tick = 0; tick < 200; tick++) {
+                assertEquals(WorkspaceSettings.defaults(), service.cachedActiveSettings());
+            }
+            org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, service::active);
+        } finally {
+            java.nio.file.Files.move(moved, metadata);
+        }
+        var enabled = new WorkspaceSettings(true, true, true,
+                io.github.lumi.domain.model.HudDisplayMode.GUI, true);
+        service.updateActiveSettings(enabled);
+        assertEquals(enabled, service.cachedActiveSettings());
     }
 
     private static Commit commit(io.github.lumi.domain.model.ObjectId tree, UUID workspace) {

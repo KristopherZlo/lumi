@@ -473,7 +473,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
     }
 
     private void scheduleAutoVersion() throws IOException {
-        if (!workspaces.active().settings().automaticVersionsEnabled()) return;
+        if (!workspaces.cachedActiveSettings().automaticVersionsEnabled()) return;
         long now = level.getGameTime();
         if (now < nextAutoVersionTick || autoVersionScheduled.get()) {
             return;
