@@ -40,6 +40,11 @@ final class PerformanceSamples {
         return ordered.get((int) Math.ceil(ordered.size() * percentile) - 1).nanos();
     }
 
+    long medianAllocatedBytes() {
+        var ordered = samples.stream().map(Sample::bytes).sorted().toList();
+        return ordered.get(ordered.size() / 2);
+    }
+
     void write() throws Exception {
         StringBuilder csv = new StringBuilder("sample,units,nanos,allocated_bytes,verified\n");
         for (int index = 0; index < samples.size(); index++) {

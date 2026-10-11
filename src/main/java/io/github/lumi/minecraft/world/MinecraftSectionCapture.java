@@ -4,12 +4,9 @@ import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
@@ -20,12 +17,13 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 
 /** Copies one visible 16x16x16 section into the Minecraft-free durable model. */
 public final class MinecraftSectionCapture {
-    private final Map<BlockState, String> encodedStates = new IdentityHashMap<>();
+    private final MinecraftSectionPaletteCapture paletteCapture =
+            new MinecraftSectionPaletteCapture();
 
     public SectionBlob capture(ServerLevel level, LevelChunk chunk, int sectionY) throws IOException {
         int sectionIndex = sectionIndex(level, chunk, sectionY);
-        List<String> states = captureStates(chunk.getSection(sectionIndex));
-        return new SectionBlob(states, captureBlockEntities(level, chunk, sectionY));
+        return paletteCapture.capture(chunk.getSection(sectionIndex),
+                captureBlockEntities(level, chunk, sectionY));
     }
 
     public boolean matches(
@@ -111,22 +109,4 @@ public final class MinecraftSectionCapture {
         return sectionIndex;
     }
 
-    private List<String> captureStates(LevelChunkSection section) {
-        List<String> states = new ArrayList<>(SectionBlob.BLOCK_COUNT);
-        section.acquire();
-        try {
-            for (int y = 0; y < 16; y++) {
-                for (int z = 0; z < 16; z++) {
-                    for (int x = 0; x < 16; x++) {
-                        BlockState state = section.getBlockState(x, y, z);
-                        states.add(encodedStates.computeIfAbsent(
-                                state, BlockStateParser::serialize));
-                    }
-                }
-            }
-        } finally {
-            section.release();
-        }
-        return states;
-    }
 }

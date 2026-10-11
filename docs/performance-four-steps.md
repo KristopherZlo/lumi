@@ -55,6 +55,21 @@ cannot dispatch the same writer again after an urgent flush. Chunk retention
 and publication gates still require the actual durable generations, not timer
 completion. Existing synchronous/test adapters retain zero-delay scheduling.
 
+## Native palette capture
+
+`MinecraftSectionPaletteCapture` holds the existing section lock while copying
+native bit-storage indexes and only the palette entries actually used by its
+4096 cells. It sorts distinct encoded states and remaps compact short indexes
+directly into `SectionBlob.fromPalette`. Uniform, local and global native palettes
+use the same canonical payload as the former expanded-list capture. Unused native
+entries are excluded, and global native IDs are compacted before conversion to
+short. Block-entity canonical NBT remains unchanged.
+
+Two access-widener entries expose the immutable native data snapshot and its
+existing public accessors to the adapter; no additional mixin is installed.
+Tests cover palette transitions, 4096 distinct states, block entities, snapshot
+immutability, stale native entries and lock release after failure.
+
 ## Verification
 
 After the Restore slice, the targeted Restore/publication tests and
