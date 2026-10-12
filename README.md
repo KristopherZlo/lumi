@@ -210,6 +210,13 @@ intact across batch boundaries.
 Spatial GPU meshes own their vertex buffers and release them explicitly. Fill
 opacity and x-ray depth behavior are draw-time settings, so changing the Action
 key does not require rebuilding identical vertices.
+Geometry preparation runs on a background executor. The render thread uploads
+at most two spatial batches per frame, stopping new uploads after 4 ms; a single
+batch may exceed that target. It draws only nearby batches inside the camera
+frustum. The resident vertex cache is limited to 128 MiB; larger visible results
+use one transient batch at a time instead of omitting blocks. Hiding, replacing
+or cancelling Compare and disconnecting release the cache and cancel obsolete
+preparation. All fills finish before any outlines are drawn.
 
 Zone and selection fixes, regression coverage, and paired shell measurements
 are recorded in [the interaction verification report](docs/zone-interaction-fixes.md).

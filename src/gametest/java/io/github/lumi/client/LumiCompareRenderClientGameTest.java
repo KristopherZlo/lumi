@@ -23,6 +23,7 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
 import net.minecraft.client.renderer.state.LevelRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.fog.FogRenderer;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.world.level.gamerules.GameRules;
 
@@ -40,11 +41,13 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
     private boolean active;
     private MultiBufferSource.BufferSource buffers;
     private final List<ByteBufferBuilder> ownedBuffers = new ArrayList<>();
+    private FogRenderer benchmarkFog;
 
     @Override
     public void runTest(ClientGameTestContext context) {
         if (!"COMPARE_RENDER".equalsIgnoreCase(System.getProperty("lumi.gametest.suite"))) return;
         WorldRenderEvents.END_MAIN.register(this::render);
+        WorldRenderEvents.END_EXTRACTION.register(extracted -> renderer.setFrustum(extracted.frustum()));
         int previousLimit = context.computeOnClient(client -> client.options.framerateLimit().get());
         context.runOnClient(client -> {
             var fixed = new LinkedHashMap<RenderType, ByteBufferBuilder>();
@@ -59,6 +62,7 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
             var fallback = new ByteBufferBuilder(65536);
             ownedBuffers.add(fallback);
             buffers = MultiBufferSource.immediateWithBuffers(fixed, fallback);
+            benchmarkFog = new FogRenderer();
         });
         try (var world = context.worldBuilder().adjustSettings(settings -> {
             settings.setName("Lumi Compare render benchmark");
@@ -108,6 +112,8 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                 pending.clear();
                 buffers.endBatch();
                 ownedBuffers.forEach(ByteBufferBuilder::close);
+                benchmarkFog.close();
+                renderer.close();
                 client.options.framerateLimit().set(previousLimit);
             });
         }
@@ -132,10 +138,14 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
         var encoder = RenderSystem.getDevice().createCommandEncoder();
         GpuQuery query = frame >= 30 && frame < 90 ? encoder.timerQueryBegin() : null;
         long started = System.nanoTime();
+        var previousFog = RenderSystem.getShaderFog();
+        RenderSystem.setShaderFog(benchmarkFog.getBuffer(FogRenderer.FogMode.NONE));
         renderer.render(new MeasuredContext(context, buffers), changes, xray);
+        if (!renderer.isReady()) frame = 0;
         // Include the existing renderer's deferred uploads and draws in both measurements.
         buffers.endBatch(LumiCompareRenderTypes.fill(xray));
         buffers.endBatch(LumiCompareRenderTypes.outline(xray));
+        if (previousFog != null) RenderSystem.setShaderFog(previousFog);
         long cpuNanos = System.nanoTime() - started;
         if (query != null) {
             encoder.timerQueryEnd(query);

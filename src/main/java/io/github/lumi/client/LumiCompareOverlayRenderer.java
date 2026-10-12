@@ -2,69 +2,201 @@ package io.github.lumi.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.systems.RenderSystem;
+import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BlockChange;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Map;
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
-import net.minecraft.client.renderer.ShapeRenderer;
+import net.minecraft.util.Util;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.client.renderer.rendertype.LayeringTransform;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.phys.shapes.Shapes;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
 
 /** Renders exact directional Compare blocks without reading client world state. */
-final class LumiCompareOverlayRenderer {
+final class LumiCompareOverlayRenderer implements AutoCloseable {
     private static final double MAX_DISTANCE_SQUARED = 256.0 * 256.0;
     private static final int NORMAL_ALPHA = 48;
     private static final int XRAY_ALPHA = 96;
+    private static final long MAX_GPU_BYTES = 128L * 1024 * 1024;
+    private final long residentByteLimit;
+    private final Map<CompareOverlayGeometry.Section, CompareOverlayGpuMesh> meshes =
+            new IdentityHashMap<>();
+    private final CompareOverlayGeometry geometry = new CompareOverlayGeometry();
+    private List<BlockChange> source = List.of();
+    private List<CompareOverlayGeometry.Section> sections = List.of();
+    private CompletableFuture<List<CompareOverlayGeometry.Section>> preparation;
+    private AtomicBoolean cancelled = new AtomicBoolean();
+    private Frustum frustum;
+    private long gpuBytes;
+    private boolean ready;
+
+    LumiCompareOverlayRenderer() {
+        this(MAX_GPU_BYTES);
+    }
+
+    LumiCompareOverlayRenderer(long residentByteLimit) {
+        if (residentByteLimit < 0) throw new IllegalArgumentException("Negative Compare GPU budget");
+        this.residentByteLimit = residentByteLimit;
+    }
+
+    long cachedBytes() {
+        return gpuBytes;
+    }
+
+    boolean isReady() {
+        return ready;
+    }
+
+    void setFrustum(Frustum frustum) {
+        this.frustum = frustum;
+    }
 
     void render(
             WorldRenderContext context,
             List<BlockChange> changes,
             boolean xray) {
-        if (changes.isEmpty()) return;
-        var camera = context.worldState().cameraRenderState.pos;
-        VertexConsumer fills = context.consumers().getBuffer(
-                LumiCompareRenderTypes.fill(xray));
-        int alpha = xray ? XRAY_ALPHA : NORMAL_ALPHA;
-        Set<Long> occupied = positions(changes);
-        for (BlockChange change : changes) {
-            double x = change.x() - camera.x;
-            double y = change.y() - camera.y;
-            double z = change.z() - camera.z;
-            if (distanceSquared(x + 0.5, y + 0.5, z + 0.5)
-                    > MAX_DISTANCE_SQUARED) {
-                continue;
+        if (changes != source) {
+            close();
+            source = changes;
+            if (!changes.isEmpty()) {
+                AtomicBoolean token = cancelled;
+                preparation = CompletableFuture.supplyAsync(
+                        () -> geometry.prepare(changes, token::get), Util.backgroundExecutor());
             }
-            int color = color(change.kind());
-            for (Direction side : Direction.values()) {
-                if (!occupied.contains(BlockPos.asLong(
-                        change.x() + side.getStepX(),
-                        change.y() + side.getStepY(),
-                        change.z() + side.getStepZ()))) {
-                    renderFace(context.matrices(), fills,
-                            (float) x, (float) y, (float) z,
-                            (float) x + 1, (float) y + 1, (float) z + 1,
-                            side, (color >> 16) & 255,
-                            (color >> 8) & 255, color & 255, alpha);
+        }
+        if (preparation != null && preparation.isDone()) {
+            try {
+                sections = preparation.join();
+            } catch (CompletionException failed) {
+                LumiMod.LOGGER.error("Lumi Compare overlay preparation failed", failed.getCause());
+            }
+            preparation = null;
+        }
+        if (sections.isEmpty()) return;
+        var camera = context.worldState().cameraRenderState.pos;
+        var visible = new ArrayList<CompareOverlayGeometry.Section>();
+        for (var section : sections) {
+            var bounds = section.bounds();
+            double x = Math.max(bounds.minX - camera.x, Math.max(0, camera.x - bounds.maxX));
+            double y = Math.max(bounds.minY - camera.y, Math.max(0, camera.y - bounds.maxY));
+            double z = Math.max(bounds.minZ - camera.z, Math.max(0, camera.z - bounds.maxZ));
+            if (distanceSquared(x, y, z) <= MAX_DISTANCE_SQUARED
+                    && (frustum == null || frustum.isVisible(bounds))) visible.add(section);
+        }
+        long uploadStarted = System.nanoTime();
+        long missingBytes = visible.stream().filter(section -> !meshes.containsKey(section))
+                .mapToLong(CompareOverlayGpuMesh::estimatedBytes).sum();
+        if (gpuBytes + missingBytes > residentByteLimit) {
+            Set<CompareOverlayGeometry.Section> visibleSet = Collections.newSetFromMap(new IdentityHashMap<>());
+            visibleSet.addAll(visible);
+            meshes.entrySet().removeIf(entry -> {
+                if (visibleSet.contains(entry.getKey())) return false;
+                gpuBytes -= entry.getValue().bytes();
+                entry.getValue().close();
+                return true;
+            });
+        }
+        int uploads = 0;
+        ready = true;
+        for (var section : visible) {
+            if (meshes.containsKey(section)
+                    || gpuBytes + CompareOverlayGpuMesh.estimatedBytes(section) > residentByteLimit
+                    || uploads >= 2 || System.nanoTime() - uploadStarted >= 4_000_000) continue;
+            CompareOverlayGpuMesh mesh = new CompareOverlayGpuMesh(section);
+            if (gpuBytes + mesh.bytes() > residentByteLimit) {
+                mesh.close();
+                break;
+            }
+            meshes.put(section, mesh);
+            gpuBytes += mesh.bytes();
+            uploads++;
+        }
+        for (var section : visible) {
+            if (!meshes.containsKey(section)
+                    && gpuBytes + CompareOverlayGpuMesh.estimatedBytes(section) <= residentByteLimit) ready = false;
+        }
+        draw(context, visible, xray, false);
+        draw(context, visible, xray, true);
+    }
+
+    private void draw(WorldRenderContext context, List<CompareOverlayGeometry.Section> visible,
+            boolean xray, boolean outline) {
+        var type = outline ? LumiCompareRenderTypes.outline(xray) : LumiCompareRenderTypes.fill(xray);
+        var target = Minecraft.getInstance().getMainRenderTarget();
+        var color = RenderSystem.outputColorTextureOverride != null
+                ? RenderSystem.outputColorTextureOverride : target.getColorTextureView();
+        var depth = RenderSystem.outputDepthTextureOverride != null
+                ? RenderSystem.outputDepthTextureOverride : target.getDepthTextureView();
+        var modelView = RenderSystem.getModelViewStack();
+        modelView.pushMatrix();
+        LayeringTransform.VIEW_OFFSET_Z_LAYERING.getModifier().accept(modelView);
+        try {
+            var camera = context.worldState().cameraRenderState.pos;
+            var tint = new Vector4f(1, 1, 1,
+                    outline ? 1 : (xray ? XRAY_ALPHA : NORMAL_ALPHA) / 255.0F);
+            for (var section : visible) {
+                var mesh = meshes.get(section);
+                boolean transientMesh = mesh == null
+                        && gpuBytes + CompareOverlayGpuMesh.estimatedBytes(section) > residentByteLimit;
+                if (transientMesh) mesh = new CompareOverlayGpuMesh(section);
+                if (mesh == null) continue; // Visible batches upload incrementally after preparation.
+                try {
+                    var layer = mesh.layer(outline);
+                    if (layer == null) continue;
+                    var transform = new Matrix4f(RenderSystem.getModelViewMatrix())
+                            .mul(context.matrices().last().pose())
+                            .translate((float) (section.x() - camera.x),
+                                    (float) (section.y() - camera.y), (float) (section.z() - camera.z));
+                    var uniform = RenderSystem.getDynamicUniforms()
+                            .writeTransform(transform, tint, new Vector3f(), new Matrix4f());
+                    var indices = RenderSystem.getSequentialBuffer(layer.mode());
+                    var indexBuffer = indices.getBuffer(layer.indexCount());
+                    try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                            () -> "Lumi Compare", color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
+                        pass.setPipeline(type.pipeline());
+                        RenderSystem.bindDefaultUniforms(pass);
+                        pass.setUniform("DynamicTransforms", uniform);
+                        pass.setVertexBuffer(0, layer.buffer());
+                        pass.setIndexBuffer(indexBuffer, indices.type());
+                        pass.drawIndexed(0, 0, layer.indexCount(), 1);
+                    }
+                } finally {
+                    if (transientMesh) mesh.close();
                 }
             }
+        } finally {
+            modelView.popMatrix();
         }
-        VertexConsumer lines = context.consumers().getBuffer(
-                LumiCompareRenderTypes.outline(xray));
-        for (BlockChange change : changes) {
-            double x = change.x() - camera.x;
-            double y = change.y() - camera.y;
-            double z = change.z() - camera.z;
-            if (distanceSquared(x + 0.5, y + 0.5, z + 0.5)
-                    > MAX_DISTANCE_SQUARED) {
-                continue;
-            }
-            int color = color(change.kind());
-            ShapeRenderer.renderShape(
-                    context.matrices(), lines, Shapes.block(),
-                    x, y, z, color, 2.75F);
-        }
+    }
+
+    @Override
+    public void close() {
+        if (source.isEmpty() && preparation == null && meshes.isEmpty()) return;
+        cancelled.set(true);
+        cancelled = new AtomicBoolean();
+        preparation = null;
+        source = List.of();
+        sections = List.of();
+        meshes.values().forEach(CompareOverlayGpuMesh::close);
+        meshes.clear();
+        gpuBytes = 0;
+        ready = false;
     }
 
     static int color(BlockChange.Kind kind) {

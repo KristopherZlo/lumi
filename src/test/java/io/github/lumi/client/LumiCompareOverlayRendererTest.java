@@ -28,15 +28,11 @@ class LumiCompareOverlayRendererTest {
     }
 
     @Test
-    void finishesFillsBeforeAcquiringTheOutlineBuffer() throws Exception {
+    void finishesAllFillsBeforeDrawingOutlines() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/io/github/lumi/client/LumiCompareOverlayRenderer.java"));
-        int fillBuffer = source.indexOf("LumiCompareRenderTypes.fill(xray)");
-        int fill = source.indexOf("renderFace(", fillBuffer);
-        int outlineBuffer = source.indexOf(
-                "LumiCompareRenderTypes.outline(xray)", fillBuffer);
-
-        assertTrue(fillBuffer < fill);
-        assertTrue(fill < outlineBuffer);
+        int fills = source.indexOf("draw(context, visible, xray, false)");
+        int outlines = source.indexOf("draw(context, visible, xray, true)");
+        assertTrue(fills >= 0 && fills < outlines);
     }
 }

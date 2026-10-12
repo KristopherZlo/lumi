@@ -68,6 +68,11 @@ final class CompareOverlayGpuMesh implements AutoCloseable {
                 + (outlines == null ? 0 : outlines.buffer().size());
     }
 
+    static long estimatedBytes(CompareOverlayGeometry.Section section) {
+        return (long) section.faceCount() * 4 * LumiCompareRenderTypes.fill(false).format().getVertexSize()
+                + (long) section.edgeCount() * 4 * LumiCompareRenderTypes.outline(false).format().getVertexSize();
+    }
+
     @Override
     public void close() {
         if (fills != null) fills.buffer().close();

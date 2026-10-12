@@ -5,6 +5,8 @@ import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientZonePendingPreviewStore;
 import java.util.Objects;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
@@ -38,9 +40,13 @@ public final class LumiPendingChangeOverlay {
     public void register() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
         WorldRenderEvents.END_MAIN.register(this::render);
+        WorldRenderEvents.END_EXTRACTION.register(context -> compareOverlay.setFrustum(context.frustum()));
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> compareOverlay.close());
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> compareOverlay.close());
     }
 
     private void tick(Minecraft client) {
+        if (comparisons.visibleChanges().isEmpty()) compareOverlay.close();
         if (zonePreviews.hasScope() && zonePreviews.currentZone(
                 history.state().snapshot().orElse(null)).isEmpty()) zonePreviews.clear();
         boolean actionDown = actionDown(client);

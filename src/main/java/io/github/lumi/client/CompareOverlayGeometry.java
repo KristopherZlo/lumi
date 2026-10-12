@@ -48,7 +48,9 @@ final class CompareOverlayGeometry {
             int y = BlockPos.getY(key) << 4;
             int z = BlockPos.getZ(key) << 4;
             prepared.add(new Section(x, y, z, List.copyOf(blocks),
-                    new AABB(x, y, z, x + 16, y + 16, z + 16)));
+                    new AABB(x, y, z, x + 16, y + 16, z + 16),
+                    blocks.stream().mapToInt(b -> Integer.bitCount(b.faces())).sum(),
+                    blocks.stream().mapToInt(b -> Integer.bitCount(b.edges())).sum()));
         });
         return List.copyOf(prepared);
     }
@@ -89,5 +91,6 @@ final class CompareOverlayGeometry {
 
     record Block(BlockChange change, int faces, int edges) { }
 
-    record Section(int x, int y, int z, List<Block> blocks, AABB bounds) { }
+    record Section(int x, int y, int z, List<Block> blocks, AABB bounds,
+            int faceCount, int edgeCount) { }
 }
