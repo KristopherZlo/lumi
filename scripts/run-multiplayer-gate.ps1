@@ -48,6 +48,8 @@ try {
             $taskArgFile = Join-Path $taskDirectory 'launch.args'
             [IO.File]::WriteAllLines($taskArgFile, $taskArguments, [Text.UTF8Encoding]::new($false))
             $taskProcesses += Start-Process -FilePath $Java -ArgumentList ('@"' + $taskArgFile + '"') -WindowStyle Hidden -PassThru -WorkingDirectory $taskGameDirectory -RedirectStandardOutput (Join-Path $taskDirectory 'stdout.log') -RedirectStandardError (Join-Path $taskDirectory 'stderr.log')
+            # Retain the process handle before exit; Windows PowerShell can otherwise lose ExitCode.
+            $taskProcesses[-1].Handle | Out-Null
             $taskProcesses.Id | Set-Content -LiteralPath (Join-Path $taskRun 'pids.txt')
             $taskLogs += Join-Path $taskDirectory 'stdout.log'
         }

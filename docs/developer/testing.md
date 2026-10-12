@@ -140,6 +140,13 @@ three-minute timeout and are excluded from the production jar. These gates
 cover one dimension; cross-dimension concurrency and standalone server JVM
 coverage remain separate checks.
 
+On 2026-10-12, the two-client runner passed all six named gates, including the
+post-capture TCP edits and disconnect after journaled Restore mutation. Evidence:
+`build/reports/lumi-multiplayer/20261012-104930-c147cb8dd0f74c43bfaf1be8d478bdf9/`.
+The manifest records the candidate and dirty working-tree status. Both clients
+used WorldEdit 7.4.2 and Axiom 5.4.2. This is functional network evidence, not a
+foreground performance measurement or a standalone server-process crash test.
+
 ## Real process-crash matrix
 
 GameTest-only persistence probes can cut staged object writes, pack force/move,
@@ -157,6 +164,13 @@ separate donor repository so its object pack cannot be skipped as duplicate
 data. An unpublished import must be safely retryable and must leave the
 canonical HEAD and live world unchanged. This fixture covers one section;
 large captures and entity/block-entity fixtures remain separate evidence.
+
+Run `scripts/run-publication-crash-matrix.ps1 -Kind save` or `-Kind import`.
+`-Phase journal-created` selects a focused Save cut; omit `-Phase` for all
+declared cuts. Each cut receives a new preserved game directory. The runner
+requires producer exit 86, its matching marker, verifier exit 0, and the named
+verification gate. Results and logs are under `build/reports/lumi-publication-crash/`.
+Save has twelve cuts; Import has eight. A subset run proves only its listed cuts.
 
 ```powershell
 .\gradlew.bat runRestoreCrashMatrix --no-daemon
