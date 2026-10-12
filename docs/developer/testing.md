@@ -97,7 +97,7 @@ For the default functional selection:
 | `SMOKE` | First-minute client/server actions, exact state, lighting, close, and reopen |
 | `UI` | Screen workflows and control states |
 | `UI_SCALE` | Fixed Lumi scale, mouse input, tooltips, and viewport sizes |
-| `COMPARE_RENDER` | Production overlay correctness, CPU submission, GPU timing, and screenshots |
+| `COMPARE_RENDER` | Overlay correctness, preparation HUD, H toggles, CPU submission, GPU timing, and screenshots |
 | `INTERACTION` | Player interaction diagnostics |
 | `RECOVERY` | Interrupted operation recovery through the UI |
 | `EXACT` | Exact Restore acceptance scenarios |
@@ -110,6 +110,13 @@ For example:
 .\gradlew.bat '-Dlumi.gametest.suite=UI_SCALE' runClientGameTest --no-daemon
 .\gradlew.bat '-Dlumi.gametest.suite=EXACT' runClientGameTest --no-daemon
 ```
+
+The Compare rendering gate also uses the registered overlay owner and the actual H binding.
+It checks preparation and partial-upload screenshots before the first highlight appears.
+The ready screenshot must show the highlight without the preparation bar.
+Hide/show cycles must preserve the prepared cache.
+Clearing Compare must release it.
+See [Highlight preparation](highlight-preparation.md#verification) for the focused command and recorded evidence.
 
 Client run files, logs, and screenshots live under `build/run/clientGameTest/`.
 Behavior scenarios also write reports under `build/reports/lumi-behavior/`.

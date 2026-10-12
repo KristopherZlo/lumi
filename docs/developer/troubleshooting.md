@@ -55,6 +55,17 @@ Do not compare samples from different paths as if they measured the same work.
 The optional developer mode in Lumi settings shows operation diagnostics in chat.
 Keep the runtime log for the full phase and failure context.
 
+## Compare preparation
+
+The highlight preparation bar reports client geometry and visible GPU uploads.
+It does not report server history progress or estimated time remaining.
+The GUI HUD setting controls its display in the world and Lumi screens.
+
+If a completed server Compare has no visible highlight, inspect local preparation and renderer readiness.
+The first highlight waits for its visible batches.
+Hidden, completed, and failed preparation have no active bar.
+For an unexpected bar or partial first highlight, follow the [client ownership path](highlight-preparation.md#read-the-code).
+
 ## Shared-world rejections
 
 A rejected queued request can be correct behavior.

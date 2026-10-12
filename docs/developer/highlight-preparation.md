@@ -1,49 +1,77 @@
 # Compare highlight preparation
 
-`ClientCompareStore` keeps one immutable input while H changes visibility.
-`LumiPendingChangeOverlay` retains the renderer input until Compare is replaced,
-cleared, or disconnected. H keeps the bounded GPU cache, so showing an unchanged
-highlight again does not repeat preparation or uploads.
+[Documentation home](README.md) / Compare highlight preparation
 
-`CompareOverlayGeometry` reports completed blocks in its two background passes.
-`LumiCompareOverlayRenderer` adds the visible batch uploads to this local progress.
-`HighlightPreparationProgress` is an immutable client value; it does not create a
-server history operation. Completed, hidden, and failed preparations have no
-active progress indicator.
+## What the player sees
 
-`LumiOperationHud` receives a progress supplier from the registered overlay owner.
-It displays a translated percentage and bar below the current operation panel and
-above notifications. Both the in-world HUD and Lumi screens use the same panel.
-The workspace's GUI HUD setting still applies.
+Compare shows a preparation percentage and bar when the workspace uses the GUI HUD.
+The bar appears below the current operation panel and above notifications.
+The in-world HUD and Lumi screens use the same panel.
 
-The first highlight is presented after its visible batches are ready. Subsequent
-camera movement keeps the existing highlight visible while new batches upload.
-Preparation remains asynchronous. Uploads retain the two-batch and 4 ms launch
-budgets, and the resident cache retains its 128 MiB limit and exact transient
-fallback. No changed blocks or interior x-ray edges are omitted.
+The first highlight appears when its visible batches are ready for drawing.
+Later camera movement keeps the existing highlight visible while new batches upload.
+Completed, hidden, and failed preparation have no active bar.
 
-Unit coverage includes immutable input retention, both geometry progress passes,
-and valid progress bounds. `COMPARE_RENDER` exercises the registered owner and
-actual H binding across three hide/show cycles, checks retained bytes and immediate
-readiness, and verifies that clearing Compare releases the cache.
-It also checks screenshots for the preparation bar and its disappearance when
-ready, hidden, or cleared.
-The partial-upload screenshot must contain the bar and no individual outlines;
-the ready screenshot must contain the highlight and no preparation bar.
+The H binding changes visibility and retains the prepared cache.
+Showing the same prepared highlight again does not repeat geometry preparation or uploads.
+Replacing or clearing Compare, disconnecting, and stopping the client release renderer resources.
+
+## Read the code
+
+| Step | Owner | Responsibility |
+| --- | --- | --- |
+| 1 | [ClientCompareStore](../../src/main/java/io/github/lumi/client/state/ClientCompareStore.java) | Keeps the immutable comparison input while visibility changes. |
+| 2 | [LumiPendingChangeOverlay](../../src/main/java/io/github/lumi/client/LumiPendingChangeOverlay.java) | Retains renderer input and exposes `highlightProgress` for the visible comparison. |
+| 3 | [CompareOverlayGeometry](../../src/main/java/io/github/lumi/client/CompareOverlayGeometry.java) | Reports completed blocks during its two background geometry passes. |
+| 4 | [LumiCompareOverlayRenderer](../../src/main/java/io/github/lumi/client/LumiCompareOverlayRenderer.java) | Combines geometry progress with visible upload work and controls initial presentation. |
+| 5 | [HighlightPreparationProgress](../../src/main/java/io/github/lumi/client/state/HighlightPreparationProgress.java) | Provides immutable completed and total work counts, a fraction, and a percentage. |
+| 6 | [LumiClient.onInitializeClient](../../src/main/java/io/github/lumi/client/LumiClient.java) | Supplies `PENDING_OVERLAY::highlightProgress` to the HUD. |
+| 7 | [LumiOperationHud.renderHighlightProgress](../../src/main/java/io/github/lumi/client/ui/LumiOperationHud.java) | Draws the translated percentage and progress bar in both HUD contexts. |
+
+## Progress and ownership
+
+This progress describes client geometry preparation and visible GPU uploads.
+It does not create a server history operation or acquire a dimension freeze.
+The percentage measures work counts, not elapsed time or estimated time remaining.
+
+Geometry preparation runs on a background worker.
+The render thread uploads, draws, and releases GPU buffers.
+The HUD reads the progress value through its supplier.
+`LumiPendingChangeOverlay.highlightProgress` returns inactive progress while Compare is hidden.
+
+The translation key is `luma.status.highlight_preparing`.
+Translation files live under [assets/lumi/lang](../../src/main/resources/assets/lumi/lang).
+
+## Rendering limits
+
+Each frame starts at most two retained batch uploads.
+New uploads stop after a 4 ms launch budget.
+One batch can exceed that budget.
+The resident GPU cache has a 128 MiB limit.
+Results above the limit use transient drawing for remaining visible batches.
+The fallback must preserve changed blocks and interior x-ray edges.
 
 ## Verification
 
-On 2026-10-12, JDK 21, RTX 2080, 854 by 480, with the client capped at 30 FPS:
+Unit tests cover immutable input retention, both geometry progress passes, and valid progress bounds:
 
-- All 949 unit tests passed; `compileGametestJava` and `remapJar` passed.
-- `COMPARE_RENDER` passed, including normal/x-ray dense and scattered geometry,
-  the zero-byte resident-cache fallback, native H toggles, and HUD screenshots.
-- The initial 100,000-block preparation took 1.716 seconds. Repeated H toggles
-  retained exactly the same cached bytes and were ready immediately, with no
-  active preparation indicator.
-- The final 60-frame scattered workload had median CPU submission times of
-  0.251 ms (normal) and 0.237 ms (x-ray). GPU elapsed medians were 10.015 ms and
-  9.950 ms; these include submission gaps, rather than isolated shader execution.
+- [ClientCompareStoreTest](../../src/test/java/io/github/lumi/client/state/ClientCompareStoreTest.java).
+- [CompareOverlayGeometryTest](../../src/test/java/io/github/lumi/client/CompareOverlayGeometryTest.java).
+- [HighlightPreparationProgressTest](../../src/test/java/io/github/lumi/client/state/HighlightPreparationProgressTest.java).
+
+The `COMPARE_RENDER` suite uses the registered overlay owner and actual H binding.
+[LumiCompareToggleScenario](../../src/gametest/java/io/github/lumi/client/LumiCompareToggleScenario.java) checks these states:
+
+| State | Required result |
+| --- | --- |
+| Geometry preparation | The bar appears and the first highlight remains hidden. |
+| Partial visible upload | The bar remains visible and no individual highlight outlines appear. |
+| Ready | The highlight appears and the preparation bar disappears. |
+| Hidden | The bar disappears. Prepared cache data remains available. |
+| Three hide/show cycles | Cached bytes remain equal and prepared visibility returns immediately. |
+| Cleared | Cached bytes return to zero and preparation becomes inactive. |
+
+The suite also checks dense and scattered geometry, normal and x-ray drawing, and the zero-byte resident-cache fallback.
 
 Run the checks from PowerShell with JDK 21:
 
@@ -52,7 +80,31 @@ Run the checks from PowerShell with JDK 21:
 .\gradlew.bat '-Dlumi.gametest.suite=COMPARE_RENDER' runClientGameTest --no-daemon --no-parallel --max-workers=1
 ```
 
-Local evidence is preserved in `build/reports/lumi-compare-render/highlight.csv`,
-`highlight-preparation.csv`, and `highlight-screenshots/`. Client tests recreate
-their run directory; copy evidence before another run. The synthetic fixture
-does not mutate saved history. The player's original forest was not exercised.
+Client tests recreate their run directory.
+Copy evidence before another run.
+See [Testing](testing.md#client-gametests) for other suites and report locations.
+
+### Recorded run: 2026-10-12
+
+The recorded run used JDK 21, an RTX 2080, an 854-by-480 framebuffer, and a 30 FPS client limit.
+All 949 unit tests passed.
+`compileGametestJava`, `remapJar`, and `COMPARE_RENDER` also passed.
+
+| Measurement | Recorded result |
+| --- | --- |
+| Initial 100,000-block preparation | 1.716 seconds |
+| Repeated H toggles | Equal cached bytes, immediate readiness, and no active preparation bar |
+| Scattered CPU submission median, normal / x-ray | 0.251 / 0.237 ms across 60 frames |
+| Scattered GPU elapsed median, normal / x-ray | 10.015 / 9.950 ms across 60 frames |
+
+GPU elapsed samples include submission gaps.
+They do not isolate shader execution time.
+These measurements describe this synthetic fixture and environment.
+They do not establish performance for arbitrary player worlds.
+The fixture does not mutate saved history.
+
+The recorded artifacts are local build output, not files in the Git checkout:
+
+- `build/reports/lumi-compare-render/highlight.csv`.
+- `build/reports/lumi-compare-render/highlight-preparation.csv`.
+- `build/reports/lumi-compare-render/highlight-screenshots/`.

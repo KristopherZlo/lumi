@@ -78,6 +78,10 @@ selection history shows a message. Put the sword away to undo or redo world edit
 
 You can change all key bindings in Minecraft controls.
 
+With the GUI HUD enabled, Compare shows a preparation percentage and bar.
+The first world highlight appears when its visible parts are ready.
+The preparation bar disappears when the highlight is ready or hidden.
+
 Lumi screens use a fixed GUI scale of 2. Minecraft's GUI Scale setting does not
 change their size. Resizing the window or entering fullscreen updates the
 available layout space while keeping controls at the same pixel scale.

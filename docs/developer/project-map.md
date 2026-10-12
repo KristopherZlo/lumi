@@ -101,6 +101,10 @@ Read the called service and matching test before you study the full assembly cla
 | Render thread | GPU upload, drawing, and release of render resources |
 | Client background workers | Immutable overlay geometry and optional preview preparation |
 
+Compare highlight preparation has its own client progress value.
+The HUD receives that value from the overlay owner through a supplier.
+Follow [Highlight preparation](highlight-preparation.md#read-the-code) for this ownership path.
+
 Do not access a live Minecraft world from a worker just because a service uses a future.
 Use the existing adapter contract for that specific operation.
 

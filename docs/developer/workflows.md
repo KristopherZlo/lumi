@@ -83,13 +83,18 @@ It does not restore either version or freeze the live dimension.
 | 5 | [CompareService.compare](../../src/main/java/io/github/lumi/domain/service/CompareService.java) | Finds changed leaves by skipping equal tree hashes. |
 | 6 | [BlockDifferenceService.scan](../../src/main/java/io/github/lumi/domain/service/BlockDifferenceService.java) | Decodes changed section pairs and emits directional block differences. |
 | 7 | [ClientCompareStore](../../src/main/java/io/github/lumi/client/state/ClientCompareStore.java) | Accepts ordered results for the current request and rejects stale results. |
-| 8 | [LumiCompareOverlayRenderer](../../src/main/java/io/github/lumi/client/LumiCompareOverlayRenderer.java) | Prepares and draws the accepted result in the world. |
+| 8 | [LumiPendingChangeOverlay](../../src/main/java/io/github/lumi/client/LumiPendingChangeOverlay.java) | Owns the renderer and exposes local preparation progress. |
+| 9 | [LumiCompareOverlayRenderer](../../src/main/java/io/github/lumi/client/LumiCompareOverlayRenderer.java) | Prepares geometry, uploads visible batches, and draws the accepted result. |
+| 10 | [LumiOperationHud](../../src/main/java/io/github/lumi/client/ui/LumiOperationHud.java) | Shows the preparation percentage and bar in the world and Lumi screens. |
 
 ### Separate history logic from drawing
 
 [CompareOverlayGeometry](../../src/main/java/io/github/lumi/client/CompareOverlayGeometry.java) prepares exact faces and edges from immutable block changes.
 [CompareOverlayGpuMesh](../../src/main/java/io/github/lumi/client/CompareOverlayGpuMesh.java) owns GPU buffers for those batches.
 GPU upload, drawing, and resource release belong on the render thread.
+The renderer reports local progress through `HighlightPreparationProgress`.
+`LumiClient` connects the overlay's progress supplier to `LumiOperationHud`.
+This client work does not enter the server mutation queue.
 See [Highlight preparation](highlight-preparation.md) for client progress and initial presentation.
 
 For a wrong block difference, start in `CompareService` or `BlockDifferenceService`.
