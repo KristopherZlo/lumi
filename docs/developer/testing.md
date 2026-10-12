@@ -161,6 +161,11 @@ disarmed during fixture creation, force a unique marker, and halt with exit code
 86. These probes do not establish coverage until a producer reaches each marker
 and a separate verifier reopens its preserved world.
 
+`working-cleared` cuts after `MutationDurabilityTracker.complete` has drained
+the captured-generation write. Normal Save uses this completion collaborator;
+the repository's `clearCaptured` method belongs to startup recovery. A producer
+fails immediately if its operation terminates without the selected crash marker.
+
 `PERSISTENCE_CRASH` selects the Save/Import producer and verifier. The producer
 creates durable prior history and an independent section oracle before arming
 the cut. The verifier checks the complete reachable object inventory, expected
@@ -212,6 +217,19 @@ Merge `applying` passed after correcting fixture onboarding and the independent
 block oracle, including two-parent history, prior Restore and clean reopen:
 `build/reports/lumi-publication-crash/20261012-114039-d98c10b6e7784146823c2c48f1811a78/`.
 These focused runs do not establish the remaining cuts.
+
+Save's twelve declared cuts were verified in two resumed runs on 2026-10-12.
+The first completed `objects-staged`, `pack-forced`, `pack-published`,
+`index-forced`, `objects-published`, `commit-written`, `ref-forced`,
+`ref-published` and `journal-created`, then failed because the original
+`working-cleared` probe did not intercept normal Save:
+`build/reports/lumi-publication-crash/20261012-114228-aa355087341b486f92ca3d01e0bee31c/`.
+After correcting the test-only probe, `working-cleared`, `journal-complete` and
+`cleanup` passed:
+`build/reports/lumi-publication-crash/20261012-115719-6373d3e859314a059c635b239f532971/`.
+Each completed cut includes prior-history Restore and clean reopen. The
+manifests record their different test-code candidates; this combined evidence
+is not a single all-green candidate release run.
 
 ```powershell
 .\gradlew.bat runRestoreCrashMatrix --no-daemon

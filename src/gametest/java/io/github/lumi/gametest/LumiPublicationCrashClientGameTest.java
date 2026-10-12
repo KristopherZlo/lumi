@@ -6,6 +6,7 @@ import io.github.lumi.domain.model.*;
 import io.github.lumi.domain.service.ImportExportService;
 import io.github.lumi.minecraft.runtime.FabricDimensionRuntime;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
+import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.storage.object.SectionBlobCodec;
 import io.github.lumi.storage.packageformat.LumiPackageDirectory;
 import io.github.lumi.storage.repository.*;
@@ -84,7 +85,14 @@ public final class LumiPublicationCrashClientGameTest implements FabricClientGam
             LumiPersistenceCrashProbe.writeMetadata(metadata);
             LumiPersistenceCrashProbe.arm();
             if (kind.equals("save")) {
-                context.runOnClient(client -> LumiClient.networking().save("publication-target"));
+                UUID request = context.computeOnClient(client -> LumiClient.networking().save("publication-target"));
+                context.waitFor(client -> {
+                    var event = LumiClient.history().state().events().get(request);
+                    return event != null && event.state() != OperationEventPayload.State.ACCEPTED
+                            && event.state() != OperationEventPayload.State.PROGRESS;
+                }, 12000);
+                throw new AssertionError("Save terminated without its crash cutpoint: "
+                        + context.computeOnClient(client -> LumiClient.history().state().events().get(request)));
             } else {
                 var confirmed = inspection;
                 var future = server.computeOnServer(minecraft -> runtime(minecraft).importPackage(
@@ -93,8 +101,6 @@ public final class LumiPublicationCrashClientGameTest implements FabricClientGam
                 future.join();
                 throw new AssertionError("Import completed without its crash cutpoint");
             }
-            context.waitTicks(12000);
-            throw new AssertionError("Save never reached its crash cutpoint");
         }
     }
 

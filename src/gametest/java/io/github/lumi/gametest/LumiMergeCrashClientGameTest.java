@@ -83,9 +83,11 @@ public final class LumiMergeCrashClientGameTest implements FabricClientGameTest 
             });
             var plan = awaitFuture(context, preparation);
             require(plan.result().conflicts() > 0, "Merge fixture did not create conflicts");
-            server.runOnServer(minecraft -> runtime(minecraft).startMerge(plan, ignored -> { }));
-            context.waitTicks(12000);
-            throw new AssertionError("Merge did not reach the selected cutpoint");
+            var mutation = server.computeOnServer(minecraft -> runtime(minecraft).startMerge(plan, ignored -> { }));
+            await(context, () -> server.computeOnServer(minecraft -> mutation.isTerminal()),
+                    "Merge never reached its crash cutpoint");
+            throw new AssertionError("Merge terminated without its crash cutpoint: "
+                    + server.computeOnServer(minecraft -> mutation.terminalState()));
         }
     }
 
