@@ -184,7 +184,7 @@ To run one server GameTest, add
 `-Dfabric-api.gametest.filter=<test-id>` before `runGameTest`. This skips the
 full suite.
 
-Client GameTests run all current suites by default. Select `SMOKE`, `UI`, `UI_SCALE`, `COMPARE_RENDER`, `INTERACTION`,
+Client GameTests run the functional suites by default. Select `SMOKE`, `UI`, `UI_SCALE`, `COMPARE_RENDER`, `INTERACTION`,
 `RECOVERY`, `EXACT`, or `BENCHMARK` with
 `-Dlumi.gametest.suite=<name> runClientGameTest --no-daemon`.
 
@@ -202,6 +202,11 @@ another client test run, which recreates that directory.
 GPU elapsed time includes upload and gaps while the CPU prepares the submission;
 it is not an isolated shader execution measurement. Screenshots must contain
 the colored highlight, so an empty or incorrectly aimed view fails the test.
+The test also records preparation latency and GPU environment, checks cache
+release when Compare is hidden, and verifies that a zero-byte resident budget
+still draws every visible batch through the transient path. Its isolated
+overlay fixture disables fog for both A/B runs and leaves the world renderer's
+fog unchanged.
 
 Compare overlay preparation groups exact block faces and edges into spatial
 batches. It removes shared internal fills and duplicate edges only when their

@@ -26,19 +26,23 @@ import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.fog.FogRenderer;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.world.level.gamerules.GameRules;
+import org.lwjgl.glfw.GLFW;
 
 /** Measures the real overlay pipeline; synthetic Compare input never edits saved history. */
 @SuppressWarnings("UnstableApiUsage")
 public final class LumiCompareRenderClientGameTest implements FabricClientGameTest {
-    private final LumiCompareOverlayRenderer renderer = new LumiCompareOverlayRenderer();
+    private LumiCompareOverlayRenderer renderer = new LumiCompareOverlayRenderer();
     private final List<String> report = new ArrayList<>(List.of(
             "case,blocks,frame,cpu_ns,gpu_ns"));
     private final List<Pending> pending = new ArrayList<>();
+    private final List<String> preparationReport = new ArrayList<>(List.of("case,ready_ns,resident_bytes"));
     private List<BlockChange> changes = List.of();
     private String name;
     private boolean xray;
     private int frame;
     private boolean active;
+    private long inputStarted;
+    private boolean observedReady;
     private MultiBufferSource.BufferSource buffers;
     private final List<ByteBufferBuilder> ownedBuffers = new ArrayList<>();
     private FogRenderer benchmarkFog;
@@ -49,6 +53,7 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
         WorldRenderEvents.END_MAIN.register(this::render);
         WorldRenderEvents.END_EXTRACTION.register(extracted -> renderer.setFrustum(extracted.frustum()));
         int previousLimit = context.computeOnClient(client -> client.options.framerateLimit().get());
+        Path denseXrayScreenshot = null;
         context.runOnClient(client -> {
             var fixed = new LinkedHashMap<RenderType, ByteBufferBuilder>();
             for (boolean throughWorld : new boolean[] {false, true}) {
@@ -98,13 +103,43 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                         xray = throughWorld;
                         name = (sparse ? "canopy" : "dense") + (xray ? "_xray" : "_normal");
                         frame = 0;
+                        inputStarted = System.nanoTime();
+                        observedReady = false;
                         active = true;
                     });
                     context.waitFor(client -> frame >= 90 && pending.isEmpty(), 1200);
-                    assertHighlight(context.takeScreenshot("lumi-compare-" + name));
+                    Path screenshot = context.takeScreenshot("lumi-compare-" + name);
+                    assertHighlight(screenshot);
+                    if (!sparse && throughWorld) denseXrayScreenshot = screenshot;
                     context.runOnClient(client -> active = false);
                 }
             }
+            context.runOnClient(client -> {
+                changes = List.of();
+                active = true;
+            });
+            context.waitFor(client -> renderer.cachedBytes() == 0);
+            context.runOnClient(client -> {
+                active = false;
+                renderer.close();
+                if (renderer.cachedBytes() != 0) throw new AssertionError("Hidden Compare leaked GPU vertices");
+                renderer = new LumiCompareOverlayRenderer(0);
+                changes = fixture(false);
+                name = "dense_zero_resident_budget";
+                xray = true;
+                frame = 0;
+                inputStarted = System.nanoTime();
+                observedReady = false;
+                active = true;
+            });
+            context.waitFor(client -> frame >= 90 && pending.isEmpty(), 1200);
+            Path transientScreenshot = context.takeScreenshot("lumi-compare-zero-budget");
+            assertHighlight(transientScreenshot);
+            assertSameHighlight(denseXrayScreenshot, transientScreenshot);
+            context.runOnClient(client -> {
+                active = false;
+                if (renderer.cachedBytes() != 0) throw new AssertionError("Compare exceeded its zero-byte cache budget");
+            });
         } finally {
             context.runOnClient(client -> {
                 active = false;
@@ -121,6 +156,14 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
             Path output = FabricLoader.getInstance().getGameDir()
                     .resolve("compare-render.csv");
             Files.write(output, report);
+            Files.write(output.resolveSibling("compare-render-preparation.csv"), preparationReport);
+            String environment = context.computeOnClient(client ->
+                    "GPU=" + RenderSystem.getDevice().getRenderer()
+                    + "\nJDK=" + System.getProperty("java.version")
+                    + "\nframebuffer=" + client.getWindow().getWidth() + "x" + client.getWindow().getHeight()
+                    + "\nwindow_visible=" + GLFW.glfwGetWindowAttrib(client.getWindow().handle(), GLFW.GLFW_VISIBLE)
+                    + "\nframe_limit=30\noverlay_fog=NONE\n");
+            Files.writeString(output.resolveSibling("compare-render-environment.txt"), environment);
         } catch (Exception failed) {
             throw new IllegalStateException("Cannot write Compare render measurements", failed);
         }
@@ -141,7 +184,15 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
         var previousFog = RenderSystem.getShaderFog();
         RenderSystem.setShaderFog(benchmarkFog.getBuffer(FogRenderer.FogMode.NONE));
         renderer.render(new MeasuredContext(context, buffers), changes, xray);
+        if (renderer.cachedBytes() > 128L * 1024 * 1024) {
+            throw new AssertionError("Compare exceeded its resident GPU budget");
+        }
         if (!renderer.isReady()) frame = 0;
+        if (renderer.isReady() && !observedReady) {
+            preparationReport.add(name + "," + (System.nanoTime() - inputStarted)
+                    + "," + renderer.cachedBytes());
+            observedReady = true;
+        }
         // Include the existing renderer's deferred uploads and draws in both measurements.
         buffers.endBatch(LumiCompareRenderTypes.fill(xray));
         buffers.endBatch(LumiCompareRenderTypes.outline(xray));
@@ -199,5 +250,32 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
         public ChunkSectionsToRender sectionState() { return delegate.sectionState(); }
         public SubmitNodeCollector commandQueue() { return delegate.commandQueue(); }
         public PoseStack matrices() { return delegate.matrices(); }
+    }
+
+    private static void assertSameHighlight(Path cached, Path transientDraw) {
+        try {
+            var before = ImageIO.read(cached.toFile());
+            var after = ImageIO.read(transientDraw.toFile());
+            int shared = 0, total = 0;
+            for (int y = 0; y < before.getHeight(); y++) {
+                for (int x = 0; x < before.getWidth(); x++) {
+                    boolean first = colored(before.getRGB(x, y));
+                    boolean second = colored(after.getRGB(x, y));
+                    if (first || second) total++;
+                    if (first && second) shared++;
+                }
+            }
+            if (total == 0 || shared < total * 0.99) {
+                throw new AssertionError("Transient Compare lost visible geometry: " + shared + "/" + total);
+            }
+        } catch (java.io.IOException failed) {
+            throw new IllegalStateException("Cannot compare cached/transient highlights", failed);
+        }
+    }
+
+    private static boolean colored(int rgb) {
+        int red = rgb >> 16 & 255, green = rgb >> 8 & 255, blue = rgb & 255;
+        return (red > blue + 40 && red > green + 40)
+                || (green > red + 40 && green > blue + 40);
     }
 }

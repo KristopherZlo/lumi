@@ -1,10 +1,15 @@
 package io.github.lumi.client;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.domain.model.BlockChange;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import org.junit.jupiter.api.Test;
 
@@ -45,6 +50,41 @@ class CompareOverlayGeometryTest {
     void cancelsObsoletePreparation() {
         assertThrows(CancellationException.class,
                 () -> geometry.prepare(List.of(block(0, 0, 0)), () -> true));
+    }
+
+    @Test
+    void matchesEveryColoredEdgeOfTheOriginalRendererAcrossAllAxes() {
+        var random = new Random(710);
+        List<BlockChange> changes = new ArrayList<>();
+        for (int x = -18; x < 18; x++) {
+            for (int y = -2; y < 2; y++) {
+                for (int z = -18; z < 18; z++) {
+                    if (random.nextBoolean()) changes.add(new BlockChange(x, y, z,
+                            BlockChange.Kind.values()[random.nextInt(3)]));
+                }
+            }
+        }
+        Set<String> original = new HashSet<>();
+        changes.forEach(block -> addEdges(original, block, 0xfff, false));
+        Set<String> prepared = new HashSet<>();
+        geometry.prepare(changes, () -> false).forEach(section -> section.blocks()
+                .forEach(block -> addEdges(prepared, block.change(), block.edges(), true)));
+        assertEquals(original, prepared);
+    }
+
+    private static void addEdges(Set<String> edges, BlockChange block, int mask, boolean unique) {
+        for (int axis = 0; axis < 3; axis++) {
+            for (int corner = 0; corner < 4; corner++) {
+                if ((mask & (1 << (axis * 4 + corner))) == 0) continue;
+                int[] start = {block.x(), block.y(), block.z()};
+                start[(axis + 1) % 3] += corner & 1;
+                start[(axis + 2) % 3] += corner >> 1;
+                String edge = block.kind() + ":" + axis + ":"
+                        + start[0] + ":" + start[1] + ":" + start[2];
+                boolean added = edges.add(edge);
+                if (unique) assertTrue(added, "Duplicate edge: " + edge);
+            }
+        }
     }
 
     private void assertCounts(List<BlockChange> changes, int faces, int edges) {
