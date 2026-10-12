@@ -200,6 +200,11 @@ samples to `build/run/clientGameTest/compare-render.csv`, and saves screenshots.
 The synthetic Compare input does not edit world history. Copy the CSV before
 another client test run, which recreates that directory.
 
+Compare overlay preparation groups exact block faces and edges into spatial
+batches. It removes shared internal fills and duplicate edges only when their
+colors match; the individual block grid, including interior x-ray edges, stays
+intact across batch boundaries.
+
 Zone and selection fixes, regression coverage, and paired shell measurements
 are recorded in [the interaction verification report](docs/zone-interaction-fixes.md).
 Single-click container, block and lever timing is described in
