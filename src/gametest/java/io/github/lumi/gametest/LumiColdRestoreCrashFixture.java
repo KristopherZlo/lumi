@@ -35,7 +35,7 @@ final class LumiColdRestoreCrashFixture {
     }
 
     void prewarm(CommitId target) throws IOException {
-        dense.awaitUnloaded("crash_stored_chunks_ready", AREA);
+        dense.awaitBlockChunksUnloaded("crash_stored_chunks_ready", AREA);
         server.runOnServer(minecraft -> {
             var level = minecraft.getPlayerList().getPlayers().getFirst().level();
             var runtime = LumiMod.serverRuntime().find(level).orElseThrow();

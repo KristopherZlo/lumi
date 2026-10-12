@@ -7,6 +7,7 @@ import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.minecraft.world.ChunkLoadGate;
 import io.github.lumi.minecraft.world.MinecraftSectionCapture;
 import io.github.lumi.mixin.ServerLevelEntityManagerAccessor;
+import io.github.lumi.mixin.PersistentEntityManagerPersistenceAccessor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
@@ -85,6 +86,14 @@ final class LumiDenseSectionFixture {
     }
 
     void awaitUnloaded(String name, BlockBox area) {
+        awaitUnloaded(name, area, true);
+    }
+
+    void awaitBlockChunksUnloaded(String name, BlockBox area) {
+        awaitUnloaded(name, area, false);
+    }
+
+    private void awaitUnloaded(String name, BlockBox area, boolean requireEntityUnload) {
         long started = System.nanoTime();
         server.runOnServer(minecraft ->
                 minecraft.saveEverything(false, true, false));
@@ -92,7 +101,7 @@ final class LumiDenseSectionFixture {
         for (int ticks = 0; ticks < UNLOAD_TIMEOUT_TICKS; ticks++) {
             int loaded = server.computeOnServer(minecraft -> loadedChunks(
                     minecraft.getPlayerList().getPlayers().getFirst().level(),
-                    area));
+                    area, requireEntityUnload));
             if (loaded == 0) {
                 stableTicks++;
                 if (stableTicks == STABLE_UNLOAD_TICKS) {
@@ -103,11 +112,20 @@ final class LumiDenseSectionFixture {
                 }
             } else {
                 stableTicks = 0;
+                if (ticks % 200 == 0) {
+                    String details = server.computeOnServer(minecraft -> describeResidency(
+                            minecraft.getPlayerList().getPlayers().getFirst().level(), area));
+                    report.event("fixture", name, "waiting", ticks, elapsedMillis(started),
+                            "activeChunks=" + loaded + ";paused="
+                                    + context.computeOnClient(client -> client.isPaused())
+                                    + ";" + details);
+                }
             }
             context.waitTick();
         }
         int loaded = server.computeOnServer(minecraft -> loadedChunks(
-                minecraft.getPlayerList().getPlayers().getFirst().level(), area));
+                minecraft.getPlayerList().getPlayers().getFirst().level(), area,
+                requireEntityUnload));
         throw new AssertionError("Stored benchmark still has " + loaded
                 + " active fixture chunks after " + UNLOAD_TIMEOUT_TICKS + " ticks");
     }
@@ -198,9 +216,12 @@ final class LumiDenseSectionFixture {
         return PALETTE.get((int) (mixed & (PALETTE.size() - 1)));
     }
 
-    private static int loadedChunks(ServerLevel level, BlockBox area) {
+    private static int loadedChunks(
+            ServerLevel level, BlockBox area, boolean requireEntityUnload) {
         var entities = ((ServerLevelEntityManagerAccessor) level)
                 .lumi$entityManager();
+        var entitySections = ((PersistentEntityManagerPersistenceAccessor<?>) entities)
+                .lumi$sectionStorage();
         int loaded = 0;
         for (int chunkZ = SectionPos.blockToSectionCoord(area.minZ());
                 chunkZ <= SectionPos.blockToSectionCoord(area.maxZ()); chunkZ++) {
@@ -213,12 +234,35 @@ final class LumiDenseSectionFixture {
                         || ((ChunkLoadGate.PendingUnloadAccess)
                                 level.getChunkSource().chunkMap)
                                 .lumi$hasPendingUnload(key)
-                        || entities.areEntitiesLoaded(key)) {
+                        || (requireEntityUnload ? entities.areEntitiesLoaded(key)
+                                : entitySections.getExistingSectionsInChunk(key)
+                                        .anyMatch(section -> !section.isEmpty()))) {
                     loaded++;
                 }
             }
         }
         return loaded;
+    }
+
+    private static String describeResidency(ServerLevel level, BlockBox area) {
+        int x = SectionPos.blockToSectionCoord(area.minX());
+        int z = SectionPos.blockToSectionCoord(area.minZ());
+        ChunkPos position = new ChunkPos(x, z);
+        long key = position.toLong();
+        var holder = level.getChunkSource().chunkMap.getUpdatingChunkIfPresent(key);
+        var entities = ((ServerLevelEntityManagerAccessor) level).lumi$entityManager();
+        int entityCount = ((PersistentEntityManagerPersistenceAccessor<?>) entities)
+                .lumi$sectionStorage().getExistingSectionsInChunk(key)
+                .mapToInt(section -> section.size()).sum();
+        return "firstChunk=" + x + "," + z
+                + ";resident=" + (level.getChunkSource().getChunkNow(x, z) != null)
+                + ";holderLevel=" + (holder == null ? "none" : holder.getTicketLevel())
+                + ";pendingUnload=" + ((ChunkLoadGate.PendingUnloadAccess)
+                        level.getChunkSource().chunkMap).lumi$hasPendingUnload(key)
+                + ";entitiesLoaded=" + entities.areEntitiesLoaded(key)
+                + ";entitiesPresent=" + entityCount
+                + ";gated=" + ChunkLoadGate.isGated(level, position)
+                + ";debug=" + level.getChunkSource().getChunkDebugData(position);
     }
 
     private static long chunkCount(BlockBox area) {

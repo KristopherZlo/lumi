@@ -142,6 +142,15 @@ complete intent prewarm, and assert no fixture chunk or holder was loaded.
 Recovery and a second clean reopen must both match that target digest as well
 as the original nearby blocks, armor stand, ref, journal and freeze checks.
 
+Two attempts to prepare the `write` crash fixture timed out before Restore.
+Diagnostics showed no terrain, updating holder, pending unload or load gate,
+but vanilla retained `entitiesLoaded=true` metadata. The block-only crash fixture
+now waits for the actual terrain-gate conditions and rejects nonempty entity
+sections, including hidden ones, rather than waiting for that empty loaded flag
+to disappear. The existing entity-sensitive unload helper remains strict.
+Pending fixture waits log residency and entity counts every 200 ticks; the
+timeout and all recovery/endpoint assertions remain unchanged.
+
 ### Reproduction
 
 Use JDK 21. The native resource limit init script used for both variants is:
