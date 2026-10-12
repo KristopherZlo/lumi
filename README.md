@@ -107,147 +107,23 @@ Lumi settings must also allow access from Survival mode.
 WorldEdit and Axiom are optional. Lumi does not require these mods for ordinary
 play.
 
-## Reliability
+## World safety
 
-Lumi stores only the state that exact recovery needs. Save captures the visible
-world boundary. Restore prepares large tasks outside the server tick.
+Lumi saves the visible state of your build and verifies restored world data
+before it reports success. Earlier valid history remains available if an
+operation fails or the server stops.
 
-Restore applies bounded batches. It persists these batches through Minecraft
-storage and reads the result before it reports success. Restore and live
-Undo/Redo drain lighting in all affected loaded chunks before they finish.
+A completed operation leaves a normal playable Minecraft world. If the server
+stops during Restore, keep Lumi installed until recovery finishes.
 
-After a verified Restore or direct Axiom edit, Lumi rebases session block-entity
-baselines. Later Undo/Redo operations use these new baselines.
-
-Restore repairs duplicate legacy entity UUIDs across saved chunks in a
-deterministic way. A new frozen Save rejects this invalid state.
-
-Lumi stores published history in immutable, content-addressed objects and sparse
-Merkle trees. It uses hash-verified LZ4 packs, atomic refs, and operation
-journals.
-
-A failed or interrupted operation keeps the last valid history intact. Lumi
-then offers a safe recovery path.
-
-Lumi data is separate from vanilla chunk data:
-
-```text
-<world>/lumi/history/<dimension>/
-```
-
-A cleanly completed Lumi operation leaves a normal playable Minecraft world.
-If the server stops during Restore, keep Lumi installed until journal recovery
-finishes. Lumi V2 starts a new history and does not import legacy patch-v9 or
+Keep independent backups of important worlds, especially with release-candidate
+builds. Lumi V2 starts a new history and does not import legacy patch-v9 or
 snapshot-v8 projects.
 
-When Lumi has no useful work, it does not process history. Long operations
-remain incremental and report progress. Working memory stays bounded by the
-current batch instead of the full world.
+## Developer documentation
 
-During Restore, Lumi reuses one immutable object-pack channel at a time. It does
-not reopen a channel for every section. It also decodes repeated Merkle chunk
-nodes once per compared region in physical pack order.
-
-Outdated pending-work statistics do not report a history error or delay a
-confirmed Save, Restore, or Undo action. History search waits four client ticks
-after the last keystroke before it requests a page. Zone overlays wait for a
-stable player cell and history revision before they request a new shell.
-
-A newer full Restore, branch switch, or workspace switch replaces only the same
-player's older queued world selection. Active work and other builders are not
-cancelled.
-
-The optional developer mode in Lumi settings prints operation times, exact
-Restore phases, and verification status in chat. Each terminal report, including
-a failure, has a copy action.
-
-## For Developers
-
-Use JDK 21.
-
-```powershell
-.\gradlew.bat build --no-daemon
-.\gradlew.bat test --no-daemon
-.\gradlew.bat runClient --no-daemon
-```
-
-`build` compiles the mod. It also runs the unit tests and server GameTest suites.
-
-The bundled redstone GameTests place two Rube Goldberg machines on the ground.
-A nearby player presses each stone button. The tests verify exact block,
-block-entity, and entity state after Quick Restore, Restore, and Undo.
-
-Checks run at 2 ticks, then every 5 ticks through 40 or 245 ticks. Run the tests
-with `.\gradlew.bat runGameTest --no-daemon`.
-
-To run one server GameTest, add
-`-Dfabric-api.gametest.filter=<test-id>` before `runGameTest`. This skips the
-full suite.
-
-Client GameTests run the functional suites by default. Select `SMOKE`, `UI`, `UI_SCALE`, `COMPARE_RENDER`, `INTERACTION`,
-`RECOVERY`, `EXACT`, or `BENCHMARK` with
-`-Dlumi.gametest.suite=<name> runClientGameTest --no-daemon`.
-
-`UI_SCALE` checks fixed Lumi scale-2 geometry, mouse hover and clicks at Minecraft
-GUI scales 1, 2, 3, 4 and Auto across three window sizes, including visible
-tooltip text at the expected scale-2 position. It loads no world, caps
-its test client at 30 FPS, and saves a screenshot of each case.
-
-`COMPARE_RENDER` measures CPU submission and GPU elapsed time for 32,768 dense and
-100,000 scattered Compare blocks, with depth testing and Action-key x-ray. It
-uses the production overlay renderer, caps its client at 30 FPS, writes raw
-samples to `build/run/clientGameTest/compare-render.csv`, and saves screenshots.
-The synthetic Compare input does not edit world history. Copy the CSV before
-another client test run, which recreates that directory.
-GPU elapsed time includes upload and gaps while the CPU prepares the submission;
-it is not an isolated shader execution measurement. Screenshots must contain
-the colored highlight, so an empty or incorrectly aimed view fails the test.
-The test also records preparation latency and GPU environment, checks cache
-release when Compare is hidden, and verifies that a zero-byte resident budget
-still draws every visible batch through the transient path. Its isolated
-overlay fixture disables fog for both A/B runs and leaves the world renderer's
-fog unchanged.
-
-Compare overlay preparation groups exact block faces and edges into spatial
-batches. It removes shared internal fills and duplicate edges only when their
-colors match; the individual block grid, including interior x-ray edges, stays
-intact across batch boundaries.
-Spatial GPU meshes own their vertex buffers and release them explicitly. Fill
-opacity and x-ray depth behavior are draw-time settings, so changing the Action
-key does not require rebuilding identical vertices.
-Geometry preparation runs on a background executor. The render thread uploads
-at most two spatial batches per frame, stopping new uploads after 4 ms; a single
-batch may exceed that target. It draws only nearby batches inside the camera
-frustum. The resident vertex cache is limited to 128 MiB; larger visible results
-use one transient batch at a time instead of omitting blocks. H only hides the
-highlight and retains this bounded cache for immediate reuse. Replacing or
-cancelling Compare and disconnecting release the cache and cancel obsolete
-preparation. All fills finish before any outlines are drawn.
-
-Zone and selection fixes, regression coverage, and paired shell measurements
-are recorded in [the interaction verification report](docs/zone-interaction-fixes.md).
-Single-click container, block and lever timing is described in
-[the latency test guide](docs/interaction-latency-tests.md).
-
-Restore benchmark `totalMs` starts before the final UI confirmation and ends at
-the durable terminal event. `queueMs` and `serverMs` split that interval. Apply
-metrics separate background preparation, loaded and stored apply, lighting, and
-verification. The cold benchmark rejects latency, tick, heap, workload, and
-exactness regressions.
-
-Cold-path causes, previous attempts, bounded prewarm/classification changes and
-measurements are tracked in [the cold Restore report](docs/cold-restore-path-preservation.md).
-
-The code is split by responsibility:
-
-| Layer | Responsibility |
-| --- | --- |
-| `domain/model` | Value objects, persisted records, summaries, runtime state |
-| `domain/service` | Save, Restore, Compare, branch, workspace, and zone rules |
-| `minecraft/*` | Capture hooks, Minecraft adapters, tick-time application |
-| `storage/*` | Object storage, serialization, refs, journals, and packages |
-| `network` | Revision-checked client/server commands and immutable payloads |
-| `client/ui/*` | Rendering, thin controllers, and immutable view state |
+For setup, the code map, workflow walkthroughs, and verification commands,
+read the [developer documentation](docs/developer/README.md).
 
 ## License
 
