@@ -22,6 +22,7 @@ The server owns that history in singleplayer and multiplayer.
 | How does Restore protect the previous world state? | [Workflows](workflows.md#restore) |
 | Where does Lumi store history? | [Storage and recovery](storage.md) |
 | Which tests should I run? | [Testing](testing.md) |
+| What evidence permits a stable release? | [Release readiness](release-readiness.md) |
 | How do I change a name rule or add behavior? | [Making a change](contributing.md) |
 | Where are logs and test reports? | [Troubleshooting](troubleshooting.md) |
 

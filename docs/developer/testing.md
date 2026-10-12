@@ -94,6 +94,7 @@ For the default functional selection:
 | `RECOVERY` | Interrupted operation recovery through the UI |
 | `EXACT` | Exact Restore acceptance scenarios |
 | `RESTORE_CRASH` | Producer/verifier process-crash harness. Use the matrix task below. |
+| `PERSISTENCE_CRASH` | Save, Merge, and Import process-crash producers/verifiers; needs the publication runner |
 | `BENCHMARK` | Opt-in history performance workloads |
 | `MULTIPLAYER` | Two client JVMs against a TCP dedicated server; needs the multiplayer runner |
 
