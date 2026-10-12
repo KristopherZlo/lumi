@@ -39,7 +39,9 @@ Follow the [workflows](workflows.md) for the actual collaborators.
 | Version or commit | An immutable saved record that names a world-state tree, parents, author, and other metadata. |
 | Branch | A named reference to a commit. Switching it changes the dimension's canonical live state. |
 | HEAD | The commit named by the active branch reference. |
+| Reference or ref | A persisted name that points to a commit. It has a revision for conflict checks. |
 | Ref revision | A counter used to reject requests based on an outdated branch reference. |
+| Ref-neutral | An operation that leaves the branch reference unchanged. |
 | Section | A 16-by-16-by-16 block volume inside a chunk. |
 | Entity chunk | The durable non-player entity state associated with a chunk. |
 | Origin | A history key's original state, used when a sparse commit tree has no explicit leaf. |
@@ -49,6 +51,7 @@ Follow the [workflows](workflows.md) for the actual collaborators.
 | Operation journal | A durable record that lets recovery identify an interrupted operation and its phase. |
 | Merkle tree | A tree whose nodes have content hashes. Equal hashes let Compare skip unchanged regions. |
 | Checkpoint | A hidden saved return point used by an operation or session Undo. |
+| Publication | The durable change that makes a prepared result visible through refs or pointers. |
 
 ## Find the right package
 

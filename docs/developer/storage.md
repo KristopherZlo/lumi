@@ -26,7 +26,7 @@ The encoded directory contains this logical layout:
 | `origins/` | Original payload IDs for sparse history | [OriginStore](../../src/main/java/io/github/lumi/storage/repository/OriginStore.java) |
 | `working/index.bin` | Dirty keys and captured-generation boundaries | [WorkingIndexRepository](../../src/main/java/io/github/lumi/storage/repository/WorkingIndexRepository.java) |
 | `operations/active.bin` | Current operation kind, target, and durable phase | [OperationJournalRepository](../../src/main/java/io/github/lumi/storage/repository/OperationJournalRepository.java) |
-| `operations/active-generations.bin` | Captured-generation sidecar for the operation | `OperationJournalRepository` |
+| `operations/active-generations.bin` | Separate file with captured generations for the operation | `OperationJournalRepository` |
 | `names/`, `tags/`, `previews/` | Mutable display metadata and optional thumbnails | [VersionDisplayNameRepository](../../src/main/java/io/github/lumi/storage/repository/VersionDisplayNameRepository.java), [VersionTagRepository](../../src/main/java/io/github/lumi/storage/repository/VersionTagRepository.java), [VersionPreviewRepository](../../src/main/java/io/github/lumi/storage/repository/VersionPreviewRepository.java) |
 | `tombstones/` | Soft-delete markers | [TombstoneRepository](../../src/main/java/io/github/lumi/storage/repository/TombstoneRepository.java) |
 
@@ -79,6 +79,8 @@ Immutable files never change after publication.
 Small mutable records use [AtomicFileWriter](../../src/main/java/io/github/lumi/storage/repository/AtomicFileWriter.java).
 It writes and forces a temporary file before atomic replacement.
 It does not use a non-atomic move as a successful fallback.
+Atomic replacement exposes either the previous file or the complete replacement.
+Forcing the file requests persistence of its written bytes.
 
 Publish an object pack and its validated index before a ref can expose the new commit.
 Create the operation journal before publishing a Save's ref.
@@ -116,4 +118,5 @@ Session Undo checkpoints remain owned by their in-memory action until permanent 
 [RetentionService](../../src/main/java/io/github/lumi/domain/service/RetentionService.java) manages operation checkpoint retention.
 [SessionCheckpointRefService](../../src/main/java/io/github/lumi/domain/service/SessionCheckpointRefService.java) manages session-owned refs.
 [GarbageCollector](../../src/main/java/io/github/lumi/storage/repository/GarbageCollector.java) handles unreachable history after the orphan grace period.
+The orphan grace period delays deletion of recent unreachable payloads.
 Use these owners instead of deleting payload files directly.

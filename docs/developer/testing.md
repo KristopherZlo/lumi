@@ -8,6 +8,8 @@ Quote `-D` arguments in PowerShell.
 
 ## Choose a gate
 
+A gate is a check that must pass before a change or release can proceed.
+
 | Change | Minimum useful checks |
 | --- | --- |
 | Form, value object, or domain rule | Matching unit tests, then `test` |
