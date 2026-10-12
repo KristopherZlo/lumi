@@ -271,7 +271,9 @@ heap and a separate game directory per cut. It requires exit 86 and the exact
 Restore marker, then exit 0 and a success gate emitted after recovery, exact
 world/ref/journal assertions, and the second clean reopen. Use `-RestoreCold`
 to include the existing cold stored-world digest fixture. The release runner's
-`RestoreCrash` gate uses this path. Runtime equivalence and speed measurements
+`RestoreCrash` gate uses this path. Only the producer receives crash-injection
+properties; the verifier receives the expected phase with injection disarmed,
+as in the original Gradle matrix. Runtime equivalence and speed measurements
 for this new launch path are pending; static review is not execution evidence.
 
 The original Gradle task remains available, including on other operating systems:

@@ -24,8 +24,10 @@ class LumiCrashMatrixDefinition {
         if ($cold -and $this.Kind -ne 'restore') { throw 'Cold fixture requires the Restore matrix.' }
         if ($this.Kind -eq 'restore') {
             $arguments = @('-Dlumi.gametest.suite=RESTORE_CRASH',
-                "-Dlumi.gametest.restoreCrashMode=$mode", "-Dlumi.gametest.restoreCrashPhase=$phase",
-                "-Dlumi.gametest.restoreCrashExpectedPhase=$phase", "-Dlumi.gametest.restoreCrashMarker=$marker")
+                "-Dlumi.gametest.restoreCrashMode=$mode")
+            if ($mode -eq 'produce') {
+                $arguments += @("-Dlumi.gametest.restoreCrashPhase=$phase", "-Dlumi.gametest.restoreCrashMarker=$marker")
+            } else { $arguments += "-Dlumi.gametest.restoreCrashExpectedPhase=$phase" }
             if ($cold) { $arguments += '-Dlumi.gametest.restoreCrashCold=true' }
             return $arguments
         }

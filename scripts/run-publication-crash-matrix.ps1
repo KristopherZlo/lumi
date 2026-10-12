@@ -122,8 +122,9 @@ try {
             $taskManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
             Write-Output "Verified $Kind/$taskPhase`: $taskDirectory"
         }
-        if ([LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java) -cne $taskFingerprint) {
-            throw 'Launch inputs changed during the crash matrix.'
+        if ((& git rev-parse HEAD).Trim() -cne $taskSha -or [bool](& git status --porcelain) -ne $taskDirty -or
+            [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java) -cne $taskFingerprint) {
+            throw 'The candidate or launch inputs changed during the crash matrix.'
         }
         $taskManifest.status = 'passed'
     } catch {

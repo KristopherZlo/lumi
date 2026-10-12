@@ -19,7 +19,12 @@ foreach ($kind in @('save', 'import', 'merge', 'restore')) {
             $arguments = $matrix.Arguments($phase, $mode, 'marker', $false)
             $prefix = if ($kind -eq 'restore') { 'lumi.gametest.restoreCrash' } else { 'lumi.persistence.' }
             Assert-That ($arguments -contains "-D${prefix}$(if ($kind -eq 'restore') { 'Mode' } else { 'mode' })=$mode") 'Mode missing.'
-            Assert-That ($arguments -contains "-D${prefix}$(if ($kind -eq 'restore') { 'Phase' } else { 'phase' })=$phase") 'Phase missing.'
+            if ($kind -eq 'restore' -and $mode -eq 'verify') {
+                Assert-That ($arguments -contains "-Dlumi.gametest.restoreCrashExpectedPhase=$phase") 'Expected phase missing.'
+                Assert-That (@($arguments | Where-Object { $_ -match '^-Dlumi.gametest.restoreCrash(Phase|Marker)=' }).Count -eq 0) 'Verifier rearmed the crash injection.'
+            } else {
+                Assert-That ($arguments -contains "-D${prefix}$(if ($kind -eq 'restore') { 'Phase' } else { 'phase' })=$phase") 'Phase missing.'
+            }
         }
         Assert-That ($matrix.Gate($phase).EndsWith(': succeeded')) 'Verifier gate missing.'
     }
