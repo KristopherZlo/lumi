@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('save', 'import')] [string]$Kind = 'save',
+    [ValidateSet('save', 'import', 'merge')] [string]$Kind = 'save',
     [string[]]$Phase = @(),
     [ValidateRange(120, 7200)] [int]$TimeoutSeconds = 900,
     [string]$Java = (Join-Path $env:JAVA_HOME 'bin/java.exe')
@@ -11,6 +11,11 @@ $taskPhases = @('objects-staged', 'pack-forced', 'pack-published', 'index-forced
     'objects-published', 'commit-written', 'ref-forced', 'ref-published')
 if ($Kind -eq 'save') {
     $taskPhases += @('journal-created', 'working-cleared', 'journal-complete', 'cleanup')
+}
+if ($Kind -eq 'import') { $taskPhases += 'preview-written' }
+if ($Kind -eq 'merge') {
+    $taskPhases = @('object-written', 'commit-written', 'prepared', 'applying',
+        'write', 'barrier', 'force', 'verify', 'publication', 'cleanup')
 }
 if ($Phase.Count -gt 0) {
     foreach ($taskPhase in $Phase) {

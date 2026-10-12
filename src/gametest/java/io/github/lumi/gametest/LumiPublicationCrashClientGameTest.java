@@ -36,6 +36,7 @@ public final class LumiPublicationCrashClientGameTest implements FabricClientGam
     @Override public void runTest(ClientGameTestContext context) {
         String mode = System.getProperty("lumi.persistence.mode", "");
         if (mode.isEmpty() || !LumiClientTestSuite.includes(LumiClientTestSuite.PERSISTENCE_CRASH)) return;
+        if (System.getProperty("lumi.persistence.kind", "").equals("merge")) return;
         try {
             if (mode.equals("produce")) produce(context);
             else if (mode.equals("verify")) verify(context);
@@ -110,8 +111,12 @@ public final class LumiPublicationCrashClientGameTest implements FabricClientGam
                 CommitKind.MANUAL, new CommitStatistics(1, 0, SectionBlob.BLOCK_COUNT, 0)));
         var packages = new LumiPackageDirectory(world);
         packages.ensureDirectory();
+        byte[] preview = java.util.Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN0sAAAAASUVORK5CYII=");
+        new VersionPreviewRepository(donor).save(commit, preview);
         var inspection = new ImportExportService("minecraft:overworld", donor)
-                .export(commit, packages.resolve(PACKAGE), false);
+                .export(commit, packages.resolve(PACKAGE), true);
+        metadata.setProperty("preview", ObjectId.hash(preview).hex());
         metadata.setProperty("targetSection", id.hex());
         metadata.setProperty("importBranch", "import/" + PACKAGE.value() + "-" + commit.hex().substring(0, 8));
         return inspection;
@@ -158,7 +163,11 @@ public final class LumiPublicationCrashClientGameTest implements FabricClientGam
                     var branch = refs.read(new BranchName(metadata.getProperty("importBranch")));
                     boolean published = metadata.getProperty("phase").equals("ref-published");
                     require(branch.isPresent() == published, "Import exposed a partial branch");
-                    if (published) validateTree(repository, branch.orElseThrow().commit(), metadata.getProperty("targetSection"));
+                    if (published) {
+                        validateTree(repository, branch.orElseThrow().commit(), metadata.getProperty("targetSection"));
+                        require(ObjectId.hash(new VersionPreviewRepository(repository).load(branch.orElseThrow().commit())
+                                .orElseThrow()).hex().equals(metadata.getProperty("preview")), "Import preview was lost");
+                    }
                     else {
                         var runtime = server.computeOnServer(LumiPublicationCrashClientGameTest::runtime);
                         var inspection = awaitFuture(context, runtime.inspectPackage(PACKAGE));

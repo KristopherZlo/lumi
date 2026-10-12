@@ -5,7 +5,8 @@
   "mixins": ["InteractionTimingMixin", "ServerUsePacketTimingMixin",
     "SavePublicationPauseMixin", "RestoreMutationPauseMixin", "PackCrashMixin",
     "IndexCrashMixin", "AtomicRefCrashMixin", "CommitCrashMixin", "JournalCrashMixin",
-    "RefCrashMixin", "WorkingIndexCrashMixin"],
+    "RefCrashMixin", "WorkingIndexCrashMixin", "PreviewCrashMixin",
+    "MergeObjectCrashMixin", "MergeApplyCrashMixin"],
   "client": ["ClientInteractionTimingMixin", "ClientUseTimingMixin"],
   "injectors": {"defaultRequire": 1}
 }

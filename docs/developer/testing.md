@@ -170,7 +170,13 @@ Run `scripts/run-publication-crash-matrix.ps1 -Kind save` or `-Kind import`.
 declared cuts. Each cut receives a new preserved game directory. The runner
 requires producer exit 86, its matching marker, verifier exit 0, and the named
 verification gate. Results and logs are under `build/reports/lumi-publication-crash/`.
-Save has twelve cuts; Import has eight. A subset run proves only its listed cuts.
+Save has twelve cuts; Import has nine, including preview publication. A subset
+run proves only its listed cuts. `-Kind merge` covers the loose object and commit
+writes during preparation, then the eight existing Restore persistence phases
+through a real divergent Merge. Its verifier resumes the target, checks the
+source-wins section oracle and both commit parents, restores the prior current
+commit, and reopens the world again. Return-checkpoint recovery needs its own
+run and is not implied by resume-target evidence.
 
 ```powershell
 .\gradlew.bat runRestoreCrashMatrix --no-daemon

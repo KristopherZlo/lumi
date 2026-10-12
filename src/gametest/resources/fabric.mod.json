@@ -18,6 +18,7 @@
       "io.github.lumi.gametest.LumiRecoveryClientGameTest",
       "io.github.lumi.gametest.LumiRestoreCrashClientGameTest",
       "io.github.lumi.gametest.LumiPublicationCrashClientGameTest",
+      "io.github.lumi.gametest.LumiMergeCrashClientGameTest",
       "io.github.lumi.gametest.LumiExactRestoreClientGameTest"
     ],
     "fabric-gametest": [
