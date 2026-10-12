@@ -231,6 +231,24 @@ Each completed cut includes prior-history Restore and clean reopen. The
 manifests record their different test-code candidates; this combined evidence
 is not a single all-green candidate release run.
 
+On Windows, use the prepared-launch runner for Restore too:
+
+```powershell
+.\scripts\run-publication-crash-matrix.ps1 -RunMinecraft -Kind restore
+```
+
+It prepares the GameTest classpath once, then launches fresh producer/verifier
+JVMs directly at all eight cuts. This removes sixteen nested Gradle invocations;
+it still starts sixteen real clients. Like the publication runner, it uses a 2 GiB
+heap and a separate game directory per cut. It requires exit 86 and the exact
+Restore marker, then exit 0 and a success gate emitted after recovery, exact
+world/ref/journal assertions, and the second clean reopen. Use `-RestoreCold`
+to include the existing cold stored-world digest fixture. The release runner's
+`RestoreCrash` gate uses this path. Runtime equivalence and speed measurements
+for this new launch path are pending; static review is not execution evidence.
+
+The original Gradle task remains available, including on other operating systems:
+
 ```powershell
 .\gradlew.bat runRestoreCrashMatrix --no-daemon
 ```
@@ -240,10 +258,19 @@ The task runs separate producer and verifier processes at eight Restore cutpoint
 Each producer must reach its marker before the verifier runs.
 Each verifier recovers and reopens the interrupted world.
 
-Markers live under `build/reports/lumi-crash-matrix/`.
+The prepared-launch runner preserves markers and worlds under
+`build/reports/lumi-publication-crash/`; the Gradle task keeps markers under
+`build/reports/lumi-crash-matrix/`.
 [build.gradle](../../build.gradle) defines the task chain.
 [LumiRestoreCrashClientGameTest](../../src/gametest/java/io/github/lumi/gametest/LumiRestoreCrashClientGameTest.java) defines the scenarios.
 This matrix is separate from ordinary `build` and client functional runs.
+
+The runner contract has standalone checks in
+`scripts/tests/CrashMatrixDefinition.Tests.ps1`. They do not start Gradle or Minecraft:
+
+```powershell
+.\scripts\tests\CrashMatrixDefinition.Tests.ps1
+```
 
 ## Performance checks
 

@@ -33,10 +33,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-/** Produces and verifies one real process crash selected by the Gradle matrix. */
+/** Produces and verifies one real process crash selected by a matrix runner. */
 @SuppressWarnings("UnstableApiUsage")
 public final class LumiRestoreCrashClientGameTest implements FabricClientGameTest {
+    private static final Logger LOGGER = LoggerFactory.getLogger("lumi-behavior-test");
     private static final String MODE_PROPERTY = "lumi.gametest.restoreCrashMode";
     private static final String PHASE_PROPERTY = "lumi.gametest.restoreCrashPhase";
     private static final String EXPECTED_PHASE_PROPERTY =
@@ -151,6 +154,7 @@ public final class LumiRestoreCrashClientGameTest implements FabricClientGameTes
             assertTarget(reopened.getServer(), metadata);
         }
         Files.deleteIfExists(metadataPath(gameDirectory));
+        LOGGER.info("restore_crash_{}: succeeded", expectedPhase);
     }
 
     private static void awaitRecovery(

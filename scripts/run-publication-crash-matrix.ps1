@@ -1,7 +1,10 @@
+using module ./CrashMatrixDefinition.psm1
+
 param(
     [switch]$RunMinecraft,
-    [ValidateSet('save', 'import', 'merge')] [string]$Kind = 'save',
+    [ValidateSet('save', 'import', 'merge', 'restore')] [string]$Kind = 'save',
     [string[]]$Phase = @(),
+    [switch]$RestoreCold,
     [ValidateRange(120, 7200)] [int]$TimeoutSeconds = 900,
     [string]$Java = (Join-Path $env:JAVA_HOME 'bin/java.exe')
 )
@@ -11,16 +14,9 @@ if (-not $RunMinecraft) {
     throw 'No tests started. This matrix repeatedly opens Minecraft windows and uses CPU/GPU. Pass -RunMinecraft only when the computer is available for testing.'
 }
 $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$taskPhases = @('objects-staged', 'pack-forced', 'pack-published', 'index-forced',
-    'objects-published', 'commit-written', 'ref-forced', 'ref-published')
-if ($Kind -eq 'save') {
-    $taskPhases += @('journal-created', 'working-cleared', 'journal-complete', 'cleanup')
-}
-if ($Kind -eq 'import') { $taskPhases += 'preview-written' }
-if ($Kind -eq 'merge') {
-    $taskPhases = @('object-written', 'commit-written', 'prepared', 'applying',
-        'write', 'barrier', 'force', 'verify', 'publication', 'cleanup')
-}
+$taskDefinition = [LumiCrashMatrixDefinition]::new($Kind)
+$taskPhases = $taskDefinition.Phases
+if ($RestoreCold -and $Kind -ne 'restore') { throw '-RestoreCold requires -Kind restore.' }
 if ($Phase.Count -gt 0) {
     foreach ($taskPhase in $Phase) {
         if ($taskPhase -notin $taskPhases) { throw "Invalid $Kind cutpoint: $taskPhase" }
@@ -39,7 +35,8 @@ try {
     New-Item -ItemType Directory -Path $taskRun | Out-Null
     $taskManifest = [ordered]@{
         schema = 1; gitSha = (& git rev-parse HEAD); dirty = [bool](& git status --porcelain)
-        kind = $Kind; phases = $taskPhases; startedUtc = [DateTime]::UtcNow.ToString('o')
+        kind = $Kind; phases = $taskPhases; restoreCold = [bool]$RestoreCold
+        startedUtc = [DateTime]::UtcNow.ToString('o')
         status = 'unverified'; completed = @()
         buildProperties = @((Get-Content -LiteralPath (Join-Path $taskRepo 'gradle.properties')) | ForEach-Object { [string]$_ })
     }
@@ -54,10 +51,9 @@ try {
             $taskMarker = Join-Path $taskDirectory 'crash.marker'
             foreach ($taskMode in @('produce', 'verify')) {
                 $taskArguments = Get-Content -LiteralPath (Join-Path $taskRepo 'build/multiplayer-launch.args')
-                $taskExtra = @(('-Djava.io.tmpdir=' + $taskTemp), '-Dlumi.gametest.suite=PERSISTENCE_CRASH',
-                    ('-Dlumi.persistence.kind=' + $Kind), ('-Dlumi.persistence.phase=' + $taskPhase),
-                    ('-Dlumi.persistence.mode=' + $taskMode), ('-Dlumi.persistence.marker=' + $taskMarker),
-                    'net.fabricmc.devlaunchinjector.Main', '--username', 'Lumi-crash', '--gameDir', $taskGameDirectory)
+                $taskExtra = @('-Djava.io.tmpdir=' + $taskTemp) +
+                    $taskDefinition.Arguments($taskPhase, $taskMode, $taskMarker, [bool]$RestoreCold) +
+                    @('net.fabricmc.devlaunchinjector.Main', '--username', 'Lumi-crash', '--gameDir', $taskGameDirectory)
                 foreach ($taskArgument in $taskExtra) {
                     $taskArguments += '"' + $taskArgument.Replace('\', '\\').Replace('"', '\"') + '"'
                 }
@@ -83,12 +79,8 @@ try {
                         throw "Expected exit $taskExpectedExit, got $($taskProcess.ExitCode): $taskLog"
                     }
                     if ($taskMode -eq 'produce') {
-                        if (-not (Test-Path -LiteralPath $taskMarker) -or
-                            -not (Select-String -LiteralPath $taskMarker -SimpleMatch ('phase=' + $taskPhase) -Quiet) -or
-                            -not (Select-String -LiteralPath $taskMarker -SimpleMatch ('kind=' + $Kind) -Quiet)) {
-                            throw "The process did not reach the selected cutpoint: $taskDirectory"
-                        }
-                    } elseif (-not (Select-String -LiteralPath $taskLog -SimpleMatch ('publication_crash_' + $Kind + '_' + $taskPhase + ': succeeded') -Quiet)) {
+                        $taskDefinition.AssertMarker($taskMarker, $taskPhase)
+                    } elseif (-not (Select-String -LiteralPath $taskLog -SimpleMatch $taskDefinition.Gate($taskPhase) -Quiet)) {
                         throw "Verifier exited without its gate: $taskLog"
                     }
                 } finally {
@@ -109,7 +101,7 @@ try {
         $taskManifest.finishedUtc = [DateTime]::UtcNow.ToString('o')
         $taskManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
     }
-    Write-Output "Publication crash matrix passed: $taskRun"
+    Write-Output "Crash matrix passed ($Kind): $taskRun"
 } finally {
     Pop-Location
 }

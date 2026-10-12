@@ -60,7 +60,7 @@ try {
                 'Exact' { $taskGradleArguments = @('-Dlumi.gametest.suite=EXACT', 'runClientGameTest') }
                 'Recovery' { $taskGradleArguments = @('-Dlumi.gametest.suite=RECOVERY', 'runClientGameTest') }
                 'Multiplayer' { & (Join-Path $PSScriptRoot 'run-multiplayer-gate.ps1') -RunMinecraft *> $taskLog }
-                'RestoreCrash' { $taskGradleArguments = @('runRestoreCrashMatrix') }
+                'RestoreCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind restore *> $taskLog }
                 'SaveCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind save *> $taskLog }
                 'MergeCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind merge *> $taskLog }
                 'ImportCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind import *> $taskLog }
