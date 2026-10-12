@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BlockChange;
+import io.github.lumi.client.state.HighlightPreparationProgress;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -17,6 +18,7 @@ import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.util.Util;
 import net.minecraft.client.Minecraft;
@@ -46,6 +48,19 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
     private long gpuBytes;
     private boolean ready;
     private boolean failed;
+    private boolean presented;
+    private AtomicLong preparedWork = new AtomicLong();
+    private long visibleBlocks;
+    private long uploadedBlocks;
+
+    HighlightPreparationProgress progress() {
+        if (source.isEmpty() || ready || failed) return HighlightPreparationProgress.NONE;
+        if (preparation != null) {
+            return new HighlightPreparationProgress(preparedWork.get(), 3L * source.size());
+        }
+        long geometryWork = 2L * source.size();
+        return new HighlightPreparationProgress(geometryWork + uploadedBlocks, geometryWork + visibleBlocks);
+    }
 
     void retainInput(List<BlockChange> changes) {
         if (changes == source) return;
@@ -82,8 +97,9 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
         if (source.isEmpty()) return;
         if (sections.isEmpty() && preparation == null && !failed) {
             AtomicBoolean token = cancelled;
+            AtomicLong progress = preparedWork;
             preparation = CompletableFuture.supplyAsync(
-                    () -> geometry.prepare(changes, token::get), Util.backgroundExecutor());
+                    () -> geometry.prepare(changes, token::get, progress::set), Util.backgroundExecutor());
         }
         if (preparation != null && preparation.isDone()) {
             try {
@@ -133,12 +149,22 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
             gpuBytes += mesh.bytes();
             uploads++;
         }
+        visibleBlocks = 0;
+        uploadedBlocks = 0;
         for (var section : visible) {
+            visibleBlocks += section.blocks().size();
             if (!meshes.containsKey(section)
-                    && gpuBytes + CompareOverlayGpuMesh.estimatedBytes(section) <= residentByteLimit) ready = false;
+                    && gpuBytes + CompareOverlayGpuMesh.estimatedBytes(section) <= residentByteLimit) {
+                ready = false;
+            } else {
+                uploadedBlocks += section.blocks().size();
+            }
         }
-        draw(context, visible, xray, false);
-        draw(context, visible, xray, true);
+        if (ready && !visible.isEmpty()) presented = true;
+        if (presented) {
+            draw(context, visible, xray, false);
+            draw(context, visible, xray, true);
+        }
     }
 
     private void draw(WorldRenderContext context, List<CompareOverlayGeometry.Section> visible,
@@ -204,6 +230,10 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
         gpuBytes = 0;
         ready = false;
         failed = false;
+        presented = false;
+        preparedWork = new AtomicLong();
+        visibleBlocks = 0;
+        uploadedBlocks = 0;
     }
 
     static int color(BlockChange.Kind kind) {

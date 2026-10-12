@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.function.BooleanSupplier;
+import java.util.function.LongConsumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
@@ -16,11 +17,18 @@ final class CompareOverlayGeometry {
     private static final Direction[] SIDES = Direction.values();
 
     List<Section> prepare(List<BlockChange> changes, BooleanSupplier cancelled) {
+        return prepare(changes, cancelled, ignored -> { });
+    }
+
+    List<Section> prepare(List<BlockChange> changes, BooleanSupplier cancelled, LongConsumer progress) {
         var occupied = new Long2ByteOpenHashMap(changes.size());
+        long completed = 0;
         for (BlockChange block : changes) {
             checkCancelled(cancelled);
             occupied.put(position(block), (byte) (block.kind().ordinal() + 1));
+            if ((++completed & 1023) == 0) progress.accept(completed);
         }
+        progress.accept(completed);
         var sections = new Long2ObjectLinkedOpenHashMap<List<Block>>();
         for (BlockChange block : changes) {
             checkCancelled(cancelled);
@@ -41,9 +49,11 @@ final class CompareOverlayGeometry {
             long section = BlockPos.asLong(block.x() >> 4, block.y() >> 4, block.z() >> 4);
             sections.computeIfAbsent(section, ignored -> new ArrayList<>())
                     .add(new Block(block, faces, edges));
+            if ((++completed & 1023) == 0) progress.accept(completed);
         }
         List<Section> prepared = new ArrayList<>(sections.size());
         sections.forEach((key, blocks) -> {
+            checkCancelled(cancelled);
             int x = BlockPos.getX(key) << 4;
             int y = BlockPos.getY(key) << 4;
             int z = BlockPos.getZ(key) << 4;
@@ -52,6 +62,7 @@ final class CompareOverlayGeometry {
                     blocks.stream().mapToInt(b -> Integer.bitCount(b.faces())).sum(),
                     blocks.stream().mapToInt(b -> Integer.bitCount(b.edges())).sum()));
         });
+        progress.accept(completed);
         return List.copyOf(prepared);
     }
 

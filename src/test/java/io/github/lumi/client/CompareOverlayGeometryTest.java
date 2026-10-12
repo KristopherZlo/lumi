@@ -53,6 +53,19 @@ class CompareOverlayGeometryTest {
     }
 
     @Test
+    void reportsBothPreparationPassesWithoutChangingGeometry() {
+        List<Long> progress = new ArrayList<>();
+        List<BlockChange> changes = new ArrayList<>();
+        for (int x = 0; x < 2050; x++) changes.add(block(x, 0, 0));
+        assertEquals(geometry.prepare(changes, () -> false),
+                geometry.prepare(changes, () -> false, progress::add));
+        assertEquals(4100, progress.getLast());
+        assertTrue(progress.contains(2050L));
+        assertTrue(progress.size() < 10, "Progress must not publish one update per block");
+        for (int i = 1; i < progress.size(); i++) assertTrue(progress.get(i) >= progress.get(i - 1));
+    }
+
+    @Test
     void matchesEveryColoredEdgeOfTheOriginalRendererAcrossAllAxes() {
         var random = new Random(710);
         List<BlockChange> changes = new ArrayList<>();

@@ -3,6 +3,7 @@ package io.github.lumi.client;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientCompareStore;
 import io.github.lumi.client.state.ClientZonePendingPreviewStore;
+import io.github.lumi.client.state.HighlightPreparationProgress;
 import java.util.Objects;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -43,6 +44,11 @@ public final class LumiPendingChangeOverlay {
         WorldRenderEvents.END_EXTRACTION.register(context -> compareOverlay.setFrustum(context.frustum()));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> compareOverlay.close());
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> compareOverlay.close());
+    }
+
+    public HighlightPreparationProgress highlightProgress() {
+        return comparisons.visibleChanges().isEmpty()
+                ? HighlightPreparationProgress.NONE : compareOverlay.progress();
     }
 
     private void tick(Minecraft client) {
