@@ -99,7 +99,6 @@ All 949 unit tests passed.
 
 GPU elapsed samples include submission gaps.
 They do not isolate shader execution time.
-These measurements describe this synthetic fixture and environment.
 They do not establish performance for arbitrary player worlds.
 The fixture does not mutate saved history.
 

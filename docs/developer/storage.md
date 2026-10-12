@@ -64,10 +64,11 @@ Codecs define binary field order, bounds, and compatibility readers.
 Repositories define names, publication, and cleanup.
 Do not duplicate serialization details in a domain service or UI controller.
 
-Useful format identifiers include `LUO2` for loose objects and `LUP2`/`LUI2` for pack data and indexes.
-World payloads use `LUS2`, `LUE2`, `LUC2`, `LUR2`, `LUD2`, and `LUM2`.
-These prefixes identify different payload types.
-The matching codec remains the exact field-level reference.
+Loose objects use `LUO2`.
+Packs use `LUP2`, and their indexes use `LUI2`.
+Section and entity payloads use `LUS2` and `LUE2`.
+Chunk, region, and dimension tree nodes use `LUC2`, `LUR2`, and `LUD2`.
+Commits use `LUM2`.
 
 For a format change, inspect the codec, repository, existing readers, and matching tests together.
 Keep old-format fixtures when the reader promises compatibility.

@@ -25,9 +25,7 @@ flowchart LR
     Events --> UI
 ```
 
-This diagram shows the runtime flow.
-It does not mean that every class calls every other layer.
-Follow the [workflows](workflows.md) for the actual collaborators.
+For the classes and methods in each path, see [Workflows](workflows.md).
 
 ## Terms you will meet
 
@@ -57,7 +55,7 @@ Follow the [workflows](workflows.md) for the actual collaborators.
 
 All production packages below start at `src/main/java/io/github/lumi/`.
 
-| Package | Owns | First useful class |
+| Package | Owns | Entry class |
 | --- | --- | --- |
 | `domain/model` | Valid values, persisted records, summaries, and focused runtime state | [VersionDisplayName](../../src/main/java/io/github/lumi/domain/model/VersionDisplayName.java) |
 | `domain/service` | Save, Restore, Compare, branches, workspaces, zones, and permissions | [SaveService](../../src/main/java/io/github/lumi/domain/service/SaveService.java) |
@@ -87,7 +85,6 @@ All production packages below start at `src/main/java/io/github/lumi/`.
 [FabricServerSession](../../src/main/java/io/github/lumi/minecraft/runtime/FabricServerSession.java) owns the server's workers and dimension runtimes.
 [FabricDimensionRuntime](../../src/main/java/io/github/lumi/minecraft/runtime/FabricDimensionRuntime.java) connects one dimension's services and operations.
 
-These assembly classes contain many collaborators.
 Use the named workflow method to enter them, such as `startSave` or `startRestore`.
 Read the called service and matching test before you study the full assembly class.
 
@@ -138,12 +135,9 @@ See [Storage and recovery](storage.md) for publication order and [Testing](testi
 - Translations, mixin registration, and mod metadata live under [src/main/resources](../../src/main/resources).
 - The Gradle wrapper and [build.gradle](../../build.gradle) define the supported build tasks.
 
-Use a targeted search when you know a feature or class name:
+Search with ripgrep (`rg`):
 
 ```powershell
 rg -n 'startSave|createChunkReadySave' src/main/java/io/github/lumi/minecraft/runtime/FabricDimensionRuntime.java
 rg --files src/test/java -g '*Save*Test.java'
 ```
-
-`rg` is an optional search tool.
-Your IDE's symbol search and Find Usages can answer the same questions.

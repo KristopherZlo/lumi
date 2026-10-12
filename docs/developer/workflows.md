@@ -3,8 +3,6 @@
 [Documentation home](README.md) / Workflows
 
 Read the [Project map](project-map.md) first if a term is unfamiliar.
-Each walkthrough starts with a player action and ends with an observable result.
-Open the named method rather than reading each large file from its first line.
 
 ## Save
 

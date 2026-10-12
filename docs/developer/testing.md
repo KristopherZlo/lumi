@@ -6,11 +6,9 @@ Run commands from the repository root with JDK 21.
 On macOS or Linux, replace `.\gradlew.bat` with `./gradlew`.
 Quote `-D` arguments in PowerShell.
 
-## Choose a gate
+## Choose checks
 
-A gate is a check that must pass before a change or release can proceed.
-
-| Change | Minimum useful checks |
+| Change | Checks |
 | --- | --- |
 | Form, value object, or domain rule | Matching unit tests, then `test` |
 | Structural Java change | Compile all source sets and run `test` |
@@ -21,7 +19,6 @@ A gate is a check that must pass before a change or release can proceed.
 | Restore persistence or recovery | Restore/recovery tests, `EXACT`, `RECOVERY`, and the process-crash matrix |
 | Idle or hot-path performance | `regressionPerformanceTest` and a relevant controlled workload |
 
-These checks answer different questions.
 A unit test cannot prove that Minecraft persisted and reloaded an exact world.
 A synthetic benchmark cannot prove multiplayer correctness.
 
@@ -37,7 +34,7 @@ A synthetic benchmark cannot prove multiplayer correctness.
 .\gradlew.bat test --no-daemon
 ```
 
-Run one test class when you work on a specific rule:
+Run one test class:
 
 ```powershell
 .\gradlew.bat test --tests 'io.github.lumi.client.ui.SaveScreenControllerTest' --no-daemon
@@ -56,9 +53,7 @@ The ordinary `test` task excludes the `performance` tag.
 .\gradlew.bat runGameTest --no-daemon
 ```
 
-This task starts Minecraft's server GameTest runner.
 The build recreates its test world under `build/run/gameTest/world`.
-It uses disposable fixtures rather than a player's development world.
 
 Registered suites cover history operations, live actions, projectiles, TNT, fluids, falling blocks, pistons, redstone, WorldEdit, and Axiom.
 See the [GameTest mod entry points](../../src/gametest/resources/fabric.mod.json) for the complete list.
@@ -73,9 +68,6 @@ The server runtime log is `build/run/gameTest/logs/latest.log`.
 A normal `build` also includes `runGameTest`.
 
 ## Client GameTests
-
-These tests need a graphical Minecraft client.
-They exercise player input, networking, screens, overlays, and integrated-server behavior.
 
 Start with the focused smoke gate:
 
@@ -173,8 +165,7 @@ The [script](../../scripts/run-cold-restore-benchmark.ps1) recreates `build/cold
 
 ## Before a release
 
-A passing build is one part of release evidence.
-Release review also needs:
+Release checks:
 
 - Repeated vanilla and Lumi idle measurements.
 - Exact Save, Compare, and Restore workloads at several sizes.

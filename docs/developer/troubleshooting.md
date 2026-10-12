@@ -68,7 +68,6 @@ For an unexpected bar or partial first highlight, follow the [client ownership p
 
 ## Shared-world rejections
 
-A rejected queued request can be correct behavior.
 Another builder may have changed the active ref, workspace, zone revision, or actor authority.
 Inspect the activation checks before treating rejection as a world-apply bug.
 Never silently rebind an old destructive request to newer shared state.

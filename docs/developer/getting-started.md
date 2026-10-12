@@ -10,7 +10,6 @@
 - A graphical session for the development client and client GameTests.
 
 Use the Gradle wrapper included in the repository.
-You do not need a separate Gradle installation.
 The wrapper selects Gradle 9.4.0 from [gradle-wrapper.properties](../../gradle/wrapper/gradle-wrapper.properties).
 
 [gradle.properties](../../gradle.properties) selects Minecraft 1.21.11, Fabric Loader 0.19.2, and Fabric API 0.141.3+1.21.11.
@@ -20,7 +19,6 @@ Mappings give readable names to Minecraft classes and methods.
 WorldEdit and Axiom are optional player dependencies.
 The development build downloads them for compilation and integration tests.
 The build also extracts Axiom's nested API libraries.
-Do not copy these libraries into the source tree.
 
 ## Open the project
 
@@ -30,12 +28,9 @@ Do not copy these libraries into the source tree.
 4. Select JDK 21 as the Gradle JVM.
 5. Open a terminal in the repository root.
 
-If the checkout already exists, use it directly.
-Check the active branch before you edit files.
+Check the Java and Gradle versions:
 
 ```powershell
-git status --short
-git branch --show-current
 java -version
 .\gradlew.bat --version
 ```
@@ -73,9 +68,6 @@ Create a disposable Creative world for experiments.
 Use the [player controls](../../README.md#default-controls) to Save, Compare, and Restore a small edit.
 Read `run/logs/latest.log` if an action fails.
 
-The first run downloads Minecraft and mod dependencies.
-Later runs reuse the Gradle cache.
-
 ## Build the distributable mod
 
 ```powershell
@@ -88,13 +80,5 @@ The [Testing guide](testing.md) explains these separate gates.
 
 Artifacts appear in `build/libs/`.
 Use the remapped `lumi-<version>.jar` for a normal Fabric installation.
-The sources JAR contains source code.
-
-## Your first code-reading session
-
-1. Read the [Project map](project-map.md).
-2. Open `SaveScreenController.submit` from the [Save walkthrough](workflows.md#save).
-3. Follow that walkthrough until `SaveService.publishSave`.
-4. Read one matching test before you change behavior.
 
 For setup failures, use [Troubleshooting](troubleshooting.md#build-and-setup).

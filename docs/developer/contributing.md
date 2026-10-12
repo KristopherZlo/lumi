@@ -2,21 +2,14 @@
 
 [Documentation home](README.md) / Making a change
 
-## Start with a small behavior
+## Find the affected code
 
-Describe the trigger and expected result before you edit code.
-For example: "A version name containing a control character must be rejected before persistence."
 Use the [Project map](project-map.md) to find the owner.
 Use the [workflows](workflows.md) to identify its callers and observable outcome.
-
 Read the owner, its direct collaborators, and the matching tests.
 Expand the search when a caller or test points to another package.
-You do not need to read all production files before a focused change.
 
 ## Example: change a version name rule
-
-This is a useful first reading exercise because it crosses clear responsibility boundaries.
-It does not require GPU code or direct Minecraft world mutation.
 
 1. Open [VersionDisplayName](../../src/main/java/io/github/lumi/domain/model/VersionDisplayName.java).
 2. Open [VersionDisplayNameService](../../src/main/java/io/github/lumi/domain/service/VersionDisplayNameService.java).
@@ -32,7 +25,6 @@ The protocol carries the request and its expected shared state.
 
 A rule change may affect a form limit, wire limit, or persisted limit.
 Trace those limits before editing only the model constant.
-Use a regression test for the exact accepted or rejected input.
 
 ## Put each decision in its owner
 
