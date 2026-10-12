@@ -28,8 +28,10 @@ culls spatial batches by distance and frustum and reuses offscreen buffers until
 space is needed. All fills still finish before all outlines. No world state,
 Compare semantics, history storage, Save or Restore path changed.
 
-Preparation is cancelled when its immutable input is replaced. Hiding or
-cancelling Compare, disconnecting and stopping the client release GPU buffers.
+Preparation is cancelled when its immutable input is replaced. Hiding with H
+retains the bounded cache; cancelling Compare, disconnecting and stopping the
+client release GPU buffers. An empty terminal summary preserves the immutable
+input identity instead of needlessly invalidating prepared geometry.
 Uploads start at most two batches per frame and stop starting batches after
 4 ms. A single batch can exceed that target. The resident vertex cache is
 limited to 128 MiB; overflow uses one transient spatial batch at a time, with

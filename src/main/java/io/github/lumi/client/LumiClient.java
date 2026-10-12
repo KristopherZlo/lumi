@@ -138,6 +138,9 @@ public final class LumiClient implements ClientModInitializer {
     private static final LumiZoneOverlay ZONE_OVERLAY =
             new LumiZoneOverlay(
                     ZONE_OVERLAYS, HISTORY, NETWORKING::requestZoneOverlay);
+    private static final LumiPendingChangeOverlay PENDING_OVERLAY =
+            new LumiPendingChangeOverlay(
+                    HISTORY, COMPARISONS, ZONE_PREVIEWS, LumiClient::refreshPendingPreview);
 
     @Override
     public void onInitializeClient() {
@@ -222,8 +225,7 @@ public final class LumiClient implements ClientModInitializer {
         ZONE_OVERLAY.register();
         new LumiOperationHud(
                 HISTORY, PENDING_STATISTICS, NOTIFICATIONS).register();
-        new LumiPendingChangeOverlay(
-                HISTORY, COMPARISONS, ZONE_PREVIEWS, LumiClient::refreshPendingPreview).register();
+        PENDING_OVERLAY.register();
         ONBOARDING_WORLD.register();
         LumiMod.LOGGER.info("Lumi V2 client initialized");
     }

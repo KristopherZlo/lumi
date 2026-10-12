@@ -114,6 +114,7 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                     context.runOnClient(client -> active = false);
                 }
             }
+            new LumiCompareToggleScenario().run(context, fixture(true));
             context.runOnClient(client -> {
                 changes = List.of();
                 active = true;

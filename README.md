@@ -219,8 +219,9 @@ Geometry preparation runs on a background executor. The render thread uploads
 at most two spatial batches per frame, stopping new uploads after 4 ms; a single
 batch may exceed that target. It draws only nearby batches inside the camera
 frustum. The resident vertex cache is limited to 128 MiB; larger visible results
-use one transient batch at a time instead of omitting blocks. Hiding, replacing
-or cancelling Compare and disconnecting release the cache and cancel obsolete
+use one transient batch at a time instead of omitting blocks. H only hides the
+highlight and retains this bounded cache for immediate reuse. Replacing or
+cancelling Compare and disconnecting release the cache and cancel obsolete
 preparation. All fills finish before any outlines are drawn.
 
 Zone and selection fixes, regression coverage, and paired shell measurements

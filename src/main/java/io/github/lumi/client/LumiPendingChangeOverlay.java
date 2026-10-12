@@ -46,7 +46,7 @@ public final class LumiPendingChangeOverlay {
     }
 
     private void tick(Minecraft client) {
-        if (comparisons.visibleChanges().isEmpty()) compareOverlay.close();
+        compareOverlay.retainInput(comparisons.blockChanges());
         if (zonePreviews.hasScope() && zonePreviews.currentZone(
                 history.state().snapshot().orElse(null)).isEmpty()) zonePreviews.clear();
         boolean actionDown = actionDown(client);
@@ -77,7 +77,9 @@ public final class LumiPendingChangeOverlay {
                         0xffffd166);
             }
         }
-        compareOverlay.render(context, comparison, actionDown(client));
+        if (!comparison.isEmpty()) {
+            compareOverlay.render(context, comparison, actionDown(client));
+        }
     }
 
     private static void renderBlock(

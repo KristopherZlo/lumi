@@ -36,8 +36,10 @@ public final class ClientCompareStore {
         if (pending != null && pending.matches(candidate)
                 && candidate.batchIndex() == nextBatch) {
             nextBatch++;
-            changes.addAll(candidate.blockChanges());
-            publishedChanges = List.copyOf(changes);
+            if (!candidate.blockChanges().isEmpty()) {
+                changes.addAll(candidate.blockChanges());
+                publishedChanges = List.copyOf(changes);
+            }
             if (candidate.complete()) {
                 result = candidate;
                 if (!candidate.error().isEmpty()) {
@@ -60,6 +62,10 @@ public final class ClientCompareStore {
 
     public synchronized List<BlockChange> visibleChanges() {
         return highlightVisible ? publishedChanges : List.of();
+    }
+
+    public synchronized List<BlockChange> blockChanges() {
+        return publishedChanges;
     }
 
     public synchronized Optional<Boolean> toggleVisibility() {

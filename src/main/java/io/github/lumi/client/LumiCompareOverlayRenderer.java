@@ -45,6 +45,13 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
     private Frustum frustum;
     private long gpuBytes;
     private boolean ready;
+    private boolean failed;
+
+    void retainInput(List<BlockChange> changes) {
+        if (changes == source) return;
+        close();
+        source = changes;
+    }
 
     LumiCompareOverlayRenderer() {
         this(MAX_GPU_BYTES);
@@ -71,20 +78,19 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
             WorldRenderContext context,
             List<BlockChange> changes,
             boolean xray) {
-        if (changes != source) {
-            close();
-            source = changes;
-            if (!changes.isEmpty()) {
-                AtomicBoolean token = cancelled;
-                preparation = CompletableFuture.supplyAsync(
-                        () -> geometry.prepare(changes, token::get), Util.backgroundExecutor());
-            }
+        retainInput(changes);
+        if (source.isEmpty()) return;
+        if (sections.isEmpty() && preparation == null && !failed) {
+            AtomicBoolean token = cancelled;
+            preparation = CompletableFuture.supplyAsync(
+                    () -> geometry.prepare(changes, token::get), Util.backgroundExecutor());
         }
         if (preparation != null && preparation.isDone()) {
             try {
                 sections = preparation.join();
             } catch (CompletionException failed) {
                 LumiMod.LOGGER.error("Lumi Compare overlay preparation failed", failed.getCause());
+                this.failed = true;
             }
             preparation = null;
         }
@@ -197,6 +203,7 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
         meshes.clear();
         gpuBytes = 0;
         ready = false;
+        failed = false;
     }
 
     static int color(BlockChange.Kind kind) {

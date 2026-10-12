@@ -3,6 +3,7 @@ package io.github.lumi.client.state;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.BlockChange;
@@ -79,6 +80,25 @@ class ClientCompareStoreTest {
                 new BlockChange(0, 1, 2, BlockChange.Kind.ADDED),
                 new BlockChange(1, 1, 2, BlockChange.Kind.REMOVED)),
                 store.visibleChanges());
+    }
+
+    @Test
+    void preservesTheImmutableInputOnCompletionAndHideShow() {
+        ClientCompareStore store = new ClientCompareStore();
+        UUID request = UUID.randomUUID();
+        store.begin(request, "minecraft:overworld", BEFORE, AFTER);
+        store.accept(batch(request, 0, false, BlockChange.Kind.ADDED));
+        var input = store.blockChanges();
+        store.accept(new CompareResultPayload(request, "minecraft:overworld", BEFORE, AFTER,
+                1, 0, List.of(), List.of(), "", 1, true, List.of(), 1));
+        assertSame(input, store.visibleChanges());
+        store.toggleVisibility();
+        assertTrue(store.visibleChanges().isEmpty());
+        assertSame(input, store.blockChanges());
+        store.toggleVisibility();
+        assertSame(input, store.visibleChanges());
+        store.clear();
+        assertTrue(store.blockChanges().isEmpty());
     }
 
     private static CompareResultPayload result(UUID request, String dimension) {
