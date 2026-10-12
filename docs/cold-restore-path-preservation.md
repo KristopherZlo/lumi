@@ -41,7 +41,7 @@ most 128 before requesting any fallback tickets. The two limits keep their
 original meanings; resident coalescing and cold-memory limits stay intact.
 The new 34-resident/128-cold regression failed before this ordering correction.
 It also holds the second write future incomplete to prove no loaded apply or
-persistence starts while the tail is unclassified.
+loaded-chunk persistence starts while the tail is unclassified.
 
 ## History and alternatives
 
@@ -129,6 +129,17 @@ before each stored operation. All original state and path assertions remain;
 each of the four stored/mixed transitions applied 32 stored chunks. This follows
 the coverage gap already recorded in `performance-investigation.md`.
 
+The dedicated-server suite passed **35 required GameTests**, including the
+redstone Restore/Quick Restore/Undo scenarios. Native SMOKE passed its first
+minute and clean-reopen gates with real packets, entity moves, Save,
+Restore, Undo/Redo and client lighting checks. Final `compileGametestJava remapJar`
+succeeded. `build/libs/lumi-0.2.0-rc.1.jar` contains the complete classification
+cursor and no `io/github/lumi/gametest` classes. Its SHA-256 is
+`2c94ee867c36f34f4688de3e6f66119569e56fc53354f4f9c00e8a3cd8ae750d`.
+All owned native/Gradle test processes exited; the pre-existing IDE Java
+processes remain. The immutable fixture's 1,815-file digest was verified again
+after the A/B runs and remained unchanged.
+
 Raw measurements are in `build/cold-restore/{baseline,complete}-oct12-0*.properties`
 and `build/reports/lumi-ui-audit/cold-*-oct12-0*.log`. Derived cold/warm CSVs and
 `cold-ab-summary-oct12.json` are in the same report directory. These local
@@ -150,6 +161,24 @@ sections, including hidden ones, rather than waiting for that empty loaded flag
 to disappear. The existing entity-sensitive unload helper remains strict.
 Pending fixture waits log residency and entity counts every 200 ticks; the
 timeout and all recovery/endpoint assertions remain unchanged.
+
+All **eight real-process crash producer/verifier pairs passed**:
+`prepared`, `applying`, `write`, `barrier`, `force`, `verify`,
+`publication`, and `cleanup`. Each verifier checked the cold endpoint, nearby
+blocks, armor stand, ref revision, empty journal and released freeze after both
+recovery and a second clean reopen. Publication/cleanup cuts reopened directly
+without recovery UI. The local `cold-crash-results.csv`, phase markers and
+producer/verifier logs preserve the results; the two preparation failures are
+retained as `cold-crash-write-precondition-failed.log` and
+`cold-crash-write-diagnostic-producer.log`.
+
+The first two phases passed with the original strict unload condition; the
+remaining six used the corrected block-only precondition. Production code was
+the same complete candidate for all eight pairs.
+
+These use the existing phase cutpoints. In particular, `write` cuts at loaded
+chunk persistence after the preceding stored batches; it does not inject a
+crash after each individual stored-chunk enqueue.
 
 ### Reproduction
 
@@ -231,3 +260,12 @@ For worlds where changed POI or missing/unsupported storage forces loading,
 bounded lookahead of necessary fallback chunks remains useful to test. Exact
 stored POI rewrites are a larger change: chunk and POI storage need coordinated
 force, reread and crash coverage. Neither option is implemented here.
+
+## Scope of the result
+
+This comparison covers the fixed 4,194,304-block cold fixture, small loaded-only
+controls, exact loaded/stored/mixed branch switches, and the eight existing
+process-crash phases. It is not a release-wide performance or reliability
+certificate. Repeated vanilla/Lumi native idle measurements, the full size
+matrix, and multi-client conflicts/disconnects were not rerun in this change.
+The strict latency and tick budget failures above remain open.
