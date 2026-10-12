@@ -17,7 +17,11 @@ the test log records their resolved versions. No other Minecraft version has a
 verified row. Newer compatible Loader/API releases permitted by installation
 constraints need their own evidence; a successful compile does not add a row.
 
-Run `scripts/run-release-gates.ps1` from a committed candidate. The runner pins
+Run `scripts/run-release-gates.ps1 -RunTests` from a committed candidate when the
+computer is available for sustained testing. Without `-RunTests`, the runner
+exits before starting any gate. Client gates open Minecraft rendering windows
+that can take focus; their CPU/GPU/memory load can disrupt other games. Hidden
+launcher windows do not prevent this. The runner pins
 its Git SHA, records OS/CPU/GPU/dependencies, and keeps each gate's logs and
 reports under a unique `build/reports/lumi-release/` directory. It runs core
 checks, exact Restore, recovery, two clients, all four process-crash matrices,

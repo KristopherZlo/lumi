@@ -1,9 +1,13 @@
 param(
+    [switch]$RunMinecraft,
     [ValidateRange(120, 7200)] [int]$TimeoutSeconds = 900,
     [string]$Java = (Join-Path $env:JAVA_HOME 'bin/java.exe')
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $RunMinecraft) {
+    throw 'No tests started. This gate opens Minecraft windows and uses CPU/GPU. Pass -RunMinecraft only when the computer is available for testing.'
+}
 $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not (Test-Path -LiteralPath $Java)) { throw 'A JDK 21 java.exe is required.' }
 Push-Location $taskRepo

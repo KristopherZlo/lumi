@@ -120,8 +120,12 @@ Crash verifiers deliberately retain the producer's interrupted world.
 
 ### Two real clients
 
-Run `scripts/run-multiplayer-gate.ps1` on Windows with JDK 21. It prepares the
+Run `scripts/run-multiplayer-gate.ps1 -RunMinecraft` on Windows with JDK 21. It prepares the
 existing GameTest classpath and launches separate owner and peer client JVMs.
+Without `-RunMinecraft`, it exits before starting Gradle or clients. Minecraft
+windows can take focus and use substantial CPU/GPU resources; schedule the run
+when the computer is available. `-WindowStyle Hidden` hides the launcher window,
+not Minecraft's rendering window.
 Fabric starts a dedicated server in the owner JVM; both clients connect over TCP.
 Each client has a separate game directory and offline identity. The file mailbox
 only schedules test actions; Save, Restore and snapshots use production packets.
@@ -166,7 +170,9 @@ data. An unpublished import must be safely retryable and must leave the
 canonical HEAD and live world unchanged. This fixture covers one section;
 large captures and entity/block-entity fixtures remain separate evidence.
 
-Run `scripts/run-publication-crash-matrix.ps1 -Kind save` or `-Kind import`.
+Run `scripts/run-publication-crash-matrix.ps1 -RunMinecraft -Kind save` or
+`-RunMinecraft -Kind import`. The explicit switch is required before any launch;
+the matrix repeatedly opens Minecraft windows and can disrupt other games.
 `-Phase journal-created` selects a focused Save cut; omit `-Phase` for all
 declared cuts. Each cut receives a new preserved game directory. The runner
 requires producer exit 86, its matching marker, verifier exit 0, and the named
@@ -185,6 +191,12 @@ verifier JVMs, including prior-history Restore and clean reopen:
 Crash verifiers call the production runtime Restore entry point; the separate
 multiplayer gate exercises the client packet path. The fixtures use Fabric's
 consistent test-world settings and wait for both active and queued operations.
+
+The subsequent full Save matrix was stopped at the user's request on 2026-10-12
+because its clients interrupted foreground gameplay. Only `objects-staged` and
+`pack-forced` completed in that run:
+`build/reports/lumi-publication-crash/20261012-110002-4302a5e924e047deaa944b244225661e/`.
+The remaining cuts and queued Import/Merge runs were not verified.
 
 ```powershell
 .\gradlew.bat runRestoreCrashMatrix --no-daemon

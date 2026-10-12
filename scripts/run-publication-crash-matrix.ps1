@@ -1,4 +1,5 @@
 param(
+    [switch]$RunMinecraft,
     [ValidateSet('save', 'import', 'merge')] [string]$Kind = 'save',
     [string[]]$Phase = @(),
     [ValidateRange(120, 7200)] [int]$TimeoutSeconds = 900,
@@ -6,6 +7,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $RunMinecraft) {
+    throw 'No tests started. This matrix repeatedly opens Minecraft windows and uses CPU/GPU. Pass -RunMinecraft only when the computer is available for testing.'
+}
 $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $taskPhases = @('objects-staged', 'pack-forced', 'pack-published', 'index-forced',
     'objects-published', 'commit-written', 'ref-forced', 'ref-published')
