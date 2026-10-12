@@ -39,6 +39,7 @@
   ],
   "client": [
     "client.GuiGraphicsAccessor",
+    "client.GuiGraphicsMixin",
     "client.MouseHandlerMixin"
   ],
   "injectors": {

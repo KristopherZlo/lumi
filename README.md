@@ -78,6 +78,10 @@ selection history shows a message. Put the sword away to undo or redo world edit
 
 You can change all key bindings in Minecraft controls.
 
+Lumi screens use a fixed GUI scale of 2. Minecraft's GUI Scale setting does not
+change their size. Resizing the window or entering fullscreen updates the
+available layout space while keeping controls at the same pixel scale.
+
 Zone Save, Amend, and See Changes use the zone's current pending state. Changes
 elsewhere in the workspace do not enable these controls. They show a reason
 while statistics load or the zone is clean; entity-only edits remain savable.
@@ -180,9 +184,14 @@ To run one server GameTest, add
 `-Dfabric-api.gametest.filter=<test-id>` before `runGameTest`. This skips the
 full suite.
 
-Client GameTests run all current suites by default. Select `SMOKE`, `UI`, `INTERACTION`,
+Client GameTests run all current suites by default. Select `SMOKE`, `UI`, `UI_SCALE`, `INTERACTION`,
 `RECOVERY`, `EXACT`, or `BENCHMARK` with
 `-Dlumi.gametest.suite=<name> runClientGameTest --no-daemon`.
+
+`UI_SCALE` checks fixed Lumi scale-2 geometry, mouse hover and clicks at Minecraft
+GUI scales 1, 2, 3, 4 and Auto across three window sizes, including visible
+tooltip text at the expected scale-2 position. It loads no world, caps
+its test client at 30 FPS, and saves a screenshot of each case.
 
 Zone and selection fixes, regression coverage, and paired shell measurements
 are recorded in [the interaction verification report](docs/zone-interaction-fixes.md).

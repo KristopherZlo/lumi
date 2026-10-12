@@ -1,11 +1,9 @@
 package io.github.lumi.client.ui;
 
-import com.mojang.blaze3d.platform.Window;
-import net.minecraft.client.Minecraft;
-
-/** Lumi coordinates resolved from Minecraft's live logical GUI scale. */
+/** Fixed Lumi pixel scale with matching render and input coordinates. */
 public record LumiUiScale(int targetGuiScale) {
     public static final String TARGET_GUI_SCALE_PROPERTY = "lumi.ui.targetGuiScale";
+    private static final int DEFAULT_GUI_SCALE = 2;
     private static final int MAX_TARGET_GUI_SCALE = 8;
 
     public LumiUiScale {
@@ -13,27 +11,20 @@ public record LumiUiScale(int targetGuiScale) {
     }
 
     public static LumiUiScale current() {
-        Minecraft client = Minecraft.getInstance();
-        Window window = client == null ? null : client.getWindow();
-        return forGuiScale(window == null ? 2 : window.getGuiScale());
-    }
-
-    static LumiUiScale forGuiScale(int guiScale) {
         return new LumiUiScale(Integer.getInteger(
-                TARGET_GUI_SCALE_PROPERTY, Math.max(1, guiScale)));
+                TARGET_GUI_SCALE_PROPERTY, DEFAULT_GUI_SCALE));
     }
 
     public float renderScale(int currentGuiScale) {
         return targetGuiScale / (float) Math.max(1, currentGuiScale);
     }
 
-    public int virtualSize(int scaledSize, int currentGuiScale) {
-        return Math.max(1, (int) (((long) scaledSize * Math.max(1, currentGuiScale))
-                / targetGuiScale));
+    public int virtualSize(int framebufferSize) {
+        return Math.max(1, (int) Math.ceil(framebufferSize / (double) targetGuiScale));
     }
 
     public double virtualCoordinate(double coordinate, int currentGuiScale) {
-        return coordinate / renderScale(currentGuiScale);
+        return coordinate * Math.max(1, currentGuiScale) / targetGuiScale;
     }
 
     private static int clamp(int value, int min, int max) {

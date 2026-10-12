@@ -12,6 +12,7 @@
       "io.github.lumi.gametest.LumiHistoryBenchmarkClientGameTest",
       "io.github.lumi.gametest.LumiUiWorkflowClientGameTest",
       "io.github.lumi.gametest.LumiUiContractClientGameTest",
+      "io.github.lumi.gametest.LumiUiScaleClientGameTest",
       "io.github.lumi.gametest.LumiRecoveryClientGameTest",
       "io.github.lumi.gametest.LumiRestoreCrashClientGameTest",
       "io.github.lumi.gametest.LumiExactRestoreClientGameTest"

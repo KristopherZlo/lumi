@@ -17,7 +17,7 @@ import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
 /** Neutral V2 screen mechanics shared by pages and modal workflows. */
-abstract class LumiScreen extends Screen {
+public abstract class LumiScreen extends Screen {
     private static final int OPEN_MILLIS = 160;
     private static final float OPEN_SCALE = 0.94F;
     protected static final int INPUT_HEIGHT = 14;
@@ -128,10 +128,9 @@ abstract class LumiScreen extends Screen {
         hintPreviousButton = null;
         hintNextButton = null;
         Window window = Minecraft.getInstance().getWindow();
-        int currentGuiScale = currentGuiScale();
         uiScale = LumiUiScale.current();
-        width = uiScale.virtualSize(window.getGuiScaledWidth(), currentGuiScale);
-        height = uiScale.virtualSize(window.getGuiScaledHeight(), currentGuiScale);
+        width = uiScale.virtualSize(window.getWidth());
+        height = uiScale.virtualSize(window.getHeight());
     }
 
     protected final void beginScreenInit() {
@@ -476,6 +475,7 @@ abstract class LumiScreen extends Screen {
                     LumiTheme.withOpacity(
                             LumiTheme.BACKDROP, 1.0F - openingValue));
         }
+        graphics.renderDeferredElements();
         graphics.pose().popMatrix();
     }
 
