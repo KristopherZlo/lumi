@@ -147,6 +147,9 @@ tasks.register('prepareMultiplayerLaunch') {
         output.text = arguments.collect { argument ->
             '"' + argument.toString().replace('\\', '\\\\').replace('"', '\\"') + '"'
         }.join('\n') + '\n'
+        layout.buildDirectory.file('multiplayer-launch.inputs.json').get().asFile.text =
+                groovy.json.JsonOutput.toJson([
+                        schema: 1, classpath: run.classpath.files.collect { it.absolutePath }])
     }
 }
 

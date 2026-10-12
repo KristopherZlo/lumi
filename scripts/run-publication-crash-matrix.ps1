@@ -5,6 +5,7 @@ param(
     [ValidateSet('save', 'import', 'merge', 'restore')] [string]$Kind = 'save',
     [string[]]$Phase = @(),
     [switch]$RestoreCold,
+    [string[]]$ResumeFrom = @(),
     [ValidateRange(120, 7200)] [int]$TimeoutSeconds = 900,
     [string]$Java = (Join-Path $env:JAVA_HOME 'bin/java.exe')
 )
@@ -30,25 +31,42 @@ try {
     & (Join-Path $taskRepo 'gradlew.bat') prepareMultiplayerLaunch --no-daemon
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) { throw 'Client launch preparation failed.' }
+    $taskSha = (& git rev-parse HEAD).Trim()
+    $taskDirty = [bool](& git status --porcelain)
+    $taskFingerprint = [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java)
+    $taskEvidence = [LumiCrashMatrixEvidence]::new($taskFingerprint, $taskSha, $taskDirty, $taskDefinition)
+    $taskResumed = $taskEvidence.Resume($ResumeFrom, $taskPhases, [bool]$RestoreCold)
     $taskRun = Join-Path $taskRepo ('build/reports/lumi-publication-crash/' +
         [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $taskRun | Out-Null
     $taskManifest = [ordered]@{
-        schema = 1; gitSha = (& git rev-parse HEAD); dirty = [bool](& git status --porcelain)
+        schema = 2; gitSha = $taskSha; dirty = $taskDirty; inputFingerprint = $taskFingerprint
         kind = $Kind; phases = $taskPhases; restoreCold = [bool]$RestoreCold
         startedUtc = [DateTime]::UtcNow.ToString('o')
-        status = 'unverified'; completed = @()
+        status = 'unverified'; completed = @(); results = [ordered]@{}
+        resumedFrom = $ResumeFrom
         buildProperties = @((Get-Content -LiteralPath (Join-Path $taskRepo 'gradle.properties')) | ForEach-Object { [string]$_ })
     }
     $taskManifestPath = Join-Path $taskRun 'manifest.json'
-    $taskManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
+    $taskManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
     try {
         foreach ($taskPhase in $taskPhases) {
+            if ((& git rev-parse HEAD).Trim() -cne $taskSha -or [bool](& git status --porcelain) -ne $taskDirty) {
+                throw 'The candidate changed during the crash matrix.'
+            }
+            if ($taskResumed.ContainsKey($taskPhase)) {
+                $taskManifest.results[$taskPhase] = $taskResumed[$taskPhase]
+                $taskManifest.completed += $taskPhase
+                $taskManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
+                Write-Output "Reused verified $Kind/$taskPhase`: $($taskResumed[$taskPhase].directory)"
+                continue
+            }
             $taskDirectory = Join-Path $taskRun $taskPhase
             $taskGameDirectory = Join-Path $taskDirectory 'run/clientGameTest'
             $taskTemp = Join-Path $taskDirectory 'tmp'
             New-Item -ItemType Directory -Path $taskGameDirectory, $taskTemp -Force | Out-Null
             $taskMarker = Join-Path $taskDirectory 'crash.marker'
+            $taskReceipts = [ordered]@{}
             foreach ($taskMode in @('produce', 'verify')) {
                 $taskArguments = Get-Content -LiteralPath (Join-Path $taskRepo 'build/multiplayer-launch.args')
                 $taskExtra = @('-Djava.io.tmpdir=' + $taskTemp) +
@@ -60,6 +78,7 @@ try {
                 $taskArgFile = Join-Path $taskDirectory ($taskMode + '.args')
                 [IO.File]::WriteAllLines($taskArgFile, $taskArguments, [Text.UTF8Encoding]::new($false))
                 $taskLog = Join-Path $taskDirectory ($taskMode + '.stdout.log')
+                $taskStarted = [DateTime]::UtcNow.ToString('o')
                 $taskProcess = Start-Process -FilePath $Java -ArgumentList ('@"' + $taskArgFile + '"') -WindowStyle Hidden -PassThru -WorkingDirectory $taskGameDirectory -RedirectStandardOutput $taskLog -RedirectStandardError (Join-Path $taskDirectory ($taskMode + '.stderr.log'))
                 $taskProcess.Handle | Out-Null
                 $taskProcess.Id | Set-Content -LiteralPath (Join-Path $taskDirectory ($taskMode + '.pid'))
@@ -80,17 +99,32 @@ try {
                     }
                     if ($taskMode -eq 'produce') {
                         $taskDefinition.AssertMarker($taskMarker, $taskPhase)
+                        if ($Kind -eq 'restore') {
+                            Copy-Item -LiteralPath (Join-Path $taskGameDirectory 'lumi-restore-crash.properties') -Destination (Join-Path $taskDirectory 'producer-metadata.properties')
+                        }
                     } elseif (-not (Select-String -LiteralPath $taskLog -SimpleMatch $taskDefinition.Gate($taskPhase) -Quiet)) {
                         throw "Verifier exited without its gate: $taskLog"
+                    }
+                    $taskReceipts[$taskMode] = [ordered]@{
+                        exitCode = $taskProcess.ExitCode; startedUtc = $taskStarted
+                        finishedUtc = [DateTime]::UtcNow.ToString('o')
                     }
                 } finally {
                     if (-not $taskProcess.HasExited) { Stop-Process -Id $taskProcess.Id -Force }
                     $taskProcess.Dispose()
                 }
             }
+            if ((& git rev-parse HEAD).Trim() -cne $taskSha -or [bool](& git status --porcelain) -ne $taskDirty -or
+                [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java) -cne $taskFingerprint) {
+                throw 'The candidate or launch inputs changed during the crash pair.'
+            }
+            $taskManifest.results[$taskPhase] = $taskEvidence.Record($taskDirectory, $taskPhase, $taskReceipts)
             $taskManifest.completed += $taskPhase
-            $taskManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
+            $taskManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
             Write-Output "Verified $Kind/$taskPhase`: $taskDirectory"
+        }
+        if ([LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java) -cne $taskFingerprint) {
+            throw 'Launch inputs changed during the crash matrix.'
         }
         $taskManifest.status = 'passed'
     } catch {
@@ -99,7 +133,7 @@ try {
         throw
     } finally {
         $taskManifest.finishedUtc = [DateTime]::UtcNow.ToString('o')
-        $taskManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
+        $taskManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
     }
     Write-Output "Crash matrix passed ($Kind): $taskRun"
 } finally {

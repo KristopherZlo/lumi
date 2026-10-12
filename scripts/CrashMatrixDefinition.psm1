@@ -50,3 +50,139 @@ class LumiCrashMatrixDefinition {
         return "publication_crash_$($this.Kind)_${phase}: succeeded"
     }
 }
+
+class LumiCrashMatrixEvidence {
+    [string] $Fingerprint
+    [string] $GitSha
+    [bool] $Dirty
+    [LumiCrashMatrixDefinition] $Definition
+
+    LumiCrashMatrixEvidence([string] $fingerprint, [string] $gitSha, [bool] $dirty,
+        [LumiCrashMatrixDefinition] $definition) {
+        $this.Fingerprint = $fingerprint
+        $this.GitSha = $gitSha
+        $this.Dirty = $dirty
+        $this.Definition = $definition
+    }
+
+    static [object[]] Inventory([string[]] $roots) {
+        $inventory = [Collections.Generic.List[object]]::new()
+        foreach ($root in $roots) {
+            $path = [IO.Path]::GetFullPath($root)
+            if (-not (Test-Path -LiteralPath $path)) {
+                $inventory.Add([ordered]@{ path = $path; type = 'missing' })
+            } elseif (Test-Path -LiteralPath $path -PathType Container) {
+                $inventory.Add([ordered]@{ path = $path; type = 'directory' })
+                foreach ($file in (Get-ChildItem -LiteralPath $path -Recurse -File -Force | Sort-Object FullName)) {
+                    $inventory.Add([ordered]@{ path = $file.FullName; hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash })
+                }
+            } else {
+                $inventory.Add([ordered]@{ path = $path; hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash })
+            }
+        }
+        return $inventory.ToArray()
+    }
+
+    static [string] Digest([object] $value) {
+        $hash = [Security.Cryptography.SHA256]::Create()
+        try {
+            $json = ConvertTo-Json -InputObject $value -Depth 10 -Compress
+            return [BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($json))).Replace('-', '')
+        } finally { $hash.Dispose() }
+    }
+
+    static [string] Inputs([string] $repo, [string] $java) {
+        $descriptor = Join-Path $repo 'build/multiplayer-launch.inputs.json'
+        $launch = Get-Content -LiteralPath $descriptor -Raw | ConvertFrom-Json
+        if ($launch.schema -ne 1) { throw 'Unknown prepared-launch input schema.' }
+        $jdk = Split-Path (Split-Path ([IO.Path]::GetFullPath($java)) -Parent) -Parent
+        $roots = @($launch.classpath) + @($descriptor, (Join-Path $repo 'build/multiplayer-launch.args'),
+            (Join-Path $repo '.gradle/loom-cache/launch.cfg'),
+            (Join-Path $repo '.gradle/loom-cache/remapClasspath.txt'),
+            (Join-Path $repo '.gradle/loom-cache/log4j.xml'))
+        foreach ($part in @('bin', 'lib', 'conf', 'release')) { $roots += Join-Path $jdk $part }
+        $identity = [ordered]@{
+            files = [LumiCrashMatrixEvidence]::Inventory($roots); java = [IO.Path]::GetFullPath($java)
+            machine = $env:COMPUTERNAME; os = [Environment]::OSVersion.VersionString
+            gpu = @(Get-CimInstance Win32_VideoController | Sort-Object Name | Select-Object Name, DriverVersion)
+            javaOptions = @($env:JAVA_TOOL_OPTIONS, $env:JDK_JAVA_OPTIONS, $env:_JAVA_OPTIONS)
+        }
+        return [LumiCrashMatrixEvidence]::Digest($identity)
+    }
+
+    [string] ArtifactDigest([string] $directory) {
+        $roots = @()
+        foreach ($name in @('crash.marker', 'produce.args', 'verify.args', 'produce.stdout.log',
+            'produce.stderr.log', 'verify.stdout.log', 'verify.stderr.log', 'run')) {
+            $path = Join-Path $directory $name
+            if (-not (Test-Path -LiteralPath $path)) { throw "Missing crash artifact: $path" }
+            $roots += $path
+        }
+        if ($this.Definition.Kind -eq 'restore') {
+            $path = Join-Path $directory 'producer-metadata.properties'
+            if (-not (Test-Path -LiteralPath $path)) { throw "Missing producer metadata: $path" }
+            $roots += $path
+        }
+        return [LumiCrashMatrixEvidence]::Digest([LumiCrashMatrixEvidence]::Inventory($roots))
+    }
+
+    [object] Record([string] $directory, [string] $phase, [object] $processes) {
+        $proof = [pscustomobject]@{
+            phase = $phase; directory = [IO.Path]::GetFullPath($directory)
+            processes = $processes; artifactSha256 = ''
+        }
+        $this.AssertOutcome($proof, $phase)
+        $proof.artifactSha256 = $this.ArtifactDigest($directory)
+        return $proof
+    }
+
+    hidden [void] AssertOutcome([object] $proof, [string] $phase) {
+        if ($null -eq $proof -or $proof.phase -cne $phase -or
+            $null -eq $proof.processes.produce -or $null -eq $proof.processes.verify -or
+            $proof.processes.produce.exitCode -ne 86 -or $proof.processes.verify.exitCode -ne 0) {
+            throw "Missing successful process receipts: $phase"
+        }
+        $directory = [IO.Path]::GetFullPath($proof.directory)
+        $this.Definition.AssertMarker((Join-Path $directory 'crash.marker'), $phase)
+        $log = Join-Path $directory 'verify.stdout.log'
+        if (-not (Select-String -LiteralPath $log -SimpleMatch $this.Definition.Gate($phase) -Quiet)) {
+            throw "Missing verifier gate: $phase"
+        }
+        foreach ($mode in @('produce', 'verify')) {
+            if (Select-String -LiteralPath (Join-Path $directory "$mode.stdout.log") -SimpleMatch 'Client gametests failed with an exception' -Quiet) {
+                throw "Failed client: $phase/$mode"
+            }
+        }
+    }
+
+    [void] Assert([object] $proof, [string] $phase) {
+        $this.AssertOutcome($proof, $phase)
+        $directory = [IO.Path]::GetFullPath($proof.directory)
+        if ($this.ArtifactDigest($directory) -cne $proof.artifactSha256) {
+            throw "Crash artifacts changed: $phase"
+        }
+    }
+
+    [hashtable] Resume([string[]] $paths, [string[]] $phases, [bool] $cold) {
+        $results = @{}
+        foreach ($path in $paths) {
+            if ($this.Dirty) { throw 'Crash evidence can only be reused for a clean candidate.' }
+            $manifest = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+            if ($manifest.schema -ne 2 -or $manifest.dirty -ne $false -or
+                $manifest.gitSha -cne $this.GitSha -or $manifest.inputFingerprint -cne $this.Fingerprint -or
+                $manifest.kind -cne $this.Definition.Kind -or $manifest.restoreCold -ne $cold) {
+                throw "Crash evidence has a different candidate/configuration or lacks receipts: $path"
+            }
+            foreach ($phase in @($manifest.completed)) {
+                if ($phase -notin $this.Definition.Phases) { throw "Unknown recorded phase: $phase" }
+                if ($phase -notin $phases) { continue }
+                if ($null -eq $manifest.results) { throw "Missing phase receipts: $path" }
+                $property = $manifest.results.PSObject.Properties[$phase]
+                if ($null -eq $property) { throw "Missing phase receipt: $phase" }
+                $this.Assert($property.Value, $phase)
+                $results[$phase] = $property.Value
+            }
+        }
+        return $results
+    }
+}

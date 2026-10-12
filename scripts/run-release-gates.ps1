@@ -7,12 +7,18 @@ param(
     [string]$FixtureManifest,
     [string]$ExistingWorldSource,
     [string]$ExistingWorldName = 'Lumi behavior seed 710',
-    [string]$ReviewedEvidence
+    [string]$ReviewedEvidence,
+    [hashtable]$CrashResumeFrom = @{}
 )
 
 $ErrorActionPreference = 'Stop'
 if (-not $RunTests) {
     throw 'No tests started. Release gates can repeatedly open Minecraft windows and impose sustained CPU/GPU/memory load. Pass -RunTests only when the computer is available for testing.'
+}
+foreach ($taskResumeGate in $CrashResumeFrom.Keys) {
+    if ($taskResumeGate -notin @('RestoreCrash', 'SaveCrash', 'MergeCrash', 'ImportCrash')) {
+        throw "Unknown crash gate for resumption: $taskResumeGate"
+    }
 }
 $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $taskRepo
@@ -55,15 +61,17 @@ try {
         $taskStarted = [DateTime]::UtcNow
         try {
             $taskGradleArguments = @()
+            $taskCrashResume = @()
+            if ($CrashResumeFrom.ContainsKey($taskName)) { $taskCrashResume = @($CrashResumeFrom[$taskName]) }
             switch ($taskName) {
                 'Core' { $taskGradleArguments = @('compileJava', 'compileTestJava', 'compileGametestJava', 'test', 'runGameTest') }
                 'Exact' { $taskGradleArguments = @('-Dlumi.gametest.suite=EXACT', 'runClientGameTest') }
                 'Recovery' { $taskGradleArguments = @('-Dlumi.gametest.suite=RECOVERY', 'runClientGameTest') }
                 'Multiplayer' { & (Join-Path $PSScriptRoot 'run-multiplayer-gate.ps1') -RunMinecraft *> $taskLog }
-                'RestoreCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind restore *> $taskLog }
-                'SaveCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind save *> $taskLog }
-                'MergeCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind merge *> $taskLog }
-                'ImportCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind import *> $taskLog }
+                'RestoreCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind restore -ResumeFrom $taskCrashResume *> $taskLog }
+                'SaveCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind save -ResumeFrom $taskCrashResume *> $taskLog }
+                'MergeCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind merge -ResumeFrom $taskCrashResume *> $taskLog }
+                'ImportCrash' { & (Join-Path $PSScriptRoot 'run-publication-crash-matrix.ps1') -RunMinecraft -Kind import -ResumeFrom $taskCrashResume *> $taskLog }
                 'LoadRegression' { $taskGradleArguments = @('regressionPerformanceTest') }
                 'RestoreSoak' {
                     if (-not $FixtureManifest -or -not $ExistingWorldSource) {

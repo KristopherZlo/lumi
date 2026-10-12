@@ -182,6 +182,33 @@ the matrix repeatedly opens Minecraft windows and can disrupt other games.
 declared cuts. Each cut receives a new preserved game directory. The runner
 requires producer exit 86, its matching marker, verifier exit 0, and the named
 verification gate. Results and logs are under `build/reports/lumi-publication-crash/`.
+The runner prepares Gradle once per invocation and records a schema-2 manifest
+with both process exit codes and SHA-256 fingerprints of the launch inputs and
+completed cut's artifacts. JVM durations are recorded as UTC start/end times.
+
+To continue a partially completed matrix on the same clean candidate, pass one
+or more of these manifests with `-ResumeFrom`:
+
+```powershell
+.\scripts\run-publication-crash-matrix.ps1 -RunMinecraft -Kind merge -ResumeFrom 'build/reports/lumi-publication-crash/<run>/manifest.json'
+```
+
+Only fully verified requested cuts are reused. The commit, clean tree, matrix
+kind, cold-fixture setting, compiled classpath/JDK/configuration fingerprint,
+host/OS/GPU driver, JVM environment options, process receipts, marker, verifier
+gate, logs, and preserved world must match. The runner hashes actual files,
+including directory contents; Git SHA alone is insufficient for ignored build
+outputs. Invalid evidence stops the invocation before clients start. Schema-1
+reports from previous runs cannot be reused automatically. Keep the source
+artifact directories; resumed manifests reference their unchanged contents.
+Remaining cuts still get new worlds and separate crashed/restarted JVMs. A full
+resumption starts no clients but still performs launch preparation and evidence
+validation. These are functional crash results, not new performance samples.
+
+The release runner accepts the same manifests per gate, for example
+`-CrashResumeFrom @{ MergeCrash = 'build/reports/lumi-publication-crash/<run>/manifest.json' }`.
+Other release gates and manual evidence requirements remain in force.
+
 Save has twelve cuts; Import has nine, including preview publication. A subset
 run proves only its listed cuts. `-Kind merge` covers the loose object and commit
 writes during preparation, then the eight existing Restore persistence phases
