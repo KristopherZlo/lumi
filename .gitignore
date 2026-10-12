@@ -25,8 +25,9 @@ replay_pid*
 Thumbs.db
 Desktop.ini
 
-# Local AI working material
-/docs/
+# Local working notes, with public developer documentation
+/docs/*
+!/docs/developer/
 /*.md
 !/README.md
 /.lumi-*
