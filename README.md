@@ -21,7 +21,7 @@ Save a good moment. Test another idea on a branch. Compare the result, then
 return without copying the world or learning Git.
 
 > [!WARNING]
-> Lumi 0.2.0 is a release candidate. Keep normal backups of worlds you care about.
+> Lumi 0.2.0-rc.2 is a release candidate. Keep normal backups of worlds you care about.
 
 ## What Lumi Does
 
