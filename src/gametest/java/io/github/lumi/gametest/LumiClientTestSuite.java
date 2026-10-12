@@ -8,6 +8,7 @@ enum LumiClientTestSuite {
     SMOKE,
     UI,
     UI_SCALE,
+    COMPARE_RENDER,
     INTERACTION,
     RECOVERY,
     RESTORE_CRASH,

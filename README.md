@@ -184,7 +184,7 @@ To run one server GameTest, add
 `-Dfabric-api.gametest.filter=<test-id>` before `runGameTest`. This skips the
 full suite.
 
-Client GameTests run all current suites by default. Select `SMOKE`, `UI`, `UI_SCALE`, `INTERACTION`,
+Client GameTests run all current suites by default. Select `SMOKE`, `UI`, `UI_SCALE`, `COMPARE_RENDER`, `INTERACTION`,
 `RECOVERY`, `EXACT`, or `BENCHMARK` with
 `-Dlumi.gametest.suite=<name> runClientGameTest --no-daemon`.
 
@@ -192,6 +192,13 @@ Client GameTests run all current suites by default. Select `SMOKE`, `UI`, `UI_SC
 GUI scales 1, 2, 3, 4 and Auto across three window sizes, including visible
 tooltip text at the expected scale-2 position. It loads no world, caps
 its test client at 30 FPS, and saves a screenshot of each case.
+
+`COMPARE_RENDER` measures CPU submission and GPU draw time for 32,768 dense and
+100,000 scattered Compare blocks, with depth testing and Action-key x-ray. It
+uses the production overlay renderer, caps its client at 30 FPS, writes raw
+samples to `build/run/clientGameTest/compare-render.csv`, and saves screenshots.
+The synthetic Compare input does not edit world history. Copy the CSV before
+another client test run, which recreates that directory.
 
 Zone and selection fixes, regression coverage, and paired shell measurements
 are recorded in [the interaction verification report](docs/zone-interaction-fixes.md).
