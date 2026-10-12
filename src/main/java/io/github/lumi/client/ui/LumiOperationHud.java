@@ -5,17 +5,20 @@ import io.github.lumi.client.LumiHotkeys;
 import io.github.lumi.client.state.ClientHistoryStore;
 import io.github.lumi.client.state.ClientNotificationStore;
 import io.github.lumi.client.state.ClientPendingStatisticsStore;
+import io.github.lumi.client.state.HighlightPreparationProgress;
 import io.github.lumi.domain.model.HudDisplayMode;
 import io.github.lumi.network.OperationEventPayload;
+import java.util.function.Supplier;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
-/** Compact operation/queue HUD backed only by immutable server events. */
+/** Compact HUD backed by immutable server events and local highlight progress. */
 public final class LumiOperationHud {
     private static final Identifier ID =
             Identifier.fromNamespaceAndPath(LumiMod.MOD_ID, "operation_hud");
@@ -23,16 +26,20 @@ public final class LumiOperationHud {
     private final ClientHistoryStore history;
     private final ClientPendingStatisticsStore pendingStatistics;
     private final ClientNotificationStore notifications;
+    private final Supplier<HighlightPreparationProgress> highlightProgress;
 
     public LumiOperationHud(
             ClientHistoryStore history,
             ClientPendingStatisticsStore pendingStatistics,
-            ClientNotificationStore notifications) {
+            ClientNotificationStore notifications,
+            Supplier<HighlightPreparationProgress> highlightProgress) {
         this.history = java.util.Objects.requireNonNull(history, "history");
         this.pendingStatistics = java.util.Objects.requireNonNull(
                 pendingStatistics, "pendingStatistics");
         this.notifications = java.util.Objects.requireNonNull(
                 notifications, "notifications");
+        this.highlightProgress = java.util.Objects.requireNonNull(
+                highlightProgress, "highlightProgress");
     }
 
     public void register() {
@@ -56,13 +63,32 @@ public final class LumiOperationHud {
         if (!usesGui() || Minecraft.getInstance().screen instanceof LumiScreen) return;
         int y = renderWorkspace(graphics);
         y = renderOperation(graphics, y);
+        y = renderHighlightProgress(graphics, y);
         renderNotifications(graphics, y);
     }
 
     private void renderScreenOverlay(GuiGraphics graphics) {
         if (!usesGui()) return;
         int y = renderOperation(graphics, SCREEN_TOP);
+        y = renderHighlightProgress(graphics, y);
         renderNotifications(graphics, y);
+    }
+
+    private int renderHighlightProgress(GuiGraphics graphics, int y) {
+        HighlightPreparationProgress progress = highlightProgress.get();
+        if (!progress.preparing()) return y;
+        String text = Component.translatable(
+                "luma.status.highlight_preparing", progress.percent()).getString();
+        int width = compactPanelWidth(graphics, text);
+        int x = graphics.guiWidth() - width - 10;
+        graphics.fill(x, y, x + width, y + 28, 0xd9111419);
+        drawClipped(graphics, text, x + 8, y + 6, width - 16, 0xfff0f3f6);
+        int barWidth = width - 16;
+        graphics.fill(x + 8, y + 20, x + 8 + barWidth, y + 23, 0xff343a43);
+        graphics.fill(x + 8, y + 20,
+                x + 8 + (int) Math.round(barWidth * progress.fraction()), y + 23,
+                0xff70d6a5);
+        return nextPanelY(y, 28);
     }
 
     private int renderOperation(GuiGraphics graphics, int y) {

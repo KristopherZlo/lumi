@@ -539,6 +539,7 @@
   "luma.status.compare_select_two": "Elige primero dos guardados diferentes.",
   "luma.status.compare_loading": "Comparación del edificio al fondo.",
   "luma.status.compare_overlay_loading": "Preparando lo más destacado del mundo en el fondo.",
+  "luma.status.highlight_preparing": "Preparando resaltado · %s%%",
   "luma.status.compare_failed": "La operación de comparación falló.",
   "luma.status.compare_no_changes": "No hay nada que comparar.",
   "luma.status.compare_overlay_enabled": "Resaltado mundial habilitado.",

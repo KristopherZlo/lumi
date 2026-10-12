@@ -5,9 +5,11 @@ import io.github.lumi.domain.model.BlockChange;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.network.CompareResultPayload;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import javax.imageio.ImageIO;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Options;
@@ -23,7 +25,26 @@ final class LumiCompareToggleScenario {
                 LumiPendingChangeOverlay.class, owner, "compareOverlay", LumiCompareOverlayRenderer.class);
         try {
             context.runOnClient(client -> publish(store, fixture));
+            context.waitFor(client -> owner.highlightProgress().preparing()
+                    && owner.highlightProgress().percent() > 0, 400);
+            assertPresentation(context.takeScreenshot("lumi-compare-preparing"), true, false);
+            context.waitFor(client -> renderer.cachedBytes() > 0
+                    && owner.highlightProgress().preparing(), 400);
+            assertPresentation(context.takeScreenshot("lumi-compare-uploading"), true, false);
+            context.getInput().pressKey(LumiCompareToggleScenario::toggleBinding);
+            context.waitFor(client -> store.visibleChanges().isEmpty());
+            context.waitTicks(2);
+            context.runOnClient(client -> {
+                if (owner.highlightProgress().preparing()) {
+                    throw new AssertionError("Hidden Compare still advertises preparation");
+                }
+            });
+            assertPresentation(context.takeScreenshot("lumi-compare-preparing-hidden"), false, false);
+            context.getInput().pressKey(LumiCompareToggleScenario::toggleBinding);
+            context.waitFor(client -> !store.visibleChanges().isEmpty());
             context.waitFor(client -> renderer.isReady() && renderer.cachedBytes() > 0, 400);
+            context.waitTicks(2);
+            assertPresentation(context.takeScreenshot("lumi-compare-prepared"), false, true);
             long bytes = context.computeOnClient(client -> renderer.cachedBytes());
             for (int cycle = 0; cycle < 3; cycle++) {
                 context.getInput().pressKey(LumiCompareToggleScenario::toggleBinding);
@@ -37,7 +58,8 @@ final class LumiCompareToggleScenario {
                 context.getInput().pressKey(LumiCompareToggleScenario::toggleBinding);
                 context.waitFor(client -> !store.visibleChanges().isEmpty());
                 context.runOnClient(client -> {
-                    if (!renderer.isReady() || renderer.cachedBytes() != bytes) {
+                    if (!renderer.isReady() || renderer.cachedBytes() != bytes
+                            || owner.highlightProgress().preparing()) {
                         throw new AssertionError("H rebuilt geometry instead of showing the retained highlight");
                     }
                 });
@@ -45,6 +67,34 @@ final class LumiCompareToggleScenario {
         } finally {
             context.runOnClient(client -> store.clear());
             context.waitFor(client -> renderer.cachedBytes() == 0);
+            context.runOnClient(client -> {
+                if (owner.highlightProgress().preparing()) {
+                    throw new AssertionError("Cleared Compare left an active progress indicator");
+                }
+            });
+        }
+    }
+
+    private static void assertPresentation(Path screenshot, boolean barExpected, boolean highlightExpected) {
+        try {
+            var image = ImageIO.read(screenshot.toFile());
+            int pixels = 0;
+            int outlines = 0;
+            for (int y = 0; y < image.getHeight() / 2; y++) {
+                for (int x = 0; x < image.getWidth(); x++) {
+                    int rgb = image.getRGB(x, y) & 0xffffff;
+                    if (rgb == 0x70d6a5) pixels++;
+                    if (rgb == 0x55ff55 || rgb == 0xff5555 || rgb == 0xffd455) outlines++;
+                }
+            }
+            if (barExpected ? pixels < 5 : pixels != 0) {
+                throw new AssertionError("Unexpected preparation bar: " + pixels + " pixels in " + screenshot);
+            }
+            if (highlightExpected ? outlines < 100 : outlines != 0) {
+                throw new AssertionError("Unexpected initial highlight: " + outlines + " pixels in " + screenshot);
+            }
+        } catch (java.io.IOException failed) {
+            throw new IllegalStateException("Cannot inspect preparation screenshot", failed);
         }
     }
 

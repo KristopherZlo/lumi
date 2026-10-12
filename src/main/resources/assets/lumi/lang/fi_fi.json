@@ -539,6 +539,7 @@
   "luma.status.compare_select_two": "Valitse ensin kaksi eri tallennusta.",
   "luma.status.compare_loading": "Rakennusvertailu taustalla.",
   "luma.status.compare_overlay_loading": "Taustalla valmistellaan maailman kohokohtaa.",
+  "luma.status.highlight_preparing": "Valmistellaan korostusta · %s%%",
   "luma.status.compare_failed": "Vertailutoiminto epäonnistui.",
   "luma.status.compare_no_changes": "Ei ole mitään verrattavaa.",
   "luma.status.compare_overlay_enabled": "Maailman kohokohta käytössä.",

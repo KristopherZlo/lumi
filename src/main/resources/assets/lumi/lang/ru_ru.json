@@ -555,6 +555,7 @@
   "luma.status.compare_select_two": "Сначала выберите два разных сохранения.",
   "luma.status.compare_loading": "Сравнение создается в фоне.",
   "luma.status.compare_overlay_loading": "Подготовка подсветки мира в фоне.",
+  "luma.status.highlight_preparing": "Подготовка подсветки · %s%%",
   "luma.status.compare_failed": "Просмотр изменений завершился ошибкой.",
   "luma.status.compare_no_changes": "Нечего сравнивать.",
   "luma.status.compare_overlay_enabled": "Подсветка в мире включена.",

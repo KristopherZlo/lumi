@@ -539,6 +539,7 @@
   "luma.status.compare_select_two": "Choisis d'abord deux sauvegardes différentes.",
   "luma.status.compare_loading": "Comparaison du bâtiment en arrière-plan.",
   "luma.status.compare_overlay_loading": "Préparation du point culminant du monde en arrière-plan.",
+  "luma.status.highlight_preparing": "Préparation de la surbrillance · %s%%",
   "luma.status.compare_failed": "L’opération de comparaison a échoué.",
   "luma.status.compare_no_changes": "Il n’y a rien à comparer.",
   "luma.status.compare_overlay_enabled": "Highlight mondial activé.",

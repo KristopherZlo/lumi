@@ -224,7 +224,8 @@ public final class LumiClient implements ClientModInitializer {
         new LumiSelectionHud(SELECTION).register();
         ZONE_OVERLAY.register();
         new LumiOperationHud(
-                HISTORY, PENDING_STATISTICS, NOTIFICATIONS).register();
+                HISTORY, PENDING_STATISTICS, NOTIFICATIONS,
+                PENDING_OVERLAY::highlightProgress).register();
         PENDING_OVERLAY.register();
         ONBOARDING_WORLD.register();
         LumiMod.LOGGER.info("Lumi V2 client initialized");

@@ -650,6 +650,7 @@
   "luma.status.compare_select_two": "Choose two different saves first.",
   "luma.status.compare_loading": "Building compare in the background.",
   "luma.status.compare_overlay_loading": "Preparing world highlight in the background.",
+  "luma.status.highlight_preparing": "Preparing highlight · %s%%",
   "luma.status.compare_failed": "Compare operation failed.",
   "luma.status.compare_no_changes": "There is nothing to compare.",
   "luma.status.compare_overlay_enabled": "World highlight enabled.",
