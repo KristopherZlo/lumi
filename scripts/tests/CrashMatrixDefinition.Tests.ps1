@@ -1,4 +1,4 @@
-using module ../CrashMatrixDefinition.psm1
+. (Join-Path $PSScriptRoot '../CrashMatrixDefinition.ps1')
 
 $ErrorActionPreference = 'Stop'
 function Assert-That([bool] $condition, [string] $message) {

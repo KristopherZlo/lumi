@@ -293,7 +293,9 @@ The prepared-launch runner preserves markers and worlds under
 This matrix is separate from ordinary `build` and client functional runs.
 
 The runner contract has standalone checks in
-`scripts/tests/CrashMatrixDefinition.Tests.ps1`. They do not start Gradle or Minecraft:
+`scripts/tests/CrashMatrixDefinition.Tests.ps1`. They do not start Gradle or Minecraft.
+The runner loads its helper types relative to its own script directory, including
+on Windows PowerShell 5.1.
 
 ```powershell
 .\scripts\tests\CrashMatrixDefinition.Tests.ps1

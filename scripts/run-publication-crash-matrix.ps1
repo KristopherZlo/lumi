@@ -1,5 +1,3 @@
-using module ./CrashMatrixDefinition.psm1
-
 param(
     [switch]$RunMinecraft,
     [ValidateSet('save', 'import', 'merge', 'restore')] [string]$Kind = 'save',
@@ -14,6 +12,7 @@ $ErrorActionPreference = 'Stop'
 if (-not $RunMinecraft) {
     throw 'No tests started. This matrix repeatedly opens Minecraft windows and uses CPU/GPU. Pass -RunMinecraft only when the computer is available for testing.'
 }
+. (Join-Path $PSScriptRoot 'CrashMatrixDefinition.ps1')
 $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $taskDefinition = [LumiCrashMatrixDefinition]::new($Kind)
 $taskPhases = $taskDefinition.Phases
