@@ -430,6 +430,48 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
+    void classifiesTheWholeCoalescedWindowBeforeLoadingAnyColdFallback()
+            throws Exception {
+        List<SectionKey> keys = new ArrayList<>();
+        Set<ChunkCoordinate> resident = new HashSet<>();
+        Set<ChunkCoordinate> stored = new HashSet<>();
+        for (int chunk = 0; chunk < 162; chunk++) {
+            SectionKey key = new SectionKey(chunk, 0, 0);
+            keys.add(key);
+            (chunk < 34 ? resident : stored).add(ChunkCoordinate.from(key));
+        }
+        SectionBlob section = stoneSection();
+        ControlledExecutor background = new ControlledExecutor();
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        FakeWorld world = new FakeWorld(section);
+        world.directlyStored = stored;
+        world.storageRefusedWhileRetained = chunks.retained;
+        world.delayedStoredBatch = 2;
+        world.storedBatchReady = new CompletableFuture<>();
+        try (var session = session(plan(keys, section), world, background,
+                ignored -> new ChunkLoadSession(chunks, () -> 0L), resident::contains)) {
+            background.runNext();
+            assertTrue(session.prewarmUntil(Long.MAX_VALUE));
+            assertEquals(34, chunks.active);
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(94, session.statistics().storedChunks());
+            assertEquals(0, session.statistics().loadedChunks());
+            assertEquals(34, chunks.peak);
+            assertTrue(world.persistence.isEmpty());
+            world.storedBatchReady.complete(null);
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(128, session.statistics().storedChunks());
+            assertEquals(34, session.statistics().loadedChunks());
+            assertEquals(34, chunks.peak, "Unclassified cold tails must not receive tickets");
+            assertEquals(List.of(162), world.persistenceWindowSizes());
+            world.persistence.getFirst().complete = true;
+            assertTrue(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(162, world.persistenceCalls.getLast().verificationSections());
+        }
+        assertEquals(0, chunks.active);
+    }
+
+    @Test
     void skippedColdPrewarmStillLoadsChunksRejectedByStorage() throws Exception {
         List<SectionKey> keys = List.of(
                 new SectionKey(-2, 0, -3), new SectionKey(-1, 0, -3));
@@ -929,6 +971,10 @@ class StreamingPreparedWorldMutationSessionTest {
         private final List<EntityChunkKey> requestedEntityCleanup = new ArrayList<>();
         private final List<Integer> requestedEntityCleanupSizes = new ArrayList<>();
         private Set<ChunkCoordinate> directlyStored = Set.of();
+        private Set<ChunkCoordinate> storageRefusedWhileRetained = Set.of();
+        private int storedBatches;
+        private int delayedStoredBatch;
+        private CompletableFuture<Void> storedBatchReady = CompletableFuture.completedFuture(null);
         private boolean cleanAllStoredEntities = true;
         private Set<EntityChunkKey> directlyCleanedEntities = Set.of();
         private Map<EntityChunkKey, List<UUID>> durableEntities = Map.of();
@@ -1022,11 +1068,15 @@ class StreamingPreparedWorldMutationSessionTest {
                         Map<ChunkCoordinate, Map<SectionKey, DecodedSection>> chunks,
                         Set<ChunkCoordinate> entityChunks) {
             Map<ChunkCoordinate, StoredChunkApplyResult> results = new LinkedHashMap<>();
+            storedBatches++;
             chunks.keySet().forEach(chunk -> results.put(chunk,
                     directlyStored.contains(chunk)
+                            && !storageRefusedWhileRetained.contains(chunk)
                             ? StoredChunkApplyResult.APPLIED
                             : StoredChunkApplyResult.FALLBACK));
-            return CompletableFuture.completedFuture(Map.copyOf(results));
+            return storedBatches == delayedStoredBatch
+                    ? storedBatchReady.thenApply(ignored -> Map.copyOf(results))
+                    : CompletableFuture.completedFuture(Map.copyOf(results));
         }
 
         @Override

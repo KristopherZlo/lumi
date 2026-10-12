@@ -28,6 +28,21 @@ the 128-cold-chunk window and slab bounds, background decoding, entity cleanup,
 the single final barrier, region force, exact durable reread, and ref publication
 ordering. It does not change the persisted format or increase concurrency.
 
+The first prewarm-only candidate did not materially improve three fresh-JVM
+samples: 16.482, 15.077 and 16.561 seconds, with 110/142/142 stored chunks.
+The remaining cause was the interaction with resident-window coalescing
+(`8e688d1a2`): a window may contain resident chunks plus 128 cold chunks, but
+`PreparedWorldMutationSession` marked classification complete after just one
+128-total-chunk write batch. Bulk loading then retained the unclassified tail,
+promoting eligible cold chunks and their surrounding holders to fallback.
+
+Classification now traverses the complete window in sequential batches of at
+most 128 before requesting any fallback tickets. The two limits keep their
+original meanings; resident coalescing and cold-memory limits stay intact.
+The new 34-resident/128-cold regression failed before this ordering correction.
+It also holds the second write future incomplete to prove no loaded apply or
+persistence starts while the tail is unclassified.
+
 ## History and alternatives
 
 The retained block-ticket prewarm (`260a2b5cc`, `3ecd97360`) improved its historical
