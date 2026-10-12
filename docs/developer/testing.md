@@ -184,6 +184,13 @@ through a real divergent Merge. Its verifier resumes the target, checks the
 source-wins section oracle and both commit parents, restores the prior current
 commit, and reopens the world again. Return-checkpoint recovery needs its own
 run and is not implied by resume-target evidence.
+The dense block oracle preserves current-only edits wherever the source equals
+the common base; source-wins conflict resolution does not replace the whole
+section with the source section.
+
+The branch hotkey test driver dismisses onboarding after the target branch's
+snapshot arrives, just as the Save and dashboard drivers do. Onboarding may
+appear during that snapshot wait in a fresh crash-fixture client.
 
 The Save `journal-created` cut passed on 2026-10-12 in separate producer and
 verifier JVMs, including prior-history Restore and clean reopen:
@@ -197,6 +204,14 @@ because its clients interrupted foreground gameplay. Only `objects-staged` and
 `pack-forced` completed in that run:
 `build/reports/lumi-publication-crash/20261012-110002-4302a5e924e047deaa944b244225661e/`.
 The remaining cuts and queued Import/Merge runs were not verified.
+
+After resuming on 2026-10-12, Import `ref-forced` passed, including retry and
+clean reopen:
+`build/reports/lumi-publication-crash/20261012-113358-7a0f12db8f32426699cbbbd9415d8c9f/`.
+Merge `applying` passed after correcting fixture onboarding and the independent
+block oracle, including two-parent history, prior Restore and clean reopen:
+`build/reports/lumi-publication-crash/20261012-114039-d98c10b6e7784146823c2c48f1811a78/`.
+These focused runs do not establish the remaining cuts.
 
 ```powershell
 .\gradlew.bat runRestoreCrashMatrix --no-daemon

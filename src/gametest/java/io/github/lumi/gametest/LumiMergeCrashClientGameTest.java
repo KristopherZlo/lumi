@@ -9,7 +9,9 @@ import io.github.lumi.storage.object.SectionBlobCodec;
 import io.github.lumi.storage.repository.*;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
@@ -49,15 +51,17 @@ public final class LumiMergeCrashClientGameTest implements FabricClientGameTest 
             var fixture = new LumiDenseSectionFixture(context, server, report);
             fixture.fill("merge-base", AREA, 0);
             CommitId base = operations.save("merge-base");
+            SectionBlob baseSection = captureSection(server);
             BranchName currentName = operations.activeBranch();
             BranchRef source = operations.createBranch("crash-source", base);
             operations.switchBranch("merge-source", source.name());
             fixture.fill("merge-source", AREA, 1);
             CommitId target = operations.save("merge-source");
-            String targetSection = sectionId(server);
+            SectionBlob sourceSection = captureSection(server);
             operations.switchBranch("merge-current", currentName);
             fixture.fill("merge-current", AREA, 2);
             operations.save("merge-current");
+            SectionBlob currentSection = captureSection(server);
             BranchRef before = server.computeOnServer(minecraft -> runtime(minecraft).activeRef());
             Properties metadata = new Properties();
             metadata.setProperty("kind", "merge");
@@ -68,7 +72,7 @@ public final class LumiMergeCrashClientGameTest implements FabricClientGameTest 
             metadata.setProperty("revision", Long.toString(before.revision()));
             metadata.setProperty("source", target.hex());
             metadata.setProperty("beforeSection", sectionId(server));
-            metadata.setProperty("targetSection", targetSection);
+            metadata.setProperty("targetSection", expectedMergeSectionId(baseSection, currentSection, sourceSection));
             server.runOnServer(minecraft -> minecraft.saveEverything(false, true, false));
             LumiPersistenceCrashProbe.writeMetadata(metadata);
             LumiPersistenceCrashProbe.arm();
@@ -150,8 +154,24 @@ public final class LumiMergeCrashClientGameTest implements FabricClientGameTest 
         require(graph.leaves().containsKey(KEY), "Merge history lost the fixture section");
     }
     private static String sectionId(TestServerContext server) throws IOException {
-        return server.computeOnServer(minecraft -> ObjectId.hash(new SectionBlobCodec().encode(
-                new MinecraftSectionCapture().capture(minecraft.overworld(), minecraft.overworld().getChunk(0, 0), 0))).hex());
+        return ObjectId.hash(new SectionBlobCodec().encode(captureSection(server))).hex();
+    }
+    private static SectionBlob captureSection(TestServerContext server) throws IOException {
+        return server.computeOnServer(minecraft -> new MinecraftSectionCapture().capture(
+                minecraft.overworld(), minecraft.overworld().getChunk(0, 0), 0));
+    }
+    private static String expectedMergeSectionId(SectionBlob base, SectionBlob current, SectionBlob source)
+            throws IOException {
+        require(base.blockEntities().isEmpty() && current.blockEntities().isEmpty()
+                && source.blockEntities().isEmpty(), "Dense Merge oracle requires blocks without block entities");
+        var expected = new ArrayList<>(source.blockStates());
+        // The source wins changed cells; untouched source cells retain current-only edits.
+        for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
+            if (source.blockStates().get(index).equals(base.blockStates().get(index))) {
+                expected.set(index, current.blockStates().get(index));
+            }
+        }
+        return ObjectId.hash(new SectionBlobCodec().encode(new SectionBlob(expected, Map.of()))).hex();
     }
     private static void prepareClient(ClientGameTestContext context) {
         context.runOnClient(client -> {

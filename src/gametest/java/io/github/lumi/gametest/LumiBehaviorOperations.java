@@ -474,7 +474,9 @@ final class LumiBehaviorOperations {
     }
 
     private void switchBranchFromHotkey(BranchName target) {
-        ui.pressChord(branchShortcut(target));
+        int shortcut = branchShortcut(target);
+        ui.completeOnboardingIfShown();
+        ui.pressChord(shortcut);
     }
 
     private int branchShortcut(BranchName target) {
