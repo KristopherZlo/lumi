@@ -50,7 +50,7 @@ public final class LumiPublicationCrashClientGameTest implements FabricClientGam
         String kind = kind();
         try (var report = LumiBehaviorReport.create(FabricLoader.getInstance().getGameDir(),
                 "publication-crash-" + kind);
-                var world = context.worldBuilder().setUseConsistentSettings(false)
+                var world = context.worldBuilder()
                         .adjustSettings(LumiClientBehaviorWorld::configureWorld).create()) {
             prepareClient(context);
             var server = world.getServer();
@@ -148,10 +148,10 @@ public final class LumiPublicationCrashClientGameTest implements FabricClientGam
                     require(active.revision() == Long.parseLong(metadata.getProperty("revision"))
                             + (recoverable ? 1 : 0), "Save recovery changed ref revision twice");
                     validateTree(repository, expected, metadata.getProperty(recoverable ? "targetSection" : "baseSection"));
-                    operations.restore("prior-history-readable", before);
+                    restore(context, server, before);
                     require(sectionId(server).equals(metadata.getProperty("baseSection")), "Prior Save no longer restores");
                     if (recoverable) {
-                        operations.restore("published-save-exact", expected);
+                        restore(context, server, expected);
                         require(sectionId(server).equals(metadata.getProperty("targetSection")), "Published Save restores inexactly");
                     }
                 } else {
@@ -217,11 +217,20 @@ public final class LumiPublicationCrashClientGameTest implements FabricClientGam
         ui.completeOnboardingIfShown();
     }
 
+    private static void restore(ClientGameTestContext context, TestServerContext server, CommitId target)
+            throws IOException {
+        server.runOnServer(minecraft -> {
+            var player = minecraft.getPlayerList().getPlayers().getFirst();
+            runtime(minecraft).startRestore(target, new CommitAuthor(player.getUUID(), player.getName().getString()));
+        });
+        awaitIdle(context, server);
+    }
+
     private static void awaitIdle(ClientGameTestContext context, TestServerContext server) {
         await(context, () -> server.computeOnServer(minecraft -> {
             var runtime = runtime(minecraft);
             return !runtime.freeze().isFrozen() && !runtime.operations().hasActiveOperation()
-                    && runtime.recoveryJournal().isEmpty();
+                    && runtime.operations().queuedCount() == 0 && runtime.recoveryJournal().isEmpty();
         }), "Publication recovery did not settle");
     }
 

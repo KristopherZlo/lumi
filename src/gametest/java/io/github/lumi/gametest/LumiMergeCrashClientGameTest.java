@@ -41,7 +41,7 @@ public final class LumiMergeCrashClientGameTest implements FabricClientGameTest 
 
     private void produce(ClientGameTestContext context) throws IOException {
         try (var report = LumiBehaviorReport.create(FabricLoader.getInstance().getGameDir(), "merge-crash-produce");
-                var world = context.worldBuilder().setUseConsistentSettings(false)
+                var world = context.worldBuilder()
                         .adjustSettings(LumiClientBehaviorWorld::configureWorld).create()) {
             prepareClient(context);
             var server = world.getServer();
@@ -126,9 +126,9 @@ public final class LumiMergeCrashClientGameTest implements FabricClientGameTest 
                             "Recovered Merge lost its two-parent history");
                 }
                 require(new OperationJournalRepository(repository).read().isEmpty(), "Merge left an active journal");
-                operations.restore("merge-prior-current", before);
+                restore(context, server, before);
                 require(sectionId(server).equals(metadata.getProperty("beforeSection")), "Merge destroyed prior current history");
-                if (!preparationCut) operations.restore("merge-recovered-target", expected);
+                if (!preparationCut) restore(context, server, expected);
             }
             try (var reopened = save.open()) {
                 prepareClient(context);
@@ -162,9 +162,18 @@ public final class LumiMergeCrashClientGameTest implements FabricClientGameTest 
         new LumiUiTestDriver(context).awaitHistory();
         new LumiUiTestDriver(context).completeOnboardingIfShown();
     }
+    private static void restore(ClientGameTestContext context, TestServerContext server, CommitId target)
+            throws IOException {
+        server.runOnServer(minecraft -> {
+            var player = minecraft.getPlayerList().getPlayers().getFirst();
+            runtime(minecraft).startRestore(target, new CommitAuthor(player.getUUID(), player.getName().getString()));
+        });
+        awaitIdle(context, server);
+    }
     private static void awaitIdle(ClientGameTestContext context, TestServerContext server) {
         await(context, () -> server.computeOnServer(minecraft -> !runtime(minecraft).freeze().isFrozen()
                 && !runtime(minecraft).operations().hasActiveOperation()
+                && runtime(minecraft).operations().queuedCount() == 0
                 && runtime(minecraft).recoveryJournal().isEmpty()), "Merge recovery did not settle");
     }
     private static <T> T awaitFuture(ClientGameTestContext context, CompletableFuture<T> future) {

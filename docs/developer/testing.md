@@ -178,6 +178,13 @@ source-wins section oracle and both commit parents, restores the prior current
 commit, and reopens the world again. Return-checkpoint recovery needs its own
 run and is not implied by resume-target evidence.
 
+The Save `journal-created` cut passed on 2026-10-12 in separate producer and
+verifier JVMs, including prior-history Restore and clean reopen:
+`build/reports/lumi-publication-crash/20261012-105643-0d298a4ee7b34888855975a04fe04b38/`.
+Crash verifiers call the production runtime Restore entry point; the separate
+multiplayer gate exercises the client packet path. The fixtures use Fabric's
+consistent test-world settings and wait for both active and queued operations.
+
 ```powershell
 .\gradlew.bat runRestoreCrashMatrix --no-daemon
 ```
