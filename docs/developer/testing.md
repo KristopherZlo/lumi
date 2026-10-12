@@ -145,13 +145,6 @@ three-minute timeout and are excluded from the production jar. These gates
 cover one dimension; cross-dimension concurrency and standalone server JVM
 coverage remain separate checks.
 
-On 2026-10-12, the two-client runner passed all six named gates, including the
-post-capture TCP edits and disconnect after journaled Restore mutation. Evidence:
-`build/reports/lumi-multiplayer/20261012-104930-c147cb8dd0f74c43bfaf1be8d478bdf9/`.
-The manifest records the candidate and dirty working-tree status. Both clients
-used WorldEdit 7.4.2 and Axiom 5.4.2. This is functional network evidence, not a
-foreground performance measurement or a standalone server-process crash test.
-
 ## Real process-crash matrix
 
 GameTest-only persistence probes can cut staged object writes, pack force/move,
@@ -224,47 +217,9 @@ The branch hotkey test driver dismisses onboarding after the target branch's
 snapshot arrives, just as the Save and dashboard drivers do. Onboarding may
 appear during that snapshot wait in a fresh crash-fixture client.
 
-The Save `journal-created` cut passed on 2026-10-12 in separate producer and
-verifier JVMs, including prior-history Restore and clean reopen:
-`build/reports/lumi-publication-crash/20261012-105643-0d298a4ee7b34888855975a04fe04b38/`.
 Crash verifiers call the production runtime Restore entry point; the separate
 multiplayer gate exercises the client packet path. The fixtures use Fabric's
 consistent test-world settings and wait for both active and queued operations.
-
-The subsequent full Save matrix was stopped at the user's request on 2026-10-12
-because its clients interrupted foreground gameplay. Only `objects-staged` and
-`pack-forced` completed in that run:
-`build/reports/lumi-publication-crash/20261012-110002-4302a5e924e047deaa944b244225661e/`.
-The remaining cuts and queued Import/Merge runs were not verified.
-
-After resuming on 2026-10-12, Import `ref-forced` passed, including retry and
-clean reopen:
-`build/reports/lumi-publication-crash/20261012-113358-7a0f12db8f32426699cbbbd9415d8c9f/`.
-Merge `applying` passed after correcting fixture onboarding and the independent
-block oracle, including two-parent history, prior Restore and clean reopen:
-`build/reports/lumi-publication-crash/20261012-114039-d98c10b6e7784146823c2c48f1811a78/`.
-These focused runs do not establish the remaining cuts.
-
-Save's twelve declared cuts were verified in two resumed runs on 2026-10-12.
-The first completed `objects-staged`, `pack-forced`, `pack-published`,
-`index-forced`, `objects-published`, `commit-written`, `ref-forced`,
-`ref-published` and `journal-created`, then failed because the original
-`working-cleared` probe did not intercept normal Save:
-`build/reports/lumi-publication-crash/20261012-114228-aa355087341b486f92ca3d01e0bee31c/`.
-After correcting the test-only probe, `working-cleared`, `journal-complete` and
-`cleanup` passed:
-`build/reports/lumi-publication-crash/20261012-115719-6373d3e859314a059c635b239f532971/`.
-Each completed cut includes prior-history Restore and clean reopen. The
-manifests record their different test-code candidates; this combined evidence
-is not a single all-green candidate release run.
-
-Import's nine cuts passed in
-`build/reports/lumi-publication-crash/20261012-120429-fef6973bd0a8475fa9544ae9508ca46c/`.
-Merge's remaining `barrier`, `force`, `verify`, `publication` and `cleanup` cuts
-passed on clean candidate `ece86bcf5` in
-`build/reports/lumi-publication-crash/20261012-140550-75e264c8b38b429781426a1de5d9543f/`.
-Together with the earlier runs, this covers all ten Merge cuts across different
-candidates. Save, Merge and Import still need a complete run on one release candidate.
 
 On Windows, use the prepared-launch runner for Restore too:
 
@@ -282,17 +237,6 @@ to include the existing cold stored-world digest fixture. The release runner's
 `RestoreCrash` gate uses this path. Only the producer receives crash-injection
 properties; the verifier receives the expected phase with injection disarmed,
 as in the original Gradle matrix.
-
-All eight default Restore cuts passed through this launch path on clean candidate
-`ece86bcf5` on 2026-10-12. The first run verified four cuts, then rejected a
-`force` producer with unexpected exit `0xC0000409`; Windows identified OpenAL.dll:
-`build/reports/lumi-publication-crash/20261012-135003-fd2811e375eb486d99565df3e0bafa48/`.
-Validated resumption reused those four cuts, reran `force`, and verified the rest:
-`build/reports/lumi-publication-crash/20261012-135835-9e741f420c284c9796bac2376d9b059c/`.
-A subsequent full resumption validated all eight saved results in 26.7 seconds
-and launched zero clients; this was evidence reuse, not eight fresh crash tests:
-`build/reports/lumi-test-speed/resume-validation.json`.
-The cold variant and a controlled old/new fresh-run timing comparison were not run.
 
 The original Gradle task remains available, including on other operating systems:
 
@@ -366,19 +310,10 @@ The exact oracle runs outside the timed Restore interval and can load its area.
 This is a functional soak, not a foreground GPU, ordinary-gameplay, or vanilla
 equivalence result. Those measurements need matching ordinary-client controls.
 
-On 2026-10-12, clean candidate `ece86bcf5` completed 20 cycles (40 Restores) on
-the 512-by-512-by-16 stored-world fixture, 1800 seconds of observation, the final
-exact area check and clean reopen:
-`build/reports/lumi-behavior/20261012-142600-restore-soak/`.
-The run passed its functional gates, but did not approve load regression.
-FPS fell to 30 after about one minute and 10 after about ten minutes; later server
-warnings repeatedly reported about 15 seconds of delay. The saved client options
-use AFK throttling. Inspection of the loaded Minecraft and Fabric GameTest classes
-confirmed those AFK thresholds, a one-client-tick-per-frame limit, and client/server
-phase barriers even with the network synchronizer disabled. This supports a harness
-timing explanation for the later warnings; it does not resolve earlier warnings
-or establish ordinary-client performance. See the disassembly and aggregate evidence
-under `build/reports/lumi-test-speed/` before interpreting this run as a load measurement.
+Record AFK/background FPS throttling and server delay warnings during a soak.
+Fabric GameTest limits client ticks to one per frame and synchronizes client/server
+phases even with the network synchronizer disabled. Low FPS can therefore delay
+the server and distort load measurements.
 
 ### Save memory investigation
 
@@ -396,25 +331,6 @@ fixed heap settings. Record fixture size, NBT/entropy, GC and sampler overhead.
 Do not include exact snapshot oracles or heap-dump pauses in Save timing.
 For a small native fixture, `memoryOnly=true` stops after Save measurements;
 it requires `memory=true` and does not run or approve Restore performance gates.
-
-Harness checks on 2026-10-12: two exact endpoint cycles on the existing
-512-by-512-by-16 cold fixture, 10 seconds of observation and clean reopen passed.
-The small 64-by-64-by-2 memory-only run collected Save samples and a live heap
-dump under a 2-GiB heap. These checks do not establish long-run or memory budgets.
-A combined instrumented run failed the existing Restore 50-ms tick gate with a
-125-ms sample; keep that result separate from the focused Save investigation.
-
-A separate 512-by-512-by-16 memory-only profile passed on clean candidate
-`ece86bcf5` with a 2-GiB heap and two dense Saves of 4,194,304 blocks each:
-`build/reports/lumi-behavior/20261012-141441-history-benchmark-512x512x16-1/`.
-Their sampled peaks were 928.8 and 921.8 MiB; post-GC heap was 530.3 and 530.5 MiB.
-The live heap dump after `benchmark-base`, inspected with Eclipse Memory Analyzer
-1.17.0, contained zero instances of `CapturedWorldState`,
-`BatchedWorldStateCapture$Session`, `SaveCaptureOperation` and `SectionBlob`.
-`memory-analysis-summary.json` records the dump hash, measurements and limitations.
-This is combined client/server heap and one retained-object snapshot; it does not
-prove a universal Save memory bound or long-run freedom from leaks, and it does not
-approve Restore performance gates.
 
 ## Before a release
 
