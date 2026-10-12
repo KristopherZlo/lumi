@@ -149,6 +149,15 @@ disarmed during fixture creation, force a unique marker, and halt with exit code
 86. These probes do not establish coverage until a producer reaches each marker
 and a separate verifier reopens its preserved world.
 
+`PERSISTENCE_CRASH` selects the Save/Import producer and verifier. The producer
+creates durable prior history and an independent section oracle before arming
+the cut. The verifier checks the complete reachable object inventory, expected
+HEAD/revision, prior Save restoration, and a second clean reopen. Import uses a
+separate donor repository so its object pack cannot be skipped as duplicate
+data. An unpublished import must be safely retryable and must leave the
+canonical HEAD and live world unchanged. This fixture covers one section;
+large captures and entity/block-entity fixtures remain separate evidence.
+
 ```powershell
 .\gradlew.bat runRestoreCrashMatrix --no-daemon
 ```

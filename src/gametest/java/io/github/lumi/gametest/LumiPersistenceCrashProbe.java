@@ -42,8 +42,9 @@ public final class LumiPersistenceCrashProbe {
     }
 
     public static void commitWritten(Commit commit, CommitId id) {
-        if (!armed || !commit.kind().name().equalsIgnoreCase(
-                System.getProperty("lumi.persistence.kind"))) return;
+        String kind = System.getProperty("lumi.persistence.kind", "");
+        String expected = kind.equals("save") ? "MANUAL" : kind.toUpperCase(java.util.Locale.ROOT);
+        if (!armed || !commit.kind().name().equals(expected)) return;
         try {
             Properties metadata = readMetadata();
             metadata.setProperty("candidate", id.hex());
