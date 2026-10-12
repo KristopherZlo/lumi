@@ -68,12 +68,14 @@ final class LumiExactRestoreScenario {
         ui.awaitHistory();
         assertEndpointMetadata(
                 "reopened_d", prepared.endpointD(), prepared.branchD());
+        fixture.awaitStoredUnloaded("reopened_mixed_d_to_c");
         LumiRestoreMeasurement mixed = operations.measureBranchSwitch(
                 "reopened_mixed_d_to_c", prepared.branchC());
         assertChunkPath("reopened_mixed_d_to_c", mixed, true, true);
         assertEndpointMetadata(
                 "reopened_mixed_d_to_c",
                 prepared.endpointC(), prepared.branchC());
+        fixture.awaitStoredUnloaded("reopened_mixed_c_to_d");
         LumiRestoreMeasurement mixedReverse = operations.measureBranchSwitch(
                 "reopened_mixed_c_to_d", prepared.branchD());
         assertChunkPath("reopened_mixed_c_to_d", mixedReverse, true, true);
@@ -86,12 +88,14 @@ final class LumiExactRestoreScenario {
         assertEndpointMetadata(
                 "reopened_loaded_d_to_b",
                 prepared.endpointB(), prepared.branchB());
+        fixture.awaitStoredUnloaded("reopened_stored_b_to_c");
         LumiRestoreMeasurement stored = operations.measureBranchSwitch(
                 "reopened_stored_b_to_c", prepared.branchC());
         assertChunkPath("reopened_stored_b_to_c", stored, true, true);
         assertEndpointMetadata(
                 "reopened_stored_b_to_c",
                 prepared.endpointC(), prepared.branchC());
+        fixture.awaitStoredUnloaded("reopened_stored_c_to_b");
         LumiRestoreMeasurement storedReverse = operations.measureBranchSwitch(
                 "reopened_stored_c_to_b", prepared.branchB());
         assertChunkPath(

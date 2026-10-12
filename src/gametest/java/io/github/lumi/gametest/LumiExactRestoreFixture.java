@@ -134,6 +134,10 @@ final class LumiExactRestoreFixture {
         return List.of(loadedArea, storedArea, featureArea);
     }
 
+    void awaitStoredUnloaded(String name) {
+        dense.awaitUnloaded(name + "_stored_chunks_ready", storedArea);
+    }
+
     DerivedState derivedState() {
         return singleplayer.getServer().computeOnServer(server -> {
             ServerLevel level =

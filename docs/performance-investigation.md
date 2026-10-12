@@ -160,6 +160,12 @@ Current runs therefore leave a coverage gap; they do not demonstrate incorrect
 restored block/entity state. Test real cold storage separately from intentional
 UI prewarm, and retain all exact-state and path assertions in both workflows.
 
+The October 12 cold-path follow-up makes that precondition explicit: the EXACT
+fixture now waits for 20 consecutive ticks without active terrain, updating or
+pending-unload holders, or loaded entities before each stored-path operation.
+All endpoint and loaded/stored path assertions remain. See the
+[implementation and measurements](cold-restore-path-preservation.md).
+
 ## Previous attempts and their outcomes
 
 | Attempt | Git evidence | Recorded outcome |
