@@ -142,6 +142,13 @@ coverage remain separate checks.
 
 ## Real process-crash matrix
 
+GameTest-only persistence probes can cut staged object writes, pack force/move,
+index force, commit completion, forced ref temporary files, Save journal
+publication, captured-generation cleanup and final journal removal. They remain
+disarmed during fixture creation, force a unique marker, and halt with exit code
+86. These probes do not establish coverage until a producer reaches each marker
+and a separate verifier reopens its preserved world.
+
 ```powershell
 .\gradlew.bat runRestoreCrashMatrix --no-daemon
 ```

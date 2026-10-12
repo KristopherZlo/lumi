@@ -77,8 +77,12 @@ final class LumiMultiplayerPeer {
                         && !client.level.getBlockState(position).isAir()
                         && client.player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(position)) < 25,
                         2400);
-                if (!context.computeOnClient(client -> client.gameMode.startDestroyBlock(
-                        position, net.minecraft.core.Direction.UP))) {
+                if (!context.computeOnClient(client -> {
+                    client.hitResult = new net.minecraft.world.phys.BlockHitResult(
+                            net.minecraft.world.phys.Vec3.atCenterOf(position),
+                            net.minecraft.core.Direction.UP, position, false);
+                    return client.gameMode.startDestroyBlock(position, net.minecraft.core.Direction.UP);
+                })) {
                     throw new AssertionError("Peer refused the break packet");
                 }
             }

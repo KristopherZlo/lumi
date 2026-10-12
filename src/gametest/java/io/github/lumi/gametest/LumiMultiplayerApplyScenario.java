@@ -61,8 +61,11 @@ final class LumiMultiplayerApplyScenario {
             context.waitFor(client -> client.player != null && client.level != null
                     && client.level.getBlockState(OWNER).is(Blocks.STONE)
                     && client.player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(OWNER)) < 25);
-            if (!context.computeOnClient(client ->
-                    client.gameMode.startDestroyBlock(OWNER, Direction.UP))) {
+            if (!context.computeOnClient(client -> {
+                client.hitResult = new net.minecraft.world.phys.BlockHitResult(
+                        net.minecraft.world.phys.Vec3.atCenterOf(OWNER), Direction.UP, OWNER, false);
+                return client.gameMode.startDestroyBlock(OWNER, Direction.UP);
+            })) {
                 throw new AssertionError("Owner refused the break packet");
             }
             await(() -> server.computeOnServer(minecraft ->
@@ -92,7 +95,8 @@ final class LumiMultiplayerApplyScenario {
             await(pause::reached, "Restore did not reach its post-mutation boundary");
             server.runOnServer(minecraft -> {
                 if (!runtime(minecraft).freeze().isFrozen()
-                        || runtime(minecraft).recoveryJournal().isEmpty()) {
+                        || new io.github.lumi.storage.repository.OperationJournalRepository(
+                                runtime(minecraft).repository()).read().isEmpty()) {
                     throw new AssertionError("Applied Restore lost its freeze or journal");
                 }
             });
