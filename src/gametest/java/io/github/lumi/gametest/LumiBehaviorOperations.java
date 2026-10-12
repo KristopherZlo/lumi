@@ -105,6 +105,17 @@ final class LumiBehaviorOperations {
 
     MeasuredSave measureSave(String name) throws IOException {
         awaitHistoryReady();
+        if (Boolean.getBoolean("lumi.benchmark.memory")) {
+            try (var memory = new LumiSaveMemoryProbe()) {
+                MeasuredSave result = measureReadySave(name);
+                memory.report(name, report);
+                return result;
+            }
+        }
+        return measureReadySave(name);
+    }
+
+    private MeasuredSave measureReadySave(String name) throws IOException {
         long started = System.nanoTime();
         OperationEventPayload event = awaitOperation(
                 "save_" + name,

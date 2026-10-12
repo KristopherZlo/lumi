@@ -163,6 +163,44 @@ For repeated cold runs from one immutable fixture, use the Windows runner:
 This is a large performance investigation, not a quick contribution check.
 The [script](../../scripts/run-cold-restore-benchmark.ps1) recreates `build/cold-restore/` and reports each isolated sample.
 
+### Repeated endpoint Restore
+
+The benchmark also accepts `-Dlumi.benchmark.soak=true` with an isolated
+`existingWorldSource`, `existingWorld`, and `coldManifest` from the cold fixture
+producer. It alternates Initial and Latest, verifies the manifest's exact area
+after every Restore, observes unpaused ticking, then closes and reopens Latest.
+`soakCycles` defaults to 20; `observeSeconds` defaults to 1800 wall-clock seconds.
+Use 2 cycles and 10 seconds to check the harness before a long run.
+
+Post-Restore samples report cumulative process CPU, used/committed heap, and FPS.
+The exact oracle runs outside the timed Restore interval and can load its area.
+This is a functional soak, not a foreground GPU, ordinary-gameplay, or vanilla
+equivalence result. Those measurements need matching ordinary-client controls.
+
+### Save memory investigation
+
+Add `-Dlumi.benchmark.memory=true` to a benchmark run. A test-only sampler records
+process heap every 2 ms throughout each UI Save and releases its thread afterward.
+Samples include client and integrated-server allocations; the observed maximum
+is a sampled peak, not a proof that no shorter peak occurred. `memoryGc=true`
+requests GC after the timed operation and reports whether a collection occurred.
+Post-GC used heap is not a retained-object graph measurement.
+
+Use `heapDumpSave=<exact-save-name>` to write one live `.hprof` after that Save.
+Inspect its dominators and paths to GC roots before claiming capture was released.
+Start with the small benchmark, then the `player-scale-30` `saveOnly` profile under
+fixed heap settings. Record fixture size, NBT/entropy, GC and sampler overhead.
+Do not include exact snapshot oracles or heap-dump pauses in Save timing.
+For a small native fixture, `memoryOnly=true` stops after Save measurements;
+it requires `memory=true` and does not run or approve Restore performance gates.
+
+Harness checks on 2026-10-12: two exact endpoint cycles on the existing
+512-by-512-by-16 cold fixture, 10 seconds of observation and clean reopen passed.
+The small 64-by-64-by-2 memory-only run collected Save samples and a live heap
+dump under a 2-GiB heap. These checks do not establish long-run or memory budgets.
+A combined instrumented run failed the existing Restore 50-ms tick gate with a
+125-ms sample; keep that result separate from the focused Save investigation.
+
 ## Before a release
 
 Release checks:

@@ -105,6 +105,14 @@ final class LumiHistoryBenchmarkScenario {
             return;
         }
         PreparedHistory history = prepareHistory(ui, false);
+        if (Boolean.getBoolean("lumi.benchmark.memoryOnly")) {
+            if (!Boolean.getBoolean("lumi.benchmark.memory")) {
+                throw new IllegalArgumentException("memoryOnly requires memory=true");
+            }
+            report.event("benchmark", "save_memory_only", "succeeded", 0, 0,
+                    config.describe() + ";restorePerformance=unverified");
+            return;
+        }
         List<LumiRestoreMeasurement> restores = new ArrayList<>();
         LumiRepositoryMetrics.Snapshot previous = history.storage();
         List<Integer> restoreOrder;

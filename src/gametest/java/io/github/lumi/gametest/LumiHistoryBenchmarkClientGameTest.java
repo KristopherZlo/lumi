@@ -38,6 +38,15 @@ public final class LumiHistoryBenchmarkClientGameTest
         String existingWorld = System.getProperty(EXISTING_WORLD_PROPERTY);
         if (existingWorld != null && !existingWorld.isBlank()) {
             try (var ignored = LumiUiScaleTestScope.readableViewport()) {
+                if (Boolean.getBoolean(LumiHistoryBenchmarkConfig.PREFIX + "soak")) {
+                    LumiClientBehaviorWorld.runExistingWithReopen(context,
+                            "restore-soak", existingWorld,
+                            (test, world, report) -> new LumiRestoreSoakScenario(
+                                    test, world, report).run(),
+                            (test, world, report) -> new LumiRestoreSoakScenario(
+                                    test, world, report).verifyReopened());
+                    return;
+                }
                 if (LumiHistoryBenchmarkConfig.operationMode()
                         == LumiHistoryBenchmarkConfig.OperationMode.BRANCH_SWITCH) {
                     runExistingBranchSwitch(context, existingWorld);
