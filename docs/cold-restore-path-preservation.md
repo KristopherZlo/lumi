@@ -72,3 +72,11 @@ The JSONL report and properties retain separate preparation, readiness,
 application, write, barrier/force, verification, tick and heap measurements.
 
 Results will be recorded after the repeated comparison and recovery checks.
+
+For native cold samples, `-Dlumi.benchmark.minimumStoredChunks=1024` requires
+the full dense fixture to retain the stored path in addition to its exact digest.
+Crash producers accept `-Dlumi.gametest.restoreCrashCold=true`: they add a
+131,072-block, 32-chunk distant target/return pair, wait for vanilla unload,
+complete intent prewarm, and assert no fixture chunk or holder was loaded.
+Recovery and a second clean reopen must both match that target digest as well
+as the original nearby blocks, armor stand, ref, journal and freeze checks.

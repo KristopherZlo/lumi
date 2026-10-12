@@ -64,6 +64,15 @@ final class LumiColdRestoreMeasurementScenario {
         report.event("restore_metrics", "fresh-jvm-latest-to-initial", "measured", 0,
                 measurement.totalMillis(), measurement.describe());
 
+        int minimumStoredChunks = Integer.getInteger(PREFIX + "minimumStoredChunks", 0);
+        if (minimumStoredChunks < 0 || minimumStoredChunks > manifest.chunkCount()) {
+            throw new IllegalArgumentException("Invalid minimumStoredChunks for this fixture");
+        }
+        if (measurement.apply().storedChunks() < minimumStoredChunks) {
+            throw new AssertionError("Cold Restore lost the expected stored path: actual="
+                    + measurement.apply().storedChunks() + ";minimum=" + minimumStoredChunks);
+        }
+
         assertValue("restored_branch",
                 operations.activeBranch().value(), manifest.latestBranch().value());
         assertValue("restored_head",

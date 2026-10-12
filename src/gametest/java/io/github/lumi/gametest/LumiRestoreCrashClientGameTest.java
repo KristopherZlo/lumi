@@ -88,14 +88,19 @@ public final class LumiRestoreCrashClientGameTest implements FabricClientGameTes
         actions.placeBlocks("crash_target_blocks", Items.STONE, positions);
         UUID entity = actions.placeArmorStands(
                 List.of(positions.getFirst().above())).getFirst();
+        LumiColdRestoreCrashFixture cold = Boolean.getBoolean("lumi.gametest.restoreCrashCold")
+                ? new LumiColdRestoreCrashFixture(context, world.getServer(), report) : null;
+        String coldDigest = cold == null ? "" : cold.buildTarget();
         CommitId target = operations.save("crash-target");
         actions.destroyBlocks("crash_return_blocks", positions);
         actions.attackEntity("crash_return_entity", entity, Items.DIAMOND_SWORD);
+        if (cold != null) cold.buildReturn();
         operations.save("crash-return");
+        if (cold != null) cold.prewarm(target);
         BranchRef before = world.getServer().computeOnServer(
                 minecraft -> runtime(minecraft).activeRef());
         writeMetadata(gameDirectory, world.getWorldSave(), before,
-                target, positions, entity);
+                target, positions, entity, coldDigest);
         world.getServer().computeOnServer(minecraft -> {
             var player = minecraft.getPlayerList().getPlayers().getFirst();
             try {
@@ -199,6 +204,8 @@ public final class LumiRestoreCrashClientGameTest implements FabricClientGameTes
                 "Recovered runtime retained journal or freeze");
         require(new OperationJournalRepository(runtime.repository()).read().isEmpty(),
                 "Recovered repository retained active.bin");
+        String coldDigest = metadata.getProperty("coldDigest", "");
+        if (!coldDigest.isEmpty()) LumiColdRestoreCrashFixture.assertTarget(server, coldDigest);
     }
 
     private static List<BlockPos> fixturePositions(
@@ -214,7 +221,8 @@ public final class LumiRestoreCrashClientGameTest implements FabricClientGameTes
 
     private static void writeMetadata(
             Path gameDirectory, TestWorldSave save, BranchRef before,
-            CommitId target, List<BlockPos> positions, UUID entity) throws IOException {
+            CommitId target, List<BlockPos> positions, UUID entity, String coldDigest)
+            throws IOException {
         Properties metadata = new Properties();
         metadata.setProperty("phase", System.getProperty(PHASE_PROPERTY, ""));
         metadata.setProperty("world", save.getSaveDirectory().toAbsolutePath().toString());
@@ -223,6 +231,7 @@ public final class LumiRestoreCrashClientGameTest implements FabricClientGameTes
         metadata.setProperty("revision", Long.toString(before.revision()));
         metadata.setProperty("target", target.hex());
         metadata.setProperty("entity", entity.toString());
+        if (!coldDigest.isEmpty()) metadata.setProperty("coldDigest", coldDigest);
         metadata.setProperty("positions", positions.stream()
                 .map(position -> position.getX() + "," + position.getY()
                         + "," + position.getZ())
