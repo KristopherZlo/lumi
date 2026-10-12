@@ -21,9 +21,9 @@ public final class LumiMultiplayerClientGameTest implements FabricClientGameTest
             }
             Properties settings = new Properties();
             settings.setProperty("online-mode", "false");
-            settings.setProperty("server-port", "0");
             settings.setProperty("view-distance", "4");
             settings.setProperty("gamemode", "creative");
+            settings.setProperty("max-players", "2");
             try (var report = LumiBehaviorReport.create(FabricLoader.getInstance().getGameDir(),
                     "multiplayer");
                     var server = context.worldBuilder()
@@ -33,14 +33,25 @@ public final class LumiMultiplayerClientGameTest implements FabricClientGameTest
                 ready.setProperty("address", "localhost:" + server.computeOnServer(
                         minecraft -> minecraft.getPort()));
                 mailbox.publish("server", ready);
-                context.waitFor(client -> server.computeOnServer(
-                        minecraft -> minecraft.getPlayerList().getPlayerCount()) == 2, 12000);
+                int ticks = 0;
+                while (server.computeOnServer(minecraft ->
+                        minecraft.getPlayerList().getPlayerCount()) != 2) {
+                    if (++ticks > 12000) throw new AssertionError("Second client did not join");
+                    context.waitTick();
+                }
+                server.runOnServer(minecraft -> minecraft.getPlayerList().getPlayers().forEach(
+                        player -> minecraft.getPlayerList().op(new net.minecraft.server.players.NameAndId(
+                                player.getUUID(), player.getName().getString()))));
+                context.waitFor(client -> client.player != null && client.player.canUseGameMasterBlocks());
                 var ui = new LumiUiTestDriver(context);
                 ui.completeOnboardingIfShown();
                 ui.awaitHistory();
+                new LumiDenseSectionFixture(context, server, report).fill("multiplayer-fixture",
+                        new io.github.lumi.domain.model.BlockBox(0, 0, 0, 15, 0, 15), 0);
                 var operations = new LumiBehaviorOperations(context, server, report);
                 var saved = operations.save("multiplayer-shared");
                 mailbox.request(context, "head", saved.hex());
+                new LumiMultiplayerQueueScenario(context, server, report, mailbox).run();
                 server.runOnServer(minecraft -> {
                     var runtime = LumiMod.serverRuntime().find(minecraft.overworld()).orElseThrow();
                     if (runtime.operations().hasActiveOperation() || runtime.freeze().isFrozen()) {

@@ -117,6 +117,21 @@ The Compare renderer writes `build/run/clientGameTest/compare-render.csv`.
 Preserve results before another client run recreates its run directory.
 Crash verifiers deliberately retain the producer's interrupted world.
 
+### Two real clients
+
+Run `scripts/run-multiplayer-gate.ps1` on Windows with JDK 21. It prepares the
+existing GameTest classpath and launches separate owner and peer client JVMs.
+Fabric starts a dedicated server in the owner JVM; both clients connect over TCP.
+Each client has a separate game directory and offline identity. The file mailbox
+only schedules test actions; Save, Restore and snapshots use production packets.
+The runner preserves both logs and a candidate/version manifest in
+`build/reports/lumi-multiplayer/`. A client failure, missing gate or timeout fails
+the run. It stops only the JVMs it launched. The gate checks shared history,
+two conflicting queued Saves, queued-client disconnect/reconnect, and revoked
+actor authority at activation. A test-only mutation occupies the queue until
+both real network requests are present; it never edits the world. Disconnect
+after world apply and edits during Save publication need their phase gates.
+
 ## Real process-crash matrix
 
 ```powershell
