@@ -195,6 +195,9 @@ metrics separate background preparation, loaded and stored apply, lighting, and
 verification. The cold benchmark rejects latency, tick, heap, workload, and
 exactness regressions.
 
+Cold-path causes, previous attempts and the current bounded prewarm change are
+tracked in [the cold Restore report](docs/cold-restore-path-preservation.md).
+
 The code is split by responsibility:
 
 | Layer | Responsibility |

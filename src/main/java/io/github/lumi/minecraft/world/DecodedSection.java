@@ -123,6 +123,10 @@ public final class DecodedSection {
         return delta != null;
     }
 
+    boolean supportsStoredRewrite() {
+        return delta != null && delta.poiIndexes().length == 0;
+    }
+
     PreparedSectionDelta preparedDelta() {
         if (delta == null) {
             throw new IllegalStateException("Section has no directional Restore delta");

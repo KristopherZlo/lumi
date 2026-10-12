@@ -393,6 +393,96 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     @Test
+    void prewarmLeavesStoredEligibleColdChunksUnloadedThroughHandoff() throws Exception {
+        List<SectionKey> keys = List.of(
+                new SectionKey(0, 0, 0), new SectionKey(1, 0, 0));
+        SectionBlob section = stoneSection();
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(section);
+        world.directlyStored = Set.of(ChunkCoordinate.from(keys.getFirst()),
+                ChunkCoordinate.from(keys.getLast()));
+        world.completeFinalPersistence = false;
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        Function<ChunkLoadAccess.Readiness, ChunkLoadSession> loads = ignored ->
+                new ChunkLoadSession(chunks, () -> 0L);
+        var original = session(plan(keys, section), world, background, loads);
+        background.runNext();
+
+        assertTrue(original.prewarmUntil(Long.MAX_VALUE));
+        assertEquals(0, chunks.active, "Intent must preserve the unloaded stored path");
+        assertTrue(world.persistence.isEmpty());
+        var handoff = original.suspendPrewarm();
+        try (var recomposed = session(plan(keys, section), world, background, loads,
+                ignored -> false, handoff)) {
+            background.runNext();
+            assertFalse(recomposed.applyUntil(Long.MAX_VALUE));
+            assertEquals(2, recomposed.statistics().storedChunks());
+            assertEquals(0, chunks.peak);
+            world.persistence.getFirst().complete = true;
+            assertFalse(recomposed.applyUntil(Long.MAX_VALUE));
+            assertEquals(PreparedWorldMutationSession.PersistenceMode.FINAL,
+                    world.persistenceCalls.getLast().mode());
+            assertEquals(2, world.persistenceCalls.getLast().verificationSections());
+            world.persistence.getLast().complete = true;
+            assertTrue(recomposed.applyUntil(Long.MAX_VALUE));
+        }
+        assertEquals(0, chunks.active);
+    }
+
+    @Test
+    void skippedColdPrewarmStillLoadsChunksRejectedByStorage() throws Exception {
+        List<SectionKey> keys = List.of(
+                new SectionKey(-2, 0, -3), new SectionKey(-1, 0, -3));
+        SectionBlob section = stoneSection();
+        ControlledExecutor background = new ControlledExecutor();
+        FakeWorld world = new FakeWorld(section);
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        try (var session = session(plan(keys, section), world, background,
+                ignored -> new ChunkLoadSession(chunks, () -> 0L))) {
+            background.runNext();
+            assertTrue(session.prewarmUntil(Long.MAX_VALUE));
+            assertEquals(0, chunks.active);
+            assertFalse(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(2, chunks.peak);
+            assertEquals(0, session.statistics().storedChunks());
+            assertEquals(2, session.statistics().loadedChunks());
+            world.persistence.getFirst().complete = true;
+            assertTrue(session.applyUntil(Long.MAX_VALUE));
+            assertEquals(2, world.persistenceCalls.getLast().verificationSections());
+        }
+        assertEquals(0, chunks.active);
+    }
+
+    @Test
+    void prewarmRetainsPoiFallbackAndResidentChunksButNotEligibleColdChunks()
+            throws Exception {
+        List<SectionKey> keys = List.of(new SectionKey(0, 0, 0),
+                new SectionKey(0, 1, 0), new SectionKey(1, 0, 0),
+                new SectionKey(2, 0, 0));
+        SectionBlob stone = stoneSection();
+        var poiStates = new ArrayList<>(stone.blockStates());
+        poiStates.set(18, "minecraft:lectern");
+        SectionBlob poi = new SectionBlob(poiStates, Map.of());
+        var source = new WorldStateApply.State(Map.of(keys.get(0), stone,
+                keys.get(1), poi, keys.get(2), stone, keys.get(3), stone), Map.of());
+        var base = new WorldStateApply.State(Map.of(keys.get(0), stone,
+                keys.get(1), stone, keys.get(2), stone, keys.get(3), stone), Map.of());
+        var plan = new PreparedMinecraftPlanState(source, base, Map.of(), Map.of(),
+                keys, List.of(), Set.of());
+        ControlledExecutor background = new ControlledExecutor();
+        RecordingChunkAccess chunks = new RecordingChunkAccess();
+        ChunkCoordinate resident = ChunkCoordinate.from(keys.get(3));
+        try (var session = session(plan, new FakeWorld(stone), background,
+                ignored -> new ChunkLoadSession(chunks, () -> 0L), resident::equals)) {
+            background.runNext();
+            assertTrue(session.prewarmUntil(Long.MAX_VALUE));
+            assertEquals(2, chunks.active);
+            assertEquals(Set.of(new ChunkCoordinate(0, 0), resident), chunks.retained);
+        }
+        assertEquals(0, chunks.active);
+    }
+
+    @Test
     void prewarmsAndTransfersTheFirstChunkWindowWithoutWorldMutation()
             throws Exception {
         SectionKey key = new SectionKey(0, 0, 0);
@@ -406,7 +496,7 @@ class StreamingPreparedWorldMutationSessionTest {
                 plan(List.of(key), section), world, background, readiness -> {
                     requested.add(readiness);
                     return new ChunkLoadSession(chunks, () -> 0L);
-                })) {
+                }, ignored -> true)) {
             assertFalse(session.prewarmUntil(0));
             background.runNext();
             assertTrue(session.prewarmUntil(Long.MAX_VALUE));
@@ -439,7 +529,7 @@ class StreamingPreparedWorldMutationSessionTest {
         };
 
         StreamingPreparedWorldMutationSession original = session(
-                originalPlan, world, background, loads);
+                originalPlan, world, background, loads, ignored -> true);
         assertFalse(original.prewarmUntil(0));
         background.runNext();
         assertTrue(original.prewarmUntil(Long.MAX_VALUE));
@@ -476,7 +566,7 @@ class StreamingPreparedWorldMutationSessionTest {
         };
 
         StreamingPreparedWorldMutationSession original = session(
-                plan, world, background, loads);
+                plan, world, background, loads, ignored -> true);
         background.runNext();
         assertFalse(original.prewarmUntil(1));
         assertEquals(1, chunks.active);
@@ -801,6 +891,7 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     private static final class RecordingChunkAccess implements ChunkLoadAccess {
+        private final Set<ChunkCoordinate> retained = new HashSet<>();
         private final List<Integer> activeBeforeRetain = new ArrayList<>();
         private final Map<ChunkCoordinate, CompletableFuture<Void>> loads =
                 new LinkedHashMap<>();
@@ -809,6 +900,7 @@ class StreamingPreparedWorldMutationSessionTest {
 
         @Override
         public CompletableFuture<Void> retain(ChunkCoordinate chunk) {
+            retained.add(chunk);
             activeBeforeRetain.add(active);
             peak = Math.max(peak, ++active);
             return loads.getOrDefault(

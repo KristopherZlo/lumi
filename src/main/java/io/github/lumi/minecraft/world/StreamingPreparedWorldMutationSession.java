@@ -553,7 +553,12 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
     private List<SectionKey> prewarmKeys(PreparedMinecraftState firstWindow) {
         Map<ChunkCoordinate, SectionKey> keys = new LinkedHashMap<>();
         for (SectionKey key : firstWindow.sectionKeys()) {
-            keys.putIfAbsent(ChunkCoordinate.from(key), key);
+            ChunkCoordinate chunk = ChunkCoordinate.from(key);
+            // Loading eligible cold chunks also promotes their neighbors off the stored path.
+            if (resident.test(chunk)
+                    || !firstWindow.sections().get(key).supportsStoredRewrite()) {
+                keys.putIfAbsent(chunk, key);
+            }
         }
         for (SectionKey key : plan.sectionKeys()) {
             if (keys.size() == MAX_PREWARM_CHUNKS) {

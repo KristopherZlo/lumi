@@ -76,6 +76,24 @@ class MinecraftRestorePreparationTest {
     }
 
     @Test
+    void storedEligibilityIncludesLightingButExcludesUnknownAndChangedPoi()
+            throws Exception {
+        var decoder = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK);
+        SectionBlob stone = new SectionBlob(Collections.nCopies(
+                SectionBlob.BLOCK_COUNT, "minecraft:stone"), Map.of());
+        var states = new ArrayList<>(stone.blockStates());
+        states.set(18, "minecraft:glowstone");
+        SectionBlob glow = new SectionBlob(states, Map.of());
+        states.set(18, "minecraft:lectern");
+        SectionBlob poi = new SectionBlob(states, Map.of());
+
+        assertFalse(decoder.decode(stone).supportsStoredRewrite());
+        assertTrue(decoder.decodeAgainst(glow, stone).supportsStoredRewrite());
+        assertFalse(decoder.decodeAgainst(poi, stone).supportsStoredRewrite());
+        assertFalse(decoder.decodeAgainst(stone, poi).supportsStoredRewrite());
+    }
+
+    @Test
     void precomputesExactBlockAndLightDeltaAgainstReturnState() throws Exception {
         SectionKey key = new SectionKey(2, 1, -3);
         var beforeStates = new ArrayList<>(Collections.nCopies(

@@ -101,8 +101,7 @@ final class MinecraftStoredChunkAccess {
                     Preparation.fallback(StoredChunkApplyResult.Outcome.ENTITY_CHANGES));
         }
         if (target.isEmpty() || target.values().stream()
-                .anyMatch(section -> !section.hasPreparedDelta()
-                        || section.preparedDelta().poiIndexes().length != 0)) {
+                .anyMatch(section -> !section.supportsStoredRewrite())) {
             return CompletableFuture.completedFuture(
                     Preparation.fallback(StoredChunkApplyResult.Outcome.UNSUPPORTED_DELTA));
         }

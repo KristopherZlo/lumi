@@ -121,6 +121,21 @@ final class LumiColdRestoreMeasurementScenario {
                 Long.toString(measurement.apply().batchPreparationNanos()));
         values.setProperty("lightingNanos",
                 Long.toString(measurement.apply().lightingNanos()));
+        values.setProperty("chunkLoadNanos",
+                Long.toString(measurement.apply().chunkLoadNanos()));
+        values.setProperty("loadedApplyNanos",
+                Long.toString(measurement.apply().loadedApplyNanos()));
+        values.setProperty("storageReadNanos",
+                Long.toString(measurement.apply().storageReadNanos()));
+        values.setProperty("storageWriteNanos",
+                Long.toString(measurement.apply().storageWriteNanos()));
+        values.setProperty("storageSyncNanos",
+                Long.toString(measurement.apply().storageSyncNanos()));
+        values.setProperty("storageForceNanos",
+                Long.toString(measurement.apply().storageForceNanos()));
+        values.setProperty("verificationNanos",
+                Long.toString(measurement.apply().verificationNanos()));
+        values.setProperty("storedFallbacks", measurement.apply().storedFallbacks().toString());
         try (Writer writer = Files.newBufferedWriter(
                 absolute, StandardCharsets.UTF_8)) {
             values.store(writer, "Lumi fresh-JVM cold Restore sample");

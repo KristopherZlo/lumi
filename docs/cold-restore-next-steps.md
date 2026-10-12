@@ -4,6 +4,9 @@ This is a proposal based on the current pipeline and its recorded experiments,
 not a measured speedup of the current release. The four recent performance fixes
 have not been followed by a new repeated large cold-Restore comparison.
 
+The subsequent implementation and comparison are tracked in
+[Preserve the cold stored Restore path](cold-restore-path-preservation.md).
+
 Current Restore already has physically ordered immutable-tree reads with one
 helper session, a bounded section-payload cache, two estimated 64-MiB native
 slabs, at most 128 cold chunks per window, transferable first-window block
