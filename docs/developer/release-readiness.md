@@ -27,8 +27,11 @@ reports under a unique `build/reports/lumi-release/` directory. It runs core
 checks, exact Restore, recovery, two clients, all four process-crash matrices,
 load-regression checks, repeated Restore, and a 512×512×16 Save memory probe.
 Pass `-FixtureManifest` and `-ExistingWorldSource` for the repeated Restore gate;
-its source must be an immutable disposable fixture. `-Gate Multiplayer` selects
-a focused run. Omitted gates remain unverified, and the overall run exits with a
+its source must be an immutable disposable fixture.
+The copied world's name must match the manifest's `worldName`; pass
+`-ExistingWorldName` when it differs from the cold producer's default
+`Lumi behavior seed 710`. `-Gate Multiplayer` selects a focused run.
+Omitted gates remain unverified, and the overall run exits with a
 failure until every required gate has evidence.
 
 Automated Save memory sampling does not prove retained memory or a universal

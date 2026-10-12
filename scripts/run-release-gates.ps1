@@ -6,6 +6,7 @@ param(
         'SaveCrash', 'MergeCrash', 'ImportCrash', 'LoadRegression', 'RestoreSoak', 'SaveMemory'),
     [string]$FixtureManifest,
     [string]$ExistingWorldSource,
+    [string]$ExistingWorldName = 'Lumi behavior seed 710',
     [string]$ReviewedEvidence
 )
 
@@ -73,7 +74,7 @@ try {
                         '-Dlumi.benchmark.soak=true', '-Dlumi.benchmark.soakCycles=20', '-Dlumi.benchmark.observeSeconds=1800',
                         ('-Dlumi.benchmark.coldManifest=' + [IO.Path]::GetFullPath($FixtureManifest)),
                         ('-Dlumi.benchmark.existingWorldSource=' + [IO.Path]::GetFullPath($ExistingWorldSource)),
-                        '-Dlumi.benchmark.existingWorld=release-soak', 'runClientGameTest')
+                        ('-Dlumi.benchmark.existingWorld=' + $ExistingWorldName), 'runClientGameTest')
                 }
                 'SaveMemory' {
                     $taskGradleArguments = @('-Dlumi.gametest.suite=BENCHMARK', '-Dlumi.benchmark.enabled=true',
