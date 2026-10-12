@@ -207,6 +207,9 @@ Compare overlay preparation groups exact block faces and edges into spatial
 batches. It removes shared internal fills and duplicate edges only when their
 colors match; the individual block grid, including interior x-ray edges, stays
 intact across batch boundaries.
+Spatial GPU meshes own their vertex buffers and release them explicitly. Fill
+opacity and x-ray depth behavior are draw-time settings, so changing the Action
+key does not require rebuilding identical vertices.
 
 Zone and selection fixes, regression coverage, and paired shell measurements
 are recorded in [the interaction verification report](docs/zone-interaction-fixes.md).
