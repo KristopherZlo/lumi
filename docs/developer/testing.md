@@ -95,6 +95,7 @@ For the default functional selection:
 | `EXACT` | Exact Restore acceptance scenarios |
 | `RESTORE_CRASH` | Producer/verifier process-crash harness. Use the matrix task below. |
 | `BENCHMARK` | Opt-in history performance workloads |
+| `MULTIPLAYER` | Two client JVMs against a TCP dedicated server; needs the multiplayer runner |
 
 For example:
 
