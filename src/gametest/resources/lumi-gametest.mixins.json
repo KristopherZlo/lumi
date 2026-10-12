@@ -2,7 +2,8 @@
   "required": true,
   "package": "io.github.lumi.gametest.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["InteractionTimingMixin", "ServerUsePacketTimingMixin"],
+  "mixins": ["InteractionTimingMixin", "ServerUsePacketTimingMixin",
+    "SavePublicationPauseMixin", "RestoreMutationPauseMixin"],
   "client": ["ClientInteractionTimingMixin", "ClientUseTimingMixin"],
   "injectors": {"defaultRequire": 1}
 }

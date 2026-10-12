@@ -129,8 +129,16 @@ The runner preserves both logs and a candidate/version manifest in
 the run. It stops only the JVMs it launched. The gate checks shared history,
 two conflicting queued Saves, queued-client disconnect/reconnect, and revoked
 actor authority at activation. A test-only mutation occupies the queue until
-both real network requests are present; it never edits the world. Disconnect
-after world apply and edits during Save publication need their phase gates.
+both real network requests are present; it never edits the world. Separate
+GameTest-only mixins pause background Save publication and defer Restore ticks
+after a physical block changes. Two TCP break packets must survive Save
+publication as later dirty generations; restoring both commits checks their
+exact boundaries. The Restore initiator then disconnects after mutation while
+the freeze and journal are present. The server must finish the exact target,
+clear the journal, and synchronize the reconnecting client. Pauses have a
+three-minute timeout and are excluded from the production jar. These gates
+cover one dimension; cross-dimension concurrency and standalone server JVM
+coverage remain separate checks.
 
 ## Real process-crash matrix
 

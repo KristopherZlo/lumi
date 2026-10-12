@@ -69,6 +69,19 @@ final class LumiMultiplayerPeer {
             case "disconnect", "stop" -> context.runOnClient(
                     client -> client.disconnect(new TitleScreen(), false));
             case "connect" -> connect();
+            case "break" -> {
+                String[] coordinates = argument.split(",");
+                var position = new net.minecraft.core.BlockPos(Integer.parseInt(coordinates[0]),
+                        Integer.parseInt(coordinates[1]), Integer.parseInt(coordinates[2]));
+                context.waitFor(client -> client.player != null && client.level != null
+                        && !client.level.getBlockState(position).isAir()
+                        && client.player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(position)) < 25,
+                        2400);
+                if (!context.computeOnClient(client -> client.gameMode.startDestroyBlock(
+                        position, net.minecraft.core.Direction.UP))) {
+                    throw new AssertionError("Peer refused the break packet");
+                }
+            }
             default -> throw new IllegalArgumentException("Unknown peer command: " + action);
         }
     }
@@ -76,6 +89,7 @@ final class LumiMultiplayerPeer {
     private void connect() {
         context.runOnClient(client -> {
             client.options.pauseOnLostFocus = false;
+            com.moulberry.axiom.Axiom.configuration.internal.shownIntroduction = true;
             ConnectScreen.startConnecting(new TitleScreen(), client,
                     ServerAddress.parseString(address),
                     new ServerData("Lumi multiplayer", address, ServerData.Type.OTHER), false, null);

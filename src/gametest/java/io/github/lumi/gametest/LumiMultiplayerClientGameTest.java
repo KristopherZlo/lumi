@@ -43,6 +43,11 @@ public final class LumiMultiplayerClientGameTest implements FabricClientGameTest
                         player -> minecraft.getPlayerList().op(new net.minecraft.server.players.NameAndId(
                                 player.getUUID(), player.getName().getString()))));
                 context.waitFor(client -> client.player != null && client.player.canUseGameMasterBlocks());
+                context.runOnClient(client -> {
+                    client.options.pauseOnLostFocus = false;
+                    com.moulberry.axiom.Axiom.configuration.internal.shownIntroduction = true;
+                });
+                context.setScreen(() -> null);
                 var ui = new LumiUiTestDriver(context);
                 ui.completeOnboardingIfShown();
                 ui.awaitHistory();
@@ -52,6 +57,7 @@ public final class LumiMultiplayerClientGameTest implements FabricClientGameTest
                 var saved = operations.save("multiplayer-shared");
                 mailbox.request(context, "head", saved.hex());
                 new LumiMultiplayerQueueScenario(context, server, report, mailbox).run();
+                new LumiMultiplayerApplyScenario(context, server, report, mailbox).run();
                 server.runOnServer(minecraft -> {
                     var runtime = LumiMod.serverRuntime().find(minecraft.overworld()).orElseThrow();
                     if (runtime.operations().hasActiveOperation() || runtime.freeze().isFrozen()) {

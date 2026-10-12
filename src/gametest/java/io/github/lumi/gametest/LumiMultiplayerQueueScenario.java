@@ -34,6 +34,8 @@ final class LumiMultiplayerQueueScenario {
     }
 
     private void conflictingSaves() throws IOException {
+        new LumiDenseSectionFixture(context, server, report).fill("multiplayer-conflict-fixture",
+                new io.github.lumi.domain.model.BlockBox(0, 0, 0, 15, 0, 15), 1);
         synchronizeHeads();
         try (var hold = holdQueue()) {
             String peerRequest = mailbox.request(context, "save", "peer-conflict").getProperty("request");
@@ -57,6 +59,8 @@ final class LumiMultiplayerQueueScenario {
     }
 
     private void disconnectedQueuedSave() throws IOException {
+        new LumiDenseSectionFixture(context, server, report).fill("multiplayer-disconnect-fixture",
+                new io.github.lumi.domain.model.BlockBox(0, 0, 0, 15, 0, 15), 2);
         String before = head();
         try (var hold = holdQueue()) {
             mailbox.request(context, "save", "disconnected-queued");
