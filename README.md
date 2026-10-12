@@ -193,12 +193,15 @@ GUI scales 1, 2, 3, 4 and Auto across three window sizes, including visible
 tooltip text at the expected scale-2 position. It loads no world, caps
 its test client at 30 FPS, and saves a screenshot of each case.
 
-`COMPARE_RENDER` measures CPU submission and GPU draw time for 32,768 dense and
+`COMPARE_RENDER` measures CPU submission and GPU elapsed time for 32,768 dense and
 100,000 scattered Compare blocks, with depth testing and Action-key x-ray. It
 uses the production overlay renderer, caps its client at 30 FPS, writes raw
 samples to `build/run/clientGameTest/compare-render.csv`, and saves screenshots.
 The synthetic Compare input does not edit world history. Copy the CSV before
 another client test run, which recreates that directory.
+GPU elapsed time includes upload and gaps while the CPU prepares the submission;
+it is not an isolated shader execution measurement. Screenshots must contain
+the colored highlight, so an empty or incorrectly aimed view fails the test.
 
 Compare overlay preparation groups exact block faces and edges into spatial
 batches. It removes shared internal fills and duplicate edges only when their
