@@ -1,10 +1,9 @@
 # Cold Restore: next experiments
 
-This is a proposal based on the current pipeline and its recorded experiments,
-not a measured speedup of the current release. The four recent performance fixes
-have not been followed by a new repeated large cold-Restore comparison.
+This proposal records the pipeline and experiments considered before the
+October 12 comparison. Its remaining experiments are not measured speedups.
 
-The subsequent implementation and comparison are tracked in
+The subsequent implementation and repeated baseline/candidate measurements are in
 [Preserve the cold stored Restore path](cold-restore-path-preservation.md).
 
 Current Restore already has physically ordered immutable-tree reads with one
