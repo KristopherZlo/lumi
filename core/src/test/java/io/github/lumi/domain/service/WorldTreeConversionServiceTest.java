@@ -77,6 +77,19 @@ class WorldTreeConversionServiceTest {
         assertEquals(version, target.readEntities(result.get(new EntityChunkKey(0, 0))).dataVersion());
         assertEquals(WorldDataVersion.LEGACY_12111, source.readSection(section).dataVersion());
         assertEquals(leaves, new WorldObjectGraph(source).scan(tree).leaves());
+        new HistoryConversionVerifier(directory.resolve("old"), directory.resolve("new"), map, payloads)
+                .verify(ignored -> { });
+        var changedAdapter = new WorldPayloadConverter() {
+            public SectionBlob convert(SectionBlob value, WorldDataVersion dataVersion) {
+                return new SectionBlob(Collections.nCopies(4096, "minecraft:air"), value.blockEntities(), dataVersion);
+            }
+            public EntityChunkBlob convert(EntityChunkBlob value, WorldDataVersion dataVersion) {
+                return new EntityChunkBlob(value.entities(), dataVersion);
+            }
+        };
+        assertThrows(IOException.class, () -> new HistoryConversionVerifier(
+                directory.resolve("old"), directory.resolve("new"), map,
+                new WorldPayloadConversionService(version, changedAdapter)).verify(ignored -> { }));
         assertThrows(IOException.class,
                 () -> map.record(HistoryConversionMap.Kind.DIMENSION, tree, section));
     }

@@ -53,6 +53,19 @@ class CommitHistoryConversionServiceTest {
         assertEquals(List.of(initial), source.read(left).parents());
         assertEquals(3, new VersionPreviewRepository(converted).load(result).orElseThrow().length);
         assertEquals(result, restarted.convert(merge));
+        var adapter = new WorldPayloadConverter() {
+            public SectionBlob convert(SectionBlob value, WorldDataVersion version) {
+                return new SectionBlob(value.blockStates(), value.blockEntities(), version);
+            }
+            public EntityChunkBlob convert(EntityChunkBlob value, WorldDataVersion version) {
+                return new EntityChunkBlob(value.entities(), version);
+            }
+        };
+        var verifier = new HistoryConversionVerifier(old, converted, map,
+                new WorldPayloadConversionService(new WorldDataVersion(4786), adapter));
+        verifier.verify(ignored -> { });
+        new VersionTagRepository(converted).replace(result, VersionTags.empty());
+        assertThrows(IOException.class, () -> verifier.verify(ignored -> { }));
         try (var files = java.nio.file.Files.list(converted.resolve("conversion-work"))) {
             assertEquals(0, files.count());
         }
