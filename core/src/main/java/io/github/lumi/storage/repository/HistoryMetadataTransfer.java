@@ -31,6 +31,11 @@ public final class HistoryMetadataTransfer {
                 copyFile(source.resolve(relative), target.resolve(relative));
             }
         }
+        verify(source, target);
+    }
+
+    public void verify(Path source, Path target) throws IOException {
+        var workspaces = new WorkspaceRepository(source).list();
         if (!new ActiveBranchRepository(source).read().equals(new ActiveBranchRepository(target).read())
                 || !new ActiveWorkspaceRepository(source).read().equals(new ActiveWorkspaceRepository(target).read())
                 || !new WorkingIndexRepository(source).readState().equals(new WorkingIndexRepository(target).readState())
