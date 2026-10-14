@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "defaultTarget": "legacy-12111",
+  "targets": [
+    {
+      "id": "legacy-12111",
+      "minecraftVersion": "1.21.11",
+      "minecraftVersions": ["1.21.11"],
+      "javaVersion": 21,
+      "loaderVersion": "0.19.2",
+      "fabricApiVersion": "0.141.3+1.21.11",
+      "worldeditVersionId": "oY3E2pzA",
+      "axiomVersionId": "DLVQrqv2",
+      "worldeditCuiCoordinate": "org.enginehub.worldeditcui-protocol:worldeditcui-protocol-fabric-mc1.21.11:4.0.2",
+      "axiomRuntimeJars": [
+        "axiomclientapi.jar",
+        "lattice-1.3.0.jar",
+        "mixinconstraints-1.0.9.jar",
+        "mixinextras-fabric-0.3.5.jar"
+      ]
+    }
+  ]
+}
