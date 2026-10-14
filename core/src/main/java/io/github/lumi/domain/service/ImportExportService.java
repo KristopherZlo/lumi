@@ -8,6 +8,8 @@ import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.CommitKind;
 import io.github.lumi.domain.model.CommitStatistics;
 import io.github.lumi.domain.model.EntityChunkKey;
+import io.github.lumi.domain.model.HistoryKey;
+import io.github.lumi.domain.model.WorldDataVersion;
 import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.SectionKey;
@@ -39,11 +41,21 @@ public final class ImportExportService {
     private final BranchRefRepository refs;
     private final MerkleTreeEditor trees;
     private final VersionPreviewRepository previews;
+    private final Optional<WorldPayloadConversionService> conversion;
     private final LumiPackageArchive archive = new LumiPackageArchive();
     private final CommitCodec commitCodec = new CommitCodec();
 
     public ImportExportService(String dimensionId, Path dimensionRepository) {
+        this(dimensionId, dimensionRepository, Optional.empty());
+    }
+
+    public ImportExportService(String dimensionId, Path dimensionRepository, WorldPayloadConversionService conversion) {
+        this(dimensionId, dimensionRepository, Optional.of(Objects.requireNonNull(conversion, "conversion")));
+    }
+
+    private ImportExportService(String dimensionId, Path dimensionRepository, Optional<WorldPayloadConversionService> conversion) {
         this.dimensionId = requireDimensionId(dimensionId);
+        this.conversion = conversion;
         Objects.requireNonNull(dimensionRepository, "dimensionRepository");
         objects = new WorldObjectRepository(dimensionRepository);
         commits = new CommitRepository(dimensionRepository);
@@ -119,9 +131,10 @@ public final class ImportExportService {
                 throw new IOException(
                         "Lumi package object inventory does not match its commit tree");
             }
-            statistics = statistics(importedTree.leaves(), batch);
+            var converted = convertLeaves(importedTree.leaves(), batch);
+            statistics = statistics(converted, batch);
             tree = trees.update(
-                    Optional.of(localBase.tree()), importedTree.leaves(), batch);
+                    Optional.of(localBase.tree()), converted, batch);
             batch.publish();
         }
         CommitId commit = commits.write(new Commit(
@@ -135,6 +148,31 @@ public final class ImportExportService {
         }
         requireCurrent(base);
         return new ImportResult(commit, refs.create(target, commit));
+    }
+
+    private Map<HistoryKey, ObjectId> convertLeaves(
+            Map<HistoryKey, ObjectId> imported, WorldObjectRepository.WriteBatch batch) throws IOException {
+        var converted = new HashMap<HistoryKey, ObjectId>();
+        for (var entry : imported.entrySet()) {
+            if (entry.getKey() instanceof SectionKey) {
+                var source = batch.readSection(entry.getValue());
+                if (conversion.isPresent()) {
+                    converted.put(entry.getKey(), batch.write(conversion.orElseThrow().convert(source)));
+                } else {
+                    WorldDataCompatibility.requireCurrent(source.dataVersion(), WorldDataVersion.LEGACY_12111);
+                    converted.put(entry.getKey(), entry.getValue());
+                }
+            } else {
+                var source = batch.readEntities(entry.getValue());
+                if (conversion.isPresent()) {
+                    converted.put(entry.getKey(), batch.write(conversion.orElseThrow().convert(source)));
+                } else {
+                    WorldDataCompatibility.requireCurrent(source.dataVersion(), WorldDataVersion.LEGACY_12111);
+                    converted.put(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        return converted;
     }
 
     private PackageRead readPackage(

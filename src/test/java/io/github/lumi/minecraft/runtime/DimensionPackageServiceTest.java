@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.PackageName;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
+import io.github.lumi.domain.service.ImportExportService;
 import io.github.lumi.storage.repository.ActiveBranchRepository;
 import io.github.lumi.storage.repository.BranchRefRepository;
 import io.github.lumi.storage.repository.CommitRepository;
@@ -36,7 +37,7 @@ class DimensionPackageServiceTest {
                 current.name(), current.commit(), current.revision() + 1);
         Path world = directory.resolve("world");
         var service = new DimensionPackageService(
-                "minecraft:overworld", repository, world,
+                new ImportExportService("minecraft:overworld", repository), world,
                 Runnable::run, () -> current);
 
         CompletionException failure = assertThrows(

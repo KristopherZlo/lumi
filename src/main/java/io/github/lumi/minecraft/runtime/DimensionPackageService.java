@@ -22,14 +22,11 @@ final class DimensionPackageService {
     private final CurrentBranch currentBranch;
 
     DimensionPackageService(
-            String dimensionId,
-            Path repository,
+            ImportExportService history,
             Path worldRoot,
             Executor background,
             CurrentBranch currentBranch) {
-        history = new ImportExportService(
-                Objects.requireNonNull(dimensionId, "dimensionId"),
-                Objects.requireNonNull(repository, "repository"));
+        this.history = Objects.requireNonNull(history, "history");
         directory = new LumiPackageDirectory(
                 Objects.requireNonNull(worldRoot, "worldRoot"));
         this.background = Objects.requireNonNull(background, "background");

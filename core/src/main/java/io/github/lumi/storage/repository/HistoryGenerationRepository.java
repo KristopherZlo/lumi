@@ -38,6 +38,12 @@ public final class HistoryGenerationRepository {
                 : root.resolve("generations").resolve(generation.id().toString());
     }
 
+    public synchronized Path currentDirectory(WorldDataVersion currentGame) throws IOException {
+        HistoryGeneration selected = active();
+        WorldDataCompatibility.requireCurrent(selected.dataVersion(), currentGame);
+        return directory(selected);
+    }
+
     public synchronized HistoryGeneration active() throws IOException {
         if (!Files.exists(pointer)) return HistoryGeneration.LEGACY;
         HistoryGeneration generation = decode(pointer, 1)[0];

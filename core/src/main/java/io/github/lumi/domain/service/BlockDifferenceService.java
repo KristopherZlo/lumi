@@ -66,6 +66,9 @@ public final class BlockDifferenceService {
             checkCancelled(cancelled);
             SectionBlob before = objects.readSection(entry.getValue().before());
             SectionBlob after = objects.readSection(entry.getValue().after());
+            if (!before.dataVersion().equals(after.dataVersion())) {
+                throw new IOException("Convert history to one data version before Compare");
+            }
             SectionKey key = entry.getKey();
             for (int index = 0; index < SectionBlob.BLOCK_COUNT; index++) {
                 if ((index & 255) == 0) checkCancelled(cancelled);

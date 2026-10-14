@@ -23,6 +23,17 @@ class BlockDifferenceServiceTest {
     @TempDir Path repositoryRoot;
 
     @Test
+    void mixedRepresentationsRefuseComparisonInsteadOfReportingSchemaChangesAsBuilderEdits() throws Exception {
+        var objects = new WorldObjectRepository(repositoryRoot);
+        var before = objects.write(SectionBlob.fromPalette(List.of("minecraft:stone"), new short[4096], Map.of()));
+        var after = objects.write(SectionBlob.fromPalette(List.of("minecraft:stone"), new short[4096], Map.of(),
+                new io.github.lumi.domain.model.WorldDataVersion(4786)));
+        var difference = new WorldDifference(Map.of(new SectionKey(0, 0, 0), new ObjectChange(before, after)), Map.of());
+        assertThrows(java.io.IOException.class, () -> new BlockDifferenceService(objects)
+                .scan(difference, () -> false, ignored -> { }));
+    }
+
+    @Test
     void streamsDirectionalChangesAndCountsMaterials() throws Exception {
         WorldObjectRepository objects = new WorldObjectRepository(repositoryRoot);
         var before = objects.write(section(Map.of(

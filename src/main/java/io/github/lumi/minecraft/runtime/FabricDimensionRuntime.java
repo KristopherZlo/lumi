@@ -57,6 +57,9 @@ import io.github.lumi.domain.service.AutoVersionService;
 import io.github.lumi.domain.service.HistoryQueryService;
 import io.github.lumi.domain.service.ForwardHistoryService;
 import io.github.lumi.domain.service.ImportExportService;
+import io.github.lumi.domain.service.WorldPayloadConversionService;
+import io.github.lumi.domain.model.WorldDataVersion;
+import io.github.lumi.minecraft.world.MinecraftWorldPayloadConverter;
 import io.github.lumi.domain.service.LiveActionJournal;
 import io.github.lumi.domain.service.MergeService;
 import io.github.lumi.domain.service.PreparedMerge;
@@ -100,6 +103,7 @@ import io.github.lumi.minecraft.world.RestoreBaselineReconciler;
 import io.github.lumi.minecraft.world.SavePreparation;
 import io.github.lumi.minecraft.world.ScopedSavePreparation;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
+import io.github.lumi.storage.repository.HistoryGenerationRepository;
 import io.github.lumi.storage.repository.ActiveBranchRepository;
 import io.github.lumi.storage.repository.ActiveWorkspaceRepository;
 import io.github.lumi.storage.repository.BranchRefRepository;
@@ -137,6 +141,9 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import net.minecraft.ChatFormatting;
+import net.minecraft.SharedConstants;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -299,9 +306,12 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                 new ForwardHistoryService(commits, refs),
                 restoreStateListener, background);
         packages = new DimensionPackageService(
-                level.dimension().identifier().toString(), repository,
-                level.getServer().getWorldPath(LevelResource.ROOT),
-                background, this::activeRef);
+                new ImportExportService(level.dimension().identifier().toString(), repository,
+                        new WorldPayloadConversionService(new WorldDataVersion(
+                        SharedConstants.getCurrentVersion().dataVersion().version()),
+                        new MinecraftWorldPayloadConverter(
+                                level.registryAccess().lookupOrThrow(Registries.BLOCK), BuiltInRegistries.ENTITY_TYPE))),
+                level.getServer().getWorldPath(LevelResource.ROOT), background, this::activeRef);
         comparisons = new DimensionComparisonQueries(
                 repository, background, zones, this::activeWorkspaceId);
         zoneOverlays = new DimensionZoneOverlayQueries(
@@ -342,7 +352,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(layout, "layout");
         Objects.requireNonNull(background, "background");
         Objects.requireNonNull(durabilityBackground, "durabilityBackground");
-        Path repository = layout.resolve(level.dimension().identifier().toString());
+        Path repository = new HistoryGenerationRepository(layout.resolve(level.dimension().identifier().toString()))
+                .currentDirectory(new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()));
         DimensionFreezeState freeze = new DimensionFreezeState();
         var objects = new WorldObjectRepository(repository);
         var commits = new CommitRepository(repository);

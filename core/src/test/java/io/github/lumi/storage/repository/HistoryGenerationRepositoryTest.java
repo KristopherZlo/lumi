@@ -19,6 +19,8 @@ class HistoryGenerationRepositoryTest {
         var repository = new HistoryGenerationRepository(root);
         Files.writeString(root.resolve("original-history"), "unchanged");
         assertEquals(root, repository.directory(repository.active()));
+        assertEquals(root, repository.currentDirectory(WorldDataVersion.LEGACY_12111));
+        assertThrows(IOException.class, () -> repository.currentDirectory(new WorldDataVersion(4786)));
         var prepared = repository.prepare(HistoryGeneration.LEGACY, new WorldDataVersion(4786));
         assertThrows(IOException.class, () -> repository.publish(HistoryGeneration.LEGACY, prepared));
         assertEquals(HistoryGeneration.LEGACY, new HistoryGenerationRepository(root).active());
@@ -26,6 +28,8 @@ class HistoryGenerationRepositoryTest {
         assertEquals(HistoryGeneration.LEGACY, new HistoryGenerationRepository(root).active());
         repository.publish(HistoryGeneration.LEGACY, prepared);
         assertEquals(prepared, new HistoryGenerationRepository(root).active());
+        assertEquals(repository.directory(prepared), repository.currentDirectory(new WorldDataVersion(4786)));
+        assertThrows(IOException.class, () -> repository.currentDirectory(WorldDataVersion.LEGACY_12111));
         assertEquals("unchanged", Files.readString(root.resolve("original-history")));
         assertThrows(IOException.class, () -> repository.markVerified(prepared,
                 new HistoryGeneration(prepared.id(), new WorldDataVersion(4903))));
