@@ -43,4 +43,34 @@ public final class HistoryConversionMap {
         return directory.resolve(kind.name().toLowerCase(java.util.Locale.ROOT))
                 .resolve(hex.substring(0, 2)).resolve(hex.substring(2) + ".map");
     }
+
+    public void visit(Visitor visitor) throws IOException {
+        for (Kind kind : Kind.values()) {
+            Path root = directory.resolve(kind.name().toLowerCase(java.util.Locale.ROOT));
+            if (!Files.exists(root)) continue;
+            try (var files = Files.walk(root)) {
+                var iterator = files.iterator();
+                while (iterator.hasNext()) {
+                    Path file = iterator.next();
+                    if (Files.isSymbolicLink(file)) throw new IOException("Conversion mapping is a symbolic link: " + file);
+                    if (!file.getFileName().toString().endsWith(".map")) continue;
+                    Path relative = root.relativize(file);
+                    if (relative.getNameCount() != 2) throw new IOException("Invalid conversion mapping path: " + file);
+                    String name = relative.getName(1).toString();
+                    try {
+                        ObjectId source = new ObjectId(relative.getName(0) + name.substring(0, name.length() - 4));
+                        if (!path(kind, source).equals(file)) throw new IOException("Noncanonical conversion mapping path");
+                        visitor.visit(kind, source, read(kind, source).orElseThrow());
+                    } catch (IllegalArgumentException invalid) {
+                        throw new IOException("Invalid conversion mapping identity", invalid);
+                    }
+                }
+            }
+        }
+    }
+
+    @FunctionalInterface
+    public interface Visitor {
+        void visit(Kind kind, ObjectId source, ObjectId target) throws IOException;
+    }
 }

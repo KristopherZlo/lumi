@@ -1,6 +1,7 @@
 package io.github.lumi.storage.repository;
 
 import io.github.lumi.domain.model.HistoryGeneration;
+import io.github.lumi.domain.model.HistoryConversion;
 import io.github.lumi.domain.model.WorldDataVersion;
 import io.github.lumi.domain.service.WorldDataCompatibility;
 import java.io.ByteArrayInputStream;
@@ -11,6 +12,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Publishes verified generations; callers retain exclusive dimension mutation ownership. */
@@ -42,6 +44,7 @@ public final class HistoryGenerationRepository {
         if (generation.legacy()) throw new IOException("An active generation pointer cannot select legacy history");
         HistoryGeneration[] verified = decode(verifiedFile(generation), 2);
         if (!generation.equals(verified[1])) throw new IOException("Generation verification does not match pointer");
+        if (verified[0].id().equals(generation.id())) throw new IOException("Generation verification reuses its source identity");
         WorldDataCompatibility.requireForward(verified[0].dataVersion(), generation.dataVersion());
         return generation;
     }
@@ -54,6 +57,43 @@ public final class HistoryGenerationRepository {
         Files.createDirectories(directory(prepared).getParent());
         Files.createDirectory(directory(prepared));
         return prepared;
+    }
+
+    public synchronized Optional<HistoryConversion> pending() throws IOException {
+        Path file = root.resolve("generations/conversion.bin");
+        if (!Files.exists(file)) return Optional.empty();
+        HistoryGeneration[] pair = decode(file, 2);
+        try {
+            return Optional.of(new HistoryConversion(pair[0], pair[1]));
+        } catch (IllegalArgumentException invalid) {
+            throw new IOException("Invalid history conversion journal", invalid);
+        }
+    }
+
+    public synchronized HistoryGeneration beginConversion(
+            HistoryGeneration expected, WorldDataVersion target) throws IOException {
+        requireActive(expected);
+        var pending = pending();
+        if (pending.isPresent()) {
+            var conversion = pending.orElseThrow();
+            if (!conversion.source().equals(expected) || !conversion.target().dataVersion().equals(target)) {
+                throw new IOException("An interrupted history conversion targets a different source or game");
+            }
+            requireCandidate(expected, conversion.target());
+            return conversion.target();
+        }
+        HistoryGeneration prepared = prepare(expected, target);
+        AtomicFileWriter.replace(root.resolve("generations/conversion.bin"), encode(expected, prepared));
+        return prepared;
+    }
+
+    public synchronized void finishConversion(HistoryGeneration published) throws IOException {
+        requireActive(published);
+        var pending = pending();
+        if (pending.isPresent() && !pending.orElseThrow().target().equals(published)) {
+            throw new IOException("Published generation differs from the conversion journal");
+        }
+        Files.deleteIfExists(root.resolve("generations/conversion.bin"));
     }
 
     /** Called only after the conversion service has durably validated every root and sidecar. */
@@ -87,7 +127,7 @@ public final class HistoryGenerationRepository {
     }
 
     private void requireCandidate(HistoryGeneration expected, HistoryGeneration prepared) throws IOException {
-        if (prepared.legacy() || prepared.equals(expected) || !Files.isDirectory(directory(prepared))) {
+        if (prepared.legacy() || prepared.id().equals(expected.id()) || !Files.isDirectory(directory(prepared))) {
             throw new IOException("Invalid prepared history generation");
         }
         WorldDataCompatibility.requireForward(expected.dataVersion(), prepared.dataVersion());

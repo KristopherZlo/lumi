@@ -27,6 +27,9 @@ class HistoryGenerationRepositoryTest {
         repository.publish(HistoryGeneration.LEGACY, prepared);
         assertEquals(prepared, new HistoryGenerationRepository(root).active());
         assertEquals("unchanged", Files.readString(root.resolve("original-history")));
+        assertThrows(IOException.class, () -> repository.markVerified(prepared,
+                new HistoryGeneration(prepared.id(), new WorldDataVersion(4903))));
+        assertEquals(prepared, repository.active());
         assertThrows(RefConflictException.class,
                 () -> repository.prepare(HistoryGeneration.LEGACY, new WorldDataVersion(4903)));
         assertThrows(IOException.class,
@@ -59,5 +62,21 @@ class HistoryGenerationRepositoryTest {
         assertThrows(IOException.class, () -> new HistoryGenerationRepository(root).active());
         Files.delete(verified);
         assertThrows(IOException.class, () -> new HistoryGenerationRepository(root).active());
+    }
+
+    @Test
+    void restartReusesTheJournaledTargetAndCompletesAfterPointerPublication() throws Exception {
+        var repository = new HistoryGenerationRepository(root);
+        var version = new WorldDataVersion(4786);
+        var prepared = repository.beginConversion(HistoryGeneration.LEGACY, version);
+        var restarted = new HistoryGenerationRepository(root);
+        assertEquals(prepared, restarted.beginConversion(HistoryGeneration.LEGACY, version));
+        assertThrows(IOException.class, () -> restarted.beginConversion(HistoryGeneration.LEGACY, new WorldDataVersion(4903)));
+        assertThrows(RefConflictException.class, () -> restarted.finishConversion(prepared));
+        restarted.markVerified(HistoryGeneration.LEGACY, prepared);
+        restarted.publish(HistoryGeneration.LEGACY, prepared);
+        new HistoryGenerationRepository(root).finishConversion(prepared);
+        assertEquals(java.util.Optional.empty(), repository.pending());
+        assertEquals(prepared, repository.active());
     }
 }
