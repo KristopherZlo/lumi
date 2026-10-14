@@ -95,6 +95,11 @@ class OriginStoreTest {
                 new OriginStore(repositoryRoot).entries());
         assertThrows(OriginConflictException.class, () ->
                 store.register(legacy, id("different")));
+        var visited = new HashMap<HistoryKey, ObjectId>();
+        new OriginStore(repositoryRoot).visitBatches(visited::putAll);
+        assertEquals(store.entries(), visited);
+        Files.write(legacyFile, new byte[3]);
+        assertThrows(IOException.class, () -> new OriginStore(repositoryRoot).visitBatches(ignored -> { }));
     }
 
     @Test

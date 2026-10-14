@@ -49,6 +49,21 @@ public final class BranchRefRepository {
         return created;
     }
 
+    /** Initializes a converted repository while preserving the original ref revision. */
+    public synchronized void initializeSnapshot(BranchRef snapshot) throws IOException {
+        Objects.requireNonNull(snapshot, "snapshot");
+        try (var publication = maintenance.beginPublication()) {
+            Optional<BranchRef> existing = read(snapshot.name());
+            if (existing.isPresent()) {
+                if (!existing.orElseThrow().equals(snapshot)) {
+                    throw new RefConflictException("Converted branch snapshot differs: " + snapshot.name());
+                }
+                return;
+            }
+            AtomicFileWriter.replace(path(snapshot.name()), encode(snapshot));
+        }
+    }
+
     public synchronized BranchRef compareAndSet(BranchRef expected, CommitId update) throws IOException {
         try (var publication = maintenance.beginPublication()) {
             return advanceRef(expected, update);

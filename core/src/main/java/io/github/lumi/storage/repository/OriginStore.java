@@ -151,6 +151,41 @@ public final class OriginStore {
         return Map.copyOf(origins);
     }
 
+    /** Visits one legacy entry or region shard at a time without filling the shard cache. */
+    public synchronized void visitBatches(BatchVisitor visitor) throws IOException {
+        Objects.requireNonNull(visitor, "visitor");
+        if (!Files.exists(originsDirectory)) return;
+        try (var files = Files.walk(originsDirectory)) {
+            var iterator = files.iterator();
+            while (iterator.hasNext()) {
+                Path file = iterator.next();
+                if (Files.isSymbolicLink(file)) throw new IOException("Origin path is a symbolic link: " + file);
+                if (!Files.isRegularFile(file)) continue;
+                String name = file.getFileName().toString();
+                if (name.endsWith(".origin")) {
+                    HistoryKey key = keyFromPath(file);
+                    visitor.visit(Map.of(key, decode(key,
+                            RepositoryFileReader.read(file, (int) SECTION_ENTRY_BYTES))));
+                } else if (name.endsWith(".bin")) {
+                    RegionCoordinate region = regionFromPath(file);
+                    requireShardSize(file);
+                    Map<HistoryKey, ObjectId> entries = decodeShard(region,
+                            RepositoryFileReader.read(file, (int) MAX_SHARD_BYTES));
+                    for (var entry : entries.entrySet()) {
+                        Optional<ObjectId> legacy = readLegacy(entry.getKey());
+                        if (legacy.isPresent()) requireSame(entry.getKey(), legacy.orElseThrow(), entry.getValue());
+                    }
+                    visitor.visit(entries);
+                }
+            }
+        }
+    }
+
+    @FunctionalInterface
+    public interface BatchVisitor {
+        void visit(Map<HistoryKey, ObjectId> entries) throws IOException;
+    }
+
     public synchronized Map<EntityChunkKey, ObjectId> entityEntries()
             throws IOException {
         Map<EntityChunkKey, ObjectId> entities = new HashMap<>();
