@@ -90,7 +90,7 @@ public final class MinecraftEntityStateDecoder {
             normalized.add(canonical.equals(entity.nbt()) ? entity
                     : new EntityState(entity.id(), entity.type(), canonical));
         }
-        return new EntityChunkBlob(normalized);
+        return new EntityChunkBlob(normalized, source.dataVersion());
     }
 
     private static EntityChunkBlob withoutTopLevelPassengers(
@@ -100,7 +100,7 @@ public final class MinecraftEntityStateDecoder {
         }
         return new EntityChunkBlob(source.entities().stream()
                 .filter(entity -> !passengerIds.contains(entity.id()))
-                .toList());
+                .toList(), source.dataVersion());
     }
 
     DecodedEntityChunk decodeNormalized(EntityChunkBlob source) throws IOException {

@@ -198,7 +198,7 @@ final class EntityRestorePlanner {
         return new EntityChunkBlob(chunk.entities().stream()
                 .filter(entity -> !identities.contains(entity.id())
                         || Objects.equals(selected.get(entity.id()), new Placement(key, entity)))
-                .toList());
+                .toList(), chunk.dataVersion());
     }
 
     private static IOException ambiguous(

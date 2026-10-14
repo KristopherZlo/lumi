@@ -5,8 +5,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 
-public record EntityChunkBlob(List<EntityState> entities) {
+public record EntityChunkBlob(List<EntityState> entities, WorldDataVersion dataVersion) {
     public EntityChunkBlob {
+        Objects.requireNonNull(dataVersion, "dataVersion");
         entities = Objects.requireNonNull(entities, "entities").stream()
                 .sorted(Comparator.comparing(EntityState::id))
                 .toList();
@@ -14,5 +15,9 @@ public record EntityChunkBlob(List<EntityState> entities) {
         if (entities.stream().anyMatch(entity -> !identities.add(entity.id()))) {
             throw new IllegalArgumentException("Entity UUIDs must be unique within a chunk");
         }
+    }
+
+    public EntityChunkBlob(List<EntityState> entities) {
+        this(entities, WorldDataVersion.LEGACY_12111);
     }
 }

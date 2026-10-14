@@ -25,7 +25,7 @@ public final class BlockEntityBaselineStore {
         Map<Integer, CanonicalNbt> oldBlockEntities = baselines.remove(key);
         return oldBlockEntities == null
                 ? Optional.empty()
-                : Optional.of(new SectionBlob(current.blockStates(), oldBlockEntities));
+                : Optional.of(new SectionBlob(current.blockStates(), oldBlockEntities, current.dataVersion()));
     }
 
     public synchronized void discard(SectionKey key) {

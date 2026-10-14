@@ -417,6 +417,7 @@ public final class RestoreService {
             BlockBox area, boolean outside) {
         boolean fullSection = outside ? !area.intersects(key) : area.contains(key);
         if (fullSection) return after;
+        before.dataVersion().requireSame(after.dataVersion());
         var blocks = new ArrayList<>(before.blockStates());
         var blockEntities = new HashMap<>(before.blockEntities());
         int baseX = key.chunkX() * 16;
@@ -434,7 +435,7 @@ public final class RestoreService {
                 }
             }
         }
-        return new SectionBlob(blocks, blockEntities);
+        return new SectionBlob(blocks, blockEntities, before.dataVersion());
     }
 
     private ObjectId origin(io.github.lumi.domain.model.HistoryKey key) throws IOException {

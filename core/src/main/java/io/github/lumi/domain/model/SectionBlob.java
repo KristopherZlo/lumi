@@ -9,10 +9,12 @@ import java.util.Objects;
 import java.util.RandomAccess;
 import java.util.TreeSet;
 
-public record SectionBlob(List<String> blockStates, Map<Integer, CanonicalNbt> blockEntities) {
+public record SectionBlob(List<String> blockStates, Map<Integer, CanonicalNbt> blockEntities,
+        WorldDataVersion dataVersion) {
     public static final int BLOCK_COUNT = 16 * 16 * 16;
 
     public SectionBlob {
+        Objects.requireNonNull(dataVersion, "dataVersion");
         Objects.requireNonNull(blockStates, "blockStates");
         blockStates = PaletteBlockStates.copyOf(blockStates);
         blockEntities = Map.copyOf(Objects.requireNonNull(blockEntities, "blockEntities"));
@@ -24,12 +26,21 @@ public record SectionBlob(List<String> blockStates, Map<Integer, CanonicalNbt> b
         }
     }
 
+    public SectionBlob(List<String> blockStates, Map<Integer, CanonicalNbt> blockEntities) {
+        this(blockStates, blockEntities, WorldDataVersion.LEGACY_12111);
+    }
+
     /** Builds an immutable section without expanding its persisted palette. */
     public static SectionBlob fromPalette(
             List<String> palette,
             short[] indexes,
             Map<Integer, CanonicalNbt> blockEntities) {
-        return new SectionBlob(new PaletteBlockStates(palette, indexes), blockEntities);
+        return fromPalette(palette, indexes, blockEntities, WorldDataVersion.LEGACY_12111);
+    }
+
+    public static SectionBlob fromPalette(List<String> palette, short[] indexes,
+            Map<Integer, CanonicalNbt> blockEntities, WorldDataVersion dataVersion) {
+        return new SectionBlob(new PaletteBlockStates(palette, indexes), blockEntities, dataVersion);
     }
 
     public PaletteBlockStates palette() {

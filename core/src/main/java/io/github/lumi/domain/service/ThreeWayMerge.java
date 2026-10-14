@@ -5,6 +5,7 @@ import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
 import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.WorldDataVersion;
 import io.github.lumi.domain.model.PlayerSpawn;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,6 +24,8 @@ public final class ThreeWayMerge {
         Objects.requireNonNull(base, "base");
         Objects.requireNonNull(current, "current");
         Objects.requireNonNull(source, "source");
+        current.dataVersion().requireSame(base.dataVersion());
+        current.dataVersion().requireSame(source.dataVersion());
         var states = new ArrayList<>(current.blockStates());
         var blockEntities = new HashMap<>(current.blockEntities());
         int conflicts = 0;
@@ -43,7 +46,7 @@ public final class ThreeWayMerge {
             }
         }
         return new SectionResult(
-                new SectionBlob(states, blockEntities), conflicts, changed);
+                new SectionBlob(states, blockEntities, current.dataVersion()), conflicts, changed);
     }
 
     public EntityResult entities(
@@ -62,6 +65,14 @@ public final class ThreeWayMerge {
         Objects.requireNonNull(base, "base");
         Objects.requireNonNull(current, "current");
         Objects.requireNonNull(source, "source");
+        WorldDataVersion version = null;
+        for (var world : java.util.List.of(base, current, source)) {
+            for (var chunk : world.values()) {
+                if (version == null) version = chunk.dataVersion();
+                else version.requireSame(chunk.dataVersion());
+            }
+        }
+        WorldDataVersion mergedVersion = version == null ? WorldDataVersion.LEGACY_12111 : version;
         var keys = new HashSet<EntityChunkKey>();
         keys.addAll(base.keySet());
         keys.addAll(current.keySet());
@@ -97,7 +108,7 @@ public final class ThreeWayMerge {
         }
         Map<EntityChunkKey, EntityChunkBlob> result = new HashMap<>();
         merged.forEach((key, entities) -> result.put(
-                key, new EntityChunkBlob(new ArrayList<>(entities.values()))));
+                key, new EntityChunkBlob(new ArrayList<>(entities.values()), mergedVersion)));
         return new EntityWorldResult(result, conflicts, changed);
     }
 

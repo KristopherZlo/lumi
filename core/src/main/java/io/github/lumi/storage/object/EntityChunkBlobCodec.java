@@ -3,6 +3,7 @@ package io.github.lumi.storage.object;
 import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.WorldDataVersion;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -16,6 +17,7 @@ import java.util.UUID;
 
 public final class EntityChunkBlobCodec {
     private static final int MAGIC = 0x4C554532;
+    private static final int VERSIONED_MAGIC = 0x4C554533;
     private static final int MAX_ENTITIES = 65_536;
     private static final int MAX_TYPE_BYTES = 1024 * 1024;
     private static final int MAX_NBT_BYTES = 16 * 1024 * 1024;
@@ -29,7 +31,9 @@ public final class EntityChunkBlobCodec {
                 .toList();
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream output = new DataOutputStream(bytes)) {
-            output.writeInt(MAGIC);
+            boolean legacy = chunk.dataVersion().equals(WorldDataVersion.LEGACY_12111);
+            output.writeInt(legacy ? MAGIC : VERSIONED_MAGIC);
+            if (!legacy) output.writeInt(chunk.dataVersion().value());
             output.writeInt(entities.size());
             for (EntityState entity : entities) {
                 output.writeLong(entity.id().getMostSignificantBits());
@@ -43,9 +47,12 @@ public final class EntityChunkBlobCodec {
 
     public EntityChunkBlob decode(byte[] payload) throws IOException {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(payload))) {
-            if (input.readInt() != MAGIC) {
-                throw new IOException("Not a Lumi V2 entity chunk blob");
+            int magic = input.readInt();
+            if (magic != MAGIC && magic != VERSIONED_MAGIC) {
+                throw new IOException("Not a Lumi entity chunk blob");
             }
+            WorldDataVersion dataVersion = magic == MAGIC ? WorldDataVersion.LEGACY_12111
+                    : new WorldDataVersion(input.readInt());
             int count = input.readInt();
             if (count < 0 || count > MAX_ENTITIES) {
                 throw new IOException("Invalid entity count");
@@ -65,9 +72,11 @@ public final class EntityChunkBlobCodec {
             if (input.available() != 0) {
                 throw new IOException("Trailing bytes in entity chunk blob");
             }
-            return new EntityChunkBlob(entities);
+            return new EntityChunkBlob(entities, dataVersion);
         } catch (EOFException truncated) {
             throw new IOException("Truncated entity chunk blob", truncated);
+        } catch (IllegalArgumentException invalid) {
+            throw new IOException("Invalid entity chunk blob", invalid);
         }
     }
 }
