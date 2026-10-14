@@ -2,9 +2,11 @@ package io.github.lumi.security;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -41,12 +43,14 @@ class ExternalCodeExecutionBoundaryTest {
     @Test
     void productionCodeCannotLaunchOrDynamicallyLoadExternalCode() throws Exception {
         List<String> violations = new ArrayList<>();
-        try (var files = Files.walk(Path.of("src/main/java"))) {
-            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
-                String source = Files.readString(file);
-                for (ForbiddenApi api : FORBIDDEN_APIS) {
-                    if (api.pattern().matcher(source).find()) {
-                        violations.add(file + ": " + api.capability());
+        for (Path root : productionRoots("java")) {
+            try (var files = Files.walk(root)) {
+                for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                    String source = Files.readString(file);
+                    for (ForbiddenApi api : FORBIDDEN_APIS) {
+                        if (api.pattern().matcher(source).find()) {
+                            violations.add(file + ": " + api.capability());
+                        }
                     }
                 }
             }
@@ -56,13 +60,21 @@ class ExternalCodeExecutionBoundaryTest {
 
     @Test
     void productionResourcesCannotBundleExecutablePayloads() throws Exception {
-        List<Path> violations;
-        try (var files = Files.walk(Path.of("src/main/resources"))) {
-            violations = files.filter(Files::isRegularFile)
-                    .filter(ExternalCodeExecutionBoundaryTest::hasExecutableSuffix)
-                    .toList();
+        List<Path> violations = new ArrayList<>();
+        for (Path root : productionRoots("resources")) {
+            try (var files = Files.walk(root)) {
+                violations.addAll(files.filter(Files::isRegularFile)
+                        .filter(ExternalCodeExecutionBoundaryTest::hasExecutableSuffix)
+                        .toList());
+            }
         }
         assertTrue(violations.isEmpty(), () -> "Executable resources: " + violations);
+    }
+
+    private static List<Path> productionRoots(String kind) {
+        String configured = System.getProperty("lumi.test.production." + kind);
+        assertTrue(configured != null && !configured.isBlank(), "Production roots must be supplied by Gradle");
+        return Arrays.stream(configured.split(Pattern.quote(File.pathSeparator))).map(Path::of).toList();
     }
 
     private static ForbiddenApi forbidden(String capability, String expression) {

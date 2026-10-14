@@ -1,5 +1,6 @@
 import groovy.json.JsonOutput
 import io.github.lumi.buildconfig.MinecraftTargetCatalogReader
+import io.github.lumi.buildconfig.MinecraftArtifactVerifier
 
 plugins {
     id 'fabric-loom' version "${loom_version}"
@@ -59,6 +60,7 @@ tasks.register('writeMinecraftBuildManifest') {
     outputs.file(report)
     doLast {
         def artifact = artifactFile.get().asFile
+        new MinecraftArtifactVerifier().verify(artifact.toPath(), minecraftTarget, modVersion)
         def digest = java.security.MessageDigest.getInstance('SHA-256')
         def manifest = [schema: 1, target: minecraftTargetParameters, modVersion: modVersion,
                 artifact: [name: artifact.name, sha256: digest.digest(artifact.bytes).encodeHex().toString()]]
@@ -257,6 +259,8 @@ tasks.register('runRestoreCrashMatrix') {
 }
 
 dependencies {
+    implementation project(':core')
+    include project(':core')
     axiomDistribution "maven.modrinth:N6n5dqoA:${minecraftTarget.axiomVersionId()}"
     minecraft "com.mojang:minecraft:${minecraftTarget.minecraftVersion()}"
     mappings loom.officialMojangMappings()
@@ -270,8 +274,8 @@ dependencies {
     modRuntimeOnly axiomRuntimeJars
     minecraftTarget.worldeditCuiCoordinate().ifPresent { coordinate -> modRuntimeOnly coordinate }
 
-    implementation "org.lz4:lz4-java:${project.lz4_version}"
-    include "org.lz4:lz4-java:${project.lz4_version}"
+    implementation "at.yawk.lz4:lz4-java:${project.lz4_version}"
+    include "at.yawk.lz4:lz4-java:${project.lz4_version}"
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -307,8 +311,20 @@ tasks.withType(Test).configureEach {
 }
 
 tasks.named('test', Test) {
+    dependsOn ':core:test'
     useJUnitPlatform { excludeTags 'performance' }
     systemProperty 'lumi.test.target', minecraftTarget.id()
+}
+
+gradle.projectsEvaluated {
+    tasks.named('test', Test) {
+        def productionProjects = rootProject.allprojects.findAll { it.plugins.hasPlugin('java') }
+        ['java', 'resources'].each { kind ->
+            def roots = productionProjects.collectMany { it.sourceSets.main[kind].srcDirs }
+                    .findAll { it.exists() }.collect { it.absolutePath }.unique()
+            systemProperty "lumi.test.production.${kind}", roots.join(File.pathSeparator)
+        }
+    }
 }
 
 tasks.register('regressionPerformanceTest', Test) {
@@ -327,4 +343,8 @@ java {
     sourceCompatibility = JavaVersion.toVersion(minecraftTarget.javaVersion())
     targetCompatibility = JavaVersion.toVersion(minecraftTarget.javaVersion())
     withSourcesJar()
+}
+
+tasks.named('sourcesJar', Jar) {
+    from(project(':core').sourceSets.main.allSource)
 }
