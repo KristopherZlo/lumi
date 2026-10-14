@@ -28,4 +28,7 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+    doFirst {
+        systemProperty 'lumi.test.runtime.classpath', sourceSets.test.runtimeClasspath.asPath
+    }
 }

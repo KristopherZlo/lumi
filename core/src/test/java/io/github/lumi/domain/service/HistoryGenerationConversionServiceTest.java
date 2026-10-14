@@ -55,6 +55,20 @@ class HistoryGenerationConversionServiceTest {
         assertEquals(fixture.main(), new BranchRefRepository(root).read(fixture.main().name()).orElseThrow());
     }
 
+    @Test
+    void pendingWorldApplyRefusesUpgradeBeforeAllocatingAGeneration() throws Exception {
+        var fixture = fixture(root);
+        var ref = fixture.main();
+        var target = new OperationTarget(ref.name(), ref.commit(), ref.revision(), Optional.of(ref.commit()),
+                Optional.empty(), Optional.empty(), Optional.empty(), false);
+        new OperationJournalRepository(root).create(new OperationJournal(new UUID(0, 9),
+                OperationKind.RESTORE, OperationPhase.APPLYING, target));
+        assertThrows(IOException.class, () -> new HistoryGenerationConversionService(root)
+                .convert(new WorldDataVersion(4786), adapter(), ignored -> { }));
+        assertTrue(new HistoryGenerationRepository(root).pending().isEmpty());
+        assertEquals(HistoryGeneration.LEGACY, new HistoryGenerationRepository(root).active());
+    }
+
     static Fixture fixture(Path root) throws IOException {
         var objects = new WorldObjectRepository(root);
         var section = objects.write(SectionBlob.fromPalette(List.of("minecraft:stone"), new short[4096], Map.of()));
