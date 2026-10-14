@@ -14,6 +14,19 @@ def artifact = suppliedArtifact.isPresent() ? files(file(suppliedArtifact.get())
 def evidence = new PackagedGameTestEvidence()
 def candidateVersion = project.version.toString()
 def runDirectory = layout.buildDirectory.dir("run/packaged/${target.id()}/${game}/${UUID.randomUUID()}")
+def manifest = runDirectory.map { it.file('lumi-evidence.json').asFile }
+def finalizeEvidence = tasks.register('finalizePackagedGameTestEvidence') {
+    doLast {
+        def file = manifest.get()
+        if (file.isFile()) {
+            def record = new groovy.json.JsonSlurper().parse(file)
+            if (record.status == 'running') {
+                record.status = 'failed'
+                file.text = JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n'
+            }
+        }
+    }
+}
 
 configurations {
     packagedTestMods { transitive = false }
@@ -55,6 +68,7 @@ if (target.javaVersion() == 21) {
 }
 
 tasks.register('runPackagedGameTest', lumiServerProductionRunTaskType) {
+    finalizedBy finalizeEvidence
     group = 'verification'
     description = 'Runs the supplied Lumi JAR through a normal Fabric dedicated-server launcher'
     installerVersion = '1.1.1'
@@ -70,11 +84,21 @@ tasks.register('runPackagedGameTest', lumiServerProductionRunTaskType) {
     jvmArgs.add(xmlReport.map { "-Dfabric-api.gametest.report-file=${it.absolutePath}" })
     def filter = System.getProperty('fabric-api.gametest.filter')
     if (filter != null) jvmArgs.add("-Dfabric-api.gametest.filter=${filter}")
-    def manifest = runDirectory.map { it.file('lumi-evidence.json').asFile }
     def record = [:]
     doFirst {
         def candidate = artifact.singleFile
         new MinecraftArtifactVerifier().verify(candidate.toPath(), target, candidateVersion)
+        def directory = runDirectory.get().asFile
+        def warmCache = directory.parentFile.listFiles()?.findAll { previous ->
+            def report = new File(previous, 'lumi-evidence.json')
+            previous != directory && report.isFile() && new groovy.json.JsonSlurper().parse(report).game == game
+        }?.max { previous -> previous.lastModified() }
+        if (warmCache != null) {
+            // Only vanilla bundler caches; Minecraft checks their hashes. Worlds and mods stay isolated.
+            ['libraries', 'versions'].each { name ->
+                copy { from new File(warmCache, name); into new File(directory, name) }
+            }
+        }
         record.putAll([schema: 1, status: 'running', group: target.id(), game: game,
                 scope: 'server-gametest', filter: filter ?: '*',
                 javaVersion: target.javaVersion(),

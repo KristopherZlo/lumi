@@ -26,7 +26,9 @@ public final class LegacyGameTestAnnotationRepair {
                 var entry = entries.nextElement();
                 // A derivative cannot retain its publisher's signature; source reads still verify it.
                 if (entry.getName().matches("META-INF/[^/]+\\.(SF|RSA|DSA|EC)")) continue;
-                output.putNextEntry(new ZipEntry(entry.getName()));
+                var copy = new ZipEntry(entry.getName());
+                copy.setTime(0);
+                output.putNextEntry(copy);
                 try (var input = sourceJar.getInputStream(entry)) {
                     if (entry.getName().equals("META-INF/MANIFEST.MF")) {
                         var manifest = new Manifest(input);
