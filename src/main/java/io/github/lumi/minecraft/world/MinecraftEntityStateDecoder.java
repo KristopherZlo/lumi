@@ -80,6 +80,7 @@ public final class MinecraftEntityStateDecoder {
 
     private EntityChunkBlob normalizePayloads(
             EntityChunkBlob source, Set<UUID> passengerIds) throws IOException {
+        MinecraftWorldDataVersion.requireCurrent(source.dataVersion());
         var normalized = new ArrayList<EntityState>(source.entities().size());
         for (EntityState entity : source.entities()) {
             EntityType<?> type = resolveType(entity.type());
@@ -104,6 +105,7 @@ public final class MinecraftEntityStateDecoder {
     }
 
     DecodedEntityChunk decodeNormalized(EntityChunkBlob source) throws IOException {
+        MinecraftWorldDataVersion.requireCurrent(source.dataVersion());
         var decoded = new ArrayList<DecodedEntity>(source.entities().size());
         for (var entity : source.entities()) {
             EntityType<?> type = resolveType(entity.type());

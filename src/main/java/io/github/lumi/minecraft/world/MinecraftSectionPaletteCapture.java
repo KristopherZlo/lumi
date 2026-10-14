@@ -2,6 +2,7 @@ package io.github.lumi.minecraft.world;
 
 import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.WorldDataVersion;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,6 +16,7 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 /** Copies only used native palette entries into canonical immutable section state. */
 public final class MinecraftSectionPaletteCapture {
     private final Map<BlockState, String> encodedStates = new IdentityHashMap<>();
+    private final WorldDataVersion dataVersion = MinecraftWorldDataVersion.current();
 
     public SectionBlob capture(LevelChunkSection section, Map<Integer, CanonicalNbt> entities) {
         section.acquire();
@@ -25,7 +27,7 @@ public final class MinecraftSectionPaletteCapture {
             short[] indexes = new short[SectionBlob.BLOCK_COUNT];
             if (storage.getBits() == 0) {
                 return SectionBlob.fromPalette(List.of(encode(nativePalette.valueFor(0))),
-                        indexes, entities);
+                        indexes, entities, dataVersion);
             }
             // Global native IDs need not fit in a short; compact only the used IDs.
             var ordinals = new Int2IntOpenHashMap();
@@ -52,7 +54,7 @@ public final class MinecraftSectionPaletteCapture {
             for (int cell = 0; cell < indexes.length; cell++) {
                 indexes[cell] = remap[Short.toUnsignedInt(indexes[cell])];
             }
-            return SectionBlob.fromPalette(palette, indexes, entities);
+            return SectionBlob.fromPalette(palette, indexes, entities, dataVersion);
         } finally {
             section.release();
         }

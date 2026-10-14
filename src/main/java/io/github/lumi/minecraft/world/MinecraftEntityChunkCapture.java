@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.CanonicalNbt;
 import io.github.lumi.domain.model.EntityChunkBlob;
 import io.github.lumi.domain.model.EntityChunkKey;
 import io.github.lumi.domain.model.EntityState;
+import io.github.lumi.domain.model.WorldDataVersion;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +27,7 @@ import net.minecraft.world.level.storage.TagValueOutput;
 /** Copies durable non-player entities into Lumi's canonical chunk payload. */
 public final class MinecraftEntityChunkCapture {
     private final MinecraftEntityNbtCanonicalizer canonicalizer;
+    private final WorldDataVersion dataVersion = MinecraftWorldDataVersion.current();
 
     public MinecraftEntityChunkCapture() {
         this(new MinecraftEntityNbtCanonicalizer());
@@ -54,7 +56,7 @@ public final class MinecraftEntityChunkCapture {
                 captureEntity(level, access).ifPresent(entity -> captured.add(entity.state()));
             }
         }
-        return new EntityChunkBlob(captured);
+        return new EntityChunkBlob(captured, dataVersion);
     }
 
     public Optional<CapturedEntity> captureEntity(
@@ -92,9 +94,13 @@ public final class MinecraftEntityChunkCapture {
         Objects.requireNonNull(key, "key");
         Objects.requireNonNull(stored, "stored");
         if (stored.isEmpty()) {
-            return new EntityChunkBlob(List.of());
+            return new EntityChunkBlob(List.of(), dataVersion);
         }
         CompoundTag root = stored.orElseThrow();
+        int storedVersion = root.getInt("DataVersion").orElseThrow(() ->
+                new IOException("Persisted entity chunk has no DataVersion: " + key));
+        if (storedVersion < 1) throw new IOException("Invalid persisted entity DataVersion: " + key);
+        MinecraftWorldDataVersion.requireCurrent(new WorldDataVersion(storedVersion));
         ChunkPos position = root.read("Position", ChunkPos.CODEC).orElseThrow(() ->
                 new IOException("Persisted entity chunk has no Position: " + key));
         if (!position.equals(new ChunkPos(key.chunkX(), key.chunkZ()))) {
@@ -116,7 +122,7 @@ public final class MinecraftEntityChunkCapture {
             states.add(new EntityState(id, type, canonicalEntityNbt(entity)));
         }
         try {
-            return new EntityChunkBlob(states);
+            return new EntityChunkBlob(states, dataVersion);
         } catch (IllegalArgumentException malformed) {
             throw new IOException("Malformed persisted entity chunk " + key, malformed);
         }

@@ -125,6 +125,7 @@ class MinecraftEntityChunkCaptureTest {
 
     private static CompoundTag storedRoot(EntityChunkKey key, ListTag entities) {
         CompoundTag root = new CompoundTag();
+        net.minecraft.nbt.NbtUtils.addCurrentDataVersion(root);
         root.store("Position", ChunkPos.CODEC, new ChunkPos(key.chunkX(), key.chunkZ()));
         root.put("Entities", entities);
         return root;

@@ -90,6 +90,17 @@ class MinecraftBlockStateDecoderTest {
     }
 
     @Test
+    void refusesOtherDataVersionsBeforeDecodingNativeStates() {
+        var decoder = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK);
+        var source = new SectionBlob(Collections.nCopies(4096, "minecraft:air"), Map.of(),
+                new io.github.lumi.domain.model.WorldDataVersion(4786));
+        assertThrows(IOException.class, () -> decoder.decode(source));
+        var entityDecoder = new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE);
+        var entities = new io.github.lumi.domain.model.EntityChunkBlob(java.util.List.of(), source.dataVersion());
+        assertThrows(IOException.class, () -> entityDecoder.decode(entities));
+    }
+
+    @Test
     void rejectsUnknownBlockEntityTypeDuringPreflight() throws Exception {
         var states = new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));

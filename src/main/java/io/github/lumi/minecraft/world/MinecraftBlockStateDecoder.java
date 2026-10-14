@@ -79,6 +79,7 @@ public final class MinecraftBlockStateDecoder {
     }
 
     List<BlockState> decodePalette(SectionBlob source) throws IOException {
+        MinecraftWorldDataVersion.requireCurrent(source.dataVersion());
         var decoded = new ArrayList<BlockState>(source.palette().palette().size());
         for (String encoded : source.palette().palette()) {
             decoded.add(decodeState(encoded));

@@ -450,7 +450,7 @@ final class StreamingPreparedWorldMutationSession implements WorldStateApply.App
             List<EntityChunkKey> keys) {
         Map<EntityChunkKey, EntityChunkBlob> entities = new LinkedHashMap<>();
         Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
-        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob empty = new EntityChunkBlob(List.of(), MinecraftWorldDataVersion.current());
         DecodedEntityChunk decodedEmpty = new DecodedEntityChunk(List.of());
         for (EntityChunkKey key : keys) {
             entities.put(key, empty);
