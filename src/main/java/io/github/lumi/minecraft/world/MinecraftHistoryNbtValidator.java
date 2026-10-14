@@ -2,12 +2,16 @@ package io.github.lumi.minecraft.world;
 
 import java.io.IOException;
 import java.util.Set;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
+import net.minecraft.world.item.ItemStack;
 
 /** Rejects missing content that vanilla otherwise silently discards while reading history. */
 final class MinecraftHistoryNbtValidator {
@@ -16,6 +20,11 @@ final class MinecraftHistoryNbtValidator {
             "minecraft:charged_projectiles");
     private static final Set<String> ITEMS = Set.of("Item", "item", "item_stack", "SaddleItem", "ArmorItem",
             "DecorItem", "buy", "buyB", "sell", "mainhand", "offhand", "feet", "legs", "chest", "head", "body", "saddle");
+    private final RegistryOps<Tag> itemOps;
+
+    MinecraftHistoryNbtValidator(HolderLookup.Provider registries) {
+        itemOps = RegistryOps.create(NbtOps.INSTANCE, registries);
+    }
 
     void validate(Tag tag) throws IOException {
         if (tag instanceof ListTag list) {
@@ -44,12 +53,18 @@ final class MinecraftHistoryNbtValidator {
         }
     }
 
-    private static void validateItem(Tag tag) throws IOException {
+    private void validateItem(Tag tag) throws IOException {
         if (!(tag instanceof CompoundTag item)) throw new IOException("Invalid history item stack");
         if (item.isEmpty()) return;
         // Container components wrap a stack in a slot/item record.
-        if (!item.contains("id") && item.contains("item")) return;
-        requireType(item.getStringOr("id", ""), BuiltInRegistries.ITEM, "item");
+        if (!item.contains("id") && item.contains("item")) {
+            validateItem(item.get("item"));
+            return;
+        }
+        var result = ItemStack.CODEC.parse(itemOps, item);
+        if (result.error().isPresent()) {
+            throw new IOException("Invalid history item stack: " + result.error().orElseThrow().message());
+        }
     }
 
     private static void requireType(String encoded, Registry<?> registry, String kind) throws IOException {

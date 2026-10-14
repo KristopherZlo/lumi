@@ -17,6 +17,7 @@ import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
@@ -30,11 +31,12 @@ import net.minecraft.world.level.block.Block;
 public final class MinecraftWorldPayloadConverter implements WorldPayloadConverter {
     private final HolderLookup<Block> blocks;
     private final Registry<EntityType<?>> entityTypes;
-    private final MinecraftHistoryNbtValidator nbtValidator = new MinecraftHistoryNbtValidator();
+    private final MinecraftHistoryNbtValidator nbtValidator;
 
-    public MinecraftWorldPayloadConverter(HolderLookup<Block> blocks, Registry<EntityType<?>> entityTypes) {
-        this.blocks = Objects.requireNonNull(blocks, "blocks");
+    public MinecraftWorldPayloadConverter(HolderLookup.Provider registries, Registry<EntityType<?>> entityTypes) {
+        blocks = Objects.requireNonNull(registries, "registries").lookupOrThrow(Registries.BLOCK);
         this.entityTypes = Objects.requireNonNull(entityTypes, "entityTypes");
+        nbtValidator = new MinecraftHistoryNbtValidator(registries);
     }
 
     @Override

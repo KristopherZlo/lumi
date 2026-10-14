@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.Bootstrap;
@@ -28,7 +29,7 @@ class MinecraftWorldPayloadConverterTest {
 
     @Test
     void canonicalizesTheTargetPaletteAndPreservesEntityIdentityWithoutChangingSource() throws Exception {
-        var converter = new MinecraftWorldPayloadConverter(BuiltInRegistries.BLOCK, BuiltInRegistries.ENTITY_TYPE);
+        var converter = converter();
         var source = new SectionBlob(Collections.nCopies(4096, "minecraft:oak_stairs[facing=west]"), Map.of());
         SectionBlob result = converter.convert(source, WorldDataVersion.LEGACY_12111);
         assertEquals("minecraft:oak_stairs[facing=west,half=bottom,shape=straight,waterlogged=false]",
@@ -42,7 +43,7 @@ class MinecraftWorldPayloadConverterTest {
 
     @Test
     void refusesMissingRegistryTypesAndATargetOtherThanTheRunningGame() {
-        var converter = new MinecraftWorldPayloadConverter(BuiltInRegistries.BLOCK, BuiltInRegistries.ENTITY_TYPE);
+        var converter = converter();
         var source = new SectionBlob(Collections.nCopies(4096, "missing:block"), Map.of());
         assertThrows(IOException.class, () -> converter.convert(source, WorldDataVersion.LEGACY_12111));
         var entities = new EntityChunkBlob(List.of(new EntityState(UUID.randomUUID(), "missing:entity",
@@ -53,7 +54,7 @@ class MinecraftWorldPayloadConverterTest {
 
     @Test
     void refusesMissingInventoryItemsAndAttributesButPreservesOpaqueCustomData() throws Exception {
-        var converter = new MinecraftWorldPayloadConverter(BuiltInRegistries.BLOCK, BuiltInRegistries.ENTITY_TYPE);
+        var converter = converter();
         var chest = new CompoundTag();
         chest.putString("id", "minecraft:chest");
         var item = new CompoundTag();
@@ -81,5 +82,39 @@ class MinecraftWorldPayloadConverterTest {
         var safe = new SectionBlob(Collections.nCopies(4096, "minecraft:chest"),
                 Map.of(0, MinecraftNbtCodec.encode(chest)));
         assertEquals(safe.blockEntities(), converter.convert(safe, WorldDataVersion.LEGACY_12111).blockEntities());
+    }
+
+    @Test
+    void rejectsMissingAndMalformedItemComponentsWithoutAcceptingPartialDecodes() throws Exception {
+        var components = new CompoundTag();
+        components.put("missing:component", new CompoundTag());
+        assertThrows(IOException.class, () -> converter().convert(chestWith(components), WorldDataVersion.LEGACY_12111));
+        components.remove("missing:component");
+        components.putString("minecraft:damage", "invalid");
+        assertThrows(IOException.class, () -> converter().convert(chestWith(components), WorldDataVersion.LEGACY_12111));
+        components.remove("minecraft:damage");
+        var custom = new CompoundTag();
+        custom.putString("item", "opaque custom value");
+        components.put("minecraft:custom_data", custom);
+        SectionBlob valid = chestWith(components);
+        assertEquals(valid.blockEntities(), converter().convert(valid, WorldDataVersion.LEGACY_12111).blockEntities());
+    }
+
+    private static SectionBlob chestWith(CompoundTag components) throws IOException {
+        var item = new CompoundTag();
+        item.putString("id", "minecraft:diamond");
+        item.putInt("count", 1);
+        item.put("components", components);
+        var items = new net.minecraft.nbt.ListTag();
+        items.add(item);
+        var chest = new CompoundTag();
+        chest.putString("id", "minecraft:chest");
+        chest.put("Items", items);
+        return new SectionBlob(Collections.nCopies(4096, "minecraft:chest"), Map.of(0, MinecraftNbtCodec.encode(chest)));
+    }
+
+    private static MinecraftWorldPayloadConverter converter() {
+        return new MinecraftWorldPayloadConverter(RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY),
+                BuiltInRegistries.ENTITY_TYPE);
     }
 }

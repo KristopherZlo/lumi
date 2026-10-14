@@ -142,7 +142,6 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 import net.minecraft.ChatFormatting;
 import net.minecraft.SharedConstants;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -310,7 +309,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         new WorldPayloadConversionService(new WorldDataVersion(
                         SharedConstants.getCurrentVersion().dataVersion().version()),
                         new MinecraftWorldPayloadConverter(
-                                level.registryAccess().lookupOrThrow(Registries.BLOCK), BuiltInRegistries.ENTITY_TYPE))),
+                                level.registryAccess(), BuiltInRegistries.ENTITY_TYPE))),
                 level.getServer().getWorldPath(LevelResource.ROOT), background, this::activeRef);
         comparisons = new DimensionComparisonQueries(
                 repository, background, zones, this::activeWorkspaceId);
