@@ -61,7 +61,8 @@ public final class CommitHistoryConversionService {
                 if (parents.size() != commit.parents().size()) continue;
                 CommitId result = target.write(new Commit(trees.dimension(commit.tree()), parents,
                         commit.author(), commit.message(), commit.timestamp(), commit.workspaceId(),
-                        commit.zoneId(), commit.kind(), commit.statistics(), commit.playerSpawns()));
+                        commit.zoneId(), commit.kind(), commit.statistics(), commit.playerSpawns(),
+                        java.util.Optional.of(commit.conversionOrigin().orElse(id))));
                 copySidecars(id, result);
                 mapping.record(Kind.COMMIT, id.value(), result.value());
                 pending.pop();

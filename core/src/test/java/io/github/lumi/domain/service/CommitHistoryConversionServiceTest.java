@@ -21,6 +21,51 @@ class CommitHistoryConversionServiceTest {
     @TempDir Path directory;
 
     @Test
+    void coalescingWorldStatesPreservesDistinctVersionsAndBothMergeParents() throws Exception {
+        Path old = directory.resolve("old"), converted = directory.resolve("new");
+        var objects = new WorldObjectRepository(old);
+        var editor = new MerkleTreeEditor(objects);
+        var key = new SectionKey(0, 0, 0);
+        var leftTree = editor.update(Optional.empty(), Map.of(key, objects.write(
+                SectionBlob.fromPalette(List.of("minecraft:stone"), new short[4096], Map.of()))));
+        var rightTree = editor.update(Optional.empty(), Map.of(key, objects.write(
+                SectionBlob.fromPalette(List.of("minecraft:dirt"), new short[4096], Map.of()))));
+        var source = new CommitRepository(old);
+        var left = source.write(commit(leftTree, List.of(), "Same metadata"));
+        var right = source.write(commit(rightTree, List.of(), "Same metadata"));
+        var merge = source.write(commit(rightTree, List.of(left, right), "Merge"));
+        var adapter = new WorldPayloadConverter() {
+            public SectionBlob convert(SectionBlob value, WorldDataVersion version) {
+                return SectionBlob.fromPalette(List.of("minecraft:air"), new short[4096], Map.of(), version);
+            }
+            public EntityChunkBlob convert(EntityChunkBlob value, WorldDataVersion version) {
+                return new EntityChunkBlob(value.entities(), version);
+            }
+        };
+        var map = new HistoryConversionMap(converted);
+        var payloads = new WorldPayloadConversionService(new WorldDataVersion(4786), adapter);
+        var trees = new WorldTreeConversionService(objects, new WorldObjectRepository(converted), map, payloads, ignored -> { });
+        var service = new CommitHistoryConversionService(old, converted, map, trees, ignored -> { });
+        var migrated = new CommitRepository(converted).read(service.convert(merge));
+        var target = new CommitRepository(converted);
+        var leftResult = target.read(migrated.parents().get(0));
+        var rightResult = target.read(migrated.parents().get(1));
+        assertEquals(leftResult.tree(), rightResult.tree());
+        org.junit.jupiter.api.Assertions.assertNotEquals(migrated.parents().get(0), migrated.parents().get(1));
+        assertEquals(Optional.of(left), leftResult.conversionOrigin());
+        assertEquals(Optional.of(right), rightResult.conversionOrigin());
+        new HistoryConversionVerifier(old, converted, map, payloads).verify(ignored -> { });
+        Path next = directory.resolve("next");
+        var nextMap = new HistoryConversionMap(next);
+        var nextPayloads = new WorldPayloadConversionService(new WorldDataVersion(4903), adapter);
+        var nextTrees = new WorldTreeConversionService(new WorldObjectRepository(converted), new WorldObjectRepository(next),
+                nextMap, nextPayloads, ignored -> { });
+        var nextService = new CommitHistoryConversionService(converted, next, nextMap, nextTrees, ignored -> { });
+        var nextCommit = new CommitRepository(next).read(nextService.convert(migrated.parents().get(0)));
+        assertEquals(Optional.of(left), nextCommit.conversionOrigin());
+    }
+
+    @Test
     void interruptedMergeConversionResumesWithSharedParentsAndAllSidecars() throws Exception {
         Path old = directory.resolve("old"), converted = directory.resolve("new");
         var objects = new WorldObjectRepository(old);
@@ -46,7 +91,10 @@ class CommitHistoryConversionServiceTest {
         CommitId result = restarted.convert(merge);
         var target = new CommitRepository(converted);
         Commit migrated = target.read(result);
-        assertEquals(commit(migrated.tree(), List.of(restarted.convert(left), restarted.convert(right)), "Merge"), migrated);
+        var expected = commit(migrated.tree(), List.of(restarted.convert(left), restarted.convert(right)), "Merge");
+        assertEquals(new Commit(expected.tree(), expected.parents(), expected.author(), expected.message(), expected.timestamp(),
+                expected.workspaceId(), expected.zoneId(), expected.kind(), expected.statistics(), expected.playerSpawns(),
+                Optional.of(merge)), migrated);
         assertEquals(List.of(restarted.convert(initial)), target.read(migrated.parents().getFirst()).parents());
         assertEquals(name, new VersionDisplayNameRepository(converted).read(result).orElseThrow());
         assertEquals(tags, new VersionTagRepository(converted).read(result));

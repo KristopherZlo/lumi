@@ -90,7 +90,8 @@ public final class HistoryConversionVerifier {
                 for (var parent : commit.parents()) parents.add(new CommitId(mapped(Kind.COMMIT, parent.value())));
                 yield new CommitCodec().encode(new Commit(mapped(Kind.DIMENSION, commit.tree()), parents,
                         commit.author(), commit.message(), commit.timestamp(), commit.workspaceId(), commit.zoneId(),
-                        commit.kind(), commit.statistics(), commit.playerSpawns()));
+                        commit.kind(), commit.statistics(), commit.playerSpawns(),
+                        Optional.of(commit.conversionOrigin().orElse(new CommitId(id)))));
             }
         };
     }

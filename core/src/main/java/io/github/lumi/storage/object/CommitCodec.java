@@ -19,13 +19,17 @@ import java.util.Optional;
 
 public final class CommitCodec {
     private static final int MAGIC = 0x4C554D32;
+    private static final int CONVERTED_MAGIC = 0x4C554D33; // LUM3
     private static final int MAX_TEXT_BYTES = 1024 * 1024;
     private static final int MAX_PLAYER_SPAWNS = 10_000;
 
     public byte[] encode(Commit commit) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (DataOutputStream output = new DataOutputStream(bytes)) {
-            output.writeInt(MAGIC);
+            output.writeInt(commit.conversionOrigin().isPresent() ? CONVERTED_MAGIC : MAGIC);
+            if (commit.conversionOrigin().isPresent()) {
+                CanonicalBytes.writeId(output, commit.conversionOrigin().orElseThrow().value());
+            }
             CanonicalBytes.writeId(output, commit.tree());
             output.writeByte(commit.parents().size());
             for (CommitId parent : commit.parents()) {
@@ -64,9 +68,12 @@ public final class CommitCodec {
 
     public Commit decode(byte[] payload) throws IOException {
         try (DataInputStream input = new DataInputStream(new ByteArrayInputStream(payload))) {
-            if (input.readInt() != MAGIC) {
+            int magic = input.readInt();
+            if (magic != MAGIC && magic != CONVERTED_MAGIC) {
                 throw new IOException("Not a Lumi V2 commit");
             }
+            Optional<CommitId> conversionOrigin = magic == CONVERTED_MAGIC
+                    ? Optional.of(new CommitId(CanonicalBytes.readId(input))) : Optional.empty();
             var tree = CanonicalBytes.readId(input);
             int parentCount = input.readUnsignedByte();
             if (parentCount > 2) {
@@ -92,7 +99,7 @@ public final class CommitCodec {
             var statistics = new CommitStatistics(
                     input.readInt(), input.readInt(), input.readLong(), input.readInt());
             Map<java.util.UUID, PlayerSpawn> playerSpawns = new HashMap<>();
-            if (input.available() != 0) {
+            if (input.available() != 0 || magic == CONVERTED_MAGIC) {
                 int count = input.readInt();
                 if (count < 0 || count > MAX_PLAYER_SPAWNS) {
                     throw new IOException("Invalid player spawn count");
@@ -111,7 +118,7 @@ public final class CommitCodec {
                 throw new IOException("Trailing bytes in commit");
             }
             return new Commit(tree, parents, author, message, timestamp, workspace, zone,
-                    kind, statistics, playerSpawns);
+                    kind, statistics, playerSpawns, conversionOrigin);
         } catch (IllegalArgumentException invalid) {
             throw new IOException("Invalid commit payload", invalid);
         }

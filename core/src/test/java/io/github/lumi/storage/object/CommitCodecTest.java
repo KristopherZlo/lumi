@@ -41,6 +41,23 @@ class CommitCodecTest {
     }
 
     @Test
+    void convertedIdentityRoundTripsWithoutChangingLegacyCommitBytes() throws IOException {
+        var legacy = new Commit(ObjectId.hash(new byte[] { 1 }), List.of(),
+                new CommitAuthor(new UUID(0, 1), "Builder"), "Original", Instant.EPOCH,
+                new UUID(0, 2), Optional.empty(), CommitKind.MANUAL, new CommitStatistics(0, 0, 0, 0));
+        byte[] original = codec.encode(legacy);
+        assertEquals("92a6cff32a813413eb26df1b46e019f7a4a2015bea52000e525486db1a15c2cd", ObjectId.hash(original).hex());
+        var converted = new Commit(legacy.tree(), legacy.parents(), legacy.author(), legacy.message(), legacy.timestamp(),
+                legacy.workspaceId(), legacy.zoneId(), legacy.kind(), legacy.statistics(), legacy.playerSpawns(),
+                Optional.of(CommitId.hash(original)));
+        byte[] payload = codec.encode(converted);
+        assertEquals("LUM3", new String(payload, 0, 4, StandardCharsets.US_ASCII));
+        assertEquals(converted, codec.decode(payload));
+        assertThrows(IOException.class, () -> codec.decode(Arrays.copyOf(payload, 12)));
+        assertThrows(IOException.class, () -> codec.decode(Arrays.copyOf(payload, payload.length - Integer.BYTES)));
+    }
+
+    @Test
     void readsCommitPayloadWrittenBeforePlayerSpawnExtension() throws IOException {
         Commit modern = new Commit(
                 ObjectId.hash("tree".getBytes(StandardCharsets.UTF_8)), List.of(),

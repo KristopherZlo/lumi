@@ -18,7 +18,8 @@ public record Commit(
         Optional<UUID> zoneId,
         CommitKind kind,
         CommitStatistics statistics,
-        Map<UUID, PlayerSpawn> playerSpawns) {
+        Map<UUID, PlayerSpawn> playerSpawns,
+        Optional<CommitId> conversionOrigin) {
     public Commit {
         Objects.requireNonNull(tree, "tree");
         parents = List.copyOf(Objects.requireNonNull(parents, "parents"));
@@ -30,9 +31,18 @@ public record Commit(
         Objects.requireNonNull(kind, "kind");
         Objects.requireNonNull(statistics, "statistics");
         playerSpawns = Map.copyOf(Objects.requireNonNull(playerSpawns, "playerSpawns"));
+        conversionOrigin = Objects.requireNonNull(conversionOrigin, "conversionOrigin");
         if (parents.size() > 2 || new HashSet<>(parents).size() != parents.size()) {
             throw new IllegalArgumentException("Commit must have zero, one or two distinct parents");
         }
+    }
+
+    public Commit(
+            ObjectId tree, List<CommitId> parents, CommitAuthor author, String message,
+            Instant timestamp, UUID workspaceId, Optional<UUID> zoneId, CommitKind kind,
+            CommitStatistics statistics, Map<UUID, PlayerSpawn> playerSpawns) {
+        this(tree, parents, author, message, timestamp, workspaceId, zoneId, kind,
+                statistics, playerSpawns, Optional.empty());
     }
 
     public Commit(
