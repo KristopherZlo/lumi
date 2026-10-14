@@ -50,4 +50,36 @@ class MinecraftWorldPayloadConverterTest {
         assertThrows(IOException.class, () -> converter.convert(entities, WorldDataVersion.LEGACY_12111));
         assertThrows(IOException.class, () -> converter.convert(source, new WorldDataVersion(4786)));
     }
+
+    @Test
+    void refusesMissingInventoryItemsAndAttributesButPreservesOpaqueCustomData() throws Exception {
+        var converter = new MinecraftWorldPayloadConverter(BuiltInRegistries.BLOCK, BuiltInRegistries.ENTITY_TYPE);
+        var chest = new CompoundTag();
+        chest.putString("id", "minecraft:chest");
+        var item = new CompoundTag();
+        item.putString("id", "missing:item");
+        item.putInt("count", 1);
+        var inventory = new net.minecraft.nbt.ListTag();
+        inventory.add(item);
+        chest.put("Items", inventory);
+        var section = new SectionBlob(Collections.nCopies(4096, "minecraft:chest"),
+                Map.of(0, MinecraftNbtCodec.encode(chest)));
+        assertThrows(IOException.class, () -> converter.convert(section, WorldDataVersion.LEGACY_12111));
+        var attribute = new CompoundTag();
+        attribute.putString("id", "missing:attribute");
+        var attributes = new net.minecraft.nbt.ListTag();
+        attributes.add(attribute);
+        var payload = new CompoundTag();
+        payload.put("attributes", attributes);
+        var entities = new EntityChunkBlob(List.of(new EntityState(UUID.randomUUID(), "minecraft:armor_stand",
+                MinecraftNbtCodec.encode(payload))));
+        assertThrows(IOException.class, () -> converter.convert(entities, WorldDataVersion.LEGACY_12111));
+        var opaque = new CompoundTag();
+        opaque.put("Items", inventory);
+        chest.remove("Items");
+        chest.put("minecraft:custom_data", opaque);
+        var safe = new SectionBlob(Collections.nCopies(4096, "minecraft:chest"),
+                Map.of(0, MinecraftNbtCodec.encode(chest)));
+        assertEquals(safe.blockEntities(), converter.convert(safe, WorldDataVersion.LEGACY_12111).blockEntities());
+    }
 }

@@ -30,6 +30,7 @@ import net.minecraft.world.level.block.Block;
 public final class MinecraftWorldPayloadConverter implements WorldPayloadConverter {
     private final HolderLookup<Block> blocks;
     private final Registry<EntityType<?>> entityTypes;
+    private final MinecraftHistoryNbtValidator nbtValidator = new MinecraftHistoryNbtValidator();
 
     public MinecraftWorldPayloadConverter(HolderLookup<Block> blocks, Registry<EntityType<?>> entityTypes) {
         this.blocks = Objects.requireNonNull(blocks, "blocks");
@@ -52,6 +53,7 @@ public final class MinecraftWorldPayloadConverter implements WorldPayloadConvert
         for (var entry : source.blockEntities().entrySet()) {
             CompoundTag fixed = fix(References.BLOCK_ENTITY, MinecraftNbtCodec.decode(entry.getValue()),
                     source.dataVersion(), target);
+            nbtValidator.validate(fixed);
             blockEntities.put(entry.getKey(), MinecraftNbtCodec.encode(fixed));
         }
         SectionBlob result = new SectionBlob(states, blockEntities, target);
@@ -69,6 +71,7 @@ public final class MinecraftWorldPayloadConverter implements WorldPayloadConvert
             payload.putString("id", entity.type());
             payload.putIntArray("UUID", UUIDUtil.uuidToIntArray(entity.id()));
             CompoundTag fixed = fix(References.ENTITY_TREE, payload, source.dataVersion(), target);
+            nbtValidator.validate(fixed);
             validateEntityTree(fixed);
             if (!entity.id().equals(fixed.read("UUID", UUIDUtil.CODEC).orElse(null))) {
                 throw new IOException("Conversion changed or removed entity UUID: " + entity.id());
