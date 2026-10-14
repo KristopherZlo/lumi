@@ -2,7 +2,7 @@
   "required": true,
   "package": "io.github.lumi.mixin",
   "plugin": "io.github.lumi.mixin.LumiMixinPlugin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_${java_version}",
   "mixins": [
     "AxiomSetBlockMixin",
     "AxiomSetBufferMixin",

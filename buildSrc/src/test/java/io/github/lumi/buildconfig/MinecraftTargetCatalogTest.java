@@ -38,6 +38,14 @@ class MinecraftTargetCatalogTest {
     }
 
     @Test
+    void rejectsOpenVersionRangesAndDuplicateReleases() {
+        assertThrows(IllegalArgumentException.class,
+                () -> target("group", List.of("26.1", ">=26.1")));
+        assertThrows(IllegalArgumentException.class,
+                () -> target("group", List.of("26.1", "26.1")));
+    }
+
+    @Test
     void rejectsAmbiguousOwnershipAndDuplicateTargets() {
         var first = target("first", List.of("26.1"));
         var overlap = target("second", List.of("26.1", "26.1.1"));

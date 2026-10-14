@@ -45,6 +45,7 @@ try {
         status = 'unverified'; completed = @(); results = [ordered]@{}
         resumedFrom = $ResumeFrom
         buildProperties = @((Get-Content -LiteralPath (Join-Path $taskRepo 'gradle.properties')) | ForEach-Object { [string]$_ })
+        minecraftTarget = (Get-Content -LiteralPath (Join-Path $taskRepo 'build/multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json).target
     }
     $taskManifestPath = Join-Path $taskRun 'manifest.json'
     $taskManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8

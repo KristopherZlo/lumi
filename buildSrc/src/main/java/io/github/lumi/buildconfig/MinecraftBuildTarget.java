@@ -22,7 +22,8 @@ public record MinecraftBuildTarget(
         }
         minecraftVersions = List.copyOf(minecraftVersions);
         if (minecraftVersions.isEmpty() || minecraftVersions.size() > 32
-                || minecraftVersions.stream().anyMatch(String::isBlank)
+                || minecraftVersions.stream().anyMatch(version ->
+                        !version.matches("\\d+\\.\\d+(?:\\.\\d+)?"))
                 || new HashSet<>(minecraftVersions).size() != minecraftVersions.size()
                 || !minecraftVersions.contains(minecraftVersion)) {
             throw new IllegalArgumentException("Invalid Minecraft release list for " + id);

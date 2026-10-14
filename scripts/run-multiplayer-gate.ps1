@@ -26,6 +26,7 @@ try {
         status = 'unverified'; server = 'dedicated-in-owner-jvm'; clients = 2
         dirty = [bool](& git status --porcelain)
         buildProperties = @((Get-Content -LiteralPath (Join-Path $taskRepo 'gradle.properties')) | ForEach-Object { [string]$_ })
+        minecraftTarget = (Get-Content -LiteralPath (Join-Path $taskRepo 'build/multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json).target
     }
     $taskManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskRun 'manifest.json') -Encoding UTF8
     $taskProcesses = @()

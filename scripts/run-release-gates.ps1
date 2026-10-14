@@ -39,6 +39,7 @@ try {
         schema = 1; gitSha = $taskSha; startedUtc = [DateTime]::UtcNow.ToString('o')
         status = 'incomplete'; gates = $taskResults
         buildProperties = @((Get-Content -LiteralPath 'gradle.properties') | ForEach-Object { [string]$_ })
+        minecraftTargets = Get-Content -LiteralPath 'gradle/minecraft-targets.json' -Raw | ConvertFrom-Json
         os = (Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber)
         cpu = @(Get-CimInstance Win32_Processor | Select-Object Name, NumberOfLogicalProcessors)
         gpu = @(Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion)
