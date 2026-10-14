@@ -11,6 +11,9 @@ def minecraftTargetsFile = file('gradle/minecraft-targets.json')
 def minecraftTargets = new MinecraftTargetCatalogReader().read(minecraftTargetsFile.toPath())
 def minecraftTarget = minecraftTargets.select(
         providers.gradleProperty('lumiTarget').getOrElse(minecraftTargets.defaultTarget().id()))
+ext.lumiMinecraftTarget = minecraftTarget
+ext.lumiRemapJarTaskType = net.fabricmc.loom.task.RemapJarTask
+ext.lumiServerProductionRunTaskType = net.fabricmc.loom.task.prod.ServerProductionRunTask
 def obsoleteTargetProperties = ['minecraft_version', 'loader_version', 'fabric_api_version',
         'worldedit_version_id', 'axiom_version_id']
 obsoleteTargetProperties.each { name ->
@@ -348,3 +351,5 @@ java {
 tasks.named('sourcesJar', Jar) {
     from(project(':core').sourceSets.main.allSource)
 }
+
+apply from: 'gradle/packaged-verification.gradle'

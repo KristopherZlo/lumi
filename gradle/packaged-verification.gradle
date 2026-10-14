@@ -1,0 +1,98 @@
+import groovy.json.JsonOutput
+import io.github.lumi.buildconfig.MinecraftArtifactVerifier
+import io.github.lumi.buildconfig.PackagedGameTestEvidence
+import io.github.lumi.buildconfig.LegacyGameTestAnnotationRepair
+
+def target = lumiMinecraftTarget
+def game = providers.gradleProperty('lumiGameVersion').getOrElse(target.minecraftVersion())
+if (!target.minecraftVersions().contains(game)) {
+    throw new GradleException("${game} is outside target ${target.id()}")
+}
+def suppliedArtifact = providers.gradleProperty('lumiArtifact')
+def binary = tasks.named(target.javaVersion() == 21 ? 'remapJar' : 'jar')
+def artifact = suppliedArtifact.isPresent() ? files(file(suppliedArtifact.get())) : files(binary)
+def evidence = new PackagedGameTestEvidence()
+def candidateVersion = project.version.toString()
+def runDirectory = layout.buildDirectory.dir("run/packaged/${target.id()}/${game}/${UUID.randomUUID()}")
+
+configurations {
+    packagedTestMods { transitive = false }
+    packagedGameTestApi { transitive = false }
+}
+dependencies {
+    packagedTestMods "net.fabricmc.fabric-api:fabric-api:${target.fabricApiVersion()}"
+    packagedGameTestApi fabricApi.module('fabric-gametest-api-v1', target.fabricApiVersion())
+    packagedTestMods "maven.modrinth:1u6JkXh5:${target.worldeditVersionId()}"
+    packagedTestMods "maven.modrinth:N6n5dqoA:${target.axiomVersionId()}"
+    target.worldeditCuiCoordinate().ifPresent { coordinate -> packagedTestMods coordinate }
+}
+
+def testApi = configurations.packagedGameTestApi
+if (target.javaVersion() == 21) {
+    def repairedApi = layout.buildDirectory.file('packaged-test-api/fabric-gametest-api-v1.jar')
+    def repairApi = tasks.register('repairLegacyPackagedGameTestApi') {
+        inputs.files(configurations.packagedGameTestApi)
+        outputs.file(repairedApi)
+        doLast {
+            new LegacyGameTestAnnotationRepair().repair(
+                    configurations.packagedGameTestApi.singleFile.toPath(), repairedApi.get().asFile.toPath())
+        }
+    }
+    testApi = files(repairedApi).builtBy(repairApi)
+}
+
+def testJar = tasks.register('packagedGameTestJar', Jar) {
+    from sourceSets.gametest.output
+    archiveClassifier = target.javaVersion() == 21 ? 'gametest-dev' : 'gametest'
+}
+def productionTestJar = testJar
+if (target.javaVersion() == 21) {
+    productionTestJar = tasks.register('remapPackagedGameTestJar', lumiRemapJarTaskType) {
+        inputFile = testJar.flatMap { it.archiveFile }
+        archiveClassifier = 'gametest'
+        addNestedDependencies = false
+    }
+}
+
+tasks.register('runPackagedGameTest', lumiServerProductionRunTaskType) {
+    group = 'verification'
+    description = 'Runs the supplied Lumi JAR through a normal Fabric dedicated-server launcher'
+    installerVersion = '1.1.1'
+    loaderVersion = target.loaderVersion()
+    minecraftVersion = game
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(target.javaVersion())
+    }
+    runDir = runDirectory
+    mods.setFrom(artifact, configurations.packagedTestMods, testApi, productionTestJar)
+    jvmArgs.add('-Dfabric-api.gametest')
+    def xmlReport = runDirectory.map { it.file('gametest-results.xml').asFile }
+    jvmArgs.add(xmlReport.map { "-Dfabric-api.gametest.report-file=${it.absolutePath}" })
+    def filter = System.getProperty('fabric-api.gametest.filter')
+    if (filter != null) jvmArgs.add("-Dfabric-api.gametest.filter=${filter}")
+    def manifest = runDirectory.map { it.file('lumi-evidence.json').asFile }
+    def record = [:]
+    doFirst {
+        def candidate = artifact.singleFile
+        new MinecraftArtifactVerifier().verify(candidate.toPath(), target, candidateVersion)
+        record.putAll([schema: 1, status: 'running', group: target.id(), game: game,
+                scope: 'server-gametest', filter: filter ?: '*',
+                javaVersion: target.javaVersion(),
+                testApi: [originalSha256: evidence.hash(configurations.packagedGameTestApi.singleFile.toPath()),
+                        enumDefaultRepair: target.javaVersion() == 21],
+                artifact: [path: candidate.absolutePath, sha256: evidence.hash(candidate.toPath())],
+                mods: mods.files.collect { mod ->
+                    if (!mod.isFile() || !mod.name.endsWith('.jar')) throw new GradleException("Non-JAR production mod: ${mod}")
+                    [name: mod.name, sha256: evidence.hash(mod.toPath())]
+                }])
+        def output = manifest.get()
+        output.parentFile.mkdirs()
+        output.text = JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n'
+    }
+    doLast {
+        record.tests = evidence.verify(xmlReport.get().toPath(), artifact.singleFile.toPath(), record.artifact.sha256)
+        record.status = 'passed'
+        manifest.get().text = JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n'
+        logger.lifecycle("Packaged ${game}: ${record.tests} passed; evidence: ${manifest.get()}")
+    }
+}
