@@ -103,6 +103,30 @@ class OriginStoreTest {
     }
 
     @Test
+    void legacyConversionUsesBoundedBatchesInsteadOfRewritingARegionForEveryEntry() throws IOException {
+        var expected = new HashMap<HistoryKey, ObjectId>();
+        for (int index = 0; index < 1025; index++) {
+            var key = new SectionKey(index % 32, index / 1024, index / 32 % 32);
+            ObjectId object = id("legacy-" + index);
+            Path file = repositoryRoot.resolve("origins/sections/" + key.chunkX() + "/"
+                    + key.chunkZ() + "/" + key.sectionY() + ".origin");
+            Files.createDirectories(file.getParent());
+            Files.write(file, legacyPayload(key, object));
+            expected.put(key, object);
+        }
+        Path target = repositoryRoot.resolve("converted");
+        int[] batches = {0};
+        new OriginStore(repositoryRoot).visitBatches(batch -> {
+            assertTrue(batch.size() <= 1024);
+            assertThrows(UnsupportedOperationException.class, batch::clear);
+            new OriginStore(target).registerAll(batch);
+            batches[0]++;
+        });
+        assertEquals(2, batches[0]);
+        assertEquals(expected, new OriginStore(target).entries());
+    }
+
+    @Test
     void cachedReaderSeesOriginsAppendedByAnotherRepositoryInstance()
             throws IOException {
         OriginStore reader = new OriginStore(repositoryRoot);

@@ -29,6 +29,7 @@ public final class OriginStore {
     private static final int SHARD_MAGIC = 0x4C4F5332;
     private static final int REGION_SIZE = 32;
     private static final int MAX_SHARD_ENTRIES = 100_000;
+    private static final int MAX_LEGACY_BATCH = 1024;
     private static final long MAX_SHARD_BYTES = 4L * Integer.BYTES
             + MAX_SHARD_ENTRIES * (1L + 3L * Integer.BYTES + 32L);
     private static final Comparator<HistoryKey> KEY_ORDER = Comparator
@@ -66,16 +67,8 @@ public final class OriginStore {
 
     private int persistRegistrations(
             Map<? extends HistoryKey, ObjectId> registrations) throws IOException {
-        Objects.requireNonNull(registrations, "registrations");
-        Map<RegionCoordinate, Map<HistoryKey, ObjectId>> byRegion = new TreeMap<>();
-        for (var registration : registrations.entrySet()) {
-            HistoryKey key = Objects.requireNonNull(registration.getKey(), "origin key");
-            ObjectId id = Objects.requireNonNull(registration.getValue(), "origin id");
-            byRegion.computeIfAbsent(region(key), ignored -> new HashMap<>()).put(key, id);
-        }
-
         int added = 0;
-        for (var region : byRegion.entrySet()) {
+        for (var region : groupByRegion(registrations).entrySet()) {
             Map<HistoryKey, ObjectId> combined = new HashMap<>(readShard(region.getKey()));
             boolean changed = false;
             for (var registration : region.getValue().entrySet()) {
@@ -106,6 +99,18 @@ public final class OriginStore {
             }
         }
         return added;
+    }
+
+    private Map<RegionCoordinate, Map<HistoryKey, ObjectId>> groupByRegion(
+            Map<? extends HistoryKey, ObjectId> entries) {
+        Objects.requireNonNull(entries, "entries");
+        Map<RegionCoordinate, Map<HistoryKey, ObjectId>> groups = new TreeMap<>();
+        for (var entry : entries.entrySet()) {
+            HistoryKey key = Objects.requireNonNull(entry.getKey(), "origin key");
+            ObjectId id = Objects.requireNonNull(entry.getValue(), "origin id");
+            groups.computeIfAbsent(region(key), ignored -> new HashMap<>()).put(key, id);
+        }
+        return groups;
     }
 
     public synchronized Optional<ObjectId> read(HistoryKey key) throws IOException {
@@ -151,10 +156,11 @@ public final class OriginStore {
         return Map.copyOf(origins);
     }
 
-    /** Visits one legacy entry or region shard at a time without filling the shard cache. */
+    /** Visits bounded legacy batches grouped by region, or one shard, without filling the cache. */
     public synchronized void visitBatches(BatchVisitor visitor) throws IOException {
         Objects.requireNonNull(visitor, "visitor");
         if (!Files.exists(originsDirectory)) return;
+        Map<HistoryKey, ObjectId> legacyBatch = new HashMap<>();
         try (var files = Files.walk(originsDirectory)) {
             var iterator = files.iterator();
             while (iterator.hasNext()) {
@@ -164,8 +170,8 @@ public final class OriginStore {
                 String name = file.getFileName().toString();
                 if (name.endsWith(".origin")) {
                     HistoryKey key = keyFromPath(file);
-                    visitor.visit(Map.of(key, decode(key,
-                            RepositoryFileReader.read(file, (int) SECTION_ENTRY_BYTES))));
+                    legacyBatch.put(key, decode(key, RepositoryFileReader.read(file, (int) SECTION_ENTRY_BYTES)));
+                    if (legacyBatch.size() == MAX_LEGACY_BATCH) visitLegacyBatch(legacyBatch, visitor);
                 } else if (name.endsWith(".bin")) {
                     RegionCoordinate region = regionFromPath(file);
                     requireShardSize(file);
@@ -179,6 +185,12 @@ public final class OriginStore {
                 }
             }
         }
+        visitLegacyBatch(legacyBatch, visitor);
+    }
+
+    private void visitLegacyBatch(Map<HistoryKey, ObjectId> entries, BatchVisitor visitor) throws IOException {
+        for (var batch : groupByRegion(entries).values()) visitor.visit(Map.copyOf(batch));
+        entries.clear();
     }
 
     @FunctionalInterface
