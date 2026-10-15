@@ -26,7 +26,7 @@ final class MinecraftHistoryStartup {
     static void run(MinecraftServer server) throws IOException {
         var current = new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version());
         // Enable another source/target pair only after its stopped-world native upgrade fixture passes.
-        Set<WorldDataVersion> permittedSources = current.value() == 4786
+        Set<WorldDataVersion> permittedSources = (current.value() == 4786 || current.value() == 4903)
                 ? Set.of(WorldDataVersion.LEGACY_12111) : Set.of();
         var upgrade = new WorldHistoryUpgradeService(
                 new DimensionRepositoryLayout(server.getWorldPath(LevelResource.ROOT)), current,
