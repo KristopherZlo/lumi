@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory)][string]$CandidateDirectory,
     [Parameter(Mandatory)][string]$SourceDirectory,
     [Parameter(Mandatory)][string]$OutputDirectory,
-    [string[]]$TargetGame = @()
+    [string[]]$TargetGame = @(),
+    [string[]]$SourceGame = @()
 )
 $ErrorActionPreference = 'Stop'
 if (-not $RunMinecraft) { throw 'Pass -RunMinecraft to open the stopped-world upgrade and vanilla-reopen clients.' }
@@ -20,6 +21,15 @@ $taskGames = @($taskCatalog.targets.minecraftVersions | Sort-Object { [version]$
 foreach ($taskGame in $TargetGame) {
     if ($taskGame -cnotin $taskGames -or $taskGame -ceq $taskGames[0]) { throw "Unknown upgrade target: $taskGame" }
 }
+foreach ($taskGame in $SourceGame) {
+    if ($taskGame -cnotin $taskGames -or $taskGame -ceq $taskGames[-1]) { throw "Unknown upgrade source: $taskGame" }
+}
+$taskSelectedSources = if ($SourceGame.Count) { $SourceGame } else { $taskGames }
+$taskSelectedTargets = if ($TargetGame.Count) { $TargetGame } else { $taskGames }
+if (-not @($taskSelectedSources | Where-Object {
+    $taskSourceVersion = [version]$_
+    @($taskSelectedTargets | Where-Object { [version]$_ -gt $taskSourceVersion }).Count -gt 0
+}).Count) { throw 'No forward upgrade route selected.' }
 $taskProfiles = @{}
 foreach ($taskTarget in $taskCatalog.targets) {
     $taskGroup = @($taskCandidate.groups | Where-Object { $_.target.id -ceq $taskTarget.id })
@@ -46,6 +56,7 @@ try {
         $taskHash = (Get-FileHash -LiteralPath $taskProfile.Artifact -Algorithm SHA256).Hash.ToLowerInvariant()
         for ($taskSourceIndex = 0; $taskSourceIndex -lt $taskTargetIndex; $taskSourceIndex++) {
             $taskSourceGame = $taskGames[$taskSourceIndex]
+            if ($SourceGame.Count -gt 0 -and $taskSourceGame -cnotin $SourceGame) { continue }
             $taskFixture = Join-Path $taskOutput ($taskSourceGame + '-to-' + $taskGame)
             New-Item -ItemType Directory -Path $taskFixture | Out-Null
             foreach ($taskItem in @('source-a', 'source-b', 'fixture.properties')) {

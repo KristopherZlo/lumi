@@ -21,8 +21,13 @@ $taskArguments = @{ CandidateDirectory = $taskDirectory; SourceDirectory = $task
     OutputDirectory = Join-Path $taskDirectory 'matrix' }
 Assert-Rejected { & $taskScript @taskArguments } 'Pass -RunMinecraft'
 Assert-Rejected { & $taskScript -RunMinecraft @taskArguments -TargetGame '99.0' } 'Unknown upgrade target'
+Assert-Rejected { & $taskScript -RunMinecraft @taskArguments -SourceGame '99.0' } 'Unknown upgrade source'
+Assert-Rejected { & $taskScript -RunMinecraft @taskArguments -SourceGame '26.2' -TargetGame '26.1' } 'No forward upgrade route'
 Assert-Rejected { & $taskScript -RunMinecraft @taskArguments } 'Candidate changed'
 if (Test-Path -LiteralPath $taskArguments.OutputDirectory) { throw 'Invalid inputs created a matrix output.' }
 New-Item -ItemType Directory -Path $taskArguments.OutputDirectory | Out-Null
 Assert-Rejected { & $taskScript -RunMinecraft @taskArguments } 'Upgrade output must be unused'
+$taskChainScript = Join-Path $PSScriptRoot '../run-upgrade-chain.ps1'
+Assert-Rejected { & $taskChainScript @taskArguments } 'Pass -RunMinecraft'
+Assert-Rejected { & $taskChainScript -RunMinecraft @taskArguments } 'Upgrade chain output must be unused'
 Write-Output "Upgrade matrix input guards passed: $taskDirectory"

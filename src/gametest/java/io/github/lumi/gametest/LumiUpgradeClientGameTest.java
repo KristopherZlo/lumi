@@ -119,6 +119,8 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
         LumiClientBehaviorWorld.runExisting(context, "upgrade-unsaved", "lumi-upgrade-target",
                 (test, world, report) -> {
                     new LumiUiTestDriver(test).completeOnboardingIfShown();
+                    var operations = new LumiBehaviorOperations(test, world.getServer(), report);
+                    fixture.setProperty("head", operations.activeCommit().value().hex());
                     world.getServer().runOnServer(server -> {
                         var player = server.getPlayerList().getPlayers().getFirst();
                         var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
@@ -129,7 +131,6 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
                             chest.setChanged();
                         }
                     });
-                    var operations = new LumiBehaviorOperations(test, world.getServer(), report);
                     operations.awaitDurability("upgrade-unsaved");
                     fixture.setProperty("builderKeys", Integer.toString(operations.pendingBuilderKeyCount()));
                 });
