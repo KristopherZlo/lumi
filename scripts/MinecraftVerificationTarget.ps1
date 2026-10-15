@@ -24,9 +24,19 @@ class LumiMinecraftVerificationTarget {
     }
 
     [string[]] PrepareArguments() {
-        if (-not $this.Modern) { return @("-PlumiTarget=$($this.Definition.id)", 'prepareMultiplayerLaunch') }
-        $arguments = @('-p', 'modern', ":adapters:$($this.Definition.id):prepareMultiplayerLaunch",
-            "-PlumiGameVersion=$($this.Definition.minecraftVersion)")
+        return $this.TaskArguments(@('prepareMultiplayerLaunch'))
+    }
+
+    [string[]] TaskArguments([string[]] $tasks) {
+        $arguments = @()
+        if ($this.Modern) { $arguments += @('-p', 'modern') }
+        foreach ($task in $tasks) {
+            if ($task.StartsWith(':')) { $arguments += $task }
+            elseif ($this.Modern) { $arguments += ":adapters:$($this.Definition.id):$task" }
+            else { $arguments += ":$task" }
+        }
+        $arguments += "-PlumiTarget=$($this.Definition.id)"
+        if ($this.Modern) { $arguments += "-PlumiGameVersion=$($this.Definition.minecraftVersion)" }
         if ($this.Artifact) { $arguments += "-PlumiArtifact=$($this.Artifact)" }
         return $arguments
     }

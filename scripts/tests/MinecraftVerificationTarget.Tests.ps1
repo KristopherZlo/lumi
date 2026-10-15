@@ -11,8 +11,11 @@ $taskCatalog = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../../gradle/m
 $taskLegacy = [LumiMinecraftVerificationTarget]::new($taskCatalog, 'legacy-12111', '', '')
 Assert-That (-not $taskLegacy.Modern) 'Legacy launch must keep its Java 21 path.'
 Assert-That ($taskLegacy.PrepareArguments() -contains '-PlumiTarget=legacy-12111') 'Legacy target missing.'
+Assert-That ($taskLegacy.TaskArguments(@('test')) -contains ':test') 'Legacy test must not select child projects.'
 $taskNative = [LumiMinecraftVerificationTarget]::new($taskCatalog, 'modern-262', '', '')
 Assert-That ($taskNative.PrepareArguments() -contains ':adapters:modern-262:prepareMultiplayerLaunch') 'Native task missing.'
+Assert-That ($taskNative.TaskArguments(@(':core:test', 'runPackagedGameTest')) -contains ':core:test') 'Absolute task changed.'
+Assert-That ($taskNative.TaskArguments(@('runPackagedGameTest')) -contains ':adapters:modern-262:runPackagedGameTest') 'Wrong native server task.'
 Assert-Rejected { [LumiMinecraftVerificationTarget]::new($taskCatalog, 'missing', '', '') }
 Assert-Rejected { [LumiMinecraftVerificationTarget]::new($taskCatalog, 'modern-262', '26.1', '') }
 Assert-Rejected { [LumiMinecraftVerificationTarget]::new($taskCatalog, 'modern-261', '26.1.2', '') }
