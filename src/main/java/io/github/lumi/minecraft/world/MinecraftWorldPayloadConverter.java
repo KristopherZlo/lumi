@@ -33,7 +33,7 @@ public final class MinecraftWorldPayloadConverter implements WorldPayloadConvert
     private static final int BLOCK_STATE_FIELD_NAMES_VERSION = 5006;
     @Override
     public String recipeId() {
-        return "minecraft-dfu-canonical-v1";
+        return "minecraft-dfu-canonical-v2";
     }
 
     private final HolderLookup<Block> blocks;
@@ -58,16 +58,46 @@ public final class MinecraftWorldPayloadConverter implements WorldPayloadConvert
         }
         var states = new ArrayList<String>(SectionBlob.BLOCK_COUNT);
         for (String state : source.blockStates()) states.add(translated.get(state));
-        var blockEntities = new HashMap<Integer, io.github.lumi.domain.model.CanonicalNbt>();
-        for (var entry : source.blockEntities().entrySet()) {
-            CompoundTag fixed = fix(References.BLOCK_ENTITY, MinecraftNbtCodec.decode(entry.getValue()),
-                    source.dataVersion(), target);
-            nbtValidator.validate(fixed);
-            blockEntities.put(entry.getKey(), MinecraftNbtCodec.encode(fixed));
-        }
-        SectionBlob result = new SectionBlob(states, blockEntities, target);
+        SectionBlob result = new SectionBlob(states, convertBlockEntities(source, target), target);
         decoder.validate(result);
         return result;
+    }
+
+    private java.util.Map<Integer, io.github.lumi.domain.model.CanonicalNbt> convertBlockEntities(
+            SectionBlob source, WorldDataVersion target) throws IOException {
+        if (source.blockEntities().isEmpty()) return java.util.Map.of();
+        var entities = new net.minecraft.nbt.ListTag();
+        for (var entry : source.blockEntities().entrySet()) {
+            var tag = MinecraftNbtCodec.decode(entry.getValue());
+            int index = entry.getKey();
+            tag.putInt("x", index & 15);
+            tag.putInt("y", (index >>> 8) & 15);
+            tag.putInt("z", (index >>> 4) & 15);
+            entities.add(tag);
+        }
+        // Removal fixes belong to CHUNK, not to the standalone BLOCK_ENTITY type.
+        var chunk = new CompoundTag();
+        chunk.putInt("xPos", 0);
+        chunk.putInt("zPos", 0);
+        chunk.putString("Status", "minecraft:full");
+        chunk.put("sections", new net.minecraft.nbt.ListTag());
+        chunk.put("block_entities", entities);
+        var fixed = fix(References.CHUNK, chunk, source.dataVersion(), target);
+        var converted = new HashMap<Integer, io.github.lumi.domain.model.CanonicalNbt>();
+        for (Tag value : fixed.getListOrEmpty("block_entities")) {
+            if (!(value instanceof CompoundTag entity)) throw new IOException("Invalid converted block entity");
+            int x = entity.getIntOr("x", -1), y = entity.getIntOr("y", -1), z = entity.getIntOr("z", -1);
+            if (x < 0 || x > 15 || y < 0 || y > 15 || z < 0 || z > 15) {
+                throw new IOException("Conversion moved a block entity outside its section");
+            }
+            nbtValidator.validate(entity);
+            int index = (y << 8) | (z << 4) | x;
+            if (!source.blockEntities().containsKey(index)
+                    || converted.put(index, MinecraftSectionCapture.canonicalBlockEntityNbt(entity)) != null) {
+                throw new IOException("Conversion changed block entity positions");
+            }
+        }
+        return java.util.Map.copyOf(converted);
     }
 
     @Override

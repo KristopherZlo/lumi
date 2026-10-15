@@ -47,6 +47,28 @@ class MinecraftWorldPayloadConverterTest {
     }
 
     @Test
+    void chunkContextDropsOnlyVanillaRemovedBlockEntities() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(NativeWorldTestData.version().value() >= 4885);
+        var bed = new CompoundTag();
+        bed.putString("id", "minecraft:bed");
+        var source = new SectionBlob(Collections.nCopies(4096, "minecraft:red_bed"),
+                Map.of(0, MinecraftNbtCodec.encode(bed)));
+        SectionBlob result = converter().convert(source, NativeWorldTestData.version());
+        assertEquals(Map.of(), result.blockEntities());
+        assertEquals(1, source.blockEntities().size());
+        assertEquals("minecraft:red_bed[facing=north,occupied=false,part=foot]", result.blockStates().getFirst());
+    }
+
+    @Test
+    void chunkContextRejectsUnknownBlockEntityTypes() throws Exception {
+        var unknown = new CompoundTag();
+        unknown.putString("id", "missing:block_entity");
+        var source = new SectionBlob(Collections.nCopies(4096, "minecraft:stone"),
+                Map.of(0, MinecraftNbtCodec.encode(unknown)));
+        assertThrows(IOException.class, () -> converter().convert(source, NativeWorldTestData.version()));
+    }
+
+    @Test
     void refusesMissingRegistryTypesAndATargetOtherThanTheRunningGame() {
         var converter = converter();
         var source = new SectionBlob(Collections.nCopies(4096, "missing:block"), Map.of());
