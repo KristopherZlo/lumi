@@ -95,7 +95,7 @@ gradle.projectsEvaluated {
         ['java', 'resources'].each { kind ->
             def roots = [project, project(':core')]
                     .collectMany { it.sourceSets.main[kind].srcDirs }
-                    .findAll { it.exists() }.collect { it.absolutePath }.unique()
+                    .collect { it.absolutePath }.unique()
             systemProperty "lumi.test.production.${kind}", roots.join(File.pathSeparator)
         }
     }
