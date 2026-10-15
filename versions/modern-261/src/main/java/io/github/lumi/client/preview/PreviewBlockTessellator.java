@@ -16,6 +16,8 @@ final class PreviewBlockTessellator implements AutoCloseable {
     private final ModelBlockRenderer renderer;
     private final FluidRenderer fluidRenderer;
     private final Function<ChunkSectionLayer, BufferBuilder> output;
+    private final FluidRenderer.Output fluidOutput;
+    private final PreviewFluidVertexConsumer fluidVertices = new PreviewFluidVertexConsumer();
     private final BlockPos.MutableBlockPos local = new BlockPos.MutableBlockPos();
     private final BlockPos.MutableBlockPos neighbor = new BlockPos.MutableBlockPos();
 
@@ -25,6 +27,7 @@ final class PreviewBlockTessellator implements AutoCloseable {
         renderer = new ModelBlockRenderer(client.options.ambientOcclusion().get(), true, client.getBlockColors());
         fluidRenderer = new FluidRenderer(client.getModelManager().getFluidStateModelSet());
         this.output = output;
+        fluidOutput = layer -> fluidVertices.bind(output.apply(layer), local);
     }
 
     void addBlock(PreviewCullingBlockGetter blocks, PreviewTranslatedBlockGetter fluids,
@@ -34,7 +37,7 @@ final class PreviewBlockTessellator implements AutoCloseable {
         var fluid = state.getFluidState();
         if (filter.shouldRenderFluid(blocks, position, fluid, neighbor)) {
             local.set(position.getX() - min.getX(), position.getY() - min.getY(), position.getZ() - min.getZ());
-            fluidRenderer.tesselate(fluids, local, output::apply, state, fluid);
+            fluidRenderer.tesselate(fluids, local, fluidOutput, state, fluid);
         }
         if (!filter.shouldRenderModel(blocks, position, state, neighbor)) return;
         renderer.tesselateBlock((x, y, z, quad, instance) -> output.apply(quad.materialInfo().layer())

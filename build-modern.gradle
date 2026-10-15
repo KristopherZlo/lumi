@@ -66,6 +66,15 @@ fabricApi {
     }
 }
 
+tasks.named('runClientGameTest') {
+    systemProperty 'fabric.client.gametest.disableNetworkSynchronizer', 'true'
+    System.properties.findAll { name, ignored ->
+        name.toString().startsWith('lumi.benchmark.') || name.toString().startsWith('lumi.gametest.')
+                || name.toString().startsWith('lumi.multiplayer.')
+    }.each { name, value -> systemProperty name.toString(), value }
+    jvmArgs '-Xmx2G'
+}
+
 java { toolchain.languageVersion = JavaLanguageVersion.of(target.javaVersion()); withSourcesJar() }
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'

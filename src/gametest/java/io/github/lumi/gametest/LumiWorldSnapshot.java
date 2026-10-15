@@ -83,7 +83,7 @@ final class LumiWorldSnapshot {
                 .filter(entity -> copiedAreas.stream().anyMatch(area -> area.contains(
                         entity.getBlockX(), entity.getBlockY(), entity.getBlockZ()))));
         var sortedEntities = new EntityChunkBlob(capturedEntities.entities().stream()
-                .sorted(ENTITY_ORDER).toList());
+                .sorted(ENTITY_ORDER).toList(), capturedEntities.dataVersion());
         Map<UUID, PlayerSpawn> playerSpawns =
                 new MinecraftWorldStateReader(level).readPlayerSpawns();
         LumiWorldSnapshot snapshot = new LumiWorldSnapshot(

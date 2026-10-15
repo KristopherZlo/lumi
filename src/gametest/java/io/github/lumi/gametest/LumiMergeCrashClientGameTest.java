@@ -173,7 +173,7 @@ public final class LumiMergeCrashClientGameTest implements FabricClientGameTest 
                 expected.set(index, current.blockStates().get(index));
             }
         }
-        return ObjectId.hash(new SectionBlobCodec().encode(new SectionBlob(expected, Map.of()))).hex();
+        return ObjectId.hash(new SectionBlobCodec().encode(new SectionBlob(expected, Map.of(), source.dataVersion()))).hex();
     }
     private static void prepareClient(ClientGameTestContext context) {
         context.runOnClient(client -> {
