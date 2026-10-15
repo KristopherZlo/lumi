@@ -33,15 +33,17 @@ public final class MinecraftWorldPayloadConverter implements WorldPayloadConvert
     private static final int BLOCK_STATE_FIELD_NAMES_VERSION = 5006;
     @Override
     public String recipeId() {
-        return "minecraft-dfu-canonical-v2";
+        return "minecraft-dfu-canonical-v3";
     }
 
+    private final HolderLookup.Provider registries;
     private final HolderLookup<Block> blocks;
     private final Registry<EntityType<?>> entityTypes;
     private final MinecraftHistoryNbtValidator nbtValidator;
 
     public MinecraftWorldPayloadConverter(HolderLookup.Provider registries, Registry<EntityType<?>> entityTypes) {
-        blocks = Objects.requireNonNull(registries, "registries").lookupOrThrow(Registries.BLOCK);
+        this.registries = Objects.requireNonNull(registries, "registries");
+        blocks = registries.lookupOrThrow(Registries.BLOCK);
         this.entityTypes = Objects.requireNonNull(entityTypes, "entityTypes");
         nbtValidator = new MinecraftHistoryNbtValidator(registries);
     }
@@ -58,13 +60,14 @@ public final class MinecraftWorldPayloadConverter implements WorldPayloadConvert
         }
         var states = new ArrayList<String>(SectionBlob.BLOCK_COUNT);
         for (String state : source.blockStates()) states.add(translated.get(state));
-        SectionBlob result = new SectionBlob(states, convertBlockEntities(source, target), target);
+        SectionBlob result = new SectionBlob(states, convertBlockEntities(source, target, states, decoder), target);
         decoder.validate(result);
         return result;
     }
 
     private java.util.Map<Integer, io.github.lumi.domain.model.CanonicalNbt> convertBlockEntities(
-            SectionBlob source, WorldDataVersion target) throws IOException {
+            SectionBlob source, WorldDataVersion target, java.util.List<String> states,
+            MinecraftBlockStateDecoder decoder) throws IOException {
         if (source.blockEntities().isEmpty()) return java.util.Map.of();
         var entities = new net.minecraft.nbt.ListTag();
         for (var entry : source.blockEntities().entrySet()) {
@@ -92,6 +95,15 @@ public final class MinecraftWorldPayloadConverter implements WorldPayloadConvert
             }
             nbtValidator.validate(entity);
             int index = (y << 8) | (z << 4) | x;
+            if (!source.dataVersion().equals(target)) {
+                var state = decoder.decodeState(states.get(index));
+                decoder.validateBlockEntityState(state, entity);
+                var nativeEntity = net.minecraft.world.level.block.entity.BlockEntity.loadStatic(
+                        new net.minecraft.core.BlockPos(x, y, z), state, entity, registries);
+                if (nativeEntity == null) throw new IOException("Cannot normalize converted block entity at " + index);
+                entity = nativeEntity.saveWithFullMetadata(registries);
+                nbtValidator.validate(entity);
+            }
             if (!source.blockEntities().containsKey(index)
                     || converted.put(index, MinecraftSectionCapture.canonicalBlockEntityNbt(entity)) != null) {
                 throw new IOException("Conversion changed block entity positions");

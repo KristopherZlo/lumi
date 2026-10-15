@@ -60,6 +60,25 @@ class MinecraftWorldPayloadConverterTest {
     }
 
     @Test
+    void convertedFurnaceUsesTheRunningGamesSerializedDefaults() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(NativeWorldTestData.version().value() >= 5000);
+        var furnace = new CompoundTag();
+        furnace.putString("id", "minecraft:furnace");
+        furnace.putShort("cooking_time_spent", (short) 17);
+        furnace.putShort("cooking_total_time", (short) 200);
+        var source = new SectionBlob(Collections.nCopies(4096, "minecraft:furnace"),
+                Map.of(0, MinecraftNbtCodec.encode(furnace)));
+        SectionBlob converted = converter().convert(source, NativeWorldTestData.version());
+        var tag = MinecraftNbtCodec.decode(converted.blockEntities().get(0));
+        assertEquals(net.minecraft.nbt.Tag.TAG_INT, tag.get("cooking_time_spent").getId());
+        assertEquals(17, tag.getIntOr("cooking_time_spent", -1));
+        assertEquals(1.0f, tag.getFloatOr("speed_multiplier", -1));
+        assertEquals(converted, converter().convert(converted, NativeWorldTestData.version()));
+        assertEquals(net.minecraft.nbt.Tag.TAG_SHORT,
+                MinecraftNbtCodec.decode(source.blockEntities().get(0)).get("cooking_time_spent").getId());
+    }
+
+    @Test
     void chunkContextRejectsUnknownBlockEntityTypes() throws Exception {
         var unknown = new CompoundTag();
         unknown.putString("id", "missing:block_entity");
