@@ -94,7 +94,7 @@ public final class DurableSavePreparation implements SavePreparation {
             if (boundary == null) {
                 boundary = mutations.durabilityBoundary();
             }
-            complete = mutations.isDurable(boundary);
+            complete = mutations.awaitDurable(boundary, deadlineNanos);
             return complete;
         }
 
