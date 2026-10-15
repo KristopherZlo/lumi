@@ -47,5 +47,9 @@ stonecutter.replacements {
         replace('context.matrices()', 'context.poseStack()')
         replace('ChunkPos.asLong(', 'ChunkPos.pack(')
         replace('.toLong()', '.pack()')
+        replace('.sortOnUpload()', '.translucent()')
+        replace('CachedOrthoProjectionMatrixBuffer', 'ProjectionMatrixBuffer')
+        replace('method = "renderTooltip"', 'method = "tooltip"')
+        replace('@Accessor("renderState")', '@Accessor("guiRenderState")')
     }
 }

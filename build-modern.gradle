@@ -73,7 +73,22 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs += ['-Xmaxerrs', '1000']
 }
 tasks.withType(Test).configureEach { useJUnitPlatform { excludeTags 'performance' } }
-tasks.named('test') { dependsOn ':core:test' }
+tasks.named('test') {
+    dependsOn ':core:test'
+    workingDir repositoryRoot
+    systemProperty 'lumi.test.target', target.id()
+}
+
+gradle.projectsEvaluated {
+    tasks.named('test') {
+        ['java', 'resources'].each { kind ->
+            def roots = rootProject.allprojects.findAll { it.plugins.hasPlugin('java') }
+                    .collectMany { it.sourceSets.main[kind].srcDirs }
+                    .findAll { it.exists() }.collect { it.absolutePath }.unique()
+            systemProperty "lumi.test.production.${kind}", roots.join(File.pathSeparator)
+        }
+    }
+}
 
 tasks.named('processResources') {
     def parameters = [version: project.version, loader_version: target.loaderVersion(),

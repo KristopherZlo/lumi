@@ -66,7 +66,13 @@ class PreviewBlockGetterTest {
             states.put(pos.immutable(), state);
         }
 
+        //? if >=26.1 {
+        /*@Override public net.minecraft.world.level.CardinalLighting cardinalLighting() {
+            return net.minecraft.world.level.CardinalLighting.DEFAULT;
+        }
+        *///?} else {
         @Override public float getShade(Direction direction, boolean shade) { return 1; }
+        //?}
         @Override public LevelLightEngine getLightEngine() { return null; }
         @Override public int getBlockTint(BlockPos pos, ColorResolver resolver) { return 0xffffff; }
         @Override public int getBrightness(LightLayer layer, BlockPos pos) { return 15; }

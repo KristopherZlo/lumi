@@ -12,6 +12,7 @@ final class PreviewRenderMesh implements AutoCloseable {
     private static final ChunkSectionLayer[] DRAW_ORDER = {
         ChunkSectionLayer.SOLID,
         ChunkSectionLayer.CUTOUT,
+        //? if <26.1
         ChunkSectionLayer.TRIPWIRE,
         ChunkSectionLayer.TRANSLUCENT
     };
@@ -49,6 +50,7 @@ final class PreviewRenderMesh implements AutoCloseable {
             case SOLID -> RenderTypes.solidMovingBlock();
             case CUTOUT -> RenderTypes.cutoutMovingBlock();
             case TRANSLUCENT -> RenderTypes.translucentMovingBlock();
+            //? if <26.1
             case TRIPWIRE -> RenderTypes.tripwireMovingBlock();
         };
     }

@@ -26,8 +26,12 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
             new PreviewFramingCalculator();
     private final PreviewImageCropper imageCropper = new PreviewImageCropper();
     private final CachedOrthoProjectionMatrixBuffer projectionMatrixBuffer =
+            //? if >=26.1 {
+            /*new CachedOrthoProjectionMatrixBuffer("Lumi Preview");
+            *///?} else {
             new CachedOrthoProjectionMatrixBuffer(
                     "Lumi Preview", -1000.0F, 1000.0F, false);
+            //?}
     private FogRenderer previewFog;
 
     PendingPreviewCapture capture(
@@ -71,8 +75,7 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
                 .clearColorAndDepthTextures(color, 0, depth, 1.0);
         RenderSystem.backupProjectionMatrix();
         RenderSystem.setProjectionMatrix(
-                projectionMatrixBuffer.getBuffer(
-                        framing.resolution(), framing.resolution()),
+                projection(framing.resolution()),
                 ProjectionType.ORTHOGRAPHIC);
         Matrix4fStack modelView = RenderSystem.getModelViewStack();
         modelView.pushMatrix();
@@ -85,6 +88,7 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
         RenderSystem.outputDepthTextureOverride = depthView;
         try {
             RenderSystem.setShaderFog(fog().getBuffer(FogRenderer.FogMode.NONE));
+            //? if <26.1
             client.gameRenderer.lightTexture().updateLightTexture(1.0F);
             client.gameRenderer.getLighting().setupFor(Lighting.Entry.LEVEL);
             float halfResolution = framing.resolution() * 0.5F;
@@ -112,6 +116,16 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
     private FogRenderer fog() {
         if (previewFog == null) previewFog = new FogRenderer();
         return previewFog;
+    }
+
+    private GpuBufferSlice projection(int resolution) {
+        //? if >=26.1 {
+        /*var projection = new net.minecraft.client.renderer.Projection();
+        projection.setupOrtho(-1000.0F, 1000.0F, resolution, resolution, false);
+        return projectionMatrixBuffer.getBuffer(projection);
+        *///?} else {
+        return projectionMatrixBuffer.getBuffer(resolution, resolution);
+        //?}
     }
 
     private CompletableFuture<NativeImage> readPixels(RenderTarget target) {
