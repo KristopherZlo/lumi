@@ -186,6 +186,12 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
             verifyBackup(context);
             copyWorld(targetWorld, directory.resolve("restored-target"), true);
             copyWorld(save(context, "lumi-upgrade-oracle-a"), directory.resolve("vanilla-saved"), false);
+            // Crash cuts exercise history conversion after vanilla's independently tested file migration.
+            Path nativeFixture = directory.resolve("native-layout");
+            copyWorld(save(context, "lumi-upgrade-oracle-a"), nativeFixture.resolve("source-a"), false);
+            copyWorld(save(context, "lumi-upgrade-oracle-b"), nativeFixture.resolve("source-b"), false);
+            copyDirectory(directory.resolve("source-b/lumi"), nativeFixture.resolve("source-b/lumi"), true);
+            Files.copy(directory.resolve("fixture.properties"), nativeFixture.resolve("fixture.properties"));
         }
         if (resume) LumiMod.LOGGER.info("Lumi history upgrade restart {}: succeeded", restartPhase);
     }
@@ -305,6 +311,11 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
         if (!Files.isRegularFile(source.resolve("level.dat")) || Files.exists(target)) {
             throw new IOException("Upgrade copy requires a world and an unused destination: " + source + " -> " + target);
         }
+        copyDirectory(source, target, includeHistory);
+    }
+
+    private static void copyDirectory(Path source, Path target, boolean includeHistory) throws IOException {
+        if (!Files.isDirectory(source) || Files.exists(target)) throw new IOException("Invalid upgrade fixture copy: " + target);
         try (var paths = Files.walk(source)) {
             var iterator = paths.iterator();
             while (iterator.hasNext()) {
