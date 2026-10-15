@@ -1,6 +1,5 @@
 import groovy.json.JsonOutput
 import io.github.lumi.buildconfig.MinecraftTargetCatalogReader
-import io.github.lumi.buildconfig.MinecraftArtifactVerifier
 
 plugins {
     id 'fabric-loom' version "${loom_version}"
@@ -25,13 +24,6 @@ obsoleteTargetProperties.each { name ->
         throw new GradleException("${name} belongs in gradle/minecraft-targets.json; select a group with -PlumiTarget")
     }
 }
-def minecraftTargetParameters = [
-        id: minecraftTarget.id(), minecraftVersion: minecraftTarget.minecraftVersion(),
-        minecraftVersions: minecraftTarget.minecraftVersions(), javaVersion: minecraftTarget.javaVersion(),
-        loaderVersion: minecraftTarget.loaderVersion(), fabricApiVersion: minecraftTarget.fabricApiVersion(),
-        worldeditVersionId: minecraftTarget.worldeditVersionId(), axiomVersionId: minecraftTarget.axiomVersionId(),
-        worldeditCuiCoordinate: minecraftTarget.worldeditCuiCoordinate().orElse(null),
-        axiomRuntimeJars: minecraftTarget.axiomRuntimeJars()]
 
 version = project.mod_version
 def modVersion = project.version.toString()
@@ -55,27 +47,7 @@ tasks.register('listMinecraftTargets') {
     }
 }
 
-tasks.register('writeMinecraftBuildManifest') {
-    group = 'verification'
-    description = 'Records the selected group and the distributable artifact hash'
-    dependsOn 'remapJar'
-    def report = layout.buildDirectory.file('reports/lumi-build/manifest.json')
-    def artifactFile = tasks.named('remapJar').flatMap { it.archiveFile }
-    inputs.file(minecraftTargetsFile)
-    inputs.properties(minecraftTargetParameters.findAll { key, value -> value != null })
-    inputs.file(artifactFile)
-    outputs.file(report)
-    doLast {
-        def artifact = artifactFile.get().asFile
-        new MinecraftArtifactVerifier().verify(artifact.toPath(), minecraftTarget, modVersion)
-        def digest = java.security.MessageDigest.getInstance('SHA-256')
-        def manifest = [schema: 1, target: minecraftTargetParameters, modVersion: modVersion,
-                artifact: [name: artifact.name, sha256: digest.digest(artifact.bytes).encodeHex().toString()]]
-        def output = report.get().asFile
-        output.parentFile.mkdirs()
-        output.text = JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + '\n'
-    }
-}
+apply from: 'gradle/artifact-manifest.gradle'
 
 loom {
     accessWidenerPath = file('src/main/resources/lumi.accesswidener')

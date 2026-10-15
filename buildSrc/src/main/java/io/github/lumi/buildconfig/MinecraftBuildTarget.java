@@ -37,4 +37,20 @@ public record MinecraftBuildTarget(
             throw new IllegalArgumentException("Invalid Axiom runtime jar list for " + id);
         }
     }
+
+    public java.util.Map<String, Object> parameters() {
+        var values = new java.util.LinkedHashMap<String, Object>();
+        values.put("id", id);
+        values.put("minecraftVersion", minecraftVersion);
+        values.put("minecraftVersions", minecraftVersions);
+        values.put("javaVersion", javaVersion);
+        values.put("loaderVersion", loaderVersion);
+        values.put("fabricApiVersion", fabricApiVersion);
+        values.put("worldeditVersionId", worldeditVersionId);
+        values.put("axiomVersionId", axiomVersionId);
+        values.put("worldeditCuiCoordinate", worldeditCuiCoordinate.orElse(null));
+        values.put("axiomRuntimeJars", axiomRuntimeJars);
+        return java.util.Collections.unmodifiableMap(values);
+    }
+
 }

@@ -70,6 +70,10 @@ class MinecraftTargetCatalogTest {
                 Optional.empty(), List.of("api.jar"));
         assertEquals("26.1", target.minecraftVersion());
         assertEquals(List.of("26.1.1", "26.1.2"), target.minecraftVersions());
+        assertEquals("26.1", target.parameters().get("minecraftVersion"));
+        assertEquals(target.minecraftVersions(), target.parameters().get("minecraftVersions"));
+        assertThrows(UnsupportedOperationException.class,
+                () -> target.parameters().put("minecraftVersion", "26.2"));
         assertThrows(IllegalArgumentException.class, () -> new MinecraftBuildTarget(
                 "group", "26.x", List.of("26.1"), 25, "loader", "api", "we", "axiom",
                 Optional.empty(), List.of("api.jar")));

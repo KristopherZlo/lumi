@@ -56,12 +56,8 @@ tasks.register('prepareMultiplayerLaunch', launchType) {
             '"' + argument.toString().replace('\\', '\\\\').replace('"', '\\"') + '"'
         }.join('\n') + '\n'
         def target = lumiMinecraftTarget
-        def parameters = [id: target.id(), minecraftVersion: project.findProperty('lumiVerificationGame') ?: target.minecraftVersion(),
-                minecraftVersions: target.minecraftVersions(), javaVersion: target.javaVersion(),
-                loaderVersion: target.loaderVersion(), fabricApiVersion: target.fabricApiVersion(),
-                worldeditVersionId: target.worldeditVersionId(), axiomVersionId: target.axiomVersionId(),
-                worldeditCuiCoordinate: target.worldeditCuiCoordinate().orElse(null),
-                axiomRuntimeJars: target.axiomRuntimeJars()]
+        def parameters = new LinkedHashMap(target.parameters())
+        parameters.minecraftVersion = project.findProperty('lumiVerificationGame') ?: target.minecraftVersion()
         layout.buildDirectory.file('multiplayer-launch.inputs.json').get().asFile.text = JsonOutput.toJson([
                 schema: 1, target: parameters, configuration: configuration,
                 classpath: classpath] + (production ? [launchKind: 'production-client',
