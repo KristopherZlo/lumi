@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "io.github.lumi.gametest.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["ClientGameTestStartupMixin", "ClientGameTestWorldCloseMixin"],
+  "injectors": {"defaultRequire": 1}
+}

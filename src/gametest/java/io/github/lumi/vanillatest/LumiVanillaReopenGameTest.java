@@ -20,7 +20,7 @@ import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.storage.TagValueOutput;
 
-/** Independent native serialization check; its test JAR contains no Lumi implementation or mixins. */
+/** Independent native serialization check with Fabric test synchronization fixes and no Lumi implementation. */
 @SuppressWarnings("UnstableApiUsage")
 public final class LumiVanillaReopenGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {

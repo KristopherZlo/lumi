@@ -83,11 +83,13 @@ if (target.javaVersion() == 21) {
 }
 
 def testMetadata = layout.buildDirectory.file("generated/packaged-test/${builderTools}/fabric.mod.json")
+def vanillaMetadata = layout.buildDirectory.file("generated/vanilla-reopen/${builderTools}/fabric.mod.json")
 def writeTestMetadata = tasks.register('writePackagedTestMetadata') {
     dependsOn 'processGametestResources'
     inputs.files(sourceSets.gametest.output.resourcesDir)
     inputs.property('builderTools', builderTools)
     outputs.file(testMetadata)
+    outputs.file(vanillaMetadata)
     doLast {
         def metadata = new groovy.json.JsonSlurper().parse(new File(sourceSets.gametest.output.resourcesDir, 'fabric.mod.json'))
         metadata.entrypoints['fabric-gametest'].removeAll { entry ->
@@ -97,6 +99,11 @@ def writeTestMetadata = tasks.register('writePackagedTestMetadata') {
         def output = testMetadata.get().asFile
         output.parentFile.mkdirs()
         output.text = JsonOutput.prettyPrint(JsonOutput.toJson(metadata)) + '\n'
+        def control = new groovy.json.JsonSlurper().parse(new File(sourceSets.gametest.output.resourcesDir, 'vanilla-reopen.mod.json'))
+        if (target.javaVersion() > 21) control.mixins = ['vanilla-reopen.mixins.json']
+        def controlOutput = vanillaMetadata.get().asFile
+        controlOutput.parentFile.mkdirs()
+        controlOutput.text = JsonOutput.prettyPrint(JsonOutput.toJson(control)) + '\n'
     }
 }
 def testClassifier = 'gametest' + (builderTools == 'both' ? '' : '-' + builderTools)
@@ -266,10 +273,15 @@ def requestedClientSuite = System.getProperty('lumi.gametest.suite', 'SMOKE').to
 }
 
 def vanillaTestJar = tasks.register('vanillaReopenGameTestJar', Jar) {
+    dependsOn writeTestMetadata
     from(sourceSets.gametest.output) {
-        include 'io/github/lumi/vanillatest/**', 'vanilla-reopen.mod.json'
-        rename 'vanilla-reopen.mod.json', 'fabric.mod.json'
+        include 'io/github/lumi/vanillatest/**'
+        if (target.javaVersion() > 21) {
+            include 'io/github/lumi/gametest/mixin/ClientGameTestStartupMixin.class',
+                    'io/github/lumi/gametest/mixin/ClientGameTestWorldCloseMixin.class', 'vanilla-reopen.mixins.json'
+        }
     }
+    from vanillaMetadata
     archiveClassifier = target.javaVersion() == 21 ? 'vanilla-reopen-dev' : 'vanilla-reopen'
 }
 def vanillaProductionJar = vanillaTestJar
