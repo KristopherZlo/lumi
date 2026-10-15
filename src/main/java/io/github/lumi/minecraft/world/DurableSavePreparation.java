@@ -18,7 +18,6 @@ public final class DurableSavePreparation implements SavePreparation {
     private final MutationDurabilityTracker mutations;
     private final Predicate<HistoryKey> includes;
     private final LongSupplier nanoTime;
-    private final boolean awaitOriginDurability;
 
     public DurableSavePreparation(
             WorldStateReader reader,
@@ -49,32 +48,21 @@ public final class DurableSavePreparation implements SavePreparation {
             MutationDurabilityTracker mutations,
             Predicate<HistoryKey> includes,
             LongSupplier nanoTime) {
-        this(reader, entities, mutations, includes, nanoTime, true);
-    }
-
-    private DurableSavePreparation(
-            WorldStateReader reader,
-            EntityChunkDurabilityGate entities,
-            MutationDurabilityTracker mutations,
-            Predicate<HistoryKey> includes,
-            LongSupplier nanoTime,
-            boolean awaitOriginDurability) {
         this.reader = Objects.requireNonNull(reader, "reader");
         this.entities = Objects.requireNonNull(entities, "entities");
         this.mutations = Objects.requireNonNull(mutations, "mutations");
         this.includes = Objects.requireNonNull(includes, "includes");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
-        this.awaitOriginDurability = awaitOriginDurability;
     }
 
-    /** The durable checkpoint supersedes pending origins before any world mutation. */
+    /** Older targets still need durable origins for keys first captured in the return point. */
     public static DurableSavePreparation forReturnPoint(
             WorldStateReader reader,
             EntityChunkDurabilityGate entities,
             MutationDurabilityTracker mutations,
             Predicate<HistoryKey> includes) {
         return new DurableSavePreparation(
-                reader, entities, mutations, includes, System::nanoTime, false);
+                reader, entities, mutations, includes);
     }
 
     @Override
@@ -106,7 +94,7 @@ public final class DurableSavePreparation implements SavePreparation {
             if (boundary == null) {
                 boundary = mutations.durabilityBoundary();
             }
-            complete = !awaitOriginDurability || mutations.isDurable(boundary);
+            complete = mutations.isDurable(boundary);
             return complete;
         }
 

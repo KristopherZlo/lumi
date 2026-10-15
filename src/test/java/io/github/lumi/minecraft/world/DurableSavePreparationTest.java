@@ -65,7 +65,7 @@ class DurableSavePreparationTest {
     }
 
     @Test
-    void returnPointUsesItsCheckpointInsteadOfWaitingForOrigins() throws Exception {
+    void returnPointWaitsForOriginsNeededWhenTheTargetDoesNotContainTheKey() throws Exception {
         ManualExecutor background = new ManualExecutor();
         MutationDurabilityTracker mutations = MutationDurabilityTracker.open(
                 new WorldObjectRepository(repositoryRoot), new OriginStore(repositoryRoot),
@@ -84,9 +84,15 @@ class DurableSavePreparationTest {
         SavePreparation.Session session = DurableSavePreparation.forReturnPoint(
                 reader, entities, mutations, ignored -> true).begin();
 
+        assertFalse(session.prepareUntil(Long.MAX_VALUE));
+        assertTrue(new OriginStore(repositoryRoot).read(key).isEmpty());
+        assertFalse(mutations.canPublish(key));
+        background.runNext();
+        background.runNext();
         assertTrue(session.prepareUntil(Long.MAX_VALUE));
         assertEquals(Map.of(key, 1L), session.finish().generations());
-        assertFalse(mutations.canPublish(key));
+        assertTrue(new OriginStore(repositoryRoot).read(key).isPresent());
+        assertTrue(mutations.canPublish(key));
     }
 
     @Test
