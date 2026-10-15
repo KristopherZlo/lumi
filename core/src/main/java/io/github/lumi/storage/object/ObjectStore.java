@@ -551,7 +551,7 @@ public final class ObjectStore {
                     return packs.read(packed);
                 } catch (java.nio.file.FileSystemException replacedPack) {
                     PackedObject refreshed = refreshPackedObjects().get(id);
-                    if (attempt == 2 || refreshed == null || refreshed.pack().equals(packed.pack())) {
+                    if (attempt == 2 || refreshed == null) {
                         throw replacedPack;
                     }
                     packed = refreshed;
