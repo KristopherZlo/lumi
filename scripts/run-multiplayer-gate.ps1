@@ -1,6 +1,8 @@
 param(
     [switch]$RunMinecraft,
     [string]$Target = 'legacy-12111',
+    [string]$GameVersion,
+    [string]$Artifact,
     [ValidateRange(120, 7200)] [int]$TimeoutSeconds = 900,
     [string]$Java = (Join-Path $env:JAVA_HOME 'bin/java.exe')
 )
@@ -10,18 +12,18 @@ if (-not $RunMinecraft) {
     throw 'No tests started. This gate opens Minecraft windows and uses CPU/GPU. Pass -RunMinecraft only when the computer is available for testing.'
 }
 . (Join-Path $PSScriptRoot 'CrashMatrixDefinition.ps1')
+. (Join-Path $PSScriptRoot 'MinecraftVerificationTarget.ps1')
 $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $taskCatalog = Get-Content -LiteralPath (Join-Path $taskRepo 'gradle/minecraft-targets.json') -Raw | ConvertFrom-Json
-$taskProfile = @($taskCatalog.targets | Where-Object { $_.id -ceq $Target })
-if ($taskProfile.Count -ne 1) { throw "Unknown target: $Target" }
-$taskModern = $taskProfile[0].javaVersion -gt 21
+$taskVerification = [LumiMinecraftVerificationTarget]::new($taskCatalog, $Target, $GameVersion, $Artifact)
+$taskProfile = @($taskVerification.Definition)
+$taskModern = $taskVerification.Modern
 $taskBuild = Join-Path $taskRepo $(if ($taskModern) { "versions/$Target/build" } else { 'build' })
 if (-not (Test-Path -LiteralPath $Java)) { throw "A JDK $($taskProfile[0].javaVersion) java.exe is required." }
 Push-Location $taskRepo
 try {
     $ErrorActionPreference = 'Continue'
-    $taskPrepare = if ($taskModern) { @('-p', 'modern', ":adapters:${Target}:prepareMultiplayerLaunch") }
-        else { @("-PlumiTarget=$Target", 'prepareMultiplayerLaunch') }
+    $taskPrepare = $taskVerification.PrepareArguments()
     & (Join-Path $taskRepo 'gradlew.bat') @taskPrepare --no-daemon
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) { throw 'Multiplayer launch preparation failed.' }
