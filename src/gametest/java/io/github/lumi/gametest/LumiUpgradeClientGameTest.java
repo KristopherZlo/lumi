@@ -12,6 +12,7 @@ import io.github.lumi.storage.repository.DimensionRepositoryLayout;
 import io.github.lumi.storage.repository.HistoryGenerationRepository;
 import io.github.lumi.storage.repository.HistorySourceSnapshot;
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -143,8 +144,11 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
         Path targetWorld = save(context, "lumi-upgrade-target");
         copyWorld(directory.resolve(resume ? "crashed-target" : "source-b"), targetWorld, true);
         Path originalHistory = new DimensionRepositoryLayout(targetWorld).resolve("minecraft:overworld");
-        var sourceSnapshot = new HistorySourceSnapshot().capture(originalHistory);
         var generations = new HistoryGenerationRepository(originalHistory);
+        var sourceGenerations = new HistoryGenerationRepository(new DimensionRepositoryLayout(
+                directory.resolve("source-b")).resolve("minecraft:overworld"));
+        var sourceGeneration = sourceGenerations.active();
+        var sourceSnapshot = new HistorySourceSnapshot().capture(sourceGenerations.directory(sourceGeneration));
         var expectedGeneration = resume ? generations.pending().map(pending -> pending.target())
                 .orElse(generations.active()) : null;
         LumiClientBehaviorWorld.runExisting(context, "upgrade-vanilla-saved", "lumi-upgrade-oracle-a",
@@ -179,7 +183,7 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
                             server.getPlayerList().getPlayers().getFirst().level(), expectedSaved, "restored upgrade"));
                 }, (test, world, report) -> world.getServer().runOnServer(server -> assertWorld(
                         server.getPlayerList().getPlayers().getFirst().level(), expectedSaved, "reopened upgrade")));
-        if (!sourceSnapshot.equals(new HistorySourceSnapshot().capture(originalHistory))) {
+        if (!sourceSnapshot.equals(new HistorySourceSnapshot().capture(generations.directory(sourceGeneration)))) {
             throw new AssertionError("Upgrade or Restore changed the original source history");
         }
         if (automatic && !resume) {
@@ -216,16 +220,30 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
         }
     }
 
-    private static void verifyBackup(ClientGameTestContext context) throws IOException {
+    private void verifyBackup(ClientGameTestContext context) throws IOException {
         Path backups = context.computeOnClient(client -> client.getLevelSource().getBackupPath());
         try (var files = Files.list(backups)) {
             var archives = files.filter(file -> file.getFileName().toString().endsWith(".zip")).toList();
             if (archives.size() != 1) throw new AssertionError("Startup upgrade must create exactly one world backup");
-            try (var zip = new java.util.zip.ZipFile(archives.getFirst().toFile())) {
-                var entries = zip.stream().map(java.util.zip.ZipEntry::getName).toList();
-                if (entries.stream().noneMatch(name -> name.contains("/lumi/history/") && name.endsWith("/working/index.bin"))
-                        || entries.stream().anyMatch(name -> name.endsWith("/generations/active.bin"))) {
-                    throw new AssertionError("Upgrade backup did not preserve the original history representation");
+            try (var zip = FileSystems.newFileSystem(archives.getFirst())) {
+                Path expected = directory.resolve("source-b/lumi/history");
+                Path actual = zip.getPath("/lumi-upgrade-target/lumi/history");
+                long expectedCount = 0;
+                try (var sourceFiles = Files.walk(expected)) {
+                    for (var iterator = sourceFiles.iterator(); iterator.hasNext();) {
+                        Path source = iterator.next();
+                        if (!Files.isRegularFile(source)) continue;
+                        expectedCount++;
+                        Path entry = actual.resolve(expected.relativize(source).toString().replace('\\', '/'));
+                        if (!Files.isRegularFile(entry) || Files.mismatch(source, entry) != -1) {
+                            throw new AssertionError("Upgrade backup changed source history: " + entry);
+                        }
+                    }
+                }
+                try (var backupFiles = Files.walk(actual)) {
+                    if (expectedCount == 0 || backupFiles.filter(Files::isRegularFile).count() != expectedCount) {
+                        throw new AssertionError("Upgrade backup did not preserve the complete source history");
+                    }
                 }
             }
         }
