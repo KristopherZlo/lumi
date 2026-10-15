@@ -1,15 +1,39 @@
 import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import io.github.lumi.buildconfig.MinecraftArtifactVerifier
+import io.github.lumi.buildconfig.PackagedGameTestEvidence
 
-tasks.register('prepareMultiplayerLaunch') {
+def production = project.hasProperty('lumiPreparedClientLaunchType')
+def launchType = production ? lumiPreparedClientLaunchType : DefaultTask
+
+tasks.register('prepareMultiplayerLaunch', launchType) {
+    if (production) {
+        def source = tasks.named('runPackagedClientGameTest').get()
+        javaLauncher.set(source.javaLauncher)
+        useXVFB.set(false)
+        runDir.set(layout.buildDirectory.dir('prepared-production-client'))
+        mods.setFrom(source.mods)
+        jvmArgs.set(source.jvmArgs.map { values -> values.findAll {
+            !it.startsWith('-Dlumi.gametest.completion=')
+        } })
+        descriptor.set(layout.buildDirectory.file('production-client-command.json'))
+        doFirst {
+            new MinecraftArtifactVerifier().verify(lumiPackagedArtifact.singleFile.toPath(),
+                    lumiMinecraftTarget, project.version.toString())
+            if (mods.files.any { !it.isFile() || !it.name.endsWith('.jar') }) {
+                throw new GradleException('Prepared production mods must be distributable JARs')
+            }
+        }
+    }
     group = 'verification'
     description = 'Prepares an isolated client GameTest JVM and records its native target and classpath'
-    dependsOn 'gametestClasses', 'configureClientLaunch', 'generateDLIConfig', 'downloadAssets'
+    if (!production) dependsOn 'gametestClasses', 'configureClientLaunch', 'generateDLIConfig', 'downloadAssets'
     def remap = tasks.findByName('generateRemapClasspath')
-    if (remap != null) dependsOn remap
+    if (!production && remap != null) dependsOn remap
     doLast {
         def run = tasks.named('runClientGameTest').get()
         def output = layout.buildDirectory.file('multiplayer-launch.args').get().asFile
-        def configuration = ['launch.cfg', 'remapClasspath.txt', 'log4j.xml'].collect {
+        def configuration = production ? [] : ['launch.cfg', 'remapClasspath.txt', 'log4j.xml'].collect {
             layout.projectDirectory.file(".gradle/loom-cache/${it}").asFile.absolutePath
         }
         def arguments = ['-Xmx2G', '-Dfabric.client.gametest',
@@ -17,6 +41,15 @@ tasks.register('prepareMultiplayerLaunch') {
                 "-Dfabric.dli.config=${configuration[0]}", '-Dfabric.dli.env=client',
                 '-Dfabric.dli.main=net.fabricmc.loader.impl.launch.knot.KnotClient',
                 '-classpath', run.classpath.asPath]
+        def raw = production ? new JsonSlurper().parse(descriptor.get().asFile) : null
+        def classpath = run.classpath.files.collect { it.absolutePath }
+        if (production) {
+            int main = raw.command.indexOf(raw.mainClass)
+            if (main < 1) throw new GradleException('Prepared production main class is missing')
+            arguments = raw.command.subList(1, main)
+            classpath = arguments[arguments.indexOf('-cp') + 1].split(java.util.regex.Pattern.quote(File.pathSeparator)).toList()
+            if (classpath.any { !new File(it).isFile() }) throw new GradleException('Production classpath contains local outputs')
+        }
         output.text = arguments.collect { argument ->
             '"' + argument.toString().replace('\\', '\\\\').replace('"', '\\"') + '"'
         }.join('\n') + '\n'
@@ -29,6 +62,10 @@ tasks.register('prepareMultiplayerLaunch') {
                 axiomRuntimeJars: target.axiomRuntimeJars()]
         layout.buildDirectory.file('multiplayer-launch.inputs.json').get().asFile.text = JsonOutput.toJson([
                 schema: 1, target: parameters, configuration: configuration,
-                classpath: run.classpath.files.collect { it.absolutePath }])
+                classpath: classpath] + (production ? [launchKind: 'production-client',
+                mainClass: raw.mainClass, programArguments: raw.command.subList(raw.command.indexOf(raw.mainClass) + 1,
+                        raw.command.indexOf('--gameDir')), mods: raw.mods,
+                artifact: [path: lumiPackagedArtifact.singleFile.absolutePath,
+                        sha256: new PackagedGameTestEvidence().hash(lumiPackagedArtifact.singleFile.toPath())]] : [:]))
     }
 }

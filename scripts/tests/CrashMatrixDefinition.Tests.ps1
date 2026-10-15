@@ -62,6 +62,13 @@ try {
     $upgrade = [LumiCrashMatrixDefinition]::new('upgrade')
     $upgrade.AssertMarker($scratch, 'ALLOCATED')
     Assert-Rejected { $upgrade.AssertMarker($scratch, 'VERIFIED') }
+    $hash = 'a' * 64
+    [IO.File]::WriteAllText($scratch, "PERSISTENCE_CRASH`n$hash")
+    [LumiCrashMatrixEvidence]::AssertClientCompletion($scratch, $save.Suite(), $hash)
+    Assert-Rejected { [LumiCrashMatrixEvidence]::AssertClientCompletion($scratch, $restore.Suite(), $hash) }
+    Assert-Rejected { [LumiCrashMatrixEvidence]::AssertClientCompletion($scratch, $save.Suite(), ('b' * 64)) }
+    [IO.File]::WriteAllText($scratch, "PERSISTENCE_CRASH`n$hash`n")
+    Assert-Rejected { [LumiCrashMatrixEvidence]::AssertClientCompletion($scratch, $save.Suite(), $hash) }
 } finally { [IO.File]::Delete($scratch) }
 Write-Output 'Crash matrix definition checks passed.'
 
@@ -78,6 +85,9 @@ try {
     $evidence = [LumiCrashMatrixEvidence]::new('inputs', 'candidate', $false, $save)
     $processes = @{ produce = @{ exitCode = 86 }; verify = @{ exitCode = 0 } }
     $proof = $evidence.Record($scratch, 'ref-forced', $processes)
+    Assert-Rejected { $evidence.Record($scratch, 'ref-forced', @{
+        produce = @{ exitCode = 86 }; verify = @{ exitCode = 0; artifactSha256 = ('a' * 64) }
+    }) }
     $manifest = [ordered]@{
         schema = 2; gitSha = 'candidate'; dirty = $false; inputFingerprint = 'inputs'
         kind = 'save'; restoreCold = $false; status = 'failed'; completed = @('ref-forced')
@@ -113,6 +123,14 @@ try {
     $manifest.schema = 1
     $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
     Assert-Rejected { $evidence.Resume(@($manifestPath), @('ref-forced'), $false) }
+    $mod = Join-Path $scratch 'mod.jar'
+    [IO.File]::WriteAllText($mod, 'candidate')
+    @{ schema = 1; classpath = @(); configuration = @(); mods = @($mod) } |
+        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'multiplayer-launch.inputs.json') -Encoding UTF8
+    [IO.File]::WriteAllText((Join-Path $scratch 'multiplayer-launch.args'), '')
+    $fingerprint = [LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch)
+    [IO.File]::AppendAllText($mod, 'modified')
+    Assert-That ([LumiCrashMatrixEvidence]::Inputs($scratch, (Join-Path $scratch 'jdk/bin/java.exe'), $scratch) -cne $fingerprint) 'Production mod changes did not invalidate launch inputs.'
 } finally {
     if ($manifestPath) { [IO.File]::Delete($manifestPath) }
     if (-not [IO.Path]::GetFullPath($scratch).StartsWith($scratchRoot, [StringComparison]::OrdinalIgnoreCase)) {

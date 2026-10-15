@@ -1,5 +1,6 @@
 param(
     [switch]$RunMinecraft,
+    [string]$Target = 'legacy-12111',
     [ValidateRange(120, 7200)] [int]$TimeoutSeconds = 900,
     [string]$Java = (Join-Path $env:JAVA_HOME 'bin/java.exe')
 )
@@ -8,14 +9,32 @@ $ErrorActionPreference = 'Stop'
 if (-not $RunMinecraft) {
     throw 'No tests started. This gate opens Minecraft windows and uses CPU/GPU. Pass -RunMinecraft only when the computer is available for testing.'
 }
+. (Join-Path $PSScriptRoot 'CrashMatrixDefinition.ps1')
 $taskRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-if (-not (Test-Path -LiteralPath $Java)) { throw 'A JDK 21 java.exe is required.' }
+$taskCatalog = Get-Content -LiteralPath (Join-Path $taskRepo 'gradle/minecraft-targets.json') -Raw | ConvertFrom-Json
+$taskProfile = @($taskCatalog.targets | Where-Object { $_.id -ceq $Target })
+if ($taskProfile.Count -ne 1) { throw "Unknown target: $Target" }
+$taskModern = $taskProfile[0].javaVersion -gt 21
+$taskBuild = Join-Path $taskRepo $(if ($taskModern) { "versions/$Target/build" } else { 'build' })
+if (-not (Test-Path -LiteralPath $Java)) { throw "A JDK $($taskProfile[0].javaVersion) java.exe is required." }
 Push-Location $taskRepo
 try {
     $ErrorActionPreference = 'Continue'
-    & (Join-Path $taskRepo 'gradlew.bat') prepareMultiplayerLaunch --no-daemon
+    $taskPrepare = if ($taskModern) { @('-p', 'modern', ":adapters:${Target}:prepareMultiplayerLaunch") }
+        else { @("-PlumiTarget=$Target", 'prepareMultiplayerLaunch') }
+    & (Join-Path $taskRepo 'gradlew.bat') @taskPrepare --no-daemon
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) { throw 'Multiplayer launch preparation failed.' }
+    $taskLaunch = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json
+    $taskProduction = $taskLaunch.launchKind -ceq 'production-client'
+    if ($taskModern -and -not $taskProduction) { throw 'Native multiplayer gates require the packaged production launch.' }
+    foreach ($name in @('id', 'javaVersion', 'minecraftVersion', 'minecraftVersions', 'loaderVersion', 'fabricApiVersion',
+            'worldeditVersionId', 'axiomVersionId', 'worldeditCuiCoordinate', 'axiomRuntimeJars')) {
+        if ((@($taskLaunch.target.$name) -join "`n") -cne (@($taskProfile[0].$name) -join "`n")) {
+            throw "Prepared launch has a different target field: $name"
+        }
+    }
+    $taskFingerprint = [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild)
     $taskRun = Join-Path $taskRepo ('build/reports/lumi-multiplayer/' +
         [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $taskRun | Out-Null
@@ -26,7 +45,7 @@ try {
         status = 'unverified'; server = 'dedicated-in-owner-jvm'; clients = 2
         dirty = [bool](& git status --porcelain)
         buildProperties = @((Get-Content -LiteralPath (Join-Path $taskRepo 'gradle.properties')) | ForEach-Object { [string]$_ })
-        minecraftTarget = (Get-Content -LiteralPath (Join-Path $taskRepo 'build/multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json).target
+        minecraftTarget = $taskLaunch.target; artifact = $taskLaunch.artifact; inputFingerprint = $taskFingerprint
     }
     $taskManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskRun 'manifest.json') -Encoding UTF8
     $taskProcesses = @()
@@ -41,12 +60,15 @@ try {
             New-Item -ItemType Directory -Path $taskTempDirectory | Out-Null
             # The project already accepts the test-server EULA in fabricApi.configureTests.
             [IO.File]::WriteAllText((Join-Path $taskGameDirectory 'eula.txt'), "eula=true`n")
-            $taskArguments = Get-Content -LiteralPath (Join-Path $taskRepo 'build/multiplayer-launch.args')
+            $taskArguments = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.args')
             $taskExtra = @(('-Djava.io.tmpdir=' + $taskTempDirectory), '-Dlumi.gametest.suite=MULTIPLAYER',
                 ('-Dlumi.multiplayer.role=' + $taskRole),
-                ('-Dlumi.multiplayer.mailbox=' + $taskMailbox),
-                'net.fabricmc.devlaunchinjector.Main', '--username', ('Lumi-' + $taskRole),
-                '--gameDir', $taskGameDirectory)
+                ('-Dlumi.multiplayer.mailbox=' + $taskMailbox))
+            if ($taskProduction) {
+                $taskExtra += @("-Dlumi.gametest.completion=$(Join-Path $taskGameDirectory 'client.completed')",
+                    $taskLaunch.mainClass) + @($taskLaunch.programArguments)
+            } else { $taskExtra += 'net.fabricmc.devlaunchinjector.Main' }
+            $taskExtra += @('--username', ('Lumi-' + $taskRole), '--gameDir', $taskGameDirectory)
             foreach ($taskArgument in $taskExtra) {
                 $taskArguments += '"' + $taskArgument.Replace('\', '\\').Replace('"', '\"') + '"'
             }
@@ -78,6 +100,17 @@ try {
         }
         if (-not (Select-String -LiteralPath (Join-Path $taskRun 'owner/stdout.log') -SimpleMatch 'multiplayer_shared_history: succeeded' -Quiet)) {
             throw "Clients exited without the multiplayer gate: $taskRun"
+        }
+        if ($taskProduction) {
+            foreach ($taskRole in @('owner', 'peer')) {
+                [LumiCrashMatrixEvidence]::AssertClientCompletion(
+                    (Join-Path $taskRun "$taskRole/run/clientGameTest/client.completed"), 'MULTIPLAYER', $taskLaunch.artifact.sha256)
+            }
+        }
+        if ((& git rev-parse HEAD).Trim() -cne $taskManifest.gitSha.Trim() -or
+            [bool](& git status --porcelain) -ne $taskManifest.dirty -or
+            [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild) -cne $taskFingerprint) {
+            throw 'The candidate or launch inputs changed during the multiplayer gate.'
         }
         $taskManifest.status = 'passed'
     } catch {

@@ -11,6 +11,8 @@ if (!target.minecraftVersions().contains(game)) {
 def suppliedArtifact = providers.gradleProperty('lumiArtifact')
 def binary = tasks.named(target.javaVersion() == 21 ? 'remapJar' : 'jar')
 def artifact = suppliedArtifact.isPresent() ? files(file(suppliedArtifact.get())) : files(binary)
+ext.lumiPackagedArtifact = artifact
+
 def evidence = new PackagedGameTestEvidence()
 def candidateVersion = project.version.toString()
 def runDirectory = layout.buildDirectory.dir("run/packaged/${target.id()}/${game}/${UUID.randomUUID()}")

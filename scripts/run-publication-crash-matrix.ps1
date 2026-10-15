@@ -48,6 +48,8 @@ try {
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) { throw 'Client launch preparation failed.' }
     $taskLaunch = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json
+    $taskProduction = $taskLaunch.launchKind -ceq 'production-client'
+    if ($taskModern -and -not $taskProduction) { throw 'Native crash gates require the packaged production launch.' }
     if ($taskLaunch.target.id -cne $Target -or $taskLaunch.target.javaVersion -ne $taskProfile[0].javaVersion) {
         throw 'Prepared launch does not match the selected target.'
     }
@@ -73,6 +75,7 @@ try {
         resumedFrom = $ResumeFrom
         buildProperties = @((Get-Content -LiteralPath (Join-Path $taskRepo 'gradle.properties')) | ForEach-Object { [string]$_ })
         minecraftTarget = (Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json).target
+        artifact = $taskLaunch.artifact
     }
     $taskManifestPath = Join-Path $taskRun 'manifest.json'
     $taskManifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskManifestPath -Encoding UTF8
@@ -102,8 +105,12 @@ try {
             foreach ($taskMode in @('produce', 'verify')) {
                 $taskArguments = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.args')
                 $taskExtra = @('-Djava.io.tmpdir=' + $taskTemp) +
-                    $taskDefinition.Arguments($taskPhase, $taskMode, $taskMarker, [bool]$RestoreCold) +
-                    @('net.fabricmc.devlaunchinjector.Main', '--username', 'Lumi-crash', '--gameDir', $taskGameDirectory)
+                    $taskDefinition.Arguments($taskPhase, $taskMode, $taskMarker, [bool]$RestoreCold)
+                if ($taskProduction) {
+                    $taskExtra += @("-Dlumi.gametest.completion=$(Join-Path $taskGameDirectory 'client.completed')",
+                        $taskLaunch.mainClass) + @($taskLaunch.programArguments)
+                } else { $taskExtra += 'net.fabricmc.devlaunchinjector.Main' }
+                $taskExtra += @('--username', 'Lumi-crash', '--gameDir', $taskGameDirectory)
                 if ($Kind -eq 'upgrade') { $taskExtra = @("-Dlumi.gametest.upgrade.fixture=$taskDirectory") + $taskExtra }
                 foreach ($taskArgument in $taskExtra) {
                     $taskArguments += '"' + $taskArgument.Replace('\', '\\').Replace('"', '\"') + '"'
@@ -151,9 +158,16 @@ try {
                     } elseif (-not (Select-String -LiteralPath $taskLog -SimpleMatch $taskDefinition.Gate($taskPhase) -Quiet)) {
                         throw "Verifier exited without its gate: $taskLog"
                     }
+                    if ($taskProduction -and $taskMode -eq 'verify') {
+                        [LumiCrashMatrixEvidence]::AssertClientCompletion(
+                            (Join-Path $taskGameDirectory 'client.completed'), $taskDefinition.Suite(), $taskLaunch.artifact.sha256)
+                    }
                     $taskReceipts[$taskMode] = [ordered]@{
                         exitCode = $taskProcess.ExitCode; startedUtc = $taskStarted
                         finishedUtc = [DateTime]::UtcNow.ToString('o')
+                    }
+                    if ($taskProduction -and $taskMode -eq 'verify') {
+                        $taskReceipts[$taskMode].artifactSha256 = $taskLaunch.artifact.sha256
                     }
                 } finally {
                     if (-not $taskProcess.HasExited) { Stop-Process -Id $taskProcess.Id -Force }

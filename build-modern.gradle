@@ -9,6 +9,7 @@ def target = new MinecraftTargetCatalogReader().read(
 ext.lumiMinecraftTarget = target
 ext.lumiServerProductionRunTaskType = net.fabricmc.loom.task.prod.ServerProductionRunTask
 ext.lumiClientProductionRunTaskType = net.fabricmc.loom.task.prod.ClientProductionRunTask
+ext.lumiPreparedClientLaunchType = LumiPreparedClientLaunch
 version = rootProject.mod_version
 group = rootProject.maven_group
 base { archivesName = rootProject.archives_base_name }
@@ -116,3 +117,25 @@ tasks.named('processResources') {
 apply from: new File(repositoryRoot, 'gradle/modern-api.gradle')
 apply from: new File(repositoryRoot, 'gradle/packaged-verification.gradle')
 apply from: new File(repositoryRoot, 'gradle/client-verification.gradle')
+
+abstract class LumiPreparedClientLaunch extends net.fabricmc.loom.task.prod.ClientProductionRunTask {
+    @org.gradle.api.tasks.OutputFile
+    abstract org.gradle.api.file.RegularFileProperty getDescriptor()
+
+    @Override @org.gradle.api.tasks.TaskAction
+    void run() {
+        // Capturing this lazy provider does not launch the configured process.
+        project.providers.exec { spec ->
+            configureCommand(spec)
+            configureJvmArgs(spec)
+            configureClasspath(spec)
+            configureMainClass(spec)
+            configureProgramArgs(spec)
+            descriptor.get().asFile.text = groovy.json.JsonOutput.toJson([
+                    command: spec.commandLine.collect { it.toString() },
+                    mainClass: getMainClass().get(),
+                    runDirectory: runDir.get().asFile.absolutePath,
+                    mods: mods.files.collect { it.absolutePath }])
+        }
+    }
+}

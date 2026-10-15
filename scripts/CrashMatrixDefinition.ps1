@@ -46,6 +46,12 @@ class LumiCrashMatrixDefinition {
             "-Dlumi.persistence.phase=$phase", "-Dlumi.persistence.mode=$mode", "-Dlumi.persistence.marker=$marker")
     }
 
+    [string] Suite() {
+        if ($this.Kind -eq 'upgrade') { return 'UPGRADE' }
+        if ($this.Kind -eq 'restore') { return 'RESTORE_CRASH' }
+        return 'PERSISTENCE_CRASH'
+    }
+
     [void] AssertMarker([string] $path, [string] $phase) {
         if (-not [IO.File]::Exists($path)) { throw "Crash marker is missing: $path" }
         $lines = [IO.File]::ReadAllLines($path)
@@ -105,6 +111,14 @@ class LumiCrashMatrixEvidence {
         } finally { $hash.Dispose() }
     }
 
+    static [void] AssertClientCompletion([string] $path, [string] $suite, [string] $hash) {
+        if ($hash -cnotmatch '^[a-f0-9]{64}$' -or -not [IO.File]::Exists($path) -or
+            ([IO.FileInfo]::new($path)).Length -gt 256 -or
+            [IO.File]::ReadAllText($path) -cne "$suite`n$hash") {
+            throw "Missing or mismatched packaged client completion: $path"
+        }
+    }
+
     static [string] Inputs([string] $repo, [string] $java) {
         return [LumiCrashMatrixEvidence]::Inputs($repo, $java, (Join-Path $repo 'build'))
     }
@@ -115,6 +129,7 @@ class LumiCrashMatrixEvidence {
         if ($launch.schema -ne 1) { throw 'Unknown prepared-launch input schema.' }
         $jdk = Split-Path (Split-Path ([IO.Path]::GetFullPath($java)) -Parent) -Parent
         $roots = @($launch.classpath) + @($descriptor, (Join-Path $build 'multiplayer-launch.args'))
+        if ($launch.PSObject.Properties.Name -contains 'mods') { $roots += @($launch.mods) }
         if ($launch.PSObject.Properties.Name -contains 'configuration') {
             $roots += @($launch.configuration)
         } else {
@@ -172,6 +187,11 @@ class LumiCrashMatrixEvidence {
             throw "Missing successful process receipts: $phase"
         }
         $directory = [IO.Path]::GetFullPath($proof.directory)
+        if ($null -ne $proof.processes.verify.artifactSha256) {
+            [LumiCrashMatrixEvidence]::AssertClientCompletion(
+                (Join-Path $directory 'run/clientGameTest/client.completed'),
+                $this.Definition.Suite(), $proof.processes.verify.artifactSha256)
+        }
         $this.Definition.AssertMarker((Join-Path $directory 'crash.marker'), $phase)
         $log = Join-Path $directory 'verify.stdout.log'
         if (-not (Select-String -LiteralPath $log -SimpleMatch $this.Definition.Gate($phase) -Quiet)) {

@@ -23,6 +23,20 @@ public final class LumiClientCompletionGameTest implements FabricClientGameTest 
     @Override public void runTest(ClientGameTestContext context) {
         String destination = System.getProperty("lumi.gametest.completion");
         if (destination == null) return;
+        String hash = verifyLoadedOrigin();
+        try {
+            var suite = LumiClientTestSuite.valueOf(System.getProperty("lumi.gametest.suite"));
+            try (var file = FileChannel.open(Path.of(destination), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+                var bytes = ByteBuffer.wrap((suite.name() + "\n" + hash).getBytes(StandardCharsets.UTF_8));
+                while (bytes.hasRemaining()) file.write(bytes);
+                file.force(true);
+            }
+        } catch (IOException failed) {
+            throw new IllegalStateException("Cannot certify packaged client completion", failed);
+        }
+    }
+
+    static String verifyLoadedOrigin() {
         if (!SharedConstants.getCurrentVersion().name().equals(System.getProperty("lumi.gametest.game"))) {
             throw new AssertionError("Packaged client is running a different Minecraft version");
         }
@@ -45,14 +59,9 @@ public final class LumiClientCompletionGameTest implements FabricClientGameTest 
                     throw new AssertionError("Local output replaced a packaged Lumi class: " + type.getName());
                 }
             }
-            var suite = LumiClientTestSuite.valueOf(System.getProperty("lumi.gametest.suite"));
-            try (var file = FileChannel.open(Path.of(destination), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
-                var bytes = ByteBuffer.wrap((suite.name() + "\n" + hash).getBytes(StandardCharsets.UTF_8));
-                while (bytes.hasRemaining()) file.write(bytes);
-                file.force(true);
-            }
+            return hash;
         } catch (IOException | NoSuchAlgorithmException | URISyntaxException failed) {
-            throw new IllegalStateException("Cannot certify packaged client completion", failed);
+            throw new IllegalStateException("Cannot verify packaged client origin", failed);
         }
     }
 }
