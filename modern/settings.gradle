@@ -3,6 +3,8 @@ pluginManagement {
 }
 plugins { id 'dev.kikugie.stonecutter' version '0.9.8' }
 
+def minecraftTargets = new groovy.json.JsonSlurper().parse(file('../gradle/minecraft-targets.json'))
+
 rootProject.name = 'lumi-modern'
 include 'core', 'adapters'
 project(':core').projectDir = file('../core')
@@ -12,8 +14,8 @@ stonecutter {
     create('adapters') {
         centralScript = 'build-modern.gradle'
         kotlinController = false
-        version('modern-261', '26.1')
-        version('modern-262', '26.2')
-        version('modern-263', '26.3')
+        minecraftTargets.targets.findAll { it.javaVersion > 21 }.each { target ->
+            version(target.id, target.minecraftVersion)
+        }
     }
 }
