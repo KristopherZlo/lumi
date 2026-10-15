@@ -279,17 +279,6 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
         //?}
     }
 
-    private static Path takeHighlightScreenshot(ClientGameTestContext context, String name) {
-        boolean hidden = context.computeOnClient(client -> client.options.hideGui);
-        context.runOnClient(client -> client.options.hideGui = true);
-        try {
-            context.waitTicks(2);
-            return context.takeScreenshot(name);
-        } finally {
-            context.runOnClient(client -> client.options.hideGui = hidden);
-        }
-    }
-
     private static void assertHighlight(Path screenshot) {
         try {
             var image = ImageIO.read(screenshot.toFile());
