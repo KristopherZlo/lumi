@@ -26,7 +26,7 @@ class MinecraftTargetCatalogTest {
         assertEquals("DLVQrqv2", target.axiomVersionId());
         var modern = catalog.select("modern-261");
         assertEquals(25, modern.javaVersion());
-        assertEquals(List.of("26.1"), modern.minecraftVersions());
+        assertEquals(List.of("26.1", "26.1.1", "26.1.2"), modern.minecraftVersions());
         assertTrue(modern.axiomRuntimeJars().contains("lattice-2.0.1+26.1.jar"));
         assertTrue(modern.worldeditCuiCoordinate().isEmpty());
         assertEquals(List.of("26.2"), catalog.select("modern-262").minecraftVersions());

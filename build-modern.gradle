@@ -6,6 +6,13 @@ plugins { id 'net.fabricmc.fabric-loom' version '1.17.21' }
 def repositoryRoot = project(':adapters').projectDir
 def target = new MinecraftTargetCatalogReader().read(
         new File(repositoryRoot, 'gradle/minecraft-targets.json').toPath()).select(stonecutter.current.project)
+def verificationGame = providers.gradleProperty('lumiGameVersion').getOrElse(target.minecraftVersion())
+if (!target.minecraftVersions().contains(verificationGame)) {
+    throw new GradleException("${verificationGame} is outside target ${target.id()}")
+}
+if (verificationGame != target.minecraftVersion() && !providers.gradleProperty('lumiArtifact').isPresent()) {
+    throw new GradleException('Alternate-game verification requires a frozen -PlumiArtifact')
+}
 ext.lumiMinecraftTarget = target
 ext.lumiServerProductionRunTaskType = net.fabricmc.loom.task.prod.ServerProductionRunTask
 ext.lumiClientProductionRunTaskType = net.fabricmc.loom.task.prod.ClientProductionRunTask
@@ -40,7 +47,7 @@ def axiomJars = files(axiomDirectory.map { directory ->
 }).builtBy(unpackAxiom)
 
 dependencies {
-    minecraft "com.mojang:minecraft:${target.minecraftVersion()}"
+    minecraft "com.mojang:minecraft:${verificationGame}"
     implementation project(':core')
     include project(':core')
     implementation "net.fabricmc:fabric-loader:${target.loaderVersion()}"

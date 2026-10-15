@@ -25,7 +25,9 @@
       "id": "modern-261",
       "minecraftVersion": "26.1",
       "minecraftVersions": [
-        "26.1"
+        "26.1",
+        "26.1.1",
+        "26.1.2"
       ],
       "javaVersion": 25,
       "loaderVersion": "0.19.5",
