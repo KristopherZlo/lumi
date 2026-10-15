@@ -52,6 +52,8 @@ final class LumiCompareRenderTypes {
         RenderPipeline.Builder pipeline =
                 RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
                         .withLocation("pipeline/" + name);
+        //? if >=26.3
+        /*pipeline.withColorTargetState(com.mojang.renderpearl.api.pipeline.ColorTargetState.DEFAULT);*/
         //? if >=26.1 {
         /*pipeline.withDepthStencilState(new DepthStencilState(DepthStencilState.DEFAULT.depthTest(), false));
         *///?} else {

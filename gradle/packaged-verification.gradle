@@ -20,6 +20,15 @@ ext.lumiPackagedArtifact = artifact
 
 def evidence = new PackagedGameTestEvidence()
 def candidateVersion = project.version.toString()
+def graphicsBackend = providers.gradleProperty('lumiGraphicsBackend').orNull?.toLowerCase(Locale.ROOT)
+tasks.matching { it.name in ['runPackagedClientGameTest', 'runPackagedBenchmark', 'prepareMultiplayerLaunch'] }.configureEach {
+    onlyIf {
+        if (graphicsBackend != null && (target.id() != 'modern-263' || !['opengl', 'vulkan'].contains(graphicsBackend))) {
+            throw new GradleException('Explicit graphics backend verification requires modern-263 and opengl or vulkan')
+        }
+        true
+    }
+}
 def runDirectory = layout.buildDirectory.dir("run/packaged/${target.id()}/${game}/${UUID.randomUUID()}")
 def manifest = runDirectory.map { it.file('lumi-evidence.json').asFile }
 def finalizeEvidence = tasks.register('finalizePackagedGameTestEvidence') {
@@ -165,6 +174,10 @@ def requestedClientSuite = System.getProperty('lumi.gametest.suite', 'SMOKE').to
         }
         jvmArgs.add("-Dlumi.gametest.suite=${clientSuite}")
         jvmArgs.add("-Dlumi.gametest.game=${game}")
+        if (graphicsBackend != null) {
+            programArgs.addAll('--graphicsBackend', graphicsBackend.toUpperCase(Locale.ROOT))
+            jvmArgs.add("-Dlumi.gametest.graphicsBackend=${graphicsBackend}")
+        }
         def completion = clientDirectory.map { it.file('client.completed').asFile }
         jvmArgs.add(completion.map { "-Dlumi.gametest.completion=${it.absolutePath}" })
         jvmArgs.add(providers.provider { "-Dlumi.gametest.artifactHash=${evidence.hash(artifact.singleFile.toPath())}" })
@@ -201,6 +214,7 @@ def requestedClientSuite = System.getProperty('lumi.gametest.suite', 'SMOKE').to
             new MinecraftArtifactVerifier().verify(artifact.singleFile.toPath(), target, candidateVersion)
             record.putAll([schema: 1, status: 'running', group: target.id(), game: game,
                     scope: benchmark ? 'client-benchmark' : 'client-gametest', suite: clientSuite, javaVersion: target.javaVersion(),
+                    graphicsBackend: graphicsBackend ?: 'default',
                     benchmark: benchmark ? System.properties.findAll { name, ignored -> name.toString().startsWith('lumi.benchmark.') } : [:],
                     artifact: [path: artifact.singleFile.absolutePath, sha256: evidence.hash(artifact.singleFile.toPath())],
                     mods: mods.files.collect { mod ->

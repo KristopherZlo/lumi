@@ -23,6 +23,19 @@ public final class LumiClientCompletionGameTest implements FabricClientGameTest 
     @Override public void runTest(ClientGameTestContext context) {
         String destination = System.getProperty("lumi.gametest.completion");
         if (destination == null) return;
+        String requestedBackend = System.getProperty("lumi.gametest.graphicsBackend");
+        if (requestedBackend != null) {
+            //? if >=26.3 {
+            /*String actualBackend = context.computeOnClient(client ->
+                    com.mojang.blaze3d.systems.RenderSystem.getDevice().getDeviceInfo().backendName());
+            if (!actualBackend.equalsIgnoreCase(requestedBackend)) {
+                throw new AssertionError("Client used " + actualBackend + " instead of " + requestedBackend);
+            }
+            *///?}
+            //? if <26.3 {
+            throw new AssertionError("Explicit graphics backend verification requires Minecraft 26.3");
+            //?}
+        }
         String hash = verifyLoadedOrigin();
         try {
             var suite = LumiClientTestSuite.valueOf(System.getProperty("lumi.gametest.suite"));

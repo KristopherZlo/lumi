@@ -15,6 +15,7 @@ tasks.register('prepareMultiplayerLaunch', launchType) {
         useXVFB.set(false)
         runDir.set(layout.buildDirectory.dir('prepared-production-client'))
         mods.setFrom(source.mods)
+        programArgs.set(source.programArgs)
         jvmArgs.set(source.jvmArgs.map { values -> values.findAll {
             !it.startsWith('-Dlumi.gametest.completion=')
         } })
