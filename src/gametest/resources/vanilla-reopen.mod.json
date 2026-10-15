@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "lumi-vanilla-reopen-tests",
+  "version": "1.0.0",
+  "name": "Lumi absent world reopen control",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": ["io.github.lumi.vanillatest.LumiVanillaReopenGameTest"]
+  },
+  "depends": {"fabric-client-gametest-api-v1": "*"}
+}

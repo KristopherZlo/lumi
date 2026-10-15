@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.ConfirmScreen;
@@ -57,6 +58,11 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
         if (stage.equals("resume")) restartPhase = HistoryGenerationConversionService.Phase.valueOf(
                 System.getProperty("lumi.gametest.upgrade.expectedCut"));
         directory = Path.of(System.getProperty("lumi.gametest.upgrade.fixture")).toAbsolutePath();
+        var freezeSimulation = new AtomicBoolean(true);
+        // The independent copies must not advance ticking block-entity fields by different amounts.
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            if (freezeSimulation.get()) server.tickRateManager().setFrozen(true);
+        });
         var acceptUpgradeDone = new AtomicBoolean(stage.equals("verify") || stage.equals("startup") || stage.equals("resume"));
         context.runOnClient(client -> ClientTickEvents.END_CLIENT_TICK.register(ticking -> {
             if (acceptUpgradeDone.get() && ticking.screen instanceof ConfirmScreen screen
@@ -81,6 +87,7 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
             throw new IllegalStateException("Cannot run stopped-world upgrade fixture", failed);
         } finally {
             acceptUpgradeDone.set(false);
+            freezeSimulation.set(false);
         }
     }
 
@@ -175,7 +182,11 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
         if (!sourceSnapshot.equals(new HistorySourceSnapshot().capture(originalHistory))) {
             throw new AssertionError("Upgrade or Restore changed the original source history");
         }
-        if (automatic && !resume) verifyBackup(context);
+        if (automatic && !resume) {
+            verifyBackup(context);
+            copyWorld(targetWorld, directory.resolve("restored-target"), true);
+            copyWorld(save(context, "lumi-upgrade-oracle-a"), directory.resolve("vanilla-saved"), false);
+        }
         if (resume) LumiMod.LOGGER.info("Lumi history upgrade restart {}: succeeded", restartPhase);
     }
 
@@ -233,10 +244,45 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
         root.setInvulnerable(true);
         passenger.setNoAi(true);
         passenger.setNoGravity(true);
+        passenger.setInvulnerable(true);
         passenger.setPersistenceRequired();
         passenger.setPos(8.5, 179, 8.5);
         if (!passenger.startRiding(root, true, false)) throw new AssertionError("Cannot mount upgrade passenger");
         level.addFreshEntityWithPassengers(root);
+        populateBlockEntities(level);
+    }
+
+    private static void populateBlockEntities(ServerLevel level) {
+        var seen = new java.util.HashSet<net.minecraft.world.level.block.entity.BlockEntityType<?>>();
+        seen.add(net.minecraft.world.level.block.entity.BlockEntityType.CHEST);
+        seen.add(net.minecraft.world.level.block.entity.BlockEntityType.DECORATED_POT);
+        int index = 0;
+        for (var block : BuiltInRegistries.BLOCK) {
+            if (!(block instanceof net.minecraft.world.level.block.EntityBlock factory)) continue;
+            var state = block.defaultBlockState();
+            var entity = factory.newBlockEntity(BlockPos.ZERO, state);
+            if (entity == null || !seen.add(entity.getType())) continue;
+            BlockPos position;
+            do {
+                if (index >= 128) throw new AssertionError("Upgrade block-entity fixture exceeded its section");
+                position = new BlockPos((index % 8) * 2, 177 + (index / 48) * 4, 4 + ((index / 8) % 6) * 2);
+                index++;
+            } while (position.getX() >= 6 && position.getX() <= 10 && position.getZ() >= 6 && position.getZ() <= 10);
+            level.setBlockAndUpdate(position.below(), Blocks.STONE.defaultBlockState());
+            level.setBlockAndUpdate(position.above(), Blocks.STONE.defaultBlockState());
+            level.setBlockAndUpdate(position, state);
+            if (block instanceof net.minecraft.world.level.block.BedBlock) {
+                var head = position.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING));
+                level.setBlockAndUpdate(head.below(), Blocks.STONE.defaultBlockState());
+                level.setBlockAndUpdate(head, state.setValue(BlockStateProperties.BED_PART,
+                        net.minecraft.world.level.block.state.properties.BedPart.HEAD));
+            }
+        }
+        var placed = level.getChunk(0, 0).getBlockEntities().values().stream()
+                .map(net.minecraft.world.level.block.entity.BlockEntity::getType)
+                .collect(java.util.stream.Collectors.toSet());
+        if (!placed.containsAll(seen)) throw new AssertionError("Upgrade fixture lost a block-entity type during placement");
+        LumiMod.LOGGER.info("Upgrade fixture includes {} block-entity types", seen.size());
     }
 
     private static void assertWorld(ServerLevel level, LumiWorldSnapshot expected, String label) {

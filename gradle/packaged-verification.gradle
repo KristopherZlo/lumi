@@ -32,11 +32,13 @@ configurations {
     packagedTestMods { transitive = false }
     packagedGameTestApi { transitive = false }
     packagedClientGameTestApi { transitive = false }
+    vanillaReopenMods { transitive = false }
 }
 dependencies {
     packagedTestMods "net.fabricmc.fabric-api:fabric-api:${target.fabricApiVersion()}"
     packagedGameTestApi fabricApi.module('fabric-gametest-api-v1', target.fabricApiVersion())
     packagedClientGameTestApi fabricApi.module('fabric-client-gametest-api-v1', target.fabricApiVersion())
+    vanillaReopenMods "net.fabricmc.fabric-api:fabric-api:${target.fabricApiVersion()}"
     packagedTestMods "maven.modrinth:1u6JkXh5:${target.worldeditVersionId()}"
     packagedTestMods "maven.modrinth:N6n5dqoA:${target.axiomVersionId()}"
     target.worldeditCuiCoordinate().ifPresent { coordinate -> packagedTestMods coordinate }
@@ -180,5 +182,41 @@ tasks.register('runPackagedClientGameTest', lumiClientProductionRunTaskType) {
         record.status = 'passed'
         clientManifest.get().text = JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n'
         logger.lifecycle("Packaged client ${game}/${clientSuite}: passed; evidence: ${clientManifest.get()}")
+    }
+}
+
+def vanillaTestJar = tasks.register('vanillaReopenGameTestJar', Jar) {
+    from(sourceSets.gametest.output) {
+        include 'io/github/lumi/vanillatest/**', 'vanilla-reopen.mod.json'
+        rename 'vanilla-reopen.mod.json', 'fabric.mod.json'
+    }
+    archiveClassifier = target.javaVersion() == 21 ? 'vanilla-reopen-dev' : 'vanilla-reopen'
+}
+def vanillaProductionJar = vanillaTestJar
+if (target.javaVersion() == 21) {
+    vanillaProductionJar = tasks.register('remapVanillaReopenGameTestJar', lumiRemapJarTaskType) {
+        inputFile = vanillaTestJar.flatMap { it.archiveFile }
+        archiveClassifier = 'vanilla-reopen'
+        addNestedDependencies = false
+    }
+}
+def vanillaDirectory = layout.buildDirectory.dir("run/vanilla-reopen/${target.id()}/${game}/${UUID.randomUUID()}")
+tasks.register('runVanillaReopenGameTest', lumiClientProductionRunTaskType) {
+    group = 'verification'
+    description = 'Opens a completed Restore without Lumi and compares it with an independent vanilla world'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(target.javaVersion()) }
+    runDir = vanillaDirectory
+    mods.setFrom(configurations.vanillaReopenMods, testApi, configurations.packagedClientGameTestApi, vanillaProductionJar)
+    def fixture = System.getProperty('lumi.gametest.upgrade.fixture', '')
+    jvmArgs.addAll('-Xmx2G', '-Dfabric.client.gametest', '-Dfabric.client.gametest.disableNetworkSynchronizer=true',
+            "-Dlumi.gametest.upgrade.fixture=${fixture}")
+    def completion = vanillaDirectory.map { it.file('vanilla.completed').asFile }
+    jvmArgs.add(completion.map { "-Dlumi.gametest.completion=${it.absolutePath}" })
+    doFirst {
+        if (fixture.isBlank()) throw new GradleException('A completed upgrade fixture is required')
+    }
+    doLast {
+        if (completion.get().text != game + '\nwithout-lumi') throw new GradleException('Vanilla reopen did not complete')
+        logger.lifecycle("World reopened without Lumi on ${game}; evidence: ${completion.get()}")
     }
 }
