@@ -2,6 +2,7 @@ package io.github.lumi.gametest;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.client.LumiClient;
+import io.github.lumi.network.OperationEventPayload;
 import io.github.lumi.client.ui.LumiBranchesScreen;
 import io.github.lumi.client.ui.LumiDashboardScreen;
 import io.github.lumi.client.ui.LumiMergeScreen;
@@ -182,7 +183,11 @@ final class LumiUiTestDriver {
             context.waitTick();
         }
         throw new AssertionError("Lumi zone did not become "
-                + (active ? "active: " : "inactive: ") + name);
+                + (active ? "active: " : "inactive: ") + name
+                + "; failed requests=" + context.computeOnClient(client ->
+                        LumiClient.history().state().events().values().stream()
+                                .filter(event -> event.state() == OperationEventPayload.State.FAILED)
+                                .map(OperationEventPayload::message).toList()));
     }
 
     <T extends Screen> void openTab(String translationKey, Class<T> screen) {

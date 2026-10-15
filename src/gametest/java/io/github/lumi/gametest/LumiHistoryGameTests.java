@@ -75,6 +75,29 @@ public final class LumiHistoryGameTests {
     }
 
     @GameTest(maxTicks = 300000)
+    public void metadataChangesPreemptPendingStatistics(GameTestHelper helper) {
+        var runtime = runtime(helper);
+        var test = UUID.randomUUID();
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    try {
+                        var zoneStatistics = runtime.startPendingStatistics(runtime.activeRef(), ignored -> { });
+                        var zone = runtime.createZone("metadata-preemption", test);
+                        helper.assertTrue(zoneStatistics.isTerminal(), "Zone metadata left stale statistics active");
+                        runtime.deleteZone(zone.id(), zone.revision());
+                        var historyStatistics = runtime.startPendingStatistics(runtime.activeRef(), ignored -> { });
+                        runtime.updateWorkspaceSettings(runtime.activeWorkspace().settings());
+                        helper.assertTrue(historyStatistics.isTerminal(), "History metadata left stale statistics active");
+                    } catch (IOException failed) {
+                        throw new java.io.UncheckedIOException(failed);
+                    }
+                    LumiGameTestLease.release(test);
+                })
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
     public void freezeRejectsOrdinaryEntityLifecycle(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         helper.startSequence()

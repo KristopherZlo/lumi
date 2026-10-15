@@ -1880,15 +1880,17 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         };
     }
 
-    private void requireZoneMetadataMutable() {
+    private void requireZoneMetadataMutable() throws IOException {
         requireNoRecovery();
+        cancelPendingStatistics();
         if (operations.hasActiveOperation()) {
             throw new IllegalStateException("Zone metadata cannot change during an operation");
         }
     }
 
-    private void requireHistoryMetadataMutable() {
+    private void requireHistoryMetadataMutable() throws IOException {
         requireNoRecovery();
+        cancelPendingStatistics();
         if (operations.hasActiveOperation() || operations.queuedCount() > 0) {
             throw new IllegalStateException("History metadata cannot change during an operation");
         }
