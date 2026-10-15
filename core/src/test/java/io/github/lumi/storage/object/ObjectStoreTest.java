@@ -95,11 +95,15 @@ class ObjectStoreTest {
             batch.publish();
         }
         var started = new java.util.concurrent.CountDownLatch(1);
+        var readersReady = new java.util.concurrent.CountDownLatch(8);
         var running = new java.util.concurrent.atomic.AtomicBoolean(true);
-        try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(9)) {
             var compaction = executor.submit(() -> {
                 started.countDown();
                 try {
+                    if (!readersReady.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                        throw new AssertionError("Concurrent pack readers did not start");
+                    }
                     for (int index = 0; index < 64; index++) {
                         try (var batch = writer.beginBatch()) {
                             batch.write(("new pack " + index).getBytes(StandardCharsets.UTF_8));
@@ -107,18 +111,39 @@ class ObjectStoreTest {
                         }
                         writer.compactSmallPacks();
                     }
-                } catch (IOException failed) {
-                    throw new java.io.UncheckedIOException(failed);
+                } catch (IOException | InterruptedException failed) {
+                    throw new RuntimeException(failed);
                 } finally {
                     running.set(false);
                 }
             });
             assertTrue(started.await(10, java.util.concurrent.TimeUnit.SECONDS));
-            for (int reads = 0; reads < 128 || running.get(); reads++) {
-                assertArrayEquals(payload, new ObjectStore(tempDir).read(retained));
+            var readers = new java.util.ArrayList<java.util.concurrent.Future<Void>>();
+            for (int reader = 0; reader < 8; reader++) {
+                readers.add(executor.submit(() -> {
+                    readersReady.countDown();
+                    for (int reads = 0; reads < 128 || running.get(); reads++) {
+                        assertArrayEquals(payload, new ObjectStore(tempDir).read(retained));
+                    }
+                    return null;
+                }));
             }
+            for (var reader : readers) reader.get(30, java.util.concurrent.TimeUnit.SECONDS);
             compaction.get(30, java.util.concurrent.TimeUnit.SECONDS);
         }
+    }
+
+    @Test
+    void rejectsMissingPackWhenItsIndexRemainsPublished() throws IOException {
+        var store = new ObjectStore(tempDir);
+        try (var batch = store.beginBatch()) {
+            batch.write("missing pack".getBytes(StandardCharsets.UTF_8));
+            batch.publish();
+        }
+        try (var files = Files.list(tempDir.resolve("packs"))) {
+            Files.delete(files.filter(path -> path.toString().endsWith(".pack")).findFirst().orElseThrow());
+        }
+        assertThrows(CorruptObjectException.class, () -> new ObjectStore(tempDir).listIds());
     }
 
     @Test

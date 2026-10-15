@@ -12,6 +12,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.Map;
 
 /** Durable lookup table published only after its immutable pack verifies. */
@@ -29,22 +30,39 @@ final class ObjectPackIndex {
         if (!Files.exists(directory)) {
             return Map.of();
         }
-        for (int attempt = 0; ; attempt++) {
+        var retired = new HashSet<Path>();
+        int failures = 0;
+        for (;;) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new java.io.InterruptedIOException("Object pack catalog read interrupted");
+            }
             Map<ObjectId, PackedObject> entries = new LinkedHashMap<>();
             boolean replaced = false;
             try (var indexes = Files.list(directory)) {
-                for (Path index : indexes
+                var snapshot = indexes
                         .filter(path -> path.getFileName().toString().endsWith(".idx"))
                         .sorted()
-                        .toList()) {
+                        .toList();
+                retired.retainAll(snapshot);
+                for (Path index : snapshot) {
+                    if (retired.contains(index)) continue;
                     try {
                         for (var entry : read(index).entrySet()) {
                             entries.putIfAbsent(entry.getKey(), entry.getValue());
                         }
                     } catch (IOException failed) {
-                        // Compaction publishes its replacement before retiring old indexes.
-                        if (attempt == 2 || (!Files.notExists(index)
-                                && !(failed instanceof java.nio.file.FileSystemException))) throw failed;
+                        // Windows directory listings/attributes can retain a deleted index.
+                        // Probe opening it instead of treating a retired pack as corruption.
+                        try (var ignored = FileChannel.open(index, StandardOpenOption.READ)) {
+                            // A still-published invalid index must remain an error.
+                        } catch (java.nio.file.NoSuchFileException removed) {
+                            retired.add(index);
+                            replaced = true;
+                            continue;
+                        } catch (IOException inaccessible) {
+                            failed.addSuppressed(inaccessible);
+                        }
+                        if (++failures == 3) throw failed;
                         replaced = true;
                         break;
                     }
