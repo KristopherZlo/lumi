@@ -46,6 +46,27 @@ public final class HistoryGenerationRepository {
         return directory(selected);
     }
 
+    /** Selects existing history or publishes a fresh representation without converting legacy data. */
+    public synchronized Path initializeEmpty(WorldDataVersion currentGame) throws IOException {
+        HistoryGeneration selected = active();
+        if (!selected.legacy() || selected.dataVersion().equals(currentGame)) {
+            return currentDirectory(currentGame);
+        }
+        if (pending().isPresent()) throw new IOException("An interrupted history conversion requires recovery");
+        if (Files.exists(root)) {
+            try (var entries = Files.list(root)) {
+                if (entries.anyMatch(path -> !path.getFileName().toString().equals("generations"))) {
+                    throw new IOException("Existing Lumi history requires conversion before opening this game");
+                }
+            }
+        }
+        HistoryGeneration prepared = prepare(selected, currentGame);
+        // The source inventory is empty. No payloads, refs or mutable sidecars are being translated.
+        markVerified(selected, prepared);
+        publish(selected, prepared);
+        return directory(prepared);
+    }
+
     public synchronized HistoryGeneration active() throws IOException {
         if (!Files.exists(pointer)) return HistoryGeneration.LEGACY;
         HistoryGeneration generation = decode(pointer, 1)[0];

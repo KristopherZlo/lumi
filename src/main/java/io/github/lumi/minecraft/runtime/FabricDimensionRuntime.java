@@ -350,7 +350,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(layout, "layout");
         Objects.requireNonNull(background, "background");
         Objects.requireNonNull(durabilityBackground, "durabilityBackground");
-        Path repository = layout.resolveCurrent(level.dimension().identifier().toString(),
+        Path repository = layout.initializeCurrent(level.dimension().identifier().toString(),
                 new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()));
         DimensionFreezeState freeze = new DimensionFreezeState();
         var objects = new WorldObjectRepository(repository);

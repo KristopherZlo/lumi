@@ -17,6 +17,43 @@ class HistoryGenerationRepositoryTest {
     @TempDir Path root;
 
     @Test
+    void freshModernHistoryPublishesBeforeUseAndRefusesLegacyReopening() throws Exception {
+        var repository = new HistoryGenerationRepository(root.resolve("fresh"));
+        var version = new WorldDataVersion(4786);
+        Path fresh = repository.initializeEmpty(version);
+        assertEquals(fresh, new HistoryGenerationRepository(root.resolve("fresh")).currentDirectory(version));
+        assertEquals(fresh, repository.initializeEmpty(version));
+        assertEquals(version, repository.active().dataVersion());
+        assertThrows(IOException.class, () -> repository.initializeEmpty(WorldDataVersion.LEGACY_12111));
+        assertThrows(IOException.class, () -> repository.initializeEmpty(new WorldDataVersion(4903)));
+        assertEquals(root, new HistoryGenerationRepository(root).initializeEmpty(WorldDataVersion.LEGACY_12111));
+    }
+
+    @Test
+    void freshInitializationNeverMistakesExistingHistoryForAnEmptyWorld() throws Exception {
+        var repository = new HistoryGenerationRepository(root);
+        Files.createDirectories(root.resolve("objects"));
+        Files.writeString(root.resolve("objects/original"), "retain");
+        assertThrows(IOException.class, () -> repository.initializeEmpty(new WorldDataVersion(4786)));
+        assertEquals(HistoryGeneration.LEGACY, repository.active());
+        assertEquals("retain", Files.readString(root.resolve("objects/original")));
+        org.junit.jupiter.api.Assertions.assertFalse(Files.exists(root.resolve("generations")));
+    }
+
+    @Test
+    void failedFreshPublicationCanRestartWithoutSelectingTheUnpublishedCandidate() throws Exception {
+        var version = new WorldDataVersion(4786);
+        var interrupted = new HistoryGenerationRepository(root,
+                () -> { throw new IOException("interrupted fresh publication"); });
+        assertThrows(IOException.class, () -> interrupted.initializeEmpty(version));
+        assertEquals(HistoryGeneration.LEGACY, new HistoryGenerationRepository(root).active());
+        var restarted = new HistoryGenerationRepository(root);
+        Path selected = restarted.initializeEmpty(version);
+        assertEquals(selected, restarted.currentDirectory(version));
+        assertEquals(version, restarted.active().dataVersion());
+    }
+
+    @Test
     void restartSelectsOnlyVerifiedPublishedHistoryAndRetainsTheSource() throws Exception {
         var repository = new HistoryGenerationRepository(root);
         Files.writeString(root.resolve("original-history"), "unchanged");

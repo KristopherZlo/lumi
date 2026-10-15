@@ -28,6 +28,10 @@ public final class DimensionRepositoryLayout {
         return new HistoryGenerationRepository(resolve(dimensionId)).currentDirectory(gameVersion);
     }
 
+    public Path initializeCurrent(String dimensionId, WorldDataVersion gameVersion) throws IOException {
+        return new HistoryGenerationRepository(resolve(dimensionId)).initializeEmpty(gameVersion);
+    }
+
     public String dimensionId(Path repository) {
         Path normalized = Objects.requireNonNull(repository, "repository").toAbsolutePath().normalize();
         if (!historyRoot.equals(normalized.getParent())) {
