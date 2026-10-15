@@ -49,6 +49,7 @@ import io.github.lumi.domain.model.SectionKey;
 import io.github.lumi.domain.model.SectionBlob;
 import io.github.lumi.domain.model.VersionDisplayName;
 import io.github.lumi.domain.model.VersionTags;
+import io.github.lumi.domain.model.Workspace;
 import io.github.lumi.domain.model.WorkingIndexSnapshot;
 import io.github.lumi.domain.model.WorkspaceSwitchPlan;
 import io.github.lumi.domain.service.DimensionHistoryInitializer;
@@ -2150,7 +2151,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     }
                     ReturnPointRestoreOperation rollback =
                             createQuickRollback(author, pending, expected);
-                    context.set(new QuickRollbackContext(expected, rollback));
+                    context.set(new QuickRollbackContext(expected, workspace, rollback));
                     return rollback;
                 });
         enqueueForeground(operation, OperationPriority.URGENT, completed -> {
@@ -2160,11 +2161,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                     QuickRollbackContext value = context.get();
                     if (value != null) {
                         var saved = value.operation().returnPoint().orElseThrow();
-                        causalTicks.cancelSections(
-                                saved.capturedGenerations().generations().keySet().stream()
-                                        .filter(SectionKey.class::isInstance)
-                                        .map(SectionKey.class::cast)
-                                        .collect(java.util.stream.Collectors.toUnmodifiableSet()));
+                        causalTicks.cancelScope(value.workspace()::includes);
                         DirectLiveActionContext.recoverOrphanedAction(
                                 liveActions, author.id());
                         liveActions.pushCheckpoint(
@@ -2312,6 +2309,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
 
     private record QuickRollbackContext(
             BranchRef expectedRef,
+            Workspace workspace,
             ReturnPointRestoreOperation operation) { }
 
     private static void publishRestoreDiffProgress(

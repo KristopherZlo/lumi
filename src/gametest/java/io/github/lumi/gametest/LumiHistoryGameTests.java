@@ -43,6 +43,86 @@ public final class LumiHistoryGameTests {
             new TicketType(Long.MAX_VALUE, TicketType.FLAG_LOADING);
 
     @GameTest(maxTicks = 300000)
+    public void quickRestoreCancelsWorkInUnchangedSections(GameTestHelper helper) {
+        var runtime = runtime(helper);
+        var level = helper.getLevel();
+        var lease = UUID.randomUUID();
+        var zone = new AtomicReference<UUID>();
+        var terminal = new AtomicReference<MutationTerminalState>();
+        var current = new AtomicReference<DimensionMutation>();
+        BlockPos changed = helper.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos pending = changed.east(32);
+        BlockPos ambient = pending.south();
+        helper.startSequence()
+                .thenWaitUntil(() -> acquireZone(helper, runtime, lease, zone, List.of(changed, pending)))
+                .thenExecute(() -> {
+                    try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), AUTHOR.id())) {
+                        level.setBlockAndUpdate(changed, Blocks.STONE.defaultBlockState());
+                        level.setBlockAndUpdate(pending, Blocks.STONE.defaultBlockState());
+                    }
+                    startSave(helper, runtime, zone.get(), "Delayed work baseline", terminal, current);
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Delayed work baseline");
+                    try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), AUTHOR.id())) {
+                        level.setBlockAndUpdate(changed, Blocks.GOLD_BLOCK.defaultBlockState());
+                        level.scheduleTick(pending, Blocks.STONE, 100000);
+                    }
+                    level.scheduleTick(ambient, Blocks.STONE, 100000);
+                    helper.assertFalse(runtime.mutations().snapshot().generations()
+                                    .containsKey(MinecraftSectionCapture.key(pending)),
+                            "Delayed tick section must remain unchanged");
+                    try {
+                        current.set(runtime.startQuickRollback(AUTHOR,
+                                operation -> terminal.set(operation.terminalState())));
+                    } catch (IOException failed) {
+                        throw new java.io.UncheckedIOException(failed);
+                    }
+                })
+                .thenWaitUntil(() -> requireIdle(helper, runtime, current))
+                .thenExecute(() -> {
+                    requireSucceeded(helper, terminal.get(), "Quick Restore");
+                    helper.assertFalse(level.getBlockTicks().hasScheduledTick(pending, Blocks.STONE),
+                            "Quick Restore left player work in an unchanged section");
+                    helper.assertTrue(level.getBlockTicks().hasScheduledTick(ambient, Blocks.STONE),
+                            "Quick Restore removed unrelated vanilla work");
+                    ((io.github.lumi.minecraft.world.OwnedTickAccess<net.minecraft.world.level.block.Block>)
+                            level.getBlockTicks()).lumi$remove(ambient, Blocks.STONE);
+                    LumiGameTestLease.release(lease);
+                })
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
+    public void delayedWorkCancellationPreservesOutsideScope(GameTestHelper helper) {
+        var runtime = runtime(helper);
+        var level = helper.getLevel();
+        var lease = UUID.randomUUID();
+        BlockPos inside = helper.absolutePos(new BlockPos(2, 2, 2));
+        BlockPos outside = inside.east(32);
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, lease))
+                .thenExecute(() -> {
+                    level.getChunkAt(inside);
+                    level.getChunkAt(outside);
+                    try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), AUTHOR.id())) {
+                        level.scheduleTick(inside, Blocks.STONE, 100000);
+                        level.scheduleTick(outside, Blocks.STONE, 100000);
+                    }
+                    var scope = MinecraftSectionCapture.key(inside);
+                    runtime.causalTicks().cancelScope(scope::equals);
+                    helper.assertFalse(level.getBlockTicks().hasScheduledTick(inside, Blocks.STONE),
+                            "Cancellation left owned work inside its scope");
+                    helper.assertTrue(level.getBlockTicks().hasScheduledTick(outside, Blocks.STONE),
+                            "Cancellation crossed its scope boundary");
+                    runtime.causalTicks().cancelScope(MinecraftSectionCapture.key(outside)::equals);
+                    LumiGameTestLease.release(lease);
+                })
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
     public void entityStorageReadKeepsBaselinePending(GameTestHelper helper)
             throws ReflectiveOperationException {
         var runtime = runtime(helper);

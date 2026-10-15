@@ -298,25 +298,35 @@ public final class MinecraftCausalTickTracker {
         ((OwnedTickAccess<?>) blockTicks).lumi$removeSections(restored);
         ((OwnedTickAccess<?>) fluidTicks).lumi$removeSections(restored);
         eventAccess.lumi$removeBlockEventsWhere(matches);
+        cancelOwnedWork(matches);
+    }
+
+    /** Cancels delayed player work even where it has not changed a block yet. */
+    public void cancelScope(java.util.function.Predicate<SectionKey> scope) {
+        Objects.requireNonNull(scope, "scope");
+        cancelOwnedWork(position -> scope.test(MinecraftSectionCapture.key(position)));
+    }
+
+    private void cancelOwnedWork(java.util.function.Predicate<BlockPos> matches) {
         var cancelledTicks = tokens.cancelKeys(
                 key -> matches.test(key.position()));
         cancelledTicks.forEach((key, root) -> {
+            remove(key);
             journal.release(root.action());
         });
         var cancelledEvents = blockEvents.cancelKeys(
                 event -> matches.test(event.pos()));
         cancelledEvents.forEach((event, root) -> {
+            eventAccess.lumi$removeBlockEvent(event);
             journal.release(root.action());
         });
         var cancelledBlockCarriers = blockCarriers.cancelKeys(
-                carrier -> restored.contains(MinecraftSectionCapture.key(
-                        carrier.getBlockPos())));
+                carrier -> matches.test(carrier.getBlockPos()));
         cancelledBlockCarriers.values().forEach(root ->
                 journal.release(root.action()));
         changedBlockCarriers.removeAll(cancelledBlockCarriers.keySet());
         entityCarriers.cancelKeys(
-                carrier -> restored.contains(MinecraftSectionCapture.key(
-                        carrier.blockPosition())))
+                carrier -> matches.test(carrier.blockPosition()))
                 .values().forEach(root -> journal.release(root.action()));
         cancelAuthorizedWork();
     }
