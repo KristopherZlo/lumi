@@ -546,14 +546,19 @@ public final class ObjectStore {
         }
 
         private byte[] readPacked(ObjectId id, PackedObject packed) throws IOException {
-            for (int attempt = 0; ; attempt++) {
+            int failures = 0;
+            for (;;) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new java.io.InterruptedIOException("Object pack read interrupted");
+                }
                 try {
                     return packs.read(packed);
                 } catch (java.nio.file.FileSystemException replacedPack) {
                     PackedObject refreshed = refreshPackedObjects().get(id);
-                    if (attempt == 2 || refreshed == null) {
-                        throw replacedPack;
-                    }
+                    if (refreshed == null) throw replacedPack;
+                    // A new immutable pack is progress; only an unchanged failure consumes retries.
+                    failures = refreshed.pack().equals(packed.pack()) ? failures + 1 : 0;
+                    if (failures == 3) throw replacedPack;
                     packed = refreshed;
                 }
             }
