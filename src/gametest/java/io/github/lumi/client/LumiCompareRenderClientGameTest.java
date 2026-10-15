@@ -114,7 +114,7 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                         active = true;
                     });
                     context.waitFor(client -> frame >= 90 && pending.isEmpty(), 1200);
-                    Path screenshot = context.takeScreenshot("lumi-compare-" + name);
+                    Path screenshot = takeHighlightScreenshot(context, "lumi-compare-" + name);
                     assertHighlight(screenshot);
                     if (!sparse && throughWorld) denseXrayScreenshot = screenshot;
                     context.runOnClient(client -> active = false);
@@ -140,7 +140,7 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                 active = true;
             });
             context.waitFor(client -> frame >= 90 && pending.isEmpty(), 1200);
-            Path transientScreenshot = context.takeScreenshot("lumi-compare-zero-budget");
+            Path transientScreenshot = takeHighlightScreenshot(context, "lumi-compare-zero-budget");
             assertHighlight(transientScreenshot);
             assertSameHighlight(denseXrayScreenshot, transientScreenshot);
             context.runOnClient(client -> {
@@ -251,7 +251,7 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                 active = true;
             });
             context.waitFor(client -> frame >= 20 && pending.isEmpty(), 1200);
-            Path screenshot = context.takeScreenshot("lumi-compare-" + label);
+            Path screenshot = takeHighlightScreenshot(context, "lumi-compare-" + label);
             try {
                 var image = ImageIO.read(screenshot.toFile());
                 int highlighted = 0;
@@ -290,6 +290,17 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
     }
 
     private record Pending(GpuQuery query, String prefix) { }
+
+    private static Path takeHighlightScreenshot(ClientGameTestContext context, String name) {
+        boolean hidden = context.computeOnClient(client -> client.options.hideGui);
+        context.runOnClient(client -> client.options.hideGui = true);
+        try {
+            context.waitTicks(2);
+            return context.takeScreenshot(name);
+        } finally {
+            context.runOnClient(client -> client.options.hideGui = hidden);
+        }
+    }
 
     private static void assertHighlight(Path screenshot) {
         try {
