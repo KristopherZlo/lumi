@@ -257,7 +257,7 @@ dependencies {
     compileOnly axiomRuntimeJars
     modRuntimeOnly "maven.modrinth:1u6JkXh5:${minecraftTarget.worldeditVersionId()}"
     modRuntimeOnly "maven.modrinth:N6n5dqoA:${minecraftTarget.axiomVersionId()}"
-    modRuntimeOnly axiomRuntimeJars
+    runtimeOnly axiomRuntimeJars
     minecraftTarget.worldeditCuiCoordinate().ifPresent { coordinate -> modRuntimeOnly coordinate }
 
     implementation "at.yawk.lz4:lz4-java:${project.lz4_version}"
