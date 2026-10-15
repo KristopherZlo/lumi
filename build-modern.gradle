@@ -4,11 +4,24 @@ import io.github.lumi.buildconfig.MinecraftTargetCatalogReader
 plugins { id 'net.fabricmc.fabric-loom' version '1.17.21' }
 
 def repositoryRoot = project(':adapters').projectDir
-def target = new MinecraftTargetCatalogReader().read(
-        new File(repositoryRoot, 'gradle/minecraft-targets.json').toPath()).select(stonecutter.current.project)
-def verificationGame = providers.gradleProperty('lumiGameVersion').getOrElse(target.minecraftVersion())
-if (!target.minecraftVersions().contains(verificationGame)) {
-    throw new GradleException("${verificationGame} is outside target ${target.id()}")
+def catalog = new MinecraftTargetCatalogReader().read(
+        new File(repositoryRoot, 'gradle/minecraft-targets.json').toPath())
+def target = catalog.select(stonecutter.current.project)
+def requestedGame = providers.gradleProperty('lumiGameVersion').orNull
+if (requestedGame != null && !catalog.targets().any { it.minecraftVersions().contains(requestedGame) }) {
+    throw new GradleException("Unknown verification game ${requestedGame}")
+}
+def verificationGame = requestedGame != null && target.minecraftVersions().contains(requestedGame)
+        ? requestedGame : target.minecraftVersion()
+ext.lumiVerificationGame = verificationGame
+// Every adapter configures together; reject a mismatched launch only on its selected task.
+tasks.matching { it.name in ['runClientGameTest', 'runGameTest', 'runPackagedGameTest',
+        'runPackagedClientGameTest', 'runVanillaReopenGameTest', 'prepareMultiplayerLaunch'] }.configureEach {
+    doFirst {
+        if (requestedGame != null && !target.minecraftVersions().contains(requestedGame)) {
+            throw new GradleException("${requestedGame} is outside target ${target.id()}")
+        }
+    }
 }
 if (verificationGame != target.minecraftVersion() && !providers.gradleProperty('lumiArtifact').isPresent()) {
     throw new GradleException('Alternate-game verification requires a frozen -PlumiArtifact')

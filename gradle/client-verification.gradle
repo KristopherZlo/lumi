@@ -56,7 +56,7 @@ tasks.register('prepareMultiplayerLaunch', launchType) {
             '"' + argument.toString().replace('\\', '\\\\').replace('"', '\\"') + '"'
         }.join('\n') + '\n'
         def target = lumiMinecraftTarget
-        def parameters = [id: target.id(), minecraftVersion: target.minecraftVersion(),
+        def parameters = [id: target.id(), minecraftVersion: project.findProperty('lumiVerificationGame') ?: target.minecraftVersion(),
                 minecraftVersions: target.minecraftVersions(), javaVersion: target.javaVersion(),
                 loaderVersion: target.loaderVersion(), fabricApiVersion: target.fabricApiVersion(),
                 worldeditVersionId: target.worldeditVersionId(), axiomVersionId: target.axiomVersionId(),

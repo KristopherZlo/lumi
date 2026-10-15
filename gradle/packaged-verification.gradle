@@ -4,7 +4,7 @@ import io.github.lumi.buildconfig.PackagedGameTestEvidence
 import io.github.lumi.buildconfig.LegacyGameTestAnnotationRepair
 
 def target = lumiMinecraftTarget
-def game = providers.gradleProperty('lumiGameVersion').getOrElse(target.minecraftVersion())
+def game = project.findProperty('lumiVerificationGame') ?: providers.gradleProperty('lumiGameVersion').getOrElse(target.minecraftVersion())
 if (!target.minecraftVersions().contains(game)) {
     throw new GradleException("${game} is outside target ${target.id()}")
 }
@@ -163,8 +163,13 @@ tasks.register('runPackagedClientGameTest', lumiClientProductionRunTaskType) {
     jvmArgs.add(providers.provider { "-Dlumi.gametest.artifactHash=${evidence.hash(artifact.singleFile.toPath())}" })
     def record = [:]
     doFirst {
-        if (!['ALL', 'SMOKE', 'UI', 'UI_SCALE', 'COMPARE_RENDER', 'INTERACTION', 'RECOVERY', 'EXACT'].contains(clientSuite)) {
+        if (!['ALL', 'SMOKE', 'UI', 'UI_SCALE', 'COMPARE_RENDER', 'INTERACTION', 'RECOVERY', 'EXACT', 'UPGRADE'].contains(clientSuite)) {
             throw new GradleException('Packaged client requires a functional GameTest suite')
+        }
+        if (clientSuite == 'UPGRADE' && (!['source', 'edit', 'verify', 'startup', 'resume'].contains(
+                System.getProperty('lumi.gametest.upgrade.stage', ''))
+                || System.getProperty('lumi.gametest.upgrade.fixture', '').isBlank())) {
+            throw new GradleException('Packaged upgrade requires an explicit stage and fixture directory')
         }
         if (Boolean.getBoolean('lumi.benchmark.enabled') || Boolean.getBoolean('lumi.gametest.firstMinuteOnly')) {
             throw new GradleException('Packaged functional suites require full scenarios without benchmark mode')
