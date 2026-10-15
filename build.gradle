@@ -146,6 +146,7 @@ tasks.named('runClientGameTest') {
                 || name == 'lumi.gametest.firstMinuteOnly'
                 || name == 'lumi.gametest.suite'
                 || name.toString().startsWith('lumi.gametest.restoreCrash')
+                || name.toString().startsWith('lumi.gametest.upgrade.')
                 || name.toString().startsWith('lumi.multiplayer.')
     }.each { name, value -> systemProperty name.toString(), value }
     if (System.getProperty('lumi.gametest.restoreCrashMode') == 'produce') {

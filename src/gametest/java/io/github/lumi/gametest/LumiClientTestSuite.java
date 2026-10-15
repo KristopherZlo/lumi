@@ -14,6 +14,7 @@ enum LumiClientTestSuite {
     RESTORE_CRASH,
     PERSISTENCE_CRASH,
     EXACT,
+    UPGRADE,
     BENCHMARK,
     MULTIPLAYER;
 
