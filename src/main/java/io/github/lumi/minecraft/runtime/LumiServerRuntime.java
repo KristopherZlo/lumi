@@ -57,10 +57,11 @@ public final class LumiServerRuntime {
             throw new IllegalStateException("A Lumi server session is already active");
         }
         try {
+            MinecraftHistoryStartup.run(server);
             PreModBackupService.run(server);
         } catch (IOException failed) {
             throw new IllegalStateException(
-                    "Optional pre-Lumi backup failed; the world was not opened", failed);
+                    "Lumi startup preparation failed; no dimension runtime was opened", failed);
         }
         session = new FabricServerSession(server);
     }

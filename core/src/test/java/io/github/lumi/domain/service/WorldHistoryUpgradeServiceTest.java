@@ -96,4 +96,13 @@ class WorldHistoryUpgradeServiceTest {
         return new WorldHistoryUpgradeService(layout, modern,
                 HistoryGenerationConversionServiceTest.adapter(), permitted);
     }
+
+    @Test void serverPermissionMetadataIsNotADimensionAndRemainsIntact() throws Exception {
+        var permissions = new io.github.lumi.storage.repository.SurvivalOptInRepository(world);
+        var player = java.util.UUID.randomUUID();
+        permissions.setEnabled(player, true);
+        assertEquals(0, service(new DimensionRepositoryLayout(world), Set.of())
+                .upgrade(() -> fail("Permission settings triggered an upgrade"), ignored -> { }));
+        assertTrue(permissions.isEnabled(player));
+    }
 }

@@ -38,7 +38,8 @@ public final class DimensionRepositoryLayout {
         if (!Files.exists(historyRoot)) return List.of();
         if (Files.isSymbolicLink(historyRoot)) throw new IOException("History root is a symbolic link");
         try (var entries = Files.list(historyRoot)) {
-            var repositories = entries.sorted().toList();
+            var repositories = entries.filter(path -> !path.getFileName().toString().equals("server"))
+                    .sorted().toList();
             for (Path repository : repositories) {
                 if (Files.isSymbolicLink(repository) || !Files.isDirectory(repository)) {
                     throw new IOException("Invalid dimension repository: " + repository);

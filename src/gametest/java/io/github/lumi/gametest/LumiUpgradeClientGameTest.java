@@ -51,7 +51,7 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
         String stage = System.getProperty("lumi.gametest.upgrade.stage", "");
         if (stage.isEmpty()) return;
         directory = Path.of(System.getProperty("lumi.gametest.upgrade.fixture")).toAbsolutePath();
-        var acceptUpgradeDone = new AtomicBoolean(stage.equals("verify"));
+        var acceptUpgradeDone = new AtomicBoolean(stage.equals("verify") || stage.equals("startup"));
         context.runOnClient(client -> ClientTickEvents.END_CLIENT_TICK.register(ticking -> {
             if (acceptUpgradeDone.get() && ticking.screen instanceof ConfirmScreen screen
                     && screen.getTitle().getString().equals(Component.translatable("upgradeWorld.done").getString())) {
@@ -66,7 +66,8 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
             switch (stage) {
                 case "source" -> createSource(context);
                 case "edit" -> editSource(context);
-                case "verify" -> verifyUpgrade(context);
+                case "verify" -> verifyUpgrade(context, false);
+                case "startup" -> verifyUpgrade(context, true);
                 default -> throw new IllegalArgumentException("Unknown upgrade fixture stage: " + stage);
             }
         } catch (IOException failed) {
@@ -121,7 +122,7 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
         writeFixture();
     }
 
-    private void verifyUpgrade(ClientGameTestContext context) throws IOException {
+    private void verifyUpgrade(ClientGameTestContext context, boolean automatic) throws IOException {
         readFixture();
         copyWorld(directory.resolve("source-a"), save(context, "lumi-upgrade-oracle-a"), false);
         copyWorld(directory.resolve("source-b"), save(context, "lumi-upgrade-oracle-b"), false);
@@ -135,26 +136,7 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
                     converter = new MinecraftWorldPayloadConverter(level.registryAccess(), BuiltInRegistries.ENTITY_TYPE);
                     return LumiWorldSnapshot.capture(level, AREA);
                 }));
-        Path targetWorld = save(context, "lumi-upgrade-target");
-        var current = new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version());
-        //? if >=26.1 {
-        /*var storage = context.computeOnClient(client -> client.getLevelSource());
-        try (var access = storage.createAccess("lumi-upgrade-target")) {
-            net.minecraft.util.datafix.DataFixers.getFileFixer().fix(access,
-                    access.getUnfixedDataTag(false), new net.minecraft.util.worldupdate.UpgradeProgress());
-        }
-        *///?}
-        // This is the Fabric test worker, after both reference worlds have closed and before the target opens.
-        try (var dimensions = Files.list(targetWorld.resolve("lumi/history"))) {
-            for (Path dimension : dimensions.toList()) {
-                new HistoryGenerationConversionService(dimension).convert(current, converter,
-                        progress -> {
-                            if (progress.completed() == 0 || progress.completed() % 128 == 0) {
-                                LumiMod.LOGGER.info("Upgrade fixture {}: {}", dimension.getFileName(), progress);
-                            }
-                        });
-            }
-        }
+        if (!automatic) convertBeforeOpening(context);
         LumiClientBehaviorWorld.runExistingWithReopen(context, "upgrade-converted", "lumi-upgrade-target",
                 (test, world, report) -> {
                     var ui = new LumiUiTestDriver(test);
@@ -174,6 +156,42 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
                             server.getPlayerList().getPlayers().getFirst().level(), expectedSaved, "restored upgrade"));
                 }, (test, world, report) -> world.getServer().runOnServer(server -> assertWorld(
                         server.getPlayerList().getPlayers().getFirst().level(), expectedSaved, "reopened upgrade")));
+        if (automatic) verifyBackup(context);
+    }
+
+    private void convertBeforeOpening(ClientGameTestContext context) throws IOException {
+        //? if >=26.1 {
+        /*var storage = context.computeOnClient(client -> client.getLevelSource());
+        try (var access = storage.createAccess("lumi-upgrade-target")) {
+            net.minecraft.util.datafix.DataFixers.getFileFixer().fix(access,
+                    access.getUnfixedDataTag(false), new net.minecraft.util.worldupdate.UpgradeProgress());
+        }
+        *///?}
+        var current = new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version());
+        try (var dimensions = Files.list(save(context, "lumi-upgrade-target").resolve("lumi/history"))) {
+            for (Path dimension : dimensions.toList()) {
+                new HistoryGenerationConversionService(dimension).convert(current, converter, progress -> {
+                    if (progress.completed() == 0 || progress.completed() % 128 == 0) {
+                        LumiMod.LOGGER.info("Upgrade fixture {}: {}", dimension.getFileName(), progress);
+                    }
+                });
+            }
+        }
+    }
+
+    private static void verifyBackup(ClientGameTestContext context) throws IOException {
+        Path backups = context.computeOnClient(client -> client.getLevelSource().getBackupPath());
+        try (var files = Files.list(backups)) {
+            var archives = files.filter(file -> file.getFileName().toString().endsWith(".zip")).toList();
+            if (archives.size() != 1) throw new AssertionError("Startup upgrade must create exactly one world backup");
+            try (var zip = new java.util.zip.ZipFile(archives.getFirst().toFile())) {
+                var entries = zip.stream().map(java.util.zip.ZipEntry::getName).toList();
+                if (entries.stream().noneMatch(name -> name.contains("/lumi/history/") && name.endsWith("/working/index.bin"))
+                        || entries.stream().anyMatch(name -> name.endsWith("/generations/active.bin"))) {
+                    throw new AssertionError("Upgrade backup did not preserve the original history representation");
+                }
+            }
+        }
     }
 
     private static void populate(ServerLevel level) {
