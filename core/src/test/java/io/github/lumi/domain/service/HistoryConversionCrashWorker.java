@@ -12,7 +12,7 @@ public final class HistoryConversionCrashWorker {
     public static void main(String[] args) throws Exception {
         Path root = Path.of(args[0]);
         String phase = args[1];
-        new HistoryGenerationConversionService(root).convert(new WorldDataVersion(4786),
+        new HistoryGenerationConversionService(root).convert(new WorldDataVersion(Integer.parseInt(args[2])),
                 HistoryGenerationConversionServiceTest.adapter(), progress -> {
                     if (!progress.phase().name().equals(phase)) return;
                     try (var file = FileChannel.open(root.resolve("crash-cut.txt"),

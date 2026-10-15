@@ -81,7 +81,7 @@ class HistoryGenerationConversionServiceTest {
         stopAt(HistoryGenerationConversionService.Phase.METADATA);
         var generations = new HistoryGenerationRepository(root);
         var abandoned = generations.pending().orElseThrow().target();
-        names.replace(id, new VersionDisplayName("After"));
+        if (!changeRefs) names.replace(id, new VersionDisplayName("After"));
         var refs = new BranchRefRepository(root);
         BranchRef advanced = changeRefs ? refs.compareAndSet(fixture.main(), id) : fixture.main();
         if (changeRefs) refs.delete(refs.read(new BranchName("hidden/checkpoint")).orElseThrow());
@@ -90,7 +90,8 @@ class HistoryGenerationConversionServiceTest {
         var target = generations.directory(converted);
         BranchRef head = new BranchRefRepository(target).read(advanced.name()).orElseThrow();
         assertEquals(advanced.revision(), head.revision());
-        assertEquals(Optional.of(new VersionDisplayName("After")), new VersionDisplayNameRepository(target).read(head.commit()));
+        assertEquals(Optional.of(new VersionDisplayName(changeRefs ? "Before" : "After")),
+                new VersionDisplayNameRepository(target).read(head.commit()));
         assertEquals(changeRefs ? 1 : 2, new BranchRefRepository(target).list().size());
         assertEquals(advanced, refs.read(advanced.name()).orElseThrow());
         assertTrue(generations.pending().isEmpty());
