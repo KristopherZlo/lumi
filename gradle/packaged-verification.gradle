@@ -31,10 +31,12 @@ def finalizeEvidence = tasks.register('finalizePackagedGameTestEvidence') {
 configurations {
     packagedTestMods { transitive = false }
     packagedGameTestApi { transitive = false }
+    packagedClientGameTestApi { transitive = false }
 }
 dependencies {
     packagedTestMods "net.fabricmc.fabric-api:fabric-api:${target.fabricApiVersion()}"
     packagedGameTestApi fabricApi.module('fabric-gametest-api-v1', target.fabricApiVersion())
+    packagedClientGameTestApi fabricApi.module('fabric-client-gametest-api-v1', target.fabricApiVersion())
     packagedTestMods "maven.modrinth:1u6JkXh5:${target.worldeditVersionId()}"
     packagedTestMods "maven.modrinth:N6n5dqoA:${target.axiomVersionId()}"
     target.worldeditCuiCoordinate().ifPresent { coordinate -> packagedTestMods coordinate }
@@ -118,5 +120,65 @@ tasks.register('runPackagedGameTest', lumiServerProductionRunTaskType) {
         record.status = 'passed'
         manifest.get().text = JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n'
         logger.lifecycle("Packaged ${game}: ${record.tests} passed; evidence: ${manifest.get()}")
+    }
+}
+
+def clientSuite = System.getProperty('lumi.gametest.suite', 'SMOKE').toUpperCase(Locale.ROOT)
+def clientDirectory = layout.buildDirectory.dir("run/packaged-client/${target.id()}/${game}/${UUID.randomUUID()}")
+def clientManifest = clientDirectory.map { it.file('lumi-evidence.json').asFile }
+def finalizeClient = tasks.register('finalizePackagedClientGameTestEvidence') {
+    doLast {
+        def file = clientManifest.get()
+        if (file.isFile()) {
+            def record = new groovy.json.JsonSlurper().parse(file)
+            if (record.status == 'running') {
+                record.status = 'failed'
+                file.text = JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n'
+            }
+        }
+    }
+}
+
+tasks.register('runPackagedClientGameTest', lumiClientProductionRunTaskType) {
+    finalizedBy finalizeClient
+    group = 'verification'
+    description = 'Runs the distributable JAR through the production client launcher and certifies its loaded origin'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(target.javaVersion()) }
+    runDir = clientDirectory
+    mods.setFrom(artifact, configurations.packagedTestMods, testApi, configurations.packagedClientGameTestApi, productionTestJar)
+    jvmArgs.addAll('-Xmx2G', '-Dfabric.client.gametest', '-Dfabric.client.gametest.disableNetworkSynchronizer=true')
+    System.properties.findAll { name, ignored -> name.toString().startsWith('lumi.') }.each { name, value ->
+        jvmArgs.add("-D${name}=${value}")
+    }
+    jvmArgs.add("-Dlumi.gametest.suite=${clientSuite}")
+    jvmArgs.add("-Dlumi.gametest.game=${game}")
+    def completion = clientDirectory.map { it.file('client.completed').asFile }
+    jvmArgs.add(completion.map { "-Dlumi.gametest.completion=${it.absolutePath}" })
+    jvmArgs.add(providers.provider { "-Dlumi.gametest.artifactHash=${evidence.hash(artifact.singleFile.toPath())}" })
+    def record = [:]
+    doFirst {
+        if (!['ALL', 'SMOKE', 'UI', 'UI_SCALE', 'COMPARE_RENDER', 'INTERACTION', 'RECOVERY', 'EXACT'].contains(clientSuite)) {
+            throw new GradleException('Packaged client requires a functional GameTest suite')
+        }
+        if (Boolean.getBoolean('lumi.benchmark.enabled') || Boolean.getBoolean('lumi.gametest.firstMinuteOnly')) {
+            throw new GradleException('Packaged functional suites require full scenarios without benchmark mode')
+        }
+        new MinecraftArtifactVerifier().verify(artifact.singleFile.toPath(), target, candidateVersion)
+        record.putAll([schema: 1, status: 'running', group: target.id(), game: game,
+                scope: 'client-gametest', suite: clientSuite, javaVersion: target.javaVersion(),
+                artifact: [path: artifact.singleFile.absolutePath, sha256: evidence.hash(artifact.singleFile.toPath())],
+                mods: mods.files.collect { mod ->
+                    if (!mod.isFile() || !mod.name.endsWith('.jar')) throw new GradleException("Non-JAR production mod: ${mod}")
+                    [name: mod.name, sha256: evidence.hash(mod.toPath())]
+                }])
+        def output = clientManifest.get()
+        output.parentFile.mkdirs()
+        output.text = JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n'
+    }
+    doLast {
+        evidence.verifyClient(completion.get().toPath(), artifact.singleFile.toPath(), record.artifact.sha256, clientSuite)
+        record.status = 'passed'
+        clientManifest.get().text = JsonOutput.prettyPrint(JsonOutput.toJson(record)) + '\n'
+        logger.lifecycle("Packaged client ${game}/${clientSuite}: passed; evidence: ${clientManifest.get()}")
     }
 }

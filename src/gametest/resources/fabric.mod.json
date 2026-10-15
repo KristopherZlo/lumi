@@ -20,7 +20,8 @@
       "io.github.lumi.gametest.LumiRestoreCrashClientGameTest",
       "io.github.lumi.gametest.LumiPublicationCrashClientGameTest",
       "io.github.lumi.gametest.LumiMergeCrashClientGameTest",
-      "io.github.lumi.gametest.LumiExactRestoreClientGameTest"
+      "io.github.lumi.gametest.LumiExactRestoreClientGameTest",
+      "io.github.lumi.gametest.LumiClientCompletionGameTest"
     ],
     "fabric-gametest": [
       "io.github.lumi.gametest.LumiShutdownGameTests",

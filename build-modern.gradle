@@ -8,6 +8,7 @@ def target = new MinecraftTargetCatalogReader().read(
         new File(repositoryRoot, 'gradle/minecraft-targets.json').toPath()).select(stonecutter.current.project)
 ext.lumiMinecraftTarget = target
 ext.lumiServerProductionRunTaskType = net.fabricmc.loom.task.prod.ServerProductionRunTask
+ext.lumiClientProductionRunTaskType = net.fabricmc.loom.task.prod.ClientProductionRunTask
 version = rootProject.mod_version
 group = rootProject.maven_group
 base { archivesName = rootProject.archives_base_name }

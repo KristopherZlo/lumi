@@ -17,6 +17,7 @@ if (minecraftTarget.javaVersion() != 21) {
 }
 ext.lumiRemapJarTaskType = net.fabricmc.loom.task.RemapJarTask
 ext.lumiServerProductionRunTaskType = net.fabricmc.loom.task.prod.ServerProductionRunTask
+ext.lumiClientProductionRunTaskType = net.fabricmc.loom.task.prod.ClientProductionRunTask
 def obsoleteTargetProperties = ['minecraft_version', 'loader_version', 'fabric_api_version',
         'worldedit_version_id', 'axiom_version_id']
 obsoleteTargetProperties.each { name ->

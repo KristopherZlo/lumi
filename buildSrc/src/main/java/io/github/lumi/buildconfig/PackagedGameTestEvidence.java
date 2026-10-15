@@ -12,6 +12,13 @@ import javax.xml.stream.XMLStreamException;
 
 /** Refuses empty, failed, skipped, or artifact-changing production runs. */
 public final class PackagedGameTestEvidence {
+    public void verifyClient(Path completion, Path artifact, String expectedHash, String suite) throws IOException {
+        if (!hash(artifact).equals(expectedHash)) throw new IOException("Tested Lumi artifact changed");
+        if (Files.size(completion) > 256 || !Files.readString(completion).equals(suite + "\n" + expectedHash)) {
+            throw new IOException("Packaged client did not finish the selected suite with the expected artifact");
+        }
+    }
+
     public int verify(Path report, Path artifact, String expectedHash) throws IOException {
         if (!hash(artifact).equals(expectedHash)) throw new IOException("Tested Lumi artifact changed");
         if (Files.size(report) > 8 * 1024 * 1024) throw new IOException("GameTest report is too large");
