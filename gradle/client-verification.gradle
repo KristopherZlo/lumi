@@ -8,6 +8,8 @@ def launchType = production ? lumiPreparedClientLaunchType : DefaultTask
 
 tasks.register('prepareMultiplayerLaunch', launchType) {
     if (production) {
+        outputs.files(layout.buildDirectory.file('multiplayer-launch.args'),
+                layout.buildDirectory.file('multiplayer-launch.inputs.json'))
         def source = tasks.named('runPackagedClientGameTest').get()
         javaLauncher.set(source.javaLauncher)
         useXVFB.set(false)
