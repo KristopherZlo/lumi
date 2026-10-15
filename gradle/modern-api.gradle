@@ -4,14 +4,14 @@ stonecutter.replacements {
         replace('position.x', 'position.x()')
         replace('position.z', 'position.z()')
     }
-    regex(true) {
+    regex(true, '!native-types') {
         replace('\\bGuiGraphics\\b', 'GuiGraphicsExtractor', '\\bGuiGraphicsExtractor\\b', 'GuiGraphics')
         replace('(public void )render(?=\\(\\s*GuiGraphics\\b)', '$1extractRenderState',
                 '(public void )extractRenderState(?=\\(\\s*GuiGraphicsExtractor\\b)', '$1render')
         replace('(\\.(?:getPos|chunkPosition)\\(\\))\\.([xz])\\b(?!\\()', '$1.$2()',
                 '(\\.(?:getPos|chunkPosition)\\(\\))\\.([xz])\\(\\)', '$1.$2')
     }
-    string(true) {
+    string(true, '!native-api') {
         replace('net.minecraft.client.gui.render.state.', 'net.minecraft.client.renderer.state.gui.')
         replace('net.minecraft.world.level.BlockAndTintGetter', 'net.minecraft.client.renderer.block.BlockAndTintGetter')
         replace('net.minecraft.client.renderer.LightTexture', 'net.minecraft.util.LightCoordsUtil')

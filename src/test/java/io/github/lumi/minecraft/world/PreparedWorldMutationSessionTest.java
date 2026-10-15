@@ -41,7 +41,7 @@ class PreparedWorldMutationSessionTest {
     @Test
     void appliesOnePreparedSectionMutationThenVerifiesExactSection() throws Exception {
         SectionKey key = new SectionKey(1, 2, 3);
-        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
+        SectionBlob source = NativeWorldTestData.section(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
         DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
                 .decode(source);
@@ -71,7 +71,7 @@ class PreparedWorldMutationSessionTest {
         UUID oldId = new UUID(0, 1);
         UUID targetId = new UUID(0, 2);
         var nbt = new net.minecraft.nbt.CompoundTag();
-        var source = new EntityChunkBlob(List.of(new EntityState(
+        var source = NativeWorldTestData.entities(List.of(new EntityState(
                 targetId, "minecraft:armor_stand", MinecraftNbtCodec.encode(nbt))));
         DecodedEntityChunk decoded = new MinecraftEntityStateDecoder(
                 BuiltInRegistries.ENTITY_TYPE).decode(source);
@@ -101,9 +101,9 @@ class PreparedWorldMutationSessionTest {
         UUID firstTarget = new UUID(0, 3);
         UUID secondTarget = new UUID(0, 4);
         var emptyNbt = MinecraftNbtCodec.encode(new net.minecraft.nbt.CompoundTag());
-        var firstSource = new EntityChunkBlob(List.of(
+        var firstSource = NativeWorldTestData.entities(List.of(
                 new EntityState(firstTarget, "minecraft:armor_stand", emptyNbt)));
-        var secondSource = new EntityChunkBlob(List.of(
+        var secondSource = NativeWorldTestData.entities(List.of(
                 new EntityState(secondTarget, "minecraft:armor_stand", emptyNbt)));
         var decoder = new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE);
         PreparedMinecraftState target = new PreparedMinecraftState(
@@ -131,7 +131,7 @@ class PreparedWorldMutationSessionTest {
         EntityChunkKey key = new EntityChunkKey(4, -2);
         UUID oldId = new UUID(0, 1);
         UUID targetId = new UUID(0, 2);
-        var source = new EntityChunkBlob(List.of(new EntityState(
+        var source = NativeWorldTestData.entities(List.of(new EntityState(
                 targetId, "minecraft:armor_stand",
                 MinecraftNbtCodec.encode(new net.minecraft.nbt.CompoundTag()))));
         DecodedEntityChunk decoded = new MinecraftEntityStateDecoder(
@@ -188,7 +188,7 @@ class PreparedWorldMutationSessionTest {
     @Test
     void releasesAcceptedSnapshotsWhenPersistenceFails() throws Exception {
         EntityChunkKey key = new EntityChunkKey(4, -2);
-        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob empty = NativeWorldTestData.entities(List.of());
         var target = new PreparedMinecraftState(
                 new WorldStateApply.State(Map.of(), Map.of(key, empty)),
                 Map.of(), Map.of(key, new DecodedEntityChunk(List.of())));
@@ -217,12 +217,12 @@ class PreparedWorldMutationSessionTest {
     @Test
     void rejectsPersistenceAfterAVerificationMismatch() throws Exception {
         EntityChunkKey key = new EntityChunkKey(4, -2);
-        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob empty = NativeWorldTestData.entities(List.of());
         var target = new PreparedMinecraftState(
                 new WorldStateApply.State(Map.of(), Map.of(key, empty)),
                 Map.of(), Map.of(key, new DecodedEntityChunk(List.of())));
         FakeWorld world = new FakeWorld(new AtomicLong(), null);
-        world.capturedEntities = new EntityChunkBlob(List.of(new EntityState(
+        world.capturedEntities = NativeWorldTestData.entities(List.of(new EntityState(
                 UUID.randomUUID(), "minecraft:armor_stand",
                 MinecraftNbtCodec.encode(new net.minecraft.nbt.CompoundTag()))));
         var session = new PreparedWorldMutationSession(
@@ -256,7 +256,7 @@ class PreparedWorldMutationSessionTest {
     @Test
     void loadsRequiredChunkBeforeTheFirstWorldMutation() throws Exception {
         SectionKey key = new SectionKey(7, 0, -3);
-        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
+        SectionBlob source = NativeWorldTestData.section(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
         DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
                 .decode(source);
@@ -286,11 +286,11 @@ class PreparedWorldMutationSessionTest {
         SectionKey storedKey = new SectionKey(6, 0, -3);
         SectionKey sectionKey = new SectionKey(7, 0, -3);
         EntityChunkKey entityKey = new EntityChunkKey(8, -3);
-        SectionBlob section = new SectionBlob(new ArrayList<>(Collections.nCopies(
+        SectionBlob section = NativeWorldTestData.section(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
         DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
                 .decode(section);
-        EntityChunkBlob entities = new EntityChunkBlob(List.of());
+        EntityChunkBlob entities = NativeWorldTestData.entities(List.of());
         var target = new PreparedMinecraftState(
                 new WorldStateApply.State(
                         Map.of(storedKey, section, sectionKey, section),
@@ -349,7 +349,7 @@ class PreparedWorldMutationSessionTest {
     void bulkLoadsAnEntityOnlyWindowBeforeItsFirstMutation() throws Exception {
         EntityChunkKey first = new EntityChunkKey(1, 1);
         EntityChunkKey second = new EntityChunkKey(2, 2);
-        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob empty = NativeWorldTestData.entities(List.of());
         var target = new PreparedMinecraftState(
                 new WorldStateApply.State(Map.of(), Map.of(first, empty, second, empty)),
                 Map.of(), Map.of(
@@ -379,7 +379,7 @@ class PreparedWorldMutationSessionTest {
 
     @Test
     void keepsTheSequentialLoaderForStatesLargerThanOneWindow() throws Exception {
-        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob empty = NativeWorldTestData.entities(List.of());
         Map<EntityChunkKey, EntityChunkBlob> persistent = new LinkedHashMap<>();
         Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
         List<EntityChunkKey> keys = new ArrayList<>();
@@ -407,7 +407,7 @@ class PreparedWorldMutationSessionTest {
         SectionKey low = new SectionKey(1, 0, 2);
         SectionKey high = new SectionKey(1, 1, 2);
         SectionKey other = new SectionKey(3, 0, 4);
-        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
+        SectionBlob source = NativeWorldTestData.section(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
         DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
                 .decode(source);
@@ -428,7 +428,7 @@ class PreparedWorldMutationSessionTest {
 
     @Test
     void retainsLoadedSectionChunksUntilPersistenceCompletes() throws Exception {
-        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
+        SectionBlob source = NativeWorldTestData.section(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
         DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
                 .decode(source);
@@ -468,7 +468,7 @@ class PreparedWorldMutationSessionTest {
     void skipsFullLoadingAndReadbackAfterVerifiedStoredApply() throws Exception {
         SectionKey low = new SectionKey(12, 0, -8);
         SectionKey high = new SectionKey(12, 1, -8);
-        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
+        SectionBlob source = NativeWorldTestData.section(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
         DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
                 .decode(source);
@@ -503,7 +503,7 @@ class PreparedWorldMutationSessionTest {
     @Test
     void groupsStoredWritesIntoWindowsOfOneHundredTwentyEightChunks()
             throws Exception {
-        SectionBlob source = new SectionBlob(new ArrayList<>(Collections.nCopies(
+        SectionBlob source = NativeWorldTestData.section(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
         DecodedSection decoded = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
                 .decode(source);
@@ -533,7 +533,7 @@ class PreparedWorldMutationSessionTest {
 
     @Test
     void streamingDoesNotStartTheNextBatchBeforePersistence() throws Exception {
-        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob empty = NativeWorldTestData.entities(List.of());
         Map<EntityChunkKey, EntityChunkBlob> persistent = new LinkedHashMap<>();
         Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
         List<EntityChunkKey> keys = new ArrayList<>();
@@ -597,7 +597,7 @@ class PreparedWorldMutationSessionTest {
     @Test
     void streamingDefersLazySectionReadsToTheBackgroundExecutor() throws Exception {
         SectionKey key = new SectionKey(2, 0, 3);
-        SectionBlob section = new SectionBlob(new ArrayList<>(Collections.nCopies(
+        SectionBlob section = NativeWorldTestData.section(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of());
         AtomicInteger targetReads = new AtomicInteger();
         AtomicInteger baseReads = new AtomicInteger();
@@ -641,7 +641,7 @@ class PreparedWorldMutationSessionTest {
     @Test
     void streamingOmitsPlayerPathWhenSpawnsAreNotPartOfRestore() throws Exception {
         EntityChunkKey key = new EntityChunkKey(1, 2);
-        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob empty = NativeWorldTestData.entities(List.of());
         var state = new WorldStateApply.State(Map.of(), Map.of(key, empty));
         var plan = new PreparedMinecraftPlanState(
                 state, state,
@@ -677,7 +677,7 @@ class PreparedWorldMutationSessionTest {
                 storedBatchResult;
         private List<UUID> entityIds = List.of();
         private Map<EntityChunkKey, List<UUID>> entityIdsByChunk = Map.of();
-        private EntityChunkBlob capturedEntities = new EntityChunkBlob(List.of());
+        private EntityChunkBlob capturedEntities = NativeWorldTestData.entities(List.of());
         private final List<UUID> removedEntities = new ArrayList<>();
         private final List<UUID> addedEntities = new ArrayList<>();
         private final List<String> entityMutations = new ArrayList<>();

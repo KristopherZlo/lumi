@@ -25,31 +25,35 @@ class MinecraftWorldPayloadConverterTest {
     static void bootstrap() {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
+        //? if >=26.1 {
+        /*BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(net.minecraft.data.registries.VanillaRegistries.createLookup())
+                .forEach(net.minecraft.core.component.DataComponentInitializers.PendingComponents::apply);
+        *///?}
     }
 
     @Test
     void canonicalizesTheTargetPaletteAndPreservesEntityIdentityWithoutChangingSource() throws Exception {
         var converter = converter();
         var source = new SectionBlob(Collections.nCopies(4096, "minecraft:oak_stairs[facing=west]"), Map.of());
-        SectionBlob result = converter.convert(source, WorldDataVersion.LEGACY_12111);
+        SectionBlob result = converter.convert(source, NativeWorldTestData.version());
         assertEquals("minecraft:oak_stairs[facing=west,half=bottom,shape=straight,waterlogged=false]",
                 result.blockStates().getFirst());
         assertEquals("minecraft:oak_stairs[facing=west]", source.blockStates().getFirst());
         UUID id = UUID.randomUUID();
         var entities = new EntityChunkBlob(List.of(new EntityState(id, "minecraft:armor_stand",
                 MinecraftNbtCodec.encode(new CompoundTag()))));
-        assertEquals(id, converter.convert(entities, WorldDataVersion.LEGACY_12111).entities().getFirst().id());
+        assertEquals(id, converter.convert(entities, NativeWorldTestData.version()).entities().getFirst().id());
     }
 
     @Test
     void refusesMissingRegistryTypesAndATargetOtherThanTheRunningGame() {
         var converter = converter();
         var source = new SectionBlob(Collections.nCopies(4096, "missing:block"), Map.of());
-        assertThrows(IOException.class, () -> converter.convert(source, WorldDataVersion.LEGACY_12111));
+        assertThrows(IOException.class, () -> converter.convert(source, NativeWorldTestData.version()));
         var entities = new EntityChunkBlob(List.of(new EntityState(UUID.randomUUID(), "missing:entity",
                 new io.github.lumi.domain.model.CanonicalNbt(new byte[] {10, 0, 0, 0}))));
-        assertThrows(IOException.class, () -> converter.convert(entities, WorldDataVersion.LEGACY_12111));
-        assertThrows(IOException.class, () -> converter.convert(source, new WorldDataVersion(4786)));
+        assertThrows(IOException.class, () -> converter.convert(entities, NativeWorldTestData.version()));
+        assertThrows(IOException.class, () -> converter.convert(source, new WorldDataVersion(NativeWorldTestData.version().value() == 4671 ? 4786 : 4671)));
     }
 
     @Test
@@ -63,9 +67,9 @@ class MinecraftWorldPayloadConverterTest {
         var inventory = new net.minecraft.nbt.ListTag();
         inventory.add(item);
         chest.put("Items", inventory);
-        var section = new SectionBlob(Collections.nCopies(4096, "minecraft:chest"),
+        var section = NativeWorldTestData.section(Collections.nCopies(4096, "minecraft:chest"),
                 Map.of(0, MinecraftNbtCodec.encode(chest)));
-        assertThrows(IOException.class, () -> converter.convert(section, WorldDataVersion.LEGACY_12111));
+        assertThrows(IOException.class, () -> converter.convert(section, NativeWorldTestData.version()));
         var attribute = new CompoundTag();
         attribute.putString("id", "missing:attribute");
         var attributes = new net.minecraft.nbt.ListTag();
@@ -74,30 +78,30 @@ class MinecraftWorldPayloadConverterTest {
         payload.put("attributes", attributes);
         var entities = new EntityChunkBlob(List.of(new EntityState(UUID.randomUUID(), "minecraft:armor_stand",
                 MinecraftNbtCodec.encode(payload))));
-        assertThrows(IOException.class, () -> converter.convert(entities, WorldDataVersion.LEGACY_12111));
+        assertThrows(IOException.class, () -> converter.convert(entities, NativeWorldTestData.version()));
         var opaque = new CompoundTag();
         opaque.put("Items", inventory);
         chest.remove("Items");
         chest.put("minecraft:custom_data", opaque);
-        var safe = new SectionBlob(Collections.nCopies(4096, "minecraft:chest"),
+        var safe = NativeWorldTestData.section(Collections.nCopies(4096, "minecraft:chest"),
                 Map.of(0, MinecraftNbtCodec.encode(chest)));
-        assertEquals(safe.blockEntities(), converter.convert(safe, WorldDataVersion.LEGACY_12111).blockEntities());
+        assertEquals(safe.blockEntities(), converter.convert(safe, NativeWorldTestData.version()).blockEntities());
     }
 
     @Test
     void rejectsMissingAndMalformedItemComponentsWithoutAcceptingPartialDecodes() throws Exception {
         var components = new CompoundTag();
         components.put("missing:component", new CompoundTag());
-        assertThrows(IOException.class, () -> converter().convert(chestWith(components), WorldDataVersion.LEGACY_12111));
+        assertThrows(IOException.class, () -> converter().convert(chestWith(components), NativeWorldTestData.version()));
         components.remove("missing:component");
         components.putString("minecraft:damage", "invalid");
-        assertThrows(IOException.class, () -> converter().convert(chestWith(components), WorldDataVersion.LEGACY_12111));
+        assertThrows(IOException.class, () -> converter().convert(chestWith(components), NativeWorldTestData.version()));
         components.remove("minecraft:damage");
         var custom = new CompoundTag();
         custom.putString("item", "opaque custom value");
         components.put("minecraft:custom_data", custom);
         SectionBlob valid = chestWith(components);
-        assertEquals(valid.blockEntities(), converter().convert(valid, WorldDataVersion.LEGACY_12111).blockEntities());
+        assertEquals(valid.blockEntities(), converter().convert(valid, NativeWorldTestData.version()).blockEntities());
     }
 
     private static SectionBlob chestWith(CompoundTag components) throws IOException {
@@ -110,7 +114,7 @@ class MinecraftWorldPayloadConverterTest {
         var chest = new CompoundTag();
         chest.putString("id", "minecraft:chest");
         chest.put("Items", items);
-        return new SectionBlob(Collections.nCopies(4096, "minecraft:chest"), Map.of(0, MinecraftNbtCodec.encode(chest)));
+        return NativeWorldTestData.section(Collections.nCopies(4096, "minecraft:chest"), Map.of(0, MinecraftNbtCodec.encode(chest)));
     }
 
     private static MinecraftWorldPayloadConverter converter() {

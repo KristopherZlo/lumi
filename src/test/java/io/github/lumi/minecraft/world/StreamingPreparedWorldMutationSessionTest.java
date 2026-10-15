@@ -268,7 +268,7 @@ class StreamingPreparedWorldMutationSessionTest {
         SectionBlob base = stoneSection();
         var poiStates = new ArrayList<>(base.blockStates());
         poiStates.set(0, "minecraft:lectern");
-        SectionBlob poi = new SectionBlob(poiStates, Map.of());
+        SectionBlob poi = NativeWorldTestData.section(poiStates, Map.of());
         var target = new WorldStateApply.State(
                 Map.of(poiKey, poi, plainKey, poi), Map.of());
         var source = new WorldStateApply.State(
@@ -504,7 +504,7 @@ class StreamingPreparedWorldMutationSessionTest {
         SectionBlob stone = stoneSection();
         var poiStates = new ArrayList<>(stone.blockStates());
         poiStates.set(18, "minecraft:lectern");
-        SectionBlob poi = new SectionBlob(poiStates, Map.of());
+        SectionBlob poi = NativeWorldTestData.section(poiStates, Map.of());
         var source = new WorldStateApply.State(Map.of(keys.get(0), stone,
                 keys.get(1), poi, keys.get(2), stone, keys.get(3), stone), Map.of());
         var base = new WorldStateApply.State(Map.of(keys.get(0), stone,
@@ -842,7 +842,7 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     private static PreparedMinecraftPlanState entityPlan(List<EntityChunkKey> keys) {
-        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob empty = NativeWorldTestData.entities(List.of());
         Map<EntityChunkKey, EntityChunkBlob> entities = new LinkedHashMap<>();
         Map<EntityChunkKey, EntityChunkBlob> baseEntities = new LinkedHashMap<>();
         Map<EntityChunkKey, DecodedEntityChunk> decoded = new LinkedHashMap<>();
@@ -851,7 +851,7 @@ class StreamingPreparedWorldMutationSessionTest {
             entities.put(key, empty);
             UUID id = new UUID(key.chunkX(), key.chunkZ() + 1L);
             cleanupIds.add(id);
-            baseEntities.put(key, new EntityChunkBlob(List.of(new EntityState(
+            baseEntities.put(key, NativeWorldTestData.entities(List.of(new EntityState(
                     id, "minecraft:rabbit", new CanonicalNbt(new byte[] {1})))));
             decoded.put(key, new DecodedEntityChunk(List.of()));
         });
@@ -863,8 +863,8 @@ class StreamingPreparedWorldMutationSessionTest {
 
     private static PreparedMinecraftPlanState legacyDuplicatePlan(
             List<EntityChunkKey> keys, UUID id) throws IOException {
-        EntityChunkBlob empty = new EntityChunkBlob(List.of());
-        EntityChunkBlob canonical = new EntityChunkBlob(List.of(new EntityState(
+        EntityChunkBlob empty = NativeWorldTestData.entities(List.of());
+        EntityChunkBlob canonical = NativeWorldTestData.entities(List.of(new EntityState(
                 id, "minecraft:rabbit",
                 MinecraftNbtCodec.encode(new CompoundTag()))));
         DecodedEntityChunk decodedEmpty = new DecodedEntityChunk(List.of());
@@ -891,13 +891,13 @@ class StreamingPreparedWorldMutationSessionTest {
     }
 
     private static SectionBlob stoneSection() {
-        return new SectionBlob(
+        return NativeWorldTestData.section(
                 Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:stone"),
                 Map.of());
     }
 
     private static SectionBlob glowstoneSection() {
-        return new SectionBlob(
+        return NativeWorldTestData.section(
                 Collections.nCopies(SectionBlob.BLOCK_COUNT, "minecraft:glowstone"),
                 Map.of());
     }
@@ -909,7 +909,7 @@ class StreamingPreparedWorldMutationSessionTest {
         CompoundTag chest = new CompoundTag();
         chest.putString("id", "minecraft:chest");
         chest.putByteArray("lumi_test_payload", new byte[payloadBytes]);
-        return new SectionBlob(
+        return NativeWorldTestData.section(
                 states, Map.of(0, MinecraftNbtCodec.encode(chest)));
     }
 
@@ -1147,7 +1147,7 @@ class StreamingPreparedWorldMutationSessionTest {
             }
         }
         @Override public EntityChunkBlob captureEntities(EntityChunkKey key) {
-            return new EntityChunkBlob(List.of());
+            return NativeWorldTestData.entities(List.of());
         }
         @Override public void applyPlayerSpawns(Map<UUID, PlayerSpawn> spawns) { }
         @Override public boolean matchesPlayerSpawns(Map<UUID, PlayerSpawn> spawns) {

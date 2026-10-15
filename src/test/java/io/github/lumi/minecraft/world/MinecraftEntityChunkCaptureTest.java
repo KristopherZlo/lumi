@@ -119,7 +119,7 @@ class MinecraftEntityChunkCaptureTest {
 
         CompoundTag stored = MinecraftStoredChunkAccess.entityTag(key, decoded);
 
-        assertEquals(new EntityChunkBlob(List.of(state)),
+        assertEquals(NativeWorldTestData.entities(List.of(state)),
                 capture.captureStored(key, Optional.of(stored)));
     }
 

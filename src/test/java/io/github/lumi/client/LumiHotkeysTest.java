@@ -1,4 +1,7 @@
 package io.github.lumi.client;
+// Checks the shared source before platform API substitutions.
+//~ !native-api
+//~ !native-types
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

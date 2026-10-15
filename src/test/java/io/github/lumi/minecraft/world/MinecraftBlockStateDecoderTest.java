@@ -34,7 +34,7 @@ class MinecraftBlockStateDecoderTest {
         var states = new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));
         states.set(17, "minecraft:chest");
-        var source = new SectionBlob(states, Map.of(
+        var source = NativeWorldTestData.section(states, Map.of(
                 17, MinecraftNbtCodec.encode(blockEntityTag(
                         "minecraft:chest", "custom", "value"))));
 
@@ -86,14 +86,15 @@ class MinecraftBlockStateDecoderTest {
 
         assertThrows(IOException.class, () ->
                 new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
-                        .validate(new SectionBlob(states, Map.of())));
+                        .validate(NativeWorldTestData.section(states, Map.of())));
     }
 
     @Test
     void refusesOtherDataVersionsBeforeDecodingNativeStates() {
         var decoder = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK);
         var source = new SectionBlob(Collections.nCopies(4096, "minecraft:air"), Map.of(),
-                new io.github.lumi.domain.model.WorldDataVersion(4786));
+                new io.github.lumi.domain.model.WorldDataVersion(
+                        NativeWorldTestData.version().value() == 4671 ? 4786 : 4671));
         assertThrows(IOException.class, () -> decoder.decode(source));
         var entityDecoder = new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE);
         var entities = new io.github.lumi.domain.model.EntityChunkBlob(java.util.List.of(), source.dataVersion());
@@ -104,7 +105,7 @@ class MinecraftBlockStateDecoderTest {
     void rejectsUnknownBlockEntityTypeDuringPreflight() throws Exception {
         var states = new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));
-        var source = new SectionBlob(states, Map.of(
+        var source = NativeWorldTestData.section(states, Map.of(
                 0, MinecraftNbtCodec.encode(blockEntityTag(
                         "missing:not_a_block_entity", "custom", "value"))));
 
@@ -118,7 +119,7 @@ class MinecraftBlockStateDecoderTest {
         var states = new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));
         states.set(0, "minecraft:air");
-        var source = new SectionBlob(states, Map.of(
+        var source = NativeWorldTestData.section(states, Map.of(
                 0, MinecraftNbtCodec.encode(blockEntityTag(
                         "minecraft:command_block", "Command", "say invalid"))));
 
@@ -135,8 +136,8 @@ class MinecraftBlockStateDecoderTest {
 
         assertThrows(IOException.class, () ->
                 new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK).decodeAgainst(
-                        new SectionBlob(target, Map.of()),
-                        new SectionBlob(before, Map.of())));
+                        NativeWorldTestData.section(target, Map.of()),
+                        NativeWorldTestData.section(before, Map.of())));
     }
 
     @Test
@@ -150,8 +151,8 @@ class MinecraftBlockStateDecoderTest {
         var decoder = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK);
 
         DecodedSection target = decoder.decodeAgainst(
-                new SectionBlob(targetStates, Map.of()),
-                new SectionBlob(beforeStates, Map.of()));
+                NativeWorldTestData.section(targetStates, Map.of()),
+                NativeWorldTestData.section(beforeStates, Map.of()));
 
         assertArrayEquals(new int[]{(10 << 8) | (2 << 4) | 1,
                         (2 << 8) | (5 << 4) | 4},

@@ -34,7 +34,7 @@ class MinecraftEntityStateDecoderTest {
         UUID id = UUID.fromString("10000000-0000-0000-0000-000000000001");
         var payload = new net.minecraft.nbt.CompoundTag();
         payload.putString("CustomName", "marker");
-        var source = new EntityChunkBlob(List.of(new EntityState(
+        var source = NativeWorldTestData.entities(List.of(new EntityState(
                 id, "minecraft:armor_stand", MinecraftNbtCodec.encode(payload))));
 
         DecodedEntity decoded = new MinecraftEntityStateDecoder(
@@ -51,7 +51,7 @@ class MinecraftEntityStateDecoderTest {
 
     @Test
     void rejectsMissingEntityTypeDuringPreparation() throws Exception {
-        var source = new EntityChunkBlob(List.of(new EntityState(
+        var source = NativeWorldTestData.entities(List.of(new EntityState(
                 new UUID(0, 1), "missing:not_an_entity",
                 MinecraftNbtCodec.encode(new net.minecraft.nbt.CompoundTag()))));
 
@@ -70,7 +70,7 @@ class MinecraftEntityStateDecoderTest {
         passengers.add(passenger);
         CompoundTag vehicle = new CompoundTag();
         vehicle.put("Passengers", passengers);
-        var source = new EntityChunkBlob(List.of(
+        var source = NativeWorldTestData.entities(List.of(
                 new EntityState(vehicleId, "minecraft:armor_stand", MinecraftNbtCodec.encode(vehicle)),
                 new EntityState(passengerId, "minecraft:armor_stand",
                         MinecraftNbtCodec.encode(new CompoundTag()))));
@@ -99,10 +99,10 @@ class MinecraftEntityStateDecoderTest {
         Map<io.github.lumi.domain.model.EntityChunkKey, EntityChunkBlob> normalized =
                 decoder.normalize(Map.of(
                         new io.github.lumi.domain.model.EntityChunkKey(0, 0),
-                        new EntityChunkBlob(List.of(new EntityState(vehicleId,
+                        NativeWorldTestData.entities(List.of(new EntityState(vehicleId,
                                 "minecraft:oak_boat", MinecraftNbtCodec.encode(vehicle)))),
                         new io.github.lumi.domain.model.EntityChunkKey(1, 0),
-                        new EntityChunkBlob(List.of(new EntityState(passengerId,
+                        NativeWorldTestData.entities(List.of(new EntityState(passengerId,
                                 "minecraft:armor_stand",
                                 MinecraftNbtCodec.encode(new CompoundTag()))))));
 
@@ -133,9 +133,9 @@ class MinecraftEntityStateDecoderTest {
         assertThrows(IOException.class, () ->
                 new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)
                         .normalize(Map.of(
-                                first, new EntityChunkBlob(List.of(
+                                first, NativeWorldTestData.entities(List.of(
                                         rabbitAt(entityId, 1.0D))),
-                                second, new EntityChunkBlob(List.of(
+                                second, NativeWorldTestData.entities(List.of(
                                         rabbitAt(entityId, 17.0D))))));
     }
 
@@ -145,7 +145,7 @@ class MinecraftEntityStateDecoderTest {
         CompoundTag legacy = entityPayload(488.9948F, -1285.8915F,
                 "minecraft:movement_speed", "minecraft:attack_damage");
         EntityChunkKey key = new EntityChunkKey(2, 3);
-        var source = Map.of(key, new EntityChunkBlob(List.of(new EntityState(
+        var source = Map.of(key, NativeWorldTestData.entities(List.of(new EntityState(
                 entityId, "minecraft:bat", MinecraftNbtCodec.encode(legacy)))));
 
         EntityState normalized = new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE)
@@ -171,7 +171,7 @@ class MinecraftEntityStateDecoderTest {
         attributes.add(attribute("minecraft:armor", 0.0D));
         attributes.add(attribute("minecraft:armor_toughness", 0.0D));
         payload.put("attributes", attributes);
-        var source = new EntityChunkBlob(List.of(new EntityState(
+        var source = NativeWorldTestData.entities(List.of(new EntityState(
                 entityId, "minecraft:armor_stand", MinecraftNbtCodec.encode(payload))));
 
         EntityState normalized = new MinecraftEntityStateDecoder(
@@ -214,7 +214,7 @@ class MinecraftEntityStateDecoderTest {
         passengers.add(passenger);
         CompoundTag vehicle = new CompoundTag();
         vehicle.put("Passengers", passengers);
-        return new EntityChunkBlob(List.of(new EntityState(
+        return NativeWorldTestData.entities(List.of(new EntityState(
                 id, "minecraft:oak_boat", MinecraftNbtCodec.encode(vehicle))));
     }
 

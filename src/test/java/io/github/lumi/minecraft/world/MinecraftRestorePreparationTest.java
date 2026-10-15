@@ -44,9 +44,9 @@ class MinecraftRestorePreparationTest {
         SectionKey sectionKey = new SectionKey(-1, 2, 3);
         EntityChunkKey entityKey = new EntityChunkKey(-1, 3);
         var source = new WorldStateApply.State(
-                Map.of(sectionKey, new SectionBlob(new ArrayList<>(Collections.nCopies(
+                Map.of(sectionKey, NativeWorldTestData.section(new ArrayList<>(Collections.nCopies(
                         SectionBlob.BLOCK_COUNT, "minecraft:stone")), Map.of())),
-                Map.of(entityKey, new EntityChunkBlob(List.of())));
+                Map.of(entityKey, NativeWorldTestData.entities(List.of())));
         var preparation = new MinecraftRestorePreparation(
                 new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                 new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
@@ -67,7 +67,7 @@ class MinecraftRestorePreparationTest {
         var states = new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));
         states.set(0, "minecraft:oak_stairs[facing=north,half=bottom,shape=straight,waterlogged=false]");
-        SectionBlob section = new SectionBlob(states, Map.of());
+        SectionBlob section = NativeWorldTestData.section(states, Map.of());
 
         decoder.decode(section);
         decoder.decode(section);
@@ -79,13 +79,13 @@ class MinecraftRestorePreparationTest {
     void storedEligibilityIncludesLightingButExcludesUnknownAndChangedPoi()
             throws Exception {
         var decoder = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK);
-        SectionBlob stone = new SectionBlob(Collections.nCopies(
+        SectionBlob stone = NativeWorldTestData.section(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"), Map.of());
         var states = new ArrayList<>(stone.blockStates());
         states.set(18, "minecraft:glowstone");
-        SectionBlob glow = new SectionBlob(states, Map.of());
+        SectionBlob glow = NativeWorldTestData.section(states, Map.of());
         states.set(18, "minecraft:lectern");
-        SectionBlob poi = new SectionBlob(states, Map.of());
+        SectionBlob poi = NativeWorldTestData.section(states, Map.of());
 
         assertFalse(decoder.decode(stone).supportsStoredRewrite());
         assertTrue(decoder.decodeAgainst(glow, stone).supportsStoredRewrite());
@@ -102,9 +102,9 @@ class MinecraftRestorePreparationTest {
         targetStates.set(17, "minecraft:glowstone");
         targetStates.set(18, "minecraft:lectern[facing=north,has_book=false,powered=false]");
         var before = new WorldStateApply.State(
-                Map.of(key, new SectionBlob(beforeStates, Map.of())), Map.of());
+                Map.of(key, NativeWorldTestData.section(beforeStates, Map.of())), Map.of());
         var target = new WorldStateApply.State(
-                Map.of(key, new SectionBlob(targetStates, Map.of())), Map.of());
+                Map.of(key, NativeWorldTestData.section(targetStates, Map.of())), Map.of());
         var preparation = new MinecraftRestorePreparation(
                 new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                 new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
@@ -134,9 +134,9 @@ class MinecraftRestorePreparationTest {
 
         PreparedSectionDelta delta = preparation.prepare(
                         new WorldStateApply.State(Map.of(
-                                key, new SectionBlob(targetStates, Map.of())), Map.of()),
+                                key, NativeWorldTestData.section(targetStates, Map.of())), Map.of()),
                         new WorldStateApply.State(Map.of(
-                                key, new SectionBlob(beforeStates, Map.of())), Map.of()),
+                                key, NativeWorldTestData.section(beforeStates, Map.of())), Map.of()),
                         ignored -> { })
                 .sections().get(key).deltaFrom(null);
 
@@ -149,7 +149,7 @@ class MinecraftRestorePreparationTest {
         SectionKey secondKey = new SectionKey(1, 0, 0);
         var targetStates = new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));
-        SectionBlob targetSection = new SectionBlob(targetStates, Map.of());
+        SectionBlob targetSection = NativeWorldTestData.section(targetStates, Map.of());
         var firstBaseStates = new ArrayList<>(targetStates);
         firstBaseStates.set(17, "minecraft:dirt");
         var secondBaseStates = new ArrayList<>(targetStates);
@@ -158,8 +158,8 @@ class MinecraftRestorePreparationTest {
         var source = new WorldStateApply.State(
                 Map.of(firstKey, targetSection, secondKey, targetSection), Map.of());
         var base = new WorldStateApply.State(Map.of(
-                firstKey, new SectionBlob(firstBaseStates, Map.of()),
-                secondKey, new SectionBlob(secondBaseStates, Map.of())), Map.of());
+                firstKey, NativeWorldTestData.section(firstBaseStates, Map.of()),
+                secondKey, NativeWorldTestData.section(secondBaseStates, Map.of())), Map.of());
         var preparation = new MinecraftRestorePreparation(
                 new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                 new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
@@ -184,7 +184,7 @@ class MinecraftRestorePreparationTest {
         invalidStates.set(0, "missing:not_a_block");
         var source = new WorldStateApply.State(Map.of(
                 firstKey, airSection(),
-                invalidKey, new SectionBlob(invalidStates, Map.of())), Map.of());
+                invalidKey, NativeWorldTestData.section(invalidStates, Map.of())), Map.of());
         var base = new WorldStateApply.State(Map.of(
                 firstKey, airSection(), invalidKey, airSection()), Map.of());
         AtomicInteger checks = new AtomicInteger();
@@ -206,11 +206,11 @@ class MinecraftRestorePreparationTest {
         var states = new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:stone"));
         var source = new WorldStateApply.State(
-                Map.of(key, new SectionBlob(states, Map.of())), Map.of());
+                Map.of(key, NativeWorldTestData.section(states, Map.of())), Map.of());
         var baseStates = new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:dirt"));
         var base = new WorldStateApply.State(
-                Map.of(key, new SectionBlob(baseStates, Map.of())), Map.of());
+                Map.of(key, NativeWorldTestData.section(baseStates, Map.of())), Map.of());
         var preparation = new MinecraftRestorePreparation(
                 new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK),
                 new MinecraftEntityStateDecoder(BuiltInRegistries.ENTITY_TYPE));
@@ -275,7 +275,7 @@ class MinecraftRestorePreparationTest {
                 "minecraft:movement_speed", "minecraft:attack_damage");
         EntityChunkBlob unchangedEntity = entityChunk(unchanged, 0.0F, 0.0F,
                 "minecraft:movement_speed", "minecraft:attack_damage");
-        EntityChunkBlob empty = new EntityChunkBlob(List.of());
+        EntityChunkBlob empty = NativeWorldTestData.entities(List.of());
         var target = new WorldStateApply.State(Map.of(), Map.of(
                 oldKey, empty, targetKey, entity, unchangedKey, unchangedEntity));
         var base = new WorldStateApply.State(Map.of(), Map.of(
@@ -321,7 +321,7 @@ class MinecraftRestorePreparationTest {
         var states = new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, "minecraft:air"));
         states.set(0, "missing:not_a_block");
-        SectionBlob invalid = new SectionBlob(states, Map.of());
+        SectionBlob invalid = NativeWorldTestData.section(states, Map.of());
         var validated = new MinecraftRestorePreparation.ValidatedSectionWindow(
                 new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK));
 
@@ -362,7 +362,7 @@ class MinecraftRestorePreparationTest {
         attributes.add(attribute(firstAttribute));
         attributes.add(attribute(secondAttribute));
         entity.put("attributes", attributes);
-        return new EntityChunkBlob(List.of(new EntityState(
+        return NativeWorldTestData.entities(List.of(new EntityState(
                 id, "minecraft:bat", MinecraftNbtCodec.encode(entity))));
     }
 
@@ -377,7 +377,7 @@ class MinecraftRestorePreparationTest {
     }
 
     private static SectionBlob section(String state) {
-        return new SectionBlob(new ArrayList<>(Collections.nCopies(
+        return NativeWorldTestData.section(new ArrayList<>(Collections.nCopies(
                 SectionBlob.BLOCK_COUNT, state)), Map.of());
     }
 }

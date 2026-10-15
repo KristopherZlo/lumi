@@ -44,7 +44,7 @@ class MinecraftSectionPaletteCaptureTest {
         var entities = Map.of(731, MinecraftNbtCodec.encode(tag));
         var actual = capture.capture(section, entities);
         var codec = new SectionBlobCodec();
-        byte[] canonical = codec.encode(new SectionBlob(expected, entities));
+        byte[] canonical = codec.encode(NativeWorldTestData.section(expected, entities));
         assertArrayEquals(canonical, codec.encode(actual));
         assertEquals(ObjectId.hash(canonical), ObjectId.hash(codec.encode(actual)));
         section.setBlockState(0, 0, 0, Blocks.DIAMOND_BLOCK.defaultBlockState(), false);

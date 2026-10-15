@@ -56,8 +56,8 @@ class MinecraftStoredChunkPatcherTest {
         targetStates.set(changed, "minecraft:air");
         DecodedSection target = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
                 .decodeAgainst(
-                        new SectionBlob(targetStates, Map.of()),
-                        new SectionBlob(beforeStates, Map.of()));
+                        NativeWorldTestData.section(targetStates, Map.of()),
+                        NativeWorldTestData.section(beforeStates, Map.of()));
         CompoundTag source = storedChunk(position, beforeStates, changed);
 
         MinecraftStoredChunkPatcher.Patch patched =
@@ -96,8 +96,8 @@ class MinecraftStoredChunkPatcherTest {
         SectionKey absent = new SectionKey(position.x, 1, position.z);
         DecodedSection target = new MinecraftBlockStateDecoder(BuiltInRegistries.BLOCK)
                 .decodeAgainst(
-                        new SectionBlob(states, Map.of()),
-                        new SectionBlob(states, Map.of()));
+                        NativeWorldTestData.section(states, Map.of()),
+                        NativeWorldTestData.section(states, Map.of()));
 
         assertThrows(MinecraftStoredChunkPatcher.UnsupportedChunk.class, () ->
                 new MinecraftStoredChunkPatcher(blockStates, MIN_Y, HEIGHT)
