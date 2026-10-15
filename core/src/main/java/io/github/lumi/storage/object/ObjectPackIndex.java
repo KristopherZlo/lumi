@@ -14,6 +14,8 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 /** Durable lookup table published only after its immutable pack verifies. */
 final class ObjectPackIndex {
@@ -53,6 +55,7 @@ final class ObjectPackIndex {
                     } catch (IOException failed) {
                         // Windows directory listings/attributes can retain a deleted index.
                         // Probe opening it instead of treating a retired pack as corruption.
+                        boolean transientAccess = failed instanceof java.nio.file.FileSystemException;
                         try (var ignored = FileChannel.open(index, StandardOpenOption.READ)) {
                             // A still-published invalid index must remain an error.
                         } catch (java.nio.file.NoSuchFileException removed) {
@@ -61,8 +64,11 @@ final class ObjectPackIndex {
                             continue;
                         } catch (IOException inaccessible) {
                             failed.addSuppressed(inaccessible);
+                            transientAccess |= inaccessible instanceof java.nio.file.FileSystemException;
                         }
                         if (++failures == 3) throw failed;
+                        // Let existing readers close Windows delete-pending handles.
+                        if (transientAccess) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10L * failures));
                         replaced = true;
                         break;
                     }

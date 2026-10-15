@@ -27,6 +27,9 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.withType(Test).configureEach {
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(providers.gradleProperty('lumiCoreTestJava').getOrElse('21'))
+    }
     useJUnitPlatform()
     doFirst {
         systemProperty 'lumi.test.runtime.classpath', sourceSets.test.runtimeClasspath.asPath

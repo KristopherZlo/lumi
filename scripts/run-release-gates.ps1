@@ -102,7 +102,10 @@ try {
             $taskCrashResume = @()
             if ($CrashResumeFrom.ContainsKey($taskName)) { $taskCrashResume = @($CrashResumeFrom[$taskName]) }
             switch ($taskName) {
-                'Core' { $taskTasks = @(':core:test', 'compileJava', 'compileTestJava', 'compileGametestJava', 'test', 'runPackagedGameTest') }
+                'Core' {
+                    $taskTasks = @(':core:test', 'compileJava', 'compileTestJava', 'compileGametestJava', 'test', 'runPackagedGameTest')
+                    $taskGradleArguments = @("-PlumiCoreTestJava=$($taskVerification.Definition.javaVersion)")
+                }
                 'Client' { $taskGradleArguments = @('-Dlumi.gametest.suite=ALL'); $taskTasks = @('runPackagedClientGameTest') }
                 'Exact' { $taskGradleArguments = @('-Dlumi.gametest.suite=EXACT'); $taskTasks = @('runPackagedClientGameTest') }
                 'Recovery' { $taskGradleArguments = @('-Dlumi.gametest.suite=RECOVERY'); $taskTasks = @('runPackagedClientGameTest') }
