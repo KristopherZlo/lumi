@@ -1,7 +1,5 @@
 package io.github.lumi.gametest;
 
-import com.sk89q.worldedit.fabric.FabricPermissionsProvider;
-import com.sk89q.worldedit.fabric.FabricWorldEdit;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
@@ -511,30 +509,10 @@ final class LumiBehaviorActions {
     }
 
     private void worldEdit(String name, List<String> commands) {
-        timed(name, () -> server.runOnServer(minecraft -> {
-            ServerPlayer player = player(minecraft);
-            FabricPermissionsProvider previous =
-                    FabricWorldEdit.inst.getPermissionsProvider();
-            FabricWorldEdit.inst.setPermissionsProvider(new FabricPermissionsProvider() {
-                @Override
-                public boolean hasPermission(ServerPlayer actor, String permission) {
-                    return actor == player;
-                }
-
-                @Override
-                public void registerPermission(String permission) { }
-            });
-            try {
-                for (String command : commands) {
-                    execute(minecraft, player, command);
-                }
-            } finally {
-                FabricWorldEdit.inst.setPermissionsProvider(previous);
-            }
-        }));
+        timed(name, () -> new LumiWorldEditActions(server).execute(commands));
     }
 
-    private static void execute(
+    static void execute(
             MinecraftServer minecraft, ServerPlayer player, String command)
             throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         var source = player.createCommandSourceStack()

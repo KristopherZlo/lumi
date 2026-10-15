@@ -23,6 +23,13 @@ public final class LumiClientCompletionGameTest implements FabricClientGameTest 
     @Override public void runTest(ClientGameTestContext context) {
         String destination = System.getProperty("lumi.gametest.completion");
         if (destination == null) return;
+        String tools = System.getProperty("lumi.gametest.builderTools", "both");
+        boolean worldedit = tools.equals("worldedit") || tools.equals("both");
+        boolean axiom = tools.equals("axiom") || tools.equals("both");
+        if (FabricLoader.getInstance().isModLoaded("worldedit") != worldedit
+                || FabricLoader.getInstance().isModLoaded("axiom") != axiom) {
+            throw new AssertionError("Client builder tools differ from requested mode: " + tools);
+        }
         String requestedBackend = System.getProperty("lumi.gametest.graphicsBackend");
         if (requestedBackend != null) {
             //? if >=26.3 {

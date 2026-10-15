@@ -45,7 +45,9 @@ public final class LumiMultiplayerClientGameTest implements FabricClientGameTest
                 context.waitFor(client -> client.player != null && client.player.canUseGameMasterBlocks());
                 context.runOnClient(client -> {
                     client.options.pauseOnLostFocus = false;
-                    com.moulberry.axiom.Axiom.configuration.internal.shownIntroduction = true;
+                    if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")) {
+                        com.moulberry.axiom.Axiom.configuration.internal.shownIntroduction = true;
+                    }
                 });
                 context.setScreen(() -> null);
                 var ui = new LumiUiTestDriver(context);

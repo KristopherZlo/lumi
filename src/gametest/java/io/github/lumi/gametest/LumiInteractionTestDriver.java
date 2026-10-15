@@ -151,11 +151,15 @@ final class LumiInteractionTestDriver {
                 + ";target=" + (client.hitResult instanceof BlockHitResult hit ? hit.getBlockPos() : "entity")
                 + ";handsBusy=" + client.player.isHandsBusy()
                 + ";usingItem=" + client.player.isUsingItem()
-                + ";destroying=" + client.gameMode.isDestroying()
-                + ";axiomTinker=" + com.moulberry.axiom.Axiom.configuration.capabilities.tinker
+                + ";destroying=" + client.gameMode.isDestroying() + builderToolState());
+    }
+
+    private String builderToolState() {
+        if (!net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("axiom")) return ";axiom=absent";
+        return ";axiomTinker=" + com.moulberry.axiom.Axiom.configuration.capabilities.tinker
                 + ";axiomBulldozer=" + com.moulberry.axiom.Axiom.configuration.capabilities.bulldozer
                 + ";axiomEditor=" + com.moulberry.axiom.editor.EditorUI.isActive()
-                + ";axiomMenu=" + com.moulberry.axiom.ContextMenuManager.getInstance().isActive());
+                + ";axiomMenu=" + com.moulberry.axiom.ContextMenuManager.getInstance().isActive();
     }
 
     private void aim(BlockPos target, Item item) {

@@ -149,7 +149,9 @@ final class LumiClientBehaviorWorld {
             boolean requireRenderedChunks) {
         context.runOnClient(client -> {
             client.options.pauseOnLostFocus = false;
-            Axiom.configuration.internal.shownIntroduction = true;
+            if (FabricLoader.getInstance().isModLoaded("axiom")) {
+                Axiom.configuration.internal.shownIntroduction = true;
+            }
         });
         context.setScreen(() -> null);
         context.waitForScreen(null);

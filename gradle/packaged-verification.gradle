@@ -21,6 +21,12 @@ ext.lumiPackagedArtifact = artifact
 def evidence = new PackagedGameTestEvidence()
 def candidateVersion = project.version.toString()
 def graphicsBackend = providers.gradleProperty('lumiGraphicsBackend').orNull?.toLowerCase(Locale.ROOT)
+def builderTools = providers.gradleProperty('lumiBuilderTools').getOrElse('both')
+if (!['none', 'worldedit', 'axiom', 'both'].contains(builderTools)) {
+    throw new GradleException('lumiBuilderTools must be none, worldedit, axiom, or both')
+}
+def withWorldEdit = builderTools in ['worldedit', 'both']
+def withAxiom = builderTools in ['axiom', 'both']
 tasks.matching { it.name in ['runPackagedClientGameTest', 'runPackagedBenchmark', 'prepareMultiplayerLaunch'] }.configureEach {
     onlyIf {
         if (graphicsBackend != null && (target.id() != 'modern-263' || !['opengl', 'vulkan'].contains(graphicsBackend))) {
@@ -55,9 +61,11 @@ dependencies {
     packagedGameTestApi fabricApi.module('fabric-gametest-api-v1', target.fabricApiVersion())
     packagedClientGameTestApi fabricApi.module('fabric-client-gametest-api-v1', target.fabricApiVersion())
     vanillaReopenMods "net.fabricmc.fabric-api:fabric-api:${target.fabricApiVersion()}"
-    packagedTestMods "maven.modrinth:1u6JkXh5:${target.worldeditVersionId()}"
-    packagedTestMods "maven.modrinth:N6n5dqoA:${target.axiomVersionId()}"
-    target.worldeditCuiCoordinate().ifPresent { coordinate -> packagedTestMods coordinate }
+    if (withWorldEdit) {
+        packagedTestMods "maven.modrinth:1u6JkXh5:${target.worldeditVersionId()}"
+        target.worldeditCuiCoordinate().ifPresent { coordinate -> packagedTestMods coordinate }
+    }
+    if (withAxiom) packagedTestMods "maven.modrinth:N6n5dqoA:${target.axiomVersionId()}"
 }
 
 def testApi = configurations.packagedGameTestApi
@@ -74,15 +82,35 @@ if (target.javaVersion() == 21) {
     testApi = files(repairedApi).builtBy(repairApi)
 }
 
+def testMetadata = layout.buildDirectory.file("generated/packaged-test/${builderTools}/fabric.mod.json")
+def writeTestMetadata = tasks.register('writePackagedTestMetadata') {
+    dependsOn 'processGametestResources'
+    inputs.files(sourceSets.gametest.output.resourcesDir)
+    inputs.property('builderTools', builderTools)
+    outputs.file(testMetadata)
+    doLast {
+        def metadata = new groovy.json.JsonSlurper().parse(new File(sourceSets.gametest.output.resourcesDir, 'fabric.mod.json'))
+        metadata.entrypoints['fabric-gametest'].removeAll { entry ->
+            (!withWorldEdit && entry.endsWith('.LumiWorldEditGameTests')) ||
+                    (!withAxiom && entry.endsWith('.LumiAxiomGameTests'))
+        }
+        def output = testMetadata.get().asFile
+        output.parentFile.mkdirs()
+        output.text = JsonOutput.prettyPrint(JsonOutput.toJson(metadata)) + '\n'
+    }
+}
+def testClassifier = 'gametest' + (builderTools == 'both' ? '' : '-' + builderTools)
 def testJar = tasks.register('packagedGameTestJar', Jar) {
-    from sourceSets.gametest.output
-    archiveClassifier = target.javaVersion() == 21 ? 'gametest-dev' : 'gametest'
+    from(sourceSets.gametest.output) { exclude 'fabric.mod.json' }
+    dependsOn writeTestMetadata
+    from(testMetadata)
+    archiveClassifier = testClassifier + (target.javaVersion() == 21 ? '-dev' : '')
 }
 def productionTestJar = testJar
 if (target.javaVersion() == 21) {
     productionTestJar = tasks.register('remapPackagedGameTestJar', lumiRemapJarTaskType) {
         inputFile = testJar.flatMap { it.archiveFile }
-        archiveClassifier = 'gametest'
+        archiveClassifier = testClassifier
         addNestedDependencies = false
     }
 }
@@ -122,7 +150,7 @@ tasks.register('runPackagedGameTest', lumiServerProductionRunTaskType) {
             }
         }
         record.putAll([schema: 1, status: 'running', group: target.id(), game: game,
-                scope: 'server-gametest', filter: filter ?: '*', testPosition: testPosition,
+                scope: 'server-gametest', filter: filter ?: '*', testPosition: testPosition, builderTools: builderTools,
                 javaVersion: target.javaVersion(),
                 testApi: [originalSha256: evidence.hash(configurations.packagedGameTestApi.singleFile.toPath()),
                         enumDefaultRepair: target.javaVersion() == 21],
@@ -174,6 +202,7 @@ def requestedClientSuite = System.getProperty('lumi.gametest.suite', 'SMOKE').to
         }
         jvmArgs.add("-Dlumi.gametest.suite=${clientSuite}")
         jvmArgs.add("-Dlumi.gametest.game=${game}")
+        jvmArgs.add("-Dlumi.gametest.builderTools=${builderTools}")
         if (graphicsBackend != null) {
             programArgs.addAll('--graphicsBackend', graphicsBackend.toUpperCase(Locale.ROOT))
             jvmArgs.add("-Dlumi.gametest.graphicsBackend=${graphicsBackend}")
@@ -215,6 +244,7 @@ def requestedClientSuite = System.getProperty('lumi.gametest.suite', 'SMOKE').to
             record.putAll([schema: 1, status: 'running', group: target.id(), game: game,
                     scope: benchmark ? 'client-benchmark' : 'client-gametest', suite: clientSuite, javaVersion: target.javaVersion(),
                     graphicsBackend: graphicsBackend ?: 'default',
+                    builderTools: builderTools,
                     benchmark: benchmark ? System.properties.findAll { name, ignored -> name.toString().startsWith('lumi.benchmark.') } : [:],
                     artifact: [path: artifact.singleFile.absolutePath, sha256: evidence.hash(artifact.singleFile.toPath())],
                     mods: mods.files.collect { mod ->
