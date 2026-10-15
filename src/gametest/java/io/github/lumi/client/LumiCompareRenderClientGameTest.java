@@ -87,6 +87,7 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
             });
             context.setScreen(() -> null);
             context.waitFor(client -> client.player != null && client.level != null);
+            assertDepthOcclusion(context, world);
             world.getServer().runOnServer(server -> {
                 var player = server.getPlayerList().getPlayers().getFirst();
                 player.teleportTo(50, 105, 135);
@@ -210,6 +211,66 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                     name + "," + changes.size() + "," + frame + "," + cpuNanos + ","));
         }
         frame++;
+    }
+
+    private void assertDepthOcclusion(ClientGameTestContext context,
+            net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext world) {
+        world.getServer().runOnServer(server -> {
+            var player = server.getPlayerList().getPlayers().getFirst();
+            player.teleportTo(8.5, 178.88, 16.5);
+            player.getAbilities().flying = true;
+            player.onUpdateAbilities();
+        });
+        context.waitTicks(30);
+        for (int stage = 0; stage < 3; stage++) {
+            if (stage == 1) {
+                world.getServer().runOnServer(server -> {
+                    var level = server.overworld();
+                    for (int x = 5; x <= 11; x++) {
+                        for (int y = 177; y <= 184; y++) {
+                            level.setBlockAndUpdate(new net.minecraft.core.BlockPos(x, y, 12),
+                                    net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
+                        }
+                    }
+                });
+                context.waitTicks(30);
+            }
+            boolean throughWall = stage == 2;
+            String label = stage == 0 ? "depth_open" : stage == 1 ? "depth_wall" : "depth_xray";
+            context.runOnClient(client -> {
+                client.player.setYRot(180);
+                client.player.yRotO = 180;
+                client.player.setXRot(0);
+                client.player.xRotO = 0;
+                changes = List.of(new BlockChange(8, 180, 8, BlockChange.Kind.ADDED));
+                name = label;
+                xray = throughWall;
+                frame = 0;
+                inputStarted = System.nanoTime();
+                observedReady = false;
+                active = true;
+            });
+            context.waitFor(client -> frame >= 20 && pending.isEmpty(), 1200);
+            Path screenshot = context.takeScreenshot("lumi-compare-" + label);
+            try {
+                var image = ImageIO.read(screenshot.toFile());
+                int highlighted = 0;
+                for (int y = Math.max(0, image.getHeight() / 2 - 64);
+                        y < Math.min(image.getHeight(), image.getHeight() / 2 + 64); y++) {
+                    for (int x = Math.max(0, image.getWidth() / 2 - 64);
+                            x < Math.min(image.getWidth(), image.getWidth() / 2 + 64); x++) {
+                        if (colored(image.getRGB(x, y))) highlighted++;
+                    }
+                }
+                if (stage == 1 ? highlighted != 0 : highlighted < 100) {
+                    throw new AssertionError(label + " has " + highlighted
+                            + " highlight pixels in the controlled center region: " + screenshot);
+                }
+            } catch (java.io.IOException failed) {
+                throw new IllegalStateException("Cannot inspect depth screenshot", failed);
+            }
+            context.runOnClient(client -> active = false);
+        }
     }
 
     private static List<BlockChange> fixture(boolean sparse) {
