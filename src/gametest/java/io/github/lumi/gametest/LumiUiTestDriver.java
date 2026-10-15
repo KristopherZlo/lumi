@@ -77,8 +77,10 @@ final class LumiUiTestDriver {
             }
             context.waitTick();
         }
-        throw new AssertionError("Filtered History did not expose "
-                + translationKey);
+        context.takeScreenshot("lumi-filtered-history-failure");
+        throw new AssertionError("Filtered History did not expose " + translationKey + "; "
+                + context.computeOnClient(client -> client.screen == null ? "normal play"
+                        : client.screen.getClass().getSimpleName() + ": " + diagnostic(client.screen)));
     }
 
     void createBranch(String name) {
