@@ -51,7 +51,12 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
     public void runTest(ClientGameTestContext context) {
         if (!"COMPARE_RENDER".equalsIgnoreCase(System.getProperty("lumi.gametest.suite"))) return;
         WorldRenderEvents.END_MAIN.register(this::render);
+        //? if >=26.1 {
+        /*WorldRenderEvents.END_EXTRACTION.register(extracted ->
+                renderer.setFrustum(extracted.levelState().cameraRenderState.cullFrustum));
+        *///?} else {
         WorldRenderEvents.END_EXTRACTION.register(extracted -> renderer.setFrustum(extracted.frustum()));
+        //?}
         int previousLimit = context.computeOnClient(client -> client.options.framerateLimit().get());
         Path denseXrayScreenshot = null;
         context.runOnClient(client -> {
@@ -243,14 +248,23 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
         }
     }
 
-    private record MeasuredContext(WorldRenderContext delegate, MultiBufferSource consumers)
+    private record MeasuredContext(WorldRenderContext delegate, MultiBufferSource.BufferSource consumers)
             implements WorldRenderContext {
         public GameRenderer gameRenderer() { return delegate.gameRenderer(); }
+        //? if >=26.1 {
+        /*public LevelRenderer levelRenderer() { return delegate.levelRenderer(); }
+        public LevelRenderState levelState() { return delegate.levelState(); }
+        public ChunkSectionsToRender sectionsToRender() { return delegate.sectionsToRender(); }
+        public SubmitNodeCollector submitNodeCollector() { return delegate.submitNodeCollector(); }
+        public PoseStack poseStack() { return delegate.poseStack(); }
+        public MultiBufferSource.BufferSource bufferSource() { return consumers; }
+        *///?} else {
         public LevelRenderer worldRenderer() { return delegate.worldRenderer(); }
         public LevelRenderState worldState() { return delegate.worldState(); }
         public ChunkSectionsToRender sectionState() { return delegate.sectionState(); }
         public SubmitNodeCollector commandQueue() { return delegate.commandQueue(); }
         public PoseStack matrices() { return delegate.matrices(); }
+        //?}
     }
 
     private static void assertSameHighlight(Path cached, Path transientDraw) {

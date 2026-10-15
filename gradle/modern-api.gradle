@@ -4,6 +4,12 @@ stonecutter.replacements {
         replace('position.x', 'position.x()')
         replace('position.z', 'position.z()')
     }
+    regex(true, 'origin-position') {
+        replace('\\borigin\\.([xz])\\b(?!\\()', 'origin.$1()', '\\borigin\\.([xz])\\(\\)', 'origin.$1')
+    }
+    regex(true, 'test-chunk-position') {
+        replace('\\bchunk\\.([xz])\\b(?!\\()', 'chunk.$1()', '\\bchunk\\.([xz])\\(\\)', 'chunk.$1')
+    }
     regex(true, '!native-types') {
         replace('\\bGuiGraphics\\b', 'GuiGraphicsExtractor', '\\bGuiGraphicsExtractor\\b', 'GuiGraphics')
         replace('(public void )render(?=\\(\\s*GuiGraphics\\b)', '$1extractRenderState',
@@ -51,5 +57,18 @@ stonecutter.replacements {
         replace('CachedOrthoProjectionMatrixBuffer', 'ProjectionMatrixBuffer')
         replace('method = "renderTooltip"', 'method = "tooltip"')
         replace('@Accessor("renderState")', '@Accessor("guiRenderState")')
+        replace('net.minecraft.client.renderer.state.LevelRenderState',
+                'net.minecraft.client.renderer.state.level.LevelRenderState')
+        replace('.getClientWorld()', '.getClientLevel()')
+        replace('.resizeDisplay()', '.resizeGui()')
+        replace('com.sk89q.worldedit.fabric.FabricPermissionsProvider',
+                'com.sk89q.worldedit.coremc.CoreMcPermissionsProvider')
+        replace('FabricPermissionsProvider', 'CoreMcPermissionsProvider')
+        replace('com.sk89q.worldedit.fabric.FabricWorldEdit',
+                'com.sk89q.worldedit.fabric.internal.FabricWorldEdit')
+        replace('FabricWorldEdit.inst.getPermissionsProvider()',
+                'com.sk89q.worldedit.coremc.CoreMcPermissionsProvider.current()')
+        replace('FabricWorldEdit.inst.setPermissionsProvider(',
+                'com.sk89q.worldedit.coremc.CoreMcPermissionsProvider.setCurrent(')
     }
 }

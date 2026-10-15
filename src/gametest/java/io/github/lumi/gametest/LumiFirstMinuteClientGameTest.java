@@ -1,4 +1,5 @@
 package io.github.lumi.gametest;
+//~ origin-position
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.ui.LumiDashboardScreen;
@@ -294,7 +295,8 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
             TestServerContext server, UUID id, Vec3 expectedPosition) {
         server.runOnServer(minecraft -> {
             var level = minecraft.getPlayerList().getPlayers().getFirst().level();
-            ChunkPos origin = new ChunkPos(BlockPos.containing(expectedPosition));
+            BlockPos expectedBlock = BlockPos.containing(expectedPosition);
+            ChunkPos origin = new ChunkPos(expectedBlock.getX() >> 4, expectedBlock.getZ() >> 4);
             if (level.getChunkSource().getChunkNow(origin.x, origin.z) == null
                     || level.getChunkSource().getChunkNow(origin.x + 1, origin.z) == null) {
                 throw new AssertionError(
@@ -323,7 +325,8 @@ public final class LumiFirstMinuteClientGameTest implements FabricClientGameTest
             TestServerContext server, Vec3 expectedPosition) {
         return server.computeOnServer(minecraft -> {
             var level = minecraft.getPlayerList().getPlayers().getFirst().level();
-            ChunkPos origin = new ChunkPos(BlockPos.containing(expectedPosition));
+            BlockPos expectedBlock = BlockPos.containing(expectedPosition);
+            ChunkPos origin = new ChunkPos(expectedBlock.getX() >> 4, expectedBlock.getZ() >> 4);
             var entities = ((ServerLevelEntityManagerAccessor) level)
                     .lumi$entityManager();
             entities.processPendingLoads();

@@ -1,4 +1,5 @@
 package io.github.lumi.gametest;
+//~ test-chunk-position
 
 import com.mojang.blaze3d.platform.NativeImage;
 import io.github.lumi.LumiMod;
@@ -103,7 +104,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             poiPositions = positions.subList(7, 47).stream()
                     .map(BlockPos::above)
                     .toList();
-            require(poiPositions.stream().map(ChunkPos::new).distinct().count() == 40,
+            require(poiPositions.stream().map(pos -> new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4)).distinct().count() == 40,
                     "Recovery POI fixture must span exactly 40 chunks");
             lightPosition = positions.get(4).above();
             respawnPosition = positions.get(5).above();
@@ -256,7 +257,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
                         "Could not update recovery POI at " + position);
             }
             var pois = level.getChunkSource().getPoiManager();
-            positions.stream().map(ChunkPos::new).distinct().forEach(pois::flush);
+            positions.stream().map(pos -> new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4)).distinct().forEach(pois::flush);
             return ((SectionStoragePersistenceAccessor) pois)
                     .lumi$simpleRegionStorage().synchronize(true);
         }).join();
@@ -341,7 +342,7 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             long loadedPoiChunks = restored.getServer().computeOnServer(minecraft -> {
                 var level = minecraft.getPlayerList().getPlayers().getFirst().level();
                 return poiPositions.stream()
-                        .map(ChunkPos::new)
+                        .map(pos -> new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4))
                         .filter(chunk -> level.getChunkSource()
                                 .getChunkNow(chunk.x, chunk.z) != null)
                         .count();

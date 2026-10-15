@@ -1,4 +1,5 @@
 package io.github.lumi.gametest;
+//~ test-chunk-position
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.CommitAuthor;
@@ -220,7 +221,7 @@ public final class LumiHistoryGameTests {
                 .mapToObj(index -> helper.absolutePos(
                         new BlockPos(642 + index * 32, 2, 2)))
                 .toList();
-        List<ChunkPos> chunks = targets.stream().map(ChunkPos::new).toList();
+        List<ChunkPos> chunks = targets.stream().map(pos -> new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4)).toList();
         AtomicReference<UUID> zoneId = new AtomicReference<>();
         AtomicReference<CommitId> gold = new AtomicReference<>();
         AtomicReference<CommitId> diamond = new AtomicReference<>();

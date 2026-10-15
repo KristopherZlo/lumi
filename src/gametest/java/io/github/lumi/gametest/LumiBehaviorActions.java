@@ -291,9 +291,13 @@ final class LumiBehaviorActions {
                     ItemStack stack = new ItemStack(item);
                     player.setItemInHand(InteractionHand.MAIN_HAND, stack);
                     player.connection.handleInteract(
+                            //? if >=26.1 {
+                            /*new ServerboundInteractPacket(stand.getId(), InteractionHand.MAIN_HAND, new Vec3(0, 1, 0), false));
+                            *///?} else {
                             ServerboundInteractPacket.createInteractionPacket(
                                     stand, false, InteractionHand.MAIN_HAND,
                                     new Vec3(0, 1, 0)));
+                            //?}
                     require(stand.getItemBySlot(
                             stand.getEquipmentSlotForItem(stack)).is(item),
                             "Armor stand did not equip " + item);
@@ -332,8 +336,7 @@ final class LumiBehaviorActions {
             LivingEntity target = entity(player.level(), id, LivingEntity.class);
             float health = target.getHealth();
             prepareAttack(player, target, weapon);
-            player.connection.handleInteract(
-                    ServerboundInteractPacket.createAttackPacket(target, false));
+            attackPacket(player, target);
             require(target.isAlive() && target.getHealth() < health,
                     "Entity was not wounded by " + name + ": " + id);
         }));
@@ -347,8 +350,7 @@ final class LumiBehaviorActions {
             prepareAttack(player, target, weapon);
             LumiWorldSnapshot before = LumiWorldSnapshot.capture(
                     player.level(), areas, report, name + "_before");
-            player.connection.handleInteract(
-                    ServerboundInteractPacket.createAttackPacket(target, false));
+            attackPacket(player, target);
             require(!target.isAlive(), "Entity survived " + name + ": " + id);
             return before;
         }));
@@ -637,9 +639,16 @@ final class LumiBehaviorActions {
     private static void attack(
             ServerPlayer player, Entity target, Item weapon, String name) {
         prepareAttack(player, target, weapon);
-        player.connection.handleInteract(
-                ServerboundInteractPacket.createAttackPacket(target, false));
+        attackPacket(player, target);
         require(!target.isAlive(), "Entity survived " + name + ": " + target.getUUID());
+    }
+
+    private static void attackPacket(ServerPlayer player, Entity target) {
+        //? if >=26.1 {
+        /*player.connection.handleAttack(new net.minecraft.network.protocol.game.ServerboundAttackPacket(target.getId()));
+        *///?} else {
+        player.connection.handleInteract(ServerboundInteractPacket.createAttackPacket(target, false));
+        //?}
     }
 
     private static void prepareAttack(ServerPlayer player, Entity target, Item weapon) {

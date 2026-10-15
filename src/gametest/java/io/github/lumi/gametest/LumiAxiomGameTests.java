@@ -59,7 +59,7 @@ public final class LumiAxiomGameTests {
                     player.get().setItemInHand(
                             InteractionHand.MAIN_HAND,
                             Blocks.GOLD_BLOCK.asItem().getDefaultInstance());
-                    AxiomServer.onAxiomActive(player.get());
+                    activateAxiom(player.get());
                     helper.assertTrue(AxiomServer.canUseAxiom(
                                     player.get(), AxiomPermission.BUILD_PLACE),
                             "Mock player lacks Axiom build permission");
@@ -93,7 +93,7 @@ public final class LumiAxiomGameTests {
                                 "Axiom Infinite Reach Redo must succeed");
                         helper.assertBlockState(FIRST, Blocks.GOLD_BLOCK.defaultBlockState());
                     }
-                    AxiomServer.activeAxiomPlayers.remove(player.get().getUUID());
+                    deactivateAxiom(player.get());
                     helper.getLevel().getServer().getPlayerList()
                             .deop(player.get().nameAndId());
                     releasePlayer(helper, player.get(), test);
@@ -126,7 +126,7 @@ public final class LumiAxiomGameTests {
                     player.get().setItemInHand(
                             InteractionHand.MAIN_HAND,
                             Blocks.REDSTONE_BLOCK.asItem().getDefaultInstance());
-                    AxiomServer.onAxiomActive(player.get());
+                    activateAxiom(player.get());
                     tnt.forEach(position -> helper.setBlock(position, Blocks.TNT));
                     ignition.forEach(position -> applyInfiniteReach(
                             helper, player.get(), position,
@@ -178,7 +178,7 @@ public final class LumiAxiomGameTests {
                                                     + " fuse=" + entity.getFuse()
                                                     + " pos=" + entity.position())
                                             .toList());
-                    AxiomServer.activeAxiomPlayers.remove(player.get().getUUID());
+                    deactivateAxiom(player.get());
                     helper.getLevel().getServer().getPlayerList()
                             .deop(player.get().nameAndId());
                     releasePlayer(helper, player.get(), test);
@@ -362,4 +362,21 @@ public final class LumiAxiomGameTests {
         helper.assertFalse(runtime.operations().hasActiveOperation(),
                 "Lumi operation is still active");
     }
+    private static void activateAxiom(ServerPlayer player) {
+        //? if >=26.1 {
+        /*AxiomServer.onAxiomActive(player.level().getServer(), player);
+        *///?} else {
+        AxiomServer.onAxiomActive(player);
+        //?}
+    }
+
+    private static void deactivateAxiom(ServerPlayer player) {
+        //? if >=26.1 {
+        /*((com.moulberry.axiom.hooks.MinecraftServerExt) player.level().getServer())
+                .axiom$getAxiomServer().activeAxiomPlayers.remove(player.getUUID());
+        *///?} else {
+        AxiomServer.activeAxiomPlayers.remove(player.getUUID());
+        //?}
+    }
+
 }

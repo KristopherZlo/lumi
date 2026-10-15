@@ -7,6 +7,7 @@ import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.runtime.MinecraftLiveEntityTracker;
 import java.io.IOException;
 import java.util.Optional;
+import java.util.function.Supplier;
 import net.minecraft.network.protocol.game.ServerboundInteractPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
@@ -22,13 +23,31 @@ abstract class ServerGamePacketListenerImplMixin {
     @WrapMethod(method = "handleInteract")
     private void lumi$trackEntityInteraction(
             ServerboundInteractPacket packet, Operation<Void> original) {
+        lumi$trackEntityAction(() -> original.call(packet),
+                //? if >=26.1 {
+                /*() -> player.level().getEntity(packet.entityId()));
+                *///?} else {
+                () -> packet.getTarget(player.level()));
+                //?}
+    }
+
+    //? if >=26.1 {
+    /*@WrapMethod(method = "handleAttack")
+    private void lumi$trackEntityAttack(
+            net.minecraft.network.protocol.game.ServerboundAttackPacket packet, Operation<Void> original) {
+        lumi$trackEntityAction(() -> original.call(packet), () -> player.level().getEntity(packet.entityId()));
+    }
+    *///?}
+
+    @Unique
+    private void lumi$trackEntityAction(Runnable original, Supplier<Entity> target) {
         if (!player.level().getServer().isSameThread()) {
-            original.call(packet);
+            original.run();
             return;
         }
         var runtime = LumiMod.serverRuntime().find(player.level()).orElse(null);
         if (runtime == null) {
-            original.call(packet);
+            original.run();
             return;
         }
         if (!runtime.freeze().isMutationAllowed()) {
@@ -37,14 +56,9 @@ abstract class ServerGamePacketListenerImplMixin {
         try (var ignored = DirectLiveActionContext.open(
                 runtime.liveActions(), player.getUUID())) {
             Optional<MinecraftLiveEntityTracker.Pending> pending = lumi$beginCapture(
-                    runtime.liveEntities(),
-                    //? if >=26.1 {
-                    /*player.level().getEntity(packet.entityId()));
-                    *///?} else {
-                    packet.getTarget(player.level()));
-                    //?}
+                    runtime.liveEntities(), target.get());
             try {
-                original.call(packet);
+                original.run();
             } finally {
                 lumi$finishCapture(runtime.liveEntities(), pending);
             }

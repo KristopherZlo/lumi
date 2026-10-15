@@ -184,7 +184,11 @@ final class LumiInteractionTestDriver {
             context.runOnClient(client -> {
                 // A background GameTest window otherwise consumes its first click to grab the mouse.
                 if (client.screen == null) {
+                    //? if >=26.1 {
+                    /*((io.github.lumi.gametest.mixin.WindowFocusAccessor) (Object) client.getWindow()).lumi$setFocused(true);
+                    *///?} else {
                     client.setWindowActive(true);
+                    //?}
                     client.mouseHandler.grabMouse();
                 }
             });

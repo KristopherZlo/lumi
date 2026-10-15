@@ -139,10 +139,19 @@ public final class LumiWorldEditGameTests {
             ServerPlayer player,
             BlockPos first,
             BlockPos second) {
+        //? if >=26.1 {
+        /*var adapter = FabricAdapter.get();
+        var world = adapter.fromNativeWorld(helper.getLevel());
+        var selector = com.sk89q.worldedit.WorldEdit.getInstance().getSessionManager()
+                .get(adapter.fromNativePlayer(player)).getRegionSelector(world);
+        selector.selectPrimary(adapter.adapt(helper.absolutePos(first)), NO_LIMITS);
+        selector.selectSecondary(adapter.adapt(helper.absolutePos(second)), NO_LIMITS);
+        *///?} else {
         var world = FabricAdapter.adapt(helper.getLevel());
         var selector = FabricWorldEdit.inst.getSession(player).getRegionSelector(world);
         selector.selectPrimary(FabricAdapter.adapt(helper.absolutePos(first)), NO_LIMITS);
         selector.selectSecondary(FabricAdapter.adapt(helper.absolutePos(second)), NO_LIMITS);
+        //?}
     }
 
     private static void releasePlayer(

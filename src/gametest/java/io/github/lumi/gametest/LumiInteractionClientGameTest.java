@@ -29,7 +29,12 @@ public final class LumiInteractionClientGameTest implements FabricClientGameTest
             LumiClientBehaviorWorld.runWithReopen(context, "interaction-latency",
                     this::exercise, this::reopened);
         } finally {
+            //? if >=26.1 {
+            /*context.runOnClient(client -> ((io.github.lumi.gametest.mixin.WindowFocusAccessor)
+                    (Object) client.getWindow()).lumi$setFocused(windowActive));
+            *///?} else {
             context.runOnClient(client -> client.setWindowActive(windowActive));
+            //?}
         }
     }
 
