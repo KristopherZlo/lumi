@@ -10,6 +10,7 @@ enum LumiClientTestSuite {
     UI_SCALE,
     COMPARE_RENDER,
     INTERACTION,
+    BUILDER_TOOLS,
     RECOVERY,
     RESTORE_CRASH,
     PERSISTENCE_CRASH,

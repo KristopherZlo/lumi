@@ -222,8 +222,11 @@ def requestedClientSuite = System.getProperty('lumi.gametest.suite', 'SMOKE').to
             if (benchmark && (requestedClientSuite != 'BENCHMARK' || !Boolean.getBoolean('lumi.benchmark.enabled'))) {
                 throw new GradleException('Packaged benchmark requires BENCHMARK suite and explicit benchmark enablement')
             }
-            if (!benchmark && !['ALL', 'SMOKE', 'UI', 'UI_SCALE', 'COMPARE_RENDER', 'INTERACTION', 'RECOVERY', 'EXACT', 'UPGRADE'].contains(clientSuite)) {
+            if (!benchmark && !['ALL', 'SMOKE', 'UI', 'UI_SCALE', 'COMPARE_RENDER', 'INTERACTION', 'BUILDER_TOOLS', 'RECOVERY', 'EXACT', 'UPGRADE'].contains(clientSuite)) {
                 throw new GradleException('Packaged client requires a functional GameTest suite')
+            }
+            if (clientSuite == 'BUILDER_TOOLS' && builderTools == 'none') {
+                throw new GradleException('Builder-tool editing suite requires WorldEdit or Axiom')
             }
             if (clientSuite == 'UPGRADE' && (!['source', 'edit', 'verify', 'startup', 'resume'].contains(
                     System.getProperty('lumi.gametest.upgrade.stage', ''))
