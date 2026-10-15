@@ -11,13 +11,13 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /** Renders changed blocks while the remappable Action key is held. */
 public final class LumiPendingChangeOverlay {
+    private final LumiShapeOutline shapes = new LumiShapeOutline();
     private static final VoxelShape BLOCK = Shapes.block();
     private static final double MAX_DISTANCE_SQUARED = 256.0 * 256.0;
     private final ClientHistoryStore history;
@@ -40,7 +40,18 @@ public final class LumiPendingChangeOverlay {
 
     public void register() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+        //? if >=26.2 {
+        /*WorldRenderEvents.COLLECT_SUBMITS.register(this::render);
+        WorldRenderEvents.END_MAIN.register(context -> {
+            var client = Minecraft.getInstance();
+            var visible = comparisons.visibleChanges();
+            if (client.player != null && !visible.isEmpty()) {
+                compareOverlay.render(context, visible, actionDown(client));
+            }
+        });
+        *///?} else {
         WorldRenderEvents.END_MAIN.register(this::render);
+        //?}
         //? if >=26.1 {
         /*WorldRenderEvents.END_EXTRACTION.register(context ->
                 compareOverlay.setFrustum(context.levelState().cameraRenderState.cullFrustum));
@@ -79,23 +90,23 @@ public final class LumiPendingChangeOverlay {
             return;
         }
         var camera = context.worldState().cameraRenderState.pos;
-        var lines = context.consumers().getBuffer(RenderTypes.linesTranslucent());
         if (showPending) {
             for (var block : pendingBlocks) {
                 renderBlock(
-                        context, lines, camera,
+                        context, camera,
                         block.x(), block.y(), block.z(),
                         0xffffd166);
             }
         }
+        //? if <26.2 {
         if (!comparison.isEmpty()) {
             compareOverlay.render(context, comparison, actionDown(client));
         }
+        //?}
     }
 
-    private static void renderBlock(
+    private void renderBlock(
             WorldRenderContext context,
-            com.mojang.blaze3d.vertex.VertexConsumer lines,
             net.minecraft.world.phys.Vec3 camera,
             int x,
             int y,
@@ -108,8 +119,8 @@ public final class LumiPendingChangeOverlay {
                 > MAX_DISTANCE_SQUARED) {
             return;
         }
-        ShapeRenderer.renderShape(
-                context.matrices(), lines, BLOCK,
+        shapes.render(
+                context, BLOCK, RenderTypes.linesTranslucent(),
                 x - camera.x, y - camera.y, z - camera.z,
                 color, 1.0F);
     }

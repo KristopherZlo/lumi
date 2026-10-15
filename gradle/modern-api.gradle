@@ -59,7 +59,7 @@ stonecutter.replacements {
         replace('@Accessor("renderState")', '@Accessor("guiRenderState")')
         replace('net.minecraft.client.renderer.state.LevelRenderState',
                 'net.minecraft.client.renderer.state.level.LevelRenderState')
-        replace('.getClientWorld()', '.getClientLevel()')
+        replace('.getClientWorld()', stonecutter.eval(stonecutter.current.version, '>=26.2') ? '.getConnection()' : '.getClientLevel()')
         replace('.resizeDisplay()', '.resizeGui()')
         replace('com.sk89q.worldedit.fabric.FabricPermissionsProvider',
                 'com.sk89q.worldedit.coremc.CoreMcPermissionsProvider')
@@ -70,5 +70,57 @@ stonecutter.replacements {
                 'com.sk89q.worldedit.coremc.CoreMcPermissionsProvider.current()')
         replace('FabricWorldEdit.inst.setPermissionsProvider(',
                 'com.sk89q.worldedit.coremc.CoreMcPermissionsProvider.setCurrent(')
+    }
+    if (stonecutter.eval(stonecutter.current.version, '>=26.2')) {
+        regex(true, '!native262-screen') {
+            replace('(?<![\\w.])(client|minecraft|ticking)\\.screen\\b', '$1.gui.screen()', '(?<![\\w.])(client|minecraft|ticking)\\.gui\\.screen\\(\\)', '$1.screen')
+        }
+        regex(true, '!native262-current-screen') {
+            replace('Minecraft\\.getInstance\\(\\)\\.screen\\b', 'Minecraft.getInstance().gui.screen()', 'Minecraft\\.getInstance\\(\\)\\.gui\\.screen\\(\\)', 'Minecraft.getInstance().screen')
+        }
+        regex(true, '!native262-set-screen') {
+            replace('(?<![\\w.])(client|minecraft)\\.setScreen\\(', '$1.gui.setScreen(', '(?<![\\w.])(client|minecraft)\\.gui\\.setScreen\\(', '$1.setScreen(')
+        }
+        regex(true, '!native262-current-set-screen') {
+            replace('Minecraft\\.getInstance\\(\\)\\.setScreen\\(', 'Minecraft.getInstance().gui.setScreen(', 'Minecraft\\.getInstance\\(\\)\\.gui\\.setScreen\\(', 'Minecraft.getInstance().setScreen(')
+        }
+        regex(true, '!native262-entity-types') {
+            replace('(?<![\\w.])(?:net\\.minecraft\\.world\\.entity\\.)?EntityType\\.(TNT|ITEM|ARMOR_STAND|FALLING_BLOCK|PIG|CHEST_MINECART|ARROW|END_CRYSTAL)\\b',
+                    'net.minecraft.world.entity.EntityTypes.$1',
+                    'net\\.minecraft\\.world\\.entity\\.EntityTypes\\.(TNT|ITEM|ARMOR_STAND|FALLING_BLOCK|PIG|CHEST_MINECART|ARROW|END_CRYSTAL)\\b',
+                    'net.minecraft.world.entity.EntityType.$1')
+        }
+        regex(true, '!native262-block-entity-types') {
+            replace('(?<![\\w.])(?:net\\.minecraft\\.world\\.level\\.block\\.entity\\.)?BlockEntityType\\.(CHEST|DECORATED_POT)\\b',
+                    'net.minecraft.world.level.block.entity.BlockEntityTypes.$1',
+                    'net\\.minecraft\\.world\\.level\\.block\\.entity\\.BlockEntityTypes\\.(CHEST|DECORATED_POT)\\b',
+                    'net.minecraft.world.level.block.entity.BlockEntityType.$1')
+        }
+        string(true, '!native262-types') {
+            ['WHITE', 'ORANGE', 'MAGENTA', 'LIGHT_BLUE', 'YELLOW', 'LIME', 'PINK', 'GRAY',
+             'LIGHT_GRAY', 'CYAN', 'PURPLE', 'BLUE', 'BROWN', 'GREEN', 'RED', 'BLACK'].each { color ->
+                replace("Blocks.${color}_CONCRETE", "Blocks.CONCRETE.pick(net.minecraft.world.item.DyeColor.${color})")
+            }
+        }
+        string(true, '!native262-api') {
+            replace('RenderSystem.getDevice().getRenderer()', 'RenderSystem.getDevice().getDeviceInfo().name()')
+            replace('client.getOverlay()', 'client.gui.overlay()')
+            replace('client.options.hideGui', 'client.gui.hud.isHidden()')
+            replace('client.gui.setOverlayMessage(', 'client.gui.hud.setOverlayMessage(')
+            replace('Minecraft.getInstance().getMainRenderTarget()', 'Minecraft.getInstance().gameRenderer.mainRenderTarget()')
+            replace('RenderSystem.getModelViewMatrix()', 'RenderSystem.getModelViewMatrixCopy()')
+            replace('VertexFormat.Mode', 'com.mojang.blaze3d.PrimitiveTopology')
+            replace('type.mode()', 'type.primitiveTopology()')
+            replace('pass.setVertexBuffer(0, layer.buffer())', 'pass.setVertexBuffer(0, layer.buffer().slice())')
+            // 26.2: indexCount, instanceCount, firstIndex, vertexOffset, firstInstance.
+            replace('pass.drawIndexed(0, 0, layer.indexCount(), 1)', 'pass.drawIndexed(layer.indexCount(), 1, 0, 0, 0)')
+            replace('color, OptionalInt.empty(), depth', 'color, java.util.Optional.empty(), depth')
+            replace('client.gameRenderer.getLighting()', 'client.gameRenderer.lighting()')
+            replace('GpuBuffer.MappedView', 'GpuBufferSlice.MappedView')
+            replace('encoder.mapBuffer(buffer, true, false)', 'buffer.map(true, false)')
+            replace('color.getFormat().pixelSize()', 'color.getFormat().blockSize()')
+            replace('.clearColorAndDepthTextures(color, 0, depth, 1.0)', '.clearColorAndDepthTextures(color, new org.joml.Vector4f(0, 0, 0, 0), depth, 0.0)')
+            replace('framing.resolution(), true)', 'framing.resolution(), true, com.mojang.blaze3d.GpuFormat.RGBA8_UNORM)')
+        }
     }
 }

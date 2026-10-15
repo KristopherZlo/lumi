@@ -12,6 +12,7 @@ public final class LumiSelectionOverlay {
     private static final int FILL_ALPHA = 42;
     private static final int FRAME_ALPHA = 255;
     private static final float FRAME_RADIUS = 0.04F;
+    private final LumiOverlaySubmission geometry = new LumiOverlaySubmission();
     private final ClientSelection selection;
 
     public LumiSelectionOverlay(ClientSelection selection) {
@@ -19,7 +20,11 @@ public final class LumiSelectionOverlay {
     }
 
     public void register() {
+        //? if >=26.2 {
+        /*WorldRenderEvents.COLLECT_SUBMITS.register(this::render);
+        *///?} else {
         WorldRenderEvents.END_MAIN.register(this::render);
+        //?}
     }
 
     private void render(WorldRenderContext context) {
@@ -36,21 +41,21 @@ public final class LumiSelectionOverlay {
         double maxX = bounds.maxX() + 1.0 - camera.x;
         double maxY = bounds.maxY() + 1.0 - camera.y;
         double maxZ = bounds.maxZ() + 1.0 - camera.z;
-        var fills = context.consumers().getBuffer(
-                LumiCompareRenderTypes.fill(false));
-        LumiCompareOverlayRenderer.renderSolidBox(
-                context.matrices(), fills,
-                (float) minX, (float) minY, (float) minZ,
-                (float) maxX, (float) maxY, (float) maxZ,
-                0x35, 0xc6, 0xff, FILL_ALPHA);
-        renderFrame(
-                context, fills,
-                (float) minX, (float) minY, (float) minZ,
-                (float) maxX, (float) maxY, (float) maxZ);
+        geometry.submit(context, LumiCompareRenderTypes.fill(false), (pose, fills) -> {
+            LumiCompareOverlayRenderer.renderSolidBox(
+                    pose, fills,
+                    (float) minX, (float) minY, (float) minZ,
+                    (float) maxX, (float) maxY, (float) maxZ,
+                    0x35, 0xc6, 0xff, FILL_ALPHA);
+            renderFrame(
+                    pose, fills,
+                    (float) minX, (float) minY, (float) minZ,
+                    (float) maxX, (float) maxY, (float) maxZ);
+        });
     }
 
     private static void renderFrame(
-            WorldRenderContext context,
+            com.mojang.blaze3d.vertex.PoseStack.Pose pose,
             com.mojang.blaze3d.vertex.VertexConsumer consumer,
             float minX, float minY, float minZ,
             float maxX, float maxY, float maxZ) {
@@ -60,23 +65,23 @@ public final class LumiSelectionOverlay {
                 float firstY = first == 0 ? minY : maxY;
                 float secondY = second == 0 ? minY : maxY;
                 float z = second == 0 ? minZ : maxZ;
-                frameBar(context, consumer,
+                frameBar(pose, consumer,
                         minX, firstY, z, maxX, firstY, z);
-                frameBar(context, consumer,
+                frameBar(pose, consumer,
                         x, minY, z, x, maxY, z);
-                frameBar(context, consumer,
+                frameBar(pose, consumer,
                         x, secondY, minZ, x, secondY, maxZ);
             }
         }
     }
 
     private static void frameBar(
-            WorldRenderContext context,
+            com.mojang.blaze3d.vertex.PoseStack.Pose pose,
             com.mojang.blaze3d.vertex.VertexConsumer consumer,
             float minX, float minY, float minZ,
             float maxX, float maxY, float maxZ) {
         LumiCompareOverlayRenderer.renderSolidBox(
-                context.matrices(), consumer,
+                pose, consumer,
                 minX - FRAME_RADIUS, minY - FRAME_RADIUS, minZ - FRAME_RADIUS,
                 maxX + FRAME_RADIUS, maxY + FRAME_RADIUS, maxZ + FRAME_RADIUS,
                 0x35, 0xc6, 0xff, FRAME_ALPHA);

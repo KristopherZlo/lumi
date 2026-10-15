@@ -29,7 +29,7 @@ class MinecraftTargetCatalogTest {
         assertEquals(List.of("26.1"), modern.minecraftVersions());
         assertTrue(modern.axiomRuntimeJars().contains("lattice-2.0.1+26.1.jar"));
         assertTrue(modern.worldeditCuiCoordinate().isEmpty());
-        assertThrows(IllegalArgumentException.class, () -> catalog.select("modern-262"));
+        assertEquals(List.of("26.2"), catalog.select("modern-262").minecraftVersions());
     }
 
     @Test

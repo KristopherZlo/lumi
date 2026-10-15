@@ -1,28 +1,17 @@
 package io.github.lumi.client;
 
-import com.mojang.blaze3d.systems.GpuQuery;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.ByteBufferBuilder;
-import com.mojang.blaze3d.vertex.PoseStack;
 import io.github.lumi.domain.model.BlockChange;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.LinkedHashMap;
 import javax.imageio.ImageIO;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
-import net.minecraft.client.renderer.state.LevelRenderState;
-import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.fog.FogRenderer;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.world.level.gamerules.GameRules;
@@ -43,8 +32,6 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
     private boolean active;
     private long inputStarted;
     private boolean observedReady;
-    private MultiBufferSource.BufferSource buffers;
-    private final List<ByteBufferBuilder> ownedBuffers = new ArrayList<>();
     private FogRenderer benchmarkFog;
 
     @Override
@@ -60,18 +47,6 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
         int previousLimit = context.computeOnClient(client -> client.options.framerateLimit().get());
         Path denseXrayScreenshot = null;
         context.runOnClient(client -> {
-            var fixed = new LinkedHashMap<RenderType, ByteBufferBuilder>();
-            for (boolean throughWorld : new boolean[] {false, true}) {
-                for (RenderType type : new RenderType[] {
-                        LumiCompareRenderTypes.fill(throughWorld), LumiCompareRenderTypes.outline(throughWorld)}) {
-                    var buffer = new ByteBufferBuilder(65536);
-                    ownedBuffers.add(buffer);
-                    fixed.put(type, buffer);
-                }
-            }
-            var fallback = new ByteBufferBuilder(65536);
-            ownedBuffers.add(fallback);
-            buffers = MultiBufferSource.immediateWithBuffers(fixed, fallback);
             benchmarkFog = new FogRenderer();
         });
         try (var world = context.worldBuilder().adjustSettings(settings -> {
@@ -152,8 +127,6 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                 active = false;
                 pending.forEach(sample -> sample.query().close());
                 pending.clear();
-                buffers.endBatch();
-                ownedBuffers.forEach(ByteBufferBuilder::close);
                 benchmarkFog.close();
                 renderer.close();
                 client.options.framerateLimit().set(previousLimit);
@@ -185,12 +158,11 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
             sample.query().close();
             return true;
         });
-        var encoder = RenderSystem.getDevice().createCommandEncoder();
-        GpuQuery query = frame >= 30 && frame < 90 ? encoder.timerQueryBegin() : null;
+        LumiGpuTimer query = frame >= 30 && frame < 90 ? new LumiGpuTimer() : null;
         long started = System.nanoTime();
         var previousFog = RenderSystem.getShaderFog();
         RenderSystem.setShaderFog(benchmarkFog.getBuffer(FogRenderer.FogMode.NONE));
-        renderer.render(new MeasuredContext(context, buffers), changes, xray);
+        renderer.render(context, changes, xray);
         if (renderer.cachedBytes() > 128L * 1024 * 1024) {
             throw new AssertionError("Compare exceeded its resident GPU budget");
         }
@@ -200,13 +172,10 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                     + "," + renderer.cachedBytes());
             observedReady = true;
         }
-        // Include the existing renderer's deferred uploads and draws in both measurements.
-        buffers.endBatch(LumiCompareRenderTypes.fill(xray));
-        buffers.endBatch(LumiCompareRenderTypes.outline(xray));
         if (previousFog != null) RenderSystem.setShaderFog(previousFog);
         long cpuNanos = System.nanoTime() - started;
         if (query != null) {
-            encoder.timerQueryEnd(query);
+            query.finish();
             pending.add(new Pending(query,
                     name + "," + changes.size() + "," + frame + "," + cpuNanos + ","));
         }
@@ -289,7 +258,26 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
         return List.copyOf(blocks);
     }
 
-    private record Pending(GpuQuery query, String prefix) { }
+    private record Pending(LumiGpuTimer query, String prefix) { }
+
+    private static Path takeHighlightScreenshot(ClientGameTestContext context, String name) {
+        boolean hidden = context.computeOnClient(client -> client.options.hideGui);
+        context.runOnClient(client -> setHudHidden(client, true));
+        try {
+            context.waitTicks(2);
+            return context.takeScreenshot(name);
+        } finally {
+            context.runOnClient(client -> setHudHidden(client, hidden));
+        }
+    }
+
+    private static void setHudHidden(net.minecraft.client.Minecraft client, boolean hidden) {
+        //? if >=26.2 {
+        /*if (client.gui.hud.isHidden() != hidden) client.gui.hud.toggle();
+        *///?} else {
+        client.options.hideGui = hidden;
+        //?}
+    }
 
     private static Path takeHighlightScreenshot(ClientGameTestContext context, String name) {
         boolean hidden = context.computeOnClient(client -> client.options.hideGui);
@@ -318,25 +306,6 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
         } catch (java.io.IOException failed) {
             throw new IllegalStateException("Cannot inspect Compare screenshot", failed);
         }
-    }
-
-    private record MeasuredContext(WorldRenderContext delegate, MultiBufferSource.BufferSource consumers)
-            implements WorldRenderContext {
-        public GameRenderer gameRenderer() { return delegate.gameRenderer(); }
-        //? if >=26.1 {
-        /*public LevelRenderer levelRenderer() { return delegate.levelRenderer(); }
-        public LevelRenderState levelState() { return delegate.levelState(); }
-        public ChunkSectionsToRender sectionsToRender() { return delegate.sectionsToRender(); }
-        public SubmitNodeCollector submitNodeCollector() { return delegate.submitNodeCollector(); }
-        public PoseStack poseStack() { return delegate.poseStack(); }
-        public MultiBufferSource.BufferSource bufferSource() { return consumers; }
-        *///?} else {
-        public LevelRenderer worldRenderer() { return delegate.worldRenderer(); }
-        public LevelRenderState worldState() { return delegate.worldState(); }
-        public ChunkSectionsToRender sectionState() { return delegate.sectionState(); }
-        public SubmitNodeCollector commandQueue() { return delegate.commandQueue(); }
-        public PoseStack matrices() { return delegate.matrices(); }
-        //?}
     }
 
     private static void assertSameHighlight(Path cached, Path transientDraw) {

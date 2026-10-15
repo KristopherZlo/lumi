@@ -3,14 +3,13 @@ package io.github.lumi.client;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class LumiCompareWorldFlowTest {
     @Test
     void everyCompareRouteClosesTheMenuAndUsesActionBarFeedback() throws Exception {
-        String client = Files.readString(Path.of(
+        String client = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClient.java"));
 
         assertFalse(client.contains("LumiCompareScreen"));

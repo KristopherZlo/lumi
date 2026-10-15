@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
@@ -28,7 +27,7 @@ class LumiOperationHudTest {
 
     @Test
     void honorsTheActiveWorkspaceHudSetting() throws Exception {
-        String source = Files.readString(Path.of(
+        String source = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiOperationHud.java"));
 
         assertTrue(source.contains("WorkspaceView::active"));
@@ -36,7 +35,8 @@ class LumiOperationHudTest {
                 "workspace.hudDisplayMode() == HudDisplayMode.GUI"));
         assertTrue(source.contains("if (!usesGui()) return;"));
         assertTrue(source.contains("ScreenEvents.AFTER_INIT"));
-        assertTrue(source.contains("ScreenEvents.afterRender(screen)"));
+        assertTrue(source.contains("ScreenEvents.afterRender(screen)")
+                || source.contains("ScreenEvents.afterExtract(screen)"));
         assertTrue(source.contains("client.screen == current"));
         assertTrue(source.contains("notifications.visible()"));
         assertTrue(source.contains("ClientPlayConnectionEvents.DISCONNECT"));

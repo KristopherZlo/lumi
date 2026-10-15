@@ -2,16 +2,15 @@ package io.github.lumi.client;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class LumiSelectionToolTest {
     @Test
     void rawAdapterOwnsClicksWheelAndEitherHand() throws Exception {
-        String tool = Files.readString(Path.of(
+        String tool = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/LumiSelectionTool.java"));
-        String mixin = Files.readString(Path.of(
+        String mixin = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/mixin/client/MouseHandlerMixin.java"));
 
         assertTrue(tool.contains("getMainHandItem().is(Items.WOODEN_SWORD)"));

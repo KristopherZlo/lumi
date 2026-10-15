@@ -4,14 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class LumiOnboardingScreenTest {
     @Test
     void keepsTheLiveDashboardFreshBehindSpotlights() throws Exception {
-        String source = Files.readString(Path.of(
+        String source = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiOnboardingScreen.java"));
 
         assertTrue(source.contains(

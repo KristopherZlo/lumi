@@ -3,7 +3,6 @@ package io.github.lumi.client.ui;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +28,7 @@ class LumiZonesScreenTest {
 
     @Test
     void exposesV2OverlayCycleAndZoneActions() throws Exception {
-        String source = Files.readString(Path.of(
+        String source = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiZonesScreen.java"));
 
         assertTrue(source.contains("overlayLabel.get()"));
@@ -53,7 +52,7 @@ class LumiZonesScreenTest {
 
     @Test
     void opensActiveZoneHistoryInsideTheProjectMenu() throws Exception {
-        String source = Files.readString(Path.of(
+        String source = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClient.java"));
         int openDashboard = source.indexOf(
                 "private static void openDashboard(Screen parent)");
@@ -72,7 +71,7 @@ class LumiZonesScreenTest {
 
     @Test
     void enteringAZoneWaitsForServerStateThenOpensItsHistory() throws Exception {
-        String source = Files.readString(Path.of(
+        String source = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiZonesScreen.java"));
 
         assertTrue(source.contains("entry.poll(state)"));

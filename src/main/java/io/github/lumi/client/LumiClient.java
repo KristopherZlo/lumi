@@ -291,7 +291,12 @@ public final class LumiClient implements ClientModInitializer {
         MutableComponent message = value.startsWith("luma.")
                 ? Component.translatable(value) : Component.literal(value);
         MutableComponent styled = message.withStyle(color);
+        //? if >=26.2 {
+        /*var textColor = styled.getStyle().getColor();
+        Integer rgb = textColor == null ? null : textColor.getValue();
+        *///?} else {
         Integer rgb = color.getColor();
+        //?}
         NOTIFICATIONS.add(styled,
                 0xff000000 | (rgb == null ? 0xf0f3f6 : rgb));
         MinecraftPlayerMessages.overlay(player, styled);

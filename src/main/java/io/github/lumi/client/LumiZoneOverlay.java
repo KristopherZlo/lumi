@@ -12,7 +12,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.ShapeRenderer;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.AABB;
@@ -24,6 +23,8 @@ public final class LumiZoneOverlay {
     private static final double FACE_THICKNESS = 0.015;
     private static final int REQUEST_STABLE_TICKS = 4;
     private final ClientZoneOverlayStore overlays;
+    private final LumiOverlaySubmission geometry = new LumiOverlaySubmission();
+    private final LumiShapeOutline shapes = new LumiShapeOutline();
     private final ClientHistoryStore history;
     private final Consumer<ZoneOverlayArgument.Mode> request;
     private final LumiZoneColor zoneColors = new LumiZoneColor();
@@ -46,7 +47,11 @@ public final class LumiZoneOverlay {
 
     public void register() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+        //? if >=26.2 {
+        /*WorldRenderEvents.COLLECT_SUBMITS.register(this::render);
+        *///?} else {
         WorldRenderEvents.END_MAIN.register(this::render);
+        //?}
     }
 
     public Mode mode() {
@@ -139,33 +144,31 @@ public final class LumiZoneOverlay {
         List<RenderZone> zones = renderZones(snapshot);
         var camera = context.worldState().cameraRenderState.pos;
         long now = System.currentTimeMillis();
-        var fills = context.consumers().getBuffer(
-                LumiCompareRenderTypes.fill(false));
-        for (var zone : zones) {
-            int color = renderColor(
-                    zoneColors.resolve(
-                            zone.source().name(), zone.source().color(), now),
-                    mode,
-                    zone.source().active(), zone.source().entered());
-            int alpha = mode == Mode.FOCUSED || zone.source().active()
-                    ? 38 : zone.source().entered() ? 30 : 18;
-            for (RenderFace face : zone.faces()) {
-                AABB box = face.bounds();
-                LumiCompareOverlayRenderer.renderFace(
-                        context.matrices(), fills,
-                        (float) (box.minX - camera.x),
-                        (float) (box.minY - camera.y),
-                        (float) (box.minZ - camera.z),
-                        (float) (box.maxX - camera.x),
-                        (float) (box.maxY - camera.y),
-                        (float) (box.maxZ - camera.z),
-                        face.side(),
-                        color >> 16 & 255, color >> 8 & 255, color & 255,
-                        alpha);
+        geometry.submit(context, LumiCompareRenderTypes.fill(false), (pose, fills) -> {
+            for (var zone : zones) {
+                int color = renderColor(
+                        zoneColors.resolve(
+                                zone.source().name(), zone.source().color(), now),
+                        mode,
+                        zone.source().active(), zone.source().entered());
+                int alpha = mode == Mode.FOCUSED || zone.source().active()
+                        ? 38 : zone.source().entered() ? 30 : 18;
+                for (RenderFace face : zone.faces()) {
+                    AABB box = face.bounds();
+                    LumiCompareOverlayRenderer.renderFace(
+                            pose, fills,
+                            (float) (box.minX - camera.x),
+                            (float) (box.minY - camera.y),
+                            (float) (box.minZ - camera.z),
+                            (float) (box.maxX - camera.x),
+                            (float) (box.maxY - camera.y),
+                            (float) (box.maxZ - camera.z),
+                            face.side(),
+                            color >> 16 & 255, color >> 8 & 255, color & 255,
+                            alpha);
+                }
             }
-        }
-        var lines = context.consumers().getBuffer(
-                LumiCompareRenderTypes.outline(false));
+        });
         for (var zone : zones) {
             int color = renderColor(
                     zoneColors.resolve(
@@ -177,9 +180,8 @@ public final class LumiZoneOverlay {
                     : zone.source().entered() ? 2.25F : 1.25F;
             for (RenderFace face : zone.faces()) {
                 AABB box = face.bounds();
-                ShapeRenderer.renderShape(
-                        context.matrices(), lines,
-                        face.outline(),
+                shapes.render(
+                        context, face.outline(), LumiCompareRenderTypes.outline(false),
                         box.minX - camera.x,
                         box.minY - camera.y,
                         box.minZ - camera.z,

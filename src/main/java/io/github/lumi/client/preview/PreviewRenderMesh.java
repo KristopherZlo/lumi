@@ -30,13 +30,40 @@ final class PreviewRenderMesh implements AutoCloseable {
     void render() {
         for (ChunkSectionLayer layer : DRAW_ORDER) {
             MeshData mesh = layers.remove(layer);
-            if (mesh != null) renderType(layer).draw(mesh);
+            if (mesh != null) {
+                //? if >=26.2 {
+                /*draw(mesh, renderType(layer));
+                *///?} else {
+                renderType(layer).draw(mesh);
+                //?}
+            }
         }
     }
 
     boolean isEmpty() {
         return layers.isEmpty();
     }
+
+    //? if >=26.2 {
+    /*private void draw(MeshData mesh, RenderType type) {
+        var device = com.mojang.blaze3d.systems.RenderSystem.getDevice();
+        try (mesh; var vertices = device.createBuffer(() -> "Lumi Preview vertices",
+                com.mojang.blaze3d.buffers.GpuBuffer.USAGE_VERTEX, mesh.vertexBuffer())) {
+            var prepared = type.prepare();
+            if (mesh.indexBuffer() != null) {
+                try (var indices = device.createBuffer(() -> "Lumi Preview sorted indices",
+                        com.mojang.blaze3d.buffers.GpuBuffer.USAGE_INDEX, mesh.indexBuffer())) {
+                    prepared.drawFromBuffer(vertices, indices, mesh.drawState().indexType(),
+                            0, 0, mesh.drawState().indexCount());
+                }
+            } else {
+                var indices = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(type.primitiveTopology());
+                var buffer = indices.getBuffer(mesh.drawState().indexCount());
+                prepared.drawFromBuffer(vertices, buffer, indices.type(), 0, 0, mesh.drawState().indexCount());
+            }
+        }
+    }
+    *///?}
 
     @Override
     public void close() {

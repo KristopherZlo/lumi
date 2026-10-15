@@ -270,7 +270,7 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
     }
 
     static void renderSolidBox(
-            PoseStack matrices,
+            PoseStack.Pose pose,
             VertexConsumer consumer,
             float x1, float y1, float z1,
             float x2, float y2, float z2,
@@ -279,19 +279,18 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
             int blue,
             int alpha) {
         for (Direction side : Direction.values()) {
-            renderFace(matrices, consumer, x1, y1, z1, x2, y2, z2,
+            renderFace(pose, consumer, x1, y1, z1, x2, y2, z2,
                     side, red, green, blue, alpha);
         }
     }
 
     static void renderFace(
-            PoseStack matrices,
+            PoseStack.Pose pose,
             VertexConsumer consumer,
             float x1, float y1, float z1,
             float x2, float y2, float z2,
             Direction side,
             int red, int green, int blue, int alpha) {
-        PoseStack.Pose pose = matrices.last();
         switch (side) {
             case NORTH -> quad(pose, consumer, red, green, blue, alpha,
                     x1, y1, z1, x2, y1, z1, x2, y2, z1, x1, y2, z1);

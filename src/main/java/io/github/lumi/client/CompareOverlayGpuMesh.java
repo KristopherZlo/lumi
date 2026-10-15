@@ -28,7 +28,7 @@ final class CompareOverlayGpuMesh implements AutoCloseable {
                 int color = LumiCompareOverlayRenderer.color(change.kind());
                 for (Direction side : SIDES) {
                     if ((block.faces() & (1 << side.ordinal())) != 0) {
-                        LumiCompareOverlayRenderer.renderFace(pose, builder,
+                        LumiCompareOverlayRenderer.renderFace(pose.last(), builder,
                                 x, y, z, x + 1, y + 1, z + 1, side,
                                 color >> 16 & 255, color >> 8 & 255, color & 255, 255);
                     }

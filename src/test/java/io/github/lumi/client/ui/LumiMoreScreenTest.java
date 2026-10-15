@@ -4,18 +4,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class LumiMoreScreenTest {
     @Test
     void keepsImportExportAndCleanupInMoreWithoutManualHighlight() throws Exception {
-        String more = Files.readString(Path.of(
+        String more = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiMoreScreen.java"));
-        String client = Files.readString(Path.of(
+        String client = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClient.java"));
-        String cleanup = Files.readString(Path.of(
+        String cleanup = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiCleanupScreen.java"));
 
         assertTrue(more.contains("luma.action.open_cleanup"));

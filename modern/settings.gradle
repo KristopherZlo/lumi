@@ -13,5 +13,6 @@ stonecutter {
         centralScript = 'build-modern.gradle'
         kotlinController = false
         version('modern-261', '26.1')
+        version('modern-262', '26.2')
     }
 }

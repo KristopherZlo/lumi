@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.lumi.client.state.ClientHistoryStore;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -43,14 +42,14 @@ class LumiNavigationTest {
                 "LumiSettingsScreen.java",
                 "LumiDeletedVersionsScreen.java",
                 "LumiMoreScreen.java")) {
-            String source = Files.readString(ui.resolve(page));
+            String source = io.github.lumi.ProductionJavaSource.read(ui.resolve(page));
             assertTrue(source.contains("extends LumiPageScreen"), page);
             assertFalse(source.contains("renderPage("), page);
         }
 
-        String modal = Files.readString(ui.resolve("LumiModalScreen.java"));
-        String neutral = Files.readString(ui.resolve("LumiScreen.java"));
-        assertTrue(modal.contains("background.render("));
+        String modal = io.github.lumi.ProductionJavaSource.read(ui.resolve("LumiModalScreen.java"));
+        String neutral = io.github.lumi.ProductionJavaSource.read(ui.resolve("LumiScreen.java"));
+        assertTrue(modal.contains("background.render(") || modal.contains("background.extractRenderState("));
         assertTrue(modal.contains("if (dimBackground())"));
         assertTrue(neutral.contains("GLFW_HAND_CURSOR"));
         assertTrue(neutral.contains("child instanceof Button button"));
@@ -63,8 +62,8 @@ class LumiNavigationTest {
         assertTrue(modal.contains("screen.screenInitialized"));
         assertFalse(modal.contains("background.mouseClicked("));
         assertFalse(modal.contains("background.mouseReleased("));
-        String dashboard = Files.readString(ui.resolve("LumiDashboardScreen.java"));
-        String page = Files.readString(ui.resolve("LumiPageScreen.java"));
+        String dashboard = io.github.lumi.ProductionJavaSource.read(ui.resolve("LumiDashboardScreen.java"));
+        String page = io.github.lumi.ProductionJavaSource.read(ui.resolve("LumiPageScreen.java"));
         assertTrue(page.contains(
                 "alignNavigation(x, y, shellLayout.windowWidth())"));
         assertTrue(page.contains("LumiTheme.WINDOW_BORDER"));
@@ -73,10 +72,10 @@ class LumiNavigationTest {
         assertTrue(page.contains("renderPageHeader("));
         assertTrue(page.contains("shellLayout.windowY() + 62"));
         assertFalse(dashboard.contains("drawFrame("));
-        String onboarding = Files.readString(ui.resolve("LumiOnboardingScreen.java"));
+        String onboarding = io.github.lumi.ProductionJavaSource.read(ui.resolve("LumiOnboardingScreen.java"));
         assertTrue(onboarding.contains(
                 "alignNavigation(panelX, panelY, panelWidth)"));
-        String session = Files.readString(ui.resolve("LumiPageSession.java"));
+        String session = io.github.lumi.ProductionJavaSource.read(ui.resolve("LumiPageSession.java"));
         assertTrue(page.contains("private final LumiPageSession pageSession"));
         assertTrue(session.contains("new EnumMap<>(ProjectTab.class)"));
         assertTrue(session.contains("destination.accept(historyPage)"));
@@ -101,10 +100,10 @@ class LumiNavigationTest {
         assertEquals(18, LumiTextField.FRAME_HEIGHT);
         assertEquals(6, LumiTextField.HORIZONTAL_PADDING);
         assertEquals(4, LumiTextField.VERTICAL_PADDING);
-        String neutral = Files.readString(Path.of(
+        String neutral = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiScreen.java"));
         assertTrue(neutral.contains("new LumiTextField(font, x, y, width, label)"));
-        String field = Files.readString(Path.of(
+        String field = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiTextField.java"));
         assertTrue(field.contains("y + VERTICAL_PADDING"));
         assertTrue(field.contains("mouseY < frameY + FRAME_HEIGHT"));
@@ -119,7 +118,7 @@ class LumiNavigationTest {
                 "LumiDimensionsScreen.java",
                 "LumiDimensionHistoryScreen.java",
                 "LumiDeleteZoneScreen.java")) {
-            String source = Files.readString(ui.resolve(screen));
+            String source = io.github.lumi.ProductionJavaSource.read(ui.resolve(screen));
             assertFalse(source.matches("(?s).*new EditBox\\([^;]+, 20,\\s*Component.*"),
                     screen);
         }

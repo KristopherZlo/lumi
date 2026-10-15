@@ -5,7 +5,9 @@
     {
       "id": "legacy-12111",
       "minecraftVersion": "1.21.11",
-      "minecraftVersions": ["1.21.11"],
+      "minecraftVersions": [
+        "1.21.11"
+      ],
       "javaVersion": 21,
       "loaderVersion": "0.19.2",
       "fabricApiVersion": "0.141.3+1.21.11",
@@ -22,14 +24,38 @@
     {
       "id": "modern-261",
       "minecraftVersion": "26.1",
-      "minecraftVersions": ["26.1"],
+      "minecraftVersions": [
+        "26.1"
+      ],
       "javaVersion": 25,
       "loaderVersion": "0.19.5",
       "fabricApiVersion": "0.155.3+26.1.2",
       "worldeditVersionId": "gjsLvJfW",
       "axiomVersionId": "aZ3IOnv2",
-      "axiomRuntimeJars": ["axiomclientapi-unobf.jar", "lattice-2.0.1+26.1.jar",
-        "mixinconstraints-1.0.9.jar", "mixinextras-fabric-0.3.5.jar"]
+      "axiomRuntimeJars": [
+        "axiomclientapi-unobf.jar",
+        "lattice-2.0.1+26.1.jar",
+        "mixinconstraints-1.0.9.jar",
+        "mixinextras-fabric-0.3.5.jar"
+      ]
+    },
+    {
+      "id": "modern-262",
+      "minecraftVersion": "26.2",
+      "minecraftVersions": [
+        "26.2"
+      ],
+      "javaVersion": 25,
+      "loaderVersion": "0.19.5",
+      "fabricApiVersion": "0.161.0+26.2",
+      "worldeditVersionId": "6YnCYPwc",
+      "axiomVersionId": "Sc1qsNWg",
+      "axiomRuntimeJars": [
+        "axiomclientapi-unobf.jar",
+        "lattice-2.2.0.jar",
+        "mixinconstraints-1.0.9.jar",
+        "mixinextras-fabric-0.3.5.jar"
+      ]
     }
   ]
 }

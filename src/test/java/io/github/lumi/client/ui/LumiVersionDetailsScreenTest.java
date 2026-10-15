@@ -3,24 +3,23 @@ package io.github.lumi.client.ui;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class LumiVersionDetailsScreenTest {
     @Test
     void opensOneSaveWithPreviewMetadataAndExistingActions() throws Exception {
-        String details = Files.readString(Path.of(
+        String details = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiVersionDetailsScreen.java"));
-        String dashboard = Files.readString(Path.of(
+        String dashboard = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiDashboardScreen.java"));
-        String tags = Files.readString(Path.of(
+        String tags = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiVersionTagsScreen.java"));
-        String rename = Files.readString(Path.of(
+        String rename = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/ui/LumiVersionRenameScreen.java"));
-        String client = Files.readString(Path.of(
+        String client = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClient.java"));
-        String networking = Files.readString(Path.of(
+        String networking = io.github.lumi.ProductionJavaSource.read(Path.of(
                 "src/main/java/io/github/lumi/client/LumiClientNetworking.java"));
 
         assertTrue(details.contains("previews.texture(dimensionId, version.id())"));
