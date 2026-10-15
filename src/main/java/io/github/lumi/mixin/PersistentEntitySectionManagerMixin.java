@@ -79,10 +79,17 @@ abstract class PersistentEntitySectionManagerMixin<T extends EntityAccess> {
     private Stream<T> lumi$filterSuppressedEntityLoads(ChunkEntities<T> loaded) {
         var runtime = lumi$runtime();
         ChunkPos position = loaded.getPos();
-        return runtime != null && runtime.freeze().suppressesEntityLoad(
-                position.x, position.z)
-                ? Stream.empty()
-                : loaded.getEntities();
+        if (runtime != null) {
+            if (runtime.freeze().suppressesEntityLoad(position.x, position.z)) {
+                return Stream.empty();
+            }
+            try {
+                runtime.entityChunkLoaded(loaded);
+            } catch (IOException failed) {
+                throw new UncheckedIOException("Cannot accept Lumi entity baseline", failed);
+            }
+        }
+        return loaded.getEntities();
     }
 
     @Inject(method = "processChunkUnload", at = @At("RETURN"))

@@ -27,14 +27,14 @@ abstract class EntityStorageMixin implements EntityStorageLevelAccess {
     }
 
     @Inject(method = "loadEntities", at = @At("RETURN"), cancellable = true)
-    private void lumi$rememberEntityBaseline(
+    private void lumi$prepareEntityBaseline(
             ChunkPos position,
             CallbackInfoReturnable<CompletableFuture<ChunkEntities<Entity>>> callback) {
         callback.setReturnValue(callback.getReturnValue().thenApply(chunk -> {
             var runtime = LumiMod.serverRuntime().find(level).orElse(null);
             if (runtime != null) {
                 try {
-                    runtime.entityChunkLoaded(chunk);
+                    return runtime.prepareEntityChunkLoad(chunk);
                 } catch (IOException failed) {
                     throw new CompletionException("Cannot capture Lumi entity baseline", failed);
                 }

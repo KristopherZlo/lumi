@@ -96,6 +96,7 @@ import io.github.lumi.minecraft.world.MinecraftLiveEntityWorldAccess;
 import io.github.lumi.minecraft.world.MinecraftChunkLoadAccess;
 import io.github.lumi.minecraft.world.MinecraftChunkDurabilityRetention;
 import io.github.lumi.minecraft.world.MinecraftWorldStateReader;
+import io.github.lumi.minecraft.world.PreparedEntityChunkLoad;
 import io.github.lumi.minecraft.world.MinecraftWorldStateApply;
 import io.github.lumi.minecraft.world.MutationDurabilityTracker;
 import io.github.lumi.minecraft.world.LoadedChunkMutationScope;
@@ -687,10 +688,17 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         return loadedChunks.contains(chunkX, chunkZ);
     }
 
+    public <T extends EntityAccess> ChunkEntities<T> prepareEntityChunkLoad(ChunkEntities<T> chunk)
+            throws IOException {
+        return new PreparedEntityChunkLoad<>(
+                chunk, entityCapture.capture(level, chunk.getEntities()));
+    }
+
     public void entityChunkLoaded(ChunkEntities<? extends EntityAccess> chunk) throws IOException {
         entityDurability.rememberLoaded(
                 MinecraftEntityChunkCapture.key(chunk.getPos()),
-                entityCapture.capture(level, chunk.getEntities()));
+                chunk instanceof PreparedEntityChunkLoad<?> prepared
+                        ? prepared.baseline() : entityCapture.capture(level, chunk.getEntities()));
     }
 
     public boolean permitEntityStore(

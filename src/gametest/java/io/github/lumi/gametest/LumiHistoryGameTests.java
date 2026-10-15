@@ -43,6 +43,38 @@ public final class LumiHistoryGameTests {
             new TicketType(Long.MAX_VALUE, TicketType.FLAG_LOADING);
 
     @GameTest(maxTicks = 300000)
+    public void entityStorageReadKeepsBaselinePending(GameTestHelper helper)
+            throws ReflectiveOperationException {
+        var runtime = runtime(helper);
+        var field = FabricDimensionRuntime.class.getDeclaredField("entityDurability");
+        field.setAccessible(true);
+        var baselines = (io.github.lumi.minecraft.world.EntityChunkDurabilityGate) field.get(runtime);
+        var position = new ChunkPos(8192, 8192);
+        var key = new io.github.lumi.domain.model.EntityChunkKey(8192, 8192);
+        var manager = ((ServerLevelEntityManagerAccessor) helper.getLevel()).lumi$entityManager();
+        var storage = ((io.github.lumi.mixin.PersistentEntityManagerPersistenceAccessor<?>) manager)
+                .lumi$permanentStorage();
+        var read = new AtomicReference<CompletableFuture<?>>();
+        var test = UUID.randomUUID();
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    helper.assertFalse(baselines.trackedKeys().contains(key), "Control chunk is already tracked");
+                    read.set(storage.loadEntities(position));
+                })
+                .thenWaitUntil(() -> helper.assertTrue(read.get().isDone(), "Entity read is still pending"))
+                .thenExecute(() -> {
+                    var loaded = read.get().join();
+                    helper.assertFalse(baselines.trackedKeys().contains(key),
+                            "Reading storage published a live baseline before the entity manager accepted it");
+                    helper.assertTrue(loaded instanceof io.github.lumi.minecraft.world.PreparedEntityChunkLoad<?>,
+                            "The worker did not retain the prepared entity baseline");
+                    LumiGameTestLease.release(test);
+                })
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
     public void freezeRejectsOrdinaryEntityLifecycle(GameTestHelper helper) {
         FabricDimensionRuntime runtime = runtime(helper);
         helper.startSequence()
