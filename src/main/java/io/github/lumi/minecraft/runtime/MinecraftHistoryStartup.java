@@ -23,11 +23,20 @@ import net.minecraft.world.level.storage.LevelResource;
 final class MinecraftHistoryStartup {
     private MinecraftHistoryStartup() { }
 
+    // Enable a source/target pair only after its stopped-world native fixture passes.
+    static Set<WorldDataVersion> permittedSources(WorldDataVersion current) {
+        return switch (current.value()) {
+            case 4786, 4903, 5023 -> Set.of(WorldDataVersion.LEGACY_12111);
+            case 4788 -> Set.of(WorldDataVersion.LEGACY_12111, new WorldDataVersion(4786));
+            case 4790 -> Set.of(WorldDataVersion.LEGACY_12111,
+                    new WorldDataVersion(4786), new WorldDataVersion(4788));
+            default -> Set.of();
+        };
+    }
+
     static void run(MinecraftServer server) throws IOException {
         var current = new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version());
-        // Enable another source/target pair only after its stopped-world native upgrade fixture passes.
-        Set<WorldDataVersion> permittedSources = Set.of(4786, 4903, 5023).contains(current.value())
-                ? Set.of(WorldDataVersion.LEGACY_12111) : Set.of();
+        Set<WorldDataVersion> permittedSources = permittedSources(current);
         var upgrade = new WorldHistoryUpgradeService(
                 new DimensionRepositoryLayout(server.getWorldPath(LevelResource.ROOT)), current,
                 new MinecraftWorldPayloadConverter(server.registryAccess(), BuiltInRegistries.ENTITY_TYPE),
