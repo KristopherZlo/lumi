@@ -8,6 +8,9 @@ import io.github.lumi.domain.service.HistoryGenerationConversionService;
 import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import io.github.lumi.minecraft.world.MinecraftWorldPayloadConverter;
 import io.github.lumi.storage.repository.HistoryConversionMap;
+import io.github.lumi.storage.repository.DimensionRepositoryLayout;
+import io.github.lumi.storage.repository.HistoryGenerationRepository;
+import io.github.lumi.storage.repository.HistorySourceSnapshot;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,7 +54,7 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
         String stage = System.getProperty("lumi.gametest.upgrade.stage", "");
         if (stage.isEmpty()) return;
         directory = Path.of(System.getProperty("lumi.gametest.upgrade.fixture")).toAbsolutePath();
-        var acceptUpgradeDone = new AtomicBoolean(stage.equals("verify") || stage.equals("startup"));
+        var acceptUpgradeDone = new AtomicBoolean(stage.equals("verify") || stage.equals("startup") || stage.equals("resume"));
         context.runOnClient(client -> ClientTickEvents.END_CLIENT_TICK.register(ticking -> {
             if (acceptUpgradeDone.get() && ticking.screen instanceof ConfirmScreen screen
                     && screen.getTitle().getString().equals(Component.translatable("upgradeWorld.done").getString())) {
@@ -66,8 +69,9 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
             switch (stage) {
                 case "source" -> createSource(context);
                 case "edit" -> editSource(context);
-                case "verify" -> verifyUpgrade(context, false);
-                case "startup" -> verifyUpgrade(context, true);
+                case "verify" -> verifyUpgrade(context, false, false);
+                case "startup" -> verifyUpgrade(context, true, false);
+                case "resume" -> verifyUpgrade(context, true, true);
                 default -> throw new IllegalArgumentException("Unknown upgrade fixture stage: " + stage);
             }
         } catch (IOException failed) {
@@ -122,11 +126,17 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
         writeFixture();
     }
 
-    private void verifyUpgrade(ClientGameTestContext context, boolean automatic) throws IOException {
+    private void verifyUpgrade(ClientGameTestContext context, boolean automatic, boolean resume) throws IOException {
         readFixture();
         copyWorld(directory.resolve("source-a"), save(context, "lumi-upgrade-oracle-a"), false);
         copyWorld(directory.resolve("source-b"), save(context, "lumi-upgrade-oracle-b"), false);
-        copyWorld(directory.resolve("source-b"), save(context, "lumi-upgrade-target"), true);
+        Path targetWorld = save(context, "lumi-upgrade-target");
+        copyWorld(directory.resolve(resume ? "crashed-target" : "source-b"), targetWorld, true);
+        Path originalHistory = new DimensionRepositoryLayout(targetWorld).resolve("minecraft:overworld");
+        var sourceSnapshot = new HistorySourceSnapshot().capture(originalHistory);
+        var generations = new HistoryGenerationRepository(originalHistory);
+        var expectedGeneration = resume ? generations.pending().map(pending -> pending.target())
+                .orElse(generations.active()) : null;
         LumiClientBehaviorWorld.runExisting(context, "upgrade-vanilla-saved", "lumi-upgrade-oracle-a",
                 (test, world, report) -> expectedSaved = world.getServer().computeOnServer(server ->
                         LumiWorldSnapshot.capture(server.getPlayerList().getPlayers().getFirst().level(), AREA)));
@@ -149,6 +159,9 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
                         throw new AssertionError("Upgrade changed the unsaved builder boundary");
                     }
                     Path repository = operations.repository();
+                    if (resume && !repository.getFileName().toString().equals(expectedGeneration.id().toString())) {
+                        throw new AssertionError("Restart abandoned a valid conversion candidate");
+                    }
                     var translated = new HistoryConversionMap(repository).read(HistoryConversionMap.Kind.COMMIT,
                             new io.github.lumi.domain.model.ObjectId(fixture.getProperty("head"))).orElseThrow();
                     operations.restore("upgrade-source", new CommitId(translated));
@@ -156,7 +169,11 @@ public final class LumiUpgradeClientGameTest implements FabricClientGameTest {
                             server.getPlayerList().getPlayers().getFirst().level(), expectedSaved, "restored upgrade"));
                 }, (test, world, report) -> world.getServer().runOnServer(server -> assertWorld(
                         server.getPlayerList().getPlayers().getFirst().level(), expectedSaved, "reopened upgrade")));
-        if (automatic) verifyBackup(context);
+        if (!sourceSnapshot.equals(new HistorySourceSnapshot().capture(originalHistory))) {
+            throw new AssertionError("Upgrade or Restore changed the original source history");
+        }
+        if (automatic && !resume) verifyBackup(context);
+        if (resume) LumiMod.LOGGER.info("Lumi history upgrade restart: succeeded");
     }
 
     private void convertBeforeOpening(ClientGameTestContext context) throws IOException {
