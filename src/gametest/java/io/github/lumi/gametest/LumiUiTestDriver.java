@@ -495,8 +495,10 @@ final class LumiUiTestDriver {
             }
             context.getInput().pressKey(InputConstants.KEY_TAB);
         }
+        ButtonState state = buttonState(expectedScreen, translationKey, index);
+        context.takeScreenshot("lumi-ui-focus-failure");
         throw new AssertionError("Could not focus button " + translationKey
-                + " at index " + index + " in " + expectedScreen.getSimpleName());
+                + " at index " + index + " in " + expectedScreen.getSimpleName() + "; " + state);
     }
 
     private ButtonState buttonState(

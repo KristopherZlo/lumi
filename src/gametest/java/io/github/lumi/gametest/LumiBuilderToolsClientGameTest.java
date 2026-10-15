@@ -2,6 +2,7 @@ package io.github.lumi.gametest;
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BlockBox;
+import io.github.lumi.minecraft.runtime.DirectLiveActionContext;
 import java.io.IOException;
 import java.util.List;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -37,8 +38,11 @@ public final class LumiBuilderToolsClientGameTest implements FabricClientGameTes
         origin = server.computeOnServer(minecraft -> {
             var player = minecraft.getPlayerList().getPlayers().getFirst();
             BlockPos start = player.blockPosition().atY(170);
-            for (int x = 0; x < 6; x++) {
-                player.level().setBlockAndUpdate(start.offset(x, 0, 0), Blocks.STONE.defaultBlockState());
+            var runtime = LumiMod.serverRuntime().find(player.level()).orElseThrow();
+            try (var ignored = DirectLiveActionContext.open(runtime.liveActions(), player.getUUID())) {
+                for (int x = 0; x < 6; x++) {
+                    player.level().setBlockAndUpdate(start.offset(x, 0, 0), Blocks.STONE.defaultBlockState());
+                }
             }
             return start;
         });
