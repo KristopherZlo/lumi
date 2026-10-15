@@ -17,11 +17,17 @@ $taskCases = @(
     @{ name = 'functional'; task = 'runPackagedClientGameTest'; args = @('-Dlumi.gametest.suite=SMOKE', '-Dlumi.benchmark.enabled=true'); message = 'functional suites require full scenarios' },
     @{ name = 'traversal'; task = 'runPackagedBenchmark'; args = @('-Dlumi.gametest.suite=BENCHMARK', '-Dlumi.benchmark.enabled=true', '-Dlumi.benchmark.existingWorldSource=.', '-Dlumi.benchmark.existingWorld=../escape'); message = 'must be one save-folder name' }
 )
+if ($taskProfile.Modern) {
+    $taskOther = @($taskCatalog.targets | Where-Object { $_.id -cne $Target })[0].minecraftVersions[0]
+    $taskCases += @{ name = 'wrong-game'; task = 'runPackagedBenchmark';
+        args = @('-Dlumi.gametest.suite=BENCHMARK', '-Dlumi.benchmark.enabled=true', "-PlumiGameVersion=$taskOther");
+        message = "is outside target $Target" }
+}
 Push-Location $taskRepo
 try {
     foreach ($taskCase in $taskCases) {
         $taskLog = Join-Path $taskOutput ($taskCase.name + '.log')
-        $taskArguments = $taskProfile.TaskArguments(@($taskCase.task)) + $taskCase.args + @('--console=plain')
+        $taskArguments = $taskProfile.TaskArguments(@($taskCase.task)) + $taskCase.args + @('--console=plain', '--stacktrace')
         $ErrorActionPreference = 'Continue'
         & (Join-Path $taskRepo 'gradlew.bat') @taskArguments *> $taskLog
         $taskExit = $LASTEXITCODE
