@@ -70,9 +70,14 @@ final class MinecraftRegionStorageSynchronizer {
             Set<ChunkCoordinate> regions) {
         try {
             for (ChunkCoordinate region : regions) {
-                var file = access.lumi$regionCache().get(ChunkPos.asLong(
+                var cached = access.lumi$regionCache().get(ChunkPos.asLong(
                         region.x() / ChunkPos.REGION_SIZE,
                         region.z() / ChunkPos.REGION_SIZE));
+                //? if >=26.3 {
+                /*var file = cached == null ? null : cached.orElse(null);
+                *///?} else {
+                var file = cached;
+                //?}
                 // Vanilla forces an evicted RegionFile while closing it.
                 if (file != null) {
                     file.flush();

@@ -12,6 +12,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.tooltip.MenuTooltipPositioner;
 import net.minecraft.network.chat.Component;
+//? if <26.3
 import org.lwjgl.glfw.GLFW;
 
 /** Checks native Lumi geometry, hover and mouse dispatch without loading a world. */

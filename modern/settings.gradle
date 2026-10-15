@@ -14,5 +14,6 @@ stonecutter {
         kotlinController = false
         version('modern-261', '26.1')
         version('modern-262', '26.2')
+        version('modern-263', '26.3')
     }
 }

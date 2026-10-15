@@ -21,6 +21,7 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+//? if <26.3
 import org.lwjgl.glfw.GLFW;
 
 /** Single mouse presses with authoritative results; never retries a refused action. */

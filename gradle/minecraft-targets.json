@@ -56,6 +56,24 @@
         "mixinconstraints-1.0.9.jar",
         "mixinextras-fabric-0.3.5.jar"
       ]
+    },
+    {
+      "id": "modern-263",
+      "minecraftVersion": "26.3",
+      "minecraftVersions": [
+        "26.3"
+      ],
+      "javaVersion": 25,
+      "loaderVersion": "0.19.5",
+      "fabricApiVersion": "0.162.0+26.3",
+      "worldeditVersionId": "E7sbeRFx",
+      "axiomVersionId": "CrfjL7cY",
+      "axiomRuntimeJars": [
+        "axiomclientapi-unobf.jar",
+        "lattice-2.2.0.jar",
+        "mixinconstraints-1.0.9.jar",
+        "mixinextras-fabric-0.3.5.jar"
+      ]
     }
   ]
 }

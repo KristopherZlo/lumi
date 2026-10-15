@@ -17,6 +17,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
+//? if <26.3
 import org.lwjgl.glfw.GLFW;
 
 /** Raw wooden-sword world input for scoped Lumi selections. */
@@ -74,7 +75,7 @@ public final class LumiSelectionTool {
         activateScope(client);
         if (controlDown(client)) {
             editZone(client, button == GLFW.GLFW_MOUSE_BUTTON_LEFT);
-            client.player.swing(hand.orElseThrow());
+            swing(client, hand.orElseThrow());
             return true;
         }
         if (actionModifierDown(client)) {
@@ -102,7 +103,7 @@ public final class LumiSelectionTool {
             selection.setSecond(target.orElseThrow());
             feedback.accept("luma.selection.corner_b");
         }
-        client.player.swing(hand.orElseThrow());
+        swing(client, hand.orElseThrow());
         return true;
     }
 
@@ -192,6 +193,14 @@ public final class LumiSelectionTool {
     private static boolean canHandle(Minecraft client) {
         return client != null && client.player != null && client.level != null
                 && client.screen == null && client.getOverlay() == null;
+    }
+
+    private static void swing(Minecraft client, InteractionHand hand) {
+        //? if >=26.3 {
+        /*client.player.swing(hand, client.player.getItemInHand(hand).getInteractAnimation(), false);
+        *///?} else {
+        client.player.swing(hand);
+        //?}
     }
 
     private static boolean actionModifierDown(Minecraft client) {

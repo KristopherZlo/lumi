@@ -29,6 +29,8 @@ import net.minecraft.world.level.block.Block;
 
 /** Worker-only DataFixer adaptation; it never accesses or mutates a live world. */
 public final class MinecraftWorldPayloadConverter implements WorldPayloadConverter {
+    // Native DataFixers registers BlockStateFieldNamesFix at this schema.
+    private static final int BLOCK_STATE_FIELD_NAMES_VERSION = 5006;
     @Override
     public String recipeId() {
         return "minecraft-dfu-canonical-v1";
@@ -51,8 +53,8 @@ public final class MinecraftWorldPayloadConverter implements WorldPayloadConvert
         var decoder = new MinecraftBlockStateDecoder(blocks);
         var translated = new HashMap<String, String>();
         for (String state : source.distinctBlockStates()) {
-            CompoundTag fixed = fix(References.BLOCK_STATE, blockStateTag(state), source.dataVersion(), target);
-            translated.put(state, BlockStateParser.serialize(decoder.decodeState(blockStateText(fixed))));
+            CompoundTag fixed = fix(References.BLOCK_STATE, blockStateTag(state, source.dataVersion()), source.dataVersion(), target);
+            translated.put(state, BlockStateParser.serialize(decoder.decodeState(blockStateText(fixed, target))));
         }
         var states = new ArrayList<String>(SectionBlob.BLOCK_COUNT);
         for (String state : source.blockStates()) states.add(translated.get(state));
@@ -121,13 +123,13 @@ public final class MinecraftWorldPayloadConverter implements WorldPayloadConvert
         }
     }
 
-    private static CompoundTag blockStateTag(String text) throws IOException {
+    private static CompoundTag blockStateTag(String text, WorldDataVersion source) throws IOException {
         int opening = text.indexOf('[');
         String name = opening < 0 ? text : text.substring(0, opening);
         Identifier id = Identifier.tryParse(name);
         if (id == null) throw new IOException("Invalid source block name: " + name);
         var result = new CompoundTag();
-        result.putString("Name", id.toString());
+        result.putString(source.value() >= BLOCK_STATE_FIELD_NAMES_VERSION ? "id" : "Name", id.toString());
         if (opening >= 0) {
             if (!text.endsWith("]")) throw new IOException("Invalid source block properties: " + text);
             var properties = new CompoundTag();
@@ -138,15 +140,17 @@ public final class MinecraftWorldPayloadConverter implements WorldPayloadConvert
                 }
                 properties.putString(pair[0], pair[1]);
             }
-            result.put("Properties", properties);
+            result.put(source.value() >= BLOCK_STATE_FIELD_NAMES_VERSION ? "properties" : "Properties", properties);
         }
         return result;
     }
 
-    private static String blockStateText(CompoundTag state) throws IOException {
-        String name = state.getString("Name").orElseThrow(() -> new IOException("Converted block has no name"));
-        if (!state.contains("Properties")) return name;
-        CompoundTag properties = state.getCompound("Properties").orElseThrow(() ->
+    private static String blockStateText(CompoundTag state, WorldDataVersion target) throws IOException {
+        String nameKey = target.value() >= BLOCK_STATE_FIELD_NAMES_VERSION ? "id" : "Name";
+        String propertiesKey = target.value() >= BLOCK_STATE_FIELD_NAMES_VERSION ? "properties" : "Properties";
+        String name = state.getString(nameKey).orElseThrow(() -> new IOException("Converted block has no name"));
+        if (!state.contains(propertiesKey)) return name;
+        CompoundTag properties = state.getCompound(propertiesKey).orElseThrow(() ->
                 new IOException("Converted block properties are not a compound"));
         if (properties.isEmpty()) return name;
         var text = new StringJoiner(",", name + "[", "]");

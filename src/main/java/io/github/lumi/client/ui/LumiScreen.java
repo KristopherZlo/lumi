@@ -14,6 +14,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+//? if <26.3
 import org.lwjgl.glfw.GLFW;
 
 /** Neutral V2 screen mechanics shared by pages and modal workflows. */
@@ -53,6 +54,7 @@ public abstract class LumiScreen extends Screen {
     private LumiButton hintNextButton;
     private boolean handCursorActive;
     private LumiButton navigationButton;
+    //? if <26.3
     private static long handCursor;
 
     protected LumiScreen(Component title) {
@@ -406,19 +408,30 @@ public abstract class LumiScreen extends Screen {
                 && pointerHovered(mouseX, mouseY);
         if (hovered == handCursorActive) return;
         handCursorActive = hovered;
+        //? if >=26.3 {
+        /*Minecraft.getInstance().getWindow().selectCursor(hovered
+                ? com.mojang.blaze3d.platform.cursor.CursorTypes.POINTING_HAND
+                : com.mojang.blaze3d.platform.cursor.CursorTypes.ARROW);
+        *///?} else {
         if (hovered && handCursor == 0L) {
             handCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_HAND_CURSOR);
         }
         GLFW.glfwSetCursor(
                 Minecraft.getInstance().getWindow().handle(),
                 hovered ? handCursor : 0L);
+        //?}
     }
 
     @Override
     public void removed() {
         if (handCursorActive) {
+            //? if >=26.3 {
+            /*Minecraft.getInstance().getWindow().selectCursor(
+                    com.mojang.blaze3d.platform.cursor.CursorTypes.ARROW);
+            *///?} else {
             GLFW.glfwSetCursor(
                     Minecraft.getInstance().getWindow().handle(), 0L);
+            //?}
             handCursorActive = false;
         }
         super.removed();

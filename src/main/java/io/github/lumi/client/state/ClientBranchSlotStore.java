@@ -29,7 +29,8 @@ public final class ClientBranchSlotStore {
             InputConstants.KEY_0
     };
     private static final int MAX_WORKSPACES = 64;
-    private static final String MAGIC = "LBS3";
+    private static final String MAGIC = "LBS4";
+    private boolean unmappedLegacyKeys;
     private final Path file;
     private final LinkedHashMap<UUID, LinkedHashMap<Integer, String>> assignments =
             new LinkedHashMap<>(16, 0.75F, true);
@@ -46,6 +47,7 @@ public final class ClientBranchSlotStore {
 
     public synchronized void synchronize(HistorySnapshotPayload snapshot) {
         Objects.requireNonNull(snapshot, "snapshot");
+        if (unmappedLegacyKeys) return;
         LinkedHashMap<Integer, String> slots = assignments.computeIfAbsent(
                 snapshot.workspaceId(), ignored -> new LinkedHashMap<>());
         var visible = snapshot.branches().stream()
@@ -110,6 +112,7 @@ public final class ClientBranchSlotStore {
                 snapshot.workspaceId(), ignored -> new LinkedHashMap<>());
         slots.entrySet().removeIf(entry -> entry.getValue().equals(branch));
         slots.put(keyCode, branch);
+        unmappedLegacyKeys = false;
         save();
     }
 
@@ -129,7 +132,8 @@ public final class ClientBranchSlotStore {
         try {
             var lines = Files.readAllLines(file, StandardCharsets.UTF_8);
             boolean legacy = !lines.isEmpty() && "LBS2".equals(lines.getFirst());
-            if (lines.isEmpty() || !(legacy || MAGIC.equals(lines.getFirst()))) {
+            boolean numeric = !lines.isEmpty() && "LBS3".equals(lines.getFirst());
+            if (lines.isEmpty() || !(legacy || numeric || MAGIC.equals(lines.getFirst()))) {
                 throw new IOException("Invalid Lumi branch slot file");
             }
             for (int index = 1; index < lines.size(); index++) {
@@ -138,20 +142,31 @@ public final class ClientBranchSlotStore {
                     throw new IOException("Invalid Lumi branch slot entry");
                 }
                 UUID workspace = UUID.fromString(fields[0]);
-                int keyCode = Integer.parseInt(fields[1]);
-                if (legacy) keyCode = defaultKey(keyCode);
-                validateKey(keyCode);
+                int keyCode = legacy ? defaultKey(Integer.parseInt(fields[1]))
+                        : numeric ? BranchShortcutKey.legacy(Integer.parseInt(fields[1]))
+                        : BranchShortcutKey.decode(fields[1]);
                 String branch = new String(
                         Base64.getUrlDecoder().decode(fields[2]),
                         StandardCharsets.UTF_8);
                 if (branch.isBlank() || branch.length() > 256) {
                     throw new IOException("Invalid Lumi branch slot branch");
                 }
+                if (keyCode < 0 && numeric) {
+                    unmappedLegacyKeys = true;
+                    LumiMod.LOGGER.warn("Branch shortcut {} for {} has no key on this platform; reassign it in settings",
+                            fields[1], branch);
+                    continue;
+                }
+                validateKey(keyCode);
                 assignments.computeIfAbsent(
                         workspace, ignored -> new LinkedHashMap<>())
                         .put(keyCode, branch);
             }
             trimWorkspaces();
+            if (legacy || numeric) {
+                Path backup = file.resolveSibling(file.getFileName() + ".pre-key-names");
+                if (!Files.exists(backup)) Files.copy(file, backup);
+            }
         } catch (IOException | IllegalArgumentException failed) {
             assignments.clear();
             LumiMod.LOGGER.warn("Could not read Lumi branch slots", failed);
@@ -159,6 +174,7 @@ public final class ClientBranchSlotStore {
     }
 
     private void save() {
+        if (unmappedLegacyKeys) return;
         Path temporary = null;
         try {
             Files.createDirectories(file.getParent());
@@ -169,7 +185,7 @@ public final class ClientBranchSlotStore {
                     slots.entrySet().stream()
                             .sorted(Map.Entry.comparingByKey())
                             .forEach(entry -> encoded.append(workspace).append('\t')
-                                    .append(entry.getKey()).append('\t')
+                                    .append(BranchShortcutKey.encode(entry.getKey())).append('\t')
                                     .append(Base64.getUrlEncoder().withoutPadding()
                                             .encodeToString(entry.getValue().getBytes(
                                                     StandardCharsets.UTF_8)))
@@ -220,7 +236,7 @@ public final class ClientBranchSlotStore {
     }
 
     private static void validateKey(int keyCode) {
-        if (keyCode < 32 || keyCode > 348
+        if (!BranchShortcutKey.valid(keyCode)
                 || keyCode == InputConstants.KEY_LALT
                 || keyCode == InputConstants.KEY_RALT) {
             throw new IllegalArgumentException("Invalid branch shortcut key");

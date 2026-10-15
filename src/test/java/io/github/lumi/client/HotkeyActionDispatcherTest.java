@@ -43,7 +43,7 @@ class HotkeyActionDispatcherTest {
 
         dispatcher.switchBranch(
                 com.mojang.blaze3d.platform.InputConstants.KEY_P);
-        assertEquals("branch-80", calls.getLast());
+        assertEquals("branch-" + com.mojang.blaze3d.platform.InputConstants.KEY_P, calls.getLast());
     }
 
     @Test

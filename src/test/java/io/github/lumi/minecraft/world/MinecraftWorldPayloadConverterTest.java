@@ -39,6 +39,7 @@ class MinecraftWorldPayloadConverterTest {
         assertEquals("minecraft:oak_stairs[facing=west,half=bottom,shape=straight,waterlogged=false]",
                 result.blockStates().getFirst());
         assertEquals("minecraft:oak_stairs[facing=west]", source.blockStates().getFirst());
+        assertEquals(result, converter.convert(result, NativeWorldTestData.version()));
         UUID id = UUID.randomUUID();
         var entities = new EntityChunkBlob(List.of(new EntityState(id, "minecraft:armor_stand",
                 MinecraftNbtCodec.encode(new CompoundTag()))));

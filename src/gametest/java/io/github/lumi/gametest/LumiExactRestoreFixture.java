@@ -24,6 +24,8 @@ import net.minecraft.world.phys.Vec3;
 
 /** Builds four exact endpoints spanning loaded and stored chunk paths. */
 final class LumiExactRestoreFixture {
+    private static final int FIXTURE_FLAGS =
+            Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS;
     private static final int DENSE_WIDTH = 128;
     private static final int DENSE_DEPTH = 64;
     private static final int DENSE_HEIGHT = 16;
@@ -176,14 +178,20 @@ final class LumiExactRestoreFixture {
                     .find(level).orElseThrow();
             try (var ignored = DirectLiveActionContext.open(
                     runtime.liveActions(), player.getUUID())) {
+                for (BlockPos placement : List.of(chest.west(2).south(), chest.south(), chest.west().south(2))) {
+                    for (int clearance = 0; clearance < 2; clearance++) {
+                        level.setBlock(placement.above(clearance), Blocks.AIR.defaultBlockState(),
+                                FIXTURE_FLAGS);
+                    }
+                }
                 for (BlockPos support : List.of(
                         chest, sign, poi, heightProbe,
                         chest.west(2).south(), chest.south(),
                         chest.west().south(2),
                         BlockPos.containing(moverA),
                         BlockPos.containing(moverB))) {
-                    level.setBlockAndUpdate(
-                            support.below(), Blocks.STONE.defaultBlockState());
+                    level.setBlock(
+                            support.below(), Blocks.STONE.defaultBlockState(), FIXTURE_FLAGS);
                 }
                 level.setBlockAndUpdate(chest, Blocks.CHEST.defaultBlockState());
                 ChestBlockEntity chestEntity =
@@ -195,14 +203,20 @@ final class LumiExactRestoreFixture {
                 level.setBlockAndUpdate(sign, Blocks.OAK_SIGN.defaultBlockState());
                 SignBlockEntity signEntity =
                         requireType(level, sign, SignBlockEntity.class);
+                //? if >=26.3 {
+                /*signEntity.setText(SignText.EMPTY.asMutable().setLine(
+                        0, Component.literal(label)).asImmutable(),
+                        net.minecraft.world.level.block.entity.SignTextSlot.FRONT);
+                *///?} else {
                 signEntity.setText(new SignText().setMessage(
                         0, Component.literal(label)), true);
+                //?}
                 signEntity.setChanged();
 
                 level.setBlockAndUpdate(poi, poiBlock.defaultBlockState());
                 for (int y = 0; y <= 40; y++) {
-                    level.setBlockAndUpdate(heightProbe.above(y),
-                            Blocks.AIR.defaultBlockState());
+                    level.setBlock(heightProbe.above(y),
+                            Blocks.AIR.defaultBlockState(), FIXTURE_FLAGS);
                 }
                 level.setBlockAndUpdate(
                         heightProbe.above(height), Blocks.STONE.defaultBlockState());

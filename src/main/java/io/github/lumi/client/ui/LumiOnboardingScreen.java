@@ -12,6 +12,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+//? if <26.3
 import org.lwjgl.glfw.GLFW;
 
 /** Replayable hands-on introduction driven by explicit events. */

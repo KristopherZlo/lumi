@@ -71,8 +71,10 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
                 target.getDepthTexture(), "Preview depth texture is missing");
         GpuTextureView depthView = Objects.requireNonNull(
                 target.getDepthTextureView(), "Preview depth view is missing");
-        RenderSystem.getDevice().createCommandEncoder()
-                .clearColorAndDepthTextures(color, 0, depth, 1.0);
+        CommandEncoder clear = RenderSystem.getDevice().createCommandEncoder();
+        clear.clearColorAndDepthTextures(color, 0, depth, 1.0);
+        //? if >=26.3
+        /*clear.submit();*/
         RenderSystem.backupProjectionMatrix();
         RenderSystem.setProjectionMatrix(
                 projection(framing.resolution()),
@@ -80,11 +82,15 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
         Matrix4fStack modelView = RenderSystem.getModelViewStack();
         modelView.pushMatrix();
         modelView.identity();
+        //? if <26.3
         GpuTextureView previousColor = RenderSystem.outputColorTextureOverride;
+        //? if <26.3
         GpuTextureView previousDepth = RenderSystem.outputDepthTextureOverride;
         GpuBufferSlice previousLights = RenderSystem.getShaderLights();
         GpuBufferSlice previousFog = RenderSystem.getShaderFog();
+        //? if <26.3
         RenderSystem.outputColorTextureOverride = colorView;
+        //? if <26.3
         RenderSystem.outputDepthTextureOverride = depthView;
         try {
             RenderSystem.setShaderFog(fog().getBuffer(FogRenderer.FogMode.NONE));
@@ -102,9 +108,15 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
             modelView.rotateY(PreviewFramingCalculator.ISO_YAW_RADIANS);
             modelView.translate(
                     -framing.halfX(), -framing.halfY(), -framing.halfZ());
+            //? if >=26.3 {
+            /*mesh.render(colorView, depthView);
+            *///?} else {
             mesh.render();
+            //?}
         } finally {
+            //? if <26.3
             RenderSystem.outputColorTextureOverride = previousColor;
+            //? if <26.3
             RenderSystem.outputDepthTextureOverride = previousDepth;
             if (previousLights != null) RenderSystem.setShaderLights(previousLights);
             if (previousFog != null) RenderSystem.setShaderFog(previousFog);
@@ -156,6 +168,8 @@ final class TexturedPreviewCaptureService implements AutoCloseable {
                 buffer.close();
             }
         }, 0);
+        //? if >=26.3
+        /*encoder.submit();*/
         return future;
     }
 

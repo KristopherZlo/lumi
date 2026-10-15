@@ -109,7 +109,8 @@ stonecutter.replacements {
             replace('client.gui.setOverlayMessage(', 'client.gui.hud.setOverlayMessage(')
             replace('Minecraft.getInstance().getMainRenderTarget()', 'Minecraft.getInstance().gameRenderer.mainRenderTarget()')
             replace('RenderSystem.getModelViewMatrix()', 'RenderSystem.getModelViewMatrixCopy()')
-            replace('VertexFormat.Mode', 'com.mojang.blaze3d.PrimitiveTopology')
+            replace('VertexFormat.Mode', stonecutter.eval(stonecutter.current.version, '>=26.3')
+                    ? 'com.mojang.renderpearl.api.pipeline.PrimitiveTopology' : 'com.mojang.blaze3d.PrimitiveTopology')
             replace('type.mode()', 'type.primitiveTopology()')
             replace('pass.setVertexBuffer(0, layer.buffer())', 'pass.setVertexBuffer(0, layer.buffer().slice())')
             // 26.2: indexCount, instanceCount, firstIndex, vertexOffset, firstInstance.
@@ -120,7 +121,46 @@ stonecutter.replacements {
             replace('encoder.mapBuffer(buffer, true, false)', 'buffer.map(true, false)')
             replace('color.getFormat().pixelSize()', 'color.getFormat().blockSize()')
             replace('.clearColorAndDepthTextures(color, 0, depth, 1.0)', '.clearColorAndDepthTextures(color, new org.joml.Vector4f(0, 0, 0, 0), depth, 0.0)')
-            replace('framing.resolution(), true)', 'framing.resolution(), true, com.mojang.blaze3d.GpuFormat.RGBA8_UNORM)')
+            replace('framing.resolution(), true)', stonecutter.eval(stonecutter.current.version, '>=26.3')
+                    ? 'framing.resolution(), com.mojang.renderpearl.api.GpuFormat.RGBA8_UNORM, com.mojang.renderpearl.api.GpuFormat.D32_FLOAT)'
+                    : 'framing.resolution(), true, com.mojang.blaze3d.GpuFormat.RGBA8_UNORM)')
         }
     }
+    if (stonecutter.eval(stonecutter.current.version, '>=26.3')) {
+        regex(true, '!native263-key-state') {
+            replace('(InputConstants\\.isKeyDown\\()\\s*client\\.getWindow\\(\\),\\s*', '$1',
+                    '(InputConstants\\.isKeyDown\\()', '$1client.getWindow(), ')
+        }
+        string(true, '!native263-api') {
+            replace('com.mojang.blaze3d.buffers.GpuBuffer', 'com.mojang.renderpearl.api.buffers.GpuBuffer')
+            replace('com.mojang.blaze3d.textures.', 'com.mojang.renderpearl.api.textures.')
+            replace('com.mojang.blaze3d.vertex.VertexFormat', 'com.mojang.renderpearl.api.vertex.VertexFormat')
+            replace('com.mojang.blaze3d.GpuFormat', 'com.mojang.renderpearl.api.GpuFormat')
+            ['RenderPipeline', 'DepthStencilState', 'BindGroupLayout'].each { type ->
+                replace("com.mojang.blaze3d.pipeline.${type}", "com.mojang.renderpearl.api.pipeline.${type}")
+            }
+            ['PrimitiveTopology', 'IndexType', 'CompareOp'].each { type ->
+                replace("com.mojang.blaze3d.${type}", "com.mojang.renderpearl.api.pipeline.${type}")
+            }
+            ['CommandEncoder', 'RenderPass', 'GpuQueryPool', 'GpuQuery'].each { type ->
+                replace("com.mojang.blaze3d.systems.${type}", "com.mojang.renderpearl.api.commands.${type}")
+            }
+            replace('InputConstants.Type.KEYSYM', 'InputConstants.Type.KEYBOARD')
+            replace('VanillaRegistries.createLookup()', 'VanillaRegistries.createWorldLookup()')
+            replace('pass.setPipeline(type.pipeline())', 'pass.setPipeline(RenderSystem.getCompiledPipeline(type.pipeline()))')
+            replace('full.getChunkData()', 'full.chunkData()')
+            replace('full.getLightData()', 'full.lightData()')
+            replace('.setInvulnerable(', '.setPermanentlyInvulnerable(')
+            replace('full.getLightData().getSkyUpdates()', 'full.lightData().skyUpdates()')
+            replace('full.getLightData().getBlockUpdates()', 'full.lightData().blockUpdates()')
+            replace('Util.getPlatform().openUri(', 'com.mojang.blaze3d.Blaze3D.openUri(')
+            replace('Util.getPlatform().openFile(packages.ensureDirectory().toFile())',
+                    'com.mojang.blaze3d.Blaze3D.openPath(packages.ensureDirectory())')
+            replace('GLFW.GLFW_PRESS', 'com.mojang.blaze3d.platform.InputConstants.PRESS')
+            replace('GLFW.GLFW_MOUSE_BUTTON_LEFT', 'com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT')
+            replace('GLFW.GLFW_MOUSE_BUTTON_RIGHT', 'com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_RIGHT')
+            replace('GLFW.GLFW_KEY_ESCAPE', 'com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE')
+        }
+    }
+
 }

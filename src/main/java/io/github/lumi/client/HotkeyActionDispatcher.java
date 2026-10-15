@@ -66,7 +66,7 @@ public final class HotkeyActionDispatcher {
     }
 
     public void switchBranch(int keyCode) {
-        if (keyCode < 32 || keyCode > 348) {
+        if (!io.github.lumi.client.state.BranchShortcutKey.valid(keyCode)) {
             throw new IllegalArgumentException("Invalid branch shortcut key");
         }
         if (!enabled.getAsBoolean()) {

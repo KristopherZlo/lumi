@@ -56,6 +56,48 @@ class ClientBranchSlotStoreTest {
         assertTrue(slots.keyCode(withoutIdea, "idea").isPresent() == false);
     }
 
+    @Test
+    void migratesNumericKeysByMeaningAndPreservesTheOriginalFile() throws Exception {
+        Path file = directory.resolve("slots");
+        String original = "LBS3\n" + snapshot().workspaceId()
+                + "\t80\taWRlYQ\n";
+        java.nio.file.Files.writeString(file, original);
+        ClientBranchSlotStore slots = new ClientBranchSlotStore(file);
+        assertEquals("idea", slots.branch(snapshot(), InputConstants.KEY_P).orElseThrow().name());
+        slots.assignKey(snapshot(), "main", InputConstants.KEY_A);
+        assertEquals(original, java.nio.file.Files.readString(
+                file.resolveSibling("slots.pre-key-names")));
+        assertTrue(java.nio.file.Files.readString(file).startsWith("LBS4\n"));
+        assertTrue(java.nio.file.Files.readString(file).contains("key.keyboard.p"));
+        assertEquals("idea", new ClientBranchSlotStore(file)
+                .branch(snapshot(), InputConstants.KEY_P).orElseThrow().name());
+    }
+
+    //? if >=26.3 {
+    /*@Test
+    void keepsAnUnsupportedLegacyKeyUnassignedUntilTheBuilderChooses() throws Exception {
+        Path file = directory.resolve("slots");
+        String original = "LBS3\n" + snapshot().workspaceId() + "\t314\taWRlYQ\n";
+        java.nio.file.Files.writeString(file, original);
+        ClientBranchSlotStore slots = new ClientBranchSlotStore(file);
+        slots.synchronize(snapshot());
+        assertTrue(slots.keyCode(snapshot(), "idea").isEmpty());
+        assertEquals(original, java.nio.file.Files.readString(file));
+        slots.assignKey(snapshot(), "idea", InputConstants.KEY_P);
+        assertEquals("idea", new ClientBranchSlotStore(file)
+                .branch(snapshot(), InputConstants.KEY_P).orElseThrow().name());
+    }
+    *///?}
+
+    @Test
+    void migratesOldNumberedSlotsToTheSamePhysicalDigitKey() throws Exception {
+        Path file = directory.resolve("slots");
+        java.nio.file.Files.writeString(file,
+                "LBS2\n" + snapshot().workspaceId() + "\t0\tbWFpbg\n");
+        assertEquals("main", new ClientBranchSlotStore(file)
+                .branch(snapshot(), InputConstants.KEY_1).orElseThrow().name());
+    }
+
     private static HistorySnapshotPayload snapshot() {
         return new HistorySnapshotPayload(
                 "minecraft:overworld", id('1'), 0, 0, false, false,

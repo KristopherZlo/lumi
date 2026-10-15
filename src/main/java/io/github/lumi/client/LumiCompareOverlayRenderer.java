@@ -171,10 +171,15 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
             boolean xray, boolean outline) {
         var type = outline ? LumiCompareRenderTypes.outline(xray) : LumiCompareRenderTypes.fill(xray);
         var target = Minecraft.getInstance().getMainRenderTarget();
+        //? if >=26.3 {
+        /*var color = target.getColorTextureView();
+        var depth = target.getDepthTextureView();
+        *///?} else {
         var color = RenderSystem.outputColorTextureOverride != null
                 ? RenderSystem.outputColorTextureOverride : target.getColorTextureView();
         var depth = RenderSystem.outputDepthTextureOverride != null
                 ? RenderSystem.outputDepthTextureOverride : target.getDepthTextureView();
+        //?}
         var modelView = RenderSystem.getModelViewStack();
         modelView.pushMatrix();
         LayeringTransform.VIEW_OFFSET_Z_LAYERING.getModifier().accept(modelView);
@@ -199,7 +204,8 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
                             .writeTransform(transform, tint, new Vector3f(), new Matrix4f());
                     var indices = RenderSystem.getSequentialBuffer(layer.mode());
                     var indexBuffer = indices.getBuffer(layer.indexCount());
-                    try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                    var encoder = RenderSystem.getDevice().createCommandEncoder();
+                    try (var pass = encoder.createRenderPass(
                             () -> "Lumi Compare", color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
                         pass.setPipeline(type.pipeline());
                         RenderSystem.bindDefaultUniforms(pass);
@@ -208,6 +214,8 @@ final class LumiCompareOverlayRenderer implements AutoCloseable {
                         pass.setIndexBuffer(indexBuffer, indices.type());
                         pass.drawIndexed(0, 0, layer.indexCount(), 1);
                     }
+                    //? if >=26.3
+                    /*encoder.submit();*/
                 } finally {
                     if (transientMesh) mesh.close();
                 }

@@ -559,7 +559,13 @@ final class LumiBehaviorActions {
         var result = player.gameMode.useItemOn(
                 player, player.level(), stack,
                 InteractionHand.MAIN_HAND, hit);
-        require(result.consumesAction(), "Player item use failed at " + clicked);
+        require(result.consumesAction(), "Player item use failed at " + clicked
+                + "; clicked=" + player.level().getBlockState(clicked)
+                + "; above=" + player.level().getBlockState(clicked.above())
+                + "; head=" + player.level().getBlockState(clicked.above(2))
+                + "; entities=" + player.level().getEntities((Entity) null,
+                        new net.minecraft.world.phys.AABB(clicked.above()).expandTowards(0, 1, 0))
+                        .stream().map(entity -> entity.getType() + " at " + entity.position()).toList());
     }
 
     private static BlockPos surfacePlacement(ServerLevel level, int x, int z) {

@@ -15,6 +15,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.renderer.fog.FogRenderer;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.world.level.gamerules.GameRules;
+//? if <26.3
 import org.lwjgl.glfw.GLFW;
 
 /** Measures the real overlay pipeline; synthetic Compare input never edits saved history. */
@@ -141,7 +142,12 @@ public final class LumiCompareRenderClientGameTest implements FabricClientGameTe
                     "GPU=" + RenderSystem.getDevice().getRenderer()
                     + "\nJDK=" + System.getProperty("java.version")
                     + "\nframebuffer=" + client.getWindow().getWidth() + "x" + client.getWindow().getHeight()
+                    //? if >=26.3 {
+                    /*+ "\nwindow_visible=" + ((org.lwjgl.sdl.SDLVideo.SDL_GetWindowFlags(client.getWindow().handle())
+                            & org.lwjgl.sdl.SDLVideo.SDL_WINDOW_HIDDEN) == 0)
+                    *///?} else {
                     + "\nwindow_visible=" + GLFW.glfwGetWindowAttrib(client.getWindow().handle(), GLFW.GLFW_VISIBLE)
+                    //?}
                     + "\nframe_limit=30\noverlay_fog=NONE\n");
             Files.writeString(output.resolveSibling("compare-render-environment.txt"), environment);
         } catch (Exception failed) {
