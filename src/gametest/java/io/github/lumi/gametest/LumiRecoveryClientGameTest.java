@@ -114,9 +114,14 @@ public final class LumiRecoveryClientGameTest implements FabricClientGameTest {
             setPois(world.getServer(), poiPositions, true);
             actions.placeBlocks(
                     "recovery_fixture_light", Items.GLOWSTONE, List.of(lightPosition));
+            world.getServer().runOnServer(minecraft -> minecraft.getPlayerList().getPlayers().getFirst().level()
+                    .setBlockAndUpdate(lightPosition.relative(Direction.EAST), Blocks.AIR.defaultBlockState()));
             setRespawn(world.getServer(), respawnPosition);
             context.waitTicks(2);
             assertPois(world.getServer(), poiPositions, true, "Recovery baseline");
+            for (int tick = 0; tick < PACKET_TIMEOUT_TICKS && blockLight(world.getServer(), lightPosition) == 0; tick++) {
+                context.waitTick();
+            }
             expectedBlockLight = blockLight(world.getServer(), lightPosition);
             require(expectedBlockLight > 0,
                     "Recovery fixture did not create block lighting");
