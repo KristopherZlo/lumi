@@ -6,6 +6,8 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
@@ -20,6 +22,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 abstract class PistonMovingBlockEntityMixin {
     @Unique private static final ThreadLocal<Deque<Optional<MinecraftCausalTickTracker.CausalExecution>>>
             LUMI_SCOPES = ThreadLocal.withInitial(ArrayDeque::new);
+
+    /** A resting cart may have released its old token before a piston launches it. */
+    @Inject(method = "moveEntityByPiston", at = @At("HEAD"))
+    private static void lumi$inheritPistonPush(
+            Direction movement, Entity entity, double distance, Direction piston,
+            CallbackInfo callback) {
+        if (entity.level() instanceof ServerLevel level) {
+            LumiMod.serverRuntime().find(level).ifPresent(runtime ->
+                    runtime.causalTicks().rememberCarrier(entity));
+        }
+    }
 
     @Inject(method = "tick", at = @At("HEAD"))
     private static void lumi$beginCarrierTick(

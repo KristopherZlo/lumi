@@ -264,6 +264,11 @@ public final class LumiRedstoneMachineGameTests {
                 LumiWorldSnapshot.capture(helper.getLevel(), List.of(area))
                         .assertMatches(baseline, label);
             } catch (AssertionError mismatch) {
+                LumiMod.LOGGER.error("Redstone recovery {} failed; entities: {}", label,
+                        java.util.stream.StreamSupport.stream(helper.getLevel().getAllEntities().spliterator(), false)
+                                .filter(entity -> area.contains(entity.getBlockX(), entity.getBlockY(), entity.getBlockZ()))
+                                .limit(16).map(entity -> entity.getType() + " " + entity.getUUID()
+                                        + " at " + entity.position() + " bounds=" + entity.getBoundingBox()).toList());
                 throw helper.assertionException("%s", mismatch.getMessage());
             } catch (IOException failed) {
                 throw helper.assertionException(
