@@ -1,5 +1,7 @@
 package io.github.lumi.storage.repository;
 
+import io.github.lumi.domain.model.WorldDataVersion;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -20,6 +22,10 @@ public final class DimensionRepositoryLayout {
         String encoded = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(dimensionId.getBytes(StandardCharsets.UTF_8));
         return historyRoot.resolve(encoded);
+    }
+
+    public Path resolveCurrent(String dimensionId, WorldDataVersion gameVersion) throws IOException {
+        return new HistoryGenerationRepository(resolve(dimensionId)).currentDirectory(gameVersion);
     }
 
     public String dimensionId(Path repository) {

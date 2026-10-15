@@ -103,7 +103,6 @@ import io.github.lumi.minecraft.world.RestoreBaselineReconciler;
 import io.github.lumi.minecraft.world.SavePreparation;
 import io.github.lumi.minecraft.world.ScopedSavePreparation;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
-import io.github.lumi.storage.repository.HistoryGenerationRepository;
 import io.github.lumi.storage.repository.ActiveBranchRepository;
 import io.github.lumi.storage.repository.ActiveWorkspaceRepository;
 import io.github.lumi.storage.repository.BranchRefRepository;
@@ -351,8 +350,8 @@ public final class FabricDimensionRuntime implements AutoCloseable {
         Objects.requireNonNull(layout, "layout");
         Objects.requireNonNull(background, "background");
         Objects.requireNonNull(durabilityBackground, "durabilityBackground");
-        Path repository = new HistoryGenerationRepository(layout.resolve(level.dimension().identifier().toString()))
-                .currentDirectory(new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()));
+        Path repository = layout.resolveCurrent(level.dimension().identifier().toString(),
+                new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()));
         DimensionFreezeState freeze = new DimensionFreezeState();
         var objects = new WorldObjectRepository(repository);
         var commits = new CommitRepository(repository);

@@ -3,6 +3,7 @@ package io.github.lumi.client.preview;
 import com.mojang.blaze3d.platform.NativeImage;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.CommitId;
+import io.github.lumi.domain.model.WorldDataVersion;
 import io.github.lumi.storage.repository.DimensionRepositoryLayout;
 import io.github.lumi.storage.repository.VersionPreviewRepository;
 import java.io.IOException;
@@ -20,6 +21,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
@@ -206,7 +208,13 @@ public final class ClientVersionPreviewStore {
         }
         var layout = new DimensionRepositoryLayout(
                 server.getWorldPath(LevelResource.ROOT));
-        return Optional.of(new VersionPreviewRepository(layout.resolve(dimensionId)));
+        try {
+            return Optional.of(new VersionPreviewRepository(layout.resolveCurrent(dimensionId,
+                    new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()))));
+        } catch (IOException failed) {
+            LumiMod.LOGGER.warn("Failed to select Lumi preview history for {}", dimensionId, failed);
+            return Optional.empty();
+        }
     }
 
     private static String key(String dimensionId, CommitId commit) {

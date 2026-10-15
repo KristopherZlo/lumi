@@ -4,6 +4,7 @@ import io.github.lumi.domain.model.BlockBox;
 import io.github.lumi.domain.model.CommitId;
 import io.github.lumi.domain.model.RegionCoordinate;
 import io.github.lumi.domain.model.SectionKey;
+import io.github.lumi.domain.model.WorldDataVersion;
 import io.github.lumi.minecraft.world.DecodedSection;
 import io.github.lumi.minecraft.world.MinecraftBlockStateDecoder;
 import io.github.lumi.storage.repository.CommitRepository;
@@ -14,6 +15,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.BlockAndTintGetter;
@@ -36,7 +38,8 @@ final class CommitPreviewSnapshotReader {
         Objects.requireNonNull(commitId, "commitId");
         Objects.requireNonNull(bounds, "bounds");
         Path repository = new DimensionRepositoryLayout(
-                server.getWorldPath(LevelResource.ROOT)).resolve(dimensionId);
+                server.getWorldPath(LevelResource.ROOT)).resolveCurrent(dimensionId,
+                new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()));
         var commits = new CommitRepository(repository);
         var objects = new WorldObjectRepository(repository);
         var decoder = new MinecraftBlockStateDecoder(
