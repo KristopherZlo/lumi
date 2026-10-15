@@ -17,10 +17,11 @@ ext.lumiVerificationGame = verificationGame
 // Every adapter configures together; reject a mismatched launch only on its selected task.
 tasks.matching { it.name in ['runClientGameTest', 'runGameTest', 'runPackagedGameTest',
         'runPackagedClientGameTest', 'runVanillaReopenGameTest', 'prepareMultiplayerLaunch'] }.configureEach {
-    doFirst {
+    onlyIf {
         if (requestedGame != null && !target.minecraftVersions().contains(requestedGame)) {
             throw new GradleException("${requestedGame} is outside target ${target.id()}")
         }
+        true
     }
 }
 if (verificationGame != target.minecraftVersion() && !providers.gradleProperty('lumiArtifact').isPresent()) {
