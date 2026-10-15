@@ -29,7 +29,9 @@ public final class MinecraftChunkDurabilityRetention implements ChunkDurabilityR
 
     @Override
     public void release(int chunkX, int chunkZ) {
-        level.getServer().execute(() -> level.getChunkSource().removeTicketWithRadius(
-                DURABILITY_TICKET, new ChunkPos(chunkX, chunkZ), RADIUS));
+        var server = level.getServer();
+        // execute() can run on its background caller once server shutdown begins.
+        server.schedule(server.wrapRunnable(() -> level.getChunkSource().removeTicketWithRadius(
+                DURABILITY_TICKET, new ChunkPos(chunkX, chunkZ), RADIUS)));
     }
 }

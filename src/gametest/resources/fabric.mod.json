@@ -23,6 +23,7 @@
       "io.github.lumi.gametest.LumiExactRestoreClientGameTest"
     ],
     "fabric-gametest": [
+      "io.github.lumi.gametest.LumiShutdownGameTests",
       "io.github.lumi.gametest.LumiLiveActionGameTests",
       "io.github.lumi.gametest.LumiProjectileGameTests",
       "io.github.lumi.gametest.LumiTntGameTests",
