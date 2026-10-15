@@ -10,7 +10,9 @@ tasks.register('writeMinecraftBuildManifest') {
     description = 'Verifies the selected group artifact and records its exact game list and SHA-256'
     def binary = tasks.named(target.javaVersion() == 21 ? 'remapJar' : 'jar')
     dependsOn binary
-    def report = layout.buildDirectory.file('reports/lumi-build/manifest.json')
+    def report = providers.gradleProperty('lumiBuildManifestDirectory')
+            .map { new File(file(it), target.id() + '.json') }
+            .orElse(layout.buildDirectory.file('reports/lumi-build/manifest.json').map { it.asFile })
     def artifactFile = binary.flatMap { it.archiveFile }
     inputs.file(new File(repositoryRoot, 'gradle/minecraft-targets.json'))
     inputs.properties(parameters.findAll { key, value -> value != null })
@@ -21,8 +23,8 @@ tasks.register('writeMinecraftBuildManifest') {
         new MinecraftArtifactVerifier().verify(artifact.toPath(), target, project.version.toString())
         def digest = java.security.MessageDigest.getInstance('SHA-256')
         def manifest = [schema: 1, target: parameters, modVersion: project.version.toString(),
-                artifact: [name: artifact.name, sha256: digest.digest(artifact.bytes).encodeHex().toString()]]
-        def output = report.get().asFile
+                artifact: [name: artifact.name, path: artifact.absolutePath, sha256: digest.digest(artifact.bytes).encodeHex().toString()]]
+        def output = report.get()
         output.parentFile.mkdirs()
         output.text = JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + '\n'
     }
