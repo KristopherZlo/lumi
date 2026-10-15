@@ -32,15 +32,31 @@ class MinecraftArtifactVerifierTest {
         assertThrows(IOException.class, () -> verifier.verify(artifact(true, 65), target, "other"));
     }
 
+    @Test
+    void aRetiredCompileBaselineIsNotAddedBackToArtifactMetadata() throws Exception {
+        var baseline = target();
+        var retired = new MinecraftBuildTarget(baseline.id(), "1.21.10", baseline.minecraftVersions(),
+                baseline.javaVersion(), baseline.loaderVersion(), baseline.fabricApiVersion(),
+                baseline.worldeditVersionId(), baseline.axiomVersionId(), baseline.worldeditCuiCoordinate(),
+                baseline.axiomRuntimeJars());
+        assertDoesNotThrow(() -> verifier.verify(artifact(true, 65), retired, "test"));
+        assertThrows(IOException.class, () -> verifier.verify(
+                artifact(true, 65, "[\"1.21.10\",\"1.21.11\"]"), retired, "test"));
+    }
+
     private MinecraftBuildTarget target() throws IOException {
         return new MinecraftTargetCatalogReader().read(Path.of("../gradle/minecraft-targets.json"))
                 .defaultTarget();
     }
 
     private Path artifact(boolean declared, int coreMajor) throws IOException {
+        return artifact(declared, coreMajor, "[\"1.21.11\"]");
+    }
+
+    private Path artifact(boolean declared, int coreMajor, String games) throws IOException {
         String metadata = """
-                {"version":"test","depends":{"minecraft":["1.21.11"],"java":">=21"},"jars":%s}
-                """.formatted(declared ? "[{\"file\":\"META-INF/jars/core.jar\"}]" : "[]");
+                {"version":"test","depends":{"minecraft":%s,"java":">=21"},"jars":%s}
+                """.formatted(games, declared ? "[{\"file\":\"META-INF/jars/core.jar\"}]" : "[]");
         String mixins = "{\"required\":true,\"compatibilityLevel\":\"JAVA_21\"}";
         byte[] library = zip(Map.of(
                 "io/github/lumi/domain/service/SaveService.class", classHeader(coreMajor),

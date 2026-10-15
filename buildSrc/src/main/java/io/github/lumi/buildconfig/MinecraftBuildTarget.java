@@ -21,11 +21,11 @@ public record MinecraftBuildTarget(
             throw new IllegalArgumentException("Invalid Minecraft target id or Java version");
         }
         minecraftVersions = List.copyOf(minecraftVersions);
-        if (minecraftVersions.isEmpty() || minecraftVersions.size() > 32
+        if (!minecraftVersion.matches("\\d+\\.\\d+(?:\\.\\d+)?")
+                || minecraftVersions.isEmpty() || minecraftVersions.size() > 32
                 || minecraftVersions.stream().anyMatch(version ->
                         !version.matches("\\d+\\.\\d+(?:\\.\\d+)?"))
-                || new HashSet<>(minecraftVersions).size() != minecraftVersions.size()
-                || !minecraftVersions.contains(minecraftVersion)) {
+                || new HashSet<>(minecraftVersions).size() != minecraftVersions.size()) {
             throw new IllegalArgumentException("Invalid Minecraft release list for " + id);
         }
         worldeditCuiCoordinate = worldeditCuiCoordinate.filter(value -> !value.isBlank());

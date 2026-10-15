@@ -6,7 +6,12 @@ import io.github.lumi.buildconfig.LegacyGameTestAnnotationRepair
 def target = lumiMinecraftTarget
 def game = project.findProperty('lumiVerificationGame') ?: providers.gradleProperty('lumiGameVersion').getOrElse(target.minecraftVersion())
 if (!target.minecraftVersions().contains(game)) {
-    throw new GradleException("${game} is outside target ${target.id()}")
+    tasks.matching { it.name in ['runPackagedGameTest', 'runPackagedClientGameTest',
+            'runVanillaReopenGameTest', 'prepareMultiplayerLaunch'] }.configureEach {
+        onlyIf {
+            throw new GradleException("Select a supported -PlumiGameVersion for ${target.id()}: ${target.minecraftVersions()}")
+        }
+    }
 }
 def suppliedArtifact = providers.gradleProperty('lumiArtifact')
 def binary = tasks.named(target.javaVersion() == 21 ? 'remapJar' : 'jar')

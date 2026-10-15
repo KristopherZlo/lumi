@@ -64,9 +64,14 @@ class MinecraftTargetCatalogTest {
     }
 
     @Test
-    void rejectsACompileVersionOutsideTheDeclaredGameListAndUnsafeJarPaths() {
+    void keepsARetiredCompileBaselineSeparateFromTheSupportedReleases() {
+        var target = new MinecraftBuildTarget(
+                "group", "26.1", List.of("26.1.1", "26.1.2"), 25, "loader", "api", "we", "axiom",
+                Optional.empty(), List.of("api.jar"));
+        assertEquals("26.1", target.minecraftVersion());
+        assertEquals(List.of("26.1.1", "26.1.2"), target.minecraftVersions());
         assertThrows(IllegalArgumentException.class, () -> new MinecraftBuildTarget(
-                "group", "26.2", List.of("26.1"), 25, "loader", "api", "we", "axiom",
+                "group", "26.x", List.of("26.1"), 25, "loader", "api", "we", "axiom",
                 Optional.empty(), List.of("api.jar")));
         assertThrows(IllegalArgumentException.class, () -> new MinecraftBuildTarget(
                 "group", "26.1", List.of("26.1"), 25, "loader", "api", "we", "axiom",
