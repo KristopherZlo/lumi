@@ -1,6 +1,7 @@
 package io.github.lumi.storage.object;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.lumi.domain.model.ObjectId;
 import java.nio.file.Files;
@@ -12,6 +13,15 @@ import org.junit.jupiter.api.io.TempDir;
 class ObjectPackIndexTest {
     @TempDir
     Path tempDir;
+
+    @Test
+    void publishedIndexWithoutItsPackRemainsCorruption() throws Exception {
+        Path pack = tempDir.resolve("missing.pack");
+        ObjectId id = ObjectId.hash(new byte[] {1});
+        ObjectPackIndex.write(tempDir.resolve("missing.idx"),
+                Map.of(id, new PackedObject(id, pack, 8, 1, 1)));
+        assertThrows(CorruptObjectException.class, () -> ObjectPackIndex.load(tempDir));
+    }
 
     @Test
     void atomicallyPublishesAndReopensPackLocations() throws Exception {

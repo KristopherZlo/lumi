@@ -85,6 +85,42 @@ class ObjectStoreTest {
         }
     }
 
+    @org.junit.jupiter.api.RepeatedTest(5)
+    void readsWhileAnotherStoreCompactsPacks() throws Exception {
+        var writer = new ObjectStore(tempDir);
+        byte[] payload = "retained during compaction".getBytes(StandardCharsets.UTF_8);
+        ObjectId retained;
+        try (var batch = writer.beginBatch()) {
+            retained = batch.write(payload);
+            batch.publish();
+        }
+        var started = new java.util.concurrent.CountDownLatch(1);
+        var running = new java.util.concurrent.atomic.AtomicBoolean(true);
+        try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var compaction = executor.submit(() -> {
+                started.countDown();
+                try {
+                    for (int index = 0; index < 64; index++) {
+                        try (var batch = writer.beginBatch()) {
+                            batch.write(("new pack " + index).getBytes(StandardCharsets.UTF_8));
+                            batch.publish();
+                        }
+                        writer.compactSmallPacks();
+                    }
+                } catch (IOException failed) {
+                    throw new java.io.UncheckedIOException(failed);
+                } finally {
+                    running.set(false);
+                }
+            });
+            assertTrue(started.await(10, java.util.concurrent.TimeUnit.SECONDS));
+            for (int reads = 0; reads < 128 || running.get(); reads++) {
+                assertArrayEquals(payload, new ObjectStore(tempDir).read(retained));
+            }
+            compaction.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        }
+    }
+
     @Test
     void existingStoreDiscoversPackPublishedByAnotherRepositoryInstance()
             throws IOException {

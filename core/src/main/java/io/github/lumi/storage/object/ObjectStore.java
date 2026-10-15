@@ -531,15 +531,7 @@ public final class ObjectStore {
             Objects.requireNonNull(id, "id");
             PackedObject packed = packedObject(id);
             if (packed != null) {
-                try {
-                    return packs.read(packed);
-                } catch (java.nio.file.NoSuchFileException replacedPack) {
-                    PackedObject refreshed = refreshPackedObjects().get(id);
-                    if (refreshed == null || refreshed.pack().equals(packed.pack())) {
-                        throw replacedPack;
-                    }
-                    return packs.read(refreshed);
-                }
+                return readPacked(id, packed);
             }
             Path path = pathFor(id);
             try {
@@ -550,7 +542,21 @@ public final class ObjectStore {
                     throw missing;
                 }
             }
-            return packs.read(packed);
+            return readPacked(id, packed);
+        }
+
+        private byte[] readPacked(ObjectId id, PackedObject packed) throws IOException {
+            for (int attempt = 0; ; attempt++) {
+                try {
+                    return packs.read(packed);
+                } catch (java.nio.file.FileSystemException replacedPack) {
+                    PackedObject refreshed = refreshPackedObjects().get(id);
+                    if (attempt == 2 || refreshed == null || refreshed.pack().equals(packed.pack())) {
+                        throw replacedPack;
+                    }
+                    packed = refreshed;
+                }
+            }
         }
 
         @Override

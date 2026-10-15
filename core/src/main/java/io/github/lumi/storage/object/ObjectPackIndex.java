@@ -29,18 +29,29 @@ final class ObjectPackIndex {
         if (!Files.exists(directory)) {
             return Map.of();
         }
-        Map<ObjectId, PackedObject> entries = new LinkedHashMap<>();
-        try (var indexes = Files.list(directory)) {
-            for (Path index : indexes
-                    .filter(path -> path.getFileName().toString().endsWith(".idx"))
-                    .sorted()
-                    .toList()) {
-                for (var entry : read(index).entrySet()) {
-                    entries.putIfAbsent(entry.getKey(), entry.getValue());
+        for (int attempt = 0; ; attempt++) {
+            Map<ObjectId, PackedObject> entries = new LinkedHashMap<>();
+            boolean replaced = false;
+            try (var indexes = Files.list(directory)) {
+                for (Path index : indexes
+                        .filter(path -> path.getFileName().toString().endsWith(".idx"))
+                        .sorted()
+                        .toList()) {
+                    try {
+                        for (var entry : read(index).entrySet()) {
+                            entries.putIfAbsent(entry.getKey(), entry.getValue());
+                        }
+                    } catch (IOException failed) {
+                        // Compaction publishes its replacement before retiring old indexes.
+                        if (attempt == 2 || (!Files.notExists(index)
+                                && !(failed instanceof java.nio.file.FileSystemException))) throw failed;
+                        replaced = true;
+                        break;
+                    }
                 }
             }
+            if (!replaced) return Map.copyOf(entries);
         }
-        return Map.copyOf(entries);
     }
 
     static Map<ObjectId, PackedObject> read(Path index) throws IOException {
