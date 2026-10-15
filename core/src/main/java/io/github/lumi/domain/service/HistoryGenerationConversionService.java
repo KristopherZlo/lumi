@@ -13,6 +13,7 @@ import io.github.lumi.storage.repository.HistoryConversionMap;
 import io.github.lumi.storage.repository.HistoryConversionMap.Kind;
 import io.github.lumi.storage.repository.HistoryGenerationRepository;
 import io.github.lumi.storage.repository.HistoryMetadataTransfer;
+import io.github.lumi.storage.repository.HistorySourceSnapshot;
 import io.github.lumi.storage.repository.OperationJournalRepository;
 import io.github.lumi.storage.repository.OriginStore;
 import io.github.lumi.storage.repository.TombstoneRepository;
@@ -39,15 +40,19 @@ public final class HistoryGenerationConversionService {
         Objects.requireNonNull(progress, "progress");
         HistoryGeneration original = generations.active();
         WorldDataCompatibility.requireForward(original.dataVersion(), targetVersion);
+        if (generations.pending().filter(pending -> pending.target().equals(original)).isPresent()) {
+            generations.finishConversion(original);
+        }
         if (original.dataVersion().equals(targetVersion)) {
-            if (generations.pending().isPresent()) generations.finishConversion(original);
             return original;
         }
         Path source = generations.directory(original);
         if (new OperationJournalRepository(source).read().isPresent()) {
             throw new IOException("Resolve interrupted world operations with the original game before upgrading history");
         }
-        HistoryGeneration prepared = generations.beginConversion(original, targetVersion);
+        var snapshots = new HistorySourceSnapshot();
+        ObjectId sourceSnapshot = snapshots.capture(source);
+        HistoryGeneration prepared = generations.beginConversion(original, targetVersion, sourceSnapshot);
         Path target = generations.directory(prepared);
         progress.accept(new Progress(Phase.ALLOCATED, 0));
         var map = new HistoryConversionMap(target);
@@ -86,6 +91,9 @@ public final class HistoryGenerationConversionService {
                 count -> progress.accept(new Progress(Phase.VERIFICATION, count)));
         verifyRoots(source, target, map);
         new HistoryMetadataTransfer().verify(source, target);
+        if (!sourceSnapshot.equals(snapshots.capture(source))) {
+            throw new IOException("Source history metadata changed during conversion");
+        }
         generations.markVerified(original, prepared);
         progress.accept(new Progress(Phase.VERIFIED, 0));
         generations.publish(original, prepared);

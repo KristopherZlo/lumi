@@ -2,8 +2,10 @@ package io.github.lumi.storage.repository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import io.github.lumi.domain.model.HistoryGeneration;
+import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.WorldDataVersion;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -72,15 +74,30 @@ class HistoryGenerationRepositoryTest {
     void restartReusesTheJournaledTargetAndCompletesAfterPointerPublication() throws Exception {
         var repository = new HistoryGenerationRepository(root);
         var version = new WorldDataVersion(4786);
-        var prepared = repository.beginConversion(HistoryGeneration.LEGACY, version);
+        var snapshot = ObjectId.hash(new byte[] {1});
+        var prepared = repository.beginConversion(HistoryGeneration.LEGACY, version, snapshot);
         var restarted = new HistoryGenerationRepository(root);
-        assertEquals(prepared, restarted.beginConversion(HistoryGeneration.LEGACY, version));
-        assertThrows(IOException.class, () -> restarted.beginConversion(HistoryGeneration.LEGACY, new WorldDataVersion(4903)));
+        assertEquals(prepared, restarted.beginConversion(HistoryGeneration.LEGACY, version, snapshot));
+        assertThrows(IOException.class, () -> restarted.beginConversion(HistoryGeneration.LEGACY, new WorldDataVersion(4903), snapshot));
         assertThrows(RefConflictException.class, () -> restarted.finishConversion(prepared));
         restarted.markVerified(HistoryGeneration.LEGACY, prepared);
         restarted.publish(HistoryGeneration.LEGACY, prepared);
         new HistoryGenerationRepository(root).finishConversion(prepared);
         assertEquals(java.util.Optional.empty(), repository.pending());
         assertEquals(prepared, repository.active());
+    }
+
+    @Test
+    void interruptedTargetWithoutASourceSnapshotIsReplacedWithoutDeletingHistory() throws Exception {
+        var repository = new HistoryGenerationRepository(root);
+        var snapshot = ObjectId.hash(new byte[] {1});
+        var version = new WorldDataVersion(4786);
+        var old = repository.beginConversion(HistoryGeneration.LEGACY, version, snapshot);
+        Files.delete(repository.directory(old).resolve("source-state.bin"));
+        var next = new HistoryGenerationRepository(root).beginConversion(HistoryGeneration.LEGACY, version, snapshot);
+        assertNotEquals(old, next);
+        assertEquals(HistoryGeneration.LEGACY, repository.active());
+        assertEquals(next, repository.pending().orElseThrow().target());
+        org.junit.jupiter.api.Assertions.assertTrue(Files.isDirectory(repository.directory(old)));
     }
 }

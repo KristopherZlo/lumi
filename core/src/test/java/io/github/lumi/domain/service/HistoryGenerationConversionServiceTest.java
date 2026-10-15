@@ -13,6 +13,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class HistoryGenerationConversionServiceTest {
     @TempDir Path root;
@@ -67,6 +69,53 @@ class HistoryGenerationConversionServiceTest {
                 .convert(new WorldDataVersion(4786), adapter(), ignored -> { }));
         assertTrue(new HistoryGenerationRepository(root).pending().isEmpty());
         assertEquals(HistoryGeneration.LEGACY, new HistoryGenerationRepository(root).active());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void changedSourceAfterInterruptionStartsANewGenerationWithCurrentMetadata(boolean changeRefs) throws Exception {
+        Fixture fixture = fixture(root);
+        var id = fixture.main().commit();
+        var names = new VersionDisplayNameRepository(root);
+        names.replace(id, new VersionDisplayName("Before"));
+        stopAt(HistoryGenerationConversionService.Phase.METADATA);
+        var generations = new HistoryGenerationRepository(root);
+        var abandoned = generations.pending().orElseThrow().target();
+        names.replace(id, new VersionDisplayName("After"));
+        var refs = new BranchRefRepository(root);
+        BranchRef advanced = changeRefs ? refs.compareAndSet(fixture.main(), id) : fixture.main();
+        if (changeRefs) refs.delete(refs.read(new BranchName("hidden/checkpoint")).orElseThrow());
+        var converted = new HistoryGenerationConversionService(root).convert(new WorldDataVersion(4786), adapter(), ignored -> { });
+        assertNotEquals(abandoned, converted);
+        var target = generations.directory(converted);
+        BranchRef head = new BranchRefRepository(target).read(advanced.name()).orElseThrow();
+        assertEquals(advanced.revision(), head.revision());
+        assertEquals(Optional.of(new VersionDisplayName("After")), new VersionDisplayNameRepository(target).read(head.commit()));
+        assertEquals(changeRefs ? 1 : 2, new BranchRefRepository(target).list().size());
+        assertEquals(advanced, refs.read(advanced.name()).orElseThrow());
+        assertTrue(generations.pending().isEmpty());
+    }
+
+    @Test
+    void publishedJournalIsCompletedBeforeStartingTheNextUpgrade() throws Exception {
+        fixture(root);
+        stopAt(HistoryGenerationConversionService.Phase.PUBLISHED);
+        var generations = new HistoryGenerationRepository(root);
+        var previous = generations.active();
+        assertTrue(generations.pending().isPresent());
+        var targetVersion = new WorldDataVersion(4903);
+        var converted = new HistoryGenerationConversionService(root).convert(targetVersion, adapter(), ignored -> { });
+        assertEquals(targetVersion, converted.dataVersion());
+        assertEquals(converted, generations.active());
+        assertTrue(generations.pending().isEmpty());
+        assertTrue(java.nio.file.Files.isDirectory(generations.directory(previous)));
+    }
+
+    private void stopAt(HistoryGenerationConversionService.Phase phase) {
+        assertThrows(IllegalStateException.class, () -> new HistoryGenerationConversionService(root)
+                .convert(new WorldDataVersion(4786), adapter(), progress -> {
+                    if (progress.phase() == phase) throw new IllegalStateException("simulated interruption");
+                }));
     }
 
     static Fixture fixture(Path root) throws IOException {

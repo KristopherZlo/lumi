@@ -2,6 +2,7 @@ package io.github.lumi.storage.repository;
 
 import io.github.lumi.domain.model.HistoryGeneration;
 import io.github.lumi.domain.model.HistoryConversion;
+import io.github.lumi.domain.model.ObjectId;
 import io.github.lumi.domain.model.WorldDataVersion;
 import io.github.lumi.domain.service.WorldDataCompatibility;
 import java.io.ByteArrayInputStream;
@@ -12,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -77,7 +79,9 @@ public final class HistoryGenerationRepository {
     }
 
     public synchronized HistoryGeneration beginConversion(
-            HistoryGeneration expected, WorldDataVersion target) throws IOException {
+            HistoryGeneration expected, WorldDataVersion target, ObjectId sourceSnapshot) throws IOException {
+        Objects.requireNonNull(sourceSnapshot, "sourceSnapshot");
+        byte[] fingerprint = HexFormat.of().parseHex(sourceSnapshot.hex());
         requireActive(expected);
         var pending = pending();
         if (pending.isPresent()) {
@@ -86,9 +90,12 @@ public final class HistoryGenerationRepository {
                 throw new IOException("An interrupted history conversion targets a different source or game");
             }
             requireCandidate(expected, conversion.target());
-            return conversion.target();
+            Path snapshot = directory(conversion.target()).resolve("source-state.bin");
+            if (Files.exists(snapshot) && java.util.Arrays.equals(fingerprint,
+                    RepositoryFileReader.read(snapshot, 32))) return conversion.target();
         }
         HistoryGeneration prepared = prepare(expected, target);
+        AtomicFileWriter.replace(directory(prepared).resolve("source-state.bin"), fingerprint);
         AtomicFileWriter.replace(root.resolve("generations/conversion.bin"), encode(expected, prepared));
         return prepared;
     }
