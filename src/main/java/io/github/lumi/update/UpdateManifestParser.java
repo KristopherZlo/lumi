@@ -7,15 +7,13 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import net.fabricmc.loader.api.SemanticVersion;
+import net.fabricmc.loader.api.VersionParsingException;
 
 /** Strict parser for Lumi's small public release manifest. */
 public final class UpdateManifestParser {
     public static final int MAX_BYTES = 64 * 1024;
     private static final int MAX_RELEASES = 128;
-    private static final Pattern VERSION =
-            Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+)(?:-([^+]+))?(?:\\+.*)?$");
 
     public UpdateCheckResult parse(
             byte[] content, String currentVersion, String minecraftVersion) {
@@ -30,7 +28,7 @@ public final class UpdateManifestParser {
             var versions = root.getAsJsonArray("versions");
             require(versions != null && versions.size() <= MAX_RELEASES,
                     "Invalid update release count");
-            VersionNumber current = VersionNumber.parse(currentVersion);
+            SemanticVersion current = parseVersion(currentVersion);
             Optional<Candidate> newest = versions.asList().stream()
                     .map(element -> candidate(element.getAsJsonObject(), minecraftVersion))
                     .flatMap(Optional::stream)
@@ -63,7 +61,7 @@ public final class UpdateManifestParser {
         UpdateRelease release = new UpdateRelease(
                 version, minecraftVersion, summary, download, changelog);
         return compatible
-                ? Optional.of(new Candidate(VersionNumber.parse(version), release))
+                ? Optional.of(new Candidate(parseVersion(version), release))
                 : Optional.empty();
     }
 
@@ -88,28 +86,15 @@ public final class UpdateManifestParser {
         }
     }
 
-    private record Candidate(VersionNumber number, UpdateRelease release) {
-    }
+    private record Candidate(SemanticVersion number, UpdateRelease release) { }
 
-    private record VersionNumber(int major, int minor, int patch, boolean stable)
-            implements Comparable<VersionNumber> {
-        private static VersionNumber parse(String value) {
-            Matcher match = VERSION.matcher(value);
-            require(match.matches(), "Invalid version");
-            return new VersionNumber(
-                    Integer.parseInt(match.group(1)),
-                    Integer.parseInt(match.group(2)),
-                    Integer.parseInt(match.group(3)),
-                    match.group(4) == null);
-        }
-
-        @Override
-        public int compareTo(VersionNumber other) {
-            int result = Integer.compare(major, other.major);
-            if (result == 0) result = Integer.compare(minor, other.minor);
-            if (result == 0) result = Integer.compare(patch, other.patch);
-            if (result == 0) result = Boolean.compare(stable, other.stable);
-            return result;
+    private static SemanticVersion parseVersion(String value) {
+        try {
+            SemanticVersion parsed = SemanticVersion.parse(value);
+            require(parsed.getVersionComponentCount() == 3 && !parsed.hasWildcard(), "Invalid version");
+            return parsed;
+        } catch (VersionParsingException invalid) {
+            throw new IllegalArgumentException("Invalid version", invalid);
         }
     }
 }
