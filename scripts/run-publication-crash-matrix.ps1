@@ -47,6 +47,16 @@ try {
     & (Join-Path $taskRepo 'gradlew.bat') @taskPrepare --no-daemon
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) { throw 'Client launch preparation failed.' }
+    $taskLaunch = Get-Content -LiteralPath (Join-Path $taskBuild 'multiplayer-launch.inputs.json') -Raw | ConvertFrom-Json
+    if ($taskLaunch.target.id -cne $Target -or $taskLaunch.target.javaVersion -ne $taskProfile[0].javaVersion) {
+        throw 'Prepared launch does not match the selected target.'
+    }
+    foreach ($name in @('minecraftVersion', 'minecraftVersions', 'loaderVersion', 'fabricApiVersion',
+            'worldeditVersionId', 'axiomVersionId', 'worldeditCuiCoordinate', 'axiomRuntimeJars')) {
+        if ((@($taskLaunch.target.$name) -join "`n") -cne (@($taskProfile[0].$name) -join "`n")) {
+            throw "Prepared launch has a different target field: $name"
+        }
+    }
     $taskSha = (& git rev-parse HEAD).Trim()
     $taskDirty = [bool](& git status --porcelain)
     $taskFingerprint = [LumiCrashMatrixEvidence]::Inputs($taskRepo, $Java, $taskBuild)
@@ -108,7 +118,9 @@ try {
                 try {
                     $taskDeadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
                     while (-not $taskProcess.HasExited) {
-                        if (Select-String -LiteralPath $taskLog -SimpleMatch 'Client gametests failed with an exception' -Quiet) {
+                        if (Select-String -LiteralPath $taskLog -SimpleMatch -Pattern @(
+                                'Client gametests failed with an exception', 'Minecraft has crashed!',
+                                'Encountered an unexpected exception') -Quiet) {
                             throw "GameTest failed: $taskLog"
                         }
                         if ([DateTime]::UtcNow -gt $taskDeadline) { throw "Crash gate timed out: $taskLog" }
