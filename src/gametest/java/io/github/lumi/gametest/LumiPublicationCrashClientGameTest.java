@@ -123,7 +123,9 @@ public final class LumiPublicationCrashClientGameTest implements FabricClientGam
         var inspection = new ImportExportService("minecraft:overworld", donor)
                 .export(commit, packages.resolve(PACKAGE), true);
         metadata.setProperty("preview", ObjectId.hash(preview).hex());
-        metadata.setProperty("targetSection", id.hex());
+        var expected = new SectionBlob(section.blockStates(), section.blockEntities(),
+                new WorldDataVersion(net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version()));
+        metadata.setProperty("targetSection", ObjectId.hash(new SectionBlobCodec().encode(expected)).hex());
         metadata.setProperty("importBranch", "import/" + PACKAGE.value() + "-" + commit.hex().substring(0, 8));
         return inspection;
     }
