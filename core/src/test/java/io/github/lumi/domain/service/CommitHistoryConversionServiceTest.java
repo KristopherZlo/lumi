@@ -35,6 +35,7 @@ class CommitHistoryConversionServiceTest {
         var right = source.write(commit(rightTree, List.of(), "Same metadata"));
         var merge = source.write(commit(rightTree, List.of(left, right), "Merge"));
         var adapter = new WorldPayloadConverter() {
+            @Override public String recipeId() { return "test-converter-v1"; }
             public SectionBlob convert(SectionBlob value, WorldDataVersion version) {
                 return SectionBlob.fromPalette(List.of("minecraft:air"), new short[4096], Map.of(), version);
             }
@@ -102,6 +103,7 @@ class CommitHistoryConversionServiceTest {
         assertEquals(3, new VersionPreviewRepository(converted).load(result).orElseThrow().length);
         assertEquals(result, restarted.convert(merge));
         var adapter = new WorldPayloadConverter() {
+            @Override public String recipeId() { return "test-converter-v1"; }
             public SectionBlob convert(SectionBlob value, WorldDataVersion version) {
                 return new SectionBlob(value.blockStates(), value.blockEntities(), version);
             }
@@ -143,6 +145,7 @@ class CommitHistoryConversionServiceTest {
 
     private static WorldTreeConversionService trees(Path source, Path target, HistoryConversionMap map) {
         var adapter = new WorldPayloadConverter() {
+            @Override public String recipeId() { return "test-converter-v1"; }
             public SectionBlob convert(SectionBlob value, WorldDataVersion version) {
                 return new SectionBlob(value.blockStates(), value.blockEntities(), version);
             }

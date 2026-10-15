@@ -20,6 +20,7 @@ import io.github.lumi.storage.repository.TombstoneRepository;
 import io.github.lumi.storage.repository.WorldObjectRepository;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -52,7 +53,10 @@ public final class HistoryGenerationConversionService {
         }
         var snapshots = new HistorySourceSnapshot();
         ObjectId sourceSnapshot = snapshots.capture(source);
-        HistoryGeneration prepared = generations.beginConversion(original, targetVersion, sourceSnapshot);
+        String recipe = Objects.requireNonNull(adapter.recipeId(), "conversion recipe");
+        if (recipe.isBlank()) throw new IllegalArgumentException("Conversion recipe must have a revision");
+        ObjectId recipeId = ObjectId.hash(("lumi-generation-v1\n" + recipe).getBytes(StandardCharsets.UTF_8));
+        HistoryGeneration prepared = generations.beginConversion(original, targetVersion, sourceSnapshot, recipeId);
         Path target = generations.directory(prepared);
         progress.accept(new Progress(Phase.ALLOCATED, 0));
         var map = new HistoryConversionMap(target);

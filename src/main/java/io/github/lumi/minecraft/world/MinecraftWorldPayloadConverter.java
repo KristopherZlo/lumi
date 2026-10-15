@@ -29,6 +29,11 @@ import net.minecraft.world.level.block.Block;
 
 /** Worker-only DataFixer adaptation; it never accesses or mutates a live world. */
 public final class MinecraftWorldPayloadConverter implements WorldPayloadConverter {
+    @Override
+    public String recipeId() {
+        return "minecraft-dfu-canonical-v1";
+    }
+
     private final HolderLookup<Block> blocks;
     private final Registry<EntityType<?>> entityTypes;
     private final MinecraftHistoryNbtValidator nbtValidator;

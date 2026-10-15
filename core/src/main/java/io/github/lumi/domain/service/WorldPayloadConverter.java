@@ -7,6 +7,9 @@ import java.io.IOException;
 
 /** Worker-thread conversion with target-registry validation and no live world mutation. */
 public interface WorldPayloadConverter {
+    /** Stable recipe revision. Change it whenever conversion or canonicalization output can change. */
+    String recipeId();
+
     SectionBlob convert(SectionBlob source, WorldDataVersion target) throws IOException;
     EntityChunkBlob convert(EntityChunkBlob source, WorldDataVersion target) throws IOException;
 }

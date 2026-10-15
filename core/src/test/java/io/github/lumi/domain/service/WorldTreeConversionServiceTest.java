@@ -53,6 +53,7 @@ class WorldTreeConversionServiceTest {
         var calls = new AtomicInteger();
         var version = new WorldDataVersion(4786);
         var converter = new WorldPayloadConverter() {
+            @Override public String recipeId() { return "test-converter-v1"; }
             public SectionBlob convert(SectionBlob value, WorldDataVersion dataVersion) {
                 calls.incrementAndGet();
                 return new SectionBlob(value.blockStates(), value.blockEntities(), dataVersion);
@@ -80,6 +81,7 @@ class WorldTreeConversionServiceTest {
         new HistoryConversionVerifier(directory.resolve("old"), directory.resolve("new"), map, payloads)
                 .verify(ignored -> { });
         var changedAdapter = new WorldPayloadConverter() {
+            @Override public String recipeId() { return "test-converter-v1"; }
             public SectionBlob convert(SectionBlob value, WorldDataVersion dataVersion) {
                 return new SectionBlob(Collections.nCopies(4096, "minecraft:air"), value.blockEntities(), dataVersion);
             }

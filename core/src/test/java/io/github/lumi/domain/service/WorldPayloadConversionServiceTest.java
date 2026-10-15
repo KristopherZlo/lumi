@@ -39,6 +39,7 @@ class WorldPayloadConversionServiceTest {
     }
 
     private static final class RecordingConverter implements WorldPayloadConverter {
+        @Override public String recipeId() { return "test-converter-v1"; }
         private int calls;
         private WorldDataVersion output;
 

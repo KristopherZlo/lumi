@@ -49,6 +49,7 @@ class ImportedWorldDataConversionTest {
         assertThrows(IOException.class, () -> legacy.importPackage(archive, inspection, base,
                 new BranchName("future"), author(), Instant.EPOCH));
         var refusing = new WorldPayloadConverter() {
+            @Override public String recipeId() { return "test-converter-v1"; }
             public SectionBlob convert(SectionBlob value, WorldDataVersion version) throws IOException {
                 throw new IOException("Missing target registry content");
             }

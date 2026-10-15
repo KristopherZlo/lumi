@@ -79,9 +79,12 @@ public final class HistoryGenerationRepository {
     }
 
     public synchronized HistoryGeneration beginConversion(
-            HistoryGeneration expected, WorldDataVersion target, ObjectId sourceSnapshot) throws IOException {
+            HistoryGeneration expected, WorldDataVersion target, ObjectId sourceSnapshot,
+            ObjectId conversionRecipe) throws IOException {
         Objects.requireNonNull(sourceSnapshot, "sourceSnapshot");
+        Objects.requireNonNull(conversionRecipe, "conversionRecipe");
         byte[] fingerprint = HexFormat.of().parseHex(sourceSnapshot.hex());
+        byte[] recipe = HexFormat.of().parseHex(conversionRecipe.hex());
         requireActive(expected);
         var pending = pending();
         if (pending.isPresent()) {
@@ -91,11 +94,16 @@ public final class HistoryGenerationRepository {
             }
             requireCandidate(expected, conversion.target());
             Path snapshot = directory(conversion.target()).resolve("source-state.bin");
-            if (Files.exists(snapshot) && java.util.Arrays.equals(fingerprint,
-                    RepositoryFileReader.read(snapshot, 32))) return conversion.target();
+            Path recipeFile = directory(conversion.target()).resolve("conversion-recipe.bin");
+            if (Files.exists(snapshot) && Files.exists(recipeFile)
+                    && java.util.Arrays.equals(fingerprint, RepositoryFileReader.read(snapshot, 32))
+                    && java.util.Arrays.equals(recipe, RepositoryFileReader.read(recipeFile, 32))) {
+                return conversion.target();
+            }
         }
         HistoryGeneration prepared = prepare(expected, target);
         AtomicFileWriter.replace(directory(prepared).resolve("source-state.bin"), fingerprint);
+        AtomicFileWriter.replace(directory(prepared).resolve("conversion-recipe.bin"), recipe);
         AtomicFileWriter.replace(root.resolve("generations/conversion.bin"), encode(expected, prepared));
         return prepared;
     }

@@ -98,6 +98,24 @@ class HistoryGenerationConversionServiceTest {
     }
 
     @Test
+    void changedRecipeAfterInterruptionRebuildsCachedObjectsBeforePublication() throws Exception {
+        Fixture fixture = fixture(root);
+        stopAt(HistoryGenerationConversionService.Phase.METADATA);
+        var generations = new HistoryGenerationRepository(root);
+        var abandoned = generations.pending().orElseThrow().target();
+        var converted = new HistoryGenerationConversionService(root).convert(new WorldDataVersion(4786),
+                adapter("test-converter-v2", "minecraft:gold_block"), ignored -> { });
+        assertNotEquals(abandoned, converted);
+        Path target = generations.directory(converted);
+        ObjectId origin = new OriginStore(target).read(fixture.pendingKey()).orElseThrow();
+        assertEquals(List.of("minecraft:gold_block"),
+                new WorldObjectRepository(target).readSection(origin).distinctBlockStates());
+        assertEquals(converted, generations.active());
+        assertTrue(java.nio.file.Files.isDirectory(generations.directory(abandoned)));
+        assertEquals(fixture.main(), new BranchRefRepository(root).read(fixture.main().name()).orElseThrow());
+    }
+
+    @Test
     void publishedJournalIsCompletedBeforeStartingTheNextUpgrade() throws Exception {
         fixture(root);
         stopAt(HistoryGenerationConversionService.Phase.PUBLISHED);
@@ -144,9 +162,15 @@ class HistoryGenerationConversionServiceTest {
     }
 
     static WorldPayloadConverter adapter() {
+        return adapter("test-converter-v1", null);
+    }
+
+    private static WorldPayloadConverter adapter(String recipe, String replacement) {
         return new WorldPayloadConverter() {
+            @Override public String recipeId() { return recipe; }
             public SectionBlob convert(SectionBlob value, WorldDataVersion target) {
-                return new SectionBlob(value.blockStates(), value.blockEntities(), target);
+                return replacement == null ? new SectionBlob(value.blockStates(), value.blockEntities(), target)
+                        : SectionBlob.fromPalette(List.of(replacement), new short[4096], Map.of(), target);
             }
             public EntityChunkBlob convert(EntityChunkBlob value, WorldDataVersion target) {
                 return new EntityChunkBlob(value.entities(), target);

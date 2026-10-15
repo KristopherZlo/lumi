@@ -75,10 +75,10 @@ class HistoryGenerationRepositoryTest {
         var repository = new HistoryGenerationRepository(root);
         var version = new WorldDataVersion(4786);
         var snapshot = ObjectId.hash(new byte[] {1});
-        var prepared = repository.beginConversion(HistoryGeneration.LEGACY, version, snapshot);
+        var prepared = repository.beginConversion(HistoryGeneration.LEGACY, version, snapshot, snapshot);
         var restarted = new HistoryGenerationRepository(root);
-        assertEquals(prepared, restarted.beginConversion(HistoryGeneration.LEGACY, version, snapshot));
-        assertThrows(IOException.class, () -> restarted.beginConversion(HistoryGeneration.LEGACY, new WorldDataVersion(4903), snapshot));
+        assertEquals(prepared, restarted.beginConversion(HistoryGeneration.LEGACY, version, snapshot, snapshot));
+        assertThrows(IOException.class, () -> restarted.beginConversion(HistoryGeneration.LEGACY, new WorldDataVersion(4903), snapshot, snapshot));
         assertThrows(RefConflictException.class, () -> restarted.finishConversion(prepared));
         restarted.markVerified(HistoryGeneration.LEGACY, prepared);
         restarted.publish(HistoryGeneration.LEGACY, prepared);
@@ -87,14 +87,15 @@ class HistoryGenerationRepositoryTest {
         assertEquals(prepared, repository.active());
     }
 
-    @Test
-    void interruptedTargetWithoutASourceSnapshotIsReplacedWithoutDeletingHistory() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"source-state.bin", "conversion-recipe.bin"})
+    void interruptedTargetWithoutItsResumeIdentityIsReplacedWithoutDeletingHistory(String missing) throws Exception {
         var repository = new HistoryGenerationRepository(root);
         var snapshot = ObjectId.hash(new byte[] {1});
         var version = new WorldDataVersion(4786);
-        var old = repository.beginConversion(HistoryGeneration.LEGACY, version, snapshot);
-        Files.delete(repository.directory(old).resolve("source-state.bin"));
-        var next = new HistoryGenerationRepository(root).beginConversion(HistoryGeneration.LEGACY, version, snapshot);
+        var old = repository.beginConversion(HistoryGeneration.LEGACY, version, snapshot, snapshot);
+        Files.delete(repository.directory(old).resolve(missing));
+        var next = new HistoryGenerationRepository(root).beginConversion(HistoryGeneration.LEGACY, version, snapshot, snapshot);
         assertNotEquals(old, next);
         assertEquals(HistoryGeneration.LEGACY, repository.active());
         assertEquals(next, repository.pending().orElseThrow().target());
