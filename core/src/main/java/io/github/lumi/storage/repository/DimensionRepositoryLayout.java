@@ -3,8 +3,10 @@ package io.github.lumi.storage.repository;
 import io.github.lumi.domain.model.WorldDataVersion;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
+import java.util.List;
 import java.util.Objects;
 
 /** Maps a Minecraft dimension identifier to one traversal-safe repository directory. */
@@ -30,6 +32,25 @@ public final class DimensionRepositoryLayout {
 
     public Path initializeCurrent(String dimensionId, WorldDataVersion gameVersion) throws IOException {
         return new HistoryGenerationRepository(resolve(dimensionId)).initializeEmpty(gameVersion);
+    }
+
+    public List<Path> existingRepositories() throws IOException {
+        if (!Files.exists(historyRoot)) return List.of();
+        if (Files.isSymbolicLink(historyRoot)) throw new IOException("History root is a symbolic link");
+        try (var entries = Files.list(historyRoot)) {
+            var repositories = entries.sorted().toList();
+            for (Path repository : repositories) {
+                if (Files.isSymbolicLink(repository) || !Files.isDirectory(repository)) {
+                    throw new IOException("Invalid dimension repository: " + repository);
+                }
+                try {
+                    dimensionId(repository);
+                } catch (IllegalArgumentException invalid) {
+                    throw new IOException("Invalid dimension repository: " + repository, invalid);
+                }
+            }
+            return repositories;
+        }
     }
 
     public String dimensionId(Path repository) {
