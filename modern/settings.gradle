@@ -1,0 +1,17 @@
+pluginManagement {
+    repositories { maven { url = 'https://maven.fabricmc.net/' }; gradlePluginPortal() }
+}
+plugins { id 'dev.kikugie.stonecutter' version '0.9.8' }
+
+rootProject.name = 'lumi-modern'
+include 'core', 'adapters'
+project(':core').projectDir = file('../core')
+project(':adapters').projectDir = file('..')
+
+stonecutter {
+    create('adapters') {
+        centralScript = 'build-modern.gradle'
+        kotlinController = false
+        version('modern-261', '26.1')
+    }
+}

@@ -1,0 +1,4 @@
+plugins { id 'dev.kikugie.stonecutter' }
+
+// Detached mode generates platform sources without rewriting the legacy IDE checkout.
+stonecutter.active(null)

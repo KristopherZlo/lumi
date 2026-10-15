@@ -1,0 +1,12 @@
+plugins { id 'java-library' }
+repositories { mavenCentral() }
+dependencies {
+    implementation localGroovy()
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+java { toolchain.languageVersion = JavaLanguageVersion.of(21) }
+tasks.named('test') { useJUnitPlatform(); workingDir file('../../buildSrc') }
+sourceSets.main.java.setSrcDirs(['../../buildSrc/src/main/java'])
+sourceSets.test.java.setSrcDirs(['../../buildSrc/src/test/java'])

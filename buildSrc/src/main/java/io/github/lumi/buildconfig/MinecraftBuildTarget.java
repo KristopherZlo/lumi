@@ -33,7 +33,7 @@ public record MinecraftBuildTarget(
         if (axiomRuntimeJars.isEmpty()
                 || new HashSet<>(axiomRuntimeJars).size() != axiomRuntimeJars.size()
                 || axiomRuntimeJars.stream().anyMatch(name ->
-                        !name.matches("[A-Za-z0-9._-]+\\.jar"))) {
+                        !name.matches("[A-Za-z0-9._+-]+\\.jar"))) {
             throw new IllegalArgumentException("Invalid Axiom runtime jar list for " + id);
         }
     }

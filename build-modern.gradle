@@ -1,0 +1,92 @@
+import groovy.json.JsonOutput
+import io.github.lumi.buildconfig.MinecraftTargetCatalogReader
+
+plugins { id 'net.fabricmc.fabric-loom' version '1.16.3' }
+
+def repositoryRoot = project(':adapters').projectDir
+def target = new MinecraftTargetCatalogReader().read(
+        new File(repositoryRoot, 'gradle/minecraft-targets.json').toPath()).select(stonecutter.current.project)
+ext.lumiMinecraftTarget = target
+ext.lumiServerProductionRunTaskType = net.fabricmc.loom.task.prod.ServerProductionRunTask
+version = rootProject.mod_version
+group = rootProject.maven_group
+base { archivesName = rootProject.archives_base_name }
+loom { accessWidenerPath = file('src/main/resources/lumi.accesswidener') }
+tasks.withType(AbstractArchiveTask).configureEach {
+    archiveVersion = "${project.version}+mc${target.minecraftVersion()}"
+}
+
+repositories {
+    mavenCentral()
+    exclusiveContent {
+        forRepository { maven { url = 'https://api.modrinth.com/maven' } }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
+configurations { axiomDistribution }
+def axiomDirectory = layout.buildDirectory.dir('axiom-runtime')
+def unpackAxiom = tasks.register('unpackAxiomRuntime', Copy) {
+    from({ zipTree(configurations.axiomDistribution.singleFile) }) {
+        include 'META-INF/jars/*.jar'
+        eachFile { it.path = it.name }
+        includeEmptyDirs = false
+    }
+    into axiomDirectory
+}
+def axiomJars = files(axiomDirectory.map { directory ->
+    target.axiomRuntimeJars().collect { directory.file(it).asFile }
+}).builtBy(unpackAxiom)
+
+dependencies {
+    minecraft "com.mojang:minecraft:${target.minecraftVersion()}"
+    implementation project(':core')
+    include project(':core')
+    implementation "net.fabricmc:fabric-loader:${target.loaderVersion()}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${target.fabricApiVersion()}"
+    compileOnly "maven.modrinth:1u6JkXh5:${target.worldeditVersionId()}"
+    compileOnly "maven.modrinth:N6n5dqoA:${target.axiomVersionId()}"
+    axiomDistribution "maven.modrinth:N6n5dqoA:${target.axiomVersionId()}"
+    compileOnly axiomJars
+    runtimeOnly "maven.modrinth:1u6JkXh5:${target.worldeditVersionId()}"
+    runtimeOnly "maven.modrinth:N6n5dqoA:${target.axiomVersionId()}"
+    implementation "at.yawk.lz4:lz4-java:${rootProject.lz4_version}"
+    include "at.yawk.lz4:lz4-java:${rootProject.lz4_version}"
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'lumi-gametest'
+        enableGameTests = true
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
+java { toolchain.languageVersion = JavaLanguageVersion.of(target.javaVersion()); withSourcesJar() }
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = target.javaVersion()
+    options.compilerArgs += ['-Xmaxerrs', '1000']
+}
+tasks.withType(Test).configureEach { useJUnitPlatform { excludeTags 'performance' } }
+tasks.named('test') { dependsOn ':core:test' }
+
+tasks.named('processResources') {
+    def parameters = [version: project.version, loader_version: target.loaderVersion(),
+            minecraft_versions: JsonOutput.toJson(target.minecraftVersions()),
+            java_version: target.javaVersion(), fabric_api_version: target.fabricApiVersion()]
+    inputs.properties(parameters)
+    inputs.file(new File(repositoryRoot, 'gradle/minecraft-targets.json'))
+    filesMatching('fabric.mod.json') {
+        filter { it.replace('"${minecraft_versions}"', JsonOutput.toJson(target.minecraftVersions())) }
+        expand(parameters)
+    }
+    filesMatching('lumi.mixins.json') { expand(parameters) }
+}
+
+apply from: new File(repositoryRoot, 'gradle/modern-api.gradle')
+apply from: new File(repositoryRoot, 'gradle/packaged-verification.gradle')

@@ -1,0 +1,47 @@
+// Mechanical API renames only. Behavioral changes stay beside their native callers.
+stonecutter.replacements {
+    regex(true) {
+        replace('\\bGuiGraphics\\b', 'GuiGraphicsExtractor', '\\bGuiGraphicsExtractor\\b', 'GuiGraphics')
+        replace('(public void )render(?=\\(\\s*GuiGraphics\\b)', '$1extractRenderState',
+                '(public void )extractRenderState(?=\\(\\s*GuiGraphicsExtractor\\b)', '$1render')
+        replace('(\\.(?:getPos|chunkPosition)\\(\\))\\.([xz])\\b(?!\\()', '$1.$2()',
+                '(\\.(?:getPos|chunkPosition)\\(\\))\\.([xz])\\(\\)', '$1.$2')
+    }
+    string(true) {
+        replace('net.minecraft.client.gui.render.state.', 'net.minecraft.client.renderer.state.gui.')
+        replace('net.minecraft.world.level.BlockAndTintGetter', 'net.minecraft.client.renderer.block.BlockAndTintGetter')
+        replace('net.minecraft.client.renderer.LightTexture', 'net.minecraft.util.LightCoordsUtil')
+        replace('LightTexture.FULL_BRIGHT', 'LightCoordsUtil.FULL_BRIGHT')
+        replace('net.minecraft.client.renderer.block.model.BlockModelPart',
+                'net.minecraft.client.renderer.block.dispatch.BlockStateModelPart')
+        replace('BlockModelPart', 'BlockStateModelPart')
+        replace('ServerWorldEvents', 'ServerLevelEvents')
+        replace('net.fabricmc.fabric.api.client.keybinding.v1.', 'net.fabricmc.fabric.api.client.keymapping.v1.')
+        replace('KeyBindingHelper', 'KeyMappingHelper')
+        replace('net.fabricmc.fabric.api.client.rendering.v1.world.', 'net.fabricmc.fabric.api.client.rendering.v1.level.')
+        replace('WorldRenderContext', 'LevelRenderContext')
+        replace('WorldRenderEvents', 'LevelRenderEvents')
+        replace('graphics.drawString(', 'graphics.text(')
+        replace('graphics.drawCenteredString(', 'graphics.centeredText(')
+        replace('graphics.hLine(', 'graphics.horizontalLine(')
+        replace('graphics.vLine(', 'graphics.verticalLine(')
+        replace('graphics.drawWordWrap(', 'graphics.textWithWordWrap(')
+        replace('graphics.submitEntityRenderState(', 'graphics.entity(')
+        replace('.submitGuiElement(', '.addGuiElement(')
+        replace('renderContents(', 'extractContents(')
+        replace('renderWidget(', 'extractWidgetRenderState(')
+        replace('super.render(', 'super.extractRenderState(')
+        replace('button.render(', 'button.extractRenderState(')
+        replace('scrollbar.render(', 'scrollbar.extractRenderState(')
+        replace('background.render(', 'background.extractRenderState(')
+        replace('ScreenEvents.afterRender(', 'ScreenEvents.afterExtract(')
+        replace('.registerKeyBinding(', '.registerKeyMapping(')
+        replace('PayloadTypeRegistry.playC2S()', 'PayloadTypeRegistry.serverboundPlay()')
+        replace('PayloadTypeRegistry.playS2C()', 'PayloadTypeRegistry.clientboundPlay()')
+        replace('context.worldState()', 'context.levelState()')
+        replace('context.consumers()', 'context.bufferSource()')
+        replace('context.matrices()', 'context.poseStack()')
+        replace('ChunkPos.asLong(', 'ChunkPos.pack(')
+        replace('.toLong()', '.pack()')
+    }
+}

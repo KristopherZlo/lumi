@@ -13,7 +13,7 @@ class MinecraftTargetCatalogTest {
     @TempDir Path directory;
 
     @Test
-    void readsTheRepositoryBaselineAndRefusesAnUnportedTarget() throws Exception {
+    void readsTheRepositoryBaselineAndTheIsolatedModernCandidate() throws Exception {
         var catalog = new MinecraftTargetCatalogReader().read(
                 Path.of("../gradle/minecraft-targets.json"));
         var target = catalog.defaultTarget();
@@ -24,7 +24,12 @@ class MinecraftTargetCatalogTest {
         assertEquals("0.141.3+1.21.11", target.fabricApiVersion());
         assertEquals("oY3E2pzA", target.worldeditVersionId());
         assertEquals("DLVQrqv2", target.axiomVersionId());
-        assertThrows(IllegalArgumentException.class, () -> catalog.select("modern-261"));
+        var modern = catalog.select("modern-261");
+        assertEquals(25, modern.javaVersion());
+        assertEquals(List.of("26.1"), modern.minecraftVersions());
+        assertTrue(modern.axiomRuntimeJars().contains("lattice-2.0.1+26.1.jar"));
+        assertTrue(modern.worldeditCuiCoordinate().isEmpty());
+        assertThrows(IllegalArgumentException.class, () -> catalog.select("modern-262"));
     }
 
     @Test

@@ -12,6 +12,9 @@ def minecraftTargets = new MinecraftTargetCatalogReader().read(minecraftTargetsF
 def minecraftTarget = minecraftTargets.select(
         providers.gradleProperty('lumiTarget').getOrElse(minecraftTargets.defaultTarget().id()))
 ext.lumiMinecraftTarget = minecraftTarget
+if (minecraftTarget.javaVersion() != 21) {
+    throw new GradleException('Use the isolated modern build: gradlew -p modern :adapters:modern-261:build')
+}
 ext.lumiRemapJarTaskType = net.fabricmc.loom.task.RemapJarTask
 ext.lumiServerProductionRunTaskType = net.fabricmc.loom.task.prod.ServerProductionRunTask
 def obsoleteTargetProperties = ['minecraft_version', 'loader_version', 'fabric_api_version',
