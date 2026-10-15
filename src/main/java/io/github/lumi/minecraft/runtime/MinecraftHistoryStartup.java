@@ -26,10 +26,15 @@ final class MinecraftHistoryStartup {
     // Enable a source/target pair only after its stopped-world native fixture passes.
     static Set<WorldDataVersion> permittedSources(WorldDataVersion current) {
         return switch (current.value()) {
-            case 4786, 4903, 5023 -> Set.of(WorldDataVersion.LEGACY_12111);
+            case 4786 -> Set.of(WorldDataVersion.LEGACY_12111);
             case 4788 -> Set.of(WorldDataVersion.LEGACY_12111, new WorldDataVersion(4786));
             case 4790 -> Set.of(WorldDataVersion.LEGACY_12111,
                     new WorldDataVersion(4786), new WorldDataVersion(4788));
+            case 4903 -> Set.of(WorldDataVersion.LEGACY_12111,
+                    new WorldDataVersion(4786), new WorldDataVersion(4788), new WorldDataVersion(4790));
+            case 5023 -> Set.of(WorldDataVersion.LEGACY_12111,
+                    new WorldDataVersion(4786), new WorldDataVersion(4788), new WorldDataVersion(4790),
+                    new WorldDataVersion(4903));
             default -> Set.of();
         };
     }

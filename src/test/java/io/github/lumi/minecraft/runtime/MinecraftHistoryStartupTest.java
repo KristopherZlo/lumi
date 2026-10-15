@@ -12,7 +12,8 @@ class MinecraftHistoryStartupTest {
     @Test
     void permitsOnlyCertifiedForwardPairs() {
         var routes = Map.of(4786, Set.of(4671), 4788, Set.of(4671, 4786),
-                4790, Set.of(4671, 4786, 4788), 4903, Set.of(4671), 5023, Set.of(4671));
+                4790, Set.of(4671, 4786, 4788), 4903, Set.of(4671, 4786, 4788, 4790),
+                5023, Set.of(4671, 4786, 4788, 4790, 4903));
         for (var entry : routes.entrySet()) {
             var target = new WorldDataVersion(entry.getKey());
             var permitted = MinecraftHistoryStartup.permittedSources(target);
