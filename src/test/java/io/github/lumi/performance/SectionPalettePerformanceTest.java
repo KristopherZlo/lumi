@@ -2,6 +2,7 @@ package io.github.lumi.performance;
 
 import static org.junit.jupiter.api.Assertions.*;
 import io.github.lumi.domain.model.SectionBlob;
+import io.github.lumi.domain.model.WorldDataVersion;
 import io.github.lumi.minecraft.world.MinecraftSectionPaletteCapture;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -83,7 +84,8 @@ class SectionPalettePerformanceTest {
                             cell & 15, cell >>> 8, (cell >>> 4) & 15), BlockStateParser::serialize));
                 }
             } finally { section.release(); }
-            return new SectionBlob(states, Map.of());
+            return new SectionBlob(states, Map.of(),
+                    new WorldDataVersion(SharedConstants.getCurrentVersion().dataVersion().version()));
         }
     }
 }

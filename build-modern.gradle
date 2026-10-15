@@ -105,6 +105,17 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs += ['-Xmaxerrs', '1000']
 }
 tasks.withType(Test).configureEach { useJUnitPlatform { excludeTags 'performance' } }
+tasks.register('regressionPerformanceTest', Test) {
+    group = 'verification'
+    description = 'Runs the shared component regression workloads on the selected native API.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { excludeTags = []; includeTags 'performance' }
+    systemProperty 'lumi.regression.reportDir',
+            layout.buildDirectory.dir('reports/lumi-regressions').get().asFile.absolutePath
+    outputs.upToDateWhen { false }
+}
+
 tasks.named('test') {
     dependsOn ':core:test'
     workingDir repositoryRoot
