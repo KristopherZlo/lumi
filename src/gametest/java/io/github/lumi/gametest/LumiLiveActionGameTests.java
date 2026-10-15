@@ -29,6 +29,49 @@ import net.minecraft.world.level.gamerules.GameRules;
 /** Integrated gates for exact session-only world actions. */
 public final class LumiLiveActionGameTests {
     @GameTest(maxTicks = 300000)
+    public void untrackedEntityAdditionPreservesOriginDataVersion(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var runtime = LumiMod.serverRuntime().find(level).orElseThrow();
+        UUID test = UUID.randomUUID();
+        var key = new io.github.lumi.domain.model.EntityChunkKey(4096, 4096);
+        var boundary = new AtomicReference<io.github.lumi.domain.model.WorkingIndexSnapshot>();
+        var spawned = new AtomicReference<Pig>();
+        helper.startSequence()
+                .thenWaitUntil(() -> LumiGameTestLease.acquire(helper, test))
+                .thenExecute(() -> {
+                    level.getChunk(key.chunkX(), key.chunkZ());
+                    runtime.entityChunkUnloaded(new net.minecraft.world.level.ChunkPos(key.chunkX(), key.chunkZ()));
+                    Pig pig = EntityType.PIG.create(level, EntitySpawnReason.COMMAND);
+                    helper.assertTrue(pig != null, "Cannot create the origin control entity");
+                    pig.setNoAi(true);
+                    pig.setPersistenceRequired();
+                    pig.setPos(key.chunkX() * 16 + 0.5, 100, key.chunkZ() * 16 + 0.5);
+                    spawned.set(pig);
+                    helper.assertTrue(level.addFreshEntity(pig), "Cannot add the origin control entity");
+                    boundary.set(runtime.mutations().snapshot());
+                })
+                .thenWaitUntil(() -> helper.assertTrue(runtime.mutations().isDurable(boundary.get()),
+                        "The added entity's original state is not durable"))
+                .thenExecute(() -> {
+                    try {
+                        var origin = new io.github.lumi.storage.repository.OriginStore(runtime.repository())
+                                .read(key).orElseThrow();
+                        var before = new io.github.lumi.storage.repository.WorldObjectRepository(runtime.repository())
+                                .readEntities(origin);
+                        helper.assertTrue(before.entities().isEmpty(), "The added entity leaked into its original state");
+                        helper.assertValueEqual(net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version(),
+                                before.dataVersion().value(), "The entity origin lost the running game's data version");
+                    } catch (IOException failed) {
+                        throw new AssertionError("Cannot read the added entity's durable origin", failed);
+                    } finally {
+                        spawned.get().discard();
+                        LumiGameTestLease.release(test);
+                    }
+                })
+                .thenSucceed();
+    }
+
+    @GameTest(maxTicks = 300000)
     public void oneDamageRootRestoresEveryKilledMob(GameTestHelper helper) {
         FabricDimensionRuntime runtime = LumiMod.serverRuntime().find(helper.getLevel())
                 .orElseThrow(() -> helper.assertionException("Lumi runtime is not loaded"));

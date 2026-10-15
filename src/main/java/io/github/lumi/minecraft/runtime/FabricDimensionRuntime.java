@@ -747,7 +747,7 @@ public final class FabricDimensionRuntime implements AutoCloseable {
             baseline = new io.github.lumi.domain.model.EntityChunkBlob(
                     baseline.entities().stream()
                             .filter(state -> !state.id().equals(entity.getUUID()))
-                            .toList());
+                            .toList(), baseline.dataVersion());
         }
         entityDurability.rememberLoaded(key, baseline);
         entityDurability.registerMutation(key);
