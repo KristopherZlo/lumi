@@ -88,6 +88,8 @@ tasks.register('runPackagedGameTest', lumiServerProductionRunTaskType) {
     jvmArgs.add('-Dfabric-api.gametest')
     def xmlReport = runDirectory.map { it.file('gametest-results.xml').asFile }
     jvmArgs.add(xmlReport.map { "-Dfabric-api.gametest.report-file=${it.absolutePath}" })
+    def testPosition = System.getProperty('lumi.gametest.position')
+    if (testPosition != null) jvmArgs.add("-Dlumi.gametest.position=${testPosition}")
     def filter = System.getProperty('fabric-api.gametest.filter')
     if (filter != null) jvmArgs.add("-Dfabric-api.gametest.filter=${filter}")
     def record = [:]
@@ -106,7 +108,7 @@ tasks.register('runPackagedGameTest', lumiServerProductionRunTaskType) {
             }
         }
         record.putAll([schema: 1, status: 'running', group: target.id(), game: game,
-                scope: 'server-gametest', filter: filter ?: '*',
+                scope: 'server-gametest', filter: filter ?: '*', testPosition: testPosition,
                 javaVersion: target.javaVersion(),
                 testApi: [originalSha256: evidence.hash(configurations.packagedGameTestApi.singleFile.toPath()),
                         enumDefaultRepair: target.javaVersion() == 21],

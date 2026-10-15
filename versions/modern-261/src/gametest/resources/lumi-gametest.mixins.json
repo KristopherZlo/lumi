@@ -2,11 +2,34 @@
   "required": true,
   "package": "io.github.lumi.gametest.mixin",
   "compatibilityLevel": "JAVA_25",
-  "mixins": ["InteractionTimingMixin", "ServerUsePacketTimingMixin",
-    "SavePublicationPauseMixin", "RestoreMutationPauseMixin", "PackCrashMixin",
-    "IndexCrashMixin", "AtomicRefCrashMixin", "CommitCrashMixin", "JournalCrashMixin",
-    "RefCrashMixin", "WorkingIndexCrashMixin", "PreviewCrashMixin",
-    "MergeObjectCrashMixin", "MergeApplyCrashMixin", "HistoryUpgradeCrashMixin", "ClosingServerExecutionMixin", "GameTestServerFailFastMixin"],
-  "client": ["ClientInteractionTimingMixin", "ClientUseTimingMixin", "WindowFocusAccessor", "ClientGameTestStartupMixin", "ClientGameTestWorldCloseMixin"],
-  "injectors": {"defaultRequire": 1}
+  "mixins": [
+    "InteractionTimingMixin",
+    "ServerUsePacketTimingMixin",
+    "SavePublicationPauseMixin",
+    "RestoreMutationPauseMixin",
+    "PackCrashMixin",
+    "IndexCrashMixin",
+    "AtomicRefCrashMixin",
+    "CommitCrashMixin",
+    "JournalCrashMixin",
+    "RefCrashMixin",
+    "WorkingIndexCrashMixin",
+    "PreviewCrashMixin",
+    "MergeObjectCrashMixin",
+    "MergeApplyCrashMixin",
+    "HistoryUpgradeCrashMixin",
+    "ClosingServerExecutionMixin",
+    "GameTestServerFailFastMixin",
+    "GameTestServerPositionMixin"
+  ],
+  "client": [
+    "ClientInteractionTimingMixin",
+    "ClientUseTimingMixin",
+    "WindowFocusAccessor",
+    "ClientGameTestStartupMixin",
+    "ClientGameTestWorldCloseMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }
