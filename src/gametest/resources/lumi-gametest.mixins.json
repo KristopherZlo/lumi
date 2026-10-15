@@ -6,7 +6,7 @@
     "SavePublicationPauseMixin", "RestoreMutationPauseMixin", "PackCrashMixin",
     "IndexCrashMixin", "AtomicRefCrashMixin", "CommitCrashMixin", "JournalCrashMixin",
     "RefCrashMixin", "WorkingIndexCrashMixin", "PreviewCrashMixin",
-    "MergeObjectCrashMixin", "MergeApplyCrashMixin", "HistoryUpgradeCrashMixin", "ClosingServerExecutionMixin"],
+    "MergeObjectCrashMixin", "MergeApplyCrashMixin", "HistoryUpgradeCrashMixin", "ClosingServerExecutionMixin", "GameTestServerFailFastMixin"],
   "client": ["ClientInteractionTimingMixin", "ClientUseTimingMixin"],
   "injectors": {"defaultRequire": 1}
 }
