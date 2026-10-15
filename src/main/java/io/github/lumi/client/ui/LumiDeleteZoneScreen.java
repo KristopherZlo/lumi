@@ -134,7 +134,7 @@ public final class LumiDeleteZoneScreen extends LumiModalScreen {
             super.render(
                     graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endScaledRender(graphics);
+            endScaledRender(graphics, render, partialTick);
         }
     }
 

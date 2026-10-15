@@ -248,7 +248,7 @@ public final class LumiBranchesScreen extends LumiPageScreen {
                 .filter(entry -> entry.getKey().isHovered())
                 .findFirst().ifPresent(entry -> prewarm(entry.getValue()));
         } finally {
-            endScaledRender(graphics);
+            endScaledRender(graphics, render, partialTick);
         }
     }
 

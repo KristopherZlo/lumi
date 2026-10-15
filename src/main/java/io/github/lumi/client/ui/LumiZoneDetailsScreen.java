@@ -373,7 +373,7 @@ public final class LumiZoneDetailsScreen extends LumiPageScreen {
                         graphics, font, render.mouseX(), render.mouseY());
             }
         } finally {
-            endScaledRender(graphics);
+            endScaledRender(graphics, render, partialTick);
         }
     }
 

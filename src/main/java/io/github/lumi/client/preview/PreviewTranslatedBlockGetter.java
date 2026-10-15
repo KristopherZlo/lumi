@@ -21,9 +21,15 @@ final class PreviewTranslatedBlockGetter implements BlockAndTintGetter {
         this.origin = Objects.requireNonNull(origin, "origin").immutable();
     }
 
+    //? if >=26.1 {
+    /*@Override public net.minecraft.world.level.CardinalLighting cardinalLighting() {
+        return delegate.cardinalLighting();
+    }
+    *///?} else {
     @Override public float getShade(Direction direction, boolean shade) {
         return delegate.getShade(direction, shade);
     }
+    //?}
 
     @Override public LevelLightEngine getLightEngine() {
         return delegate.getLightEngine();

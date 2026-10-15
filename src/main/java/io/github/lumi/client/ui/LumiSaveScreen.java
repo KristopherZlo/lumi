@@ -276,7 +276,7 @@ public final class LumiSaveScreen extends LumiModalScreen {
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         renderAnswerTooltip(graphics, render.mouseX(), render.mouseY());
         } finally {
-            endScaledRender(graphics);
+            endScaledRender(graphics, render, partialTick);
         }
     }
 

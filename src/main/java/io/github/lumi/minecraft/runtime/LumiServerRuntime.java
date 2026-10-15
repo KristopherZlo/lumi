@@ -20,7 +20,11 @@ public final class LumiServerRuntime {
     public void registerEvents() {
         ServerLifecycleEvents.SERVER_STARTING.register(this::starting);
         ServerWorldEvents.LOAD.register(this::load);
+        //? if >=26.1 {
+        /*ServerChunkEvents.CHUNK_LOAD.register((level, chunk, generated) -> chunkLoaded(level, chunk));
+        *///?} else {
         ServerChunkEvents.CHUNK_LOAD.register(this::chunkLoaded);
+        //?}
         ServerTickEvents.START_SERVER_TICK.register(this::tick);
         ServerChunkEvents.CHUNK_UNLOAD.register(this::chunkUnloaded);
         ServerWorldEvents.UNLOAD.register(this::unload);

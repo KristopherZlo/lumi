@@ -37,7 +37,12 @@ abstract class ServerGamePacketListenerImplMixin {
         try (var ignored = DirectLiveActionContext.open(
                 runtime.liveActions(), player.getUUID())) {
             Optional<MinecraftLiveEntityTracker.Pending> pending = lumi$beginCapture(
-                    runtime.liveEntities(), packet.getTarget(player.level()));
+                    runtime.liveEntities(),
+                    //? if >=26.1 {
+                    /*player.level().getEntity(packet.entityId()));
+                    *///?} else {
+                    packet.getTarget(player.level()));
+                    //?}
             try {
                 original.call(packet);
             } finally {

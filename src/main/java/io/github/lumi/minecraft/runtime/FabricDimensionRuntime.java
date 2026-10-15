@@ -1224,10 +1224,9 @@ public final class FabricDimensionRuntime implements AutoCloseable {
                         && "Technoblade".equals(entity.getCustomName().getString()));
         var player = revived ? level.getPlayerByUUID(plan.player()) : null;
         if (player != null) {
-            player.displayClientMessage(
+            MinecraftPlayerMessages.chat(player,
                     Component.literal("TECHNOBLADE NEVER DIES!")
-                            .withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD),
-                    false);
+                            .withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD));
         }
     }
 

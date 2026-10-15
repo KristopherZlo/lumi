@@ -1,7 +1,11 @@
 package io.github.lumi.client;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+//? if >=26.1 {
+/*import com.mojang.blaze3d.pipeline.DepthStencilState;
+*///?} else {
 import com.mojang.blaze3d.platform.DepthTestFunction;
+//?}
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.LayeringTransform;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
@@ -31,7 +35,11 @@ final class LumiCompareRenderTypes {
                         .withLocation("pipeline/" + name)
                         .withCull(false);
         if (xray) {
+            //? if >=26.1 {
+            /*pipeline.withDepthStencilState(java.util.Optional.empty());
+            *///?} else {
             pipeline.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST);
+            //?}
         }
         return RenderType.create(
                 name,
@@ -43,10 +51,18 @@ final class LumiCompareRenderTypes {
     private static RenderType outline(String name, boolean xray) {
         RenderPipeline.Builder pipeline =
                 RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
-                        .withLocation("pipeline/" + name)
-                        .withDepthWrite(false);
+                        .withLocation("pipeline/" + name);
+        //? if >=26.1 {
+        /*pipeline.withDepthStencilState(new DepthStencilState(DepthStencilState.DEFAULT.depthTest(), false));
+        *///?} else {
+        pipeline.withDepthWrite(false);
+        //?}
         if (xray) {
+            //? if >=26.1 {
+            /*pipeline.withDepthStencilState(java.util.Optional.empty());
+            *///?} else {
             pipeline.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST);
+            //?}
         }
         return RenderType.create(
                 name,

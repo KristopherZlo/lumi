@@ -1,5 +1,9 @@
 // Mechanical API renames only. Behavioral changes stay beside their native callers.
 stonecutter.replacements {
+    string(true, 'chunk-position') {
+        replace('position.x', 'position.x()')
+        replace('position.z', 'position.z()')
+    }
     regex(true) {
         replace('\\bGuiGraphics\\b', 'GuiGraphicsExtractor', '\\bGuiGraphicsExtractor\\b', 'GuiGraphics')
         replace('(public void )render(?=\\(\\s*GuiGraphics\\b)', '$1extractRenderState',

@@ -539,7 +539,7 @@ public final class LumiDashboardScreen extends LumiPageScreen {
                 graphics, lumiSaveHovered(render.mouseX(), render.mouseY()),
                 width, height, System.currentTimeMillis());
         } finally {
-            endScaledRender(graphics);
+            endScaledRender(graphics, render, partialTick);
         }
     }
 

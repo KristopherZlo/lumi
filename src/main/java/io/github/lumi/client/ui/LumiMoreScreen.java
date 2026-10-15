@@ -142,7 +142,7 @@ public final class LumiMoreScreen extends LumiPageScreen {
                 viewportHeight, actionScroll, value -> actionScroll = value);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endScaledRender(graphics);
+            endScaledRender(graphics, render, partialTick);
         }
     }
 

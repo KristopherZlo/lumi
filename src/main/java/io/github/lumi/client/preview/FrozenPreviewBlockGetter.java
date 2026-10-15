@@ -43,9 +43,15 @@ final class FrozenPreviewBlockGetter implements BlockAndTintGetter {
         return null;
     }
 
+    //? if >=26.1 {
+    /*@Override public net.minecraft.world.level.CardinalLighting cardinalLighting() {
+        return lighting.cardinalLighting();
+    }
+    *///?} else {
     @Override public float getShade(Direction direction, boolean shade) {
         return lighting.getShade(direction, shade);
     }
+    //?}
 
     @Override public LevelLightEngine getLightEngine() {
         return lighting.getLightEngine();

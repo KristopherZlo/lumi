@@ -1,5 +1,6 @@
 package io.github.lumi.network;
 
+import io.github.lumi.minecraft.runtime.MinecraftPlayerMessages;
 import io.github.lumi.LumiMod;
 import io.github.lumi.domain.model.BranchRef;
 import io.github.lumi.domain.model.BranchName;
@@ -1076,7 +1077,7 @@ public final class LumiServerNetworking {
     private static void notifyFailure(ServerPlayer player, String value) {
         MutableComponent message = value.startsWith("luma.")
                 ? Component.translatable(value) : Component.literal(value);
-        player.displayClientMessage(message.withStyle(ChatFormatting.RED), true);
+        MinecraftPlayerMessages.overlay(player, message.withStyle(ChatFormatting.RED));
     }
 
     private static void sendProgress(
@@ -1108,6 +1109,8 @@ public final class LumiServerNetworking {
             ServerPlayer player, OperationTicket ticket, int queuePosition) {
         ServerBossEvent boss = BOSS_BARS.computeIfAbsent(ticket.id(), ignored -> {
             var created = new ServerBossEvent(
+                    //? if >=26.1
+                    /*ticket.id(),*/
                     Component.literal("Lumi"), BossEvent.BossBarColor.BLUE,
                     BossEvent.BossBarOverlay.PROGRESS);
             created.addPlayer(player);

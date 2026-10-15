@@ -1,4 +1,5 @@
 package io.github.lumi.mixin;
+//~ chunk-position
 
 import io.github.lumi.LumiMod;
 import io.github.lumi.minecraft.runtime.EntityStorageLevelAccess;
@@ -42,7 +43,7 @@ abstract class PersistentEntitySectionManagerMixin<T extends EntityAccess> {
         try {
             var entities = sectionStorage.getExistingSectionsInChunk(packedChunk)
                     .flatMap(section -> section.getEntities());
-            if (!runtime.permitEntityStore(new ChunkPos(packedChunk), entities)) {
+            if (!runtime.permitEntityStore(new ChunkPos(ChunkPos.getX(packedChunk), ChunkPos.getZ(packedChunk)), entities)) {
                 callback.setReturnValue(false);
             }
         } catch (IOException failed) {
@@ -89,7 +90,7 @@ abstract class PersistentEntitySectionManagerMixin<T extends EntityAccess> {
             long packedChunk, CallbackInfoReturnable<Boolean> callback) {
         var runtime = lumi$runtime();
         if (runtime != null && callback.getReturnValueZ()) {
-            runtime.entityChunkUnloaded(new ChunkPos(packedChunk));
+            runtime.entityChunkUnloaded(new ChunkPos(ChunkPos.getX(packedChunk), ChunkPos.getZ(packedChunk)));
         }
     }
 

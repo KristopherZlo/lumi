@@ -76,7 +76,7 @@ public final class LumiSpecialThanksScreen extends LumiModalScreen {
                 entries.size(), rows, scroll, value -> scroll = value);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endScaledRender(graphics);
+            endScaledRender(graphics, render, partialTick);
         }
     }
 

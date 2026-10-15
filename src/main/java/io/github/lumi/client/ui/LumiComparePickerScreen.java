@@ -218,7 +218,7 @@ public final class LumiComparePickerScreen extends LumiPageScreen {
             renderDivider(graphics);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endScaledRender(graphics);
+            endScaledRender(graphics, render, partialTick);
         }
     }
 

@@ -1,5 +1,6 @@
 package io.github.lumi.client;
 
+import io.github.lumi.minecraft.runtime.MinecraftPlayerMessages;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.lumi.LumiMod;
 import io.github.lumi.client.diagnostics.ClientOperationDiagnostics;
@@ -293,7 +294,7 @@ public final class LumiClient implements ClientModInitializer {
         Integer rgb = color.getColor();
         NOTIFICATIONS.add(styled,
                 0xff000000 | (rgb == null ? 0xf0f3f6 : rgb));
-        player.displayClientMessage(styled, true);
+        MinecraftPlayerMessages.overlay(player, styled);
     }
 
     private static void acceptOperationEvent(OperationEventPayload event) {
@@ -302,7 +303,7 @@ public final class LumiClient implements ClientModInitializer {
                 .ifPresent(report -> {
                     var player = Minecraft.getInstance().player;
                     if (player != null) {
-                        player.displayClientMessage(report, false);
+                        MinecraftPlayerMessages.chat(player, report);
                     }
                 });
         if (Minecraft.getInstance().screen instanceof LumiDeleteVersionScreen delete
@@ -838,7 +839,7 @@ public final class LumiClient implements ClientModInitializer {
     private static void showTelemetryNotice() {
         var player = Minecraft.getInstance().player;
         if (player != null && TELEMETRY.consumeNotice()) {
-            player.displayClientMessage(Component.translatable("luma.telemetry.notice"), false);
+            MinecraftPlayerMessages.chat(player, Component.translatable("luma.telemetry.notice"));
         }
     }
 

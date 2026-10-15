@@ -95,7 +95,7 @@ final class LumiVersionRenameScreen extends LumiModalScreen {
             }
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endScaledRender(graphics);
+            endScaledRender(graphics, render, partialTick);
         }
     }
 

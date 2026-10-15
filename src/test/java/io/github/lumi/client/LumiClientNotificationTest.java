@@ -31,7 +31,7 @@ class LumiClientNotificationTest {
         assertTrue(source.contains(
                 "\"luma.status.survival_disabled\".equals(value)"));
         assertTrue(source.contains("NOTIFICATIONS.add(styled,"));
-        assertTrue(source.contains("displayClientMessage(styled, true)"));
+        assertTrue(source.contains("MinecraftPlayerMessages.overlay(player, styled)"));
         assertTrue(source.contains(
                 "HISTORY, PENDING_STATISTICS, NOTIFICATIONS"));
         assertTrue(source.contains(

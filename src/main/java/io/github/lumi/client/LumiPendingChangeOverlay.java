@@ -41,7 +41,12 @@ public final class LumiPendingChangeOverlay {
     public void register() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
         WorldRenderEvents.END_MAIN.register(this::render);
+        //? if >=26.1 {
+        /*WorldRenderEvents.END_EXTRACTION.register(context ->
+                compareOverlay.setFrustum(context.levelState().cameraRenderState.cullFrustum));
+        *///?} else {
         WorldRenderEvents.END_EXTRACTION.register(context -> compareOverlay.setFrustum(context.frustum()));
+        //?}
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> compareOverlay.close());
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> compareOverlay.close());
     }

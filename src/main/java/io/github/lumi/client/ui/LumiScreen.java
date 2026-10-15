@@ -466,7 +466,8 @@ public abstract class LumiScreen extends Screen {
     protected void beginScaledContent(GuiGraphics graphics) {
     }
 
-    protected final void endScaledRender(GuiGraphics graphics) {
+    protected final void endScaledRender(
+            GuiGraphics graphics, ScaledRenderContext pointer, float partialTick) {
         endScaledContent(graphics);
         if (openingValue < 1.0F && animationWidth > 0) {
             graphics.fill(
@@ -475,7 +476,11 @@ public abstract class LumiScreen extends Screen {
                     LumiTheme.withOpacity(
                             LumiTheme.BACKDROP, 1.0F - openingValue));
         }
+        //? if >=26.1 {
+        /*graphics.extractDeferredElements(pointer.mouseX(), pointer.mouseY(), partialTick);
+        *///?} else {
         graphics.renderDeferredElements();
+        //?}
         graphics.pose().popMatrix();
     }
 

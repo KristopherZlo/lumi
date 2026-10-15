@@ -188,7 +188,7 @@ public final class LumiRestoreScreen extends LumiModalScreen {
             renderStatus(graphics);
             super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endScaledRender(graphics);
+            endScaledRender(graphics, render, partialTick);
         }
     }
 

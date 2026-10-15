@@ -118,7 +118,7 @@ public final class LumiUpdateScreen extends LumiModalScreen {
         renderResult(graphics);
         super.render(graphics, render.mouseX(), render.mouseY(), partialTick);
         } finally {
-            endScaledRender(graphics);
+            endScaledRender(graphics, render, partialTick);
         }
     }
 

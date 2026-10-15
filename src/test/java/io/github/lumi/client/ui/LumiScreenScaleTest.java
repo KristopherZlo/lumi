@@ -34,7 +34,7 @@ class LumiScreenScaleTest {
             assertTrue(source.matches(
                             "(?s).*beginScaledRender\\(\\s*graphics,\\s*mouseX,\\s*mouseY\\).*"),
                     screen.toString());
-            assertTrue(source.contains("endScaledRender(graphics);"), screen.toString());
+            assertTrue(source.contains("endScaledRender(graphics, render, partialTick);"), screen.toString());
         }
     }
 }
