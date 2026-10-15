@@ -13,4 +13,9 @@ public abstract class ClosingServerExecutionMixin {
     private void inlineOnClosingWorker(CallbackInfoReturnable<Boolean> callback) {
         if (LumiShutdownGameTests.isClosingWorker()) callback.setReturnValue(false);
     }
+
+    @Inject(method = "isStopped", at = @At("HEAD"), cancellable = true)
+    private void stoppedOnClosingWorker(CallbackInfoReturnable<Boolean> callback) {
+        if (LumiShutdownGameTests.isClosingWorker()) callback.setReturnValue(true);
+    }
 }

@@ -120,8 +120,8 @@ final class LumiClientBehaviorWorld {
                             elapsedMillis(started), "");
                     reopenedScenario.run(context, reopened, report);
                 }
-                report.assertNoRuntimeFailures();
             }
+            report.assertNoRuntimeFailures();
         } catch (IOException failed) {
             throw new IllegalStateException("Cannot write Lumi behavior report", failed);
         }

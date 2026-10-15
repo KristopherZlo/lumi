@@ -83,8 +83,12 @@ public final class LumiServerRuntime {
     }
 
     private void chunkLoaded(ServerLevel level, LevelChunk chunk) {
+        var runtime = find(level);
+        // Vanilla can finish queued chunk loads after Fabric has unloaded the dimension.
+        if (runtime.isEmpty() && level.getServer().isStopped()) return;
         try {
-            requireSession().find(level).orElseThrow().chunkLoaded(chunk);
+            runtime.orElseThrow(() -> new IllegalStateException("Lumi dimension runtime is not loaded"))
+                    .chunkLoaded(chunk);
         } catch (IOException failed) {
             throw new IllegalStateException("Cannot capture Lumi block-entity baseline", failed);
         }
